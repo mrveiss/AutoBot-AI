@@ -4,26 +4,10367 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-> **Note — this file is auto-generated, not hand-maintained.**
-> It is produced by [git-cliff](https://git-cliff.org/) from conventional-commit
-> history via `.github/workflows/release.yml` on each release cut from `main`.
-> The generator was broken from 2026-03-01 to 2026-06-13 (issue #9870: the
-> workflow read an action output that is always empty for `--bumped-version`
-> args, so every release step was skipped on every push to `main`), which is
-> why no entries newer than PR #1296 appear below. Changes merged in that
-> window (~PR #1300–#10050) are intentionally **not** listed here — the file is
-> regenerated wholesale by the next successful release, which rolls them into
-> proper version sections.
->
-> Until then, consult:
->
-> - [GitHub commit history](https://github.com/mrveiss/AutoBot-AI/commits/main) / `git log`
-> - [changelog/_index.md](changelog/_index.md) — per-version release notes compiled from fragments
-> - [docs/developer/RELEASE_WORKFLOW.md](docs/developer/RELEASE_WORKFLOW.md) — how releases and this file are generated
+### Bug Fixes
 
-## Historical entries — generated 2026-03-01 (v0.1.0 era, PRs up to #1296)
+- *(ansible)* Per-user tmp paths, site.yml roles, backend_port 8001 (#10047,#10048,#10049) (#10401) ([#10401](https://github.com/mrveiss/AutoBot-AI/pull/10401))
+
+- *(tests)* Repair AlertManager webhook test harness path failures (#10273) (#10395) ([#10395](https://github.com/mrveiss/AutoBot-AI/pull/10395))
+
+- *(logging)* Stop NPU-unavailable + SLM WS handshake-rejection log floods (#10391) ([#10391](https://github.com/mrveiss/AutoBot-AI/pull/10391))
+
+- *(frontend)* Add missing qrcode dependency; drop temp type shim (#10074) (#10397) ([#10397](https://github.com/mrveiss/AutoBot-AI/pull/10397))
+
+- *(llc)* Resolve dual agent-id keyspace wrong-column joins (#10032) (#10399) ([#10399](https://github.com/mrveiss/AutoBot-AI/pull/10399))
+
+- *(logs)* Init long-running ops (#10385); update google pricing; quiet optional-provider warns (#10394) ([#10394](https://github.com/mrveiss/AutoBot-AI/pull/10394))
+
+- *(deps)* Langchain 1.3.1+/1.3.2 (not 1.3.10) — keeps PVE-2026-88512 fix + resolves with websockets>=16.0 (main's >=1.3.10 is unbuildable)
+
+- *(llc/tests)* Remove leaking sys.modules stubs masking regressions (#9995, #10140) (#10387) ([#10387](https://github.com/mrveiss/AutoBot-AI/pull/10387))
+
+- *(constants)* Add PathConstants.TEMP_DIR + SecurityConstants.ALLOWED_WEB_PORTS (#10384) (#10390) ([#10390](https://github.com/mrveiss/AutoBot-AI/pull/10390))
+
+- *(api)* Call with_error_handling() with parens — bare use broke routes with 422 (#10383) ([#10383](https://github.com/mrveiss/AutoBot-AI/pull/10383))
+
+- *(nginx/csp)* Allow data: fonts in strict security-headers snippet (#10360 follow-up) (#10377) ([#10377](https://github.com/mrveiss/AutoBot-AI/pull/10377))
+
+- *(ansible)* Role updates branch on group_names, not legacy NN-Name hostnames (#10110) (#10372) ([#10372](https://github.com/mrveiss/AutoBot-AI/pull/10372))
+
+- *(slm-ui)* Handle 401 in code-sync + updates pollers — stop the flood (#10369) (#10370) ([#10370](https://github.com/mrveiss/AutoBot-AI/pull/10370))
+
+- *(user-app)* Allow data: fonts in CSP; stop reporting benign ResizeObserver loop as critical (#10352) (#10364) ([#10364](https://github.com/mrveiss/AutoBot-AI/pull/10364))
+
+- *(chat)* Add ChatHistoryManager.get_session — thinking-preferences 500 (#10352) (#10367) ([#10367](https://github.com/mrveiss/AutoBot-AI/pull/10367))
+
+- Live frontend console errors — /usage double-prefix, ApiClient .json() misuse, CSP font-src (#10357) (#10360) ([#10360](https://github.com/mrveiss/AutoBot-AI/pull/10360))
+
+- *(api)* Register users router so /api/users/* resolves (#10352) (#10358) ([#10358](https://github.com/mrveiss/AutoBot-AI/pull/10358))
+
+- *(llc)* Tenant-isolate boards.py endpoints + repair board service tests (#10296, #10297) (#10356) ([#10356](https://github.com/mrveiss/AutoBot-AI/pull/10356))
+
+- *(secrets)* Deny vault access to deactivated/soft-deleted principals (#10346) (#10351) ([#10351](https://github.com/mrveiss/AutoBot-AI/pull/10351))
+
+- *(deploy/frontend)* Relative same-origin API base; never emit 0.0.0.0 (#10348) (#10350) ([#10350](https://github.com/mrveiss/AutoBot-AI/pull/10350))
+
+- *(observability+ci)* Consolidate prometheus_mcp onto shared PromQL client; audit catches missing-/api calls (#10303, #10037) (#10345) ([#10345](https://github.com/mrveiss/AutoBot-AI/pull/10345))
+
+- *(provision)* Wizard inventory stamps node_roles so tts/browser activate (#9965) (#10342) ([#10342](https://github.com/mrveiss/AutoBot-AI/pull/10342))
+
+- *(frontend)* AdminUsersView /api prefix (404); de-flake useModal perf tests (#10036, #10275) (#10338) ([#10338](https://github.com/mrveiss/AutoBot-AI/pull/10338))
+
+- *(provision)* Stamp node_roles into generated inventory so optional roles activate (#9965) (#10335) ([#10335](https://github.com/mrveiss/AutoBot-AI/pull/10335))
+
+- *(deps)* Constrain tokenizers to transformers-compatible range (#10331) (#10332) ([#10332](https://github.com/mrveiss/AutoBot-AI/pull/10332))
+
+- *(provision)* Mark-synced no longer fatal on undefined slm_manager_inventory_host (#10317) (#10319) ([#10319](https://github.com/mrveiss/AutoBot-AI/pull/10319))
+
+- *(ci)* Give frontend vue-tsc enough heap to stop OOM-flaking the required gate (#10298) (#10318) ([#10318](https://github.com/mrveiss/AutoBot-AI/pull/10318))
+
+- *(deploy)* Batched SLM/deployment-health follow-ups (#10285 #10248 #10264 #10274) (#10299) ([#10299](https://github.com/mrveiss/AutoBot-AI/pull/10299))
+
+- *(llc)* Derive sprints.py create tenant from validated parent + migrate to ConfigDict (#10261, #10262) (#10290) ([#10290](https://github.com/mrveiss/AutoBot-AI/pull/10290))
+
+- *(ci/deps)* Make vllm a GPU-only optional extra; CPU-only torch in backend image (#10251) (#10287) ([#10287](https://github.com/mrveiss/AutoBot-AI/pull/10287))
+
+- *(slm)* Remove stray '-o' in node role-sync ssh command (#10277) (#10280) ([#10280](https://github.com/mrveiss/AutoBot-AI/pull/10280))
+
+- *(slm)* Auto-generate shared internal API key + derive backend URL (#10263) (#10279) ([#10279](https://github.com/mrveiss/AutoBot-AI/pull/10279))
+
+- *(graph-rag)* Add missing /health route; valid max_facts; degrade on 503 (#10011) (#10269) ([#10269](https://github.com/mrveiss/AutoBot-AI/pull/10269))
+
+- *(security)* Resolve Semgrep SAST findings — parameterize SQL + de-hardcode secret (#9489) (#10260) ([#10260](https://github.com/mrveiss/AutoBot-AI/pull/10260))
+
+- *(llc/security)* Enforce tenant-isolation on sprints.py endpoints (#10148) (#10258) ([#10258](https://github.com/mrveiss/AutoBot-AI/pull/10258))
+
+- *(telegram)* De-duplicate router registration + add wiring tests (#9006) (#10272) ([#10272](https://github.com/mrveiss/AutoBot-AI/pull/10272))
+
+- *(frontend)* Stop calling .json() on ApiClient parsed results (#10013) (#10249) ([#10249](https://github.com/mrveiss/AutoBot-AI/pull/10249))
+
+- *(migrations)* Add organizations external_pm_type/config + kb_inheritance_weight (#10189) (#10235) ([#10235](https://github.com/mrveiss/AutoBot-AI/pull/10235))
+
+- *(transcriber)* Bind transcript export to real storage, retire mock duplicate (#9958) (#10229) ([#10229](https://github.com/mrveiss/AutoBot-AI/pull/10229))
+
+- *(llc)* Validate adapter_type at hire time + decompose #9008/#9033 remaining ACs (#10227) ([#10227](https://github.com/mrveiss/AutoBot-AI/pull/10227))
+
+- *(transcriber)* Wire transcription pipeline — repair orchestrator, register providers, Celery trigger (#10128) (#10225) ([#10225](https://github.com/mrveiss/AutoBot-AI/pull/10225))
+
+- *(migrations)* Create llc_work_products+relations, fix env.py/enum drift (#10043, #10044, #10075, #10076) (#10204) ([#10204](https://github.com/mrveiss/AutoBot-AI/pull/10204))
+
+- *(voice)* Surface user-visible message when zero TTS voices available (#9999) (#10194) ([#10194](https://github.com/mrveiss/AutoBot-AI/pull/10194))
+
+- *(llc)* SKIPPED heartbeat status + drain adapter stderr to sidecar (#9951, #9992) (#10146) ([#10146](https://github.com/mrveiss/AutoBot-AI/pull/10146))
+
+- *(code-sync)* Drift checker compares frontend source (.vue/.ts/.css) so frontends are detected + rebuilt (#10120) (#10144) ([#10144](https://github.com/mrveiss/AutoBot-AI/pull/10144))
+
+- *(ci)* Drop node_modules negation that made frontend path-filter match every file (#10022) (#10143) ([#10143](https://github.com/mrveiss/AutoBot-AI/pull/10143))
+
+- *(llc/tests)* Repair test-isolation + liveness mock rot (#9995, #9987, #9978) (#10139) ([#10139](https://github.com/mrveiss/AutoBot-AI/pull/10139))
+
+- *(backend)* VisionStatusResponse declares the fields the endpoint actually returns (#9986) (#10132) ([#10132](https://github.com/mrveiss/AutoBot-AI/pull/10132))
+
+- *(frontend)* Correct web-research-settings API paths — were 404ing (#10012) (#10131) ([#10131](https://github.com/mrveiss/AutoBot-AI/pull/10131))
+
+- *(ansible)* Add autobot_shared to ai-stack unit PYTHONPATH — stop crash loop (#10121) (#10130) ([#10130](https://github.com/mrveiss/AutoBot-AI/pull/10130))
+
+- *(governance)* Harden automated branch pruning against deletion race (#10035, #9917) (#10112) ([#10112](https://github.com/mrveiss/AutoBot-AI/pull/10112))
+
+- *(frontend-deploy)* Deliver VITE_* env to the production vite build (#10084) (#10108) ([#10108](https://github.com/mrveiss/AutoBot-AI/pull/10108))
+
+- *(frontend)* Re-wire nav featureFlag filtering with fail-safe per-item defaults (#9984) (#10083) ([#10083](https://github.com/mrveiss/AutoBot-AI/pull/10083))
+
+- *(frontend)* Repair apexcharts 5.14 type errors blocking frontend-test gate (#10091) (#10092) ([#10092](https://github.com/mrveiss/AutoBot-AI/pull/10092))
+
+- *(memory-graph)* Create FT index + data on DB 0 so semantic search leaves SCAN fallback (#9943) (#10082) ([#10082](https://github.com/mrveiss/AutoBot-AI/pull/10082))
+
+- *(captcha)* Use canonical config.vnc_url to avoid empty-host VNC URL (#9942) (#10081) ([#10081](https://github.com/mrveiss/AutoBot-AI/pull/10081))
+
+- *(frontend)* Green the unit+integration suite — 89 failures, 3 uncaught errors, 7 lint errors (#9693) (#10078) ([#10078](https://github.com/mrveiss/AutoBot-AI/pull/10078))
+
+- *(llc)* Sa.Enum columns emit member VALUES not NAMES via values_callable (#9980) (#10077) ([#10077](https://github.com/mrveiss/AutoBot-AI/pull/10077))
+
+- *(frontend)* Strict vue-tsc — 231 → 0 type errors + 11 real runtime bugs (#9724) (#10073) ([#10073](https://github.com/mrveiss/AutoBot-AI/pull/10073))
+
+- *(docker)* Install claude CLI from official signed apt repo (#9950) (#10067) ([#10067](https://github.com/mrveiss/AutoBot-AI/pull/10067))
+
+- *(slm-docker)* Parameterize python version + unversioned migration interpreter for Python 3.14 (#9949) (#10071) ([#10071](https://github.com/mrveiss/AutoBot-AI/pull/10071))
+
+- *(code-sync)* Include self-node in stage-3 currency + reliable fleet selection (#9996) (#10069) ([#10069](https://github.com/mrveiss/AutoBot-AI/pull/10069))
+
+- *(code-sync)* Run dep-install/rebuild/restart after per-component resolve (#9982) (#10068) ([#10068](https://github.com/mrveiss/AutoBot-AI/pull/10068))
+
+- *(shared)* Make standalone autobot_shared authoritative — kill stale-shadow on partial sync (#10020) (#10070) ([#10070](https://github.com/mrveiss/AutoBot-AI/pull/10070))
+
+- *(settings)* Persist telemetry consent in single_user mode (#10000) (#10064) ([#10064](https://github.com/mrveiss/AutoBot-AI/pull/10064))
+
+- *(api)* Gate all LLC endpoints with 503 in single_user mode (#10010) (#10062) ([#10062](https://github.com/mrveiss/AutoBot-AI/pull/10062))
+
+- *(frontend)* Self-host font + externalize inline script for strict CSP (#9966) (#10065) ([#10065](https://github.com/mrveiss/AutoBot-AI/pull/10065))
+
+- *(slm-client)* /slm/api/ws/events on nginx paths, /api/ws/events on loopback (#9967) (#10063) ([#10063](https://github.com/mrveiss/AutoBot-AI/pull/10063))
+
+- *(ansible)* Per-user local_tmp — shared /tmp/ansible_local_tmp locked out SLM executor (#10006) (#10056) ([#10056](https://github.com/mrveiss/AutoBot-AI/pull/10056))
+
+- *(ansible)* Guard frontend_host and slm_host with default() in update summary (#10007) (#10055) ([#10055](https://github.com/mrveiss/AutoBot-AI/pull/10055))
+
+- *(validation)* Backup file path validation rejected all real paths; add containment (#9670) (#10054) ([#10054](https://github.com/mrveiss/AutoBot-AI/pull/10054))
+
+- *(tests)* Repair ssot_config_test imports + eliminate ambiguous top-level tests package (#9907) (#10053) ([#10053](https://github.com/mrveiss/AutoBot-AI/pull/10053))
+
+- *(migrations)* Baseline adoption for never-migrated DBs + strict Ansible invocation (#10001, #10026) (#10039) ([#10039](https://github.com/mrveiss/AutoBot-AI/pull/10039))
+
+- *(docker)* Update hardened overlay chromadb for 1.x image (#9663) (#10042) ([#10042](https://github.com/mrveiss/AutoBot-AI/pull/10042))
+
+- *(ci)* Api-wiring audit accurate + blocking; fix 5 masked double-prefix/path 404s; regen api.ts (#9864) (#10031) ([#10031](https://github.com/mrveiss/AutoBot-AI/pull/10031))
+
+- *(ansible)* Universal /slm prefix for all SLM API calls in playbooks (#9957) (#10015) ([#10015](https://github.com/mrveiss/AutoBot-AI/pull/10015))
+
+- *(backend)* Declare watchdog in requirements — watch-folders 500 on fresh venvs (#10009) (#10014) ([#10014](https://github.com/mrveiss/AutoBot-AI/pull/10014))
+
+- *(backend)* Sync AgentOrgNode and Secret ORM models with their migration columns (#9899) (#9989) ([#9989](https://github.com/mrveiss/AutoBot-AI/pull/9989))
+
+- *(backend)* Repair Alembic chain + compose migration bootstrap — fresh-DB upgrade now reaches head (#9759) (#9988) ([#9988](https://github.com/mrveiss/AutoBot-AI/pull/9988))
+
+- *(code-sync)* Protect .env and data via shared exclude chokepoint (#9970) (#9977) ([#9977](https://github.com/mrveiss/AutoBot-AI/pull/9977))
+
+- *(auth)* _get_jwt_secret reads ssot_config, not ConfigManager — restores all authed endpoints (#9960) (#9961) ([#9961](https://github.com/mrveiss/AutoBot-AI/pull/9961))
+
+- *(ansible)* Co-located wizard run — frontend 4b nginx ordering + universal /slm API path (#9952 #9953) (#9954) ([#9954](https://github.com/mrveiss/AutoBot-AI/pull/9954))
+
+- *(backend)* Mint short-lived service JWT for SLM event-stream WS (#9852) (#9944) ([#9944](https://github.com/mrveiss/AutoBot-AI/pull/9944))
+
+- *(docker)* Dev-override entrypoints source auto-provisioned signing secret (#9910) (#9940) ([#9940](https://github.com/mrveiss/AutoBot-AI/pull/9940))
+
+- *(ci)* Repair ansible-role-facts-test group_vars codepath (#9936) (#9941) ([#9941](https://github.com/mrveiss/AutoBot-AI/pull/9941))
+
+- *(redis)* Create agent-memory RediSearch index on db 0 (#9904) (#9939) ([#9939](https://github.com/mrveiss/AutoBot-AI/pull/9939))
+
+- *(config)* Replace non-existent flat config attrs with canonical vm/port refs (#9912) (#9938) ([#9938](https://github.com/mrveiss/AutoBot-AI/pull/9938))
+
+- *(ansible)* Unblock co-located SLM Manager provisioning (#9933 #9934) (#9935) ([#9935](https://github.com/mrveiss/AutoBot-AI/pull/9935))
+
+- *(ansible)* Make fresh-VM fleet provisioning work out-of-box (#9914 #9915) (#9916) ([#9916](https://github.com/mrveiss/AutoBot-AI/pull/9916))
+
+- Bug sweep 2026-06-10 — 7 fixes (#9832 #9788 #9785 #9782 #9783 #9767 #9768) (#9908) ([#9908](https://github.com/mrveiss/AutoBot-AI/pull/9908))
+
+- *(precommit)* Delegate execution to engine, remove duplicate runner (#9873) (#9889) ([#9889](https://github.com/mrveiss/AutoBot-AI/pull/9889))
+
+- *(precommit)* Derive API check catalog from engine SSOT — adds 5 missing checks (#9873) (#9886) ([#9886](https://github.com/mrveiss/AutoBot-AI/pull/9886))
+
+- *(api-wiring)* Resolve frontend/backend contract drift (audit #9851) (#9862) ([#9862](https://github.com/mrveiss/AutoBot-AI/pull/9862))
+
+- *(deps)* Upgrade vega ecosystem to v6 — stop recurring Dependabot break (#9847) (#9850) ([#9850](https://github.com/mrveiss/AutoBot-AI/pull/9850))
+
+- *(slm/fleet)* Re-land IP range + full role assignment dropped by #9837 squash (#9761) (#9855) ([#9855](https://github.com/mrveiss/AutoBot-AI/pull/9855))
+
+- *(slm/fleet)* Compose nodes show online + every container as a node (#9761) (#9837) ([#9837](https://github.com/mrveiss/AutoBot-AI/pull/9837))
+
+- *(auth)* Use ssot_config.misc.internal_api_key, not ConfigManager (#9781) (#9828) ([#9828](https://github.com/mrveiss/AutoBot-AI/pull/9828))
+
+- *(llc/adapters)* Share subprocess prompt+credential handling across all 4 adapters (#9789, #9769, #9777) (#9811) ([#9811](https://github.com/mrveiss/AutoBot-AI/pull/9811))
+
+- *(ansible)* Deliver build:slm to docs-referenced playbook (#9563 drift) (#9710) (#9792) ([#9792](https://github.com/mrveiss/AutoBot-AI/pull/9792))
+
+- *(tests)* Wire stubbed submodules to parent so patch('services.X.Y') resolves correctly (#9780) (#9790) ([#9790](https://github.com/mrveiss/AutoBot-AI/pull/9790))
+
+- *(extensions)* Repair None|None crash + shim duplicate builtin extensions (#9786, #9779) (#9787) ([#9787](https://github.com/mrveiss/AutoBot-AI/pull/9787))
+
+- *(compose)* Stop single_user startup error spam — LLC scheduler gate + git_tracker guard (#9771) (#9778) ([#9778](https://github.com/mrveiss/AutoBot-AI/pull/9778))
+
+- *(security)* Mask phone numbers before logging in whatsapp_integration (#9725) (#9774) ([#9774](https://github.com/mrveiss/AutoBot-AI/pull/9774))
+
+- *(ci)* Keep pr-queue-gate.yml valid YAML — build comment via indented printf (#9722) (#9770) ([#9770](https://github.com/mrveiss/AutoBot-AI/pull/9770))
+
+- *(docker)* Make compose stack run all-healthy out of the box (#9720) (#9762) ([#9762](https://github.com/mrveiss/AutoBot-AI/pull/9762))
+
+- *(ci)* Apply .bandit config in security-tests bandit scan (#9726) (#9764) ([#9764](https://github.com/mrveiss/AutoBot-AI/pull/9764))
+
+- *(llc/adapters)* Structured Markdown prompt + inject AUTOBOT_LLC_API_KEY env (#9622, #9623) (#9760) ([#9760](https://github.com/mrveiss/AutoBot-AI/pull/9760))
+
+- *(sso)* Harden SSO secret migration — key validation, error context, reliable tests (#9686) (#9757) ([#9757](https://github.com/mrveiss/AutoBot-AI/pull/9757))
+
+- *(tests)* Correct mock target for is_encryption_enabled after get_nested removal (#8954) (#9756) ([#9756](https://github.com/mrveiss/AutoBot-AI/pull/9756))
+
+- *(llc/frontend)* Read companyId from route params across LLC dashboard views (#9626) (#9723) ([#9723](https://github.com/mrveiss/AutoBot-AI/pull/9723))
+
+- *(security)* Correct Semgrep inline suppression placement to fix SAST failures (#9695) ([#9695](https://github.com/mrveiss/AutoBot-AI/pull/9695))
+
+- *(transcriber)* Add missing transcript route models to resolve startup-import-smoke (#9647) ([#9647](https://github.com/mrveiss/AutoBot-AI/pull/9647))
+
+- *(ci)* Resolve all CI failures from uv deps bump (MVA-3524) (#9631) ([#9631](https://github.com/mrveiss/AutoBot-AI/pull/9631))
+
+- *(ci)* Run isort to fix import ordering after black reformat
+
+- *(deps)* Upgrade FastAPI to 0.136.3 for starlette 1.0.1 compatibility
+
+- *(ci)* Use .bandit config in security.yml bandit scans (#9694) (#9708) ([#9708](https://github.com/mrveiss/AutoBot-AI/pull/9708))
+
+- *(ansible)* Add missing autobot_shared symlink for SLM backend (#9565) (#9707) ([#9707](https://github.com/mrveiss/AutoBot-AI/pull/9707))
+
+- *(lint)* Resolve oxlint errors blocking frontend-tests CI (#9541) (#9705) ([#9705](https://github.com/mrveiss/AutoBot-AI/pull/9705))
+
+- *(tests)* Replace FontAwesome selectors with Icon component classes (MVA-3922) (#9703) ([#9703](https://github.com/mrveiss/AutoBot-AI/pull/9703))
+
+- *(ci)* Remove unused imports in MCP resources (MVA-2205) (#9689) ([#9689](https://github.com/mrveiss/AutoBot-AI/pull/9689))
+
+- *(ci)* Create api/transcriber router to fix startup-import-smoke (#9551, MVA-3729)
+
+- *(connectors)* Correct SourceInfo fields in OneDrive connector (#9004) (#9679) ([#9679](https://github.com/mrveiss/AutoBot-AI/pull/9679))
+
+- *(api)* Allow setting nullable document fields to null (#9525) (#9678) ([#9678](https://github.com/mrveiss/AutoBot-AI/pull/9678))
+
+- *(api)* Allow canvas title to be set to null (#9526) (#9677) ([#9677](https://github.com/mrveiss/AutoBot-AI/pull/9677))
+
+- *(security)* Move SSO credentials to encrypted SystemSecret storage (MVA-1737) (#9676) ([#9676](https://github.com/mrveiss/AutoBot-AI/pull/9676))
+
+- *(ansible)* Add AUTOBOT_BACKEND_HOST to backend.env.j2 template (#9674) ([#9674](https://github.com/mrveiss/AutoBot-AI/pull/9674))
+
+- *(ci)* Remove console statements from test files (MVA-2605) (#9684) ([#9684](https://github.com/mrveiss/AutoBot-AI/pull/9684))
+
+- *(ci)* Fix flake8 errors blocking Code Quality check (MVA-3524) (#9683) ([#9683](https://github.com/mrveiss/AutoBot-AI/pull/9683))
+
+- *(ci)* Add missing tmpfs mounts for hardened-smoke-test (#9665) (#9666) ([#9666](https://github.com/mrveiss/AutoBot-AI/pull/9666))
+
+- *(ansible)* Resolve 4 critical deployment issues (MVA-3727) (#9661) ([#9661](https://github.com/mrveiss/AutoBot-AI/pull/9661))
+
+- *(llm)* Ensure tier field matches selected model [MVA-2022] (#9166) ([#9166](https://github.com/mrveiss/AutoBot-AI/pull/9166))
+
+- *(ansible)* Use build:slm command for SLM frontend deployment (#9563) (#9594) ([#9594](https://github.com/mrveiss/AutoBot-AI/pull/9594))
+
+- *(ci)* Resolve CI failures from dependabot PR #9511 (#9550) ([#9550](https://github.com/mrveiss/AutoBot-AI/pull/9550))
+
+- *(ci)* Update Storybook visual regression baselines for theme stories (#9577)
+
+- *(frontend)* Replace deprecated useApi with useApiClient
+
+- *(frontend)* Convert vite.config.ts to .js to resolve oxlint parsing error (#9366) ([#9366](https://github.com/mrveiss/AutoBot-AI/pull/9366))
+
+- *(ci)* Resolve oxlint correctness errors blocking Dev_new_gui CI
+
+- *(hardened)* Remove postgres_password secret that broke SLM DB auth
+
+- *(slm)* Respect SLM_DATA_DIR and SLM_CONFIG_DIR env vars in Settings
+
+- *(ci)* Resolve Semgrep SAST blocking findings (MVA-3380) (#9630) ([#9630](https://github.com/mrveiss/AutoBot-AI/pull/9630))
+
+- *(connectors)* Correct SourceInfo fields in OneDrive connector (MVA-3730) (#9635) ([#9635](https://github.com/mrveiss/AutoBot-AI/pull/9635))
+
+- *(adapters)* Narrow FileNotFoundError guard to cwd-only in ClaudeCodeAdapter (#9637) (#9643) ([#9643](https://github.com/mrveiss/AutoBot-AI/pull/9643))
+
+- *(docker)* Redirect SLM data_dir to named volume to fix hardened-smoke-test (#9560) ([#9560](https://github.com/mrveiss/AutoBot-AI/pull/9560))
+
+- *(security)* Enforce fail-closed authorization for device JWTs (MVA-3237) (#9614) ([#9614](https://github.com/mrveiss/AutoBot-AI/pull/9614))
+
+- *(backend)* Resolve Docker smoke-test dependency conflicts (#9465)
+
+- *(frontend)* Resolve 5 TypeScript errors in PluginsView and SettingsView (#9477)
+
+- *(flake8)* Remove unused imports exposed by isort (MVA-3526)
+
+- *(backend)* Resolve Docker smoke-test dependency conflicts (#9465)
+
+- *(frontend)* Resolve 5 TypeScript errors in PluginsView and SettingsView (#9477)
+
+- *(semgrep)* Move nosemgrep suppressions to same line as execute() calls
+
+- *(security)* Fix CRITICAL rate limiting vulnerabilities (#9610)
+
+- *(ci)* Regenerate frontend types after workflow.types changes (#9499, MVA-3668)
+
+- *(ci)* Remove unused imports flagged by autoflake (#9499, MVA-3668)
+
+- *(ci)* Remove 4 unused imports flagged by flake8 (#9499, MVA-3665)
+
+- *(ci)* Fix import sorting violations in code-quality check (#9499, MVA-3665)
+
+- *(ci)* Resolve code-quality and SAST failures in SSO rate limiting PR (#9499, MVA-3665)
+
+- *(ci)* Update vue-tsc baseline from 245 to 251 errors (#9461) ([#9461](https://github.com/mrveiss/AutoBot-AI/pull/9461))
+
+- *(i18n)* Add 118 missing translation keys to en.json (#9537) ([#9537](https://github.com/mrveiss/AutoBot-AI/pull/9537))
+
+- *(frontend/css)* Align default accent color to electric blue from design-tokens.css (#9040)
+
+- *(frontend)* Resolve missing imports blocking CI builds
+
+- *(provision-wizard)* Attribute handler failures correctly (GH#9286) (#9411) ([#9411](https://github.com/mrveiss/AutoBot-AI/pull/9411))
+
+- *(router-registry)* Remove duplicate mobile_devices registration (MVA-3022) (#9420) ([#9420](https://github.com/mrveiss/AutoBot-AI/pull/9420))
+
+- *(backend)* Remove deleted api.transcriber import from core_routers (#9384) ([#9415](https://github.com/mrveiss/AutoBot-AI/pull/9415))
+
+- *(docker)* Add /app/config tmpfs mount for hardened backend/worker (#9374) ([#9374](https://github.com/mrveiss/AutoBot-AI/pull/9374))
+
+- *(ci)* Add /app/logs tmpfs for autobot-slm in hardened config (MVA-2798) (#9373) ([#9373](https://github.com/mrveiss/AutoBot-AI/pull/9373))
+
+- *(auth)* Correct config access for internal_api_key (#9385) ([#9385](https://github.com/mrveiss/AutoBot-AI/pull/9385))
+
+- *(provision-wizard)* Track RUNNING HANDLER lines for failure attribution (#9286) (#9379) ([#9379](https://github.com/mrveiss/AutoBot-AI/pull/9379))
+
+- *(codegen)* Regenerate frontend types for WorkflowTask skill fields
+
+- *(tasks)* Normalize naive datetimes in snapshot cleanup (#9236)
+
+- *(ci)* Upgrade frontend-test workflow to Node.js 22 (MVA-2804) (#9368) ([#9368](https://github.com/mrveiss/AutoBot-AI/pull/9368))
+
+
+### CI/CD
+
+- Fail-fast visual-regression hang + dedup codegen step + cache Playwright (#10038, #10059, #10365) (#10393) ([#10393](https://github.com/mrveiss/AutoBot-AI/pull/10393))
+
+- *(frontend)* Drop redundant double unit-test run (#10365) (#10389) ([#10389](https://github.com/mrveiss/AutoBot-AI/pull/10389))
+
+- *(visual-regression)* Refresh 16 stale Storybook baselines (#10320) (#10359) ([#10359](https://github.com/mrveiss/AutoBot-AI/pull/10359))
+
+- *(visual-regression)* Fix flaky Storybook readiness — pre-fetch http-server + widen budget (#10316) (#10349) ([#10349](https://github.com/mrveiss/AutoBot-AI/pull/10349))
+
+- *(codegen)* Emit Apache-2.0/SPDX header from gen_frontend_types.py to clear check-drift (#10149) (#10259) ([#10259](https://github.com/mrveiss/AutoBot-AI/pull/10259))
+
+- *(gate)* Always-report refactor of code-quality / startup-import-smoke / frontend-test (#10022) (#10136) ([#10136](https://github.com/mrveiss/AutoBot-AI/pull/10136))
+
+- *(frontend)* Set vue-tsc regression BASELINE 249→0 — guard was toothless post-#9724 (#10093) (#10097) ([#10097](https://github.com/mrveiss/AutoBot-AI/pull/10097))
+
+- *(gate)* Run frontend-test on PRs to Dev_new_gui, not only post-merge (#10019) (#10080) ([#10080](https://github.com/mrveiss/AutoBot-AI/pull/10080))
+
+- *(test)* Co-located deployment smoke gate (#10023) (#10079) ([#10079](https://github.com/mrveiss/AutoBot-AI/pull/10079))
+
+- *(pr-gate)* Raise PR queue limit from 5 to 10
+
+- PR queue gate — warn only, do not auto-close
+
+- Enforce ≤5 open PR hard limit via GitHub Actions gate
+
+- PR queue gate — warn only, do not auto-close
+
+- Enforce ≤5 open PR hard limit via GitHub Actions gate
+
+
+### Documentation
+
+- *(migrations)* Fix 018 docstring column names (#10371) (#10396) ([#10396](https://github.com/mrveiss/AutoBot-AI/pull/10396))
+
+- *(sso)* Enterprise SSO/OIDC federation build-out PRD (#8994) (#10159) ([#10159](https://github.com/mrveiss/AutoBot-AI/pull/10159))
+
+- *(governance)* Adopt session-lifecycle protocol — .session README + workflow docs (#9918) (#10124) ([#10124](https://github.com/mrveiss/AutoBot-AI/pull/10124))
+
+- Re-apply orphan-wiring zone indexes + remove auto-generated reports (#9711) (#10115) ([#10115](https://github.com/mrveiss/AutoBot-AI/pull/10115))
+
+- *(funding)* Dedupe tier copy — FUNDING.md as single source of truth (#9846) (#10105) ([#10105](https://github.com/mrveiss/AutoBot-AI/pull/10105))
+
+- *(release)* Refresh stale CHANGELOG [Unreleased] + document release workflow (#9870) (#10103) ([#10103](https://github.com/mrveiss/AutoBot-AI/pull/10103))
+
+- *(codegen)* Document MANIFEST canonical enum coverage (#9869) (#10102) ([#10102](https://github.com/mrveiss/AutoBot-AI/pull/10102))
+
+- *(api)* Document DateRangeParams Depends() helper (#9868) (#10052) ([#10052](https://github.com/mrveiss/AutoBot-AI/pull/10052))
+
+- *(testing)* Document make_async_redis/patch_async_redis canonical fixtures (#9867) (#10051) ([#10051](https://github.com/mrveiss/AutoBot-AI/pull/10051))
+
+- *(frontend)* Document useProbeBackedHealth composable (#9866) (#10050) ([#10050](https://github.com/mrveiss/AutoBot-AI/pull/10050))
+
+- *(chromadb)* Document 0.5→1.x reindex requirement + empty-KB startup warning (#9766) (#9945) ([#9945](https://github.com/mrveiss/AutoBot-AI/pull/9945))
+
+- *(triage)* Organize open tracker into 13 umbrella epics + dispatch queue (#9932) ([#9932](https://github.com/mrveiss/AutoBot-AI/pull/9932))
+
+- *(arch)* Mark service-discovery modules as intentional unwired library (#9893) (#9903) ([#9903](https://github.com/mrveiss/AutoBot-AI/pull/9903))
+
+- *(features)* Record registry-only consolidation decision (#9872) (#9898) ([#9898](https://github.com/mrveiss/AutoBot-AI/pull/9898))
+
+- *(security)* Correct secrets cipher claim — shipped is Fernet, not AES-256 (#9894) (#9897) ([#9897](https://github.com/mrveiss/AutoBot-AI/pull/9897))
+
+- *(features)* Record verified capability statuses (codebase-checked) (#9895) ([#9895](https://github.com/mrveiss/AutoBot-AI/pull/9895))
+
+- *(nav)* Resolve conflict markers in 21 _index.md MOCs (#9887) (#9888) ([#9888](https://github.com/mrveiss/AutoBot-AI/pull/9888))
+
+- Reposition around the platform model (core → SLM → modules) + surface buried features (#9871) ([#9871](https://github.com/mrveiss/AutoBot-AI/pull/9871))
+
+- *(sso)* Document SSO secret migration process (#9687) (#9690) ([#9690](https://github.com/mrveiss/AutoBot-AI/pull/9690))
+
+- *(code-review)* Add PR review hardening documentation and test suite (#9605) (#9618) ([#9618](https://github.com/mrveiss/AutoBot-AI/pull/9618))
+
+- *(claude)* Restructure CLAUDE.md into lean quick-reference with sub-docs (#9659) ([#9659](https://github.com/mrveiss/AutoBot-AI/pull/9659))
+
+- *(backend)* Add LLM model fallback documentation (GH#8998)
+
+- *(backend)* Add Obsidian index for backend/ directory (MVA-2591)
+
+- *(connectors)* Add OneDrive/SharePoint connector documentation (#9004)
+
+
+### Features
+
+- *(secrets)* Dependency query endpoint — GET /v2/secrets/{id}/dependencies (#10381) (#10382) ([#10382](https://github.com/mrveiss/AutoBot-AI/pull/10382))
+
+- *(secrets)* Secret-dependency graph — what depends on a secret (#10374) (#10375) ([#10375](https://github.com/mrveiss/AutoBot-AI/pull/10375))
+
+- *(llc)* Aggregate card enrichment for Portfolio/Program/Project browsers + velocity sparkline (#10232) (#10373) ([#10373](https://github.com/mrveiss/AutoBot-AI/pull/10373))
+
+- *(llc/frontend)* Wire BacklogView drag-reorder + suggest-AC to #9861 backends (#10040) (#10361) ([#10361](https://github.com/mrveiss/AutoBot-AI/pull/10361))
+
+- *(secrets)* Access transparency — who can access a secret (#10343) (#10344) ([#10344](https://github.com/mrveiss/AutoBot-AI/pull/10344))
+
+- *(secrets)* Reconciliation sweep closes revoke-resurrection gate (#10337) (#10340) ([#10340](https://github.com/mrveiss/AutoBot-AI/pull/10340))
+
+- *(secrets)* Dual-write connector credentials into the unified store (#10333) (#10334) ([#10334](https://github.com/mrveiss/AutoBot-AI/pull/10334))
+
+- *(secrets)* Flagged unified-read + SQLite fallback in ConnectorCredentialStore (#10326) (#10327) ([#10327](https://github.com/mrveiss/AutoBot-AI/pull/10327))
+
+- *(workflows)* Conditional branching execution (#9036) + per-run API key injection (#9037) (#10325) ([#10325](https://github.com/mrveiss/AutoBot-AI/pull/10325))
+
+- *(analytics+error-monitoring)* Retire dead engagement duplicate; Prometheus-backed error metrics (#9959, #9983) (#10314) ([#10314](https://github.com/mrveiss/AutoBot-AI/pull/10314))
+
+- *(secrets)* Import legacy SQLite secrets store → unified envelope (#10312) (#10313) ([#10313](https://github.com/mrveiss/AutoBot-AI/pull/10313))
+
+- *(media)* AI video generation — Runway provider + async API + generate_video tool (#9016) (#10308) ([#10308](https://github.com/mrveiss/AutoBot-AI/pull/10308))
+
+- *(llc)* UI integration — reachable boards + adapter-selectable agent hire (#10219) (#10293) ([#10293](https://github.com/mrveiss/AutoBot-AI/pull/10293))
+
+- *(search)* WebSearchProvider abstraction + SearXNG and Brave backends (#9022, #9023) (#10292) ([#10292](https://github.com/mrveiss/AutoBot-AI/pull/10292))
+
+- *(secrets)* Migrate PG legacy Fernet secrets → envelope, in-place (#10286) (#10295) ([#10295](https://github.com/mrveiss/AutoBot-AI/pull/10295))
+
+- *(transcriber/frontend)* Implement ProjectsView + ProjectDetailView (#10289) (#10291) ([#10291](https://github.com/mrveiss/AutoBot-AI/pull/10291))
+
+- *(connectors)* Surface GitLab/Gitea/Forgejo connectors in the create UI (#9011) (#10283) ([#10283](https://github.com/mrveiss/AutoBot-AI/pull/10283))
+
+- *(chat)* In-folder search + folder archive (#8987) (#10282) ([#10282](https://github.com/mrveiss/AutoBot-AI/pull/10282))
+
+- *(llm)* Reasoning-effort cluster — wire effort into providers + per-conversation UI (#9017/#9468/#9460/#9471/#9531) (#10276) ([#10276](https://github.com/mrveiss/AutoBot-AI/pull/10276))
+
+- *(connectors)* Surface OneDrive/SharePoint connector in create API + UI with OAuth connect (#9004) (#10271) ([#10271](https://github.com/mrveiss/AutoBot-AI/pull/10271))
+
+- *(llc/adapters)* Subscription quota auto-pause + secrets-backed gh_token (#10218, #10217) (#10257) ([#10257](https://github.com/mrveiss/AutoBot-AI/pull/10257))
+
+- *(sso)* PKCE (S256) on the OIDC authorization-code flow (#10150) (#10254) ([#10254](https://github.com/mrveiss/AutoBot-AI/pull/10254))
+
+- *(lint)* Guard against ApiClient envelope misuse (.json()/.data on parsed results) (#10025) (#10268) ([#10268](https://github.com/mrveiss/AutoBot-AI/pull/10268))
+
+- *(connectors)* Surface Google Drive connector in create API + UI with OAuth connect (#9003) (#10265) ([#10265](https://github.com/mrveiss/AutoBot-AI/pull/10265))
+
+- *(whatsapp)* Wire inbound webhook route + dispatch to chat pipeline (#9007) (#10266) ([#10266](https://github.com/mrveiss/AutoBot-AI/pull/10266))
+
+- *(auth)* Default to single_company + seed unified admin from SLM creds (#10199) (#10243) ([#10243](https://github.com/mrveiss/AutoBot-AI/pull/10243))
+
+- *(llc)* Parse CLI token usage and report to LLC budget (#10220) (#10242) ([#10242](https://github.com/mrveiss/AutoBot-AI/pull/10242))
+
+- *(transcriber/frontend)* ASR provider selector in settings (#10147) (#10237) ([#10237](https://github.com/mrveiss/AutoBot-AI/pull/10237))
+
+- *(transcriber)* User-selectable cloud ASR providers + diarizing-provider orchestrator path (#10147) (#10236) ([#10236](https://github.com/mrveiss/AutoBot-AI/pull/10236))
+
+- *(#9929)* Per-account theme persistence (#8988) + admin shared-links view & 500-bug fix (#8996) (#10233) ([#10233](https://github.com/mrveiss/AutoBot-AI/pull/10233))
+
+- *(secrets)* /api/v2/secrets FastAPI router over SecretsCoordinator (#10240) (#10241) ([#10241](https://github.com/mrveiss/AutoBot-AI/pull/10241))
+
+- *(llc/frontend)* Portfolio → Program → Project browser views (#9628) (#10231) ([#10231](https://github.com/mrveiss/AutoBot-AI/pull/10231))
+
+- *(auth)* Seed default admin into autobot_users at startup (idempotent, Postgres-gated) (#10199) (#10230) ([#10230](https://github.com/mrveiss/AutoBot-AI/pull/10230))
+
+- *(transcriber/frontend)* Build TranscriptView with waveform player + segment sync, consume #9466 audio API (#10129) (#10226) ([#10226](https://github.com/mrveiss/AutoBot-AI/pull/10226))
+
+- *(rbac)* Service_management permission gates the SLM surface — ordinary users 403 + no SLM nav (#10198) (#10222) ([#10222](https://github.com/mrveiss/AutoBot-AI/pull/10222))
+
+- *(secrets)* Seed secrets:* RBAC permissions for team/role vaults (#10223) (#10224) ([#10224](https://github.com/mrveiss/AutoBot-AI/pull/10224))
+
+- *(auth)* SLM verifies authority RS256 tokens via cached JWKS (Pattern B) (#10197) (#10215) ([#10215](https://github.com/mrveiss/AutoBot-AI/pull/10215))
+
+- *(secrets)* SecretsCoordinator — resolve→authorize→service orchestration (#10213) (#10214) ([#10214](https://github.com/mrveiss/AutoBot-AI/pull/10214))
+
+- *(auth)* Authority token-validate/introspect + RBAC metadata API (#10195) (#10212) ([#10212](https://github.com/mrveiss/AutoBot-AI/pull/10212))
+
+- *(rag)* CAG context-augmented retrieval strategy + dispatcher behind enable_cag flag (#9018 Phase 1) (#10211) ([#10211](https://github.com/mrveiss/AutoBot-AI/pull/10211))
+
+- *(frontend)* Entity anchor click handler for chat messages (#9479) (#10206) ([#10206](https://github.com/mrveiss/AutoBot-AI/pull/10206))
+
+- *(auth)* RS256 + JWKS for the identity authority — public-key token verification (#10196) (#10205) ([#10205](https://github.com/mrveiss/AutoBot-AI/pull/10205))
+
+- *(secrets)* PrincipalFacts DB resolver from membership tables (#10190) (#10192) ([#10192](https://github.com/mrveiss/AutoBot-AI/pull/10192))
+
+- *(kb)* Wire in the ChromaDB / vector-store explorer (#8999) (#10142) ([#10142](https://github.com/mrveiss/AutoBot-AI/pull/10142))
+
+- *(code-sync)* Generate ansible inventory from DB node registry — node_id hosts + local self-node (#10110) (#10141) ([#10141](https://github.com/mrveiss/AutoBot-AI/pull/10141))
+
+- *(secrets)* UnifiedSecretsService — envelope CRUD + sharing (#10111) (#10134) ([#10134](https://github.com/mrveiss/AutoBot-AI/pull/10134))
+
+- *(llc/sprint)* Project timeline + Gantt view for sprint planning (#9020) (#10133) ([#10133](https://github.com/mrveiss/AutoBot-AI/pull/10133))
+
+- *(secrets)* RBAC authorization policy (pure) — accessible_vaults + authorize (#10113) (#10135) ([#10135](https://github.com/mrveiss/AutoBot-AI/pull/10135))
+
+- *(governance)* Merge-blocking findings gate via blocks-merge label (#10024) (#10125) ([#10125](https://github.com/mrveiss/AutoBot-AI/pull/10125))
+
+- *(transcriber)* Waveform + ranged audio playback API on recordings router (#9466) (#10122) ([#10122](https://github.com/mrveiss/AutoBot-AI/pull/10122))
+
+- *(connectors)* OAuth authorize/callback flow + auto-refresh resolver (#9019) (#10087) ([#10087](https://github.com/mrveiss/AutoBot-AI/pull/10087))
+
+- *(secrets)* Envelope store schema — secrets cols + secret_grants table (#10099) (#10100) ([#10100](https://github.com/mrveiss/AutoBot-AI/pull/10100))
+
+- *(secrets)* Canonical vault/principal namespace — VaultRef + kinds (#10094) (#10096) ([#10096](https://github.com/mrveiss/AutoBot-AI/pull/10096))
+
+- *(secrets)* Envelope-crypto core — root key, per-vault KEK, DEK wrapping (#10089) (#10090) ([#10090](https://github.com/mrveiss/AutoBot-AI/pull/10090))
+
+- *(llc)* GitHub PR ↔ work-item linking for LLC adapters (#9625) (#10061) ([#10061](https://github.com/mrveiss/AutoBot-AI/pull/10061))
+
+- *(llc/api)* Backlog reorder + suggest-AC, org-chart enrichment, full work-items tenant scoping (#9861) (#10034) ([#10034](https://github.com/mrveiss/AutoBot-AI/pull/10034))
+
+- *(llc)* Agent run replay — record, replay, diff, fixture export (#9034) (#10030) ([#10030](https://github.com/mrveiss/AutoBot-AI/pull/10030))
+
+- *(llc/budget)* Token-based budget mode with shadow cost tracking (#8997) (#9998) ([#9998](https://github.com/mrveiss/AutoBot-AI/pull/9998))
+
+- *(llc/frontend)* Company selector + LLC sidebar navigation spine (#9627) (#9997) ([#9997](https://github.com/mrveiss/AutoBot-AI/pull/9997))
+
+- *(llc/scheduler)* Rate-limit detection + backoff for registry adapters (#9773) (#9993) ([#9993](https://github.com/mrveiss/AutoBot-AI/pull/9993))
+
+- *(code-sync)* One-click full-pipeline update — orchestration endpoint + pipeline UI (#9971) (#9991) ([#9991](https://github.com/mrveiss/AutoBot-AI/pull/9991))
+
+- *(frontend)* Wire failure-analysis diagnostics UI to causal-inference endpoints (#9892) (#9974) ([#9974](https://github.com/mrveiss/AutoBot-AI/pull/9974))
+
+- *(frontend)* Wire error-monitoring dashboard to backend endpoints (#9891) (#9973) ([#9973](https://github.com/mrveiss/AutoBot-AI/pull/9973))
+
+- *(frontend)* Wire vision automation panel to /api/vision endpoints (#9890) (#9972) ([#9972](https://github.com/mrveiss/AutoBot-AI/pull/9972))
+
+- *(llc/budget)* Provision per-agent budget — hire-time auto-create + explicit endpoint (#9901) (#9981) ([#9981](https://github.com/mrveiss/AutoBot-AI/pull/9981))
+
+- *(llc)* Optional workIntent on work-item checkout — audit trail + similarity warn (#9532) (#9976) ([#9976](https://github.com/mrveiss/AutoBot-AI/pull/9976))
+
+- *(backend)* Mount transcripts router with real storage backing (#9863) (#9955) ([#9955](https://github.com/mrveiss/AutoBot-AI/pull/9955))
+
+- *(llc)* Compose-runnable subprocess agents — CLI gate, image bake-in, env passthrough (#9793) (#9948) ([#9948](https://github.com/mrveiss/AutoBot-AI/pull/9948))
+
+- *(slm)* Add canonical postgres + scheduler roles to role registry (#9853) (#9946) ([#9946](https://github.com/mrveiss/AutoBot-AI/pull/9946))
+
+- *(docker)* Auto-provision signing secrets — compose works out-of-the-box (#9905) (#9906) ([#9906](https://github.com/mrveiss/AutoBot-AI/pull/9906))
+
+- *(llc)* Make LLC module functional end-to-end — wire 7 paths, org-chart endpoint, e2e + CI gate (#9861) (#9902) ([#9902](https://github.com/mrveiss/AutoBot-AI/pull/9902))
+
+- *(llc/scheduler)* Route claude_code heartbeats through adapter registry + run-scoped key (#9622, #9623) (#9772) ([#9772](https://github.com/mrveiss/AutoBot-AI/pull/9772))
+
+- *(admin)* Telemetry and analytics opt-out (#9035) (#9704) ([#9704](https://github.com/mrveiss/AutoBot-AI/pull/9704))
+
+- *(ci)* Enforce pre-commit hooks to prevent code-quality CI failures (MVA-2111) (#9698) ([#9698](https://github.com/mrveiss/AutoBot-AI/pull/9698))
+
+- *(ui)* Add LLM fallback status visibility to Admin UI (MVA-2999) (#9421) ([#9421](https://github.com/mrveiss/AutoBot-AI/pull/9421))
+
+- *(llm)* Extract thinking_tokens from Anthropic response usage (MVA-3089) (#9452) ([#9452](https://github.com/mrveiss/AutoBot-AI/pull/9452))
+
+- *(ci)* Add auto-fix workflow for code formatting violations (#9181) ([#9181](https://github.com/mrveiss/AutoBot-AI/pull/9181))
+
+- *(kb)* Wire KB folder watcher into backend lifecycle (#9000) (#9599) ([#9599](https://github.com/mrveiss/AutoBot-AI/pull/9599))
+
+- *(llc)* Implement 3-tier configurable timeout in LLC adapters (#9521, MVA-3019, MVA-3020) ([#9555](https://github.com/mrveiss/AutoBot-AI/pull/9555))
+
+- *(telegram)* Wire Telegram bot router into integration registry (#9006) (#9544) ([#9544](https://github.com/mrveiss/AutoBot-AI/pull/9544))
+
+- *(slm/auth)* Add callback URL allowlist validation for OAuth (#9500) (#9509) ([#9509](https://github.com/mrveiss/AutoBot-AI/pull/9509))
+
+- *(ui)* Add theme preset system with 12 named themes (#8988) (#9502) ([#9502](https://github.com/mrveiss/AutoBot-AI/pull/9502))
+
+- *(frontend)* Add Ember theme toggle to Settings UI (#9274) (#9481) ([#9481](https://github.com/mrveiss/AutoBot-AI/pull/9481))
+
+- *(agent)* Add entity anchor UI convention to chat system prompt (#9297) (#9478) ([#9478](https://github.com/mrveiss/AutoBot-AI/pull/9478))
+
+- *(context-window)* Wire adaptive budget scaling for unknown models (#9294)
+
+- *(security)* Add comprehensive SSO/OIDC security test suite (MVA-3398)
+
+- *(auth)* Implement device JWT authentication with security controls (#9493)
+
+- *(frontend)* Add thinking badge to MessageItem component (MVA-3091)
+
+- *(settings)* Wire device management UI into settings view (MVA-3024)
+
+- *(chat)* Add thinking metadata to response schema and SSE stream (MVA-3090)
+
+- *(kb)* Auto-watch folder for KB ingestion — automatically ingest new files added to monitored directories (#9000)
+
+- *(connectors)* Add Google Drive knowledge base connector (#9003)
+
+- *(llm)* Quota-triggered model fallback (GH#8998) (#9442) ([#9442](https://github.com/mrveiss/AutoBot-AI/pull/9442))
+
+- *(chat)* Wire context overflow protection into chat endpoints (#9043) (#9427) ([#9427](https://github.com/mrveiss/AutoBot-AI/pull/9427))
+
+- *(mobile)* Add push notification delivery module and integration tests (GH#4463)
+
+- *(workflows)* Add switch/case nodes and JSONPath conditions (#9036)
+
+- *(theme)* Add Ember warm palette theme variant + icon set (#9274)
+
+- *(admin)* Add retention policy CRUD API and DB schema (MVA-3145, GH#8995)
+
+- *(llc/budget)* Token-based budget UI in CostDashboard (GH#8997)
+
+- *(observability)* Add Prometheus metrics and Grafana dashboard for mobile device pairing
+
+- *(MVA-3085)* Add Mobile Devices tab to settings view with device pairing UI
+
+- *(transcriber)* Add transcript editing API (MVA-2173) (#9350) ([#9350](https://github.com/mrveiss/AutoBot-AI/pull/9350))
+
+- *(connectors)* Add Microsoft OneDrive/SharePoint connector (#9004)
+
+- *(voice-bundle)* Register voice bundle routers (#8605) (#9382) ([#9382](https://github.com/mrveiss/AutoBot-AI/pull/9382))
+
+- *(mobile)* Build QR code pairing dialog component (MVA-2993)
+
+- *(connectors)* Enable GitLab/Gitea/Forgejo connectors in API (#9011)
+
+
+### Miscellaneous
+
+- *(deps)* Bump the uv group across 4 directories with 5 updates (#10354) ([#10354](https://github.com/mrveiss/AutoBot-AI/pull/10354))
+
+- *(deps)* Bump the pip group across 3 directories with 3 updates (#10353) ([#10353](https://github.com/mrveiss/AutoBot-AI/pull/10353))
+
+- *(deps)* Bump the pip group across 2 directories with 2 updates (#10256) ([#10256](https://github.com/mrveiss/AutoBot-AI/pull/10256))
+
+- *(deps)* Bump the uv group across 3 directories with 5 updates (#10245) ([#10245](https://github.com/mrveiss/AutoBot-AI/pull/10245))
+
+- *(deps)* Bump npm deps — dompurify 3.4.11 (security), storybook 10.4.6 (#10311) (#10328) ([#10328](https://github.com/mrveiss/AutoBot-AI/pull/10328))
+
+- *(deps)* Bump pip security deps — cryptography 49.0.0, python-multipart 0.0.32, pypdf 6.13.3, torch 2.12.1/torchvision 0.27.1 (#10310) (#10330) ([#10330](https://github.com/mrveiss/AutoBot-AI/pull/10330))
+
+- *(deps)* Bump the npm_and_yarn group across 6 directories with 3 updates (#10244) ([#10244](https://github.com/mrveiss/AutoBot-AI/pull/10244))
+
+- *(deps)* Bump the uv group across 3 directories with 4 updates (#10216) ([#10216](https://github.com/mrveiss/AutoBot-AI/pull/10216))
+
+- *(deps)* Widen Dependabot grouping to collapse the PR flood + gate python/ubuntu minor (#10191) ([#10191](https://github.com/mrveiss/AutoBot-AI/pull/10191))
+
+- *(license)* Add SPDX header enforcement hook + backfill post-sweep files (#9840) (#10127) ([#10127](https://github.com/mrveiss/AutoBot-AI/pull/10127))
+
+- *(license)* Document github-mcp-server provisioning in THIRD-PARTY-NOTICES (#9791) (#10116) ([#10116](https://github.com/mrveiss/AutoBot-AI/pull/10116))
+
+- *(deps)* Bump the npm_and_yarn group across 5 directories with 3 updates (#10098) ([#10098](https://github.com/mrveiss/AutoBot-AI/pull/10098))
+
+- *(triage)* 2026-06-12 umbrella restore + delta triage — reopen U1/U2, file 42 follow-ups (part of #9919, part of #9920) (#10033) ([#10033](https://github.com/mrveiss/AutoBot-AI/pull/10033))
+
+- *(lifespan)* Extract @requires_postgres decorator + gate remaining Postgres paths (#9913 #9765) (#9937) ([#9937](https://github.com/mrveiss/AutoBot-AI/pull/9937))
+
+- *(scripts)* Add API wiring audit (frontend/backend contract + dead-surface) (#9849) ([#9849](https://github.com/mrveiss/AutoBot-AI/pull/9849))
+
+- *(license)* Relicense AutoBot to Apache-2.0 (#9826) (#9830) ([#9830](https://github.com/mrveiss/AutoBot-AI/pull/9830))
+
+- *(deps-dev)* Bump npm-run-all2 in /autobot-frontend (#9807) ([#9807](https://github.com/mrveiss/AutoBot-AI/pull/9807))
+
+- *(deps)* Bump actions/cache from 4 to 5 (#9810) ([#9810](https://github.com/mrveiss/AutoBot-AI/pull/9810))
+
+- *(deps)* Bump actions/checkout from 4 to 6 (#9809) ([#9809](https://github.com/mrveiss/AutoBot-AI/pull/9809))
+
+- *(deps)* Bump the all-minor-patch group (#9806) ([#9806](https://github.com/mrveiss/AutoBot-AI/pull/9806))
+
+- *(deps)* Update numpy requirement (#9823) ([#9823](https://github.com/mrveiss/AutoBot-AI/pull/9823))
+
+- *(deps)* Update fastapi requirement (#9822) ([#9822](https://github.com/mrveiss/AutoBot-AI/pull/9822))
+
+- *(deps)* Update transformers requirement (#9821) ([#9821](https://github.com/mrveiss/AutoBot-AI/pull/9821))
+
+- *(deps)* Update openvino requirement from >=2026.1.0 to >=2026.2.0 (#9820) ([#9820](https://github.com/mrveiss/AutoBot-AI/pull/9820))
+
+- *(deps)* Update mcp requirement from >=1.27.1 to >=1.27.2 (#9818) ([#9818](https://github.com/mrveiss/AutoBot-AI/pull/9818))
+
+- *(deps)* Update soundfile requirement in /autobot-tts-worker (#9817) ([#9817](https://github.com/mrveiss/AutoBot-AI/pull/9817))
+
+- *(deps)* Update vulture requirement from >=2.11 to >=2.16 (#9816) ([#9816](https://github.com/mrveiss/AutoBot-AI/pull/9816))
+
+- *(deps)* Update torchvision requirement (#9814) ([#9814](https://github.com/mrveiss/AutoBot-AI/pull/9814))
+
+- *(deps)* Update transformers requirement (#9813) ([#9813](https://github.com/mrveiss/AutoBot-AI/pull/9813))
+
+- *(deps)* Update aiohttp requirement (#9812) ([#9812](https://github.com/mrveiss/AutoBot-AI/pull/9812))
+
+- *(deps)* Bump the all-minor-patch group with 2 updates (#9808) ([#9808](https://github.com/mrveiss/AutoBot-AI/pull/9808))
+
+- *(deps)* Bump the all-minor-patch group (#9805) ([#9805](https://github.com/mrveiss/AutoBot-AI/pull/9805))
+
+- *(deps)* Update openai requirement in /autobot-backend (#9803) ([#9803](https://github.com/mrveiss/AutoBot-AI/pull/9803))
+
+- *(deps)* Update boto3 requirement in /autobot-backend (#9802) ([#9802](https://github.com/mrveiss/AutoBot-AI/pull/9802))
+
+- *(deps)* Update pypdf requirement in /autobot-backend (#9801) ([#9801](https://github.com/mrveiss/AutoBot-AI/pull/9801))
+
+- *(deps)* Bump the all-minor-patch group (#9799) ([#9799](https://github.com/mrveiss/AutoBot-AI/pull/9799))
+
+- *(deps)* Bump python (#9797) ([#9797](https://github.com/mrveiss/AutoBot-AI/pull/9797))
+
+- *(deps)* Group Dependabot minor/patch updates to reduce PR flood (#9755) (#9758) ([#9758](https://github.com/mrveiss/AutoBot-AI/pull/9758))
+
+- *(deps)* Bump vega-functions (#9702) ([#9702](https://github.com/mrveiss/AutoBot-AI/pull/9702))
+
+- *(deps)* Bump the uv group across 3 directories with 2 updates
+
+- *(deps)* Bump the npm_and_yarn group across 4 directories with 1 update (#9518) ([#9518](https://github.com/mrveiss/AutoBot-AI/pull/9518))
+
+- *(deps)* Bump the pip group across 2 directories with 2 updates (#9511) ([#9511](https://github.com/mrveiss/AutoBot-AI/pull/9511))
+
+- *(deps)* Bump vega-functions (#9402) ([#9402](https://github.com/mrveiss/AutoBot-AI/pull/9402))
+
+- Trigger CI
+
+- *(deps)* Bump sqlalchemy from 2.0.43 to 2.0.50 (#9438) ([#9438](https://github.com/mrveiss/AutoBot-AI/pull/9438))
+
+- *(deps)* Update anthropic requirement from >=0.104.1 to >=0.105.2 (#9439) ([#9439](https://github.com/mrveiss/AutoBot-AI/pull/9439))
+
+- *(deps)* Bump beautifulsoup4 from 4.13.4 to 4.14.3 (#9440) ([#9440](https://github.com/mrveiss/AutoBot-AI/pull/9440))
+
+- *(deps)* Update pypdf2 requirement from >=3.0.0 to >=3.0.1 (#9436) ([#9436](https://github.com/mrveiss/AutoBot-AI/pull/9436))
+
+- *(deps)* Bump python-json-logger from 3.3.0 to 4.1.0 (#9434) ([#9434](https://github.com/mrveiss/AutoBot-AI/pull/9434))
+
+- *(deps)* Bump psutil from 6.1.1 to 7.2.2 (#9433) ([#9433](https://github.com/mrveiss/AutoBot-AI/pull/9433))
+
+- *(deps)* Update llama-index requirement (#9432) ([#9432](https://github.com/mrveiss/AutoBot-AI/pull/9432))
+
+- *(deps)* Update fastapi requirement (#9423) ([#9423](https://github.com/mrveiss/AutoBot-AI/pull/9423))
+
+- *(deps)* Update tokenizers requirement (#9424) ([#9424](https://github.com/mrveiss/AutoBot-AI/pull/9424))
+
+- *(deps)* Update openvino requirement (#9429) ([#9429](https://github.com/mrveiss/AutoBot-AI/pull/9429))
+
+- *(deps)* Update redis requirement (#9430) ([#9430](https://github.com/mrveiss/AutoBot-AI/pull/9430))
+
+- *(deps)* Bump vue-router in /autobot-slm-frontend (#9405) ([#9405](https://github.com/mrveiss/AutoBot-AI/pull/9405))
+
+- *(deps)* Update requests requirement (#9428) ([#9428](https://github.com/mrveiss/AutoBot-AI/pull/9428))
+
+- *(deps)* Update transformers requirement in /autobot-tts-worker (#9425) ([#9425](https://github.com/mrveiss/AutoBot-AI/pull/9425))
+
+- *(deps)* Update pytest-asyncio requirement (#9422) ([#9422](https://github.com/mrveiss/AutoBot-AI/pull/9422))
+
+- *(deps-dev)* Bump @storybook/vue3 from 10.4.1 to 10.4.2 in /autobot-slm-frontend ([#9404](https://github.com/mrveiss/AutoBot-AI/pull/9404))
+
+- *(deps-dev)* Bump eslint-plugin-vue from 10.9.1 to 10.9.2 in /autobot-slm-frontend ([#9403](https://github.com/mrveiss/AutoBot-AI/pull/9403))
+
+- *(deps)* Bump actions/upload-pages-artifact from 3 to 5 (#9399) ([#9399](https://github.com/mrveiss/AutoBot-AI/pull/9399))
+
+- *(deps)* Bump actions/deploy-pages from 4 to 5 (#9400) ([#9400](https://github.com/mrveiss/AutoBot-AI/pull/9400))
+
+- *(deps)* Bump github/codeql-action from 3.27.1 to 4.36.1 (#9401) ([#9401](https://github.com/mrveiss/AutoBot-AI/pull/9401))
+
+- *(deps)* Update weasyprint requirement in /autobot-backend (#9386) ([#9386](https://github.com/mrveiss/AutoBot-AI/pull/9386))
+
+- *(deps)* Update fastapi requirement in /autobot-backend (#9388) ([#9388](https://github.com/mrveiss/AutoBot-AI/pull/9388))
+
+- *(deps)* Update boto3 requirement in /autobot-backend (#9390) ([#9390](https://github.com/mrveiss/AutoBot-AI/pull/9390))
+
+- *(deps)* Update redis requirement in /autobot-slm-backend (#9391) ([#9391](https://github.com/mrveiss/AutoBot-AI/pull/9391))
+
+- *(deps)* Update uvicorn requirement in /autobot-slm-backend (#9392) ([#9392](https://github.com/mrveiss/AutoBot-AI/pull/9392))
+
+- *(deps)* Update sqlalchemy requirement in /autobot-slm-backend (#9393) ([#9393](https://github.com/mrveiss/AutoBot-AI/pull/9393))
+
+- *(deps)* Bump vue-i18n from 11.3.2 to 11.4.4 in /autobot-frontend (#9394) ([#9394](https://github.com/mrveiss/AutoBot-AI/pull/9394))
+
+- *(deps-dev)* Bump @vitest/ui in /autobot-frontend (#9396) ([#9396](https://github.com/mrveiss/AutoBot-AI/pull/9396))
+
+- *(deps-dev)* Bump @vitest/coverage-v8 in /autobot-frontend (#9398) ([#9398](https://github.com/mrveiss/AutoBot-AI/pull/9398))
+
+- *(deps)* Update sqlalchemy requirement in /autobot-backend (#9389) ([#9389](https://github.com/mrveiss/AutoBot-AI/pull/9389))
+
+- *(deps)* Bump the pip group across 2 directories with 1 update (#9363) ([#9363](https://github.com/mrveiss/AutoBot-AI/pull/9363))
+
+- *(deps)* Bump chromadb from 1.2.1 to 1.5.9 in /requirements-ci ([#9106](https://github.com/mrveiss/AutoBot-AI/pull/9106))
+
+- *(deps)* Bump the npm_and_yarn group across 3 directories with 2 updates (#8976) ([#8976](https://github.com/mrveiss/AutoBot-AI/pull/8976))
+
+- *(deps)* Bump langsmith in the pip group across 1 directory (#8282) ([#8282](https://github.com/mrveiss/AutoBot-AI/pull/8282))
+
+- *(deps)* Bump the npm_and_yarn group across 1 directory with 3 updates (#8267) ([#8267](https://github.com/mrveiss/AutoBot-AI/pull/8267))
+
+- *(deps)* Bump the pip group across 2 directories with 1 update (#7681) ([#7681](https://github.com/mrveiss/AutoBot-AI/pull/7681))
+
+- *(deps)* Bump @protobufjs/utf8 (#7679) ([#7679](https://github.com/mrveiss/AutoBot-AI/pull/7679))
+
+
+### Refactoring
+
+- *(frontend)* Migrate VisionMultimodalApiClient vision methods to canonical ApiClient + shared types (#9985) (#10250) ([#10250](https://github.com/mrveiss/AutoBot-AI/pull/10250))
+
+- *(slm)* Identify SLM by group/role facts, not hardcoded node name (#9956) (#10066) ([#10066](https://github.com/mrveiss/AutoBot-AI/pull/10066))
+
+- *(ansible)* Consolidate autobot-backend.service.j2 templates (#10005) (#10057) ([#10057](https://github.com/mrveiss/AutoBot-AI/pull/10057))
+
+- *(code-intelligence)* Adopt modular security/ package, shim monolith (#9856) (#10029) ([#10029](https://github.com/mrveiss/AutoBot-AI/pull/10029))
+
+- *(extensions)* Collapse duplicate extensions/ package into middleware/ (#9794) (#10004) ([#10004](https://github.com/mrveiss/AutoBot-AI/pull/10004))
+
+- *(llc/scheduler)* Extract PollLoopScheduler base for poll-loop schedulers (#9842) (#10003) ([#10003](https://github.com/mrveiss/AutoBot-AI/pull/10003))
+
+- *(llc/api)* Shared get_session + service_dep DI helper across routers (#9843) (#9994) ([#9994](https://github.com/mrveiss/AutoBot-AI/pull/9994))
+
+- *(llc/adapters/tests)* Hoist shared adapter test helpers into conftest fixtures (#9844) (#9990) ([#9990](https://github.com/mrveiss/AutoBot-AI/pull/9990))
+
+- *(llc/adapters)* Share probe_pid/terminate_pid primitives in subprocess_support (#9839) (#9979) ([#9979](https://github.com/mrveiss/AutoBot-AI/pull/9979))
+
+- *(shared)* Promote guarded env_float/env_int to autobot_shared (#9841) (#9964) ([#9964](https://github.com/mrveiss/AutoBot-AI/pull/9964))
+
+- *(llc/frontend)* Consolidate tree-build, status-color, run-status mapping (#9909) (#9969) ([#9969](https://github.com/mrveiss/AutoBot-AI/pull/9969))
+
+- *(slm)* Extract compose fleet seeder/heartbeat into services/compose_fleet (#9854) (#9947) ([#9947](https://github.com/mrveiss/AutoBot-AI/pull/9947))
+
+- *(dedup)* Eliminate code duplication via behavior-preserving extraction (#9794) (#9865) ([#9865](https://github.com/mrveiss/AutoBot-AI/pull/9865))
+
+- *(llc/adapters)* Extract shared SubprocessLifecycleAdapter base (#9834) (#9835) ([#9835](https://github.com/mrveiss/AutoBot-AI/pull/9835))
+
+- *(llc)* Consolidate config, terminal-status helper, key validation + fix broken test (#9776, #9777, #9763) (#9829) ([#9829](https://github.com/mrveiss/AutoBot-AI/pull/9829))
+
+- *(voice-rbac)* Consolidate admin role check using _require_admin() Depends pattern (#9450) ([#9450](https://github.com/mrveiss/AutoBot-AI/pull/9450))
+
+- *(schemas)* Consolidate SelfUpdateResponse into NodeSyncResponse (#9196) (#9455) ([#9455](https://github.com/mrveiss/AutoBot-AI/pull/9455))
+
+- *(voice-rbac)* Break circular import by extracting shared helpers (#8980)
+
+- *(rbac)* Use Depends(_require_admin) in voice_bundle_user.py (#8983)
+
+- *(security)* Consolidate SSRF guards into ssrf_guard.py (GH #6533) ([#7539](https://github.com/mrveiss/AutoBot-AI/pull/7539))
+
+
+### Styling
+
+- *(base)* Apply Black formatting to 5 files in Dev_new_gui (MVA-2892)
+
+
+### Testing
+
+- *(migrations)* #10026 case 2 — 018 converts legacy naive timestamps + tz round-trip (#10026) (#10368) ([#10368](https://github.com/mrveiss/AutoBot-AI/pull/10368))
+
+- *(sso)* Rate-limit throttle tests (#9611) + callback host-case test fix (#10255) (#10270) ([#10270](https://github.com/mrveiss/AutoBot-AI/pull/10270))
+
+- *(voice-rbac)* Repair voice-bundle admin tests so audit-emit assertions run (#8977) (#10207) ([#10207](https://github.com/mrveiss/AutoBot-AI/pull/10207))
+
+- *(circuit-breaker)* Add unit tests for reset_on_success modes (#9431) (#10041) ([#10041](https://github.com/mrveiss/AutoBot-AI/pull/10041))
+
+- *(frontend)* E2E tests for thinking mode toggle and indicator (MVA-3092) (#9418) ([#9418](https://github.com/mrveiss/AutoBot-AI/pull/9418))
+
+- *(circuit-breaker)* Add tests for reset_on_success feature (#9293) (#9503) ([#9503](https://github.com/mrveiss/AutoBot-AI/pull/9503))
+
+- *(transcriber)* Expand composable test coverage for useSseProgress and useTranscriberApi (#9209) (#9482) ([#9482](https://github.com/mrveiss/AutoBot-AI/pull/9482))
+
+- *(auth)* Fix device JWT test mocks for async session
+
+- *(MVA-3028)* Add unit and integration tests for reasoning effort backend
+
+
+### Cleanup
+
+- *(transcriber/frontend)* Export RecordingStatus type from useTranscriberApi (#9207) (#10106) ([#10106](https://github.com/mrveiss/AutoBot-AI/pull/10106))
+
+- *(transcriber)* Consolidate _DEFAULT_USER in transcripts.py into deps.DEFAULT_USER (#9513) (#10104) ([#10104](https://github.com/mrveiss/AutoBot-AI/pull/10104))
+
+
+### Consolidation
+
+- Promote AIStackClient.connection_status to ConnectionStatus enum (#10008) (#10145) ([#10145](https://github.com/mrveiss/AutoBot-AI/pull/10145))
+
+- *(migrations)* Shared alembic guard helpers — has_table/has_column/ensure_pg_enum (#10027) (#10072) ([#10072](https://github.com/mrveiss/AutoBot-AI/pull/10072))
+
+
+### Dedup
+
+- *(#9859 Family G)* Extract shared scoped CSS from chat components via @reference (#10306) (#10366) ([#10366](https://github.com/mrveiss/AutoBot-AI/pull/10366))
+
+- *(#9859 Family B)* Extract shared scoped CSS from analytics panels (#10304) (#10341) ([#10341](https://github.com/mrveiss/AutoBot-AI/pull/10341))
+
+- *(#9859 Family F)* Extract shared scoped CSS from marketplace/plugins views (#10305) (#10336) ([#10336](https://github.com/mrveiss/AutoBot-AI/pull/10336))
+
+- *(#9859 Family A)* Extract shared scoped CSS from analytics dashboards (#10301) (#10329) ([#10329](https://github.com/mrveiss/AutoBot-AI/pull/10329))
+
+- *(#9859 Family E)* Extract shared scoped CSS from orphan managers (#10302) (#10322) ([#10322](https://github.com/mrveiss/AutoBot-AI/pull/10322))
+
+- *(#9859 Family C)* Extract shared scoped CSS from source modals (#10300) (#10315) ([#10315](https://github.com/mrveiss/AutoBot-AI/pull/10315))
+
+
+### Enhancement
+
+- *(transcriber/frontend)* Extract inline-edit pattern into useInlineEdit composable (#9205) (#10107) ([#10107](https://github.com/mrveiss/AutoBot-AI/pull/10107))
+
+- *(transcriber/frontend)* Extract file download blob pattern into useFileDownload() composable (#9204) (#9417) ([#9417](https://github.com/mrveiss/AutoBot-AI/pull/9417))
+
+- *(transcriber/frontend)* Extract AiAnalysisPanel SSE streaming into useAiAnalysis() composable (#9203) (#9407) ([#9407](https://github.com/mrveiss/AutoBot-AI/pull/9407))
+
+- *(transcriber/frontend)* Replace KbPushButton manual polling with useKbStatus() composable (#9206)
+
+
+### Harden
+
+- *(secrets)* Concurrency-safe register via ON CONFLICT (#10374 follow-up) (#10376) ([#10376](https://github.com/mrveiss/AutoBot-AI/pull/10376))
+
+
+### Merge
+
+- Incorporate main lineage into Dev_new_gui (Dev_new_gui authoritative)
+
+
+### Release
+
+- Dev_new_gui → main (#9300) ([#9300](https://github.com/mrveiss/AutoBot-AI/pull/9300))
+
+
+### Security
+
+- *(transcriber)* Strict ownership in can_access — fix DEFAULT_USER IDOR (#9968) (#10228) ([#10228](https://github.com/mrveiss/AutoBot-AI/pull/10228))
+
+- *(bandit)* Replace repo-wide category skips with per-call-site nosec (#9709) (#10028) ([#10028](https://github.com/mrveiss/AutoBot-AI/pull/10028))
+
+- *(frontend)* Override shell-quote >=1.8.4 — fix critical GHSA-w7jw-789q-3m8p (#9857) (#9858) ([#9858](https://github.com/mrveiss/AutoBot-AI/pull/9858))
+
+- *(docker)* Remove static fallback JWT/session signing secrets from compose (#9775) (#9827) ([#9827](https://github.com/mrveiss/AutoBot-AI/pull/9827))
+
+- *(telegram)* Encrypt bot token in Redis storage (#9606) (#9675) ([#9675](https://github.com/mrveiss/AutoBot-AI/pull/9675))
+
+- *(sso)* Fix SSRF URL-allowlist bypass in OAuth callback (MVA-3542) (#9673) ([#9673](https://github.com/mrveiss/AutoBot-AI/pull/9673))
+
+- *(telegram)* Encrypt bot token in Redis storage (#9606) (#9650) ([#9650](https://github.com/mrveiss/AutoBot-AI/pull/9650))
+
+- *(webhooks)* Implement fail-closed authentication (GH#9657) (#9660) ([#9660](https://github.com/mrveiss/AutoBot-AI/pull/9660))
+
+- *(bedrock)* Add AWS credential format validation at provider init (#9640) (#9645) ([#9645](https://github.com/mrveiss/AutoBot-AI/pull/9645))
+
+- *(sso)* Configure FastAPI to read X-Forwarded-For headers for rate limiting (#9616, MVA-3671)
+
+- *(sso)* Implement rate limiting on SSO endpoints (#9499)
+
+- *(slm/sso)* Encrypt SSO client secrets at rest with AES-256-GCM (#9501) (#9507) ([#9507](https://github.com/mrveiss/AutoBot-AI/pull/9507))
+
+- *(kb)* Add admin permission check to watch folder read endpoints (#9000)
+
+- *(api)* Sanitize error responses codebase-wide to prevent information leakage (#9312) (#9409) ([#9409](https://github.com/mrveiss/AutoBot-AI/pull/9409))
+
+- *(streams)* Sanitize remaining SSE exception leaks (#9410) (#9413) ([#9413](https://github.com/mrveiss/AutoBot-AI/pull/9413))
+
+- *(streams)* Sanitize exception details in SSE error events (#9360) ([#9408](https://github.com/mrveiss/AutoBot-AI/pull/9408))
+
+- *(deps)* Add uuid override to mcp-autobot-tracker — evict natural's nested uuid@9 (#5665) (#5674) ([#5674](https://github.com/mrveiss/AutoBot-AI/pull/5674))
+
+- *(deps)* Bump uuid 8/9/11 → 14.0.0 — fix buffer bounds check CVE (#5665) (#5669) ([#5669](https://github.com/mrveiss/AutoBot-AI/pull/5669))
+
+- *(deps)* Bump vulnerable dependencies to fix all open Dependabot alerts (#5656) (#5663) (#5664) ([#5664](https://github.com/mrveiss/AutoBot-AI/pull/5664))
+
+
+## [0.3.0] - 2026-04-21
 
 ### Bug Fixes
+
+- *(provision)* Validate stale code_source has vega dep before build (#9284) (#9364) ([#9364](https://github.com/mrveiss/AutoBot-AI/pull/9364))
+
+- *(config)* Make backend.server_host optional with 0.0.0.0 default (GH#9232) (#9370) ([#9370](https://github.com/mrveiss/AutoBot-AI/pull/9370))
+
+- *(base)* Delete obsolete api/transcriber.py (MVA-2891) (#9371) ([#9371](https://github.com/mrveiss/AutoBot-AI/pull/9371))
+
+- *(transcriber/export)* Fix segment key mismatch + IDOR vulnerabilities (#9198) (#9330) ([#9330](https://github.com/mrveiss/AutoBot-AI/pull/9330))
+
+- *(ansible)* Create autobot_shared symlink for slm-agent imports (#9225) (#9328) ([#9328](https://github.com/mrveiss/AutoBot-AI/pull/9328))
+
+- *(i18n)* Add missing nav keys to non-English locales (#9197) (#9334) ([#9334](https://github.com/mrveiss/AutoBot-AI/pull/9334))
+
+- *(ssot_config)* Use localhost as REDIS_HOST default instead of empty string (#9325) ([#9325](https://github.com/mrveiss/AutoBot-AI/pull/9325))
+
+- *(security)* Add CodeQL exclusion for validated SSRF guard (MVA-2605) (#9319) ([#9319](https://github.com/mrveiss/AutoBot-AI/pull/9319))
+
+- *(code-sync)* Restore SSH rsync for multi-server SLM self-update (#9195) (#9337) ([#9337](https://github.com/mrveiss/AutoBot-AI/pull/9337))
+
+- *(agent-loop)* Move CONTRADICTION_SURFACE_THRESHOLD to AgentLoopConfig (#9053) (#9342) ([#9342](https://github.com/mrveiss/AutoBot-AI/pull/9342))
+
+- *(chat/folders)* Allow moving folders to root via parent_id=null (#9352) ([#9352](https://github.com/mrveiss/AutoBot-AI/pull/9352))
+
+- *(ci)* Add /app/autobot-backend/logs tmpfs for hardened config (MVA-2798) (#9362) ([#9362](https://github.com/mrveiss/AutoBot-AI/pull/9362))
+
+- *(slm-agent)* Fix update_url path mismatch (#9290) (#9345) ([#9345](https://github.com/mrveiss/AutoBot-AI/pull/9345))
+
+- *(ansible)* Suppress /sys/class/infiniband warning on WSL2 (GH#9282) (#9346) ([#9346](https://github.com/mrveiss/AutoBot-AI/pull/9346))
+
+- *(backend)* Restore execution_snapshots router registration (GH#9229) (#9339) ([#9339](https://github.com/mrveiss/AutoBot-AI/pull/9339))
+
+- *(code-sync)* Update node version in DB after SLM self-update (#9224) (#9324) ([#9324](https://github.com/mrveiss/AutoBot-AI/pull/9324))
+
+- *(ansible)* Suppress /sys/class/infiniband gather_facts warning on WSL2 (#9282) ([#9326](https://github.com/mrveiss/AutoBot-AI/pull/9326))
+
+- *(ci)* Merge console.log and phase validation fixes for PR #9300 (#9320) ([#9320](https://github.com/mrveiss/AutoBot-AI/pull/9320))
+
+- *(ansible)* Add REDIS_HOST env vars to slm-agent systemd unit (#9226) ([#9310](https://github.com/mrveiss/AutoBot-AI/pull/9310))
+
+- *(transcriber)* Replace @vue:updated with watch() for status changes (#9208) (#9304) ([#9304](https://github.com/mrveiss/AutoBot-AI/pull/9304))
+
+- *(config)* Merge YAML config with defaults to ensure required keys (#9232) (#9305) ([#9305](https://github.com/mrveiss/AutoBot-AI/pull/9305))
+
+- *(ci)* Ensure Docker cache directory exists before build (MVA-2519) (#9309) ([#9309](https://github.com/mrveiss/AutoBot-AI/pull/9309))
+
+- *(voice)* Rename get_provider_registry to get_speech_provider_registry (#9231) (#9308) ([#9308](https://github.com/mrveiss/AutoBot-AI/pull/9308))
+
+- *(voice)* Wire filename_hint parameter through detect_language (#9230)
+
+- *(lint)* Remove unused imports and fix line length
+
+- *(landing)* Simplify logo to single-color mark, no background (#9298)
+
+- *(landing)* Fix logo visibility on light background (#9298)
+
+- *(pages)* Run jekyll build from docs/ working directory
+
+- *(deps)* Align vega-lite version with override (5.23.0 exact)
+
+- *(pages)* Switch to GitHub Actions + Jekyll 4 for Pages build
+
+- *(docs)* Replace color-mix() with rgba() in Ember SCSS scheme
+
+- *(analytics)* Replace GTM with GA4 tag G-ZV9XT0XSWR
+
+- *(landing)* Redesign logo mark for standalone use (#9298)
+
+- *(landing)* Remove Polar.sh bounty references (#9298)
+
+- *(telegram)* Wire _api_method gateway routing to TelegramBotService methods (#9299) ([#9299](https://github.com/mrveiss/AutoBot-AI/pull/9299))
+
+- *(hooks)* Block -b/-B/-c branch creation on main tree (#6512)
+
+- *(deps)* Add vega major-version ignore rules to dependabot.yml (#9219)
+
+- *(execution)* Add thread-safety to SnapshotIndex read operations (GH#8968) (#9277) ([#9277](https://github.com/mrveiss/AutoBot-AI/pull/9277))
+
+- *(ansible)* Use valid group names in wizard-generated inventory (#9288) ([#9288](https://github.com/mrveiss/AutoBot-AI/pull/9288))
+
+- *(ansible)* Add script to remove orphaned/unreachable inventory nodes (#9289) ([#9289](https://github.com/mrveiss/AutoBot-AI/pull/9289))
+
+- *(ansible)* Phase 4c nginx co-location runs despite Phase 4a health check timeout ([#9287](https://github.com/mrveiss/AutoBot-AI/pull/9287))
+
+- *(voice-rbac)* Guard success emit() to prevent audit failures crashing endpoint (GH#8982) (#9278) ([#9278](https://github.com/mrveiss/AutoBot-AI/pull/9278))
+
+- *(frontend)* Add vega-lite as direct dep to complete Rolldown build fix
+
+- *(code-quality)* Remove unused imports and fix E501 in context_overflow and microsoft365 (#9190) ([#9190](https://github.com/mrveiss/AutoBot-AI/pull/9190))
+
+- *(frontend/css)* Remove conflicting teal primary color overrides in dark mode (#9040)
+
+- *(provisioning)* Remove env vars with defaults from validation manifest (#9182) ([#9182](https://github.com/mrveiss/AutoBot-AI/pull/9182))
+
+- *(embed)* Abort SSE reader on widget disconnect to prevent memory leak (#9101)
+
+- *(analytics)* Replace hardcoded Dev Tools text with i18n (#8756) (#9169) ([#9169](https://github.com/mrveiss/AutoBot-AI/pull/9169))
+
+- *(integrations)* Correct py_vapid API usage in generate_vapid_keys() (GH#4459)
+
+- *(plugin-sdk)* Consolidate duplicate plugin SDK to autobot_shared (MVA-2021) (#9167) ([#9167](https://github.com/mrveiss/AutoBot-AI/pull/9167))
+
+- *(security)* Harden Microsoft365Integration against injection attacks
+
+- *(ci)* Sync Ansible slm_agent role + fix chromadb hardened-smoke crash (#9157) ([#9157](https://github.com/mrveiss/AutoBot-AI/pull/9157))
+
+- *(rbac)* Remove duplicate VALID_BUNDLES assignment (#9090) (#9153) ([#9153](https://github.com/mrveiss/AutoBot-AI/pull/9153))
+
+- *(frontend)* CSS z-index scale — define semantic z-index tokens (#9039) ([#9155](https://github.com/mrveiss/AutoBot-AI/pull/9155))
+
+- *(frontend)* Dual primary color — resolve OKLCH/hex conflict in CSS tokens (#9040) ([#9154](https://github.com/mrveiss/AutoBot-AI/pull/9154))
+
+- *(slm-frontend)* Add admin SSO/OIDC settings page ([#9149](https://github.com/mrveiss/AutoBot-AI/pull/9149))
+
+- *(ci)* Remove unused imports blocking code-quality check (#9147) ([#9147](https://github.com/mrveiss/AutoBot-AI/pull/9147))
+
+- *(sso)* Remove provider_id from OAuth callback query params (#MVA-1734) (#9146) ([#9146](https://github.com/mrveiss/AutoBot-AI/pull/9146))
+
+- *(frontend)* Add vega as explicit dep to fix Rolldown/Vite8 build failure (#9143) ([#9143](https://github.com/mrveiss/AutoBot-AI/pull/9143))
+
+- *(ci)* Resolve Black formatting and oxlint errors on Dev_new_gui (#9142) ([#9142](https://github.com/mrveiss/AutoBot-AI/pull/9142))
+
+- *(llm-routing)* Call public chat_completion() instead of private _chat_completion_impl() (#8960) (#9137) ([#9137](https://github.com/mrveiss/AutoBot-AI/pull/9137))
+
+- *(agent-loop)* Add refutation_source to Assertion.to_dict() (#9069) (#9136) ([#9136](https://github.com/mrveiss/AutoBot-AI/pull/9136))
+
+- *(embed)* Clear shadow DOM on re-mount and surface errorMsg (GH#9046 GH#9067) ([#9131](https://github.com/mrveiss/AutoBot-AI/pull/9131))
+
+- *(auth)* Remove duplicate indexes in chat_shared_links migration 049 (#9129) ([#9132](https://github.com/mrveiss/AutoBot-AI/pull/9132))
+
+- *(auth)* Reject shared link ops when Redis owner unknown — IDOR cold-cache bypass (#9128) ([#9133](https://github.com/mrveiss/AutoBot-AI/pull/9133))
+
+- *(sso+connectors+tests)* SAML relay-state tests, singleton DI, voice-rbac helpers, belief-state method (#9075 #9099 #9113 #9114) (#9123) ([#9123](https://github.com/mrveiss/AutoBot-AI/pull/9123))
+
+- *(code-quality)* Reformat 7 Python files to pass black --line-length=120 (#9116) ([#9119](https://github.com/mrveiss/AutoBot-AI/pull/9119))
+
+- *(embed+rbac)* Gitignore dist-embed/, remove unused import, fix storybook pkg ([#9115](https://github.com/mrveiss/AutoBot-AI/pull/9115))
+
+- *(agent-loop)* Configurable contradiction threshold + belief state logging (#9053 #9054) ([#9112](https://github.com/mrveiss/AutoBot-AI/pull/9112))
+
+- *(voice-rbac)* Guard emit in except + use stored_bundle_name in audit (#9096 #9098) (#9111) ([#9111](https://github.com/mrveiss/AutoBot-AI/pull/9111))
+
+- *(embed)* Error state + dark CSS + SSE abort (#9070 #9100 #9101) (#9108) ([#9108](https://github.com/mrveiss/AutoBot-AI/pull/9108))
+
+- *(voice-rbac+embed)* Dedup tool count + add embed message endpoint (#9045 #9047) ([#9110](https://github.com/mrveiss/AutoBot-AI/pull/9110))
+
+- *(backend)* Migration rename 047→048, copilot DEVNULL stderr, snapshot user_id doc (#9094 #9095 #9097) (#9109) ([#9109](https://github.com/mrveiss/AutoBot-AI/pull/9109))
+
+- *(backend)* Async/sync violations in push, system health, and Celery hooks (#9071 #9091 #9093) ([#9104](https://github.com/mrveiss/AutoBot-AI/pull/9104))
+
+- *(connectors)* Replace deprecated asyncio.get_event_loop() with get_running_loop() (#9092) (#9102) ([#9102](https://github.com/mrveiss/AutoBot-AI/pull/9102))
+
+- *(websocket)* Move auth token from URL query param to Sec-WebSocket-Protocol header (#9077)
+
+- *(websocket)* Stop 403 flood — pass auth token in WS URL, accept before close (#9077)
+
+- *(provisioning)* Startup_validation.py checks non-existent env vars (#9084) (#9085) ([#9085](https://github.com/mrveiss/AutoBot-AI/pull/9085))
+
+- *(slm-agent)* Reduce memory footprint and add systemd memory limits (#9086) (#9088) ([#9088](https://github.com/mrveiss/AutoBot-AI/pull/9088))
+
+- *(backend)* Wrong import crash + raw exception exposure in health endpoint (#9055 #9065) (#9081) ([#9081](https://github.com/mrveiss/AutoBot-AI/pull/9081))
+
+- *(code-sync)* Unify all SLM sync paths to use Ansible full-machine update (#9073)
+
+- *(voice-rbac)* Security audit findings — audit emit, VALID_BUNDLES drift, missing test assertions (#8977) (#9001) ([#9001](https://github.com/mrveiss/AutoBot-AI/pull/9001))
+
+- *(code-sync)* Self-update button now runs full Ansible update for all roles (#9073)
+
+- *(frontend/css)* Correct --font-sans token to Inter (#9013) ([#9076](https://github.com/mrveiss/AutoBot-AI/pull/9076))
+
+- *(provisioning)* Resolve backend health check timeout (MVA-1633, GH#8947) (#8951) ([#8951](https://github.com/mrveiss/AutoBot-AI/pull/8951))
+
+- *(sso)* Replace in-memory OAuth state dict with Redis-backed storage (MVA-1733) (#9074) ([#9074](https://github.com/mrveiss/AutoBot-AI/pull/9074))
+
+- *(ci)* Group consecutive GITHUB_STEP_SUMMARY redirects (SC2129) (#8917) (#9052) ([#9052](https://github.com/mrveiss/AutoBot-AI/pull/9052))
+
+- *(code-sync)* Add --no-group --no-owner to local rsync to fix permission errors (#9073)
+
+- *(chat)* Restore visual distinctness between same-background message types
+
+- *(backend)* Correct import path in tool_handler.py (#8986) (#9002) ([#9002](https://github.com/mrveiss/AutoBot-AI/pull/9002))
+
+- *(voice)* Restore dropped features from add/add conflict resolution (#8969)
+
+- *(llc)* Wire croniter dep + start LivenessMonitor and BudgetWatchdog (#9027 #9028 #9029) (#9031) ([#9031](https://github.com/mrveiss/AutoBot-AI/pull/9031))
+
+- *(llc/models)* Consolidate HeartbeatRunStatus into LLCRunStatus (#8970)
+
+- *(llc/models)* Export ActivityEventType from llc/models/__init__.py (#8971)
+
+- *(llc/models)* Export TemplateCategory from llc/models/__init__.py (#8972)
+
+- *(voice-rbac)* Re-read DB after commit in set_user_bundle (#8981) ([#8992](https://github.com/mrveiss/AutoBot-AI/pull/8992))
+
+- *(backend)* Use getattr fallback for storage_dir on AutoBotConfig (#8978) (#8985) ([#8985](https://github.com/mrveiss/AutoBot-AI/pull/8985))
+
+- *(rbac)* Enforce admin-only authorization on PUT /voice/users/{user_id}/bundle (GH#8969) ([#8974](https://github.com/mrveiss/AutoBot-AI/pull/8974))
+
+- *(backend)* Surface startup errors in /api/health for provisioning visibility (GH#8947) ([#8964](https://github.com/mrveiss/AutoBot-AI/pull/8964))
+
+- *(tests)* Correct provider registry mock patches in Claude escalation tests (#8961)
+
+- *(llm-routing)* Use provider registry in route_with_escalation (#8961)
+
+- *(llm-routing)* Use get_tiered_router() singleton in route_with_escalation (#8959)
+
+- *(backend)* Replace get_nested with getattr in is_encryption_enabled (GH#8950) ([#8952](https://github.com/mrveiss/AutoBot-AI/pull/8952))
+
+- *(ansible)* Add AUTOBOT_AUDIT_LOG_FILE to backend.env.j2 template (#8936) ([#8938](https://github.com/mrveiss/AutoBot-AI/pull/8938))
+
+- *(security)* Deny KB write when project not found in artifact_ingestor
+
+- *(llc/kb)* Fail-closed authorization on write guard — remove overly broad exception handlers (GH#8598)
+
+- *(voice)* Migrate _SESSION_TTL to ssot_config canonical pattern (GH#8718) ([#8935](https://github.com/mrveiss/AutoBot-AI/pull/8935))
+
+- *(npu-worker)* Wire get_inference_config into load_model for early architecture validation (GH#8690) ([#8934](https://github.com/mrveiss/AutoBot-AI/pull/8934))
+
+- *(security)* Replace hardcoded audit log fallback with env-var resolver (GH#8929) ([#8932](https://github.com/mrveiss/AutoBot-AI/pull/8932))
+
+- *(backend)* Replace AutoBotConfig.get() with get_config_manager() in chat_history/base.py (GH#8929) (#8931) ([#8931](https://github.com/mrveiss/AutoBot-AI/pull/8931))
+
+- *(ci)* Resolve actionlint violations in frontend-test.yml and phase_validation.yml (#8917)
+
+- *(slm-agent)* Grant read access to /var/log/autobot/ansible.log via ACL (GH#8925-2)
+
+- *(slm-agent)* Add autobot user to systemd-journal group for log access (GH#8925-1)
+
+- *(backend)* Guard against empty audit_log_file path in SecurityLayer (MVA-1503) (#8923) ([#8923](https://github.com/mrveiss/AutoBot-AI/pull/8923))
+
+- *(ci)* Black formatting + missing Icon imports for CI health (MVA-1524) (#8927) ([#8927](https://github.com/mrveiss/AutoBot-AI/pull/8927))
+
+- *(autobot_shared)* Move retry_mechanism into autobot_shared to fix slm-agent startup crash (MVA-1493) (#8921) ([#8921](https://github.com/mrveiss/AutoBot-AI/pull/8921))
+
+- *(backend)* Str() wrap on single_user_mode fixes bool.lower() crash (MVA-1492) ([#8920](https://github.com/mrveiss/AutoBot-AI/pull/8920))
+
+- *(ansible)* Fix pre-flight code sync skipped in wizard deployments
+
+- *(ansible)* Fix ownership of autobot-backend dir after code sync
+
+- *(backend)* Resolve startup crash from AutoBotConfig.get() AttributeError (MVA-1489) ([#8918](https://github.com/mrveiss/AutoBot-AI/pull/8918))
+
+- *(installer)* Remove redis/chroma from SLM-Manager install
+
+- *(ci)* Add /chroma/.chroma tmpfs to hardened overlay (GH#8913, MVA-1484) ([#8915](https://github.com/mrveiss/AutoBot-AI/pull/8915))
+
+- *(installer)* Remove co-located backend from SLM-Manager install
+
+- *(ansible)* Scope localhost.yml to SLM-Manager components only
+
+- *(ci)* Fix Docker smoke-test disk-full and hardened chromadb failures (MVA-1470) (#8912) ([#8912](https://github.com/mrveiss/AutoBot-AI/pull/8912))
+
+- *(ci)* Resolve pre-existing actionlint shellcheck violations (MVA-1472) ([#8911](https://github.com/mrveiss/AutoBot-AI/pull/8911))
+
+- *(ansible)* Add slm_node_id to localhost.yml single-host inventory (#8909) ([#8910](https://github.com/mrveiss/AutoBot-AI/pull/8910))
+
+- *(visual)* Increase Storybook regression timeout for 1154 stories (MVA-1467) ([#8908](https://github.com/mrveiss/AutoBot-AI/pull/8908))
+
+- *(ci)* Pin dorny/paths-filter to node24-compatible hash (MVA-1470) ([#8907](https://github.com/mrveiss/AutoBot-AI/pull/8907))
+
+- *(ansible)* Remove dead backend symlink task (#8905) ([#8906](https://github.com/mrveiss/AutoBot-AI/pull/8906))
+
+- *(a2a)* Trust audit SQLite defaults to /tmp — lost on reboot (MVA-1464, GH#8742) ([#8900](https://github.com/mrveiss/AutoBot-AI/pull/8900))
+
+- *(backend)* Restore correct audit_middleware import (MVA-1466) (#8901) ([#8901](https://github.com/mrveiss/AutoBot-AI/pull/8901))
+
+- *(frontend)* Extend ESLint no-console override to service-worker.js, sw-cache-bust.js, and scripts (GH#8896) (#8902) ([#8902](https://github.com/mrveiss/AutoBot-AI/pull/8902))
+
+- *(frontend)* Fix pre-existing ESLint failures blocking CI (MVA-1460, GH#8896) (#8899) ([#8899](https://github.com/mrveiss/AutoBot-AI/pull/8899))
+
+- *(frontend)* Reduce vue-tsc errors from 239 back to baseline 188 (MVA-1451) ([#8898](https://github.com/mrveiss/AutoBot-AI/pull/8898))
+
+- *(ansible+backend)* Remove stale WSL2 overrides, fix config.ollama_port, rename knowledge_eval (MVA-1454) ([#8895](https://github.com/mrveiss/AutoBot-AI/pull/8895))
+
+- *(llm_shared)* Replace config.ollama_host/port with config.ollama_url (MVA-1444) (#8893) ([#8893](https://github.com/mrveiss/AutoBot-AI/pull/8893))
+
+- *(a2a)* Migrate trust_score.py from logging.getLogger to get_logger (#8889) ([#8889](https://github.com/mrveiss/AutoBot-AI/pull/8889))
+
+- *(coordination)* Move WatchError import to module top-level (GH#8707) (#8886) ([#8886](https://github.com/mrveiss/AutoBot-AI/pull/8886))
+
+- *(coordination)* Remove spurious type-ignore on AgentBudget (GH#8708, MVA-1351) (#8885) ([#8885](https://github.com/mrveiss/AutoBot-AI/pull/8885))
+
+- *(llc/kb)* Add @pytest.mark.asyncio to all async tests in test_kb_inheritance.py (GH#8597) (#8884) ([#8884](https://github.com/mrveiss/AutoBot-AI/pull/8884))
+
+- *(llc)* HandoffBriefGenerator H2A status guard unreachable (GH#8650, MVA-1344) (#8883) ([#8883](https://github.com/mrveiss/AutoBot-AI/pull/8883))
+
+- *(agent-loop)* Classify RETRY-class errors as LOW before HIGH check (GH#8649) (#8881) ([#8881](https://github.com/mrveiss/AutoBot-AI/pull/8881))
+
+- *(ansible)* Bind SLM backend to 0.0.0.0 and fix health check URL (MVA-1423) ([#8880](https://github.com/mrveiss/AutoBot-AI/pull/8880))
+
+- *(ci)* Add nosemgrep waivers for import boundary violations (MVA-1422) ([#8879](https://github.com/mrveiss/AutoBot-AI/pull/8879))
+
+- *(belief-state)* Truncate ReadFileExtractor hash to 8 chars (MVA-1432) ([#8876](https://github.com/mrveiss/AutoBot-AI/pull/8876))
+
+- *(ci)* Remove unused imports in context_window_manager_test.py
+
+- *(belief-state)* RunCommandExtractor multi-port key collision (MVA-1431) ([#8875](https://github.com/mrveiss/AutoBot-AI/pull/8875))
+
+- *(ci)* Add ArchitectureFamily and get_architecture_family to llm_shared __all__
+
+- *(llc)* Drain HandoffService background tasks on shutdown (GH#8651) ([#8855](https://github.com/mrveiss/AutoBot-AI/pull/8855))
+
+- *(agent-loop)* _should_continue() respects per-severity error budget (GH#8649) ([#8856](https://github.com/mrveiss/AutoBot-AI/pull/8856))
+
+- *(llc/kb)* Always archive_collection in try/finally (GH#8654) ([#8853](https://github.com/mrveiss/AutoBot-AI/pull/8853))
+
+- *(llc/kb)* Propagate work_item_id through search_with_inheritance (GH#8599) ([#8852](https://github.com/mrveiss/AutoBot-AI/pull/8852))
+
+- *(task-workspace)* Propagate preserved workspace_dir to local var on allocation failure (GH#8687, MVA-1335) ([#8851](https://github.com/mrveiss/AutoBot-AI/pull/8851))
+
+- *(llc)* Catch ValueError from _parse_llm_text_response in HandoffBriefGenerator (GH#8652) ([#8850](https://github.com/mrveiss/AutoBot-AI/pull/8850))
+
+- *(nav)* Gate Canvas nav item behind VITE_FEATURE_CANVAS flag (GH#8758) ([#8849](https://github.com/mrveiss/AutoBot-AI/pull/8849))
+
+- *(llc/kb)* Replace dst.add() with dst.upsert() in SprintKbSummarizer (GH#8655) ([#8844](https://github.com/mrveiss/AutoBot-AI/pull/8844))
+
+- *(ci)* Remove unused imports to resolve autoflake CI violations (MVA-1333) ([#8843](https://github.com/mrveiss/AutoBot-AI/pull/8843))
+
+- *(rbac)* Replace userId guard with Symbol token in openBundleModal (GH#8705, MVA-1337) ([#8835](https://github.com/mrveiss/AutoBot-AI/pull/8835))
+
+- *(ansible)* Deploy ChromaDB via redis role for fleet database nodes (MVA-1319 / GH#8786) ([#8836](https://github.com/mrveiss/AutoBot-AI/pull/8836))
+
+- *(llc/kb)* Archive ChromaDB sprint collection only after confirmed write (MVA-1341) (#8833) ([#8833](https://github.com/mrveiss/AutoBot-AI/pull/8833))
+
+- *(security)* Move nosec annotations to flagged lines (MVA-1320) (#8829) ([#8829](https://github.com/mrveiss/AutoBot-AI/pull/8829))
+
+- *(deps)* Correct langchain floor to >=1.3.0 in backend and AI-stack requirements (MVA-1330) ([#8830](https://github.com/mrveiss/AutoBot-AI/pull/8830))
+
+- *(infra)* Add autobot-chromadb.service to deploy pipeline (GH#8786) (#8828) ([#8828](https://github.com/mrveiss/AutoBot-AI/pull/8828))
+
+- *(ansible)* Replace ansible_user_id with lookup('env','USER') — resolves remote_user race (MVA-1314) (#8822) ([#8822](https://github.com/mrveiss/AutoBot-AI/pull/8822))
+
+- *(frontend)* Merge duplicate Icon imports into single statements (GH#8601) (#8821) ([#8821](https://github.com/mrveiss/AutoBot-AI/pull/8821))
+
+- *(tests)* Use allRoutePaths() in nav-items-coverage for child routes (GH#8818) (#8819) ([#8819](https://github.com/mrveiss/AutoBot-AI/pull/8819))
+
+- *(nav)* Guard Canvas profile menu item behind VITE_FEATURE_CANVAS flag (GH#8758) (#8817) ([#8817](https://github.com/mrveiss/AutoBot-AI/pull/8817))
+
+- *(frontend)* Resolve 155 oxlint errors blocking frontend-tests CI (GH#8771) (#8816) ([#8816](https://github.com/mrveiss/AutoBot-AI/pull/8816))
+
+- *(frontend)* Add bookmark icon to ICONS registry (GH#8698) (#8815) ([#8815](https://github.com/mrveiss/AutoBot-AI/pull/8815))
+
+- *(install)* Clean stale git lock files before checkout (MVA-1293) ([#8814](https://github.com/mrveiss/AutoBot-AI/pull/8814))
+
+- *(onboarding)* Add dismiss button and clear errors on step change (GH#8760) (#8810) ([#8810](https://github.com/mrveiss/AutoBot-AI/pull/8810))
+
+- *(a2a)* Use logging.getLogger instead of get_logger in trust_score.py (GH#8741, MVA-1269) ([#8807](https://github.com/mrveiss/AutoBot-AI/pull/8807))
+
+- *(coordination)* Remove spurious type-ignore on AgentBudgetTracker.subscribe_changes (GH#8708, MVA-1262) ([#8806](https://github.com/mrveiss/AutoBot-AI/pull/8806))
+
+- *(voice)* Replace hardcoded _SESSION_TTL with AUTOBOT_VOICE_REALTIME_SESSION_TTL env-var (GH#8718, MVA-1267) ([#8805](https://github.com/mrveiss/AutoBot-AI/pull/8805))
+
+- *(coordination)* Move WatchError import to top of shared_runtime_bag.py (MVA-1261) ([#8803](https://github.com/mrveiss/AutoBot-AI/pull/8803))
+
+- *(a2a)* Replace bare module-level guard in get_trust_manager() with lazy_singleton() (MVA-1270) ([#8802](https://github.com/mrveiss/AutoBot-AI/pull/8802))
+
+- *(rbac)* Guard openBundleModal against stale in-flight bundle fetch (GH#8705, MVA-1258) ([#8800](https://github.com/mrveiss/AutoBot-AI/pull/8800))
+
+- *(llc)* Replace module-level GoalService() singleton with lazy_singleton (GH#8738) ([#8801](https://github.com/mrveiss/AutoBot-AI/pull/8801))
+
+- *(security)* Resolve bandit medium+ findings blocking security-tests CI (MVA-1231) ([#8776](https://github.com/mrveiss/AutoBot-AI/pull/8776))
+
+- *(task-workspace)* Preserve workspace_dir on transient allocation failure
+
+- *(llc/kb)* Wrap llm.chat() in try/except and cap prompt input in SprintKbSummarizer (GH#8656, MVA-1252) ([#8777](https://github.com/mrveiss/AutoBot-AI/pull/8777))
+
+- *(tests)* Replace sys.modules guard with unconditional attr patch in test_goal_ancestry_layer (MVA-1251) ([#8775](https://github.com/mrveiss/AutoBot-AI/pull/8775))
+
+- *(layers)* Replace .lower() on bool TIERED_CONTEXT_ENABLED with bool() (MVA-1250) ([#8774](https://github.com/mrveiss/AutoBot-AI/pull/8774))
+
+- *(coordination/hook)* Fix duplicate endswith — exempt test_*.py ([#8794](https://github.com/mrveiss/AutoBot-AI/pull/8794))
+
+- *(knowledge)* Add mobile sidebar collapse toggle with drawer overlay ([#8787](https://github.com/mrveiss/AutoBot-AI/pull/8787))
+
+- *(task-workspace)* Preserve workspace_dir on transient allocation failure ([#8789](https://github.com/mrveiss/AutoBot-AI/pull/8789))
+
+- *(a2a)* Persist trust audit DB to data dir instead of /tmp ([#8778](https://github.com/mrveiss/AutoBot-AI/pull/8778))
+
+- *(llc/kb)* Write kb_summary sentinel for small sprints (<=10 docs) ([#8782](https://github.com/mrveiss/AutoBot-AI/pull/8782))
+
+- *(404)* Change primary button to 'Go Home' → /home, fix icon/label mismatch (GH#8754) (#8792) ([#8792](https://github.com/mrveiss/AutoBot-AI/pull/8792))
+
+- *(nav)* Distinguish SLM Admin external link from internal nav items (#8753) ([#8781](https://github.com/mrveiss/AutoBot-AI/pull/8781))
+
+- *(accessibility)* Add role=listbox and arrow key nav to onboarding preset cards (GH#8752) (#8779) ([#8779](https://github.com/mrveiss/AutoBot-AI/pull/8779))
+
+- *(ci)* Add celery-beat service to docker-compose.yml (GH#8666, MVA-1248) ([#8773](https://github.com/mrveiss/AutoBot-AI/pull/8773))
+
+- *(storybook)* Fix 3 pre-existing syntax/import errors blocking Storybook build (MVA-1223) (#8770) ([#8770](https://github.com/mrveiss/AutoBot-AI/pull/8770))
+
+- *(ci)* Downgrade typescript from ~6.0.3 to ~5.9.0 in autobot-frontend (#8769) ([#8769](https://github.com/mrveiss/AutoBot-AI/pull/8769))
+
+- *(security)* Resolve qs CVE-2026-8723 and idna CVE-2026-45409 (MVA-1212) ([#8768](https://github.com/mrveiss/AutoBot-AI/pull/8768))
+
+- *(ci)* Suppress pre-existing mypy type errors in autobot_shared/ (MVA-1214) ([#8767](https://github.com/mrveiss/AutoBot-AI/pull/8767))
+
+- *(ci)* Suppress pre-existing bandit B310 in cli/doctor.py (MVA-1208) ([#8764](https://github.com/mrveiss/AutoBot-AI/pull/8764))
+
+- *(startup)* Use stdlib logging in retry_mechanism to break circular import (MVA-1209) (#8765) ([#8765](https://github.com/mrveiss/AutoBot-AI/pull/8765))
+
+- *(llc)* Narrow FileNotFoundError catch to workspace path only (MVA-1192) ([#8763](https://github.com/mrveiss/AutoBot-AI/pull/8763))
+
+- *(ci)* Remove unused imports flagged by autoflake (MVA-1198) ([#8747](https://github.com/mrveiss/AutoBot-AI/pull/8747))
+
+- *(config)* Replace get_logger with logging.getLogger in all config submodules
+
+- *(ci)* Resolve pids_limit conflict in Docker Compose smoke tests (MVA-1181) ([#8730](https://github.com/mrveiss/AutoBot-AI/pull/8730))
+
+- *(llc)* Close stdout fd, retry on missing workspace, clear stale env var (MVA-1153) ([#8722](https://github.com/mrveiss/AutoBot-AI/pull/8722))
+
+- *(design-tokens)* Add .btn-error CSS + ButtonVariant type (GH#8684) ([#8727](https://github.com/mrveiss/AutoBot-AI/pull/8727))
+
+- *(db)* Resolve duplicate Alembic revision ID 20260525_043 (MVA-1185) ([#8728](https://github.com/mrveiss/AutoBot-AI/pull/8728))
+
+- *(security)* Require admin role on GET /api/tasks/{id}/workspace (GH#8686, MVA-1180) ([#8726](https://github.com/mrveiss/AutoBot-AI/pull/8726))
+
+- *(design-tokens)* BaseBadge BADGE_VARIANTS as const + merge dual watchEffect in BaseButton (MVA-1161) (#8713) ([#8713](https://github.com/mrveiss/AutoBot-AI/pull/8713))
+
+- *(voice-rbac)* Fix VoiceBundleInfo stories — share state via provide/inject (MVA-1162) ([#8710](https://github.com/mrveiss/AutoBot-AI/pull/8710))
+
+- *(coordination)* Add None guard to all 6 SharedRuntimeBag Redis methods (MVA-1158 CR must-fix) ([#8709](https://github.com/mrveiss/AutoBot-AI/pull/8709))
+
+- *(stories)* Constrain size argType options to canonical tokens (MVA-354) ([#8702](https://github.com/mrveiss/AutoBot-AI/pull/8702))
+
+- *(orchestration)* Prevent _enforce_limit from evicting active worktrees (MVA-1154) (#8699) ([#8699](https://github.com/mrveiss/AutoBot-AI/pull/8699))
+
+- *(deps)* Bump langchain 1.2.24→1.3.1 — version does not exist on PyPI (MVA-1159) ([#8696](https://github.com/mrveiss/AutoBot-AI/pull/8696))
+
+- *(ci)* Health-check CI failures — Black/oxlint/OpenTelemetry/redis-shim (MVA-1141) ([#8679](https://github.com/mrveiss/AutoBot-AI/pull/8679))
+
+- *(ci)* Make croniter soft dependency in llc/api/routines.py (MVA-1119 follow-up) ([#8670](https://github.com/mrveiss/AutoBot-AI/pull/8670))
+
+- *(ci)* Make croniter a soft dependency in llc/api/routines.py (MVA-1119)
+
+- *(startup)* Chromadb hang + missing imports regression (MVA-1119) ([#8646](https://github.com/mrveiss/AutoBot-AI/pull/8646))
+
+- *(llc)* Add agent_id fallback to actor_id extraction in set_coworker (MVA-1029) (#8663) ([#8663](https://github.com/mrveiss/AutoBot-AI/pull/8663))
+
+- *(frontend)* Add preserveSymlinks to main frontend Vite config (pinia resolution)
+
+- *(ci)* Add pinia devDep to terminal plugin; remove unused TYPE_CHECKING import
+
+- *(frontend)* Remove duplicate Icon imports from 25 component files (fix smoke-test)
+
+- *(ansible/redis)* Use 127.0.0.1 for nightly Redis backup cron (MVA-1037) ([#8593](https://github.com/mrveiss/AutoBot-AI/pull/8593))
+
+- *(ansible)* Deploy health check scripts from code_source before chmod (MVA-1038) ([#8592](https://github.com/mrveiss/AutoBot-AI/pull/8592))
+
+- *(llc/migrations)* ALTER TYPE membershiprole ADD VALUE 'lead' (MVA-1028) ([#8591](https://github.com/mrveiss/AutoBot-AI/pull/8591))
+
+- *(frontend)* Remove duplicate import Icon in KnowledgeBrowserHeader.vue
+
+- *(ci)* Resolve 246 startup-import-smoke failures (MVA-947)
+
+- *(frontend)* Fix duplicate Icon import and malformed router routes (unblock smoke-test)
+
+- *(llc/services)* Resolve circular import in services/__init__.py (#8485) (#8588) ([#8588](https://github.com/mrveiss/AutoBot-AI/pull/8588))
+
+- *(docker)* Copy autobot-plugins before npm ci — fix smoke-test CI failure (#8587) ([#8587](https://github.com/mrveiss/AutoBot-AI/pull/8587))
+
+- *(slm-agent)* Add ConditionPathExists guard to prevent crash loop (#MVA-1036) (#8586) ([#8586](https://github.com/mrveiss/AutoBot-AI/pull/8586))
+
+- *(llc/kb)* Fix concurrent AsyncSession, JSON shape, orphaned tasks, unnecessary LLCRAGAssembler (#8566 #8567 #8569 #8570) ([#8585](https://github.com/mrveiss/AutoBot-AI/pull/8585))
+
+- *(llc/kb)* Dead import LLCWorkItem in inheritance.py (GH#8568) ([#8582](https://github.com/mrveiss/AutoBot-AI/pull/8582))
+
+- *(security)* Fix path traversal guard, restore coworker endpoint, migration idempotency (MVA-1023) ([#8581](https://github.com/mrveiss/AutoBot-AI/pull/8581))
+
+- *(llc)* Address LLC API/model gaps (#8479 #8478 #8476 #8474 #8462 #8461 #8493) ([#8578](https://github.com/mrveiss/AutoBot-AI/pull/8578))
+
+- *(llc)* Fix 18 LLC functional bugs from sprint discovery (MVA-1013) (#8577) ([#8577](https://github.com/mrveiss/AutoBot-AI/pull/8577))
+
+- *(llc)* Restore missing enums, auth, migrations, SAST, CI (#8558 #8505 #8504 #8515 #8501 #8506 #8516) (#8576) ([#8576](https://github.com/mrveiss/AutoBot-AI/pull/8576))
+
+- *(llc/enums)* Add missing CoWorkerType enum (#8558) (#8565) ([#8565](https://github.com/mrveiss/AutoBot-AI/pull/8565))
+
+- *(llc)* Consolidate budget SELECT, fix str cast, add sprint columns migration, stub assignee display (#8461 #8462 #8474 #8476)
+
+- Ws org_id propagation, portability TOCTOU+dragleave, ansible health-check guard (#8492 #8561 #8562 #8483)
+
+- *(llc/sprint)* Add SELECT FOR UPDATE to lifecycle, strip status from PATCH (#8479 #8478)
+
+- *(llc/scheduler)* Store poll task ref, fix ZADD NX, write context_snapshot, wire AutoBotAgentAdapter (#8494 #8498 #8499 #8490)
+
+- *(llc)* Noload lazy for LLCRoutine.runs, fix falsy-zero token fallback (#8496 #8493)
+
+- *(llc/kb)* Address round-2 CR findings in sprint KB summarizer (GH#8238)
+
+- *(llc)* Fix 4 CR bugs in board controls — liveness/scheduler/service/api (GH#8256) (#8563) ([#8563](https://github.com/mrveiss/AutoBot-AI/pull/8563))
+
+- *(llc)* Address 2 CR bugs in PR 8556 agent capability indexing (MVA-998)
+
+- *(llc/kb)* Address 3 hard blockers in PR 8554 (GH#8241)
+
+- *(llc)* Address all 10 CR findings from PR #8553 review (GH#8239)
+
+- *(llc/health/probe)* Apply 5 SCA CR fixes from PR-8540 review
+
+- *(llc/models)* Restore HeartbeatInvocationSource, HeartbeatRunStatus, ContextMode enums
+
+- *(llc/kb)* Address 3 CR runtime bugs in sprint KB summarizer (GH#8238)
+
+- *(llc/controls)* Raise AgentNotFoundError when agent row missing (#8538)
+
+- *(llc/frontend)* Address 2 CR blockers + 4 confirmed bugs in CompanyPortabilityView (#8250)
+
+- *(llc/frontend)* Address 3 CR bugs in CompanyPortabilityView (#8250)
+
+- *(llc)* Repair syntax errors and apply Black+isort to LLC API/service files
+
+- *(llc)* Address 4 CR crash bugs in company import (MVA-968)
+
+- *(llc)* Address 2 CR blockers in PR #8521 outbound PM sync
+
+- *(llc)* Resolve 6 CR blockers in PR 8518 — route shadowing, query_text, config, status codes, error handling, ordering (GH#8236, MVA-961)
+
+- Resolve 6 CI/CD failures blocking PRs #8497 and #8503 (Issue #8506) (#8513) ([#8513](https://github.com/mrveiss/AutoBot-AI/pull/8513))
+
+- *(deps)* Bump celery to 5.6.3 to resolve kombu 5.6.2 conflict (#8512) ([#8512](https://github.com/mrveiss/AutoBot-AI/pull/8512))
+
+- *(llc/8225)* Address CR round-6 — shared singleton, 404 oracle fix
+
+- *(llc/8225)* Address CR round-5 findings
+
+- *(llc/8225)* Only bump last_heartbeat_at on SUCCEEDED runs (MVA-923)
+
+- *(llc/8225)* Address CR round-4 — SQL join, route collision, tenant fail-open, task drain
+
+- *(llc/8225)* Properly start LLC HeartbeatScheduler in lifespan + pre-auth trigger_heartbeat
+
+- *(llc/8225)* Address CR round-3 findings — tenant isolation, task GC, cron safety, shutdown
+
+- *(llc)* Address remaining HIGH findings from PR #8497 CR
+
+- *(llc)* Guard _create_run against missing org in _handle_due_agent
+
+- *(llc/8225)* Address CR round-2 findings — trigger_manual race, auth, agent-drop, test
+
+- *(llc/8225)* Address CR round-2 blockers — company_id, multi-worker race, auth prefix
+
+- *(llc)* Company_id UUID type — join agents table, guard None on run creation (#8225)
+
+- *(llc)* Rename migration 033→036, split heartbeat_runs to its own migration (#8225)
+
+- *(llc)* Auth, cron validation, schedule lifecycle, double-dispatch (GH#8229)
+
+- *(llc/8229)* Address CR round-3 blockers and high findings
+
+- *(llc/tests)* Set explicit None on mock routine fields for Pydantic RoutineRead (GH#8229)
+
+- *(llc/8229)* Address CR round-2 blockers in routines scheduler
+
+- *(migrations)* Update migration 034 down_revision from 032 to 033
+
+- *(llc)* Sync routines to updated model/service signatures (GH#8229)
+
+- *(auth)* Forward user_id from JWT payload in authenticate_websocket ([#8489](https://github.com/mrveiss/AutoBot-AI/pull/8489))
+
+- *(auth)* Forward user_id from JWT payload in authenticate_websocket
+
+- *(llc/tests)* Align BudgetExhausted assertion with actual exception message format
+
+- *(llc/adapter)* Address 5 second-round CR blockers (MVA-898 round 2)
+
+- *(llc/adapter)* Address 4 CodeReviewer blockers from PR #8480
+
+- *(ansible)* Sync autobot-plugins + Vite preserveSymlinks for file: workspace packages (MVA-893) (#8482) ([#8482](https://github.com/mrveiss/AutoBot-AI/pull/8482))
+
+- *(llc)* Address MVA-820 CR medium-priority findings for GH#8211 (#8456) ([#8456](https://github.com/mrveiss/AutoBot-AI/pull/8456))
+
+- *(llc)* Address MVA-858 code review findings — work item service (GH#8213) (#8454) ([#8454](https://github.com/mrveiss/AutoBot-AI/pull/8454))
+
+- *(tests)* Set rich_payload=None in _make_cell to fix JSON export tests ([#8449](https://github.com/mrveiss/AutoBot-AI/pull/8449))
+
+- *(pattern_analysis)* GH#8438 purge-all scope + GH#8439 checkpoint/resume + GH#8440 blocking IO ([#8444](https://github.com/mrveiss/AutoBot-AI/pull/8444))
+
+- *(analytics)* GH#8436 source_id isolation + GH#8437 no_path sentinel 404 ([#8443](https://github.com/mrveiss/AutoBot-AI/pull/8443))
+
+- *(analytics)* Fix 3 Celery migration regressions (GH#8433 critical, GH#8434, GH#8435) ([#8442](https://github.com/mrveiss/AutoBot-AI/pull/8442))
+
+- *(ansible)* Replace | last(N) with [-N:] slice to fix Jinja2 crash log display (MVA-786) (#8428) ([#8428](https://github.com/mrveiss/AutoBot-AI/pull/8428))
+
+- *(skills/hub)* Address P0+P1 review findings (#8432) ([#8432](https://github.com/mrveiss/AutoBot-AI/pull/8432))
+
+- *(frontend)* Migrate TerminalWindow.vue CSS to design tokens (GH#8427) (#8431) ([#8431](https://github.com/mrveiss/AutoBot-AI/pull/8431))
+
+- *(terminal)* Emit commandExecuted before buffer clear in frontend BaseXTerminal (#8422) (#8425) ([#8425](https://github.com/mrveiss/AutoBot-AI/pull/8425))
+
+- *(terminal-plugin,vnc-plugin)* Batch W — ensureMap guard, no-console, VncHost type (#8417 #8418 #8419) (#8429) ([#8429](https://github.com/mrveiss/AutoBot-AI/pull/8429))
+
+- *(slm-backend)* Defer annotations in replication/backup to fix X|None crash
+
+- *(slm-backend)* Replace callable builtin with Callable type in playbook_executor
+
+- *(cache)* Replace threading.Lock with asyncio.Lock in LRUCacheManager.clear() (#8421) (#8423) ([#8423](https://github.com/mrveiss/AutoBot-AI/pull/8423))
+
+- *(frontend)* KnowledgePersistenceDialog bulk-action buttons disabled when all selected (#8395) (#8410) ([#8410](https://github.com/mrveiss/AutoBot-AI/pull/8410))
+
+- *(api)* Align AdapterTestResponse fields with EnvironmentTestResult.to_dict() (#8379) ([#8379](https://github.com/mrveiss/AutoBot-AI/pull/8379))
+
+- *(vector-store)* Batch U — 5 discovery fixes #8404 #8405 #8406 #8407 #8408 ([#8420](https://github.com/mrveiss/AutoBot-AI/pull/8420))
+
+- *(llm-cache,classification,knowledge)* Batch S — 4 discovery follow-ups (#8399 #8398 #8401 #8402) ([#8409](https://github.com/mrveiss/AutoBot-AI/pull/8409))
+
+- *(vector-store)* #8390 cache_max_size bug, #8391 VectorWriteBuffer, #8392 CollectionTierManager (#8400) ([#8400](https://github.com/mrveiss/AutoBot-AI/pull/8400))
+
+- *(classification,llm-cache)* Batch M-B — crash guards and cache integrity (GH#8381 GH#8382 GH#8383 GH#8384) ([#8397](https://github.com/mrveiss/AutoBot-AI/pull/8397))
+
+- *(vector-search)* Batch M-A — 5 bugs GH#8385 GH#8386 GH#8387 GH#8388 GH#8389 ([#8396](https://github.com/mrveiss/AutoBot-AI/pull/8396))
+
+- *(frontend)* Resolve pre-existing TS errors in KnowledgePersistenceDialog (GH#8380) (#8393) ([#8393](https://github.com/mrveiss/AutoBot-AI/pull/8393))
+
+- *(llm/events/models)* Batch J — resume_download, Ollama pull, channel guard, SA2 annotations (#8373) ([#8373](https://github.com/mrveiss/AutoBot-AI/pull/8373))
+
+- FAISS IVFPQ wire-in + arch_family correctness (#8357 #8359 #8360 #8361) (#8372) ([#8372](https://github.com/mrveiss/AutoBot-AI/pull/8372))
+
+- *(api)* Align EnterpriseFeatureEnableAll + AnalyticsEvolutionExport response schemas (#8313, #8314) ([#8362](https://github.com/mrveiss/AutoBot-AI/pull/8362))
+
+- *(orchestrator)* Use asyncio.get_running_loop() in set_phi2_enabled (#8330) ([#8341](https://github.com/mrveiss/AutoBot-AI/pull/8341))
+
+- SLM crash-loop (GH#8141) + heartbeat event drop (GH#8340) ([#8342](https://github.com/mrveiss/AutoBot-AI/pull/8342))
+
+- *(frontend)* KnowledgePersistenceDialog reads response.data for pending_items/compiled (#8322) ([#8331](https://github.com/mrveiss/AutoBot-AI/pull/8331))
+
+- DataResponse bypass, web_crawler test patches, chromadb NameError (#8300, #8306, #8308) ([#8327](https://github.com/mrveiss/AutoBot-AI/pull/8327))
+
+- *(api/health)* Wire NPU worker into npu_acceleration capability flag (#6768) ([#8318](https://github.com/mrveiss/AutoBot-AI/pull/8318))
+
+- *(llm)* Ollama tool wiring — tool_choice, format conflict, review fixes (#7911) ([#8311](https://github.com/mrveiss/AutoBot-AI/pull/8311))
+
+- Unified_audit OOM/TTL + PersistStrategy.REDIS + chat_knowledge null data (#8301–#8304) ([#8315](https://github.com/mrveiss/AutoBot-AI/pull/8315))
+
+- *(models,connectors,config,ci)* Discovery fixes #8271 #8275 #8276 #8281 ([#8317](https://github.com/mrveiss/AutoBot-AI/pull/8317))
+
+- *(connectors)* Four resilience regressions from PR #8277 (#8283, #8284, #8285, #8286) ([#8288](https://github.com/mrveiss/AutoBot-AI/pull/8288))
+
+- *(connectors)* Propagate crawl errors to SyncResult and only checkpoint crawled seeds (#8296, #8297)
+
+- *(connectors)* Four resilience regressions from PR #8277 (#8283, #8284, #8285, #8286)
+
+- *(install)* Add asyncpg connect timeout + Python import smoke test (MVA-514) (#8279) ([#8279](https://github.com/mrveiss/AutoBot-AI/pull/8279))
+
+- *(initialization)* Close #6690 gaps — strict default + Ansible + test (#8280) ([#8280](https://github.com/mrveiss/AutoBot-AI/pull/8280))
+
+- *(frontend)* SW IP-gate, ChatController race warn, polling circuit-breaker (#6767/#6766/#6765) (#8287) ([#8287](https://github.com/mrveiss/AutoBot-AI/pull/8287))
+
+- *(frontend/css)* Replace space-x-* with gap-* in App.vue (#7899) (#8272) ([#8272](https://github.com/mrveiss/AutoBot-AI/pull/8272))
+
+- *(slm-backend+backend)* Revert Mapped[X|None] PEP 604 codemod + fix ChromaDB health URL (#8266 #8265) ([#8269](https://github.com/mrveiss/AutoBot-AI/pull/8269))
+
+- Debug discoveries #6769 (ChromaDB missing), #6770 (circuit-breaker total_calls=0), #6771 (i18n 59 missing keys) ([#8097](https://github.com/mrveiss/AutoBot-AI/pull/8097))
+
+- *(hooks)* Fix BRANCH_ARG extraction — GNU grep 3.7 rejects variable-length lookbehinds (#6512)
+
+- *(hooks)* Strengthen branch checkout blocking in main worktree (#6512)
+
+- *(code-analysis)* Tune DUPLICATE_CLASS_SHAPE threshold + extract problem-dict helper + consolidation fixes (#6780, #6759, #6757) (#8099) ([#8099](https://github.com/mrveiss/AutoBot-AI/pull/8099))
+
+- *(backend)* Phase 3 batch 27 — typed agent payloads, smoke test, create_chat_response cleanup (#6703, #6732, #6411) (#8095) ([#8095](https://github.com/mrveiss/AutoBot-AI/pull/8095))
+
+- *(frontend/ui)* Fix update banner false-positive, plugin list parsing, replace UnifiedLoadingView (#6775, #6774, #6698) (#8092) ([#8092](https://github.com/mrveiss/AutoBot-AI/pull/8092))
+
+- *(nginx)* Add CSP header to frontend HTML and SPA fallback locations (#6814) ([#8088](https://github.com/mrveiss/AutoBot-AI/pull/8088))
+
+- *(ansible)* Wrap SLM health check in block/rescue so diagnostics run on failure (#7919) ([#8085](https://github.com/mrveiss/AutoBot-AI/pull/8085))
+
+- *(ansible)* Add pre-health-check service state detection to fast-fail on crashed SLM (#7920) ([#8084](https://github.com/mrveiss/AutoBot-AI/pull/8084))
+
+- *(ci)* Resolve Black formatting regressions — 2 syntax errors + 105 files reformatted (#7879) ([#8083](https://github.com/mrveiss/AutoBot-AI/pull/8083))
+
+- *(frontend/types)* Triage and fix high-impact TS errors across 41 files (#7511) ([#8076](https://github.com/mrveiss/AutoBot-AI/pull/8076))
+
+- *(toast)* Use canonical durations in chat notify() wrapper (MVA-351) ([#8075](https://github.com/mrveiss/AutoBot-AI/pull/8075))
+
+- *(llm/tiered-routing)* _score_length accepts tokenizer callable, falls back to char/4 (#7348) (#7930) ([#7930](https://github.com/mrveiss/AutoBot-AI/pull/7930))
+
+- *(toast)* Align duration constants with canonical spec Section 5 (MVA-345) (#8038) ([#8038](https://github.com/mrveiss/AutoBot-AI/pull/8038))
+
+- *(a11y)* Aria-label remediation - Severity-2 views and charts (MVA-333) (#8036) ([#8036](https://github.com/mrveiss/AutoBot-AI/pull/8036))
+
+- *(frontend)* Fix 4 vue-tsc errors in LLMApiKeysView — restore baseline to 93 (MVA-177, closes #7653) (#8031) ([#8031](https://github.com/mrveiss/AutoBot-AI/pull/8031))
+
+- *(analyzer)* _detect_data_clumps KeyError + LSP required-param description (#7518, #7519) (#8015) ([#8015](https://github.com/mrveiss/AutoBot-AI/pull/8015))
+
+- *(security-ci)* Correct YAML indentation in dependency-security job (#8051) ([#8051](https://github.com/mrveiss/AutoBot-AI/pull/8051))
+
+- *(ansible/ai-stack)* Stop chromadb service before venv recreation (MVA-79) (#8045) ([#8045](https://github.com/mrveiss/AutoBot-AI/pull/8045))
+
+- *(install)* Resolve fresh-install backend health check timeout (MVA-514)
+
+- *(config)* Use runtimeHttpProto() in slmAdminUrl + ssot-config tests (GH #6837) (#7907) ([#7907](https://github.com/mrveiss/AutoBot-AI/pull/7907))
+
+- *(orchestration)* Resolve TYPE_CHECKING import cycle by moving AgentPerformance (#6831) ([#7890](https://github.com/mrveiss/AutoBot-AI/pull/7890))
+
+- *(slm-client)* Pass auth token as query param to stop /api/ws/events reconnect spam (#6839) ([#7885](https://github.com/mrveiss/AutoBot-AI/pull/7885))
+
+- *(ansible)* Add ansible_host fallback to ansible_default_ipv4.address callsites (#6840) ([#7884](https://github.com/mrveiss/AutoBot-AI/pull/7884))
+
+- *(nginx/slm)* Add /openapi.json /docs /redoc to standalone-mode block (#6843) ([#7883](https://github.com/mrveiss/AutoBot-AI/pull/7883))
+
+- *(slm-backend)* Prevent indefinite hang on database connection timeout (#7689)
+
+- *(web_fetch/robots)* Replace unreachable defensive guard with assertion (#7461) (#7865) ([#7865](https://github.com/mrveiss/AutoBot-AI/pull/7865))
+
+- *(autobot_shared)* Remove bare ConfigRegistry import for independent importability (#7526) (#7864) ([#7864](https://github.com/mrveiss/AutoBot-AI/pull/7864))
+
+- *(frontend)* Correct getUserById/getGroupById return types (GH#7541) (#7859) ([#7859](https://github.com/mrveiss/AutoBot-AI/pull/7859))
+
+- *(constants)* Remove 21 duplicate class definitions from ssot_constants.py (GH#7747) ([#7853](https://github.com/mrveiss/AutoBot-AI/pull/7853))
+
+- *(a11y)* Convert KnowledgePromptEditor prompt-item divs to button elements (#7720) (#7849) ([#7849](https://github.com/mrveiss/AutoBot-AI/pull/7849))
+
+- *(slm-frontend)* Align MonitoringError with RecentError API shape, remove stopgap cast (#7768) (#7828) ([#7828](https://github.com/mrveiss/AutoBot-AI/pull/7828))
+
+- *(pre-commit)* Extend no-literal-ttl-seconds hook to catch BinOp patterns (#7779) (#7827) ([#7827](https://github.com/mrveiss/AutoBot-AI/pull/7827))
+
+- *(canvas)* Declare bleach and weasyprint as explicit deps (MVA-362 security) ([#7819](https://github.com/mrveiss/AutoBot-AI/pull/7819))
+
+- *(security-ci)* Align upload-artifact and download-artifact to v4 (#7816) ([#7816](https://github.com/mrveiss/AutoBot-AI/pull/7816))
+
+- *(rbac)* Defer clear_cache to after session commit to close flush→publish race (GH#7605) ([#7809](https://github.com/mrveiss/AutoBot-AI/pull/7809))
+
+- *(tests)* Restore performance_benchmarks tests — fix imports + rename for pytest collection (#7132) (#7789) ([#7789](https://github.com/mrveiss/AutoBot-AI/pull/7789))
+
+- *(rbac)* Close pubsub before reconnect and use pipeline for bulk cache clear (#7788) ([#7788](https://github.com/mrveiss/AutoBot-AI/pull/7788))
+
+- *(npu-worker)* Correct root() return type Dict[str,str] → Dict[str,Any] (MVA-342) (#7771) ([#7771](https://github.com/mrveiss/AutoBot-AI/pull/7771))
+
+- *(celery)* Import knowledge_tasks and memory_tasks in tasks/__init__.py (MVA-341) (#7775) ([#7775](https://github.com/mrveiss/AutoBot-AI/pull/7775))
+
+- *(slm-frontend)* Reconcile FleetCert type — remove local interface and unsafe cast (GH#7767) (#7781) ([#7781](https://github.com/mrveiss/AutoBot-AI/pull/7781))
+
+- *(backend)* Add startup warning when SLM_AUTH_TOKEN is unset (GH#7713) (#7780) ([#7780](https://github.com/mrveiss/AutoBot-AI/pull/7780))
+
+- *(config,chromadb,constants)* Circular import + chromadb provenance + ssot_constants missing items (GH#7765, GH#7762, GH#7750) (#7777) ([#7777](https://github.com/mrveiss/AutoBot-AI/pull/7777))
+
+- *(chromadb)* Canonical provenance keys in DocIndexerService + create_collection injection (GH#7761, GH#7762) ([#7774](https://github.com/mrveiss/AutoBot-AI/pull/7774))
+
+- *(nginx)* Re-include security headers in /slm/index.html sub-location (#7737) (#7758) ([#7758](https://github.com/mrveiss/AutoBot-AI/pull/7758))
+
+- *(toast)* Use canonical durations in chat notify() wrapper (MVA-351) (#7739) ([#7739](https://github.com/mrveiss/AutoBot-AI/pull/7739))
+
+- *(tools)* Enforce worktree isolation for parallel agents (#6512, MVA-391)
+
+- *(nginx)* DRY security headers via nginx snippets (#6842) (#7736) ([#7736](https://github.com/mrveiss/AutoBot-AI/pull/7736))
+
+- *(toast)* Align duration constants with canonical spec Section 5 (MVA-345) (#7729) ([#7729](https://github.com/mrveiss/AutoBot-AI/pull/7729))
+
+- *(analyzer)* _detect_data_clumps KeyError + LSP required-param description (#7518, #7519) (#7733) ([#7733](https://github.com/mrveiss/AutoBot-AI/pull/7733))
+
+- *(ci)* Standardize artifact action versions + fix cleanup-worktrees.sh Phase 3 exit (#7712, #7537) (#7732) ([#7732](https://github.com/mrveiss/AutoBot-AI/pull/7732))
+
+- *(ci)* Align artifact action versions to v4 in security.yml (GH#7712) ([#7728](https://github.com/mrveiss/AutoBot-AI/pull/7728))
+
+- *(security-ci)* Correct YAML indentation to restore dependency-security job (MVA-350, GH#7711) ([#7727](https://github.com/mrveiss/AutoBot-AI/pull/7727))
+
+- *(a11y)* Aria-label remediation - Severity-2 views and charts (MVA-333) ([#7723](https://github.com/mrveiss/AutoBot-AI/pull/7723))
+
+- *(a11y)* KnowledgePromptEditor aria-label audit and remediation (MVA-324) ([#7719](https://github.com/mrveiss/AutoBot-AI/pull/7719))
+
+- *(a11y)* Aria-label remediation — ServiceMessageTimeline + ChatFilePanel (#MVA-323, #MVA-329) ([#7716](https://github.com/mrveiss/AutoBot-AI/pull/7716))
+
+- *(a11y)* Aria-label remediation for 10 zero-accessibility icon-only buttons (MVA-332) ([#7721](https://github.com/mrveiss/AutoBot-AI/pull/7721))
+
+- *(a11y)* Add aria-label to 10 icon-only buttons (MVA-335) (#7722) ([#7722](https://github.com/mrveiss/AutoBot-AI/pull/7722))
+
+- *(a11y)* VisualBrowserPanel aria-label audit & remediation (MVA-322) ([#7717](https://github.com/mrveiss/AutoBot-AI/pull/7717))
+
+- *(a11y)* Aria-label remediation - BaseButton contract + P1-P4 patches (MVA-317) (#7715) ([#7715](https://github.com/mrveiss/AutoBot-AI/pull/7715))
+
+- *(ansible)* Write SLM_AUTH_TOKEN to autobot-backend.env — stops WS 403 storm (#7689) ([#7707](https://github.com/mrveiss/AutoBot-AI/pull/7707))
+
+- *(health-check)* Correct WSL2 endpoints — backend IP, ChromaDB v2, SLM path (GH#7688) ([#7706](https://github.com/mrveiss/AutoBot-AI/pull/7706))
+
+- *(ci/deploy)* Address review blockers on PR #7703 — safe repo path + pipefail (MVA-291)
+
+- *(ci/deploy)* Move health-check cron to Ansible, remove /tmp wrapper (MVA-291)
+
+- *(ci)* Resolve all flake8/autoflake/Black/bandit/mypy violations on Dev_new_gui (MVA-282) ([#7699](https://github.com/mrveiss/AutoBot-AI/pull/7699))
+
+- *(scheduler)* Replace per-worker singleton with Redis-backed leader election (MVA-160 / #6556) ([#7656](https://github.com/mrveiss/AutoBot-AI/pull/7656))
+
+- *(scheduler)* Replace per-worker singleton with Redis-backed leader election (#6556)
+
+- *(openai-compat)* Omit cost_usd:null from non-streaming usage object (MVA-202) ([#7675](https://github.com/mrveiss/AutoBot-AI/pull/7675))
+
+- *(ci/visual-regression)* Remove stale baselines for regeneration (GH#7410)
+
+- *(ci/visual-regression)* Integrate Storybook visual test fixes (GH#7410)
+
+- *(auth)* Mint new JWT before revoking old in refresh_run_jwt (MVA-170) ([#7664](https://github.com/mrveiss/AutoBot-AI/pull/7664))
+
+- *(arch-chat)* Address 4 CodeReviewer blockers from PR #7652 (MVA-195)
+
+- *(frontend)* Fix 4 vue-tsc errors in LLMApiKeysView — restore baseline to 93 (MVA-177, closes #7653) (#7673) ([#7673](https://github.com/mrveiss/AutoBot-AI/pull/7673))
+
+- *(mcp)* Map JSON-RPC -32003 scope-denied to HTTP 403 in FastAPI router (MVA-171) ([#7667](https://github.com/mrveiss/AutoBot-AI/pull/7667))
+
+- *(auth)* Add missing await on get_current_user in openai_compat._get_user (MVA-169) ([#7662](https://github.com/mrveiss/AutoBot-AI/pull/7662))
+
+- *(frontend)* Remove double .json() parse in useAuditApi.getFailedOperations (#7538) ([#7649](https://github.com/mrveiss/AutoBot-AI/pull/7649))
+
+- *(security)* Add path-prefix guard — run JWT only valid on /api/runs/ and /api/mcp/ (MVA-91) (#7650) ([#7650](https://github.com/mrveiss/AutoBot-AI/pull/7650))
+
+- *(security)* Add denylist rejection test and fix TTL env var in docs (MVA-145) ([#7640](https://github.com/mrveiss/AutoBot-AI/pull/7640))
+
+- *(sec)* Resolve PR #7534 post-rebase blockers (MVA-144, #7534) ([#7638](https://github.com/mrveiss/AutoBot-AI/pull/7638))
+
+- *(dedup)* Use circuit_breaker.CircuitState — the canonical shared definition (#7636) ([#7636](https://github.com/mrveiss/AutoBot-AI/pull/7636))
+
+- *(openai-compat)* Streaming cost SSE chunk now a valid ChatCompletionChunk (MVA-138) (#7632) ([#7632](https://github.com/mrveiss/AutoBot-AI/pull/7632))
+
+- *(dedup)* Consolidate slack_approval_integration.CircuitState into shared analyzer module (MVA-139) (#7631) ([#7631](https://github.com/mrveiss/AutoBot-AI/pull/7631))
+
+- *(ci)* Remove 2 remaining F401 unused imports blocking code-quality (MVA-137) (#7630) ([#7630](https://github.com/mrveiss/AutoBot-AI/pull/7630))
+
+- *(ai-stack)* Wire Ollama backing service + CI watchdog + security regression tests (#6228) (#7626) ([#7626](https://github.com/mrveiss/AutoBot-AI/pull/7626))
+
+- *(security)* Suppress CodeQL py/full-ssrf false positive in fetch_safe_url (#6533) (#7622) ([#7622](https://github.com/mrveiss/AutoBot-AI/pull/7622))
+
+- *(security)* Patch SSRF in skill catalog importer and suppress false-positive stack-trace alerts (MVA-129) (#7621) ([#7621](https://github.com/mrveiss/AutoBot-AI/pull/7621))
+
+- *(llm-keys)* Use async Redis client with null guard and pipeline list_keys (#6590) (#7619) ([#7619](https://github.com/mrveiss/AutoBot-AI/pull/7619))
+
+- *(ansible/ai-stack)* Stop chromadb service before venv recreation (MVA-79) (#7614) ([#7614](https://github.com/mrveiss/AutoBot-AI/pull/7614))
+
+- *(ci)* Bump Node 20 → 22 in CI workflows for oxlint 1.58 vite.config.ts loading (closes #7506) (#7524) ([#7524](https://github.com/mrveiss/AutoBot-AI/pull/7524))
+
+- *(analyzer + dups)* Consolidate CircuitState + HardwareDevice + tune enum threshold (#6755 round 3) (#7520) ([#7520](https://github.com/mrveiss/AutoBot-AI/pull/7520))
+
+- *(ansible)* Add cache_valid_time: 3600 to apt update_cache tasks (#6719) (#7595) ([#7595](https://github.com/mrveiss/AutoBot-AI/pull/7595))
+
+- *(backend)* Canonical datetime_now() helper and eliminate datetime.utcnow() drift (#7436) (#7593) ([#7593](https://github.com/mrveiss/AutoBot-AI/pull/7593))
+
+- *(media/image)* Patch _vision_processor_checked instead of nonexistent _VISION_PROCESSOR_AVAILABLE (#6844) (#7571) ([#7571](https://github.com/mrveiss/AutoBot-AI/pull/7571))
+
+- *(onboarding)* Wrap apply_preset Redis writes in MULTI/EXEC transaction (#6577) (#7567) ([#7567](https://github.com/mrveiss/AutoBot-AI/pull/7567))
+
+- *(plugins)* Namespace installed SET by source to prevent name collisions (#7366) (#7533) ([#7533](https://github.com/mrveiss/AutoBot-AI/pull/7533))
+
+- *(rbac)* Replace in-process cache with Redis L2 + pub/sub invalidation (MVA-123) ([#7603](https://github.com/mrveiss/AutoBot-AI/pull/7603))
+
+- *(frontend)* Fix response.data envelope bug in ShareKnowledgeDialog (#7502) ([#7540](https://github.com/mrveiss/AutoBot-AI/pull/7540))
+
+- *(ansible/redis)* Wire TLS variables into redis-stack.conf.j2 (#6955) ([#7530](https://github.com/mrveiss/AutoBot-AI/pull/7530))
+
+- *(auth)* Gate single_user /login bypass behind AUTOBOT_DEV_AUTH_BYPASS (#6838) ([#7521](https://github.com/mrveiss/AutoBot-AI/pull/7521))
+
+- *(infra)* Refresh PHASE_CRITERIA paths + fix result-shape + Redis check (closes #7496) (#7516) ([#7516](https://github.com/mrveiss/AutoBot-AI/pull/7516))
+
+- *(ci)* Green up Phase Validation + Code Quality (#7496) (#7505) ([#7505](https://github.com/mrveiss/AutoBot-AI/pull/7505))
+
+- *(analyzer)* Skip parent-child + Protocol-impl pairs in duplicate_class_shape (#7501) (#7503) ([#7503](https://github.com/mrveiss/AutoBot-AI/pull/7503))
+
+- *(multimodal)* LSP exception contract — VisionProcessor + VoiceProcessor (#6755 round 1) (#7495) ([#7495](https://github.com/mrveiss/AutoBot-AI/pull/7495))
+
+- *(chat/search_web)* Thread max_pages through snippet path for parity with fetch_full (closes #7479) (#7493) ([#7493](https://github.com/mrveiss/AutoBot-AI/pull/7493))
+
+- *(async/fs)* Migrate 13 Path.read/write_text sites in async paths to to_thread (closes #7467) (#7492) ([#7492](https://github.com/mrveiss/AutoBot-AI/pull/7492))
+
+- *(async)* Codebase-wide asyncio.run → run_or_schedule consistency sweep (#7469 round 4) (#7488) ([#7488](https://github.com/mrveiss/AutoBot-AI/pull/7488))
+
+- *(async)* Migrate sync-entry asyncio.run sites to run_or_schedule (#7469 round 3) (#7485) ([#7485](https://github.com/mrveiss/AutoBot-AI/pull/7485))
+
+- *(scripts)* Adopt set -euo pipefail in start-services.sh (closes #7455) (#7484) ([#7484](https://github.com/mrveiss/AutoBot-AI/pull/7484))
+
+- *(async)* Migrate 3 cascade-required asyncio.run sites to run_or_schedule (#7469 round 2) (#7483) ([#7483](https://github.com/mrveiss/AutoBot-AI/pull/7483))
+
+- *(async)* Hoist asyncio-run-or-schedule defensive helper to autobot_shared (#7469 round 1) (#7474) ([#7474](https://github.com/mrveiss/AutoBot-AI/pull/7474))
+
+- *(ansible/provision)* Ensure SLM frontend node_modules before rebuild (closes #7472) (#7473) ([#7473](https://github.com/mrveiss/AutoBot-AI/pull/7473))
+
+- *(async)* Pre-commit hook blocking sync I/O in async paths (#7444 gate) (#7471) ([#7471](https://github.com/mrveiss/AutoBot-AI/pull/7471))
+
+- *(test/memory)* Migrate working_memory test + fix wrong-namespace patch (#7280 round 9) (#7433) ([#7433](https://github.com/mrveiss/AutoBot-AI/pull/7433))
+
+- *(rag)* Defensive embedding-provenance guard at ChromaDB write chokepoint (#6514 MVP) (#7429) ([#7429](https://github.com/mrveiss/AutoBot-AI/pull/7429))
+
+- *(test/skills)* Migrate LLMInterface patches to get_llm_service factory (#7398) (#7419) ([#7419](https://github.com/mrveiss/AutoBot-AI/pull/7419))
+
+- *(ci/visual-regression)* Bump test timeout + upload first-run baselines (#7410) (#7418) ([#7418](https://github.com/mrveiss/AutoBot-AI/pull/7418))
+
+- *(security)* Export VAR= form + chained-cmd separator + SHELL hardening (#7406) (#7415) ([#7415](https://github.com/mrveiss/AutoBot-AI/pull/7415))
+
+- *(test/audit)* Add SESSION_EXPORT to required AuditAction set (#7399) (#7413) ([#7413](https://github.com/mrveiss/AutoBot-AI/pull/7413))
+
+- *(test/security)* Un-xfail auth_bypass + role_confusion as test rot (#7384 sub-fixes #2, #3) (#7407) ([#7407](https://github.com/mrveiss/AutoBot-AI/pull/7407))
+
+- *(frontend)* UX audit — aria-labels, i18n key, SetupWizard form labels (#7389) (#7394) ([#7394](https://github.com/mrveiss/AutoBot-AI/pull/7394))
+
+- *(security)* Argument-aware risk for docker/find/DNS attack flags (#7384) (#7393) ([#7393](https://github.com/mrveiss/AutoBot-AI/pull/7393))
+
+- *(test/retrieval_learner)* Scope hset assertion to pattern keys (#7386) (#7387) ([#7387](https://github.com/mrveiss/AutoBot-AI/pull/7387))
+
+- *(test/security)* Mock command_executor + xfail layered failures (#7376) (#7385) ([#7385](https://github.com/mrveiss/AutoBot-AI/pull/7385))
+
+- *(security)* Detect dangerous env-var prefix injection (#7375) (#7382) ([#7382](https://github.com/mrveiss/AutoBot-AI/pull/7382))
+
+- *(test/security)* Test rot in security_edge_cases assertions (#7367 phase 1) (#7377) ([#7377](https://github.com/mrveiss/AutoBot-AI/pull/7377))
+
+- *(test/notif)* Migrate to canonical async-redis fixture + fix wrong-namespace patch (#7280 round 2) (#7374) ([#7374](https://github.com/mrveiss/AutoBot-AI/pull/7374))
+
+- *(plugins)* Make install/detail endpoints source-aware (#6524) (#7365) ([#7365](https://github.com/mrveiss/AutoBot-AI/pull/7365))
+
+- *(plugins)* Relocate marketplace_sources off /plugins prefix (#6523) (#7364) ([#7364](https://github.com/mrveiss/AutoBot-AI/pull/7364))
+
+- *(format)* Make targets need 'bash scripts/format.sh' (closes #7361) (#7362) ([#7362](https://github.com/mrveiss/AutoBot-AI/pull/7362))
+
+- *(intelligence)* Unblock IntelligentAgent demo cascade — 5 reference-rot bugs (#7245, #7246) (#7341) ([#7341](https://github.com/mrveiss/AutoBot-AI/pull/7341))
+
+- *(test/utils)* Patch event_manager.get_event_manager (lazy_singleton accessor) (#7184) (#7337) ([#7337](https://github.com/mrveiss/AutoBot-AI/pull/7337))
+
+- *(plugins)* Harden _remote_plugin_to_entry against bad remote payloads (#6525) (#7335) ([#7335](https://github.com/mrveiss/AutoBot-AI/pull/7335))
+
+- *(voice)* Collapse 2 isSpeaking watchers into 1 — eliminates hands-free cooldown double-trigger (#6823) (#7334) ([#7334](https://github.com/mrveiss/AutoBot-AI/pull/7334))
+
+- *(system-health)* Reject sync probes at registration time (#6918) (#7332) ([#7332](https://github.com/mrveiss/AutoBot-AI/pull/7332))
+
+- *(codegen)* Bypass package __init__.py via spec_from_file_location (#7269 followup) (#7331) ([#7331](https://github.com/mrveiss/AutoBot-AI/pull/7331))
+
+- *(audit-script)* Catch dynamic import() / require() / .d.ts FP classes (#6872 part 2) (#7330) ([#7330](https://github.com/mrveiss/AutoBot-AI/pull/7330))
+
+- *(test/marketplace)* Pass enums + source_id to list_catalog direct calls (closes #7251) (#7329) ([#7329](https://github.com/mrveiss/AutoBot-AI/pull/7329))
+
+- *(tests)* Patch get_async_redis_client at consumer namespace + AsyncMock wrap (#7215 followup) (#7279) ([#7279](https://github.com/mrveiss/AutoBot-AI/pull/7279))
+
+- *(ci)* Update vue-tsc baseline 248 → 250 to match Dev_new_gui state (closes #7227) (#7276) ([#7276](https://github.com/mrveiss/AutoBot-AI/pull/7276))
+
+- *(test/workflow)* UTC ISO suffix is +00:00, not Z (#7238) (#7260) ([#7260](https://github.com/mrveiss/AutoBot-AI/pull/7260))
+
+- *(ansible/redis)* TLS lines conditional on cert existence (#6701) (#7259) ([#7259](https://github.com/mrveiss/AutoBot-AI/pull/7259))
+
+- *(deploy)* Loosen autobot-celery-beat dependency on celery worker (#6580) (#7252) ([#7252](https://github.com/mrveiss/AutoBot-AI/pull/7252))
+
+- *(test/marketplace)* Unblock collection — repoint imports past #6534 enum migration (#7237) (#7250) ([#7250](https://github.com/mrveiss/AutoBot-AI/pull/7250))
+
+- *(audit-script)* Skip entry-point runners + correct worktree-relative path check (#7128b) (#7244) ([#7244](https://github.com/mrveiss/AutoBot-AI/pull/7244))
+
+- *(ci)* Pydantic[email] in CI framework reqs to unblock startup-import-smoke (closes #7225 partial) (#7243) ([#7243](https://github.com/mrveiss/AutoBot-AI/pull/7243))
+
+- *(ansible/browser)* T64 audit for noble — add defensive libatk1.0-0t64 (closes #7220) (#7235) ([#7235](https://github.com/mrveiss/AutoBot-AI/pull/7235))
+
+- *(tests)* Wrap async patch return_values with AsyncMock (#7216 — 77 sites) (#7234) ([#7234](https://github.com/mrveiss/AutoBot-AI/pull/7234))
+
+- *(frontend)* Vue-tsc regression-guard CI + worktree-gotcha doc note (closes #7227) (#7233) ([#7233](https://github.com/mrveiss/AutoBot-AI/pull/7233))
+
+- *(test/worker)* Assert on envelope-wrapped result shape (#7154) (#7230) ([#7230](https://github.com/mrveiss/AutoBot-AI/pull/7230))
+
+- *(tests)* Repoint 9 src.* mock paths #7176 missed (#6987 part 5/N) (#7215) ([#7215](https://github.com/mrveiss/AutoBot-AI/pull/7215))
+
+- *(ansible/browser)* Use libasound2t64 on noble (closes #7207) (#7208) ([#7208](https://github.com/mrveiss/AutoBot-AI/pull/7208))
+
+- *(orchestration)* Build_dag accepts both edge shapes (#7010 cluster 3 partial) (#7205) ([#7205](https://github.com/mrveiss/AutoBot-AI/pull/7205))
+
+- *(backend)* Wrap markdownify hard-import with optional_import (#7166) (#7204) ([#7204](https://github.com/mrveiss/AutoBot-AI/pull/7204))
+
+- *(test)* Repoint 7 mock paths from nonexistent utils.redis_client to canonical (#7202) (#7209) ([#7209](https://github.com/mrveiss/AutoBot-AI/pull/7209))
+
+- *(test/security)* Update 2 tests for SecurityPolicy refactor (#7147) (#7199) ([#7199](https://github.com/mrveiss/AutoBot-AI/pull/7199))
+
+- *(orchestration+retry)* NotImplementedError propagates through executor + retry (#7010 cluster 5) (#7198) ([#7198](https://github.com/mrveiss/AutoBot-AI/pull/7198))
+
+- *(ansible)* Replace ansible_X facts with ansible_facts['X'] (closes #7180) (#7197) ([#7197](https://github.com/mrveiss/AutoBot-AI/pull/7197))
+
+- *(backend/chat)* _clear_and_restore_session uses add_messages_batch (#7025) (#7196) ([#7196](https://github.com/mrveiss/AutoBot-AI/pull/7196))
+
+- *(orchestration)* Causal executor — validation gate, summary case, trace wording (#7010 cluster 4) (#7190) ([#7190](https://github.com/mrveiss/AutoBot-AI/pull/7190))
+
+- *(orchestration)* Dry-run report shape + NotificationConfig double-kwarg (#7010 cluster 3 partial) (#7186) ([#7186](https://github.com/mrveiss/AutoBot-AI/pull/7186))
+
+- *(test/monitoring)* Repoint 8 src.* mock paths to autobot_shared.redis_client (#6987 part 4/N) (#7181) ([#7181](https://github.com/mrveiss/AutoBot-AI/pull/7181))
+
+- *(ansible/redis)* Pin Redis Stack repo to jammy on noble (closes #7178) (#7179) ([#7179](https://github.com/mrveiss/AutoBot-AI/pull/7179))
+
+- *(tests)* Drop nonexistent 'src.' prefix from 43 mock paths (#6987) (#7176) ([#7176](https://github.com/mrveiss/AutoBot-AI/pull/7176))
+
+- *(orchestration)* DAG branch pruning preserves diamond join nodes (#7010 cluster 1) (#7172) ([#7172](https://github.com/mrveiss/AutoBot-AI/pull/7172))
+
+- *(orchestration)* CHECKPOINT_TTL = 30 days + add refresh_ttl() method (#7010 cluster 2, closes #3231 partial) (#7169) ([#7169](https://github.com/mrveiss/AutoBot-AI/pull/7169))
+
+- *(audit-script)* Filter test_*.py + detect router_registry callers (#7128, #7109) (#7168) ([#7168](https://github.com/mrveiss/AutoBot-AI/pull/7168))
+
+- *(tests)* Rename 44 dotted-test-filenames to underscore form (closes #7082) (#7167) ([#7167](https://github.com/mrveiss/AutoBot-AI/pull/7167))
+
+- *(install.sh)* Generate localhost.yml with network_subnet/gateway/slm_host (closes #7162) (#7164) ([#7164](https://github.com/mrveiss/AutoBot-AI/pull/7164))
+
+- *(test/security)* Unbreak 3 src.* mock paths in enhanced_security_layer_test (#6987 part 3/N) (#7160) ([#7160](https://github.com/mrveiss/AutoBot-AI/pull/7160))
+
+- *(packaging)* Add [project.optional-dependencies] test group (closes #7156 partial) (#7159) ([#7159](https://github.com/mrveiss/AutoBot-AI/pull/7159))
+
+- *(frontend/i18n)* Pass count as 3rd arg to t() for plural keys (#6976) (#7158) ([#7158](https://github.com/mrveiss/AutoBot-AI/pull/7158))
+
+- *(test/worker)* Unbreak src.* mock path in worker_node_test (#6987 part 2/N) (#7153) ([#7153](https://github.com/mrveiss/AutoBot-AI/pull/7153))
+
+- *(frontend/ui)* EmptyState stories use correct prop name 'message' (#6874) (#7152) ([#7152](https://github.com/mrveiss/AutoBot-AI/pull/7152))
+
+- *(ansible)* Pre-flight git commands fail with dubious ownership on shared hosts (closes #7150) (#7151) ([#7151](https://github.com/mrveiss/AutoBot-AI/pull/7151))
+
+- *(install)* Prefer device-shipped PPA repos; sweep stale .list duplicates (closes #7144) (#7145) ([#7145](https://github.com/mrveiss/AutoBot-AI/pull/7145))
+
+- *(frontend/i18n)* Add 4 missing en.json keys for graph loading + retry (#7079) (#7143) ([#7143](https://github.com/mrveiss/AutoBot-AI/pull/7143))
+
+- *(ansible/slm_manager)* Cleanup stale Ansible PPA source files before adding (#7140) (#7141) ([#7141](https://github.com/mrveiss/AutoBot-AI/pull/7141))
+
+- *(ansible)* Replace removed community.general.yaml callback (closes #7137) (#7138) ([#7138](https://github.com/mrveiss/AutoBot-AI/pull/7138))
+
+- *(packaging)* Autobot_shared/pyproject.toml — drop unused `requests`, add 5 missing deps (closes #7119) (#7133) ([#7133](https://github.com/mrveiss/AutoBot-AI/pull/7133))
+
+- *(test/perf)* Migrate performance_benchmarks.performance_test.py off LLMInterface (#7041) (#7131) ([#7131](https://github.com/mrveiss/AutoBot-AI/pull/7131))
+
+- *(orchestration)* WorkflowDocumenter migrate chat_completion → chat (#7042) (#7118) ([#7118](https://github.com/mrveiss/AutoBot-AI/pull/7118))
+
+- *(rlm/evaluator)* Log/verdict consistency + INDETERMINATE for evaluator failures (#6697) (#7116) ([#7116](https://github.com/mrveiss/AutoBot-AI/pull/7116))
+
+- *(backend/cache)* RedisCache.set_json default= covers dataclasses + Pydantic (#6696) (#7117) ([#7117](https://github.com/mrveiss/AutoBot-AI/pull/7117))
+
+- *(backend/codebase-analytics)* Await AsyncChromaDBCollection.get/.delete directly (#6695) (#7115) ([#7115](https://github.com/mrveiss/AutoBot-AI/pull/7115))
+
+- *(api/chat)* Wire chat endpoint through LLMService.chat() — closes silent canned-response regression (#7047) (#7101) ([#7101](https://github.com/mrveiss/AutoBot-AI/pull/7101))
+
+- *(ansible/provision)* Call mark-synced for each provisioned node (#7103) ([#7107](https://github.com/mrveiss/AutoBot-AI/pull/7107))
+
+- *(install)* Preserve existing SLM_ADMIN_PASSWORD on reinstall (#7075) ([#7106](https://github.com/mrveiss/AutoBot-AI/pull/7106))
+
+- *(slm-agent)* Version.json commit always empty — Jinja default() doesn't fall back on empty string ([#7100](https://github.com/mrveiss/AutoBot-AI/pull/7100))
+
+- *(slm-frontend)* Provision state survives navigation + WS disconnect (#7096) (#7099) ([#7097](https://github.com/mrveiss/AutoBot-AI/pull/7097))
+
+- *(ansible/provision)* Regression from #7051 — load role_*_active facts via vars_files for SLM-triggered provision ([#7093](https://github.com/mrveiss/AutoBot-AI/pull/7093))
+
+- *(orchestrator)* Unpack is_provider_healthy tuple — guard now actually fires (#7069) (#7078) ([#7078](https://github.com/mrveiss/AutoBot-AI/pull/7078))
+
+- *(ci)* Docker-smoke-test informational curls tolerate SIGPIPE under pipefail (closes #7066) (#7067) ([#7067](https://github.com/mrveiss/AutoBot-AI/pull/7067))
+
+- *(deps)* Bump langchain-core floor from 1.2.28 to 1.2.31 (#7049) (#7065) ([#7065](https://github.com/mrveiss/AutoBot-AI/pull/7065))
+
+- *(ansible/venv)* Health-check + auto-recreate broken venv (#7052) (#7061) ([#7061](https://github.com/mrveiss/AutoBot-AI/pull/7061))
+
+- *(ansible/slm-admin-ui)* User=root → User=autobot (#7054) (#7059) ([#7059](https://github.com/mrveiss/AutoBot-AI/pull/7059))
+
+- *(backend)* Complete #3185 migration — 3 missed callers + 1 broken constructor (#6983) (#7036) ([#7036](https://github.com/mrveiss/AutoBot-AI/pull/7036))
+
+- *(ansible/cleanup)* Correct SLM Manager guard — use inventory_hostname (#7031 follow-up to #7035) (#7043) ([#7043](https://github.com/mrveiss/AutoBot-AI/pull/7043))
+
+- *(ansible/cleanup)* SLM Manager owns autobot-slm-* dirs — guard 7 wipe tasks (#7031) (#7035) ([#7035](https://github.com/mrveiss/AutoBot-AI/pull/7035))
+
+- *(slm-admin-ui)* Pin self-signed cert via --cacert; drop misplaced OnFailure (#7024) (#7030) ([#7030](https://github.com/mrveiss/AutoBot-AI/pull/7030))
+
+- *(ssot)* Replace 3 hardcoded 172.16.168.20 references — restore green SSOT gate (#7028) (#7029) ([#7029](https://github.com/mrveiss/AutoBot-AI/pull/7029))
+
+- *(ansible/grafana)* Apt_repository update_cache:false — survives flaky PPA (#6719) (#7023) ([#7023](https://github.com/mrveiss/AutoBot-AI/pull/7023))
+
+- *(ci)* Startup-import-smoke uses requirements-ci.txt to dodge torch/vllm conflict (#7018) (#7021) ([#7021](https://github.com/mrveiss/AutoBot-AI/pull/7021))
+
+- *(ci)* Startup-import-smoke must run pip install from autobot-backend/ (#7001) (#7013) ([#7013](https://github.com/mrveiss/AutoBot-AI/pull/7013))
+
+- *(tools/audit)* Widen scan-dirs + tracker regex + add tests (closes #6927, #6928, #6929) (#6995) ([#6995](https://github.com/mrveiss/AutoBot-AI/pull/6995))
+
+- *(knowledge)* Tag regex `*` → `+` rejects empty/whitespace tags (#6672) (#6968) ([#6968](https://github.com/mrveiss/AutoBot-AI/pull/6968))
+
+- *(ci)* Make pip install failures in startup-import-smoke surface (closes #6947) (#6966) ([#6966](https://github.com/mrveiss/AutoBot-AI/pull/6966))
+
+- *(frontend)* Replace console.warn in iconMappings with createLogger (#6806) (#6962) ([#6962](https://github.com/mrveiss/AutoBot-AI/pull/6962))
+
+- *(backend)* Migrate async_chat_workflow imports (#6950 follow-up)
+
+- *(backend)* Migrate dependency_container to LLMService (closes #6950)
+
+- *(deps)* Align OpenTelemetry suite to 1.41.1 (#6948)
+
+- *(hooks)* Tighten temp filter + AST-aware getenv IP-fallback validator (closes #6782, #6783) (#6882) ([#6882](https://github.com/mrveiss/AutoBot-AI/pull/6882))
+
+- *(frontend)* Restore Storybook devDependencies (#6873) (#6932) ([#6932](https://github.com/mrveiss/AutoBot-AI/pull/6932))
+
+- *(frontend)* Dedupe /api/system/health polling — one canonical poller (#6773) (#6834) ([#6834](https://github.com/mrveiss/AutoBot-AI/pull/6834))
+
+- *(frontend/theme)* Apply dark theme via data-theme attribute, not class (#6772) (#6833) ([#6833](https://github.com/mrveiss/AutoBot-AI/pull/6833))
+
+- *(schemas)* Resolve 3 cross-module class-name collisions discovered by #6798 (#6799) (#6803) ([#6803](https://github.com/mrveiss/AutoBot-AI/pull/6803))
+
+- Ssot-config runtime protocol for all URL builders + wire smoke test to CI (#6789 #6795) (#6801) ([#6801](https://github.com/mrveiss/AutoBot-AI/pull/6801))
+
+- 4-issue retrospective batch — regex= audit, MissingDep subscript, smoke-test cross-module collision check, SW silent on cert (#6790 #6793 #6794 #6798) (#6800) ([#6800](https://github.com/mrveiss/AutoBot-AI/pull/6800))
+
+- *(chat)* Single-source-of-truth session_id — eliminates 4-IDs-per-send churn (#6745, #6746) (#6781) ([#6781](https://github.com/mrveiss/AutoBot-AI/pull/6781))
+
+- *(code-analysis)* LSP positional-arity rule was inverted — child widening preconditions is correct LSP (#6755) (#6778) ([#6778](https://github.com/mrveiss/AutoBot-AI/pull/6778))
+
+- *(media)* Restore parent constructor signature on 5 BasePipeline subclasses (#6755) (#6777) ([#6777](https://github.com/mrveiss/AutoBot-AI/pull/6777))
+
+- *(code-analysis)* Treat docstring + raise NotImplementedError as stub in LSP detector (#6755) (#6776) ([#6776](https://github.com/mrveiss/AutoBot-AI/pull/6776))
+
+- *(frontend/chat)* Remove remaining appStore.setLoading() misuses — eliminates per-poll screen flicker (#6694) (#6764) ([#6764](https://github.com/mrveiss/AutoBot-AI/pull/6764))
+
+- *(api/health)* Rename misleading agent_count → ai_stack_agent_count (#8) (#6763) ([#6763](https://github.com/mrveiss/AutoBot-AI/pull/6763))
+
+- *(nginx)* Route /openapi.json /docs /redoc to backend instead of SPA fallback (#6761) ([#6761](https://github.com/mrveiss/AutoBot-AI/pull/6761))
+
+- *(backend/chat)* Use add_messages_batch with canonical disk shape — restores user/assistant persistence (#6744) (#6760) ([#6760](https://github.com/mrveiss/AutoBot-AI/pull/6760))
+
+- *(security+frontend)* Debug-session batch 3 — CSP wss tighten, ssot https detection (#6751) ([#6751](https://github.com/mrveiss/AutoBot-AI/pull/6751))
+
+- *(voice)* Deepen TTS streaming pipeline 1 -> 3 chunks ahead to absorb worker jitter (#6752) (#6753) ([#6753](https://github.com/mrveiss/AutoBot-AI/pull/6753))
+
+- *(backend/chat)* Replace hard-coded 1h TTL with configurable 24h default (#6743) (#6750) ([#6750](https://github.com/mrveiss/AutoBot-AI/pull/6750))
+
+- *(p2-batch)* Debug-session batch 2 — redis_exporter IP, ApexCharts race, Agent Registry tabs (#6749) ([#6749](https://github.com/mrveiss/AutoBot-AI/pull/6749))
+
+- *(api)* Delete 1183 dead @with_error_handling decorators above @router across 129 files (#6706) (#6741) ([#6741](https://github.com/mrveiss/AutoBot-AI/pull/6741))
+
+- *(agents)* Add in-process default is_available to StandardizedAgent — unblocks backend boot (#6659 follow-up) (#6731) ([#6731](https://github.com/mrveiss/AutoBot-AI/pull/6731))
+
+- *(ansible)* Roll out bounded shell apt-get update to all role-level callsites (#6719) (#6730) ([#6730](https://github.com/mrveiss/AutoBot-AI/pull/6730))
+
+- *(ansible)* Bounded shell apt-get update across 5 SLM-Manager-bound roles (#6719) (#6729) ([#6729](https://github.com/mrveiss/AutoBot-AI/pull/6729))
+
+- *(ansible/nginx)* Bounded shell apt-get update — survives PPA timeouts even when cache is stale (#6719) (#6728) ([#6728](https://github.com/mrveiss/AutoBot-AI/pull/6728))
+
+- *(frontend/ws)* Revert double /ws/ prefix in LiveEventService URL (#6727) ([#6727](https://github.com/mrveiss/AutoBot-AI/pull/6727))
+
+- *(ansible/nodejs)* Add cache_valid_time so transient PPA timeouts don't abort Phase 0 (#6719) (#6726) ([#6726](https://github.com/mrveiss/AutoBot-AI/pull/6726))
+
+- *(p0+p1)* Debug-session batch — 5 fixes (WS URL, playwright 500, base.css, orchestrator 500, AbortError) (#6718) ([#6718](https://github.com/mrveiss/AutoBot-AI/pull/6718))
+
+- *(ansible/nginx)* Add cache_valid_time so transient PPA timeouts don't abort Phase 0 (#6719) (#6720) ([#6720](https://github.com/mrveiss/AutoBot-AI/pull/6720))
+
+- *(integrations)* Execute_action returns error dict instead of raising on unknown action (#6658) (#6711) ([#6711](https://github.com/mrveiss/AutoBot-AI/pull/6711))
+
+- *(agents)* Restore parent constructor signature on LLMFailsafe + DataAnalysis (#6660) (#6710) ([#6710](https://github.com/mrveiss/AutoBot-AI/pull/6710))
+
+- *(agents)* Unify is_available as abstract async on BaseAgent (#6659) (#6709) ([#6709](https://github.com/mrveiss/AutoBot-AI/pull/6709))
+
+- *(tests)* Rename _resolve_source_or_404 → _resolve_source_root_or_404 (#6675) (#6708) ([#6708](https://github.com/mrveiss/AutoBot-AI/pull/6708))
+
+- *(frontend)* WS auth + chat history blanking — closes #6692, #6693, #6700 (#6705) ([#6705](https://github.com/mrveiss/AutoBot-AI/pull/6705))
+
+- *(api)* Remove 23 stacked-duplicate @with_error_handling decorators across 9 files (#6633) (#6713) ([#6713](https://github.com/mrveiss/AutoBot-AI/pull/6713))
+
+- *(backend)* Forward-ref Optional[Stub] type annotations in log_forwarding + validation_dashboard (#6666 follow-up) (#6707) ([#6707](https://github.com/mrveiss/AutoBot-AI/pull/6707))
+
+- *(quality)* Surface backend status:"no_data" in dashboard instead of silent zeros (#6671) (#6683) ([#6683](https://github.com/mrveiss/AutoBot-AI/pull/6683))
+
+- *(quality)* Invalidate code_quality:latest* Redis cache on scan completion (#6669) (#6682) ([#6682](https://github.com/mrveiss/AutoBot-AI/pull/6682))
+
+- *(quality)* Plumb source_id into ChromaDB stats lookup with per-source fallback (#6670) (#6681) ([#6681](https://github.com/mrveiss/AutoBot-AI/pull/6681))
+
+- *(deploy)* Only set AUTOBOT_TLS_CA_PATH when SLM CA cert exists at deploy time (#6677) (#6688) ([#6688](https://github.com/mrveiss/AutoBot-AI/pull/6688))
+
+- *(slm-backend)* Clean up 4 SSOT-CI hardcoded-value violations (#6678) (#6687) ([#6687](https://github.com/mrveiss/AutoBot-AI/pull/6687))
+
+- *(backend)* Guard playwright + docker optional-dep imports (#6667) (#6686) ([#6686](https://github.com/mrveiss/AutoBot-AI/pull/6686))
+
+- *(backend)* Guard 5 missing-internal-module imports + add mcp __init__.py (#6666) (#6685) ([#6685](https://github.com/mrveiss/AutoBot-AI/pull/6685))
+
+- *(backend)* Correct Orchestrator.max_parallel_tasks attribute path (#6665) (#6680) ([#6680](https://github.com/mrveiss/AutoBot-AI/pull/6680))
+
+- *(backend)* Import MODERATE_RISK_PATTERNS from constants.terminal_constants (#6664) (#6679) ([#6679](https://github.com/mrveiss/AutoBot-AI/pull/6679))
+
+- *(frontend)* Single Agents nav entry — Activity reached via /agents tabs (#6634 follow-up) (#6674) ([#6674](https://github.com/mrveiss/AutoBot-AI/pull/6674))
+
+- *(slm-client)* URL-aware permissive SSL — accept self-signed cert on loopback (#6654) (#6657) ([#6657](https://github.com/mrveiss/AutoBot-AI/pull/6657))
+
+- *(test)* Repair chat_agent_test.py patch target — services.mcp_dispatch.get_mcp_dispatcher (#6651) (#6656) ([#6656](https://github.com/mrveiss/AutoBot-AI/pull/6656))
+
+- *(agents)* Rename Liskov-violating _build_success_response overrides in KnowledgeRetrievalAgent + EnhancedSystemCommandsAgent (#6650) (#6655) ([#6655](https://github.com/mrveiss/AutoBot-AI/pull/6655))
+
+- *(chat)* Unblock chat from GUI — rename ChatAgent helper + repair AI Stack health probe (#6648, #6649) (#6653) ([#6653](https://github.com/mrveiss/AutoBot-AI/pull/6653))
+
+- *(schemas)* Wire knowledge-graph DTOs to memory.py endpoints (#6620) (#6662) ([#6662](https://github.com/mrveiss/AutoBot-AI/pull/6662))
+
+- *(schemas)* Unshadow UsageRecordRequest LLM-analytics variant (#6636) (#6652) ([#6652](https://github.com/mrveiss/AutoBot-AI/pull/6652))
+
+- *(frontend)* Defend getFileIcon and getFileIconByMimeType against non-string input — fixes KnowledgeBrowser crash (#6645) (#6647) ([#6647](https://github.com/mrveiss/AutoBot-AI/pull/6647))
+
+- *(schemas)* Wire 10 advanced-control + 2 validation-dashboard responses (#6623) (#6646) ([#6646](https://github.com/mrveiss/AutoBot-AI/pull/6646))
+
+- *(schemas)* Wire 7 wake-word response DTOs (#6622) (#6644) ([#6644](https://github.com/mrveiss/AutoBot-AI/pull/6644))
+
+- *(frontend)* Derive WebSocket scheme from window.location at runtime — fixes mixed-content block on HTTPS pages (#6642) (#6643) ([#6643](https://github.com/mrveiss/AutoBot-AI/pull/6643))
+
+- *(schemas)* Wire EmbeddingStatsResponse to GET /stats (#6618) (#6641) ([#6641](https://github.com/mrveiss/AutoBot-AI/pull/6641))
+
+- *(schemas)* Wire AgentConfigDetailResponse to GET /agents/{id} (#6619) (#6640) ([#6640](https://github.com/mrveiss/AutoBot-AI/pull/6640))
+
+- *(schemas)* Wire FileRisk/PredictionResult to bug-prediction response models (#6617) (#6637) ([#6637](https://github.com/mrveiss/AutoBot-AI/pull/6637))
+
+- *(chat)* Propagate h-full through ChatView's keep-alive so chat layout fills viewport (#6615) (#6625) ([#6625](https://github.com/mrveiss/AutoBot-AI/pull/6625))
+
+- *(backend)* Restore chat init paths — chat_history_manager kwarg, ensure_initialized, get_default_client kwarg call (#6613) (#6614) ([#6614](https://github.com/mrveiss/AutoBot-AI/pull/6614))
+
+- *(backend)* Default DataResponse.success=True so bare DataResponse(data=...) callers work (#6609) (#6611) ([#6611](https://github.com/mrveiss/AutoBot-AI/pull/6611))
+
+- *(backend)* P0 boot crash — rename duplicate ProviderInfo/ConnectionTestRequest in schemas_workflows.py (#6604) (#6605) ([#6605](https://github.com/mrveiss/AutoBot-AI/pull/6605))
+
+- *(install)* Out-of-the-box install now deploys autobot-backend on the SLM Manager host (#6600) (#6602) ([#6602](https://github.com/mrveiss/AutoBot-AI/pull/6602))
+
+- *(backend)* Replace deprecated FastAPI regex= with pattern= (#6584) (#6587) ([#6587](https://github.com/mrveiss/AutoBot-AI/pull/6587))
+
+- *(backend)* Use get_task_tracker() factory in desktop_streaming_manager (#6583) (#6586) ([#6586](https://github.com/mrveiss/AutoBot-AI/pull/6586))
+
+- *(frontend)* Correct misleading offline banner copy (#6565) (#6585) ([#6585](https://github.com/mrveiss/AutoBot-AI/pull/6585))
+
+- *(api)* Swap @with_error_handling/@router decorator order on 1801 endpoints across 188 files (#6558) (#6578) ([#6578](https://github.com/mrveiss/AutoBot-AI/pull/6578))
+
+- *(backend)* Restore 4 orphan annotation imports from #6042 schema migration (#6569 #6570 #6571 #6572) (#6575) ([#6575](https://github.com/mrveiss/AutoBot-AI/pull/6575))
+
+- *(chat)* Move @with_error_handling below @router.* on 16 endpoints (#6537) (#6562) ([#6562](https://github.com/mrveiss/AutoBot-AI/pull/6562))
+
+- *(plugins)* Bundle 3 marketplace polish fixes — empty-url 422, refetch on delete, locale newlines (#6527 #6528 #6529) (#6551) ([#6551](https://github.com/mrveiss/AutoBot-AI/pull/6551))
+
+- *(plugins)* Swap @with_error_handling below @router on 8 marketplace routes (#6532) (#6546) ([#6546](https://github.com/mrveiss/AutoBot-AI/pull/6546))
+
+- *(api)* Re-add pydantic imports removed by #6042 migration (#6536) (#6538) ([#6538](https://github.com/mrveiss/AutoBot-AI/pull/6538))
+
+- *(i18n)* Remove stale nav.* keys from non-English locales + add parity test (#6498) (#6541) ([#6541](https://github.com/mrveiss/AutoBot-AI/pull/6541))
+
+- *(chat)* Align response_model with wire format + add get_statistics (#6490 #6497) (#6530) ([#6530](https://github.com/mrveiss/AutoBot-AI/pull/6530))
+
+- *(plugins)* SSRF guard, auth on /catalog source_id, decorator order, reset stale source (#6481) (#6510) ([#6510](https://github.com/mrveiss/AutoBot-AI/pull/6510))
+
+- *(chat)* Type 13 bare response_model=DataResponse annotations (#6410) (#6489) ([#6489](https://github.com/mrveiss/AutoBot-AI/pull/6489))
+
+- *(chat_sessions)* Remove dead response_model on export endpoint (#6412) (#6460) ([#6460](https://github.com/mrveiss/AutoBot-AI/pull/6460))
+
+- *(agent)* Rename local variable coordination_time → execution_time after #6406 rename (#6413) (#6457) ([#6457](https://github.com/mrveiss/AutoBot-AI/pull/6457))
+
+- *(execution_strategies)* Wrap _execute_single_task in _safe_execute, route all 6 call sites — task exceptions can no longer bypass result recording (#6459) (#6462) ([#6462](https://github.com/mrveiss/AutoBot-AI/pull/6462))
+
+- *(execution_strategies)* Catch dep-failure RuntimeError in sequential, stop pipeline on stage failure, remove unused imports (#6438 #6439 #6440) (#6443) ([#6443](https://github.com/mrveiss/AutoBot-AI/pull/6443))
+
+- *(execution_strategies)* 4 bugs from discovery audit (#6428 #6429 #6430 #6431) (#6433) ([#6433](https://github.com/mrveiss/AutoBot-AI/pull/6433))
+
+- *(enhanced_orchestration)* 4 targeted fixes from discovery audit (#6419 #6420 #6421 #6422) (#6423) ([#6423](https://github.com/mrveiss/AutoBot-AI/pull/6423))
+
+- *(app)* Hide About footer on /chat pages
+
+- *(nav)* Remove noVNC nav item + make chat tabs separate routes (#6414 #6415) (#6416) ([#6416](https://github.com/mrveiss/AutoBot-AI/pull/6416))
+
+- *(api)* Remove unused datetime import from ai_stack_integration.py (#6390)
+
+- *(workflow_runner)* 5 targeted bug fixes from #5058 review (#6381 #6382 #6383 #6391 #6394) ([#6395](https://github.com/mrveiss/AutoBot-AI/pull/6395))
+
+- *(backend)* Emit USER_LOGOUT event in auth.py logout endpoint (#6367) (#6376) ([#6376](https://github.com/mrveiss/AutoBot-AI/pull/6376))
+
+- *(frontend)* Use page protocol (http/https) in buildHostVncUrl — prevent mixed-content on TLS (#6361) (#6363) ([#6363](https://github.com/mrveiss/AutoBot-AI/pull/6363))
+
+- *(frontend)* Hide About footer on login page — /about requires auth
+
+- *(frontend)* Add /api prefix to path in useDocumentationSearch (#6356) (#6358) ([#6358](https://github.com/mrveiss/AutoBot-AI/pull/6358))
+
+- *(api/voice)* Correct decorator order and remove duplicate @with_error_handling on all routes (#6352) (#6357) ([#6357](https://github.com/mrveiss/AutoBot-AI/pull/6357))
+
+- *(frontend)* Add /api prefix to voice/voices and personality/active paths in useVoiceProfiles (#6351)
+
+- *(skills/mcp_trace)* Cap input_params at 4 KB before Redis storage to prevent memory bloat (#6314) (#6349) ([#6349](https://github.com/mrveiss/AutoBot-AI/pull/6349))
+
+- *(integrations)* Wire github and slack integrations to shared Redis rate limiter (#6311) (#6346) ([#6346](https://github.com/mrveiss/AutoBot-AI/pull/6346))
+
+- *(skills)* Restructure builtin skill files into subdir/SKILL.md format for LocalDirSync discovery (#6336) (#6345) ([#6345](https://github.com/mrveiss/AutoBot-AI/pull/6345))
+
+- *(api/long_running_operations)* Move from core_routers to feature_routers — already has _OPERATIONS_AVAILABLE graceful degradation (#6306) (#6343) ([#6343](https://github.com/mrveiss/AutoBot-AI/pull/6343))
+
+- *(autobot_shared/network_constants)* Get_websocket_url() returns wss:// when TLS enabled (#6303) (#6342) ([#6342](https://github.com/mrveiss/AutoBot-AI/pull/6342))
+
+- *(autobot_shared/ssot_config)* Omit TLS port from WebSocket URL — routes through nginx 443 (#6302) (#6341) ([#6341](https://github.com/mrveiss/AutoBot-AI/pull/6341))
+
+- *(frontend)* Update WEBSOCKET_LOCAL to /api/ws path — missed by #6232 (#6301) (#6340) ([#6340](https://github.com/mrveiss/AutoBot-AI/pull/6340))
+
+- *(autobot_shared/missing_dep)* Add __bool__=False; fix is-None guards in validation_dashboard, analyzers (#6339) ([#6339](https://github.com/mrveiss/AutoBot-AI/pull/6339))
+
+- *(pki)* Implement certificate renewal with key preservation option (#4312) (#6294) ([#6294](https://github.com/mrveiss/AutoBot-AI/pull/6294))
+
+- *(api/long_running_operations)* Restore HTTP 503 guards bypassed by MissingDep (#6289) (#6293) ([#6293](https://github.com/mrveiss/AutoBot-AI/pull/6293))
+
+- *(code_analysis)* Remove dead self.config assignment in OwnershipAnalyzer (#6288) (#6292) ([#6292](https://github.com/mrveiss/AutoBot-AI/pull/6292))
+
+- *(api/orchestration)* Remove unused SuccessResponse import (#6290) (#6291) ([#6291](https://github.com/mrveiss/AutoBot-AI/pull/6291))
+
+- *(backend)* Apply MissingDep to remaining callable None-stubs in 6 API/analysis modules (#6285) (#6286) ([#6286](https://github.com/mrveiss/AutoBot-AI/pull/6286))
+
+- *(frontend/backend)* Correct WebSocket URL path and HTTPS port (#6232) (#6283) ([#6283](https://github.com/mrveiss/AutoBot-AI/pull/6283))
+
+- *(frontend)* Rename imported apiClient → httpClient in useWorkflowBuilder to resolve duplicate identifier build error (#6281)
+
+- *(ci)* Add npm overrides for @typescript-eslint/utils and @vue/eslint-config-typescript TypeScript 6 peer dep (#6218)
+
+- *(backend)* Replace callable None-stubs with MissingDep in 5 files (#6276) (#6280) ([#6280](https://github.com/mrveiss/AutoBot-AI/pull/6280))
+
+- *(backend)* Add diagnostic detail to AI Stack error messages (#6234) (#6279) ([#6279](https://github.com/mrveiss/AutoBot-AI/pull/6279))
+
+- *(backend)* Promote websockets and live_events routers to core_routers — eliminate silent degradation (#6229) (#6277) ([#6277](https://github.com/mrveiss/AutoBot-AI/pull/6277))
+
+- *(docker)* Install CPU-only torch/torchvision to eliminate CUDA build bloat (#6220) (#6275) ([#6275](https://github.com/mrveiss/AutoBot-AI/pull/6275))
+
+- *(ci)* Update smoke test timeout message to 7.5 min to match max_attempts=45 (#6255) (#6273) ([#6273](https://github.com/mrveiss/AutoBot-AI/pull/6273))
+
+- *(docker)* Remove redundant /var/log/nginx tmpfs mount (#6254) (#6272) ([#6272](https://github.com/mrveiss/AutoBot-AI/pull/6272))
+
+- *(frontend/backend)* Unify WebSocket URL to /api/ws in ssot-config and frontend-config endpoint (#6232) (#6271) ([#6271](https://github.com/mrveiss/AutoBot-AI/pull/6271))
+
+- *(backend)* Define __all__ once outside try/except in training/__init__.py (#6265) (#6270) ([#6270](https://github.com/mrveiss/AutoBot-AI/pull/6270))
+
+- *(backend)* Extract MissingDep sentinel to autobot_shared, use NoReturn typing (#6261, #6264) (#6269) ([#6269](https://github.com/mrveiss/AutoBot-AI/pull/6269))
+
+- *(frontend)* Add missing getCssVar import to ResourceHeatmap and CodebaseAnalytics (#6263) (#6268) ([#6268](https://github.com/mrveiss/AutoBot-AI/pull/6268))
+
+- *(composables)* Move fetchWithAuth exemption comments inline across 6 files (#6256) (#6266) ([#6266](https://github.com/mrveiss/AutoBot-AI/pull/6266))
+
+- *(backend)* Surface specific error type/message in AI Stack client error messages (#6234) (#6262) ([#6262](https://github.com/mrveiss/AutoBot-AI/pull/6262))
+
+- *(frontend)* Add missing usePollingJob import to ResourceHeatmap.vue (#6251) (#6260) ([#6260](https://github.com/mrveiss/AutoBot-AI/pull/6260))
+
+- *(backend)* Replace module-level instantiation with lazy singletons in ide_integration.py (#6225) (#6259) ([#6259](https://github.com/mrveiss/AutoBot-AI/pull/6259))
+
+- *(backend)* Replace None-stubs with sentinel in training/__init__.py (#6223) (#6258) ([#6258](https://github.com/mrveiss/AutoBot-AI/pull/6258))
+
+- *(backend)* Register long_running_operations router — fixes HTTP 500 on /api/long-running/* (#6227) (#6253) ([#6253](https://github.com/mrveiss/AutoBot-AI/pull/6253))
+
+- *(frontend)* Add missing usePollingJob import to CustomDashboard (#6231) (#6249) ([#6249](https://github.com/mrveiss/AutoBot-AI/pull/6249))
+
+- *(docker)* Apply nginx worker/log fixes to nginx-ssl.conf, extend smoke poll to 45 attempts, add SLM health check (#6246 #6247 #6248)
+
+- *(composables)* Make AbortSignal required in useFetchEndpoint fetcher callback (#6226) (#6245) ([#6245](https://github.com/mrveiss/AutoBot-AI/pull/6245))
+
+- *(composables)* Use intermediate unknown cast for QualityDrillDown in useCodeQualityData (#6222) (#6244) ([#6244](https://github.com/mrveiss/AutoBot-AI/pull/6244))
+
+- *(docker)* Nginx worker_processes 1, frontend depends_on service_healthy, smoke test checks backend health (#6240 #6241 #6242)
+
+- *(composables)* Add ApprovalResponse type to useCommandApproval apiClient.post calls (#6221) (#6243) ([#6243](https://github.com/mrveiss/AutoBot-AI/pull/6243))
+
+- *(ci)* Catch RuntimeError in ML optional-dep guards — 19 except ImportError → (ImportError, RuntimeError) (#6219) (#6238) ([#6238](https://github.com/mrveiss/AutoBot-AI/pull/6238))
+
+- *(tooling)* Extend check_response_models hook to catch import-after-decorator ordering (#6143) (#6237) ([#6237](https://github.com/mrveiss/AutoBot-AI/pull/6237))
+
+- *(docker)* Add /var/lib/nginx and /var/log/nginx tmpfs mounts and redirect nginx logs to stdout/stderr (#1809)
+
+- *(docker)* Switch backend and SLM Dockerfiles to python:3.12-slim-bookworm (#6213) (#6218) ([#6218](https://github.com/mrveiss/AutoBot-AI/pull/6218))
+
+- *(ci)* Pin torchvision>=0.26.0 and catch RuntimeError in ML imports to fix smoke test startup crash (#904)
+
+- *(backend)* Replace bare singleton aliases with get_*() pattern at all call sites (#6196) (#6217) ([#6217](https://github.com/mrveiss/AutoBot-AI/pull/6217))
+
+- *(api)* Move @with_error_handling below @router.* in workflow_export.py — 7 endpoints (#6194) (#6216) ([#6216](https://github.com/mrveiss/AutoBot-AI/pull/6216))
+
+- *(deploy)* Add Ansible task to clear stale .pyc files after source sync (#6193) (#6215) ([#6215](https://github.com/mrveiss/AutoBot-AI/pull/6215))
+
+- *(ci)* Increase smoke test timeout 15→30min for cold Docker build
+
+- *(deps)* Correct -e ../autobot-shared path to -e ../autobot_shared in 3 requirements files (#6191) (#6212) ([#6212](https://github.com/mrveiss/AutoBot-AI/pull/6212))
+
+- *(composables)* Migrate bare fetchWithAuth to useFetchEndpoint in analytics composables batch 2 (#6152) (#6211) ([#6211](https://github.com/mrveiss/AutoBot-AI/pull/6211))
+
+- *(composables)* Migrate bare fetchWithAuth to useFetchEndpoint in analytics composables batch 1 (#6152) (#6210) ([#6210](https://github.com/mrveiss/AutoBot-AI/pull/6210))
+
+- *(composables)* Add AbortController to useHostSelection loadHosts (#6136) (#6209) ([#6209](https://github.com/mrveiss/AutoBot-AI/pull/6209))
+
+- *(composables)* Correct TS cross-type assertion in useKnowledgeGraphRAG
+
+- *(error_boundaries)* Add INFRASTRUCTURE to get_status_code_for_category map
+
+- *(backend)* 3 implementation gaps from provisioning debug session
+
+- *(knowledge)* Resolve TS2339 type errors in useKnowledgeGraph (#6040) (#6197) ([#6197](https://github.com/mrveiss/AutoBot-AI/pull/6197))
+
+- *(backend)* Add task_tracker alias and fix modern_ai_integration import
+
+- *(docker)* Match autobot-shared hyphen in requirements filter regex ([#6171](https://github.com/mrveiss/AutoBot-AI/pull/6171))
+
+- *(orchestration)* Add missing AgentCapability members to orchestration/types.py
+
+- *(api)* Remove response_model from 204 No Content route in npu_workers.py
+
+- *(api)* Remove invalid context= kwarg from with_error_handling in branch_health.py
+
+- *(backend)* Resolve 5 import/definition errors preventing backend startup
+
+- *(deps)* Restore typescript 6.0.3, use npm overrides to satisfy openapi-typescript peer dep ([#6148](https://github.com/mrveiss/AutoBot-AI/pull/6148))
+
+- *(deps)* Downgrade typescript 6.0.3→5.8.3 to satisfy openapi-typescript peer dep (#6139) ([#6144](https://github.com/mrveiss/AutoBot-AI/pull/6144))
+
+- *(api)* Add missing List import to a2a.py
+
+- *(api)* Add missing with_error_handling/ErrorCategory import to analytics_precommit
+
+- *(api)* Move late-placed schema imports before route decorators in 3 files
+
+- *(config)* Consolidate model_constants.get_lm_studio_url to use config.llm.lmstudio_host (#6125) (#6131) ([#6131](https://github.com/mrveiss/AutoBot-AI/pull/6131))
+
+- *(api)* Add response_model to 5 missed natural_language_search endpoints (#6115) (#6130) ([#6130](https://github.com/mrveiss/AutoBot-AI/pull/6130))
+
+- *(api)* Add response_model to 5 missed knowledge_graph_routes endpoints (#6116) (#6129) ([#6129](https://github.com/mrveiss/AutoBot-AI/pull/6129))
+
+- *(ci)* Add --build flag to docker smoke test compose up
+
+- *(api)* Add missing DataResponse import to agent_config and validation_dashboard
+
+- *(api)* Add response_model=DataResponse to GET /analyze in development_speedup.py (#6112) (#6118) ([#6118](https://github.com/mrveiss/AutoBot-AI/pull/6118))
+
+- *(api)* Move RISKY_COMMAND_PATTERNS and MODERATE_RISK_PATTERNS from schemas_terminal.py to security.py (#6093) (#6111) ([#6111](https://github.com/mrveiss/AutoBot-AI/pull/6111))
+
+- *(frontend)* Replace 29 direct fetch() calls with fetchWithAuth (#5945) (#6083) ([#6083](https://github.com/mrveiss/AutoBot-AI/pull/6083))
+
+- *(api)* Add 6 missing fields to CostTrackingRecordResponse — restores full LLMUsageRecord shape (#5995) (#5998) ([#5998](https://github.com/mrveiss/AutoBot-AI/pull/5998))
+
+- *(api)* Add 6 missing fields to CostTrackingRecordResponse — restores full LLMUsageRecord shape (#5995) (#5997) ([#5997](https://github.com/mrveiss/AutoBot-AI/pull/5997))
+
+- *(api)* Add UsageRecentResponse wrapper and wire GET /usage/recent response_model (#5976) (#5986) ([#5986](https://github.com/mrveiss/AutoBot-AI/pull/5986))
+
+- *(api)* Add UsageRecentResponse wrapper and wire GET /usage/recent response_model (#5976) (#5981) ([#5981](https://github.com/mrveiss/AutoBot-AI/pull/5981))
+
+- *(config)* Correct code_source_dir default + expose new env vars in Ansible template (#5980) ([#5980](https://github.com/mrveiss/AutoBot-AI/pull/5980))
+
+- *(lint)* Restrict _var_dict_keys/_returned_var_names to function scope, add attribute bypass tests (#5964 #5965) (#5978) ([#5978](https://github.com/mrveiss/AutoBot-AI/pull/5978))
+
+- *(services)* Extract 300s timeout constant in concurrent_limiter.py (#5959) (#5975) ([#5975](https://github.com/mrveiss/AutoBot-AI/pull/5975))
+
+- *(api)* Replace hardcoded localhost:1234 LM Studio URL with LMSTUDIO_HOST env var in system.py (#5957) (#5974) ([#5974](https://github.com/mrveiss/AutoBot-AI/pull/5974))
+
+- *(auth)* Replace hardcoded @autobot.local domain with AUTOBOT_AUTH_DOMAIN config (#5954) (#5973) ([#5973](https://github.com/mrveiss/AutoBot-AI/pull/5973))
+
+- *(services)* Extract 300s timeout constant in concurrent_limiter.py (#5959) (#5971) ([#5971](https://github.com/mrveiss/AutoBot-AI/pull/5971))
+
+- *(knowledge)* Replace hardcoded llama3.2:latest model default with config-backed value (#5958) (#5970) ([#5970](https://github.com/mrveiss/AutoBot-AI/pull/5970))
+
+- *(api)* Replace hardcoded localhost:1234 LM Studio URL with LMSTUDIO_HOST env var in system.py (#5957) (#5969) ([#5969](https://github.com/mrveiss/AutoBot-AI/pull/5969))
+
+- *(desktop)* Replace hardcoded VNC password path with AUTOBOT_VNC_PASSWD_FILE env var (#5956) (#5968) ([#5968](https://github.com/mrveiss/AutoBot-AI/pull/5968))
+
+- *(backend)* Derive service registry hostnames from deployment.domain config (#5955) (#5967) ([#5967](https://github.com/mrveiss/AutoBot-AI/pull/5967))
+
+- *(auth)* Replace hardcoded @autobot.local domain with AUTOBOT_AUTH_DOMAIN config (#5954) (#5966) ([#5966](https://github.com/mrveiss/AutoBot-AI/pull/5966))
+
+- *(backend)* Replace hardcoded /opt/autobot/code_source with env var in branch_metrics and branch_health (#5953) (#5963) ([#5963](https://github.com/mrveiss/AutoBot-AI/pull/5963))
+
+- *(api)* Add @with_error_handling to skills_repos, integration_database, integration_cloud (#5947) (#5962) ([#5962](https://github.com/mrveiss/AutoBot-AI/pull/5962))
+
+- *(services)* Replace get_redis_client(async_client=True) with get_async_redis_client in semantic_query_cache (#5943) (#5961) ([#5961](https://github.com/mrveiss/AutoBot-AI/pull/5961))
+
+- *(api)* Revert response_model=DataResponse to None for 309 variable-return endpoints across full API directory (#5928) (#5934) ([#5934](https://github.com/mrveiss/AutoBot-AI/pull/5934))
+
+- *(frontend)* Replace DefineComponent<{},{},any> stubs with proper prop types (#5020) ([#5920](https://github.com/mrveiss/AutoBot-AI/pull/5920))
+
+- *(api)* Revert response_model=DataResponse to None for 61 variable-return endpoints (#5904) (#5917) ([#5917](https://github.com/mrveiss/AutoBot-AI/pull/5917))
+
+- *(agents)* Rename live event channel agent: → heartbeat: for heartbeat events (#4444) (#5908) ([#5908](https://github.com/mrveiss/AutoBot-AI/pull/5908))
+
+- *(chat)* Reset showMobileSidebar on desktop viewport resize (#4446) (#5906) ([#5906](https://github.com/mrveiss/AutoBot-AI/pull/5906))
+
+- *(truncation)* Skip whitespace-snap for CJK text in _snap_to_char_boundary (#4436) (#5907) ([#5907](https://github.com/mrveiss/AutoBot-AI/pull/5907))
+
+- *(agents)* Replace naive [:2000] truncation with ToolOutputFilter in command_explanation_service (#5885) (#5901) ([#5901](https://github.com/mrveiss/AutoBot-AI/pull/5901))
+
+- *(tool_output_filter)* Wire dead code, singleton, prepare_and_filter, pytest summary (#5891-#5895) ([#5899](https://github.com/mrveiss/AutoBot-AI/pull/5899))
+
+- *(api)* Revert response_model=DataResponse to None for plain-dict endpoints (#5896) (#5897) ([#5897](https://github.com/mrveiss/AutoBot-AI/pull/5897))
+
+- *(composables)* Add _pending counter to useLoadingState + unit tests (#5881 #5883) ([#5890](https://github.com/mrveiss/AutoBot-AI/pull/5890))
+
+- *(planner)* Wire available_tools default, fix byte logging, rm name collision, trim template (#5870 #5871 #5872 #5873) (#5879) ([#5879](https://github.com/mrveiss/AutoBot-AI/pull/5879))
+
+- *(planner)* Wire available_tools default, fix byte logging, rm name collision, trim template (#5870 #5871 #5872 #5873) (#5877) ([#5877](https://github.com/mrveiss/AutoBot-AI/pull/5877))
+
+- *(api)* Replace unjustified response_model=None with DataResponse (#5843) (#5868) ([#5868](https://github.com/mrveiss/AutoBot-AI/pull/5868))
+
+- *(composables)* Suppress spurious AbortError log/callback in useFetchEndpoint (#5859) (#5866) ([#5866](https://github.com/mrveiss/AutoBot-AI/pull/5866))
+
+- *(composables)* Forward AbortSignal in useFetchEndpoint + expose abort() for clean reset (#5823 #5824) (#5857) ([#5857](https://github.com/mrveiss/AutoBot-AI/pull/5857))
+
+- *(knowledge)* Wrap sync chromadb calls in asyncio.to_thread + type collections as BaseCollection (#5800 #5804) (#5856) ([#5856](https://github.com/mrveiss/AutoBot-AI/pull/5856))
+
+- *(chat)* Use real stream_completion in multi-model compare; fix lazy init race (#5013 #5023) (#5854) ([#5854](https://github.com/mrveiss/AutoBot-AI/pull/5854))
+
+- *(knowledge)* Wrap sync chromadb calls in asyncio.to_thread + type collections as BaseCollection (#5800 #5804) (#5853) ([#5853](https://github.com/mrveiss/AutoBot-AI/pull/5853))
+
+- *(composables)* Forward AbortSignal in useFetchEndpoint + expose abort() for clean reset (#5823 #5824) (#5851) ([#5851](https://github.com/mrveiss/AutoBot-AI/pull/5851))
+
+- *(chat)* Use real stream_completion in multi-model compare; fix lazy init race (#5013 #5023) (#5850) ([#5850](https://github.com/mrveiss/AutoBot-AI/pull/5850))
+
+- *(knowledge)* Wrap sync chromadb calls in asyncio.to_thread + type collections as BaseCollection (#5800 #5804) (#5849) ([#5849](https://github.com/mrveiss/AutoBot-AI/pull/5849))
+
+- *(api)* Change response_model=DataResponse→None for streaming/binary endpoints (#5317 follow-up) (#5845) ([#5845](https://github.com/mrveiss/AutoBot-AI/pull/5845))
+
+- *(planner)* Pass real tool descriptions to compress_description + use AsyncRedisClientLockedMixin (#5826 #5828) (#5839) ([#5839](https://github.com/mrveiss/AutoBot-AI/pull/5839))
+
+- *(composables)* Always pass AbortSignal to fetcher regardless of param arity (#5801) (#5836) ([#5836](https://github.com/mrveiss/AutoBot-AI/pull/5836))
+
+- *(api)* Rate-limit /v1/chat/completions; add get_provider_by_name; validate stream_completion async gen (#5132) (#5816) ([#5816](https://github.com/mrveiss/AutoBot-AI/pull/5816))
+
+- *(api)* Rate-limit /v1/chat/completions; add get_provider_by_name; validate stream_completion async gen (#5132) (#5806) ([#5806](https://github.com/mrveiss/AutoBot-AI/pull/5806))
+
+- *(composables)* Add AbortController to useApiResource — abort prior in-flight on refresh() (#5179) (#5796) ([#5796](https://github.com/mrveiss/AutoBot-AI/pull/5796))
+
+- *(cleanup)* Remove phantom dirs from _resolve_cache_directories (#5082) (#5795) ([#5795](https://github.com/mrveiss/AutoBot-AI/pull/5795))
+
+- *(composables)* Abort in-flight requests on concurrent refresh() in useApiResource (#5179) (#5787) ([#5787](https://github.com/mrveiss/AutoBot-AI/pull/5787))
+
+- *(agent_terminal)* Use server deadline_ts for approval countdown to prevent clock drift (#5024) (#5779) ([#5779](https://github.com/mrveiss/AutoBot-AI/pull/5779))
+
+- *(infra)* Remove orphaned shared/config requirements files and Dependabot entry (#5750) (#5777) ([#5777](https://github.com/mrveiss/AutoBot-AI/pull/5777))
+
+- *(redis)* Add chromadb lock + migrate to AsyncRedisClientLockedMixin in detector.py (#5769 #5768) (#5775) ([#5775](https://github.com/mrveiss/AutoBot-AI/pull/5775))
+
+- *(redis)* Guard set_budget_alert and get_all_budget_alerts against None Redis (#5767) (#5774) ([#5774](https://github.com/mrveiss/AutoBot-AI/pull/5774))
+
+- *(deps)* Remove dead /config dependabot entry targeting non-existent path (#5751) (#5758) ([#5758](https://github.com/mrveiss/AutoBot-AI/pull/5758))
+
+- *(infra)* Use SCRIPT_DIR-relative path for requirements.txt in celery worker (#5753) (#5754) ([#5754](https://github.com/mrveiss/AutoBot-AI/pull/5754))
+
+- *(i18n)* Add missing knowledge.connectors.tier keys to 10 non-English locales (#5056) (#5749) ([#5749](https://github.com/mrveiss/AutoBot-AI/pull/5749))
+
+- *(i18n)* Convert analytics.sources.share to object in 10 non-English locales (#5021) (#5747) ([#5747](https://github.com/mrveiss/AutoBot-AI/pull/5747))
+
+- *(redis)* Add double-checked lock to _get_redis_client in detector.py (#5729) (#5746) ([#5746](https://github.com/mrveiss/AutoBot-AI/pull/5746))
+
+- *(tests)* Skip torch-dependent tests when torch is stubbed (#5737) (#5744) ([#5744](https://github.com/mrveiss/AutoBot-AI/pull/5744))
+
+- *(ansible)* Split playwright-browsers recurse into dir/file loops (#5085) (#5743) ([#5743](https://github.com/mrveiss/AutoBot-AI/pull/5743))
+
+- *(docs)* Update browser worker README port 3000→9001 (#5084) (#5742) ([#5742](https://github.com/mrveiss/AutoBot-AI/pull/5742))
+
+- *(sync-queue)* Schedule prune_done via Celery Beat (#5081) (#5741) ([#5741](https://github.com/mrveiss/AutoBot-AI/pull/5741))
+
+- *(deps)* Add dependabot monitoring for autobot-infrastructure/shared/config requirements (#5685) (#5738) ([#5738](https://github.com/mrveiss/AutoBot-AI/pull/5738))
+
+- *(deps)* Remove redundant @types/uuid from mcp-autobot-tracker and mcp-task-manager-server (#5684) (#5736) ([#5736](https://github.com/mrveiss/AutoBot-AI/pull/5736))
+
+- *(deps)* Pin cryptography>=46.0.7 and python-multipart>=0.0.26 in knowledge-base-mcp pyproject.toml (#5683) (#5735) ([#5735](https://github.com/mrveiss/AutoBot-AI/pull/5735))
+
+- *(deps)* Add dependabot.yml ignore rules for deleted config/ manifest paths (#5682) (#5734) ([#5734](https://github.com/mrveiss/AutoBot-AI/pull/5734))
+
+- *(tests)* Resolve 126 optimization test failures — @patch compat + torch skip markers (#5728) (#5733) ([#5733](https://github.com/mrveiss/AutoBot-AI/pull/5733))
+
+- *(redis)* Fix unawaited bug in analytics_infrastructure/detector; migrate 4 services to AsyncRedisClientMixin (#5708) (#5727) ([#5727](https://github.com/mrveiss/AutoBot-AI/pull/5727))
+
+- *(redis)* Remove dead _initialized state from RedisEventStreamManager (#5709) (#5726) ([#5726](https://github.com/mrveiss/AutoBot-AI/pull/5726))
+
+- *(redis)* Fix unawaited bug in analytics_infrastructure/detector; migrate 4 services to AsyncRedisClientMixin (#5708) (#5725) ([#5725](https://github.com/mrveiss/AutoBot-AI/pull/5725))
+
+- *(backend)* Remove redundant safe_http_detail in duplicates.py (#5722) (#5724) ([#5724](https://github.com/mrveiss/AutoBot-AI/pull/5724))
+
+- *(slm)* Remove ansible output from reboot HTTP 500 detail (#5721) (#5723) ([#5723](https://github.com/mrveiss/AutoBot-AI/pull/5723))
+
+- *(redis)* Fix unawaited coroutine in 4 analytics services; migrate analytics_service to AsyncRedisClientMixin (#5707) (#5718) ([#5718](https://github.com/mrveiss/AutoBot-AI/pull/5718))
+
+- *(redis)* Fix unawaited coroutine + migrate to AsyncRedisClientMixin in saved_reports and analytics_llm_patterns (#5704) (#5717) ([#5717](https://github.com/mrveiss/AutoBot-AI/pull/5717))
+
+- *(slm)* Remove ansible output and str(exc) from HTTP responses in nodes.py (#5713) (#5716) ([#5716](https://github.com/mrveiss/AutoBot-AI/pull/5716))
+
+- *(backend)* Adopt safe_http_detail() in 5 exception handlers to restore debug logging (#5712) (#5715) ([#5715](https://github.com/mrveiss/AutoBot-AI/pull/5715))
+
+- *(frontend)* Replace manual script-strip regex with sanitizeHtml utility (#5711) (#5714) ([#5714](https://github.com/mrveiss/AutoBot-AI/pull/5714))
+
+- *(security)* SSH RejectPolicy — clearer error + setup-ssh-known-hosts playbook + docs (#5677) ([#5689](https://github.com/mrveiss/AutoBot-AI/pull/5689))
+
+- *(code_intelligence)* Update redis_optimizer suggestion and test fixtures to use get_async_redis_client (#5670) (#5690) ([#5690](https://github.com/mrveiss/AutoBot-AI/pull/5690))
+
+- *(vision)* Restore watch(refreshInterval) to restart polling on interval change (#5660) (#5686) ([#5686](https://github.com/mrveiss/AutoBot-AI/pull/5686))
+
+- *(tests)* Correct get_async_redis_client patch targets in 4 test files (#5655) (#5667) ([#5667](https://github.com/mrveiss/AutoBot-AI/pull/5667))
+
+- *(redis)* Replace get_redis_client(async_client=True) with await get_async_redis_client() in two services (#5659) (#5666) ([#5666](https://github.com/mrveiss/AutoBot-AI/pull/5666))
+
+- *(llm-cache)* Unify get_llm_cache / get_llm_cache_async to one singleton (#5657) (#5662) ([#5662](https://github.com/mrveiss/AutoBot-AI/pull/5662))
+
+- *(frontend)* Port.browser default 3000→9001; resolveHost fallback for all vm.* hosts (#5642, #5646)
+
+- *(ui)* Migrate all remaining EmptyState icon=\"fas fa-*\" to IconName (#5643) (#5652) ([#5652](https://github.com/mrveiss/AutoBot-AI/pull/5652))
+
+- *(security)* Tune prompt-injection sanitizer LOG_ONLY rules from prod telemetry (#5197) (#5649) ([#5649](https://github.com/mrveiss/AutoBot-AI/pull/5649))
+
+- *(tests)* Correct get_redis_client patch path in working_memory and agent_diary tests (#5624) (#5648) ([#5648](https://github.com/mrveiss/AutoBot-AI/pull/5648))
+
+- *(tests)* Add factory-exception retry test to lazy_singleton (#5631) (#5647) ([#5647](https://github.com/mrveiss/AutoBot-AI/pull/5647))
+
+- *(ui)* Replace FA class strings in EmptyState callers with IconName values (#5616) (#5633) ([#5633](https://github.com/mrveiss/AutoBot-AI/pull/5633))
+
+- *(ui)* Type DataTable emptyIcon prop as IconName for type-safe icon passing (#5630) (#5638) ([#5638](https://github.com/mrveiss/AutoBot-AI/pull/5638))
+
+- *(frontend)* Fall back to window.location.hostname when VITE_BACKEND_HOST unset (#5627)
+
+- *(chat_workflow)* Guard AsyncRedisSaver import for redisvl compatibility (#5623)
+
+- *(memory)* Replace broken mixed singleton pattern in compat.py (#5622)
+
+- *(backend)* Correct UnboundLocalError in get_extension_manager and get_slash_command_handler (#5626)
+
+- *(config)* Correct Ports.browser default from 3000 to 9001 (#5620) (#5621) ([#5621](https://github.com/mrveiss/AutoBot-AI/pull/5621))
+
+- *(ansible)* Correct browser service port from 3000 (Grafana) to 9001 (#5608)
+
+- *(api)* Standardize connector endpoint response shape (#5210) (#5617) ([#5617](https://github.com/mrveiss/AutoBot-AI/pull/5617))
+
+- *(ui)* Migrate CommandPermissionDialog to script setup + add focus trap (#5588) (#5614) ([#5614](https://github.com/mrveiss/AutoBot-AI/pull/5614))
+
+- *(ui)* Convert HostSelector host-item divs to semantic buttons (#5587) (#5613) ([#5613](https://github.com/mrveiss/AutoBot-AI/pull/5613))
+
+- *(backend)* Add missing now_utc imports to 4 services/utils files (#5602) (#5611) ([#5611](https://github.com/mrveiss/AutoBot-AI/pull/5611))
+
+- *(provision)* WSL2 frontend_backend_host override in Phase 4c (#5608)
+
+- *(backend)* Add missing now_utc imports to 4 services/utils files (#5602) (#5609) ([#5609](https://github.com/mrveiss/AutoBot-AI/pull/5609))
+
+- *(backend)* Override backend_host to 10.255.255.254 on WSL2 hosts (#5608)
+
+- *(provision)* Always show task name in heartbeat, add missing hints (#5607)
+
+- *(backend)* Increase health check window from 5min to 10min (#5605)
+
+- *(backend)* Restore models.heartbeat import block split by event_types import (#5580)
+
+- *(backend)* Move lazy_singleton import out of malformed try block in tracker.py
+
+- *(ansible)* Initialize PostgreSQL cluster when package pre-installed but data dir missing (#5603)
+
+- *(knowledge)* Separate fetch-layer errors from Redis-down state (#5590) (#5601) ([#5601](https://github.com/mrveiss/AutoBot-AI/pull/5601))
+
+- *(ui)* Accessibility gap fixes from #4806 audit (#5592 #5593 #5594 #5595) (#5598) ([#5598](https://github.com/mrveiss/AutoBot-AI/pull/5598))
+
+- *(tests)* Correct FactsMixin import path in fake_kb.py + restore FactsMixin import in test_facts_dedup.py (#5557)
+
+- *(knowledge)* Convert CATEGORY_METADATA examples from str to List[str]
+
+- *(VisualBrowserPanel)* Normalize URL input correctly for localhost + bare words (#5139) (#5570) ([#5570](https://github.com/mrveiss/AutoBot-AI/pull/5570))
+
+- *(infra)* Add missing parse_utc_iso/now_utc imports + fix 3 fromisoformat patterns (#5513) (#5566) ([#5566](https://github.com/mrveiss/AutoBot-AI/pull/5566))
+
+- *(backend)* Add missing now_utc imports to 49 files from datetime migration (#5514) (#5567) ([#5567](https://github.com/mrveiss/AutoBot-AI/pull/5567))
+
+- *(setup_wizard)* Move re import to module level in _extract_failure_summary
+
+- *(provisioning)* Replace 'exit code 2' with human-readable failure summary
+
+- *(backend)* Add missing now_utc import to 8 api modules causing startup NameError
+
+- *(time_utils)* Delete utc_timestamp_z, migrate workflow_versioning, remove orphaned timezone imports (#5539 #5540 #5541) ([#5546](https://github.com/mrveiss/AutoBot-AI/pull/5546))
+
+- *(models)* DateTime(timezone=True) + Alembic migration for skills and process_run (#5538) ([#5545](https://github.com/mrveiss/AutoBot-AI/pull/5545))
+
+- *(analytics)* ExportReport race — use useFetchEndpoint context hook (#5455) (#5531) ([#5531](https://github.com/mrveiss/AutoBot-AI/pull/5531))
+
+- *(backend)* Remaining datetime.utcnow() + time.gmtime() sites (#5199) (#5534) ([#5534](https://github.com/mrveiss/AutoBot-AI/pull/5534))
+
+- *(backend)* Time_provider.py datetime.now() → now_utc() + infra session bug (#5513) (#5532) ([#5532](https://github.com/mrveiss/AutoBot-AI/pull/5532))
+
+- *(schemas)* Migrate ReindexWithContextResponse from inline to knowledge/schemas/ (#5503) (#5524) ([#5524](https://github.com/mrveiss/AutoBot-AI/pull/5524))
+
+- *(slm-backend)* Migrations_applied.applied_at TIMESTAMP → TIMESTAMPTZ (#5515) (#5516) ([#5516](https://github.com/mrveiss/AutoBot-AI/pull/5516))
+
+- *(slm-backend)* Adopt DateTime(timezone=True) columns + datetime.now(timezone.utc) (#5385) (#5502) ([#5502](https://github.com/mrveiss/AutoBot-AI/pull/5502))
+
+- *(backend)* Adopt now_utc() + parse_utc_iso in sso_integration.py (#5419 P2 batch 5) (#5493) ([#5493](https://github.com/mrveiss/AutoBot-AI/pull/5493))
+
+- *(backend)* Adopt now_utc() across 40 pure-producer sites (#5419 P2 batch 3) (#5489) ([#5489](https://github.com/mrveiss/AutoBot-AI/pull/5489))
+
+- *(backend)* Adopt parse_utc_iso across 24 pure-parser sites (#5419 P2 batch 2) (#5482) ([#5482](https://github.com/mrveiss/AutoBot-AI/pull/5482))
+
+- *(backend)* Adopt parse_utc_iso + now_utc() in 8 mixed files (#5419 P2 batch 4) (#5491) ([#5491](https://github.com/mrveiss/AutoBot-AI/pull/5491))
+
+- *(schemas)* Correct QueryKnowledgeResponse fields to match search response shape (#5487) (#5490) ([#5490](https://github.com/mrveiss/AutoBot-AI/pull/5490))
+
+- *(backend)* P2 top-5 files parse_utc_iso adoption (#5419 P2 partial) (#5479) ([#5479](https://github.com/mrveiss/AutoBot-AI/pull/5479))
+
+- *(knowledge)* Bulk.py + stats.py adopt parse_utc_iso (paired-parser migration) (#5475) (#5478) ([#5478](https://github.com/mrveiss/AutoBot-AI/pull/5478))
+
+- *(backend)* Captcha_human_loop param-based timing + agent.py dual-purpose split (#5351) (#5477) ([#5477](https://github.com/mrveiss/AutoBot-AI/pull/5477))
+
+- *(composables)* SelectAll O(n²) → O(n+m) in useKnowledgeVectorization (#5412) (#5452) ([#5452](https://github.com/mrveiss/AutoBot-AI/pull/5452))
+
+- *(tools)* Install_skills.sh relative-path resolution (follow-up to #5447 / PR #5458) (#5471) ([#5471](https://github.com/mrveiss/AutoBot-AI/pull/5471))
+
+- *(backend)* Task_queue/security_policy/planner producer-not-migrated regression (#5469) (#5470) ([#5470](https://github.com/mrveiss/AutoBot-AI/pull/5470))
+
+- *(backend)* P2 top-5 files parse_utc_iso adoption (#5419 P2 partial) (#5468) ([#5468](https://github.com/mrveiss/AutoBot-AI/pull/5468))
+
+- *(backend)* P1 state-recovery parse_utc_iso adoption (#5419 P1) (#5467) ([#5467](https://github.com/mrveiss/AutoBot-AI/pull/5467))
+
+- *(autobot_shared)* Parse_utc_iso raises ValueError on non-str input (#5464) (#5465) ([#5465](https://github.com/mrveiss/AutoBot-AI/pull/5465))
+
+- *(utils)* Background_task_manager aware-naive TypeError — silent timeout leak (#5419 P0) (#5462) ([#5462](https://github.com/mrveiss/AutoBot-AI/pull/5462))
+
+- *(composables)* Systematic onUnmounted/onMounted guard audit across composables (#5406) (#5450) ([#5450](https://github.com/mrveiss/AutoBot-AI/pull/5450))
+
+- *(lint+api)* 3 Layer-N+1 gaps from PR #5424 review (#5418, #5426, #5427) (#5434) ([#5434](https://github.com/mrveiss/AutoBot-AI/pull/5434))
+
+- *(dialogs)* Immediate: true on 10 focus watches + extract useBodyScrollLock (closes #5421 #5422) (#5433) ([#5433](https://github.com/mrveiss/AutoBot-AI/pull/5433))
+
+- *(api)* _is_session_in_range naive>=aware regression from PR #5414 (#5420) (#5424) ([#5424](https://github.com/mrveiss/AutoBot-AI/pull/5424))
+
+- *(infra)* Wire SemanticChunker into verify_knowledge_consistency.py (#5396 follow-up) (#5416) ([#5416](https://github.com/mrveiss/AutoBot-AI/pull/5416))
+
+- *(backend)* Adopt parse_utc_iso() at 11 fromisoformat(.replace(\"Z\", \"+00:00\")) sites (#5398) (#5414) ([#5414](https://github.com/mrveiss/AutoBot-AI/pull/5414))
+
+- *(lint)* Worktree exclusion + path-aware suggestions + test allowlist (#5393, #5394, #5397) (#5405) ([#5405](https://github.com/mrveiss/AutoBot-AI/pull/5405))
+
+- *(utils/simple_optimization_test)* Redirect imports to current GPU chunker (#5395) (#5403) ([#5403](https://github.com/mrveiss/AutoBot-AI/pull/5403))
+
+- *(composables)* Guard onUnmounted with onScopeDispose in useThumbnailWorker + useTimeout (#5347) (#5399) ([#5399](https://github.com/mrveiss/AutoBot-AI/pull/5399))
+
+- *(analytics)* Promise.allSettled in runCodeIntelligenceAnalysis — preserve partial success (#5387) (#5391) ([#5391](https://github.com/mrveiss/AutoBot-AI/pull/5391))
+
+- *(slm/infra)* Migrate datetime.utcnow().isoformat() to aware UTC inline (#5381) (#5384) ([#5384](https://github.com/mrveiss/AutoBot-AI/pull/5384))
+
+- *(backend)* Migrate datetime.utcnow().isoformat() in tests + migration scripts (#5263) (#5380) ([#5380](https://github.com/mrveiss/AutoBot-AI/pull/5380))
+
+- *(security)* Threat_detection naive/aware datetime mismatches (#5350) (#5377) ([#5377](https://github.com/mrveiss/AutoBot-AI/pull/5377))
+
+- *(analytics)* Wire code-intel findings + delete 4 orphans + harden audit (#5365) (#5374) ([#5374](https://github.com/mrveiss/AutoBot-AI/pull/5374))
+
+- *(knowledge_vectorization)* Restore @with_error_handling on 2 endpoints (#5358) (#5361) ([#5361](https://github.com/mrveiss/AutoBot-AI/pull/5361))
+
+- *(composables)* Guard useDebounce onUnmounted with onScopeDispose (#5318) (#5345) ([#5345](https://github.com/mrveiss/AutoBot-AI/pull/5345))
+
+- *(frontend)* Wire searchManPages + formatKey properly (was undefined at runtime) (#5315) (#5344) ([#5344](https://github.com/mrveiss/AutoBot-AI/pull/5344))
+
+- *(database)* Swap 6 SQLAlchemy column defaults from datetime.utcnow to now_utc (#5305) (#5320) ([#5320](https://github.com/mrveiss/AutoBot-AI/pull/5320))
+
+- *(codebase-analytics)* Normalize HardcodedValue contract — backend↔frontend shape drift (#5290) (#5307) ([#5307](https://github.com/mrveiss/AutoBot-AI/pull/5307))
+
+- *(codebase-analytics)* Wire hardcoded-values panel — was fetched but never rendered (#5277) (#5284) ([#5284](https://github.com/mrveiss/AutoBot-AI/pull/5284))
+
+- *(analytics)* Scope codebase export endpoints by source_id (#5266)
+
+- *(repository)* Unwrap SystemRepository settings/config response shapes (#5214) (#5260) ([#5260](https://github.com/mrveiss/AutoBot-AI/pull/5260))
+
+- *(repository)* Unwrap SystemRepository health/info/metrics response shapes (#5212) (#5259) ([#5259](https://github.com/mrveiss/AutoBot-AI/pull/5259))
+
+- *(backend)* Split /api/health into distinct GET and HEAD operation_ids (#5222) (#5258) ([#5258](https://github.com/mrveiss/AutoBot-AI/pull/5258))
+
+- *(backend)* Replace 11 invalid mixed-format datetime.utcnow().isoformat() + "Z" sites with utc_timestamp() (#5238) (#5243) ([#5243](https://github.com/mrveiss/AutoBot-AI/pull/5243))
+
+- *(repository)* Unwrap KnowledgeRepository stats response shapes (#5215) (#5240) ([#5240](https://github.com/mrveiss/AutoBot-AI/pull/5240))
+
+- *(repository)* Systematic audit + fix of response.data silent casts (#5207) (#5228) ([#5228](https://github.com/mrveiss/AutoBot-AI/pull/5228))
+
+- *(knowledge-connectors)* Align testConnector + syncConnector with backend response shapes (#5203 #5204) (#5227) ([#5227](https://github.com/mrveiss/AutoBot-AI/pull/5227))
+
+- *(knowledge-connectors)* Unpack wrapped backend response shapes in KnowledgeRepository (#5200) (#5202) ([#5202](https://github.com/mrveiss/AutoBot-AI/pull/5202))
+
+- *(frontend)* Cytoscape Retry button now re-initializes the graph (#5173)
+
+- *(rag-benchmarks)* Require ≥1 test_id access before labeling held_out_score (#5160) (#5165) ([#5165](https://github.com/mrveiss/AutoBot-AI/pull/5165))
+
+- *(frontend)* FunctionCallGraph 'cytoscape is not defined' - complete #3998 lazy-load refactor (#5158)
+
+- *(knowledge/backends)* Dedup guard on InMemory update, wrap list_collections, expand contract tests (#5133 #5134 #5135) (#5144) ([#5144](https://github.com/mrveiss/AutoBot-AI/pull/5144))
+
+- *(codebase-analytics)* Import get_redis_client instead of get_async_redis_client (#5099) (#5124) ([#5124](https://github.com/mrveiss/AutoBot-AI/pull/5124))
+
+- *(ui)* Real focus trap via keydown in HostSelectionDialog + BaseModal (#5016)
+
+- *(api)* /v1/chat/completions emits usage in final streaming chunk when include_usage=true (#5019)
+
+- *(agent_loop)* Canonicalize APPROVAL_REQUIRED event_type to uppercase (#5014, #4959)
+
+- *(codebase-analytics)* Scope getCodebaseStats + getProblemsReport by source_id (#5111) (#5113) ([#5113](https://github.com/mrveiss/AutoBot-AI/pull/5113))
+
+- *(typescript)* Drop misleading '| null' from fetchStats return type (#5103) (#5118) ([#5118](https://github.com/mrveiss/AutoBot-AI/pull/5118))
+
+- *(frontend)* DocumentationSearchSidebar uses apiClient directly — remove broken destructuring (#5095) (#5115) ([#5115](https://github.com/mrveiss/AutoBot-AI/pull/5115))
+
+- *(cleanup)* Exclude chromadb/redis/sqlite files from cleanup_generated_files walks (#5083) (#5090) ([#5090](https://github.com/mrveiss/AutoBot-AI/pull/5090))
+
+- *(knowledge)* Degrade /connectors/health on Redis failure + skip corrupted records (#5054 #5055) (#5088) ([#5088](https://github.com/mrveiss/AutoBot-AI/pull/5088))
+
+- *(llm)* Export OpenRouter and NousPortal providers from llm_providers (#5017)
+
+- *(ansible)* Install Playwright browsers to shared PLAYWRIGHT_BROWSERS_PATH accessible to service user (#4662)
+
+- *(sync-queue)* Priority ordering, atomic claim, path dedup (#5078 #5079 #5080)
+
+- *(media)* Add circuit breaker, pooled session, and correct title parsing to Jina Reader fast-path (#5022)
+
+- *(rag)* Gate /rag/benchmark/run behind admin permission + modernize asyncio calls (#5018)
+
+- *(knowledge)* Remove dead Response-property reads in useKnowledgeBase (#5012)
+
+- *(media)* SSRF defense in Jina Reader fast-path — resolve hostnames and reject private IPs (#5015)
+
+- *(mobile)* Make Dashboard, Agents, Knowledge, Settings views responsive at ≤768px (#4445)
+
+- *(media)* Add pytest.importorskip guard for bs4 in pipeline_test.py (#4533)
+
+- *(nav)* Remove redundant admin v-if and overflow-hidden from desktop nav container
+
+- *(nav)* Measure real dropdown width for edge clamping; only restore focus on keyboard dismiss
+
+- *(nav)* NavOverflowMenu viewport clamp, resize listener, focus management, a11y improvements
+
+- *(nav)* Add Escape key handler on NavOverflowMenu dropdown container for keyboard accessibility
+
+- *(nav)* Correct gap arithmetic and add itemCount watch in useNavOverflow
+
+- *(i18n)* Add 81 missing translation keys to en.json (#4982)
+
+- *(i18n)* Add 4 missing nav error keys to 10 non-English locale files (#4965)
+
+- *(api)* Register user_management router in feature_routers.py
+
+- *(ansible/install)* Fix install failures on fresh installs (#4571) ([#4571](https://github.com/mrveiss/AutoBot-AI/pull/4571))
+
+- *(ui)* Add missing ARIA roles and labels to BaseModal, DataTable, HostSelectionDialog (#4806)
+
+- *(agent_loop)* Bridge APPROVAL_REQUIRED events to LiveEventManager for frontend dialog (#4959)
+
+- *(rag)* Guard metadata None dereference and clamp hybrid_score to [0,1] in _deduplicate_and_rank (#4939 #4943)
+
+- *(knowledge)* Set _running=True during loop execution so re-init guard is effective (#4937)
+
+- *(scheduler)* Normalize day-7 in range-step tokens like '1-7/2' in _normalize_dow_field (#4944)
+
+- *(mesh)* Correct graspologic ImportError log message — no restart needed after #4924 (#4936)
+
+- *(knowledge)* Propagate dep_error from extractors so missing tree-sitter is counted as failed not skipped (#4938)
+
+- *(mesh)* Store community_cluster_task on app.state and cancel on shutdown (#4946)
+
+- *(infrastructure)* Use os.environ.get() instead of unexpanded shell variable in sys.path.append (#4945)
+
+- *(frontend)* Suppress TS2591 on lazy require() calls in submitApprovalDecision (#4952)
+
+- *(frontend)* Wire tool approval dialog to POST /api/agent-terminal/tools/approve/{approval_id} (#4952)
+
+- *(rag)* Remove unused call import in rag_service_mesh_test (#4765)
+
+- *(rag)* Store mesh components on app.state; build per-instance NeuralMeshRetriever in RAGService.initialize() (#4765)
+
+- *(rag)* Cache synthesis_schema singleton in _get_kb_synthesis_context (#4654)
+
+- *(layout,nav)* Restore chat input layout fixes and /desktop removal lost in merge
+
+- *(knowledge)* O(1) ancestor lookup in LineageService via get_by_run_id (#4788)
+
+- *(rag)* Memoize hash cache in _filter_stale_chunks with 60s TTL (#4723) ([#4951](https://github.com/mrveiss/AutoBot-AI/pull/4951))
+
+- *(rag)* Memoize hash cache in _filter_stale_chunks with 60s TTL (#4723)
+
+- *(knowledge)* Use asyncio.Lock to prevent hash cache write race in CodeIndexer (#4895) ([#4940](https://github.com/mrveiss/AutoBot-AI/pull/4940))
+
+- *(knowledge)* Use asyncio.Lock to prevent hash cache write race in CodeIndexer (#4895)
+
+- *(knowledge)* Move /index/code to background task with status polling (#4912) ([#4934](https://github.com/mrveiss/AutoBot-AI/pull/4934))
+
+- *(knowledge)* Move /index/code to background task with status polling (#4912)
+
+- *(chat)* Rename mislabeled Overseer toggle label from 'Explain' to 'Overseer'
+
+- *(i18n)* Add missing nav.applicationError/unexpectedError/loadingTimeout keys
+
+- *(cli,browser)* Correct config merge and remove task_id filter in approval subscribe
+
+- *(cli,kb,browser)* Wire approval pub/sub, KB categories, WebResearcher init
+
+- *(knowledge)* Guard against empty-string content in _split_and_embed (#4921) (#4933) ([#4933](https://github.com/mrveiss/AutoBot-AI/pull/4933))
+
+- *(mesh)* Retry graspologic import with 24h backoff instead of permanent exit (#4924)
+
+- *(mesh)* Downgrade graspologic ImportError log from CRITICAL to WARNING (#4923)
+
+- *(knowledge)* Replace string startswith path check with Path.is_relative_to() (#4925)
+
+- *(knowledge)* Make POST /index/code non-blocking via background task (#4912) (#4932) ([#4932](https://github.com/mrveiss/AutoBot-AI/pull/4932))
+
+- *(rag)* Apply provenance_adjustment() to hybrid_score in _deduplicate_and_rank (#4914) (#4931) ([#4931](https://github.com/mrveiss/AutoBot-AI/pull/4931))
+
+- *(mesh)* Add 5-minute startup delay before first Leiden clustering run (#4919) (#4930) ([#4930](https://github.com/mrveiss/AutoBot-AI/pull/4930))
+
+- *(scheduler)* Handle range+step expressions in _normalize_dow_field — 1-7 no longer raises ValueError (#4918) (#4927) ([#4927](https://github.com/mrveiss/AutoBot-AI/pull/4927))
+
+- *(knowledge)* CodeIndexer call-graph scope, save_cache mkdir, async upsert+rglob, method test (#4908 #4909 #4910 #4911 #4913) (#4926) ([#4926](https://github.com/mrveiss/AutoBot-AI/pull/4926))
+
+- *(knowledge)* TTL on pending_approval Redis key, POST /loop/reject endpoint, _running guard in re-init (#4915 #4916 #4917)
+
+- *(knowledge)* Floor regression analyze score at _MIN_SCORE_DELTA not 0.0 (#4794)
+
+- *(knowledge)* Surface tree-sitter ImportError to /index/code caller (#4898)
+
+- *(mesh)* Raise ImportError from cluster_graph so loop exits on missing graspologic (#4896)
+
+- *(knowledge)* Validate root_dir path in /index/code to prevent traversal (#4894)
+
+- *(testing)* Replace hardcoded HookPoint count with enum-driven config coverage check (#4887)
+
+- *(scheduler)* Normalize cron 7=Sunday in _parse_cron_field (#4888)
+
+- *(ci)* Fix ServiceURLs string literals — add f-prefix to all broken URL interpolations (#4305)
+
+- *(knowledge)* Floor analyze score at 0 so failed experiments produce lessons (#4794)
+
+- *(knowledge)* Replace single-level oversized chunk split with recursive retry up to depth 4 (#4702)
+
+- *(scheduler)* Normalize cron 7=Sunday in _parse_cron_field (#4888) (#4893) ([#4893](https://github.com/mrveiss/AutoBot-AI/pull/4893))
+
+- *(testing)* Replace hardcoded HookPoint count with enum-driven config coverage check (#4887) (#4892) ([#4892](https://github.com/mrveiss/AutoBot-AI/pull/4892))
+
+- *(knowledge)* Persist _pending_approval to Redis to survive server restart (#4792) (#4886) ([#4886](https://github.com/mrveiss/AutoBot-AI/pull/4886))
+
+- *(knowledge)* Guard get_loop_orchestrator() against None llm_service race (#4791) (#4885) ([#4885](https://github.com/mrveiss/AutoBot-AI/pull/4885))
+
+- *(knowledge)* CodeIndexer cache path, async index_file, node ID collision (#4851 #4852 #4853) (#4884) ([#4884](https://github.com/mrveiss/AutoBot-AI/pull/4884))
+
+- *(provisioning)* Add creates guard to Playwright install — skip if already installed (#4855) (#4882) ([#4882](https://github.com/mrveiss/AutoBot-AI/pull/4882))
+
+- *(middleware)* Apply body size check before exemption check — /save was unguarded (#4865) (#4881) ([#4881](https://github.com/mrveiss/AutoBot-AI/pull/4881))
+
+- *(scheduler)* Cron day-of-week standard convention — 0=Sunday not 0=Monday (#4863) (#4880) ([#4880](https://github.com/mrveiss/AutoBot-AI/pull/4880))
+
+- *(agents)* Correct orchestrator source_file path in agent_config.py (#4867) (#4876) ([#4876](https://github.com/mrveiss/AutoBot-AI/pull/4876))
+
+- *(ui)* Add getSystemStatusAriaLabel to App.vue setup() return (#4862) (#4868) ([#4868](https://github.com/mrveiss/AutoBot-AI/pull/4868))
+
+- *(knowledge)* Pipeline xadd+hset in log_run() to prevent partial write (#4873) (#4878) ([#4878](https://github.com/mrveiss/AutoBot-AI/pull/4878))
+
+- *(testing)* Rename test_hash_none_vs_empty_string_differ — tests no-args not None (#4875) (#4877) ([#4877](https://github.com/mrveiss/AutoBot-AI/pull/4877))
+
+- *(config)* Remove unused ModelManager import from agent_config.py (#4872) (#4874) ([#4874](https://github.com/mrveiss/AutoBot-AI/pull/4874))
+
+- *(ui)* Add getSystemStatusAriaLabel to App.vue setup() return (#4862) (#4866) ([#4866](https://github.com/mrveiss/AutoBot-AI/pull/4866))
+
+- *(provisioning)* Complete agent model config — all 15 agents now have PROVIDER/ENDPOINT/MODEL (#4854)
+
+- *(mesh)* Add fetch_edges + promote_to_anchor forwarding methods to MeshDBAdapter (#4837)
+
+- *(knowledge)* Extend _cron_matches_now to evaluate day/month/weekday fields (#4793)
+
+- *(ui)* Fix 3 remaining accessibility gaps — toast icon aria-hidden, status dot aria-hidden, aria-label anti-pattern (#4821)
+
+- *(testing)* Replace deprecated get_event_loop() in test_first_turn_priming.py (#4848)
+
+- *(agent_loop)* Resolve _compute_tool_call_hash type collision and _make_tool None gap (#4847)
+
+- *(agent_loop)* Set _halted_on_repetition=True in _execute_tools on repetition halt (#4846)
+
+- *(provisioning)* Four out-of-box gaps — Playwright, AI Stack models, /save injection, SLM TLS
+
+- *(i18n)* Translate operations.view.* keys into 10 non-English locales (#4825)
+
+- *(testing)* Update stale lambda docstrings in test_mmr_diversity.py (#4828)
+
+- *(mesh)* Remove unused networkx import in _split_community (#4820)
+
+- *(rag)* Throttle SessionAdaptiveReranker eviction to once per 60s (#4827) (#4831) ([#4831](https://github.com/mrveiss/AutoBot-AI/pull/4831))
+
+- *(testing)* Update stale lambda docstrings in test_mmr_diversity.py (#4828) (#4830) ([#4830](https://github.com/mrveiss/AutoBot-AI/pull/4830))
+
+- *(knowledge)* Cap AutonomousLoopOrchestrator._history at 100 entries using deque (#4795) (#4824) ([#4824](https://github.com/mrveiss/AutoBot-AI/pull/4824))
+
+- *(testing)* Mock CrossEncoder availability in test_mmr_diversity (#4786) (#4823) ([#4823](https://github.com/mrveiss/AutoBot-AI/pull/4823))
+
+- *(rag)* Add TTL eviction to SessionAdaptiveReranker (#4787) (#4822) ([#4822](https://github.com/mrveiss/AutoBot-AI/pull/4822))
+
+- *(desktop)* Use correct i18n key desktop.contextPanel.title for toggle button (#4812) (#4814) ([#4814](https://github.com/mrveiss/AutoBot-AI/pull/4814))
+
+- *(ui)* Accessibility & interaction — focus rings, touch targets, ARIA labels, Escape key (#4803) (#4804) ([#4804](https://github.com/mrveiss/AutoBot-AI/pull/4804))
+
+- *(testing)* Update test_causal_reasoning.py to use llama_index stubs instead of xfail (#4749) (#4808) ([#4808](https://github.com/mrveiss/AutoBot-AI/pull/4808))
+
+- *(testing)* Update test_synthesize_docs_happy_path to account for AnalyzerService LLM calls (#4785) (#4807) ([#4807](https://github.com/mrveiss/AutoBot-AI/pull/4807))
+
+- *(frontend)* Add missing operations.view.* i18n keys to all 11 locales (#4801) (#4802) ([#4802](https://github.com/mrveiss/AutoBot-AI/pull/4802))
+
+- *(mcp)* Update knowledge-base-mcp requires-python to >=3.12 (#4719) (#4800) ([#4800](https://github.com/mrveiss/AutoBot-AI/pull/4800))
+
+- *(backend)* Update startup_validator.py minimum Python version check from 3.8 to 3.12 (#4718) (#4799) ([#4799](https://github.com/mrveiss/AutoBot-AI/pull/4799))
+
+- *(testing)* Update test_total_hook_count_increased expected HookPoint count to match current enum (#4740) (#4798) ([#4798](https://github.com/mrveiss/AutoBot-AI/pull/4798))
+
+- *(testing)* Use timezone-aware datetime.now(timezone.utc) in TestIsTaskStale (#4698) (#4797) ([#4797](https://github.com/mrveiss/AutoBot-AI/pull/4797))
+
+- *(backend)* Remove duplicate api.user_management router registration from feature_routers.py (#4708) (#4796) ([#4796](https://github.com/mrveiss/AutoBot-AI/pull/4796))
+
+- *(rag)* Remove duplicate register_shared_mesh_retriever import in lifespan.py (#4766) (#4790) ([#4790](https://github.com/mrveiss/AutoBot-AI/pull/4790))
+
+- *(frontend)* Add /desktop nav entry to App.vue navItems (#4778) (#4789) ([#4789](https://github.com/mrveiss/AutoBot-AI/pull/4789))
+
+- *(rag)* Add enable_rlm_refinement and enable_session_adaptive_reranking to RAGConfig.to_dict() (#4725) (#4783) ([#4783](https://github.com/mrveiss/AutoBot-AI/pull/4783))
+
+- *(frontend)* Add /operations nav entry and nav.operations i18n key (#4270) (#4780) ([#4780](https://github.com/mrveiss/AutoBot-AI/pull/4780))
+
+- *(slm-frontend)* CoLocatedApiUrlGuard now clarifies it only guards builds, not vite dev server (#4652) (#4775) ([#4775](https://github.com/mrveiss/AutoBot-AI/pull/4775))
+
+- *(frontend)* Add @types/three and remove @ts-ignore in KnowledgeGraph3D.vue (#4437) (#4764) ([#4764](https://github.com/mrveiss/AutoBot-AI/pull/4764))
+
+- *(rag)* Wire NeuralMeshRetriever into all RAGService instances, not just GraphRAGService (#4757) (#4763) ([#4763](https://github.com/mrveiss/AutoBot-AI/pull/4763))
+
+- *(frontend)* Resolve TerminalService.ts TS2352 unsafe cast to SessionInfo[] (#4701) (#4756) ([#4756](https://github.com/mrveiss/AutoBot-AI/pull/4756))
+
+- *(frontend)* Resolve CacheService.ts TS2352 unsafe Window cast (#4700) (#4755) ([#4755](https://github.com/mrveiss/AutoBot-AI/pull/4755))
+
+- *(frontend)* Resolve App.vue TS2322 SVG fill-rule and Booleanish errors (#4699) (#4754) ([#4754](https://github.com/mrveiss/AutoBot-AI/pull/4754))
+
+- *(rag)* Correct _hybrid_search closure — remove erroneous tuple unpack (#4724) (#4753) ([#4753](https://github.com/mrveiss/AutoBot-AI/pull/4753))
+
+- *(merge)* Apply #4677 MAP-Elites + #4678 AnalyzerService with conflict resolution
+
+- *(knowledge)* Wire SynthesisProvenanceLog.log_run into KBSynthesizer._synthesize_cluster (#4656)
+
+- *(testing)* Fix import path for property_graph in test_property_graph.py (#4730)
+
+- *(testing)* Fix import of think_causally in test_causal_reasoning.py (#4729)
+
+- *(testing)* Lazy-load BROWSER_TOOL_NAMES in tool_registry to break circular import (#4557)
+
+- *(usage)* Replace redis.keys() with async scan_iter in get_all_user_costs, get_all_agent_costs, _fetch_model_costs (#4443)
+
+- *(rag)* Call _filter_stale_chunks() in _fallback_basic_search — stale paths were returned on fallback path (#4721)
+
+- *(testing)* Patch get_async_redis_client in TestStoreFeedbackInStream — was patching non-existent get_redis_client (#4720)
+
+- *(backend)* Trust self-signed cert for internal WebSocket connections (#4664)
+
+- *(deployment)* Add missing AUTOBOT_*_ENDPOINT env vars to agent service config (#4661)
+
+- *(rag)* Remove dead NeuralMeshRetriever injection gate from RAGService (#4686)
+
+- *(knowledge)* Validate synthesis_schema source paths on load — log warning for missing paths (#4695)
+
+- *(rag)* Validate source paths on retrieved chunks — log and filter stale paths (#4689)
+
+- *(knowledge)* Pass llm_service to DocIndexerService so KB synthesis runs (#4655)
+
+- *(rag)* Wire advanced_search_with_refinement into RAGService (#4696)
+
+- *(rag)* Wire expanded_queries into _retrieve_hybrid_results (#4685)
+
+- *(tools)* Replace hardcoded _BUILTIN_TOOL_SCHEMAS with imported constants (#4561)
+
+- *(knowledge)* Log oversized chunk errors explicitly instead of silent drop (#4665)
+
+- *(npu-worker)* Log NPU unavailable warning once at startup, not per-request (#4666)
+
+- *(tts-worker)* Migrate FastAPI on_event to lifespan handler (#4667)
+
+- *(drift-checker)* Update compute_drift docstring after total_compared rename (#4653)
+
+- *(chat)* Distinguish API error from missing data in loadEssentialChatData (#4537)
+
+- *(analytics)* Declare realTimeEnabled in CodebaseOverviewPanel Props (#4546)
+
+- *(analytics)* Add missing 'components' field to HealthScore interface (#4545)
+
+- *(analytics)* Type v-for idx as number in AdvancedAnalytics (#4544)
+
+- *(chat)* Use createNewChat return value in pushLocalOnlySessions (#4536)
+
+- *(knowledge)* Remove incorrect await on ChromaDB Collection objects (#4663)
+
+- *(orchestrator)* Add missing LongTermMemoryManager.initialize() call (#4660)
+
+- *(frontend)* Tokenize remaining multi-value and non-standard border-radius values (#4638) (#4648) ([#4648](https://github.com/mrveiss/AutoBot-AI/pull/4648))
+
+- *(frontend)* Replace hardcoded border-radius in chart tooltip JS strings with design tokens (#4637) (#4647) ([#4647](https://github.com/mrveiss/AutoBot-AI/pull/4647))
+
+- *(frontend)* Replace hardcoded inline style CSS values with design tokens (#4636) (#4646) ([#4646](https://github.com/mrveiss/AutoBot-AI/pull/4646))
+
+- *(slm-frontend)* CoLocatedApiUrlGuard throws instead of warn to abort broken builds (#4632) (#4645) ([#4645](https://github.com/mrveiss/AutoBot-AI/pull/4645))
+
+- *(ansible)* Replace hardcoded UFW port cleanup with playwright_ports_legacy list (#4633) (#4644) ([#4644](https://github.com/mrveiss/AutoBot-AI/pull/4644))
+
+- *(drift-checker)* Exclude expected-drift paths from total_compared count (#4631) (#4643) ([#4643](https://github.com/mrveiss/AutoBot-AI/pull/4643))
+
+- *(knowledge)* Substitute {documents} placeholder in synthesis_schema prompt templates (#4634) (#4641) ([#4641](https://github.com/mrveiss/AutoBot-AI/pull/4641))
+
+- *(deps)* Add autobot-slm-frontend to dependabot.yml (#4616) (#4630) ([#4630](https://github.com/mrveiss/AutoBot-AI/pull/4630))
+
+- *(knowledge)* Migrate knowledge_models.py from Pydantic V1 @validator to V2 @field_validator (#4615) (#4628) ([#4628](https://github.com/mrveiss/AutoBot-AI/pull/4628))
+
+- *(deps)* Add autobot-slm-frontend to dependabot.yml (#4616) (#4625) ([#4625](https://github.com/mrveiss/AutoBot-AI/pull/4625))
+
+- *(knowledge)* Migrate knowledge_models.py from Pydantic V1 @validator to V2 @field_validator (#4615) (#4624) ([#4624](https://github.com/mrveiss/AutoBot-AI/pull/4624))
+
+- *(ansible)* Remove stale UFW port 3000 rule after playwright_port change to 9001 (#4609) (#4621) ([#4621](https://github.com/mrveiss/AutoBot-AI/pull/4621))
+
+- *(slm-frontend)* Warn when VITE_API_URL unset in co-located build (#4603) (#4620) ([#4620](https://github.com/mrveiss/AutoBot-AI/pull/4620))
+
+- *(slm)* Exclude deployment-generated files from drift detector report (#4610) (#4622) ([#4622](https://github.com/mrveiss/AutoBot-AI/pull/4622))
+
+- *(a2a)* Add logger.debug on JWT sub decode failure in _decode_jwt_sub (#4607) (#4619) ([#4619](https://github.com/mrveiss/AutoBot-AI/pull/4619))
+
+- *(a2a)* Slide a2a:tasks set TTL in get_task() alongside task and audit keys (#4604) (#4617) ([#4617](https://github.com/mrveiss/AutoBot-AI/pull/4617))
+
+- *(a2a)* Evict stale IP entries from _rate_buckets to prevent memory leak (#4595) (#4602) ([#4602](https://github.com/mrveiss/AutoBot-AI/pull/4602))
+
+- *(a2a)* Expire a2a:tasks tracking set to prevent unbounded growth (#4594) (#4601) ([#4601](https://github.com/mrveiss/AutoBot-AI/pull/4601))
+
+- *(a2a)* Eliminate double list_tasks() scan in task_stats() (#4593) (#4600) ([#4600](https://github.com/mrveiss/AutoBot-AI/pull/4600))
+
+- *(a11y)* Add focus-visible outlines for keyboard navigation (#4592) (#4598) ([#4598](https://github.com/mrveiss/AutoBot-AI/pull/4598))
+
+- *(frontend)* Replace hardcoded z-index values with design tokens (#4591) (#4597) ([#4597](https://github.com/mrveiss/AutoBot-AI/pull/4597))
+
+- *(frontend)* Replace hardcoded box-shadow values with design tokens (#4560) (#4599) ([#4599](https://github.com/mrveiss/AutoBot-AI/pull/4599))
+
+- *(chat)* Keep ChatInput fixed at bottom — move scroll to messages container
+
+- *(nginx)* Add no-cache headers for /slm/index.html to prevent stale bundle caching
+
+- *(slm-frontend)* Correct code source defaults to /opt/autobot/code_source + Dev_new_gui
+
+- *(frontend)* Replace hardcoded box-shadow values with design tokens (#4560)
+
+- *(frontend)* Replace hardcoded colors with design tokens in status, secrets, terminal settings, voice panels (#4578) (#4584) ([#4584](https://github.com/mrveiss/AutoBot-AI/pull/4584))
+
+- *(terminal)* Replace hardcoded palette colors with design tokens in Terminal (#4577) (#4583) ([#4583](https://github.com/mrveiss/AutoBot-AI/pull/4583))
+
+- *(frontend)* Replace hardcoded hex colors with design tokens in HeartbeatPanel, WorkflowTemplateGallery, ProfileModal (#4576) (#4582) ([#4582](https://github.com/mrveiss/AutoBot-AI/pull/4582))
+
+- *(ui)* Replace hardcoded palette colors with design tokens in TouchFriendlyButton (#4575) (#4581) ([#4581](https://github.com/mrveiss/AutoBot-AI/pull/4581))
+
+- *(chat)* Replace hardcoded palette colors with design tokens in overseer messages (#4574) (#4579) ([#4579](https://github.com/mrveiss/AutoBot-AI/pull/4579))
+
+- *(chat)* Replace hardcoded palette colors with design tokens in message components (#4573) (#4580) ([#4580](https://github.com/mrveiss/AutoBot-AI/pull/4580))
+
+- *(slm-frontend)* Fix broken beforeEnter guard on /maintenance/updates route
+
+- *(chat)* Add missing context field to LLMIterationContext (#4264)
+
+- *(ansible)* Change playwright_port from 3000 to 9001 to avoid Grafana conflict
+
+- *(install)* Fix unit name parsing for failed/orphaned autobot-* services
+
+- *(frontend)* Replace all hardcoded Tailwind palette colors with design tokens
+
+- *(install)* Stop all autobot-* units before removing unit files in --uninstall
+
+- *(ansible)* Fix PostgreSQL readiness check and duplicate task keys
+
+- *(frontend)* Fix blank icons in ActivityFeed and correct z-index token values
+
+- *(a2a)* Raise a2a_task_ttl default from 60s to 3600s for Redis persistence (#4551) (#4553) ([#4553](https://github.com/mrveiss/AutoBot-AI/pull/4553))
+
+- *(tools)* Validate arguments for direct-dispatch tools, not just MCP (#4529) (#4552) ([#4552](https://github.com/mrveiss/AutoBot-AI/pull/4552))
+
+- *(agent)* Inject first_turn_note into LLM user message on first turn (#4528) (#4550) ([#4550](https://github.com/mrveiss/AutoBot-AI/pull/4550))
+
+- *(frontend)* Fix 3 hardcoded color violations breaking dark/light theme
+
+- *(llm)* Ollama stream uses correct endpoint; vllm uses correct LLMResponse fields (#4525, #4527)
+
+- *(ci)* Remove stale gitlink for .claude/worktrees/issue-4347
+
+- *(kb)* Add process_query to KBLibrarianAgent and runtime config attrs (#4531) (#4542) ([#4542](https://github.com/mrveiss/AutoBot-AI/pull/4542))
+
+- *(a2a)* Correct routing for research and knowledge_retrieval agents (#4530) (#4541) ([#4541](https://github.com/mrveiss/AutoBot-AI/pull/4541))
+
+- *(agents)* Extract LLMResponse.content in system_commands agent (#4532) (#4540) ([#4540](https://github.com/mrveiss/AutoBot-AI/pull/4540))
+
+- *(analytics)* Add missing useAggregationMemo imports (#4538) (#4539) ([#4539](https://github.com/mrveiss/AutoBot-AI/pull/4539))
+
+- *(frontend)* Eliminate hardcoded colors and undefined CSS vars across components
+
+- *(llm)* Opt-in chat_template only; ollama uses generate endpoint for pre-rendered prompts (#4524, #4525)
+
+- *(lint)* Add missing blank line after _build_skill_context in prompt_manager (E305)
+
+- *(theme)* Replace hardcoded colors with CSS design-token variables (#4527)
+
+- *(llm)* Wire chat_template_loader into ollama and vllm providers (#4518) (#4523) ([#4523](https://github.com/mrveiss/AutoBot-AI/pull/4523))
+
+- *(truncation)* Optimize large file handling for 10MB+ files (#4397) (#4513) ([#4513](https://github.com/mrveiss/AutoBot-AI/pull/4513))
+
+- *(truncation)* Add binary file detection and safe handling (#4396) (#4512) ([#4512](https://github.com/mrveiss/AutoBot-AI/pull/4512))
+
+- *(a2a)* Replace in-process task store with Redis for worker isolation (#4502) (#4508) ([#4508](https://github.com/mrveiss/AutoBot-AI/pull/4508))
+
+- *(a2a)* Use attribute access on LLMResponse in task_executor (#4501) (#4507) ([#4507](https://github.com/mrveiss/AutoBot-AI/pull/4507))
+
+- *(truncation)* Preserve JSON/XML structure integrity on truncation (#4395) (#4511) ([#4511](https://github.com/mrveiss/AutoBot-AI/pull/4511))
+
+- *(frontend)* Register wired components in index files (#4323) (#4517) ([#4517](https://github.com/mrveiss/AutoBot-AI/pull/4517))
+
+- *(frontend)* Replace generic type params with 'as Type' casts to survive linter (#4425) (#4504) ([#4504](https://github.com/mrveiss/AutoBot-AI/pull/4504))
+
+- *(knowledge)* Add missing web/internet platform tool YAML definitions (#4428) (#4505) ([#4505](https://github.com/mrveiss/AutoBot-AI/pull/4505))
+
+- *(frontend)* Add -p tsconfig.app.json to vue-tsc calls so TS errors are caught (#4424) (#4506) ([#4506](https://github.com/mrveiss/AutoBot-AI/pull/4506))
+
+- *(chat)* Push local-only sessions to backend in bidirectional sync (#4431) (#4493) ([#4493](https://github.com/mrveiss/AutoBot-AI/pull/4493))
+
+- *(analytics)* Update usePrometheusMetrics to use useApi() response format (#4426) (#4494) ([#4494](https://github.com/mrveiss/AutoBot-AI/pull/4494))
+
+- *(tools)* Add ast.literal_eval fallback for malformed LLM JSON in tool calls (#4483) (#4497) ([#4497](https://github.com/mrveiss/AutoBot-AI/pull/4497))
+
+- *(agents)* Wire SlackNotificationIntegration into agent loop (#4308) (#4480) ([#4480](https://github.com/mrveiss/AutoBot-AI/pull/4480))
+
+- *(frontend)* Distinguish errors from empty responses in batch API (#4353) (#4479) ([#4479](https://github.com/mrveiss/AutoBot-AI/pull/4479))
+
+- *(usage)* Add nav link, fix CSV auth, and use useApi() in UsageView (#4465, #4466, #4467) (#4478) ([#4478](https://github.com/mrveiss/AutoBot-AI/pull/4478))
+
+- *(workers)* Add __all__ exports to new worker modules (#4322) (#4477) ([#4477](https://github.com/mrveiss/AutoBot-AI/pull/4477))
+
+- *(frontend)* Restore generic type safety in useVirtualList (#4434) (#4475) ([#4475](https://github.com/mrveiss/AutoBot-AI/pull/4475))
+
+- *(doc_indexer)* Handle circular symlinks in _compute_file_hash and _normalize_path (#4433) (#4474) ([#4474](https://github.com/mrveiss/AutoBot-AI/pull/4474))
+
+- *(media)* Enable TLS certificate verification in LinkPipeline (#4427) (#4471) ([#4471](https://github.com/mrveiss/AutoBot-AI/pull/4471))
+
+- *(lint)* Fix blank line violations in usage.py (#1807) (#4468) ([#4468](https://github.com/mrveiss/AutoBot-AI/pull/4468))
+
+- *(lint)* Fix remaining E501 in ValueError message (#1807)
+
+- *(lint)* Remove unused import and fix E501 lines in llm_cost_tracker (#1807)
+
+- *(lint)* Remove unused import and fix E501 violations in llm_cost_tracker.py (#4450) ([#4450](https://github.com/mrveiss/AutoBot-AI/pull/4450))
+
+- *(typescript)* Resolve code analysis type errors (#4363)
+
+- *(typescript)* Resolve browser automation and dev tools type errors (#4362)
+
+- *(analytics)* Add missing useGroupingMemo import to CodeSmells, Declarations, CodeReviewDashboard
+
+- *(truncation)* Ensure UTF-8 multi-byte character boundary safety (#4394) (#4418) ([#4418](https://github.com/mrveiss/AutoBot-AI/pull/4418))
+
+- *(doc_indexer)* Handle hash cache edge cases for symlinks, permissions, path normalization (#4382) (#4416) ([#4416](https://github.com/mrveiss/AutoBot-AI/pull/4416))
+
+- *(typescript)* Resolve collaboration and secrets management type errors (#4361) (#4409) ([#4409](https://github.com/mrveiss/AutoBot-AI/pull/4409))
+
+- *(typescript)* Resolve knowledge UI component type errors (#4359) (#4408) ([#4408](https://github.com/mrveiss/AutoBot-AI/pull/4408))
+
+- *(typescript)* Resolve analytics and Prometheus metrics type errors (#4358) (#4407) ([#4407](https://github.com/mrveiss/AutoBot-AI/pull/4407))
+
+- *(discovery)* Correct scheduler path and skill_management exports (#4398 #4399) (#4406) ([#4406](https://github.com/mrveiss/AutoBot-AI/pull/4406))
+
+- *(cron_scheduler)* Correct nested path reference (#4398) (#4404) ([#4404](https://github.com/mrveiss/AutoBot-AI/pull/4404))
+
+- *(skill_management)* Add missing __init__.py exports (#4399) (#4403) ([#4403](https://github.com/mrveiss/AutoBot-AI/pull/4403))
+
+- *(knowledge)* Force full indexing when collection empty despite cache (#4350) (#4377) ([#4377](https://github.com/mrveiss/AutoBot-AI/pull/4377))
+
+- *(knowledge)* Force full indexing when collection empty despite cache (#4350)
+
+- *(api)* Return explicit error indicator for failed batch API (#4354)
+
+- *(api)* Return explicit error indicator for failed batch API (#4354)
+
+- *(frontend)* Cleanup promises on ChatInterface unmount (#4355) (#4368) ([#4368](https://github.com/mrveiss/AutoBot-AI/pull/4368))
+
+- *(typescript)* Resolve 56 errors in useKnowledgeBase.ts (#4357)
+
+- *(typescript)* Resolve 47+ errors in chat components (#4360)
+
+- Resolve TypeScript errors in frontend components (#4328)
+
+- *(frontend)* Correct BaseButton import path in CodeEvolutionTimeline (#4349)
+
+- *(frontend)* Prevent chat sessions loss on empty backend response (#4328) (#4351) ([#4351](https://github.com/mrveiss/AutoBot-AI/pull/4351))
+
+- *(knowledge)* Fix NameError in TaskStatusManager static methods
+
+- *(knowledge)* Fix all async background task executions in knowledge population
+
+- *(frontend)* Correct invalid TailwindCSS utility classes in build
+
+- *(frontend)* Set VITE_BACKEND_HOST env var and support HEAD on health endpoint
+
+- Wire RelationshipViewer component in EntityDetail panel (#4272)
+
+- *(components)* Wire orphaned component CausalChainViewer (#4274)
+
+- *(components)* Wire orphaned component TouchFriendlyButton (#4275)
+
+- *(components)* Wire orphaned component OperationFilters (#4277)
+
+- *(components)* Wire orphaned component TerminalHeader (#4281)
+
+- *(components)* Wire orphaned component TerminalHeader (#4281)
+
+- *(terminal)* Wire TerminalStatusBar component in Terminal view (#4285) (#4320) ([#4320](https://github.com/mrveiss/AutoBot-AI/pull/4320))
+
+- *(devops)* Systemd-created log files have wrong ownership (#4309) (#4318) ([#4318](https://github.com/mrveiss/AutoBot-AI/pull/4318))
+
+- *(ci)* Verify all workflows use supported action versions (#4293) (#4314) ([#4314](https://github.com/mrveiss/AutoBot-AI/pull/4314))
+
+- *(branching)* Add target branch guard to prevent commits on main (#4113) (#4313) ([#4313](https://github.com/mrveiss/AutoBot-AI/pull/4313))
+
+- *(provisioning)* Replace timeout-based health check with retry-based approach
+
+- *(provisioning)* Increase backend health check timeout to 180s
+
+- *(devops)* Ensure log directory/files have correct ownership in provision playbook
+
+- Resolve metaclass conflict in SQLAlchemy models (#4300)
+
+- *(slack)* Add comprehensive error handling for API operations (#4161) ([#4306](https://github.com/mrveiss/AutoBot-AI/pull/4306))
+
+- *(ci)* Update deprecated action versions from v6/v7 to current stable v4 (#4296) ([#4301](https://github.com/mrveiss/AutoBot-AI/pull/4301))
+
+- *(config)* Update Black line-length from 88 to 120 in .claude/settings.json (#4298) ([#4303](https://github.com/mrveiss/AutoBot-AI/pull/4303))
+
+- *(ci)* Fix phase_validation_system.py broken imports (#4297) ([#4302](https://github.com/mrveiss/AutoBot-AI/pull/4302))
+
+- *(test)* Resolve merge conflict in executor_artifacts_test.py
+
+- *(agent-loop)* Guard tool args, sentinel halt, propagate error to LLM (#3859 #3862 #3868 #3874 #3877) ([#4299](https://github.com/mrveiss/AutoBot-AI/pull/4299))
+
+- Remove unresolved merge conflict marker from executor_artifacts_test.py
+
+- *(tests)* ParallelToolExecutor test fixture - fix JSON serialization in artifact test (#4226) (#4243) ([#4243](https://github.com/mrveiss/AutoBot-AI/pull/4243))
+
+- *(ci)* Resolve Phase Validation workflow action versions and script paths (#4125)
+
+- *(ci)* Exclude test files from AWS key grep to prevent false positives (#4127) (#4238) ([#4238](https://github.com/mrveiss/AutoBot-AI/pull/4238))
+
+- Complete PR #4213 implementation - add missing ExperimentTask and build_task_inference_params (#3259)
+
+- *(slack)* Add comprehensive error handling to API calls (#4161)
+
+- *(tests)* Add missing tool_dispatcher argument to ParallelToolExecutor fixture (#4226)
+
+- *(security)* Move service auth enforcement tests to correct location (#3394) (#4228) ([#4228](https://github.com/mrveiss/AutoBot-AI/pull/4228))
+
+- Add error handling for diff generation (#4172) (#4190) ([#4190](https://github.com/mrveiss/AutoBot-AI/pull/4190))
+
+- Add size limits to artifact output (#4173) (#4191) ([#4191](https://github.com/mrveiss/AutoBot-AI/pull/4191))
+
+- Standardize tool result format parsing (#4174) (#4192) ([#4192](https://github.com/mrveiss/AutoBot-AI/pull/4192))
+
+- *(ci)* Resolve flake8 violations (#4158) (#4177) ([#4177](https://github.com/mrveiss/AutoBot-AI/pull/4177))
+
+- *(events)* Validate artifact serialization (#4178) (#4199) ([#4199](https://github.com/mrveiss/AutoBot-AI/pull/4199))
+
+- *(llm)* Remove unused imports in model_param_registry_test (#3257) (#4205) ([#4205](https://github.com/mrveiss/AutoBot-AI/pull/4205))
+
+- *(ci)* Add required env-file flag to docker compose commands (#4123) (#4220) ([#4220](https://github.com/mrveiss/AutoBot-AI/pull/4220))
+
+- *(install)* Validate critical services exist before Ansible deployment (#4124) (#4134) ([#4134](https://github.com/mrveiss/AutoBot-AI/pull/4134))
+
+- *(ci)* Update Security Scanning workflow action versions (#4127) (#4153) ([#4153](https://github.com/mrveiss/AutoBot-AI/pull/4153))
+
+- *(ci)* Resolve dependency conflicts in CI/CD pipeline (#4126) (#4135) ([#4135](https://github.com/mrveiss/AutoBot-AI/pull/4135))
+
+- *(install)* Validate critical services exist before Ansible deployment (#4124) (#4146) ([#4146](https://github.com/mrveiss/AutoBot-AI/pull/4146))
+
+- *(slm)* Monitor slm-agent.service on all nodes (#4129) (#4133) ([#4133](https://github.com/mrveiss/AutoBot-AI/pull/4133))
+
+- *(slm)* Create slm-admin-ui service for frontend health monitoring (#4120) (#4122) ([#4122](https://github.com/mrveiss/AutoBot-AI/pull/4122))
+
+- *(install)* Distribute autobot-slm-agent in step [3/7] (#4116) (#4121) ([#4121](https://github.com/mrveiss/AutoBot-AI/pull/4121))
+
+- *(knowledge)* Fix TaskStatusManager @classmethod bugs and add tests (#4103)
+
+- *(slm)* Resolve pyopenssl/pysaml2 dependency conflict (#4106)
+
+- *(backend)* Sync docs directory for knowledge base population (#4100)
+
+- *(ansible)* AI Stack systemd services use correct EnvironmentFile path (#4088)
+
+- *(ai-stack)* ChromaDB health check uses correct endpoint
+
+- *(frontend)* Correct ssot-config import in LiveEventService
+
+- *(frontend)* LiveEventService uses wrong host for WebSocket connection
+
+- *(ansible)* ChromaDB host detection for co-located vs distributed deployments
+
+- *(backend)* Add missing get_redis_client import in advanced_cache_manager.py
+
+- *(frontend)* Remove broken pause/resume calls in visibility handler (#3999)
+
+- *(causality)* Resolve 3 critical causal reasoning blocking issues
+
+- *(knowledge)* Inject redis client, fix entity type patterns, key prefix, config model name, UTC datetime (#3384)
+
+- *(infrastructure)* Change Playwright service port from 3000 to 9001 (#4052)
+
+- *(browser)* Resolve Playwright Chromium launch failure (#4060) (#4066) ([#4066](https://github.com/mrveiss/AutoBot-AI/pull/4066))
+
+- *(analytics)* Use vLLM model name in cache key (instead of Ollama default) (#4054) (#4065) ([#4065](https://github.com/mrveiss/AutoBot-AI/pull/4065))
+
+- *(frontend)* Resolve CodebaseAnalytics dashboard rendering gaps (#4063) (#4067) ([#4067](https://github.com/mrveiss/AutoBot-AI/pull/4067))
+
+- *(infrastructure)* Resolve ChromaDB protobuf mismatch and Playwright port conflict
+
+- *(redis)* Await coroutine before ping in KB initialization (#3962) (#4051) ([#4051](https://github.com/mrveiss/AutoBot-AI/pull/4051))
+
+- *(analytics)* Add data validation to all CodeQualityDashboard loaders
+
+- *(analytics)* Validate complexity data structure before accessing properties
+
+- *(frontend)* Remove invalid Tailwind class font-inherit from FileBrowserHeader
+
+- *(perf)* Add request deduplication and debouncing for batch status API (#4006) (#4028) ([#4028](https://github.com/mrveiss/AutoBot-AI/pull/4028))
+
+- *(frontend)* Handle null/undefined score in QualityScoreBadge (#4016) (#4044) ([#4044](https://github.com/mrveiss/AutoBot-AI/pull/4044))
+
+- Lazy-load Cytoscape chart components (#3998) (#4018) ([#4018](https://github.com/mrveiss/AutoBot-AI/pull/4018))
+
+- Memoize filteredSecrets computation with cache (#4000) (#4020) ([#4020](https://github.com/mrveiss/AutoBot-AI/pull/4020))
+
+- Add visibilitychange listener to pause message polling (#3999) (#4021) ([#4021](https://github.com/mrveiss/AutoBot-AI/pull/4021))
+
+- *(perf)* Lazy-load large components and add CSS containment (#4003, #4005) (#4029) ([#4029](https://github.com/mrveiss/AutoBot-AI/pull/4029))
+
+- *(perf)* Add request deduplication and debouncing for batch status API (#4006) (#4026) ([#4026](https://github.com/mrveiss/AutoBot-AI/pull/4026))
+
+- *(perf)* Replace deep watcher with length-based watch on KnowledgeGraph3D (#4004) (#4025) ([#4025](https://github.com/mrveiss/AutoBot-AI/pull/4025))
+
+- *(perf)* Replace deep watcher with individual property watchers on TerminalSettings (#4002) (#4024) ([#4024](https://github.com/mrveiss/AutoBot-AI/pull/4024))
+
+- *(perf)* Replace deep watcher with shallow length watch on TerminalOutput (#4001) (#4023) ([#4023](https://github.com/mrveiss/AutoBot-AI/pull/4023))
+
+- *(perf)* Lazy-load large components and add CSS containment (#4003, #4005)
+
+- *(redis)* Await async Redis client coroutine in KB initialization (#3962) (#4027) ([#4027](https://github.com/mrveiss/AutoBot-AI/pull/4027))
+
+- *(config)* Migrate chat_history/base.py to ssot_config, eliminate double ConfigManager instantiation (#3945) (#4019) ([#4019](https://github.com/mrveiss/AutoBot-AI/pull/4019))
+
+- Prevent toFixed() error on undefined quality_threshold in KnowledgeVerificationQueue
+
+- *(frontend)* Migrate vite config from deprecated esbuildOptions to rolldownOptions (#3967) (#3996) ([#3996](https://github.com/mrveiss/AutoBot-AI/pull/3996))
+
+- Fetch real audit logs from backend API in SecretAuditLog (#3988) (#3991) ([#3991](https://github.com/mrveiss/AutoBot-AI/pull/3991))
+
+- Fetch real secrets from backend API in SecretVault (#3987) (#3995) ([#3995](https://github.com/mrveiss/AutoBot-AI/pull/3995))
+
+- Fetch real participant roles from session API in ParticipantList (#3986) (#3994) ([#3994](https://github.com/mrveiss/AutoBot-AI/pull/3994))
+
+- *(frontend)* Fetch users from API in InviteUserDialog (#3985) (#3992) ([#3992](https://github.com/mrveiss/AutoBot-AI/pull/3992))
+
+- Fetch user/group names from API in ShareKnowledgeDialog (#3984)
+
+- *(kb)* Add ChromaDB service monitoring to health checks and API (#3461)
+
+- *(deps)* Relax protobuf constraint to <7.0.0 for opentelemetry compatibility (#3971)
+
+- *(frontend)* Remove duplicate KnowledgeRepository instance from KnowledgeSearch (#3969)
+
+- *(sec)* Document vanna CVE monitoring (#3445)
+
+- *(deps)* Resolve protobuf version incompatibility with chromadb (#3971)
+
+- Remove non-existent LLMInterface.initialize() calls (#3974)
+
+- Add missing scrollbars to file lists and upload progress
+
+- *(hardening)* Enhance hook to catch single-quoted path literals (#3939) (#3968) ([#3968](https://github.com/mrveiss/AutoBot-AI/pull/3968))
+
+- *(frontend)* Remove duplicate :repository prop in KBSearchResultPanel (#3970) ([#3970](https://github.com/mrveiss/AutoBot-AI/pull/3970))
+
+- *(config)* Add depth limit to deep_merge on non-sync paths (#3931)
+
+- *(security)* Add CodeQL suppression for well-hardened xdotool command execution (#3938)
+
+- *(config)* Add depth limit to deep_merge on non-sync paths (#3931)
+
+- *(redis)* Resolve coroutine handling in KB async Redis initialization (#3962)
+
+- *(deployment)* Add PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python to ChromaDB systemd service
+
+- *(llm)* Use DEFAULT_LLM_MODEL instead of ROUTING_MODEL in think_tool/rlm (#3948) (#3960) ([#3960](https://github.com/mrveiss/AutoBot-AI/pull/3960))
+
+- *(config)* Remove broken UnifiedConfig imports from code_analysis (#3937) (#3959) ([#3959](https://github.com/mrveiss/AutoBot-AI/pull/3959))
+
+- *(hardening)* Expand hardcoding-prevention hook to detect single-quoted literals (#3939)
+
+- *(frontend)* Remove as-any cast and deduplicate KnowledgeRepository in KBSearchResultPanel (#3940)
+
+- *(analytics)* Record correct vLLM model name in chat_completion_optimized (#3943)
+
+- *(config)* Raise _SYNC_MAX_DEPTH to accommodate 6+ level payloads (#3946)
+
+- *(llm)* Use DEFAULT_LLM_MODEL in think_tool and rlm modules (#3948)
+
+- *(frontend)* Remove as-any cast and duplicate KnowledgeRepository in KBSearchResultPanel (#3940)
+
+- *(security)* Path traversal guard on terminal transcript writes (#3164) ([#3942](https://github.com/mrveiss/AutoBot-AI/pull/3942))
+
+- *(security)* Path traversal guard on terminal transcript writes (#3164) (#3941) ([#3941](https://github.com/mrveiss/AutoBot-AI/pull/3941))
+
+- *(security)* Address CodeQL clear-text-storage, logging, and injection alerts (#3205) (#3930) ([#3930](https://github.com/mrveiss/AutoBot-AI/pull/3930))
+
+- *(test)* Add await manager.initialize() to 4 ChatHistoryManager sites in concurrency_safety_test (#3916) (#3927) ([#3927](https://github.com/mrveiss/AutoBot-AI/pull/3927))
+
+- *(agent_loop)* Add default phase_completed to IterationResult — TypeError on every iteration (#3917) ([#3918](https://github.com/mrveiss/AutoBot-AI/pull/3918))
+
+- *(llm)* Cache bypass, empty model_name, unknown session_id, silent adapter errors (#3858 #3860 #3861 #3866) ([#3914](https://github.com/mrveiss/AutoBot-AI/pull/3914))
+
+- *(chat)* ChatHistoryManager.initialize() — implement real async init (#3886) ([#3908](https://github.com/mrveiss/AutoBot-AI/pull/3908))
+
+- *(config)* Settings sync allowlist, depth limit, async file ops + tests (#3881 #3882) ([#3907](https://github.com/mrveiss/AutoBot-AI/pull/3907))
+
+- *(llm)* Fix LLMSettings env parsing SettingsError that blocks test collection (#3843) (#3898) ([#3898](https://github.com/mrveiss/AutoBot-AI/pull/3898))
+
+- *(agent_loop)* Don't add halted tool to executed list; surface error to LLM (#3859 #3862) ([#3903](https://github.com/mrveiss/AutoBot-AI/pull/3903))
+
+- *(config)* Use explicit None checks in startup validation (#3880) (#3897) ([#3897](https://github.com/mrveiss/AutoBot-AI/pull/3897))
+
+- *(agent_loop)* Robust tool-call hash + repetition-halt guard (#3868 #3874 #3877) ([#3899](https://github.com/mrveiss/AutoBot-AI/pull/3899))
+
+- *(ansible)* Deploy permission_rules.yaml to infrastructure config path (#3873) (#3891) ([#3891](https://github.com/mrveiss/AutoBot-AI/pull/3891))
+
+- *(knowledge)* Resolve async Redis client coroutine ping error (#3872) (#3890) ([#3890](https://github.com/mrveiss/AutoBot-AI/pull/3890))
+
+- *(security)* Apply validate_path() to fix path-injection CodeQL alerts (#3164) (#3875) ([#3875](https://github.com/mrveiss/AutoBot-AI/pull/3875))
+
+- *(a2a)* Guard AUTOBOT_A2A_CARD_TTL int() cast against invalid env var (#3824) (#3869) ([#3869](https://github.com/mrveiss/AutoBot-AI/pull/3869))
+
+- *(voice)* Wire VoiceInterface into app.state, guard endpoints with 503 (#3848) (#3867) ([#3867](https://github.com/mrveiss/AutoBot-AI/pull/3867))
+
+- *(chat)* Use ModelConfig.CHAT_NUM_CTX — was referencing wrong class ModelConstants
+
+- *(ansible)* Add notify+flush_handlers to backend role — restart workers on autobot_shared reinstall (#3856)
+
+- *(orchestration)* Guard _save_checkpoint so failures never fail a successful step (#3825) (#3852) ([#3852](https://github.com/mrveiss/AutoBot-AI/pull/3852))
+
+- *(config)* Add alias to AutoBotConfig.path to prevent PATH env var collision (#3851)
+
+- *(chat-workflow)* Remove system_prompt from _build_continuation_prompt to fix double-injection (#3784) (#3791) ([#3791](https://github.com/mrveiss/AutoBot-AI/pull/3791))
+
+- *(ansible)* Inject SLM secrets into standalone deploy extra_vars (#3519) (#3780) ([#3780](https://github.com/mrveiss/AutoBot-AI/pull/3780))
+
+- *(ansible)* Inject SLM secrets into standalone deploy extra_vars (#3773) ([#3773](https://github.com/mrveiss/AutoBot-AI/pull/3773))
+
+- *(backend)* Allow any authenticated user to GET /review/{id} (#3754) (#3772) ([#3772](https://github.com/mrveiss/AutoBot-AI/pull/3772))
+
+- *(chat-workflow)* Route system prompt via Ollama system field; raise num_ctx to 8192 (#3761) (#3765) ([#3765](https://github.com/mrveiss/AutoBot-AI/pull/3765))
+
+- *(frontend)* Clear auto-save interval on ChatController destroy (#3749) (#3766) ([#3766](https://github.com/mrveiss/AutoBot-AI/pull/3766))
+
+- *(config)* Canonicalize browser host env var to AUTOBOT_BROWSER_SERVICE_HOST ([#3764](https://github.com/mrveiss/AutoBot-AI/pull/3764))
+
+- *(monitoring)* Replace hardcoded 172.16.168.25 with $browser_vm_ip variable in Grafana dashboard ([#3763](https://github.com/mrveiss/AutoBot-AI/pull/3763))
+
+- *(config)* Replace hardcoded 172.16.168.* IPs with named placeholders in .env.example ([#3762](https://github.com/mrveiss/AutoBot-AI/pull/3762))
+
+- *(frontend)* Guard loadReview against undefined reviewId (#3755) (#3759) ([#3759](https://github.com/mrveiss/AutoBot-AI/pull/3759))
+
+- *(frontend)* Clear auto-save interval on ChatController destroy ([#3760](https://github.com/mrveiss/AutoBot-AI/pull/3760))
+
+- *(tests)* Handle https→wss protocol upgrade in simple_terminal.e2e_test.py ([#3758](https://github.com/mrveiss/AutoBot-AI/pull/3758))
+
+- *(tests)* Evaluate get_test_backend_url() lazily in TakeoverTestClient (#3747) (#3756) ([#3756](https://github.com/mrveiss/AutoBot-AI/pull/3756))
+
+- *(browser)* Replace hardcoded :3000 with NetworkConstants.BROWSER_SERVICE_PORT in web_crawler.py fallback (#3728) (#3731) ([#3731](https://github.com/mrveiss/AutoBot-AI/pull/3731))
+
+- *(backend)* Remove total timeout from LLM streaming — use connect-only timeout (#3732) (#3737) ([#3737](https://github.com/mrveiss/AutoBot-AI/pull/3737))
+
+- *(tests)* Correct stale src.tool_discovery patch path in tool_discovery_test (#3722) (#3738) ([#3738](https://github.com/mrveiss/AutoBot-AI/pull/3738))
+
+- *(tests)* Update stale src.tool_discovery mock path (#3722) ([#3734](https://github.com/mrveiss/AutoBot-AI/pull/3734))
+
+- *(frontend)* Remove duplicate withSourceId() wrap in Redis health URL (#3714) ([#3715](https://github.com/mrveiss/AutoBot-AI/pull/3715))
+
+- *(ansible)* Idempotent autobot:autobot ownership on Redis dirs (#3396) ([#3721](https://github.com/mrveiss/AutoBot-AI/pull/3721))
+
+- *(backend)* Rate-limit AI Stack connection error logging (#3686) ([#3720](https://github.com/mrveiss/AutoBot-AI/pull/3720))
+
+- *(ansible)* Add post-deploy smoke test to backend role (#3687) ([#3719](https://github.com/mrveiss/AutoBot-AI/pull/3719))
+
+- *(ansible)* AUTOBOT_CHROMADB_HOST fallback uses backend_ai_stack_host (#3541) ([#3717](https://github.com/mrveiss/AutoBot-AI/pull/3717))
+
+- *(frontend)* Remove dead loadReview() — GET /review/{id} has no backend storage (#3701) ([#3713](https://github.com/mrveiss/AutoBot-AI/pull/3713))
+
+- *(frontend)* Use wss:// on HTTPS for CodeQualityDashboard WebSocket connection (#3702) ([#3711](https://github.com/mrveiss/AutoBot-AI/pull/3711))
+
+- *(frontend)* Remove spurious /analytics prefix from code-review pattern preference URLs (#3699) ([#3709](https://github.com/mrveiss/AutoBot-AI/pull/3709))
+
+- *(frontend)* Correct useEvolution base URL from /analytics/evolution to /evolution (#3698) ([#3707](https://github.com/mrveiss/AutoBot-AI/pull/3707))
+
+- *(slm-frontend)* Safe WebSocket URL construction when getBackendUrl() is absolute (#3673) ([#3695](https://github.com/mrveiss/AutoBot-AI/pull/3695))
+
+- *(backend)* Replace bare REDIS_HOST with AUTOBOT_REDIS_HOST in chat_history (no-op — already in #3672) ([#3693](https://github.com/mrveiss/AutoBot-AI/pull/3693))
+
+- *(analytics)* Scope codebase analytics caches and live scans to source_id (#3685) ([#3689](https://github.com/mrveiss/AutoBot-AI/pull/3689))
+
+- *(backend)* Fix REDIS_HOST → AUTOBOT_REDIS_HOST in chat history modules ([#3672](https://github.com/mrveiss/AutoBot-AI/pull/3672))
+
+- *(backend)* Add TTL_24_HOURS to chat_workflow/manager.py import (#3646)
+
+- *(backend)* Default SLM_URL to localhost and deduplicate startup warning (#3655) ([#3667](https://github.com/mrveiss/AutoBot-AI/pull/3667))
+
+- *(ansible)* Guard groups['database'] lookup in deploy-backend-local.yml (#3651) ([#3664](https://github.com/mrveiss/AutoBot-AI/pull/3664))
+
+- *(slm)* Pass auth token to PasswordChangeForm — was always sending empty Bearer
+
+- *(backend)* Guard context_window_manager against list-format llm_models.yaml (#3647)
+
+- *(ansible)* Sync standalone autobot_shared on backend deploy (#3649) ([#3659](https://github.com/mrveiss/AutoBot-AI/pull/3659))
+
+- *(backend)* Normalize naive datetimes from Redis in stats and analytics (#3620) ([#3637](https://github.com/mrveiss/AutoBot-AI/pull/3637))
+
+- *(backend)* Normalize naive datetime from Redis in knowledge_manager (#3618) ([#3636](https://github.com/mrveiss/AutoBot-AI/pull/3636))
+
+- *(backend)* Use local time in is_business_hours and is_weekend (#3619) ([#3635](https://github.com/mrveiss/AutoBot-AI/pull/3635))
+
+- *(backend)* Replace naive datetime.now() with UTC-aware calls (#3613) (#3615) ([#3615](https://github.com/mrveiss/AutoBot-AI/pull/3615))
+
+- *(ansible)* Correct systemd startup ordering for all core services (#3609)
+
+- *(ansible)* Restart backend+celery when code is synced (#3608)
+
+- *(ansible)* Preserve wizard's slm_colocated_frontend in role set_fact; fix include_vars precedence in Phase 4c
+
+- *(ansible)* Fix code_source ownership before git reset to unblock pre-flight sync
+
+- *(ansible)* Use set_fact to override slm_colocated_frontend — include_vars beats task vars
+
+- *(ansible)* Replace fragile group-based SLM detection in Phase 4c with filesystem stat
+
+- *(ansible)* Pass slm_colocated_frontend=true when re-rendering nginx in co-located mode
+
+- *(ansible)* Fix ai-stack source file path — playbooks/ is 3 levels from code_source
+
+- *(ansible)* Add force: yes to pre-flight git sync to handle local modifications
+
+- *(ai-stack)* Remove llama-index-vector-stores-redis from requirements-ai.txt
+
+- *(llm)* Exclude temperature fallback for reasoning models in model_param_registry (#3257)
+
+- *(agents)* Fix health_check call site + deserialize facts in _handle_filter_facts (#3387)
+
+- *(ansible)* Chown frontend dir after rsync to fix npm EACCES on package-lock.json
+
+- *(ansible)* Wait for backend health before VNC credential registration (#3592) ([#3594](https://github.com/mrveiss/AutoBot-AI/pull/3594))
+
+- *(chat-workflow)* Reset loop state per turn + cap fingerprint history (#3583) ([#3587](https://github.com/mrveiss/AutoBot-AI/pull/3587))
+
+- *(ansible)* Extend python312 guard to backend role in deploy.yml (#3584) ([#3585](https://github.com/mrveiss/AutoBot-AI/pull/3585))
+
+- *(llm)* Betas routed via extra_headers + temperature=1 enforced for thinking (#3582) ([#3586](https://github.com/mrveiss/AutoBot-AI/pull/3586))
+
+- *(llm)* Betas routed via extra_headers + temperature=1 enforced for thinking (#3582)
+
+- *(ansible)* AUTOBOT_CHROMADB_HOST uses backend_ai_stack_host on WSL2 (#3541) (#3572) ([#3572](https://github.com/mrveiss/AutoBot-AI/pull/3572))
+
+- *(ansible)* Deploy.yml standalone redeploy now installs python3.12 prerequisite (#3538) (#3568) ([#3568](https://github.com/mrveiss/AutoBot-AI/pull/3568))
+
+- *(multimodal)* Retire multimodal_processor_impl.py — delete dead file (#3579) ([#3581](https://github.com/mrveiss/AutoBot-AI/pull/3581))
+
+- *(ansible)* Add pre-flight git pull to provision-fleet-roles.yml (#3561) (#3567) ([#3567](https://github.com/mrveiss/AutoBot-AI/pull/3567))
+
+- *(multimodal)* Remove shadowed multimodal_processor.py — merge into package (#3554) ([#3558](https://github.com/mrveiss/AutoBot-AI/pull/3558))
+
+- *(media)* Defer VisionProcessor import to break circular dependency (#3551)
+
+- *(ansible)* Ai-stack role uses python3.12 for venv + fix pip cache (#3534) (#3536) ([#3536](https://github.com/mrveiss/AutoBot-AI/pull/3536))
+
+- *(setup_wizard)* Auto-derive backend_chromadb_host from ai_stack_host for fleet deployments (#3523) ([#3524](https://github.com/mrveiss/AutoBot-AI/pull/3524))
+
+- *(setup_wizard)* Propagate injected ai_stack_host into infra_vars (#3515) ([#3522](https://github.com/mrveiss/AutoBot-AI/pull/3522))
+
+- *(slm)* Skip non-path tokens in _check_sensitive_path to fix 3 test failures (#3520)
+
+- *(ansible)* Add backend_chromadb_host/port defaults to backend role (#3514) (#3518) ([#3518](https://github.com/mrveiss/AutoBot-AI/pull/3518))
+
+- *(ansible)* Auto-detect WSL2 and set correct ai_stack_host per deployment (#3503) (#3516) ([#3516](https://github.com/mrveiss/AutoBot-AI/pull/3516))
+
+- *(ansible)* Inject AUTOBOT_INTERNAL_API_KEY into SLM and backend process env (#3512) (#3513) ([#3513](https://github.com/mrveiss/AutoBot-AI/pull/3513))
+
+- *(frontend)* Gate Desktop and CustomDashboard nav links to admins (#3502) (#3517) ([#3517](https://github.com/mrveiss/AutoBot-AI/pull/3517))
+
+- *(ansible)* Set ai_user/ai_group to autobot for co-located ai-stack deployment (#3501) (#3510) ([#3510](https://github.com/mrveiss/AutoBot-AI/pull/3510))
+
+- *(ansible)* Add AUTOBOT_AI_STACK_HOST/PORT to backend env template (#3503) (#3509) ([#3509](https://github.com/mrveiss/AutoBot-AI/pull/3509))
+
+- *(ansible)* Create src/ directory before creating backend module symlinks (#3500) (#3507) ([#3507](https://github.com/mrveiss/AutoBot-AI/pull/3507))
+
+- *(analytics)* Use route.params.sourceId in sub-tab nav links, start polling after sync (#3497, #3498)
+
+- *(agents)* Asyncio.Lock collision causes health check failure in StandardizedAgent (#3491)
+
+- *(ansible)* Ai-stack role missing source deploy, wrong venv, wrong user for co-located (#3491)
+
+- *(chat)* Normalize SSE error key, fix empty exc string, fix status override
+
+- *(slm)* Add sensitive-path denylist for cat/head/tail in nodes_execution.py (#3475) (#3496) ([#3496](https://github.com/mrveiss/AutoBot-AI/pull/3496))
+
+- *(slm)* Block find -delete and file-write actions in argument guard (#3474) (#3495) ([#3495](https://github.com/mrveiss/AutoBot-AI/pull/3495))
+
+- *(slm)* Add admin guard to tools-terminal, files, novnc, voice, mcp routes (#3490) (#3494) ([#3494](https://github.com/mrveiss/AutoBot-AI/pull/3494))
+
+- *(slm)* Require explicit git stash subcommand — bare stash returns HTTP 400 (#3478) (#3486) ([#3486](https://github.com/mrveiss/AutoBot-AI/pull/3486))
+
+- *(ansible)* Update deploy-aiml.yml chromadb_port default from 8000 to 8100 (#3462) (#3483) ([#3483](https://github.com/mrveiss/AutoBot-AI/pull/3483))
+
+- *(slm)* Add admin guard to BrowserTool.vue route (#3470) (#3484) ([#3484](https://github.com/mrveiss/AutoBot-AI/pull/3484))
+
+- *(tts)* Call _check_cache_writable before pocket_tts import, remove redundant mkdir (#3480) (#3482) ([#3482](https://github.com/mrveiss/AutoBot-AI/pull/3482))
+
+- *(frontend)* Extract error/message field from JSON error bodies instead of [object Object] (#3463) (#3481) ([#3481](https://github.com/mrveiss/AutoBot-AI/pull/3481))
+
+- *(tts)* Extend _check_cache_writable to validate hub/xet subdirs (#3471) ([#3473](https://github.com/mrveiss/AutoBot-AI/pull/3473))
+
+- *(tts)* Validate cache directory writability before model load (#3466) ([#3467](https://github.com/mrveiss/AutoBot-AI/pull/3467))
+
+- *(setup)* Auto-inject ai-stack on backend node when no fleet node has it (#3461) ([#3468](https://github.com/mrveiss/AutoBot-AI/pull/3468))
+
+- *(tts)* Change TTS worker port 8082→8083, fix model cache ownership (#3431)
+
+- *(chat)* Resolve 'Error: Error:' double-wrap in SSE error responses (#3458)
+
+- *(wizard)* Co-located backend binds wrong host:port, SLM frontend missing VITE_API_URL (#3426)
+
+- *(slm)* Replace shell denylist with allowlist to prevent command injection (#3421)
+
+- *(ansible)* Rename backend_port to backend_nginx_port in distributed_setup to prevent port conflict (#3431)
+
+- *(backend)* Add authentication to Docker deployment API endpoints (#3423)
+
+- *(slm-agent)* Move get_redis_client to top-level import to fix test patching (#3422)
+
+- *(knowledge-graph)* Remove non-existent _destructor() call — Three.js teardown already complete (#3420)
+
+- Lazy-load KnowledgeGraph3D to defer Three.js loading (#4017) ([#4017](https://github.com/mrveiss/AutoBot-AI/pull/4017))
+
+- Fetch user/group names from API in ShareKnowledgeDialog (#3990) ([#3990](https://github.com/mrveiss/AutoBot-AI/pull/3990))
+
+- *(security)* Harden ALLOWED_EXECUTABLES — dpkg/git-stash/find guards (#3450) ([#3457](https://github.com/mrveiss/AutoBot-AI/pull/3457))
+
+- *(security)* Revert get_current_user on /events/sync — agents have no bearer token (#3452) ([#3472](https://github.com/mrveiss/AutoBot-AI/pull/3472))
+
+- *(security)* Add auth to browser MCP endpoints (#3451) (#3460) ([#3460](https://github.com/mrveiss/AutoBot-AI/pull/3460))
+
+- *(security)* Add auth to /events/sync endpoint (#3452) (#3459) ([#3459](https://github.com/mrveiss/AutoBot-AI/pull/3459))
+
+- *(workflow)* Prevent checkpoint expiry for paused workflows (#3231) (#3448) ([#3448](https://github.com/mrveiss/AutoBot-AI/pull/3448))
+
+- *(analytics)* Pass ComputedRef to useEvolution to prevent stale source_id on project nav (#3436)
+
+- *(security)* Bump vulnerable dependency versions across requirements files
+
+- *(frontend)* PhaseProgressionIndicator calls non-existent project/phase API endpoints (#3413) ([#3413](https://github.com/mrveiss/AutoBot-AI/pull/3413))
+
+- *(knowledge-graph)* Dispose Three.js GPU resources on KnowledgeGraph3D unmount (#3412) ([#3412](https://github.com/mrveiss/AutoBot-AI/pull/3412))
+
+- *(knowledge-graph)* Resize KnowledgeGraph3D canvas when container dimensions change (#3411) ([#3411](https://github.com/mrveiss/AutoBot-AI/pull/3411))
+
+- *(knowledge-graph)* Call cy.resize()/fit() after switching back to 2D view (#3410) ([#3410](https://github.com/mrveiss/AutoBot-AI/pull/3410))
+
+- *(backend)* Fall through on corrupt cache entry; fix cache_function JSONResponse serialisation (#3380) ([#3380](https://github.com/mrveiss/AutoBot-AI/pull/3380))
+
+- *(test)* Align chat_knowledge e2e test path with router registration (#3349) (#3378) ([#3378](https://github.com/mrveiss/AutoBot-AI/pull/3378))
+
+- *(backend)* Log warning instead of silently swallowing exceptions in cache metric helpers (#3350) (#3377) ([#3377](https://github.com/mrveiss/AutoBot-AI/pull/3377))
+
+- *(backend)* Register kb_librarian router in main.py (#3348) (#3379) ([#3379](https://github.com/mrveiss/AutoBot-AI/pull/3379))
+
+- *(backend)* Move empty-prefix router prefixes to registry tuples, eliminate /api/health shadowing (#3355) (#3371) ([#3371](https://github.com/mrveiss/AutoBot-AI/pull/3371))
+
+- *(test)* Correct chat_knowledge underscore paths to chat-knowledge hyphen (#3349) (#3366) ([#3366](https://github.com/mrveiss/AutoBot-AI/pull/3366))
+
+- *(knowledge-graph)* Teardown, i18n, shallowRef typing, nextTick, RAF leak (#3363) (#3369) ([#3369](https://github.com/mrveiss/AutoBot-AI/pull/3369))
+
+- *(chat-workflow)* Wire _inject_mid_conversation_warning into RLM path + move tests (#3260) (#3362) ([#3362](https://github.com/mrveiss/AutoBot-AI/pull/3362))
+
+- *(knowledge)* Doc_indexer stale path, frontmatter parsing, _index.md exclusion (#3299) (#3360) ([#3360](https://github.com/mrveiss/AutoBot-AI/pull/3360))
+
+- *(frontend)* Add missing i18n key auth.login.footer (#3307) (#3358) ([#3358](https://github.com/mrveiss/AutoBot-AI/pull/3358))
+
+- *(chat-workflow)* Add _inject_mid_conversation_warning helper and document Anthropic restriction (#3260) (#3338) ([#3338](https://github.com/mrveiss/AutoBot-AI/pull/3338))
+
+- *(backend)* Re-enable LLM response caching after FastAPI 0.115.9 fix (#3273) (#3341) ([#3341](https://github.com/mrveiss/AutoBot-AI/pull/3341))
+
+- *(install.sh)* Upsert IP/network keys in preserved secrets to prevent stale values (#3194) (#3337) ([#3337](https://github.com/mrveiss/AutoBot-AI/pull/3337))
+
+- *(backend)* Correct .ports -> .port typo in chromadb client modules (#3329) (#3340) ([#3340](https://github.com/mrveiss/AutoBot-AI/pull/3340))
+
+- *(slm-frontend)* Use bg-autobot-bg-tertiary for toggle off-state (#3187) (#3328) ([#3328](https://github.com/mrveiss/AutoBot-AI/pull/3328))
+
+- *(slm-frontend)* Wire i18n keys in WorkflowLiveDashboard status/connection labels (#3188) (#3324) ([#3324](https://github.com/mrveiss/AutoBot-AI/pull/3324))
+
+- *(slm-frontend)* Group wizard role assignment into deployment categories (#3192) (#3323) ([#3323](https://github.com/mrveiss/AutoBot-AI/pull/3323))
+
+- *(ansible)* Align slm_tls_cert/key defaults with actual cert paths (#3191) (#3327) ([#3327](https://github.com/mrveiss/AutoBot-AI/pull/3327))
+
+- *(install.sh)* Pre-create ansible tmp dirs as autobot user (#3298) (#3326) ([#3326](https://github.com/mrveiss/AutoBot-AI/pull/3326))
+
+- *(slm-frontend)* Replace hardcoded colors with design tokens in AgentSettingsPanel (#3187) (#3322) ([#3322](https://github.com/mrveiss/AutoBot-AI/pull/3322))
+
+- *(docs)* Replace hardcoded 172.16.168.x IPs with VM role placeholders (#3315) ([#3315](https://github.com/mrveiss/AutoBot-AI/pull/3315))
+
+- *(ansible)* Fresh-install issues — SLM frontend rebuild, hostname guard, pg_hba default (#3297) ([#3297](https://github.com/mrveiss/AutoBot-AI/pull/3297))
+
+- *(slm-frontend)* Add node summary header to details slide-over panel (#3306) (#3310) ([#3310](https://github.com/mrveiss/AutoBot-AI/pull/3310))
+
+- *(slm-frontend)* Wire dark mode setting to CSS class (#3305) (#3309) ([#3309](https://github.com/mrveiss/AutoBot-AI/pull/3309))
+
+- *(chat-workflow)* Merge context into system prompt instead of appending second system message (#3260) (#3304) ([#3304](https://github.com/mrveiss/AutoBot-AI/pull/3304))
+
+- *(backend)* Replace hardcoded available_providers with real health checks (#3276) (#3303) ([#3303](https://github.com/mrveiss/AutoBot-AI/pull/3303))
+
+- *(ansible)* Add default filter for network_subnet in Ansible playbooks (#3302) ([#3302](https://github.com/mrveiss/AutoBot-AI/pull/3302))
+
+- *(frontend)* Add missing i18n key auth.login.footer (#3307) (#3308) ([#3308](https://github.com/mrveiss/AutoBot-AI/pull/3308))
+
+- *(code)* Normalise deployment paths in code, scripts, and agent configs
+
+- *(docs)* Update Phase 5/9 references and normalise deployment paths
+
+- *(docs)* Rename Phase 5/9 files to remove implementation-era naming
+
+- *(slm-agent)* Heartbeats 502 in co-located mode, wrong /api/ path (#3268)
+
+- *(config)* Close remaining hardcoded IP gaps after #3226 (#3253) (#3264) ([#3264](https://github.com/mrveiss/AutoBot-AI/pull/3264))
+
+- *(slm-agent)* Heartbeats 502 in co-located mode, wrong /api/ path (#3268) ([#3267](https://github.com/mrveiss/AutoBot-AI/pull/3267))
+
+- *(ansible)* Group/host collision, stale secrets IPs, hardcoded networks (#3266)
+
+- *(ansible)* Load slm_manager defaults in Phase 4c before re-rendering nginx (#3226)
+
+- *(ansible)* Guard all infrastructure.hosts.* template expressions against undefined (#3226)
+
+- *(ansible)* Guard infrastructure.hosts.backend against undefined in slm_manager defaults (#3226)
+
+- *(ansible)* Escape inner double quotes in role defaults YAML Jinja2 lookups (#3226)
+
+- *(agent)* Add auth token to SLM agent event sync requests (#3193) (#3249) ([#3249](https://github.com/mrveiss/AutoBot-AI/pull/3249))
+
+- *(config)* Replace deployment-specific IP ranges and paths with portable env vars (#3226)
+
+- *(config)* Remove hardcoded 172.16.168.x IPs from all scripts, Ansible, and shared modules (#3226)
+
+- *(config)* Remove all hardcoded 172.16.168.x IPs from config, env, and test files (#3226)
+
+- *(types)* Type SLM API security function responses instead of unknown (#3190) ([#3248](https://github.com/mrveiss/AutoBot-AI/pull/3248))
+
+- *(orchestration)* Resolve status type mismatch in NodeHealthCard/ServiceActionButtons (#3195) (#3247) ([#3247](https://github.com/mrveiss/AutoBot-AI/pull/3247))
+
+- *(autoResearch)* Align useAutoResearch with composable error handling pattern (#3210) (#3246) ([#3246](https://github.com/mrveiss/AutoBot-AI/pull/3246))
+
+- *(ai)* Use init_empty_weights() in model_inspector + add tests (#3186) (#3244) ([#3244](https://github.com/mrveiss/AutoBot-AI/pull/3244))
+
+- *(voice)* Replace unsafe 'as string' casts with typed voiceSpeak response (#3197) (#3241) ([#3241](https://github.com/mrveiss/AutoBot-AI/pull/3241))
+
+- *(mcp)* Enforce PROJECT_ROOT restriction in executeCommand (#3216) (#3239) ([#3239](https://github.com/mrveiss/AutoBot-AI/pull/3239))
+
+- *(execution)* Inject notification_config into execution_context (#3172) (#3237) ([#3237](https://github.com/mrveiss/AutoBot-AI/pull/3237))
+
+- *(html)* Strip script/style content in _fallback_html_strip (#3214) (#3236) ([#3236](https://github.com/mrveiss/AutoBot-AI/pull/3236))
+
+- *(workflow)* Add trigger_payload field to ActiveWorkflow dataclass (#3178) (#3235) ([#3235](https://github.com/mrveiss/AutoBot-AI/pull/3235))
+
+- *(quantization)* Move load_in_4bit to extra_kwargs (#3179) (#3234) ([#3234](https://github.com/mrveiss/AutoBot-AI/pull/3234))
+
+- *(api)* Add auth guard to DELETE /sessions/{id}/checkpoints (#3173) (#3233) ([#3233](https://github.com/mrveiss/AutoBot-AI/pull/3233))
+
+- *(config)* Replace deployment-specific IP ranges and paths with portable env vars (#3226)
+
+- *(config)* Remove hardcoded 172.16.168.x IPs from all scripts, Ansible, and shared modules (#3226)
+
+- *(config)* Remove all hardcoded 172.16.168.x IPs from config, env, and test files (#3226)
+
+- *(config)* Replace all hardcoded IP fallbacks with empty strings (#3226)
+
+- *(ansible)* Replace all remaining hardcoded IPs and DNS servers with variables (#3226)
+
+- *(ansible)* Remove all hardcoded IPs — derive subnet/hosts from install-time secrets (#3226)
+
+- *(nginx)* Add default for frontend_dist_dir in co-located template (#3226)
+
+- *(install)* Clear IP cache on reinstall + heal stale node IP on startup (#3194)
+
+- *(provision)* Block/rescue VNC registration + colocation by node_id (#3226 #3227)
+
+- *(provision)* VNC registration non-fatal + frontend_backend_host undefined (#3226 #3227)
+
+- *(slm)* Self-register SLM manager node on startup if missing from DB (#3225)
+
+- *(wizard)* Auto-save roles before advancing assign_roles step (#3220)
+
+- *(security)* Resolve Python warning-severity CodeQL alerts (#3164) ([#3204](https://github.com/mrveiss/AutoBot-AI/pull/3204))
+
+- *(security)* Preserve slug lookahead semantics and URL port/query support (#3164)
+
+- *(security)* Resolve Python warning-severity CodeQL alerts (#3164)
+
+- *(security)* Resolve ~14 JavaScript CodeQL alerts (#3164) ([#3183](https://github.com/mrveiss/AutoBot-AI/pull/3183))
+
+- *(security)* Complete sessionStorage migration for auth tokens (#3164)
+
+- *(security)* Resolve ~14 JavaScript CodeQL alerts (#3164)
+
+- *(install)* Redirect detect_local_ip success message to stderr (#3010)
+
+- *(devops)* Fix co-location check for wizard-generated inventories
+
+- *(frontend)* Replace remaining any types across Vue components and TS files (#3167) (#3180) ([#3180](https://github.com/mrveiss/AutoBot-AI/pull/3180))
+
+- *(security)* Apply path validation to ~66 path-injection alerts (#3164) (#3182) ([#3182](https://github.com/mrveiss/AutoBot-AI/pull/3182))
+
+- *(backend)* Persist notification config to Redis across restarts (#3166) (#3175) ([#3175](https://github.com/mrveiss/AutoBot-AI/pull/3175))
+
+- *(backend)* Load workflow notification_config from execution_context (#3168) (#3171) ([#3171](https://github.com/mrveiss/AutoBot-AI/pull/3171))
+
+- *(frontend)* Remove duplicate /agent-registry route (#3163) (#3169) ([#3169](https://github.com/mrveiss/AutoBot-AI/pull/3169))
+
+- *(devops)* Remove /slm prefix from co-located agent admin URL
+
+- *(devops)* Simplify slm_host template to single-line, remove debug
+
+- *(security)* Fix remaining CodeQL alerts - stack-trace-exposure and path-injection (#3151) (#3162) ([#3162](https://github.com/mrveiss/AutoBot-AI/pull/3162))
+
+- *(types)* Replace 103 more any types in ChatController, ChatRepository, and 5 other files (#3152) (#3158) ([#3158](https://github.com/mrveiss/AutoBot-AI/pull/3158))
+
+- *(install)* Make secrets file readable by autobot group
+
+- *(devops)* Derive slm_host from install-time secrets, not hostvars
+
+- *(devops)* Use explicit 172.16.168.19 for slm_host in slm-nodes.yml
+
+- *(devops)* Check venv directory not venv/bin/python for symlink
+
+- *(deps)* Migrate tailwindcss 3→4 CSS-first config (#2636) ([#3146](https://github.com/mrveiss/AutoBot-AI/pull/3146))
+
+- *(types)* Replace 116 any types with concrete types (#2861) ([#3148](https://github.com/mrveiss/AutoBot-AI/pull/3148))
+
+- *(security)* Fix stack-trace-exposure CodeQL alerts (#1733) ([#3149](https://github.com/mrveiss/AutoBot-AI/pull/3149))
+
+- *(backend)* Pass trigger payload to workflow execution (#3138) (#3144) ([#3144](https://github.com/mrveiss/AutoBot-AI/pull/3144))
+
+- *(devops)* Replace hardcoded 172.16.168.20 with configurable variable (#3137) (#3142) ([#3142](https://github.com/mrveiss/AutoBot-AI/pull/3142))
+
+- *(devops)* Add slm_host to slm-nodes.yml inventory
+
+- *(devops)* Fix recursive template loop in VNC slm_admin_password
+
+- *(devops)* Fix backend pip filter and VNC SLM host resolution
+
+- *(backend)* Auto-inject WorkflowMemory findings into step prompts (#3099) (#3135) ([#3135](https://github.com/mrveiss/AutoBot-AI/pull/3135))
+
+- *(backend)* Start TriggerService background loops during app init (#3100) (#3134) ([#3134](https://github.com/mrveiss/AutoBot-AI/pull/3134))
+
+- *(devops)* Move NPU worker models dir to /var/lib/autobot-npu (#3120)
+
+- *(security)* Sanitize git credential tokens from error messages (#3095)
+
+- *(devops)* Resolve /var/lib/autobot ownership conflict between ai-stack and backend (#3097) (#3119) ([#3119](https://github.com/mrveiss/AutoBot-AI/pull/3119))
+
+- *(backend)* Fix Knowledge Base initialization failure (#3094, #3106) (#3118) ([#3118](https://github.com/mrveiss/AutoBot-AI/pull/3118))
+
+- *(devops)* Add /slm prefix to agent admin_url for co-located mode (#3096) (#3117) ([#3117](https://github.com/mrveiss/AutoBot-AI/pull/3117))
+
+- *(frontend,backend)* Add status polling for code source cards (#3092) (#3116) ([#3116](https://github.com/mrveiss/AutoBot-AI/pull/3116))
+
+- *(devops)* Fix nginx WebSocket proxy and template divergence (#3105, #3108, #3109) (#3115) ([#3115](https://github.com/mrveiss/AutoBot-AI/pull/3115))
+
+- *(npu-worker)* Remove hardcoded backend IP fallback (#3084) (#3114) ([#3114](https://github.com/mrveiss/AutoBot-AI/pull/3114))
+
+- *(backend)* Update dead /ws exempt path to /api/ws (#3110) (#3113) ([#3113](https://github.com/mrveiss/AutoBot-AI/pull/3113))
+
+- *(backend)* Add missing websockets dependency to requirements.txt (#3098) (#3112) ([#3112](https://github.com/mrveiss/AutoBot-AI/pull/3112))
+
+- *(backend)* Reorder analytics routes to fix /sources/summary 404 (#3107) (#3111) ([#3111](https://github.com/mrveiss/AutoBot-AI/pull/3111))
+
+- *(lint)* Shorten nosec comment to fit Black line length
+
+- *(lint)* Add nosec B307 for sandboxed eval in dag_executor
+
+- *(lint)* Remove unused imports detected by autoflake
+
+- *(lint)* Resolve 20 pre-existing flake8 F-code violations
+
+- *(ansible)* Remove self-referencing symlink tasks after rename (#2934, #3090)
+
+- *(tts)* Add HuggingFace auth token support for gated models (#3078) (#3086) ([#3086](https://github.com/mrveiss/AutoBot-AI/pull/3086))
+
+- *(infra)* Replace hardcoded IPs in 2 missed test files (#3077) (#3082) ([#3082](https://github.com/mrveiss/AutoBot-AI/pull/3082))
+
+- *(slm-frontend)* Replace hardcoded proxy targets with env var overrides (#3076) (#3081) ([#3081](https://github.com/mrveiss/AutoBot-AI/pull/3081))
+
+- *(security)* Exempt /api/nodes/ from CSRF middleware for agent heartbeats (#3072) ([#3072](https://github.com/mrveiss/AutoBot-AI/pull/3072))
+
+- *(frontend)* Fix all 115 remaining test failures across 5 files (#2641) (#3066) ([#3066](https://github.com/mrveiss/AutoBot-AI/pull/3066))
+
+- *(infra)* Replace hardcoded IPs in utility scripts with env var overrides (#3051) (#3062) ([#3062](https://github.com/mrveiss/AutoBot-AI/pull/3062))
+
+- *(wizard)* Create deployment records during fleet provisioning (#3032) (#3061) ([#3061](https://github.com/mrveiss/AutoBot-AI/pull/3061))
+
+- *(frontend)* Replace hardcoded IPs in vite.config.ts and ServiceDiscovery (#3052) (#3059) ([#3059](https://github.com/mrveiss/AutoBot-AI/pull/3059))
+
+- *(slm-frontend)* Add env var overrides to ssot-config VM IPs and ports (#3049) (#3057) ([#3057](https://github.com/mrveiss/AutoBot-AI/pull/3057))
+
+- *(hooks)* Strip commit message content before pattern checking (#3041) (#3056) ([#3056](https://github.com/mrveiss/AutoBot-AI/pull/3056))
+
+- *(config)* Replace hardcoded IPs in comments to fix SSOT CI check (#3042) (#3054) ([#3054](https://github.com/mrveiss/AutoBot-AI/pull/3054))
+
+- *(vnc)* Handle both access_token and token field names in SLM auth response (#3053) ([#3053](https://github.com/mrveiss/AutoBot-AI/pull/3053))
+
+- *(browser)* Add code sync from code_source — WorkingDirectory was missing (#3044) ([#3044](https://github.com/mrveiss/AutoBot-AI/pull/3044))
+
+- *(redis)* Set User=redis in systemd override (#3031) ([#3031](https://github.com/mrveiss/AutoBot-AI/pull/3031))
+
+- *(tests)* Update redis_optimizer_test.py fixtures to use await pattern (#3029) (#3030) ([#3030](https://github.com/mrveiss/AutoBot-AI/pull/3030))
+
+- *(ansible)* Preserve dpkg conffiles during role removal and decommission (#3011) (#3028) ([#3028](https://github.com/mrveiss/AutoBot-AI/pull/3028))
+
+- *(install)* Use file-based cache for detect_local_ip across subshells (#3010) (#3027) ([#3027](https://github.com/mrveiss/AutoBot-AI/pull/3027))
+
+- *(slm)* Move co-location detection before SLM frontend build (#3013) (#3025) ([#3025](https://github.com/mrveiss/AutoBot-AI/pull/3025))
+
+- *(ansible)* Re-deploy SLM nginx in co-located mode after frontend provision (#3012) (#3024) ([#3024](https://github.com/mrveiss/AutoBot-AI/pull/3024))
+
+- *(ansible)* Add esbuild install step for frontend build + VNC auth assertion (#3006)
+
+- *(frontend)* Fix mock infrastructure for 8 failing test files (#2641) (#3007) ([#3007](https://github.com/mrveiss/AutoBot-AI/pull/3007))
+
+- *(nginx)* Redirect /slm to /slm/ for SLM frontend access without trailing slash
+
+- *(ansible)* Guard VNC deployment to vnc-role nodes only (#2989) (#3002) ([#3002](https://github.com/mrveiss/AutoBot-AI/pull/3002))
+
+- *(ansible)* Audit and fix 5 ignore_errors bypasses in playbooks (#2950) (#3000) ([#3000](https://github.com/mrveiss/AutoBot-AI/pull/3000))
+
+- *(frontend)* Remove orphaned ApprovalGatePanel.vue and useApprovalGates.ts (#2949) (#2997) ([#2997](https://github.com/mrveiss/AutoBot-AI/pull/2997))
+
+- *(config)* Replace hardcoded IPs in standalone script and model schema (#2983) (#2995) ([#2995](https://github.com/mrveiss/AutoBot-AI/pull/2995))
+
+- *(redis)* Await get_async_client() in 12 remaining callers (#2984) (#2991) ([#2991](https://github.com/mrveiss/AutoBot-AI/pull/2991))
+
+- *(npu)* Wire worker manager injection, safe failover, error propagation (#2985) (#2987) ([#2987](https://github.com/mrveiss/AutoBot-AI/pull/2987))
+
+- *(ansible)* Add tts-worker phase to provisioning + verify clean task guards (#2959) (#2980) ([#2980](https://github.com/mrveiss/AutoBot-AI/pull/2980))
+
+- *(deploy)* Single-host deployment gaps — PostgreSQL, auth, SSOT defaults (#2953) (#2981) ([#2981](https://github.com/mrveiss/AutoBot-AI/pull/2981))
+
+- *(npu)* Wire per-worker task tracking callers and add failover fallback (#2944) (#2970) ([#2970](https://github.com/mrveiss/AutoBot-AI/pull/2970))
+
+- *(redis)* Await get_async_client() coroutine in all callers (#2956) (#2969) ([#2969](https://github.com/mrveiss/AutoBot-AI/pull/2969))
+
+- *(backend)* Deploy config files (llm_models.yaml, permission_rules.yaml) (#2957) (#2972) ([#2972](https://github.com/mrveiss/AutoBot-AI/pull/2972))
+
+- *(slm)* Derive heartbeat URL from SSOT config instead of static IP (#2955) (#2966) ([#2966](https://github.com/mrveiss/AutoBot-AI/pull/2966))
+
+- *(chat)* Resolve run_in_chat_io_executor keyword argument mismatch (#2958) (#2964) ([#2964](https://github.com/mrveiss/AutoBot-AI/pull/2964))
+
+- *(redis)* Fix RDB persistence permissions and vm.overcommit (#2954) (#2962) ([#2962](https://github.com/mrveiss/AutoBot-AI/pull/2962))
+
+- *(ansible)* Audit and fix 31 ignore_errors/failed_when bypasses (#2872) (#2952) ([#2952](https://github.com/mrveiss/AutoBot-AI/pull/2952))
+
+- *(security)* Add CSRF mitigation middleware and security headers (#2858) (#2946) ([#2946](https://github.com/mrveiss/AutoBot-AI/pull/2946))
+
+- *(ansible)* Make slm_manager role idempotent and remove silent failures (#2857) (#2943) ([#2943](https://github.com/mrveiss/AutoBot-AI/pull/2943))
+
+- *(ansible)* Redis service file recovery + VNC slm_host resolution
+
+- *(redis)* Use absolute /usr/bin/redis-cli path for Ansible become context
+
+- *(redis)* Use redis-cli from PATH instead of hardcoded /opt/redis-stack path
+
+- *(redis)* Use full path for redis-cli and show logs when no password set
+
+- *(ai-stack)* Change ChromaDB port from 8000 to 8100 to avoid SLM conflict (#2810)
+
+- *(ansible)* Resolve backend/frontend nginx config conflict on single-host (#2829) (#2935) ([#2935](https://github.com/mrveiss/AutoBot-AI/pull/2935))
+
+- *(backend)* Replace hardcoded Redis DB numbers with SSOT env vars (#2806) (#2933) ([#2933](https://github.com/mrveiss/AutoBot-AI/pull/2933))
+
+- *(ansible)* Remove default inventory from ansible.cfg to prevent merge (#2837) (#2931) ([#2931](https://github.com/mrveiss/AutoBot-AI/pull/2931))
+
+- *(frontend)* Use --legacy-peer-deps for npm install (#2835)
+
+- *(frontend)* Add code sync from code_source before build (#2829)
+
+- *(install)* Prompt user to select network interface on multi-interface hosts (#2832)
+
+- *(slm)* Sync NodeRole entries when wizard saves role assignments (#2836)
+
+- *(slm)* Auto-detect co-located frontend instead of relying on external flag (#2829)
+
+- *(slm-frontend)* Only show SLM Services on manager node in wizard (#2900)
+
+- *(ansible)* Add pip timeout to all install tasks to prevent hangs (#2835) (#2927) ([#2927](https://github.com/mrveiss/AutoBot-AI/pull/2927))
+
+- *(ansible)* Deploy backend .env to code_dir matching systemd EnvironmentFile (#2824) (#2925) ([#2925](https://github.com/mrveiss/AutoBot-AI/pull/2925))
+
+- *(ansible)* Protect SLM nginx configs during node decommission (#2918) (#2923) ([#2923](https://github.com/mrveiss/AutoBot-AI/pull/2923))
+
+- *(config)* Replace legacy AUTOBOT_REDIS_DB with named SSOT key (#2813) (#2922) ([#2922](https://github.com/mrveiss/AutoBot-AI/pull/2922))
+
+- *(deps)* Unify langchain upper bounds across all requirements files (#2808) (#2921) ([#2921](https://github.com/mrveiss/AutoBot-AI/pull/2921))
+
+- *(slm)* Stop agent heartbeat from auto-creating unassigned roles (#2900)
+
+- *(deploy)* Activate role status after provisioning and add var defaults (#2836)
+
+- *(slm-frontend)* Remove hardcoded VNC host, use dynamic API only (#2900)
+
+- *(ansible)* Guard all wrong-node clean tasks with node_roles is defined (#2836, #2900)
+
+- *(ansible)* Add SLM service safety guards to co-located role tasks (#2900) (#2912) ([#2912](https://github.com/mrveiss/AutoBot-AI/pull/2912))
+
+- *(backend)* Document bare-except regex false positive on string literals (#2911) (#2917) ([#2917](https://github.com/mrveiss/AutoBot-AI/pull/2917))
+
+- *(backend)* Add noqa markers to demo credentials in analytics_precommit (#2910) (#2916) ([#2916](https://github.com/mrveiss/AutoBot-AI/pull/2916))
+
+- *(docker)* Hardcode HEALTHCHECK port to match exec-form CMD (#2909) (#2915) ([#2915](https://github.com/mrveiss/AutoBot-AI/pull/2915))
+
+- *(devops)* Correct misleading SSH security test description (#2908) (#2914) ([#2914](https://github.com/mrveiss/AutoBot-AI/pull/2914))
+
+- *(frontend)* Remove dead emergency-performance-fix.js (#2907) (#2913) ([#2913](https://github.com/mrveiss/AutoBot-AI/pull/2913))
+
+- *(frontend)* Add backend_host default in configuration summary task
+
+- *(deploy)* Update ssh_user to autobot after enrollment, preserve original for decommission (#2826)
+
+- *(backend)* Centralize DB connection pool sizes via SSOT config (#2860) (#2906) ([#2906](https://github.com/mrveiss/AutoBot-AI/pull/2906))
+
+- *(install)* Wait for HTTPS readiness before Phase 6 node registration (#2830) (#2904) ([#2904](https://github.com/mrveiss/AutoBot-AI/pull/2904))
+
+- *(backend)* Replace silent placeholder implementations with explicit failures (#2869) (#2901) ([#2901](https://github.com/mrveiss/AutoBot-AI/pull/2901))
+
+- *(security)* Make CI security checks blocking — remove continue-on-error (#2874) (#2899) ([#2899](https://github.com/mrveiss/AutoBot-AI/pull/2899))
+
+- *(security)* Replace hardcoded CORS origins and proxy IPs with SSOT (#2862) (#2898) ([#2898](https://github.com/mrveiss/AutoBot-AI/pull/2898))
+
+- *(backend)* Add double-checked locking for singleton/lazy-init globals (#2854) (#2894) ([#2894](https://github.com/mrveiss/AutoBot-AI/pull/2894))
+
+- *(frontend)* Check service exists before stopping legacy Vite dev server
+
+- *(llm)* Add zstd to Ollama install dependencies
+
+- *(backend)* Use backend_code_dir for EnvironmentFile in systemd service (#2824)
+
+- *(deploy)* Single-host nginx conflict, provision log streaming, and installer fixes (#2829, #2824)
+
+- *(frontend)* Add missing event listener cleanup to prevent memory leaks (#2849) (#2888) ([#2888](https://github.com/mrveiss/AutoBot-AI/pull/2888))
+
+- *(backend)* Wrap all SQLAlchemy sessions in context managers (#2851) (#2887) ([#2887](https://github.com/mrveiss/AutoBot-AI/pull/2887))
+
+- *(backend)* Replace hardcoded GPU/NPU benchmark placeholders with real queries (#2871) (#2886) ([#2886](https://github.com/mrveiss/AutoBot-AI/pull/2886))
+
+- *(backend)* Populate empty monitoring stub with Prometheus/Grafana config (#2875) (#2885) ([#2885](https://github.com/mrveiss/AutoBot-AI/pull/2885))
+
+- *(security)* Replace StrictHostKeyChecking=no with accept-new (#2868) (#2884) ([#2884](https://github.com/mrveiss/AutoBot-AI/pull/2884))
+
+- *(frontend)* Remove dead RouterHealthMonitor with disabled recovery (#2870) (#2883) ([#2883](https://github.com/mrveiss/AutoBot-AI/pull/2883))
+
+- *(frontend)* Replace empty catch blocks with logged errors in composables (#2859) (#2882) ([#2882](https://github.com/mrveiss/AutoBot-AI/pull/2882))
+
+- *(security)* Make TLS verification configurable, default to enabled (#2852) (#2881) ([#2881](https://github.com/mrveiss/AutoBot-AI/pull/2881))
+
+- *(security)* Replace f-string SQL queries with parameterized/validated queries (#2845) (#2880) ([#2880](https://github.com/mrveiss/AutoBot-AI/pull/2880))
+
+- *(security)* Prevent path traversal in merge conflict resolution (#2848) (#2879) ([#2879](https://github.com/mrveiss/AutoBot-AI/pull/2879))
+
+- *(security)* Sanitize v-html content to prevent XSS (#2847) (#2878) ([#2878](https://github.com/mrveiss/AutoBot-AI/pull/2878))
+
+- *(security)* Remove hardcoded emergency admin password hash (#2853) (#2877) ([#2877](https://github.com/mrveiss/AutoBot-AI/pull/2877))
+
+- *(security)* Add synchronization for global model state (#2846) (#2876) ([#2876](https://github.com/mrveiss/AutoBot-AI/pull/2876))
+
+- *(backend)* Add logging to silent exception handler in database session (#2850) (#2873) ([#2873](https://github.com/mrveiss/AutoBot-AI/pull/2873))
+
+- *(backend)* Enforce TTL for lpush/rpush/xadd and fix ttl=0 override in redis_mcp (#2793) (#2866) ([#2866](https://github.com/mrveiss/AutoBot-AI/pull/2866))
+
+- *(deps)* Unify redis client pin to >=7.4.0, remove deprecated aioredis (#2807) (#2865) ([#2865](https://github.com/mrveiss/AutoBot-AI/pull/2865))
+
+- *(devops)* Improve IP detection for multi-interface hosts in install.sh (#2832) (#2864) ([#2864](https://github.com/mrveiss/AutoBot-AI/pull/2864))
+
+- *(ansible)* Add apply blocks for tag propagation in include_role tasks (#2827) (#2863) ([#2863](https://github.com/mrveiss/AutoBot-AI/pull/2863))
+
+- *(backend)* Update agent admin_url when node IP changes in wizard (#2833) (#2856) ([#2856](https://github.com/mrveiss/AutoBot-AI/pull/2856))
+
+- *(database)* Remove unused Redis DB duplicate allocations for DB 7 and DB 11 (#2810) (#2855) ([#2855](https://github.com/mrveiss/AutoBot-AI/pull/2855))
+
+- *(deps)* Add upper version bounds to llama-index dependencies (#2822) (#2844) ([#2844](https://github.com/mrveiss/AutoBot-AI/pull/2844))
+
+- *(ansible)* Update stale llama3.2:3b references to llama3.2:1b in config templates (#2809) (#2843) ([#2843](https://github.com/mrveiss/AutoBot-AI/pull/2843))
+
+- *(frontend)* Remove dead save-workflow/update-workflow emits (#2820) (#2842) ([#2842](https://github.com/mrveiss/AutoBot-AI/pull/2842))
+
+- *(backend)* Update stale model fallbacks in optimize_llm_models (#2814) (#2841) ([#2841](https://github.com/mrveiss/AutoBot-AI/pull/2841))
+
+- *(docker)* Use exec form in Dockerfile CMD for graceful shutdown (#2821) (#2840) ([#2840](https://github.com/mrveiss/AutoBot-AI/pull/2840))
+
+- *(frontend)* Replace hardcoded English plural with i18n in MessageAttachments (#2805) (#2839) ([#2839](https://github.com/mrveiss/AutoBot-AI/pull/2839))
+
+- *(backend)* Remove unused DEFAULT_ROLES import (#2817) (#2838) ([#2838](https://github.com/mrveiss/AutoBot-AI/pull/2838))
+
+- *(ansible)* Override ansible.cfg default inventory to prevent production.yml merge (#2836)
+
+- Runtime validation of major npm upgrades (vue-router 5, pinia 3, vitest 4) (#2801) ([#2801](https://github.com/mrveiss/AutoBot-AI/pull/2801))
+
+- *(deps)* Upgrade llama-index to 0.14.x to resolve openai>=2 conflict (#2747)
+
+- *(docker)* Align nginx conf var name and harden worker service (#1809)
+
+- *(deps)* Resolve port collision and bcrypt conflict (#2669) (#2799) ([#2799](https://github.com/mrveiss/AutoBot-AI/pull/2799))
+
+- *(devops)* Remove stale autobot-shared copies (#2796) ([#2803](https://github.com/mrveiss/AutoBot-AI/pull/2803))
+
+- *(devops)* Remove stale autobot-shared copies from ansible node dirs (#2796)
+
+- *(devops)* Add missing tier models to nested settings.json (#2794) ([#2802](https://github.com/mrveiss/AutoBot-AI/pull/2802))
+
+- *(devops)* Add missing tier models to nested settings.json defaults (#2794)
+
+- *(frontend)* Fix useErrorHandler + useKnowledgeVectorization tests (#2641) (#2795) ([#2795](https://github.com/mrveiss/AutoBot-AI/pull/2795))
+
+- *(ansible)* Run provisioning from code_source for latest roles (#2747)
+
+- *(ansible)* Remove duplicate unfiltered requirements install that fails on relative path (#2747)
+
+- *(devops)* Use dynamic inventory from DB (#2700) ([#2789](https://github.com/mrveiss/AutoBot-AI/pull/2789))
+
+- *(devops)* Use dynamic inventory from DB instead of static file (#2700)
+
+- *(frontend)* Fix 3 test files with stale assertions (#2641) (#2787) ([#2787](https://github.com/mrveiss/AutoBot-AI/pull/2787))
+
+- *(frontend)* Align type-check script with CI command (#2643) (#2785) ([#2785](https://github.com/mrveiss/AutoBot-AI/pull/2785))
+
+- *(slm)* Use correct admin URL for single-host installs (#2747) (#2782) ([#2782](https://github.com/mrveiss/AutoBot-AI/pull/2782))
+
+- *(backend)* Use shared get_local_ips() for single-host detection (#2722) (#2780) ([#2780](https://github.com/mrveiss/AutoBot-AI/pull/2780))
+
+- *(ansible)* Add SLM backend code sync from code_source to slm_manager role (#2747)
+
+- *(api)* Create NodeRole entries when registering node via POST /api/nodes (#2747)
+
+- *(devops)* Remove stale ssot_config.py copies (#2580) ([#2779](https://github.com/mrveiss/AutoBot-AI/pull/2779))
+
+- *(devops)* Remove stale ssot_config.py copies from ansible node dirs (#2580)
+
+- *(setup)* Health check validates assigned roles only, not all default roles (#2747)
+
+- *(install)* Register only SLM + monitoring roles, user assigns service roles via wizard (#2717)
+
+- *(install)* Only register SLM roles on install, service roles assigned via wizard (#2717)
+
+- *(devops)* Restore docker-compose.override.example.yml (#2688) ([#2776](https://github.com/mrveiss/AutoBot-AI/pull/2776))
+
+- *(devops)* Restore docker-compose.override.example.yml (#2688)
+
+- *(devops)* Replace obsolete model names (#2585) ([#2775](https://github.com/mrveiss/AutoBot-AI/pull/2775))
+
+- *(devops)* Replace obsolete model names with 3-tier mapping (#2585)
+
+- *(devops)* Use fixed+percentage threshold for small commit contamination (#2761) (#2773) ([#2773](https://github.com/mrveiss/AutoBot-AI/pull/2773))
+
+- *(frontend)* Implement AdvancedStepConfirmationModal (#2674) (#2770) ([#2770](https://github.com/mrveiss/AutoBot-AI/pull/2770))
+
+- *(ci)* Prevent stale CodeQL check status on PRs (#2699) (#2769) ([#2769](https://github.com/mrveiss/AutoBot-AI/pull/2769))
+
+- *(devops)* Restore docker-compose.override.example.yml deleted by pre-commit (#2688) (#2768) ([#2768](https://github.com/mrveiss/AutoBot-AI/pull/2768))
+
+- *(slm)* Remove hardcoded external_url default, write SLM_EXTERNAL_URL at deploy (#2758) (#2767) ([#2767](https://github.com/mrveiss/AutoBot-AI/pull/2767))
+
+- *(frontend)* Align DatabaseConstants with ssot_config.py (#2762) (#2765) ([#2765](https://github.com/mrveiss/AutoBot-AI/pull/2765))
+
+- *(install)* Use correct role names matching role_registry for node registration (#2717)
+
+- *(ansible)* Use code_source_dir for backend code sync instead of playbook_dir (#2747)
+
+- *(ansible)* Skip git clone when code already synced from code_source (#2747)
+
+- *(ansible)* Add code sync tasks to backend role for provisioning (#2747)
+
+- *(ansible)* Guard all role clean tasks to not delete SLM dirs on single-host (#2747)
+
+- *(devops)* Make Claude settings portable and reduce permission prompts (#2764)
+
+- *(ansible)* Use 127.0.0.1 for redis wait_for and connectivity check (#2747)
+
+- *(ansible)* Create redis user/group before redis-stack data dir (#2747)
+
+- *(devops)* Batch pre-commit --files for large staged sets (#2697) (#2750) ([#2750](https://github.com/mrveiss/AutoBot-AI/pull/2750))
+
+- *(backend)* Suppress false positive db.execute in blocking detection (#2656) ([#2757](https://github.com/mrveiss/AutoBot-AI/pull/2757))
+
+- *(devops)* Scope PostToolUse auto-format to already-staged files (#2698) (#2748) ([#2748](https://github.com/mrveiss/AutoBot-AI/pull/2748))
+
+- *(backend)* Validate file paths in analytics problems scanner (#2724) (#2753) ([#2753](https://github.com/mrveiss/AutoBot-AI/pull/2753))
+
+- *(backend)* Fix sync for newly added repos in analytics (#2654) ([#2756](https://github.com/mrveiss/AutoBot-AI/pull/2756))
+
+- *(ansible)* Remove hardcoded backend_port, derive all from infra_vars (#2747)
+
+- *(ansible)* Derive backend_host from ansible facts instead of hardcoding (#2747)
+
+- *(ansible)* Replace hardcoded backend_host with 127.0.0.1 fallback (#2747)
+
+- *(setup)* Include inactive roles in provisioning inventory (#2747)
+
+- *(backend)* Harden local node detection in code source (#2721) ([#2752](https://github.com/mrveiss/AutoBot-AI/pull/2752))
+
+- *(setup)* Fix duplicate host in inventory and guard frontend clean task (#2747)
+
+- *(backend)* Revert_prompt returns 404 instead of 500 (#2745) ([#2749](https://github.com/mrveiss/AutoBot-AI/pull/2749))
+
+- *(setup)* Pass node_roles to dynamic inventory for provisioning (#2747)
+
+- *(ansible)* Allow localhost traffic through UFW for service communication (#2722)
+
+- *(backend)* Populate empty codebase analytics sections (#2655) ([#2744](https://github.com/mrveiss/AutoBot-AI/pull/2744))
+
+- *(backend)* Scope analytics to active source by default (#2653) ([#2738](https://github.com/mrveiss/AutoBot-AI/pull/2738))
+
+- *(backend)* Convert sync __init__ Redis calls to lazy async init (#2725) ([#2737](https://github.com/mrveiss/AutoBot-AI/pull/2737))
+
+- *(setup)* Also remove ProtectHome for user creation during provisioning (#2722)
+
+- *(setup)* Remove ProtectSystem=strict to allow Ansible provisioning (#2722)
+
+- *(setup)* Escape systemd namespace for provisioning ansible (#2722)
+
+- *(setup)* Use local connection for self-node provisioning (#2722)
+
+- *(backend)* Resolve undefined file paths in endpoint scanner (#2652) ([#2733](https://github.com/mrveiss/AutoBot-AI/pull/2733))
+
+- *(frontend)* Add missing analytics i18n sections to fa/he/ur (#2625) ([#2732](https://github.com/mrveiss/AutoBot-AI/pull/2732))
+
+- *(backend)* Align DatabaseConstants with ssot_config.py (#2723) ([#2731](https://github.com/mrveiss/AutoBot-AI/pull/2731))
+
+- *(backend)* Move testing DB from 15 to 13 (#2720) ([#2730](https://github.com/mrveiss/AutoBot-AI/pull/2730))
+
+- *(devops)* Preserve existing secret key in deploy-backend-env.yml (#2726) ([#2728](https://github.com/mrveiss/AutoBot-AI/pull/2728))
+
+- *(install)* Fix deployment failures and add uninstall, /slm subroute, node self-registration (#2705, #2706, #2716, #2717)
+
+- *(devops)* Preserve secret key and add SLM CORS on .env regen (#2649)
+
+- *(devops)* Regenerate backend .env from template during fleet code sync (#2649) ([#2709](https://github.com/mrveiss/AutoBot-AI/pull/2709))
+
+- *(devops)* Add autobot_shared symlink inside backend dir after fleet sync (#2651) ([#2708](https://github.com/mrveiss/AutoBot-AI/pull/2708))
+
+- *(backend)* Restore await on async Redis call sites (#2707) ([#2711](https://github.com/mrveiss/AutoBot-AI/pull/2711))
+
+- *(backend)* Align knowledge DB allocation across config files (#2673) ([#2704](https://github.com/mrveiss/AutoBot-AI/pull/2704))
+
+- *(backend)* Remove hardcoded Redis IP from .env.example Celery URLs (#2677) ([#2702](https://github.com/mrveiss/AutoBot-AI/pull/2702))
+
+- *(backend)* Add missing Celery DB entries to redis-databases.yaml (#2675) ([#2701](https://github.com/mrveiss/AutoBot-AI/pull/2701))
+
+- Remove stale pyvenv.cfg from tracking (Python 3.10 artifact)
+
+- *(devops)* Replace grep -P with bash regex in detection script (#2695)
+
+- *(npu)* Align Windows NPU worker resources to Python 3.12 (#2692)
+
+- *(devops)* Restore docker-compose.override.example.yml (#2688)
+
+- *(devops)* Restore docker-compose.override.example.yml (#2688)
+
+- *(devops)* Restore docker-compose.override.example.yml (#2688)
+
+- Detection script false positives, TLS ports in SSOT (#2687, #2689)
+
+- *(devops)* Restore docker-compose.override.example.yml (#2688)
+
+- *(backend)* Correct ssot_config attribute paths in npu_workers.py (#2686)
+
+- *(ci)* Align knowledge-base Dockerfile to Python 3.12 (#2683)
+
+- *(ci)* Align remaining setup.py and Dockerfiles to Python 3.12 (#2683)
+
+- *(ci)* Align .python-version and setup.py to Python 3.12 (#2683)
+
+- *(provisioning)* Use temp inventory by IP for node provisioning, make fleet playbook dynamic (#2678)
+
+- *(ci)* Bulk isort re-sort with src_paths config (#2679) ([#2691](https://github.com/mrveiss/AutoBot-AI/pull/2691))
+
+- *(ci)* Add known_first_party config and fix celery_app isort (#2679) ([#2690](https://github.com/mrveiss/AutoBot-AI/pull/2690))
+
+- *(ci)* Add pyproject.toml isort config and fix celery_app imports (#2667) (#2680) ([#2680](https://github.com/mrveiss/AutoBot-AI/pull/2680))
+
+- *(decommission)* Use temp inventory by IP, add full VM cleanup phases (#2678)
+
+- *(redis)* Reassign Celery from DB 1/2 to DB 14/15 (#2669)
+
+- *(backend)* Remove erroneous await on sync get_redis_client() (#2628) ([#2633](https://github.com/mrveiss/AutoBot-AI/pull/2633))
+
+- *(slm-frontend)* Migrate eslint to flat config for v9 compat (#2561)
+
+- *(frontend)* Compat fixes for npm major version upgrades (#2559)
+
+- *(ci)* Upgrade typing to 3.10+ style, fix isort CI failures (#2608) ([#2662](https://github.com/mrveiss/AutoBot-AI/pull/2662))
+
+- *(mcp)* Forward RBAC role and move tool injection to base agent (#2629, #2631) ([#2647](https://github.com/mrveiss/AutoBot-AI/pull/2647))
+
+- *(agents)* Remove stale INSTRUCTION/LIGHT/SYSTEM_MODEL imports (#2553)
+
+- *(workflow)* Extend step refs to all types + multi-ref support (#2632) ([#2634](https://github.com/mrveiss/AutoBot-AI/pull/2634))
+
+- *(ansible)* Backend.env.j2 template uses per-tier models instead of flat (#2553)
+
+- *(frontend)* Make createLogger variadic to support %s and multi-arg calls (#2607)
+
+- *(frontend)* Accumulate errors in useCodeIntelligence for parallel calls (#2588) ([#2617](https://github.com/mrveiss/AutoBot-AI/pull/2617))
+
+- *(ansible)* Add llm/reserved hosts to production.yml slm_nodes (#2586) ([#2611](https://github.com/mrveiss/AutoBot-AI/pull/2611))
+
+- *(i18n)* Add noPreviousScan key to all locale files (#2572) ([#2605](https://github.com/mrveiss/AutoBot-AI/pull/2605))
+
+- *(deps)* Tighten Node engine constraint to >=20.19.0 (#2583) ([#2604](https://github.com/mrveiss/AutoBot-AI/pull/2604))
+
+- *(frontend)* Also update @vue/runtime-core in plugins/api.ts (#2579)
+
+- *(frontend)* Resolve TypeScript errors breaking CI on Dev_new_gui (#2579)
+
+- *(llm)* Add thread safety to TokenOptimizer for concurrent access (#2577) ([#2595](https://github.com/mrveiss/AutoBot-AI/pull/2595))
+
+- *(docker)* Target specific worker in celery healthcheck (#2565)
+
+- *(models)* Replace postgresql.UUID with Uuid in 9 more model files (#2563)
+
+- *(ansible)* Add autobot_shared symlink to fleet deployment (#2517)
+
+- *(infra)* Restore full secret_id in diagnostic JSON output (#2555) (#2560) ([#2560](https://github.com/mrveiss/AutoBot-AI/pull/2560))
+
+- *(models)* Split JSONB/UUID imports, replace postgresql.UUID in 6 more files (#2533)
+
+- *(frontend)* Add router-view to WorkflowBuilderView for child routes (#2368) ([#2542](https://github.com/mrveiss/AutoBot-AI/pull/2542))
+
+- *(frontend)* Auto-load Code Intelligence scores on dashboard open (#2115) ([#2544](https://github.com/mrveiss/AutoBot-AI/pull/2544))
+
+- *(models)* Split JSONB/UUID imports, replace postgresql.UUID in 6 more files (#2533) ([#2540](https://github.com/mrveiss/AutoBot-AI/pull/2540))
+
+- *(ansible)* Add cross-inventory group aliases (#2515) ([#2534](https://github.com/mrveiss/AutoBot-AI/pull/2534))
+
+- *(nginx)* Add /slm/api/ws/ WebSocket proxy location (#2489) ([#2535](https://github.com/mrveiss/AutoBot-AI/pull/2535))
+
+- *(deps)* Align oxlint version with eslint-plugin-oxlint peer dep (#2518) ([#2524](https://github.com/mrveiss/AutoBot-AI/pull/2524))
+
+- *(models)* Replace postgresql.UUID with sqlalchemy.types.Uuid (#2495) ([#2532](https://github.com/mrveiss/AutoBot-AI/pull/2532))
+
+- *(frontend)* Replace hardcoded model ref with SSOT config (#2480) ([#2530](https://github.com/mrveiss/AutoBot-AI/pull/2530))
+
+- *(docker)* Replace inherited HTTP healthcheck with Celery ping for worker (#2488) ([#2527](https://github.com/mrveiss/AutoBot-AI/pull/2527))
+
+- *(devops)* Remove stale run_autobot.sh references (#2493)
+
+- *(hooks)* Auto-update stale pre-commit wrapper on checkout (#2519)
+
+- *(hooks)* Bypass pre-commit stash cycle with --files flag (#2512)
+
+- *(ansible)* SLM PYTHONPATH + health-check/manage_services group alignment (#2514)
+
+- *(devops)* Restore CLAUDE.md cleanup rules + enhance cleanup script (#2507, #2508)
+
+- *(ci)* Make sync workflow manual-only to prevent untested code on main (#2445)
+
+- *(ci)* Reverse sync direction to Dev_new_gui → main (#2445)
+
+- *(backend)* Add failover monitor for dead worker task migration (#1769) (#2487) ([#2487](https://github.com/mrveiss/AutoBot-AI/pull/2487))
+
+- *(devops)* Add post-commit hook to auto-heal stash-pop conflicts (#2416) (#2486) ([#2486](https://github.com/mrveiss/AutoBot-AI/pull/2486))
+
+- *(backend)* Remove BrowserAutomationSkill stub — browser_mcp.py is canonical (#1973) (#2484) ([#2484](https://github.com/mrveiss/AutoBot-AI/pull/2484))
+
+- *(ci)* Add main→Dev_new_gui sync workflow (#2445) (#2482) ([#2482](https://github.com/mrveiss/AutoBot-AI/pull/2482))
+
+- *(infra)* Sync 6 Ansible node ssot_config.py copies to canonical (#2415)
+
+- *(docker)* Hardcode cert path to avoid fleet .env conflict (#2458)
+
+- *(shared)* Guard _get_config_manager() null dereference (#2477)
+
+- *(devops)* Add Docker TLS cert path override to docker/.env.docker (#2458) (#2476) ([#2476](https://github.com/mrveiss/AutoBot-AI/pull/2476))
+
+- *(devops)* Restore 0.0.0.0 bind for x11vnc in Docker compose (#2409) (#2475) ([#2475](https://github.com/mrveiss/AutoBot-AI/pull/2475))
+
+- *(devops)* Target Dev_new_gui for Dependabot PRs (#2449) (#2473) ([#2473](https://github.com/mrveiss/AutoBot-AI/pull/2473))
+
+
+### CI/CD
+
+- Auto-update PR branches when Dev_new_gui advances (#9323) ([#9323](https://github.com/mrveiss/AutoBot-AI/pull/9323))
+
+- *(visual-regression)* Increase job timeout-minutes 180 → 360 (MVA-1504) (#8930) ([#8930](https://github.com/mrveiss/AutoBot-AI/pull/8930))
+
+- Fix visual-regression baselines + remove dead redis.conf.j2 (#7033, #6954) ([#8078](https://github.com/mrveiss/AutoBot-AI/pull/8078))
+
+- Re-trigger workflows on rebased branch (#7522) (#8065) ([#8065](https://github.com/mrveiss/AutoBot-AI/pull/8065))
+
+- *(hooks,actions)* Complete lib/_common.sh migration + composite setup-python action (GH#7086, GH#7203) (#8052) ([#8052](https://github.com/mrveiss/AutoBot-AI/pull/8052))
+
+- *(phase-validation)* Re-enable blocking gate now that PHASE_CRITERIA is fixed (closes #7496) (#7851) ([#7851](https://github.com/mrveiss/AutoBot-AI/pull/7851))
+
+- Route code-quality and frontend-test to self-hosted runner (MVA-454) (#7811) ([#7811](https://github.com/mrveiss/AutoBot-AI/pull/7811))
+
+- Add cache-dependency-path to setup-python/node; add no-literal-ttl-seconds pre-commit hook (GH#7073, GH#7080) ([#7776](https://github.com/mrveiss/AutoBot-AI/pull/7776))
+
+- *(hardening)* Pipefail + concurrency + actionlint (GH#7071, GH#7074, GH#7083)
+
+- *(hooks,actions)* Complete lib/_common.sh migration + composite setup-python action (GH#7086, GH#7203) (#7734) ([#7734](https://github.com/mrveiss/AutoBot-AI/pull/7734))
+
+- *(mypy)* Wire mypy into code-quality pipeline — enforce on autobot_shared (GH#7105) (#7641) ([#7641](https://github.com/mrveiss/AutoBot-AI/pull/7641))
+
+- Enable pip and npm caching across all CI workflows (GH#7073) (#7628) ([#7628](https://github.com/mrveiss/AutoBot-AI/pull/7628))
+
+- Speed up Docker Smoke Test with buildx layer cache + 15-min health wait (closes #7034) (#7598) ([#7598](https://github.com/mrveiss/AutoBot-AI/pull/7598))
+
+- *(code-quality)* Fix isort import ordering on 7 backend files (#7522) (#7596) ([#7596](https://github.com/mrveiss/AutoBot-AI/pull/7596))
+
+- Extend ansible-role-facts-test trigger paths (closes #7223 partial) (#7242) ([#7242](https://github.com/mrveiss/AutoBot-AI/pull/7242))
+
+- *(lint)* Pre-commit hook for git safe.directory + fix 7 missed sites (closes #7219) (#7240) ([#7240](https://github.com/mrveiss/AutoBot-AI/pull/7240))
+
+- *(lint)* Pre-commit hook to block deprecated ansible_X facts (closes #7221) (#7229) ([#7229](https://github.com/mrveiss/AutoBot-AI/pull/7229))
+
+- *(deps)* Comprehensive pip ignore audit — 14 missing entries across 7 dirs (closes #7210) (#7211) ([#7211](https://github.com/mrveiss/AutoBot-AI/pull/7211))
+
+- *(deps)* Add semver-major ignores to autobot_shared + autobot-slm-backend pip (closes #7200) (#7201) ([#7201](https://github.com/mrveiss/AutoBot-AI/pull/7201))
+
+- *(deps)* Add semver-major ignore rules to worker pip ecosystems (closes #7192) (#7194) ([#7194](https://github.com/mrveiss/AutoBot-AI/pull/7194))
+
+- *(hooks)* Extract lib/_common.sh — DRY proof-of-concept (#7185) (#7188) ([#7188](https://github.com/mrveiss/AutoBot-AI/pull/7188))
+
+- *(security)* Expand Dependabot to cover production worker dirs + root manifests (closes #7182 P1+P2) (#7187) ([#7187](https://github.com/mrveiss/AutoBot-AI/pull/7187))
+
+- *(security)* Add npm ecosystem for context7 MCP tool (#7170 self-review) (#7174) ([#7174](https://github.com/mrveiss/AutoBot-AI/pull/7174))
+
+- *(security)* Add 2 missed Dockerfiles + semver-major ignore rules to docker Dependabot (#7157 self-review) (#7170) ([#7170](https://github.com/mrveiss/AutoBot-AI/pull/7170))
+
+- *(security)* Enable Dependabot for docker ecosystem (closes #7157) (#7163) ([#7163](https://github.com/mrveiss/AutoBot-AI/pull/7163))
+
+- *(security)* Add pre-commit-no-tag-pinned-action hook (closes #7120) (#7142) ([#7142](https://github.com/mrveiss/AutoBot-AI/pull/7142))
+
+- *(security)* Pin all 3rd-party actions to commit SHAs (closes #7091) (#7102) ([#7102](https://github.com/mrveiss/AutoBot-AI/pull/7102))
+
+- Add `requirements-ci/**` to path filters (closes #7089) (#7099) ([#7099](https://github.com/mrveiss/AutoBot-AI/pull/7099))
+
+- Dedupe path-filter lists via YAML anchors (closes #7038) (#7039) ([#7039](https://github.com/mrveiss/AutoBot-AI/pull/7039))
+
+- Per-job path filters for ci.yml + security.yml (closes #7006) (#7027) ([#7027](https://github.com/mrveiss/AutoBot-AI/pull/7027))
+
+- Workflow polish — stale comments, action version drift, missing concurrency (#7017 A-C) (#7020) ([#7020](https://github.com/mrveiss/AutoBot-AI/pull/7020))
+
+- Add `set -euo pipefail` to all piped run blocks (closes #7015) (#7019) ([#7019](https://github.com/mrveiss/AutoBot-AI/pull/7019))
+
+- Broaden path filters added in #6998 to cover all workflow inputs (#6992) (#7002) ([#7002](https://github.com/mrveiss/AutoBot-AI/pull/7002))
+
+- Add path filters to 3 expensive workflows (partial #6992) (#6998) ([#6998](https://github.com/mrveiss/AutoBot-AI/pull/6998))
+
+- Replace deadsnakes-PPA Python install with setup-python@v5 (closes #6990) (#6997) ([#6997](https://github.com/mrveiss/AutoBot-AI/pull/6997))
+
+- Migrate Bucket B workflows to ubuntu-latest (#6982 final slice, eliminates self-hosted SPOF) (#6986) ([#6986](https://github.com/mrveiss/AutoBot-AI/pull/6986))
+
+- Migrate Bucket A workflows to ubuntu-latest (#6982 follow-up to #6721) (#6984) ([#6984](https://github.com/mrveiss/AutoBot-AI/pull/6984))
+
+- Migrate 4 lint/security workflows from self-hosted → ubuntu-latest (partial #6721) (#6981) ([#6981](https://github.com/mrveiss/AutoBot-AI/pull/6981))
+
+- *(frontend)* Wire check-ts-delta.sh into package.json and CI pipeline (#5830) (#5835) ([#5835](https://github.com/mrveiss/AutoBot-AI/pull/5835))
+
+- *(workflows)* Block datetime.utcnow().isoformat() regressions in CI (#5268) (#5280) ([#5280](https://github.com/mrveiss/AutoBot-AI/pull/5280))
+
+- *(lint)* Add datetime.utcnow().isoformat() regression-prevention hook (#5178 part C) (#5264) ([#5264](https://github.com/mrveiss/AutoBot-AI/pull/5264))
+
+- *(workflows)* Add visual regression workflow for Storybook stories (#5226) (#5244) ([#5244](https://github.com/mrveiss/AutoBot-AI/pull/5244))
+
+- Add automated issue triage workflow for Phase 2.5 (#4196) ([#4196](https://github.com/mrveiss/AutoBot-AI/pull/4196))
+
+- Add Docker smoke test workflow for automated validation (#4032) ([#4032](https://github.com/mrveiss/AutoBot-AI/pull/4032))
+
+
+### Documentation
+
+- Remove all bounty references (MVA-2591) (#9314) ([#9314](https://github.com/mrveiss/AutoBot-AI/pull/9314))
+
+- Create Obsidian index files for 21 docs/ subdirectories (MVA-2596) ([#9315](https://github.com/mrveiss/AutoBot-AI/pull/9315))
+
+- *(contributing)* Rewrite CONTRIBUTING.md with two-path workflow and PR guidelines
+
+- *(frontend)* Clarify host composables scope and separation (#9063) ([#9184](https://github.com/mrveiss/AutoBot-AI/pull/9184))
+
+- *(code-sync)* Fix stale resolve_drift docstring — no longer references SLM self-sync (#9073)
+
+- *(transcriber)* Add design spec and 4-part implementation plan
+
+- *(claude)* Add hook test requirement — bash vs ugrep grep distinction (#8262)
+
+- *(resource-policy)* Add implementation plan for resource governance role
+
+- *(resource-policy)* Add system-wide resource governance design spec
+
+- *(arch)* Add agent belief-state architecture design (MVA-1426) ([#8869](https://github.com/mrveiss/AutoBot-AI/pull/8869))
+
+- *(llc)* AutoBot LLC Module PRD — 6-phase autonomous company OS design (#8204)
+
+- *(agent-patterns)* Replace PR-wait polling with Monitor/ScheduleWakeup guidance (MVA-315) (#8047) ([#8047](https://github.com/mrveiss/AutoBot-AI/pull/8047))
+
+- *(arch)* Add chat state SSOT design document (#6746) (#7944) ([#7944](https://github.com/mrveiss/AutoBot-AI/pull/7944))
+
+- *(frontend/composables)* Add canonical composable pattern guide (GH#7452) ([#7863](https://github.com/mrveiss/AutoBot-AI/pull/7863))
+
+- *(storybook)* Add stories for singleton components (#6869) (#7814) ([#7814](https://github.com/mrveiss/AutoBot-AI/pull/7814))
+
+- *(rules)* Document AUTOBOT_CHAT_SESSION_CACHE_TTL env var (#7026) (#7813) ([#7813](https://github.com/mrveiss/AutoBot-AI/pull/7813))
+
+- *(ansible)* Mark redis.conf.j2 as non-deployed reference template (#7257) (#7783) ([#7783](https://github.com/mrveiss/AutoBot-AI/pull/7783))
+
+- *(adr)* Add ADR-006 Skill-Bound Planning (GH#7268, MVA-416)
+
+- *(agent-patterns)* Replace PR-wait polling with Monitor/ScheduleWakeup guidance (MVA-315) (#7710) ([#7710](https://github.com/mrveiss/AutoBot-AI/pull/7710))
+
+- *(ci/visual-regression)* Document CI-only baseline policy + add workflow_dispatch regeneration (MVA-270) (#7698) ([#7698](https://github.com/mrveiss/AutoBot-AI/pull/7698))
+
+- *(ci)* Record code-quality as required check on Dev_new_gui (MVA-283) ([#7700](https://github.com/mrveiss/AutoBot-AI/pull/7700))
+
+- *(arch)* Add chat state SSOT design document (#6746) (#7592) ([#7592](https://github.com/mrveiss/AutoBot-AI/pull/7592))
+
+- *(canonical-check)* Design spec + Wave 0 foundation plan for #7458 (#7499) ([#7499](https://github.com/mrveiss/AutoBot-AI/pull/7499))
+
+- Refresh stale status/changelog and canonical TaskStatus examples (#7498) ([#7498](https://github.com/mrveiss/AutoBot-AI/pull/7498))
+
+- *(docker)* Document healthcheck CMD vs CMD-SHELL convention (closes #7456) (#7489) ([#7489](https://github.com/mrveiss/AutoBot-AI/pull/7489))
+
+- *(schemas/sandbox-files)* Annotate 7 FileSandbox* classes as deferred wire-in to #7409 (#6676) (#7411) ([#7411](https://github.com/mrveiss/AutoBot-AI/pull/7411))
+
+- *(autobot_shared)* Document local pytest invocation pattern (closes #7175) (#7177) ([#7177](https://github.com/mrveiss/AutoBot-AI/pull/7177))
+
+- *(deps)* Point Backend Common section to pyproject.toml (post-#7113) (#7126) ([#7126](https://github.com/mrveiss/AutoBot-AI/pull/7126))
+
+- *(specs)* Add ARC Prize plugin Phase 1 design spec
+
+- *(api/health)* Record parallel-surface decision for /monitoring/services/health (#6922) (#7005) ([#7005](https://github.com/mrveiss/AutoBot-AI/pull/7005))
+
+- *(frontend)* Add Storybook stories for design-system core (#4201) (#6880) ([#6880](https://github.com/mrveiss/AutoBot-AI/pull/6880))
+
+- *(frontend)* Correct FeatureConnectivity tier docs — backend features are not gated by browser→backend connectivity (#6566) (#6599) ([#6599](https://github.com/mrveiss/AutoBot-AI/pull/6599))
+
+- *(pki)* Add CA rotation runbook; update renew() error message to reference it (#6338) (#6354) ([#6354](https://github.com/mrveiss/AutoBot-AI/pull/6354))
+
+- *(composables)* Document useVoiceConversation fetchWithAuth FormData exemption (#6031) (#6166) ([#6166](https://github.com/mrveiss/AutoBot-AI/pull/6166))
+
+- *(composables)* Document useVoiceOutput fetchWithAuth binary exemption (#6030) (#6160) ([#6160](https://github.com/mrveiss/AutoBot-AI/pull/6160))
+
+- *(composables)* Document useIndexingJob fetchWithAuth intentional exemption (#6024) (#6134) ([#6134](https://github.com/mrveiss/AutoBot-AI/pull/6134))
+
+- *(plans)* Composable weakness remediation — 4 wave implementation plans (#6006)
+
+- *(specs)* Fix Wave 2 count to 12 (add useBackgroundTask), master tracker #6006
+
+- *(specs)* Composable weakness remediation design — 67 issues, 4 waves
+
+- *(composables)* Document Pattern A2, B2, C in COMPOSABLE_HTTP_PATTERNS.md (#5927) (#5940) ([#5940](https://github.com/mrveiss/AutoBot-AI/pull/5940))
+
+- *(claude)* Update schemas_common.py constraint note — #5799 resolved, domain files now in use
+
+- *(api)* Add response schema selection guide to API_RESPONSE_MIGRATION.md (#5914) (#5919) ([#5919](https://github.com/mrveiss/AutoBot-AI/pull/5919))
+
+- *(composables)* Document ApiClient vs fetchWithAuth patterns and when to use each (#5884) (#5898) ([#5898](https://github.com/mrveiss/AutoBot-AI/pull/5898))
+
+- *(workflow)* Document schemas_common.py serialization requirement (#5842) ([#5889](https://github.com/mrveiss/AutoBot-AI/pull/5889))
+
+- *(workflow)* Add squash-duplicate detection gate to pre-merge-validate (#5841) ([#5888](https://github.com/mrveiss/AutoBot-AI/pull/5888))
+
+- *(composables)* Document counter-based loading in useCodeIntelligence (#5880) ([#5887](https://github.com/mrveiss/AutoBot-AI/pull/5887))
+
+- *(frontend)* Correct TypeScript error baseline from 2005 to 188 (#5096) (#5860) ([#5860](https://github.com/mrveiss/AutoBot-AI/pull/5860))
+
+- *(architecture)* Move ARCHITECTURE_EXCEPTIONS.md to docs/developer/ + add missing entries (#5802 #5805) (#5855) ([#5855](https://github.com/mrveiss/AutoBot-AI/pull/5855))
+
+- *(architecture)* Move ARCHITECTURE_EXCEPTIONS.md + add skills exception entries (#5802) (#5852) ([#5852](https://github.com/mrveiss/AutoBot-AI/pull/5852))
+
+- *(architecture)* Move ARCHITECTURE_EXCEPTIONS.md to docs/developer/, add 3 skills exception entries (#5802) (#5848) ([#5848](https://github.com/mrveiss/AutoBot-AI/pull/5848))
+
+- *(frontend)* Add TypeScript error baseline and delta-check script (#5096) (#5825) ([#5825](https://github.com/mrveiss/AutoBot-AI/pull/5825))
+
+- *(config)* Complete VNC dormant comments in ssot-config, AppConfig, ServiceDiscovery, stores, slm-frontend, docs (#5138) (#5819) ([#5819](https://github.com/mrveiss/AutoBot-AI/pull/5819))
+
+- *(audit)* Poller composables comparison + consolidation proposal (#5250) (#5815) ([#5815](https://github.com/mrveiss/AutoBot-AI/pull/5815))
+
+- *(config)* Mark VNC browser-path env vars as dormant in .env.example (#5138) (#5814) ([#5814](https://github.com/mrveiss/AutoBot-AI/pull/5814))
+
+- *(audit)* Poller composables comparison + consolidation proposal (#5250) (#5809) ([#5809](https://github.com/mrveiss/AutoBot-AI/pull/5809))
+
+- *(config)* Mark VNC browser-path env vars as dormant in .env.example (#5138) (#5807) ([#5807](https://github.com/mrveiss/AutoBot-AI/pull/5807))
+
+- *(audit)* Add openai_compat.py /v1/ endpoints to response_model coverage audit (#5413) (#5794) ([#5794](https://github.com/mrveiss/AutoBot-AI/pull/5794))
+
+- *(orchestrator)* Annotate why _execute_agents_in_parallel is intentionally unbounded (#5114) (#5786) ([#5786](https://github.com/mrveiss/AutoBot-AI/pull/5786))
+
+- *(standards)* Add latency SLO budgets for hot paths to CLAUDE_RULES (#5075) (#5748) ([#5748](https://github.com/mrveiss/AutoBot-AI/pull/5748))
+
+- *(ops)* Add KB Redis-unreachable degradation runbook + Prometheus alert routing (#5408) (#5639) ([#5639](https://github.com/mrveiss/AutoBot-AI/pull/5639))
+
+- *(primitives)* Document lazy_singleton arg-guard behavior in PRIMITIVES.md (#5445)
+
+- *(architecture)* Add ARCHITECTURE_EXCEPTIONS.md for Windows NPU standalone redis_client (#5438) (#5498) ([#5498](https://github.com/mrveiss/AutoBot-AI/pull/5498))
+
+- *(skills)* Consolidate team-implement into batch-implement + fix worktree path (closes #5447 #5454) (#5458) ([#5458](https://github.com/mrveiss/AutoBot-AI/pull/5458))
+
+- *(methodology)* Codify Phase 0d Behavioral Grep rule (closes #5372) (#5444) ([#5444](https://github.com/mrveiss/AutoBot-AI/pull/5444))
+
+- *(audit)* Response_model coverage audit — 14% baseline, recommended batches (#5317) (#5401) ([#5401](https://github.com/mrveiss/AutoBot-AI/pull/5401))
+
+- *(analytics)* Manual E2E verification checklist for /analytics/codebase (#5370) (#5379) ([#5379](https://github.com/mrveiss/AutoBot-AI/pull/5379))
+
+- *(database)* SQLAlchemy DateTime column audit — naive vs aware classification (#5270) (#5281) ([#5281](https://github.com/mrveiss/AutoBot-AI/pull/5281))
+
+- *(backend)* Datetime utcnow non-isoformat audit — 248 sites, 84 files (#5211 part A) (#5267) ([#5267](https://github.com/mrveiss/AutoBot-AI/pull/5267))
+
+- *(backend)* Datetime producer audit — 57 files, 139 sites bypass time_utils (#5178 part A) (#5189) ([#5189](https://github.com/mrveiss/AutoBot-AI/pull/5189))
+
+- *(shared)* Datetime parsing audit + canonicalization decision (#5169 parts B + C) (#5186) ([#5186](https://github.com/mrveiss/AutoBot-AI/pull/5186))
+
+- *(shared)* Document UTC-format selection rule in autobot_shared.time_utils (#5169 part A) (#5176) ([#5176](https://github.com/mrveiss/AutoBot-AI/pull/5176))
+
+- Add historical banners to superseded orchestrator planning docs (#5097)
+
+- Update class names and import paths after orchestrator rename (#5097)
+
+- *(process)* Also update Pre-Implementation Validation section (#4969)
+
+- *(process)* Add commit-before-subagents rule to pre-flight checklists (#4969)
+
+- *(plans)* Add session plan files for graphify-gaps, gui-audit, and responsive-nav
+
+- *(rag)* Update get_weights() docstring to reflect 60s eviction throttle (#4833)
+
+- Rewrite README hero with brand narrative — Your data. Your AI. ([#4746](https://github.com/mrveiss/AutoBot-AI/pull/4746))
+
+- Rewrite README hero with brand narrative — Your data. Your AI.
+
+- *(claude)* Add batch-execution, branch-safety, discovery-filing, and pre-flight rules from session (#4660)
+
+- Add system diagrams, demo guide, and architecture reference (#4509) ([#4509](https://github.com/mrveiss/AutoBot-AI/pull/4509))
+
+- Heartbeat system reference and responsive design guide (#4500) ([#4500](https://github.com/mrveiss/AutoBot-AI/pull/4500))
+
+- *(users)* Admin user management guide and signup documentation (#4499) ([#4499](https://github.com/mrveiss/AutoBot-AI/pull/4499))
+
+- *(marketplace)* API reference and plugin publishing guide (#4498) ([#4498](https://github.com/mrveiss/AutoBot-AI/pull/4498))
+
+- Add AutoResearch user guide and update developer index (#4489) ([#4489](https://github.com/mrveiss/AutoBot-AI/pull/4489))
+
+- *(api)* Add usage metering API reference and admin guide (#4488) ([#4488](https://github.com/mrveiss/AutoBot-AI/pull/4488))
+
+- *(developer)* Add comprehensive hook system guide (#4487) ([#4487](https://github.com/mrveiss/AutoBot-AI/pull/4487))
+
+- *(claude.md)* Add codebase-as-source-of-truth rule
+
+- Remove .19 node references from deployment documentation
+
+- Add Issue Closure Verification Gate to CLAUDE.md
+
+- *(claude)* Add insights implementation tweaks - pre-impl validation, permission enforcement, post-merge audit, enhanced validation, CI integration
+
+- *(i18n)* Document RTL translation requirements and status (#4225)
+
+- *(testing)* Add advanced Vue testing patterns (#4200) (#4227) ([#4227](https://github.com/mrveiss/AutoBot-AI/pull/4227))
+
+- *(deploy)* Create single-host deployment runbook at developer path (#2961) (#4187) ([#4187](https://github.com/mrveiss/AutoBot-AI/pull/4187))
+
+- *(testing)* Document Pinia setup pattern for Vue component tests (#4188) (#4193) ([#4193](https://github.com/mrveiss/AutoBot-AI/pull/4193))
+
+- Add comprehensive CONTRIBUTORS.md guide for Phase 2.5 (#4195) ([#4195](https://github.com/mrveiss/AutoBot-AI/pull/4195))
+
+- Enhance README with comprehensive issue discovery links for Phase 2.5 (#4197) ([#4197](https://github.com/mrveiss/AutoBot-AI/pull/4197))
+
+- *(workflow)* Add parallel work isolation rules and pre-flight/review checklists
+
+- Document populate_autobot_docs fix via background task (#4102, #4103)
+
+- *(dev)* Expand gh pr edit workaround and add helper script (#3753) (#4080) ([#4080](https://github.com/mrveiss/AutoBot-AI/pull/4080))
+
+- *(causal)* Add causal reasoning framework documentation and integration tests
+
+- *(runbook)* Add single-host deployment runbook (#2961)
+
+- Rewrite README with hero section and Docker quickstart (#4030) ([#4030](https://github.com/mrveiss/AutoBot-AI/pull/4030))
+
+- *(security)* Monitor unpatched diskcache CVE with 90-day escalation path (#3446)
+
+- Document gh pr edit --body workaround for classic Projects issue (#3753) (#3952) ([#3952](https://github.com/mrveiss/AutoBot-AI/pull/3952))
+
+- *(plans)* Add language switcher implementation plan
+
+- *(specs)* Add language switcher design spec
+
+- *(how-to)* Add 6 query-matching how-to guides targeting remaining Context7 gaps
+
+- Deepen prompt middleware guide and how-to docs to improve Context7 scores
+
+- *(how-to)* Add 4 query-matching how-to guides to improve Context7 scores
+
+- *(nginx)* Mark slm-site.conf as reference-only, not deployed (#3174) (#3325) ([#3325](https://github.com/mrveiss/AutoBot-AI/pull/3325))
+
+- *(arch)* Add VM roles reference and consolidate task tracking
+
+- *(structure)* Move docs/plans/ to docs/archives/plans/
+
+- *(index)* Rewrite INDEX.md as Obsidian vault home with full directory links
+
+- *(nav)* Add _index.md navigation hubs for all docs directories
+
+- Add AutoResearch M3 implementation plan (#2600)
+
+- Add AutoResearch M3 design spec (#2600)
+
+- *(frontend)* Document mockReset gotcha in vitest config (#3070) (#3147) ([#3147](https://github.com/mrveiss/AutoBot-AI/pull/3147))
+
+- Add platform hardening plan and design spec (#3009)
+
+- *(llm)* Document 6-tier model stack and remove redundant GPU models
+
+- Remove stale passlib references after bcrypt 5.x migration (#2811) (#2930) ([#2930](https://github.com/mrveiss/AutoBot-AI/pull/2930))
+
+- *(cleanup)* Update stale deepseek-r1:14b and llama3.2:3b refs (#2816) (#2924) ([#2924](https://github.com/mrveiss/AutoBot-AI/pull/2924))
+
+- Shared dependency roles implementation plan (#2747)
+
+- Shared dependency roles design spec (#2747)
+
+- Fix remaining stale model names and broken links (#2734, #2736) (#2751) ([#2751](https://github.com/mrveiss/AutoBot-AI/pull/2751))
+
+- Add public API reference and SDK quickstart (#1802) (#2714) ([#2714](https://github.com/mrveiss/AutoBot-AI/pull/2714))
+
+- Add Quick Answer sections for Context7 benchmark (#1925) (#2719) ([#2719](https://github.com/mrveiss/AutoBot-AI/pull/2719))
+
+- Update stale model names to 6-tier architecture (#2587) (#2729) ([#2729](https://github.com/mrveiss/AutoBot-AI/pull/2729))
+
+- Update installation guide to match current install.sh (#2672) (#2712) ([#2712](https://github.com/mrveiss/AutoBot-AI/pull/2712))
+
+- Update stale model names to 6-tier architecture (#2587)
+
+- Final Python 3.12 alignment in test docs and guides (#2683)
+
+- Align remaining docs to Python 3.12 (#2683)
+
+- *(config)* Align remaining docs, agents, and scripts to Python 3.12 (#2683)
+
+- *(install)* Update installation guide and add systemd check (#2672)
+
+- Redis MCP bridge design (#2511)
+
+- Remove stale run_autobot.sh references (#2468) ([#2485](https://github.com/mrveiss/AutoBot-AI/pull/2485))
+
+
+### Features
+
+- *(api)* Implement ChromaDB REST API endpoints (MVA-2046) (#9235) ([#9235](https://github.com/mrveiss/AutoBot-AI/pull/9235))
+
+- *(transcriber)* Add transcript export formats (DOCX, PDF, SRT, VTT) [MVA-2211] (#9348) ([#9348](https://github.com/mrveiss/AutoBot-AI/pull/9348))
+
+- *(mcp)* Build MCP resource browser and prompt template library UI (MVA-2167) (#9343) ([#9343](https://github.com/mrveiss/AutoBot-AI/pull/9343))
+
+- *(claims-audit)* Implement report generator (MVA-2722) (#9335) ([#9335](https://github.com/mrveiss/AutoBot-AI/pull/9335))
+
+- *(observability)* Add LangFuse and LangSmith tracing observers (#9012) (#9353) ([#9353](https://github.com/mrveiss/AutoBot-AI/pull/9353))
+
+- *(transcriber/frontend)* Views & Integration (MVA-2051) (#9303) ([#9303](https://github.com/mrveiss/AutoBot-AI/pull/9303))
+
+- *(connectors)* Add Nextcloud Documents connector via WebDAV (MVA-2039) (#9291) ([#9291](https://github.com/mrveiss/AutoBot-AI/pull/9291))
+
+- *(landing)* Operator-focused copy, outcome-based cards, concrete deploy proof (#9298)
+
+- *(landing)* Force-directed cluster graph background (#9298)
+
+- *(landing)* Add particle mesh background animation to hero (#9298)
+
+- *(transcriber/frontend)* Utility Components (MVA-2056) ([#9302](https://github.com/mrveiss/AutoBot-AI/pull/9302))
+
+- *(transcriber/frontend)* Waveform & Core UI (MVA-2055) ([#9301](https://github.com/mrveiss/AutoBot-AI/pull/9301))
+
+- *(analytics)* Consent Mode v2 banner + GDPR consent flow (#9298)
+
+- *(docs)* Add Jekyll + just-the-docs with Ember color scheme (#9298)
+
+- *(landing)* Geometric logo mark, GTM, scale/knowledge sections (#9298)
+
+- *(landing)* Add scale, knowledge base, contribute, donate sections (#9298)
+
+- *(landing)* Animated AutoBot landing page with Ember theme (#9298)
+
+- *(mcp)* Implement resource subscriptions for real-time updates (MVA-2166) (#9275) ([#9275](https://github.com/mrveiss/AutoBot-AI/pull/9275))
+
+- *(ansible)* Include AUTOBOT_BACKEND_HOST in backend deployment config (MVA-2418) ([#9280](https://github.com/mrveiss/AutoBot-AI/pull/9280))
+
+- *(mcp)* Implement resources/prompts in git and knowledge bridges (MVA-2165)
+
+- *(telegram)* Implement advanced Telegram bot features (MVA-2075) (#9273) ([#9273](https://github.com/mrveiss/AutoBot-AI/pull/9273))
+
+- *(execution)* Snapshot API endpoints (MVA-2227, GH#4458) ([#9240](https://github.com/mrveiss/AutoBot-AI/pull/9240))
+
+- *(execution)* Add snapshot interface to ExecutionBackend base class (MVA-2226, GH#4458) ([#9239](https://github.com/mrveiss/AutoBot-AI/pull/9239))
+
+- *(tasks)* Implement snapshot cleanup Celery task (#4458)
+
+- *(embed)* Implement missing /api/chats/embed/message backend endpoint (MVA-1759) ([#9234](https://github.com/mrveiss/AutoBot-AI/pull/9234))
+
+- *(integrations)* Complete mobile device pairing with encryption and push (#4463) ([#9227](https://github.com/mrveiss/AutoBot-AI/pull/9227))
+
+- *(integrations/microsoft365)* Wire now_utc for datetime normalisation (#MVA-2203) (#9217) ([#9217](https://github.com/mrveiss/AutoBot-AI/pull/9217))
+
+- *(chat)* Add org-wide preset support (GH#4449) (#9222) ([#9222](https://github.com/mrveiss/AutoBot-AI/pull/9222))
+
+- *(transcriber)* Add pipeline orchestration and merge logic (MVA-2186)
+
+- *(mcp)* Implement resource/prompt infrastructure in filesystem bridge (#9213) ([#9213](https://github.com/mrveiss/AutoBot-AI/pull/9213))
+
+- *(api)* Transcript AI Analysis & KB Integration (MVA-2176) ([#9212](https://github.com/mrveiss/AutoBot-AI/pull/9212))
+
+- *(voice)* Language-keyed speech provider system (#9044)
+
+- *(llm)* Per-run dynamic API key injection (GH#9037) (#9187) ([#9187](https://github.com/mrveiss/AutoBot-AI/pull/9187))
+
+- *(llc-frontend)* Template browser UI for company creation wizard (#9164) (#9178) ([#9178](https://github.com/mrveiss/AutoBot-AI/pull/9178))
+
+- *(integrations)* Telegram bot core integration (MVA-2074) (#9174) ([#9174](https://github.com/mrveiss/AutoBot-AI/pull/9174))
+
+- *(sso)* Add OKTA provider type and endpoint templates (#9177) ([#9177](https://github.com/mrveiss/AutoBot-AI/pull/9177))
+
+- *(chat)* Thinking mode toggle — per-conversation control for reasoning models (#8993) (#9172) ([#9172](https://github.com/mrveiss/AutoBot-AI/pull/9172))
+
+- *(chat)* Thinking mode toggle, budget slider, and response indicator (#8993)
+
+- *(llm)* Configure llama3.2:1b as trivial tier model (#9175) ([#9175](https://github.com/mrveiss/AutoBot-AI/pull/9175))
+
+- *(frontend)* Add UI for agent abstention status (GH#6626) (#9171) ([#9171](https://github.com/mrveiss/AutoBot-AI/pull/9171))
+
+- *(transcriber/frontend)* Add API composable, SSE progress, and Pinia store (#MVA-2054) (#9170) ([#9170](https://github.com/mrveiss/AutoBot-AI/pull/9170))
+
+- *(ui)* Add user-selectable theme system with custom accent colors (#8988) (#9168) ([#9168](https://github.com/mrveiss/AutoBot-AI/pull/9168))
+
+- *(llm)* Add lightweight mode cost indicator (MVA-1993) (#9176) ([#9176](https://github.com/mrveiss/AutoBot-AI/pull/9176))
+
+- *(llm)* Register BedrockProvider in provider registry (#9010)
+
+- *(llm)* AWS Bedrock provider with Claude, Llama, Mistral, Titan, Nova (#9010)
+
+- *(integrations)* WhatsApp Business API channel adapter (#9007)
+
+- *(llm)* Quota-triggered model fallback (#8998) (#9173) ([#9173](https://github.com/mrveiss/AutoBot-AI/pull/9173))
+
+- *(plugins)* Plugin capability manifest — declare permissions and sandbox boundaries per plugin (#9049) (#9151) ([#9151](https://github.com/mrveiss/AutoBot-AI/pull/9151))
+
+- *(llm)* Add trivial complexity tier for lightweight inference (#9050) (#9158) ([#9158](https://github.com/mrveiss/AutoBot-AI/pull/9158))
+
+- *(llc)* Add built-in company templates (#9042) (#9163) ([#9163](https://github.com/mrveiss/AutoBot-AI/pull/9163))
+
+- *(frontend)* Add context overflow warning UI and preference settings (MVA-2006) (#9162) ([#9162](https://github.com/mrveiss/AutoBot-AI/pull/9162))
+
+- *(integrations)* Microsoft 365 Calendar, Outlook, and Teams connector (#9041)
+
+- *(chat)* Context overflow protection — auto-summarize when approaching model context limit (#9043) (#9161) ([#9161](https://github.com/mrveiss/AutoBot-AI/pull/9161))
+
+- *(plugins)* Add trust tier badges and capability API methods (#9165) ([#9165](https://github.com/mrveiss/AutoBot-AI/pull/9165))
+
+- *(backend)* Lightweight inference mode — bypass RAG/memory for trivial tier (MVA-1992) (#9160) ([#9160](https://github.com/mrveiss/AutoBot-AI/pull/9160))
+
+- *(plugins)* Add capability approval dialog and audit log UI (MVA-1989) (#9159) ([#9159](https://github.com/mrveiss/AutoBot-AI/pull/9159))
+
+- *(connectors)* GitLab/Gitea/Forgejo KB connector — index repos and issues (#9011) (#9138) ([#9138](https://github.com/mrveiss/AutoBot-AI/pull/9138))
+
+- *(frontend/css)* Migrate color tokens to OKLCH with hex fallbacks (GH#9014) ([#9139](https://github.com/mrveiss/AutoBot-AI/pull/9139))
+
+- *(integrations)* Frontend for web push notifications (service worker + permission UI) (GH#4459) (#9135) ([#9135](https://github.com/mrveiss/AutoBot-AI/pull/9135))
+
+- *(llc)* Per-agent memory wiki — knowledge vault scoped to agent role (#9021) ([#9130](https://github.com/mrveiss/AutoBot-AI/pull/9130))
+
+- *(ui)* Global keyboard shortcut system for power-user navigation (#8989) (#9124) ([#9124](https://github.com/mrveiss/AutoBot-AI/pull/9124))
+
+- *(chat)* Context window usage indicator (#8990) (#9126) ([#9126](https://github.com/mrveiss/AutoBot-AI/pull/9126))
+
+- *(providers)* Add Google Cloud Vertex AI LLM provider (GH#9009) (#9125) ([#9125](https://github.com/mrveiss/AutoBot-AI/pull/9125))
+
+- *(auth)* Shared chat link access control — password-protect shared conversations (#8996) (#9122) ([#9122](https://github.com/mrveiss/AutoBot-AI/pull/9122))
+
+- *(media)* Image generation — DALL-E 3, Flux, Stable Diffusion (#9015) (#9120) ([#9120](https://github.com/mrveiss/AutoBot-AI/pull/9120))
+
+- *(llc)* Persistent agent session state — checkpoint and recovery (GH#9026) ([#9083](https://github.com/mrveiss/AutoBot-AI/pull/9083))
+
+- *(connectors)* ConnectorCredentialStore scaffolding per ADR-007 (#9019) (#9079) ([#9079](https://github.com/mrveiss/AutoBot-AI/pull/9079))
+
+- *(llc/adapters)* Add CopilotLocalAdapter for gh copilot CLI sessions (#9008) (#9078) ([#9078](https://github.com/mrveiss/AutoBot-AI/pull/9078))
+
+- *(integrations)* Backend for web push notifications (DB + VAPID + pywebpush) (GH#4459) (#8945) ([#8945](https://github.com/mrveiss/AutoBot-AI/pull/8945))
+
+- *(code-sync)* Add Update This Server button to trigger SLM self-update from GUI (#9073)
+
+- *(chat)* Add conversation folders and collections (#8987) (#9051) ([#9051](https://github.com/mrveiss/AutoBot-AI/pull/9051))
+
+- *(agent-loop)* Assertion-based belief state on TaskContext (GH#6629) (#8956) ([#8956](https://github.com/mrveiss/AutoBot-AI/pull/8956))
+
+- *(chat)* Add Presets settings tab for slash command preset management (GH#4449-2) (#8948) ([#8948](https://github.com/mrveiss/AutoBot-AI/pull/8948))
+
+- *(frontend)* Embeddable chat widget for external websites (GH#4457) (#8943) ([#8943](https://github.com/mrveiss/AutoBot-AI/pull/8943))
+
+- *(execution)* Sandbox state snapshot and restore for resumable agent sessions (GH#4458) (#8991) ([#8991](https://github.com/mrveiss/AutoBot-AI/pull/8991))
+
+- *(voice)* Register voice_bundle_user router and add comprehensive tests (GH#8605)
+
+- *(core)* Idempotent Paperclip API wrappers in autobot_shared (GH#8944) (#8946) ([#8946](https://github.com/mrveiss/AutoBot-AI/pull/8946))
+
+- *(integrations)* Mobile device pairing for push and offline sync (GH#4463) (#8940) ([#8940](https://github.com/mrveiss/AutoBot-AI/pull/8940))
+
+- *(execution)* Add env var configuration for Docker container pool (GH#4452)
+
+- *(chat)* Add SlashCommandDropdown story and managePresets i18n key (GH#4449-2) ([#8937](https://github.com/mrveiss/AutoBot-AI/pull/8937))
+
+- *(llc/kb)* Implement write guard — sub-company agents must not write to parent KB collections (#8598)
+
+- *(npu)* Add heartbeat reachability check to pulse-probe (MVA-1399) (#8892) ([#8892](https://github.com/mrveiss/AutoBot-AI/pull/8892))
+
+- *(belief-state)* Suppress re-queries when high-confidence assertion exists (MVA-1434) ([#8878](https://github.com/mrveiss/AutoBot-AI/pull/8878))
+
+- *(belief-state)* Add ConfigFileExtractor for YAML/TOML/JSON (MVA-1433) ([#8877](https://github.com/mrveiss/AutoBot-AI/pull/8877))
+
+- *(npu)* Architecture-aware SSM kernel path with NPU_SSM_ENABLED flag (MVA-1383) ([#8873](https://github.com/mrveiss/AutoBot-AI/pull/8873))
+
+- *(backend)* Architecture-family dispatch table in attention_backend.py (MVA-1385, GH#7350) ([#8872](https://github.com/mrveiss/AutoBot-AI/pull/8872))
+
+- *(backend)* Bypass 4K/8K context cap for non-transformer models (MVA-1387, GH#7351) ([#8871](https://github.com/mrveiss/AutoBot-AI/pull/8871))
+
+- *(routing)* Add long_context tier to tiered_routing (MVA-1386, GH#7349) ([#8870](https://github.com/mrveiss/AutoBot-AI/pull/8870))
+
+- *(router)* Add expected_output_tokens SSM routing factor (GH#7353) ([#8868](https://github.com/mrveiss/AutoBot-AI/pull/8868))
+
+- *(slm-api)* Add rdp-credentials endpoint for xrdp nodes (MVA-1371) ([#8867](https://github.com/mrveiss/AutoBot-AI/pull/8867))
+
+- *(heartbeat)* Add ERROR status to AgentRuntimeState (MVA-1411) ([#8866](https://github.com/mrveiss/AutoBot-AI/pull/8866))
+
+- *(registry)* Add architecture_family field to model metadata (GH#7347) ([#8864](https://github.com/mrveiss/AutoBot-AI/pull/8864))
+
+- *(rbac)* Per-user voice bundle assignment backend (MVA-1365) ([#8862](https://github.com/mrveiss/AutoBot-AI/pull/8862))
+
+- *(npu-worker)* Add get_inference_engine() and wire into handle_partial_forward (MVA-1354) ([#8861](https://github.com/mrveiss/AutoBot-AI/pull/8861))
+
+- *(npu)* Cross-host pipeline parallelism for 70B+ model sharding (GH#6737) ([#8859](https://github.com/mrveiss/AutoBot-AI/pull/8859))
+
+- *(belief-state)* Prototype Assertion dataclasses + rule-based extractors + loop integration (MVA-1407) ([#8858](https://github.com/mrveiss/AutoBot-AI/pull/8858))
+
+- *(browser)* Scrape template management UI panel (GH#5136 Phase 5) ([#8846](https://github.com/mrveiss/AutoBot-AI/pull/8846))
+
+- *(llc/kb)* Implement write guard — sub-company agents must not write to parent KB (GH#8598) ([#8857](https://github.com/mrveiss/AutoBot-AI/pull/8857))
+
+- *(orchestration)* Per-task git worktree workspace — Celery cleanup, API endpoint, base_agent cwd, tests (GH#6471) ([#8854](https://github.com/mrveiss/AutoBot-AI/pull/8854))
+
+- *(browser)* AI-assisted region proposal endpoint + frontend magic-wand (MVA-1372) ([#8840](https://github.com/mrveiss/AutoBot-AI/pull/8840))
+
+- *(a2a)* Continuous behavioural trust scoring for federated peers (MVA-1368) ([#8838](https://github.com/mrveiss/AutoBot-AI/pull/8838))
+
+- *(browser)* ScrapeTemplate Redis model, CRUD endpoints & template runner (GH#5136 Phase 4) (#8837) ([#8837](https://github.com/mrveiss/AutoBot-AI/pull/8837))
+
+- *(browser)* Wire AccessibilitySnapshot + add page_snapshot/intercept_api MCP tools (#5136 Phase 1, closes #5138) (#8834) ([#8834](https://github.com/mrveiss/AutoBot-AI/pull/8834))
+
+- *(rdp)* Provision .26 (26-VNC) as RDP node — deploy xrdp on port 3389 (GH#1525) ([#8831](https://github.com/mrveiss/AutoBot-AI/pull/8831))
+
+- *(heartbeat)* Add AgentStatus badge and Pause/Resume controls to HeartbeatPanel (GH#8732) (#8825) ([#8825](https://github.com/mrveiss/AutoBot-AI/pull/8825))
+
+- *(execution)* Pre-warmed Docker container pool for fast sandbox cold start (GH#4452) (#8824) ([#8824](https://github.com/mrveiss/AutoBot-AI/pull/8824))
+
+- *(api)* Add typed Python and TypeScript SDK packages for AutoBot API (GH#4454) (#8827) ([#8827](https://github.com/mrveiss/AutoBot-AI/pull/8827))
+
+- *(ux)* Convert WorkflowBuilderView to URL-routed sections (GH#8750) (#8813) ([#8813](https://github.com/mrveiss/AutoBot-AI/pull/8813))
+
+- *(heartbeat)* Wire SkillApproval into system-pause resume workflow (GH#8734)
+
+- *(llc)* Wire GoalService.get_goal_ancestry_for_work_item() into production paths ([#8796](https://github.com/mrveiss/AutoBot-AI/pull/8796))
+
+- *(a2a)* Behavioural trust score for federated peers (GH#7358) (#8736) ([#8736](https://github.com/mrveiss/AutoBot-AI/pull/8736))
+
+- *(orchestration)* Goal ancestry as schema on Task model (GH#6469) (#8735) ([#8735](https://github.com/mrveiss/AutoBot-AI/pull/8735))
+
+- *(agent-loop)* Semantic stagnation detector (GH#6627) (#8723) ([#8723](https://github.com/mrveiss/AutoBot-AI/pull/8723))
+
+- *(mcp)* Plugin discovery for zero-downtime MCP bridge registration (GH#4462) (#8719) ([#8719](https://github.com/mrveiss/AutoBot-AI/pull/8719))
+
+- *(heartbeat)* Add AgentStatus enum and status transition endpoints (GH#6476) ([#8724](https://github.com/mrveiss/AutoBot-AI/pull/8724))
+
+- *(voice)* Cost + duration telemetry for Realtime WebRTC (GH#7421) ([#8720](https://github.com/mrveiss/AutoBot-AI/pull/8720))
+
+- *(memory)* Trajectory learning store (GH#7357) ([#8717](https://github.com/mrveiss/AutoBot-AI/pull/8717))
+
+- *(design-tokens)* Phase 4 ESLint rule — block deprecated size/color tokens in Vue templates (MVA-356) (#8714) ([#8714](https://github.com/mrveiss/AutoBot-AI/pull/8714))
+
+- *(cost)* Auto-refresh MODEL_PRICING from provider APIs (GH#6480) ([#8692](https://github.com/mrveiss/AutoBot-AI/pull/8692))
+
+- *(voice)* MCP tools as Realtime function tools (GH#7343) ([#8711](https://github.com/mrveiss/AutoBot-AI/pull/8711))
+
+- *(coordination)* SharedRuntimeBag follow-up — integration test, AgentBudgetTracker, lint rule (GH#6630) ([#8693](https://github.com/mrveiss/AutoBot-AI/pull/8693))
+
+- *(channels)* Expand gateway to 9+ platforms — Telegram, Signal, Matrix, iMessage (#8703) ([#8703](https://github.com/mrveiss/AutoBot-AI/pull/8703))
+
+- *(rbac)* Per-user voice toolset bundle + settings UI (GH#7422) ([#8694](https://github.com/mrveiss/AutoBot-AI/pull/8694))
+
+- *(design-tokens)* Add DEV prop validators for Size and Intent to base components (MVA-353) ([#8691](https://github.com/mrveiss/AutoBot-AI/pull/8691))
+
+- *(llm)* Anthropic-format passthrough endpoint /v1/messages (GH#6591) ([#8689](https://github.com/mrveiss/AutoBot-AI/pull/8689))
+
+- *(npu-worker)* Architecture-aware model loading — OpenVINO dispatch by architecture_family (GH#7352) ([#8682](https://github.com/mrveiss/AutoBot-AI/pull/8682))
+
+- *(chat)* Preset management modal UI (GH#8596) ([#8688](https://github.com/mrveiss/AutoBot-AI/pull/8688))
+
+- *(orchestration)* Per-task git worktree workspace for code-writing agents (GH#6471) (#8676) ([#8676](https://github.com/mrveiss/AutoBot-AI/pull/8676))
+
+- *(design-tokens)* Codemod small→sm, medium→md, large→lg, danger→error (Phase 1) (#8680) ([#8680](https://github.com/mrveiss/AutoBot-AI/pull/8680))
+
+- *(chat)* Slash command presets backend API endpoints (GH#8595) (#8678) ([#8678](https://github.com/mrveiss/AutoBot-AI/pull/8678))
+
+- *(agent-loop)* Consult error_boundaries severity before retry (GH#6628) ([#8648](https://github.com/mrveiss/AutoBot-AI/pull/8648))
+
+- *(voice)* Backend SDP proxy for OpenAI Realtime WebRTC (GH#7342) ([#8658](https://github.com/mrveiss/AutoBot-AI/pull/8658))
+
+- *(docs)* Verification artifact — wired endpoint/test proof (GH#7359) ([#8677](https://github.com/mrveiss/AutoBot-AI/pull/8677))
+
+- *(cost)* Budget Policies UI — BudgetPolicies.vue (GH#6470) ([#8672](https://github.com/mrveiss/AutoBot-AI/pull/8672))
+
+- *(npu)* Auto-suggest profile from worker capabilities (GH#6738, MVA-1081) ([#8673](https://github.com/mrveiss/AutoBot-AI/pull/8673))
+
+- *(npu)* Pre-fill pair-confirm dialog with recommended_profile + capabilities_summary (GH#6738, MVA-1138) ([#8671](https://github.com/mrveiss/AutoBot-AI/pull/8671))
+
+- *(workers)* Background audit daemon on Celery Beat schedule (GH#7356) ([#8659](https://github.com/mrveiss/AutoBot-AI/pull/8659))
+
+- *(llm/tiered-routing)* Add long_context tier alongside simple/complex (GH#7349) ([#8661](https://github.com/mrveiss/AutoBot-AI/pull/8661))
+
+- *(npu-pipeline)* Provider_registry hook + latency guard (MVA-1099) (#8644) ([#8644](https://github.com/mrveiss/AutoBot-AI/pull/8644))
+
+- *(npu)* Pulse-probe correctness check (GH#6739) (#8660) ([#8660](https://github.com/mrveiss/AutoBot-AI/pull/8660))
+
+- *(agent-loop)* Wire ThinkResult.confidence into halt path — abstention (GH#6626) (#8665) ([#8665](https://github.com/mrveiss/AutoBot-AI/pull/8665))
+
+- *(npu-pipeline)* ShardPlanner + PipelineDispatcher + peer failover (MVA-1096/1097) (#8662) ([#8662](https://github.com/mrveiss/AutoBot-AI/pull/8662))
+
+- *(npu)* Cross-host pipeline dispatcher and integration tests (GH#6737) ([#8643](https://github.com/mrveiss/AutoBot-AI/pull/8643))
+
+- *(npu-pipeline)* Worker partial-forward handler (MVA-1098) ([#8645](https://github.com/mrveiss/AutoBot-AI/pull/8645))
+
+- *(orchestration)* GOAP-style state-space planner for WorkflowPlan (GH#7354) ([#8608](https://github.com/mrveiss/AutoBot-AI/pull/8608))
+
+- *(cost)* Budget policy CRUD API + integration test (GH#6470) ([#8603](https://github.com/mrveiss/AutoBot-AI/pull/8603))
+
+- *(llc)* Provider rate-limit recovery — exponential backoff + auto-resume on quota reset (GH#8502) ([#8607](https://github.com/mrveiss/AutoBot-AI/pull/8607))
+
+- *(voice)* WebRTC Realtime mode in voice conversation UI (#7345) ([#8602](https://github.com/mrveiss/AutoBot-AI/pull/8602))
+
+- *(ui)* Live Canvas — agent-driven visual canvas workspace (GH#7425) ([#8606](https://github.com/mrveiss/AutoBot-AI/pull/8606))
+
+- *(orchestration)* Atomic task checkout via Redis lock (GH#6468) ([#8604](https://github.com/mrveiss/AutoBot-AI/pull/8604))
+
+- *(chat)* Slash command presets — user-defined shortcut prompts (GH#4449) ([#8594](https://github.com/mrveiss/AutoBot-AI/pull/8594))
+
+- *(llc/agents)* Haiku assistant tier — token efficiency (#8486) (#8590) ([#8590](https://github.com/mrveiss/AutoBot-AI/pull/8590))
+
+- *(llc/agents)* Provider-agnostic cheap/senior model tier (#8487) (#8589) ([#8589](https://github.com/mrveiss/AutoBot-AI/pull/8589))
+
+- *(scripts)* Test-first remediation loop + review agent guardrails (#8579) ([#8579](https://github.com/mrveiss/AutoBot-AI/pull/8579))
+
+- *(llc/kb)* Agent capability indexing into company KB on hire/update (#8244)
+
+- *(llc/kb)* Sub-company KB inheritance with parent read-through and weight decay (#8241)
+
+- *(llc/kb)* HandoffBriefGenerator — AI→Human and Human→AI KB briefs (#8239)
+
+- *(llc)* LLC system health probe — scheduler uptime, lag, budget metrics (#8259)
+
+- *(llc/kb)* Sprint KB summarizer — LLM-summarize and merge into project KB on close (GH#8238)
+
+- *(llc)* Board instant pause/resume/terminate controls — FR-GOV-05 (#8256)
+
+- *(llc/frontend)* Company Portability UI — export, import preview, import execute (GH#8250) ([#8537](https://github.com/mrveiss/AutoBot-AI/pull/8537))
+
+- *(llc/frontend)* Company Portability UI — export, import preview, import execute (GH#8250)
+
+- *(llc/kb)* Board decision log writer — approvals indexed to company decisions KB (#8243) ([#8548](https://github.com/mrveiss/AutoBot-AI/pull/8548))
+
+- *(llc)* Company template & snapshot export with secret scrubbing (#8245)
+
+- *(llc/frontend)* Approvals Inbox + Cost Dashboard + Heartbeat Monitor + CEO Chat (#8249)
+
+- *(llc/frontend)* Company Dashboard, Org Chart, Goal Tree, Sub-Company Tree (#8247)
+
+- *(llc)* Work item file attachments — upload, storage, text extraction (#8253)
+
+- *(llc)* Claude_code adapter — ClaudeCodeAdapter for heartbeat sessions (#8258)
+
+- *(llc)* Cross-company template KB — platform-level template index (#8260)
+
+- *(llc)* Notification routing service — relay llc:* Redis events to WebSocket (#8255)
+
+- *(llc)* Work item relations — blocking, blocked-by, duplicate, relates-to (#8252)
+
+- *(llc)* Work item label management — llc_labels table, CRUD API, assignment (#8254)
+
+- *(llc)* Company import — collision detection, preview, namespace remapping (#8246)
+
+- *(llc/kb)* Artifact ingestor — work products indexed into project KB on done (#8242)
+
+- *(llc)* Outbound project management sync — wire LLC work item completion (#8257)
+
+- *(llc/kb)* Agent diary KB writer — post-heartbeat hook on agent_diary.py (#8237)
+
+- *(llc/kb)* KB collection lifecycle manager — create/archive per entity (GH#8235)
+
+- *(llc)* Heartbeat context builder — parallel RAG assembly, fat payload (#8236)
+
+- *(llc/frontend)* Backlog + Sprint Board + Kanban Board + Work Item Detail views (GH#8248) (#8525) ([#8525](https://github.com/mrveiss/AutoBot-AI/pull/8525))
+
+- *(llc/kb)* AC suggester — RAG over company policies + past PBIs (GH#8240) ([#8522](https://github.com/mrveiss/AutoBot-AI/pull/8522))
+
+- *(llc)* Union assignment model — human|agent co-assignees, co-working mode (#8230) (#8514) ([#8514](https://github.com/mrveiss/AutoBot-AI/pull/8514))
+
+- *(llc)* Human review gate — mid-work-item approval step, configurable (#8234) (#8510) ([#8510](https://github.com/mrveiss/AutoBot-AI/pull/8510))
+
+- *(llc)* Agent-to-human handoff — KB brief, reviewer notification (#8231) (#8511) ([#8511](https://github.com/mrveiss/AutoBot-AI/pull/8511))
+
+- *(llc)* Human→Agent handoff — notes ingestion into work item KB, pickup (#8232) (#8509) ([#8509](https://github.com/mrveiss/AutoBot-AI/pull/8509))
+
+- *(llc)* CEO Chat — company-scoped chat resolving to work objects via LLM+KB (#8233) ([#8507](https://github.com/mrveiss/AutoBot-AI/pull/8507))
+
+- *(llm-routing)* Wire Claude as top-tier escalation provider with prompt caching (#8171) ([#8508](https://github.com/mrveiss/AutoBot-AI/pull/8508))
+
+- *(llc)* Provider rate-limit recovery — exponential backoff + auto-resume (GH#8502) ([#8503](https://github.com/mrveiss/AutoBot-AI/pull/8503))
+
+- *(llc)* Heartbeat scheduler — Redis sorted set, cron dispatch, restart-safe (#8225)
+
+- *(llc)* LLC Routines API routes — CRUD, run history, manual trigger (GH#8229)
+
+- *(llc)* RoutineService CRUD + env overlay + secret resolution (GH#8229)
+
+- *(llc)* DB migration + SQLAlchemy models + enums for LLC Routines (#8229)
+
+- *(llc)* LLC Routines — model, service, API, HeartbeatScheduler, pytest suite (GH#8229)
+
+- *(llc)* Adapter protocol — process + http adapters (GH#8226) ([#8484](https://github.com/mrveiss/AutoBot-AI/pull/8484))
+
+- *(llc)* AutoBot agent adapter — GH#8227 (PR #8480)
+
+- *(llc)* AutoBot agent adapter — wraps base_agent.py for heartbeat dispatch (#8227)
+
+- *(llc)* Liveness monitor + budget watchdog — stuck run detection, recovery action (GH#8228) ([#8481](https://github.com/mrveiss/AutoBot-AI/pull/8481))
+
+- *(llc)* AutoBot agent adapter — wraps base_agent.py for heartbeat dispatch (#8227) ([#8480](https://github.com/mrveiss/AutoBot-AI/pull/8480))
+
+- *(llc)* Kanban and Sprint board infrastructure (#8221) ([#8477](https://github.com/mrveiss/AutoBot-AI/pull/8477))
+
+- *(llc)* Human workers as first-class assignees — membership + claim protocol (#8223) (#8475) ([#8475](https://github.com/mrveiss/AutoBot-AI/pull/8475))
+
+- *(llc)* Sprint planning — capacity, velocity history, burndown (GH#8220) ([#8470](https://github.com/mrveiss/AutoBot-AI/pull/8470))
+
+- *(llc)* Sprint auto-close — board approval gate, KB stub, rollover (GH#8224) ([#8471](https://github.com/mrveiss/AutoBot-AI/pull/8471))
+
+- *(llc)* Backlog view API — priority ordering, bulk sprint assign, type/status filter (GH#8222) (#8469) ([#8469](https://github.com/mrveiss/AutoBot-AI/pull/8469))
+
+- *(llc)* LLC API route group + agent-facing API keys (GH#8218) ([#8468](https://github.com/mrveiss/AutoBot-AI/pull/8468))
+
+- *(llc)* Company-scoped secrets — versioned, encrypted, RBAC (GH#8217) (#8467) ([#8467](https://github.com/mrveiss/AutoBot-AI/pull/8467))
+
+- *(llc)* Board approval gates — GH#8214 (#8458) ([#8458](https://github.com/mrveiss/AutoBot-AI/pull/8458))
+
+- *(llc)* Immutable activity log — model, service, API, migration (GH#8216) ([#8457](https://github.com/mrveiss/AutoBot-AI/pull/8457))
+
+- *(llc)* Per-agent budget enforcement — hard stop, soft alert, cost ingest (#8215) ([#8459](https://github.com/mrveiss/AutoBot-AI/pull/8459))
+
+- *(llc)* GH#8212 4-level goal hierarchy — CRUD, ancestry, KB indexing ([#8451](https://github.com/mrveiss/AutoBot-AI/pull/8451))
+
+- *(llc)* Company model extension — sub-companies, budget, issue prefix, status (#8211) ([#8452](https://github.com/mrveiss/AutoBot-AI/pull/8452))
+
+- *(llc)* Work item hierarchy with atomic checkout (GH#8213) ([#8453](https://github.com/mrveiss/AutoBot-AI/pull/8453))
+
+- *(canvas)* Phase 2C — CSP header + integration tests (MVA-486) ([#8450](https://github.com/mrveiss/AutoBot-AI/pull/8450))
+
+- *(skills)* Community skill hub — install external MCP skills from registry (GH#4412) (#8430) ([#8430](https://github.com/mrveiss/AutoBot-AI/pull/8430))
+
+- *(orchestration)* Extract retry_with_backoff + publish_event primitives, shrink Orchestrator to 779 lines (#5060) (#8394) ([#8394](https://github.com/mrveiss/AutoBot-AI/pull/8394))
+
+- *(plugins)* Autobot-plugins/ monorepo + @autobot/terminal + @autobot/vnc (#4984 #4983 #4985) ([#8403](https://github.com/mrveiss/AutoBot-AI/pull/8403))
+
+- *(vector-store,llm)* Batch K — LSM write buffer, tiering, HNSW prefetch, shared LLM rate limiter (#8377) ([#8377](https://github.com/mrveiss/AutoBot-AI/pull/8377))
+
+- *(ui)* P1 migration — convert onMounted data-fetch showToast(error) to BaseAlert (MVA-357) ([#8375](https://github.com/mrveiss/AutoBot-AI/pull/8375))
+
+- *(connectors)* Standardized acceptance test harness for AbstractConnector (#8151) ([#8368](https://github.com/mrveiss/AutoBot-AI/pull/8368))
+
+- *(connectors)* Add config schema versioning and migration support (#8152) (#8367) ([#8367](https://github.com/mrveiss/AutoBot-AI/pull/8367))
+
+- *(connectors)* ExternalConnectorAdapter subprocess adapter (#8150) (#8369) ([#8369](https://github.com/mrveiss/AutoBot-AI/pull/8369))
+
+- *(ui)* P1 migration — convert form-submit showToast(error) to BaseAlert (MVA-355 spec §3/7) ([#8374](https://github.com/mrveiss/AutoBot-AI/pull/8374))
+
+- *(tools/lint)* Add --fix mode to check_decorator_order.py (#6787) ([#8365](https://github.com/mrveiss/AutoBot-AI/pull/8365))
+
+- *(code-analysis)* Add COMPOSABLE_OPPORTUNITY Vue detector (#6748) ([#8371](https://github.com/mrveiss/AutoBot-AI/pull/8371))
+
+- *(orchestration/planner)* Async gap-fill resume path (#7431, ADR-006 Phase 3) (#8370) ([#8370](https://github.com/mrveiss/AutoBot-AI/pull/8370))
+
+- *(ci)* Add smoke-test for docker-compose.hardened.yml (#8094) ([#8351](https://github.com/mrveiss/AutoBot-AI/pull/8351))
+
+- *(llm)* Context_window_manager bypasses 4K/8K cap for non-transformer families (#7351) ([#8348](https://github.com/mrveiss/AutoBot-AI/pull/8348))
+
+- *(llm)* Add ArchitectureFamily enum + attention_backend dispatch (#7347,#7350) ([#8345](https://github.com/mrveiss/AutoBot-AI/pull/8345))
+
+- *(frontend)* Add TypeScript to KnowledgePersistenceDialog (#8329) ([#8336](https://github.com/mrveiss/AutoBot-AI/pull/8336))
+
+- *(security)* Add GitHub security vulnerability reporting policy ([#8334](https://github.com/mrveiss/AutoBot-AI/pull/8334))
+
+- *(rbac)* Named voice-context toolset bundles for MCP exposure (#7344) ([#8321](https://github.com/mrveiss/AutoBot-AI/pull/8321))
+
+- *(llm/tiered-routing)* Add expected_output_tokens factor (#7353) ([#8320](https://github.com/mrveiss/AutoBot-AI/pull/8320))
+
+- *(mcp)* Admin endpoints to generate/revoke scoped tokens (#6453) ([#8319](https://github.com/mrveiss/AutoBot-AI/pull/8319))
+
+- *(frontend/icons)* Migrate 48 component files from FA to canonical Icon.vue (#6442, #4805) ([#8310](https://github.com/mrveiss/AutoBot-AI/pull/8310))
+
+- *(llm)* Wire MCP tools into Ollama provider native function calling (#7911) ([#8305](https://github.com/mrveiss/AutoBot-AI/pull/8305))
+
+- *(orchestration,schemas)* Redis-persist task-assignment state + typed result/AI-stack schemas (#6479, #6407, #6387) (#8309) ([#8309](https://github.com/mrveiss/AutoBot-AI/pull/8309))
+
+- *(frontend)* Wire useFileSandbox() + host inventory UI (#7773, #7513) (#8293) ([#8293](https://github.com/mrveiss/AutoBot-AI/pull/8293))
+
+- *(connectors)* Output schema validation, parallel sync, event hooks (#8147, #8148, #8149) ([#8289](https://github.com/mrveiss/AutoBot-AI/pull/8289))
+
+- *(llm)* Wire MCP tools into Anthropic/OpenAI/Groq/CustomOpenAI providers (#7910) ([#8278](https://github.com/mrveiss/AutoBot-AI/pull/8278))
+
+- *(connectors)* HTTP retry, typed auth, mid-sync checkpoint (#8144, #8145, #8146) ([#8277](https://github.com/mrveiss/AutoBot-AI/pull/8277))
+
+- *(orchestration)* Wire-in orphaned modules + rename AgentRouter → TaskAgentScorer (GH #6820, #6819, #6816) ([#8101](https://github.com/mrveiss/AutoBot-AI/pull/8101))
+
+- *(llm_shared)* Pluggable LLMObserver protocol — GH#6593 (#8100) ([#8100](https://github.com/mrveiss/AutoBot-AI/pull/8100))
+
+- *(api)* Add x-llm-routed-from header + x-llm-cost test (GH#6589, GH#6592) (#8098) ([#8098](https://github.com/mrveiss/AutoBot-AI/pull/8098))
+
+- *(system-health)* Data_callback extension for probe helpers — probe_batch_jobs re-migrated (#6914) (#8086) ([#8086](https://github.com/mrveiss/AutoBot-AI/pull/8086))
+
+- *(security)* Semgrep rules, cosign signing, hardened compose, LLM routing strategies (#6595 #6596 #6597) (#8093) ([#8093](https://github.com/mrveiss/AutoBot-AI/pull/8093))
+
+- *(orchestration)* Wire SuccessCriteriaEvaluator into DAGExecutor + WorkflowExecutor (#7887/#7888) ([#8087](https://github.com/mrveiss/AutoBot-AI/pull/8087))
+
+- *(tls)* Canonical SSL context factory in autobot_shared/tls.py (#6702) ([#8089](https://github.com/mrveiss/AutoBot-AI/pull/8089))
+
+- *(browser)* Wire snapshot-with-regions endpoint to PopoutChromiumBrowser (#6446) (#8081) ([#8081](https://github.com/mrveiss/AutoBot-AI/pull/8081))
+
+- *(artifact-cells)* Implement ChartCell and CodeCell components (MVA-485) ([#8079](https://github.com/mrveiss/AutoBot-AI/pull/8079))
+
+- *(canvas)* MSW mock layer for Live Canvas API (MVA-399) ([#8080](https://github.com/mrveiss/AutoBot-AI/pull/8080))
+
+- *(a11y)* BaseAlert compact size variant + document role=alert (MVA-349) ([#8077](https://github.com/mrveiss/AutoBot-AI/pull/8077))
+
+- *(canvas)* Live Canvas backend — MVA-359/362/370 (#8074) ([#8074](https://github.com/mrveiss/AutoBot-AI/pull/8074))
+
+- *(toast)* Reduce max stack 5→3 with Tier C eviction protection (MVA-347) (#8049) ([#8049](https://github.com/mrveiss/AutoBot-AI/pull/8049))
+
+- *(design-tokens)* Add canonical Size and Intent types (MVA-346) (#8039) ([#8039](https://github.com/mrveiss/AutoBot-AI/pull/8039))
+
+- *(frontend)* Wire AutomationWorkflowStep into useWorkflowBuilder.WorkflowStep (closes #7123) (#7988) ([#7988](https://github.com/mrveiss/AutoBot-AI/pull/7988))
+
+- *(system-health)* Add KnownProbes SSOT enum, use in batch_jobs and long_running probes (#6917) (#7915) ([#7915](https://github.com/mrveiss/AutoBot-AI/pull/7915))
+
+- *(backend)* Centralize background scheduler registry (GH#6594) ([#7914](https://github.com/mrveiss/AutoBot-AI/pull/7914))
+
+- *(voice)* Env_int_clamped helper + AUTOBOT_TTS_MAX_CHUNK_CHARS env var (GH #6824) (#7909) ([#7909](https://github.com/mrveiss/AutoBot-AI/pull/7909))
+
+- *(dashboard)* Surface unwired-tracker modules metric in Code Quality Dashboard (#6871) (#7906) ([#7906](https://github.com/mrveiss/AutoBot-AI/pull/7906))
+
+- *(routing)* Wire TopologyAwareRouter into AgentRouter as topology strategy (#6821) (#7904) ([#7904](https://github.com/mrveiss/AutoBot-AI/pull/7904))
+
+- *(tools/lint)* Broaden check_no_src_mock_path with runtime resolution + caching (#7901) ([#7901](https://github.com/mrveiss/AutoBot-AI/pull/7901))
+
+- *(agents)* Add LEDGER_VS_EXECUTOR rule to base agent prompts (#7380) (#7897) ([#7897](https://github.com/mrveiss/AutoBot-AI/pull/7897))
+
+- *(canvas)* MVA-485 Phase 2B — ChartCell and CodeCell components with a11y (#485) (#7893) ([#7893](https://github.com/mrveiss/AutoBot-AI/pull/7893))
+
+- *(canvas)* MVA-484 Phase 2A — Vega-Lite validation, rich_payload schema, headless SVG export (#7837) ([#7837](https://github.com/mrveiss/AutoBot-AI/pull/7837))
+
+- *(components)* Add ErrorBanner base component (#7462 Phase A) (#7866) ([#7866](https://github.com/mrveiss/AutoBot-AI/pull/7866))
+
+- *(canvas)* MVA-360 Phase 1 — Live Canvas frontend (#7823) ([#7823](https://github.com/mrveiss/AutoBot-AI/pull/7823))
+
+- *(plugin-sdk)* Hooks registry + PluginLoadError + frontend mount registry (#6970, #6971, #6972) (#7792) ([#7792](https://github.com/mrveiss/AutoBot-AI/pull/7792))
+
+- *(api/analytics)* Wire-in EngagementMetricsResponse — backend endpoint + frontend composable (#7111) (#7790) ([#7790](https://github.com/mrveiss/AutoBot-AI/pull/7790))
+
+- *(plugin_sdk)* ManifestContract Protocol + UnifiedRegistry (GH#7369) (#7769) ([#7769](https://github.com/mrveiss/AutoBot-AI/pull/7769))
+
+- *(frontend)* Implement useFileSandbox() composable (GH#7409) (#7772) ([#7772](https://github.com/mrveiss/AutoBot-AI/pull/7772))
+
+- *(frontend)* Implement useFileSandbox() composable (GH#7409)
+
+- *(frontend/a11y)* SLM canonical alignment + icon-only button aria-label audit (GH#7449, GH#7391)
+
+- *(sandbox)* Implement api/sandbox_files.py + register in feature_routers.py (#7409)
+
+- *(slm-frontend)* Storybook 10.x + vue-i18n setup (GH#7390, GH#7392) ([#7763](https://github.com/mrveiss/AutoBot-AI/pull/7763))
+
+- *(frontend)* Add useNotificationBus composable + wire into 17 components (GH#7741) (#7759) ([#7759](https://github.com/mrveiss/AutoBot-AI/pull/7759))
+
+- *(chromadb,tests)* Tag ChromaDB collections with provenance metadata + Redis fixture migration (GH#7427, GH#7280) ([#7756](https://github.com/mrveiss/AutoBot-AI/pull/7756))
+
+- *(canvas)* Phase 1 Live Canvas backend — schema, API, state machine, export (MVA-359) (#7730) ([#7730](https://github.com/mrveiss/AutoBot-AI/pull/7730))
+
+- *(knowledge)* WebResearchPanel 4-tab UI — Fetch Page / Crawl Site / Find Pages / Get Data (MVA-344) (#7726) ([#7726](https://github.com/mrveiss/AutoBot-AI/pull/7726))
+
+- *(toast)* Reduce max stack 5→3 with Tier C eviction protection (MVA-347) (#7731) ([#7731](https://github.com/mrveiss/AutoBot-AI/pull/7731))
+
+- *(a2a)* Outbound PII redaction pipeline — 14 detectors (#7355) ([#7744](https://github.com/mrveiss/AutoBot-AI/pull/7744))
+
+- *(a2a)* Outbound PII redaction pipeline — 14 detectors + task_executor wire-in (#7355)
+
+- *(design-tokens)* Add canonical Size and Intent types (MVA-346) ([#7725](https://github.com/mrveiss/AutoBot-AI/pull/7725))
+
+- *(enums)* Consolidate TaskPriority and AgentStatus to canonical status_enums (#7504)
+
+- *(security)* SEC-2 Phase 2 — wire run-JWT scope validation into MCP bridges (MVA-90) ([#7646](https://github.com/mrveiss/AutoBot-AI/pull/7646))
+
+- *(security)* Mint run-scoped JWTs for heartbeat agents (SEC-2 #6473) (#7534) ([#7534](https://github.com/mrveiss/AutoBot-AI/pull/7534))
+
+- *(llm-keys)* Virtual LLM API keys with per-key budgets (#6590) (#7617) ([#7617](https://github.com/mrveiss/AutoBot-AI/pull/7617))
+
+- *(security)* Run-scoped short-lived JWTs to limit blast radius (#6473) (#7535) ([#7535](https://github.com/mrveiss/AutoBot-AI/pull/7535))
+
+- *(slm/redis)* Wire TLS variables into redis-stack.conf.j2 (#6955)
+
+- *(workflow)* #7431 Phase 3 — async gap-fill resume path for blocked plans (#7268) (#7517) ([#7517](https://github.com/mrveiss/AutoBot-AI/pull/7517))
+
+- *(agent-tools)* Register web-research tools across chat + orchestration + MCP (#7509) (#7514) ([#7514](https://github.com/mrveiss/AutoBot-AI/pull/7514))
+
+- *(knowledge/crawl)* Thin POST /knowledge/crawl endpoint (#7508) (#7512) ([#7512](https://github.com/mrveiss/AutoBot-AI/pull/7512))
+
+- *(web_fetch)* Add WebFetcher.fetch_raw_html public API (closes #7476) (#7497) ([#7497](https://github.com/mrveiss/AutoBot-AI/pull/7497))
+
+- *(web_fetch)* Add POST /knowledge/extract schema-driven structured data extraction (#7405) (#7482) ([#7482](https://github.com/mrveiss/AutoBot-AI/pull/7482))
+
+- *(web_fetch)* Add POST /knowledge/site-map endpoint (#7403) (#7481) ([#7481](https://github.com/mrveiss/AutoBot-AI/pull/7481))
+
+- *(orchestration/executor)* Wire skill_name dispatch into WorkflowExecutor (#7430 / #7268 Phase 2) (#7468) ([#7468](https://github.com/mrveiss/AutoBot-AI/pull/7468))
+
+- *(web_search)* Add fetch_full mode to search_web tool (#7404) (#7465) ([#7465](https://github.com/mrveiss/AutoBot-AI/pull/7465))
+
+- *(knowledge/crawl)* Wire max_depth + frontier + robots in WebCrawlerConnector (#7402) (#7464) ([#7464](https://github.com/mrveiss/AutoBot-AI/pull/7464))
+
+- *(knowledge/scrape)* Consolidate scrape paths + new endpoint (#7401) (#7463) ([#7463](https://github.com/mrveiss/AutoBot-AI/pull/7463))
+
+- *(orchestration/planner)* Wire StrategyPlanner → skill_router for plan-time skill resolution (#7268 Phase 1) (#7432) ([#7432](https://github.com/mrveiss/AutoBot-AI/pull/7432))
+
+- *(web_fetch)* Foundation package with auto-detect render (#7400) (#7428) ([#7428](https://github.com/mrveiss/AutoBot-AI/pull/7428))
+
+- *(test/fixtures)* Extend make_async_redis with pipeline + scan_iter support (closes #7339) (#7397) ([#7397](https://github.com/mrveiss/AutoBot-AI/pull/7397))
+
+- *(tools/lint)* Pre-commit hook flagging patch("src.*") mock paths (closes #7165, closes #7173) (#7333) ([#7333](https://github.com/mrveiss/AutoBot-AI/pull/7333))
+
+- *(codegen)* Extend MANIFEST to cover WorkflowStepStatus + RiskLevel (closes #7226) (#7269) ([#7269](https://github.com/mrveiss/AutoBot-AI/pull/7269))
+
+- *(tests)* Canonical make_async_redis() + patch_async_redis() fixtures (#7264) (#7267) ([#7267](https://github.com/mrveiss/AutoBot-AI/pull/7267))
+
+- *(plugin-sdk)* Declarative required_env field on PluginManifest (#6971) (#7256) ([#7256](https://github.com/mrveiss/AutoBot-AI/pull/7256))
+
+- *(api/analytics)* Wire DateRangeParams as Depends() helper, migrate /timeline (#7110) (#7254) ([#7254](https://github.com/mrveiss/AutoBot-AI/pull/7254))
+
+- *(tooling)* Minimal frontend codegen pipeline + drift CI guard (closes #7122) (#7222) ([#7222](https://github.com/mrveiss/AutoBot-AI/pull/7222))
+
+- *(frontend)* Wire AutomationWorkflowStep into useWorkflowBuilder.WorkflowStep (closes #7123) (#7217) ([#7217](https://github.com/mrveiss/AutoBot-AI/pull/7217))
+
+- *(orchestration)* Wire DEBUG mode + DebugController into workflow executor (closes #7206) (#7213) ([#7213](https://github.com/mrveiss/AutoBot-AI/pull/7213))
+
+- *(workflow)* Lifecycle methods on canonical WorkflowTask + TaskStatus to autobot_shared (closes #7121, partial #6520) (#7212) ([#7212](https://github.com/mrveiss/AutoBot-AI/pull/7212))
+
+- *(code-sync)* Add 'Resync from Source' button to drift report (closes #7149) (#7189) ([#7189](https://github.com/mrveiss/AutoBot-AI/pull/7189))
+
+- *(workflow)* Canonical to_dict()/from_dict() helpers (closes #7124) (#7148) ([#7148](https://github.com/mrveiss/AutoBot-AI/pull/7148))
+
+- *(frontend/health)* Wire /api/system/health/probes into probe-name lookups (#7008) (#7135) ([#7135](https://github.com/mrveiss/AutoBot-AI/pull/7135))
+
+- *(workflow)* Phase 2F + #7044 — split TemplateStep, drop _legacy_step_dict, frontend codegen onto canonical (#6951) (#7112) ([#7112](https://github.com/mrveiss/AutoBot-AI/pull/7112))
+
+- *(frontend/settings)* Wire 'Test backend connection' button (#6964, resolves #6845) (#7077) ([#7077](https://github.com/mrveiss/AutoBot-AI/pull/7077))
+
+- *(intelligence)* Wire MockLLMService — fix broken demo __main__ blocks (#6994) (#7076) ([#7076](https://github.com/mrveiss/AutoBot-AI/pull/7076))
+
+- *(install)* Env-var overrides for interactive prompts (#7057) (#7060) ([#7060](https://github.com/mrveiss/AutoBot-AI/pull/7060))
+
+- *(hooks)* No-new-workflow-step pre-commit guard (#7014, closes #6951 Phase 4) (#7037) ([#7037](https://github.com/mrveiss/AutoBot-AI/pull/7037))
+
+- *(workflow)* Phase 3 — orchestration.types WorkflowStep/Plan aliased to canonical (#6951) (#7011) ([#7011](https://github.com/mrveiss/AutoBot-AI/pull/7011))
+
+- *(system-health)* Expose GET /api/system/health/probes (#6917) (#7003) ([#7003](https://github.com/mrveiss/AutoBot-AI/pull/7003))
+
+- *(autobot_shared)* Add optional_import() helper to MissingDep (#6691) (#6999) ([#6999](https://github.com/mrveiss/AutoBot-AI/pull/6999))
+
+- *(tools/lint)* Block dict-style access on LLMResponse (#6940) (#6996) ([#6996](https://github.com/mrveiss/AutoBot-AI/pull/6996))
+
+- *(workflow)* Phase 2B — migrate enhanced_orchestration onto canonical WorkflowTask (#6951) (#6993) ([#6993](https://github.com/mrveiss/AutoBot-AI/pull/6993))
+
+- *(workflow)* Phase 2A — migrate workflow_templates to canonical WorkflowTask (#6951) (#6985) ([#6985](https://github.com/mrveiss/AutoBot-AI/pull/6985))
+
+- *(workflow)* Canonical WorkflowTask + WorkflowPlan in autobot_shared (#6951) (#6965) ([#6965](https://github.com/mrveiss/AutoBot-AI/pull/6965))
+
+- *(ci)* Generalize hook→CI wrapper to no-direct-redis + no-print-console (closes #6785) (#6956) ([#6956](https://github.com/mrveiss/AutoBot-AI/pull/6956))
+
+- *(frontend)* ESLint no-restricted-syntax rule blocking literal VM-IP fallbacks (closes #6784) (#6949) ([#6949](https://github.com/mrveiss/AutoBot-AI/pull/6949))
+
+- *(closure-gate)* Layered defense against premature feature-issue closure (#6836) (#6875) ([#6875](https://github.com/mrveiss/AutoBot-AI/pull/6875))
+
+- *(system-health)* Probe data enrichment + frontend caller migration (#6902 partial) (#6913) ([#6913](https://github.com/mrveiss/AutoBot-AI/pull/6913))
+
+- *(system-health)* Sunset/Deprecation headers on legacy /api/<module>/health (#6902) (#6912) ([#6912](https://github.com/mrveiss/AutoBot-AI/pull/6912))
+
+- *(system-health)* Post-#3333 follow-ups — boilerplate cleanup, KB metric, cache removal, breaker visibility, feature-routers probe (#6903 #6905 #6906 #6907 #6908) (#6910) ([#6910](https://github.com/mrveiss/AutoBot-AI/pull/6910))
+
+- *(observability)* RAG per-stage timing + iconMappings non-string telemetry (#6791 #6796) (#6805) ([#6805](https://github.com/mrveiss/AutoBot-AI/pull/6805))
+
+- *(observability)* Surface feature-router load status — escalate partial-boot to ERROR + new /api/health/feature-routers (#6797) (#6802) ([#6802](https://github.com/mrveiss/AutoBot-AI/pull/6802))
+
+- *(code-analysis)* Wire LSP + consolidation rules through scanner finalize step (#6747) (#6754) ([#6754](https://github.com/mrveiss/AutoBot-AI/pull/6754))
+
+- *(code-analysis)* Add enum/class consolidation detector to AntiPatternDetector (#6684) (#6736) ([#6736](https://github.com/mrveiss/AutoBot-AI/pull/6736))
+
+- *(code-analysis)* Add LSP-violation detector to AntiPatternDetector (#6661) (#6735) ([#6735](https://github.com/mrveiss/AutoBot-AI/pull/6735))
+
+- *(ci)* Add pre-commit lint check for @with_error_handling/@router decorator order (#6638) (#6714) ([#6714](https://github.com/mrveiss/AutoBot-AI/pull/6714))
+
+- *(audit)* Add SESSION_EXPORT enum value and use it in chat_sessions export endpoint (#6639) (#6712) ([#6712](https://github.com/mrveiss/AutoBot-AI/pull/6712))
+
+- *(frontend)* Unify /agents/* under tabbed AgentsLayout — each tab keeps its own URL (#6634) (#6635) ([#6635](https://github.com/mrveiss/AutoBot-AI/pull/6635))
+
+- *(security)* Wire audit_record into chat_sessions.py session endpoints (#6559) (#6579) ([#6579](https://github.com/mrveiss/AutoBot-AI/pull/6579))
+
+- *(deploy)* Add Celery Beat systemd service so periodic schedules fire (#6555) (#6560) ([#6560](https://github.com/mrveiss/AutoBot-AI/pull/6560))
+
+- *(onboarding)* First-login redirect when no preset applied (#6452) (#6563) ([#6563](https://github.com/mrveiss/AutoBot-AI/pull/6563))
+
+- *(hooks)* Block git checkout main and reset-to-protected to enforce worktree isolation (#6549) (#6550) ([#6550](https://github.com/mrveiss/AutoBot-AI/pull/6550))
+
+- *(plugins)* User-extensible marketplace sources (#6481) (#6500) ([#6500](https://github.com/mrveiss/AutoBot-AI/pull/6500))
+
+- *(nav)* Wire AgentActivity into App.vue navigation (#6451) (#6478) ([#6478](https://github.com/mrveiss/AutoBot-AI/pull/6478))
+
+- *(plugins)* Add ZIP upload + Git URL install for 3rd-party plugins (#6464) (#6466) ([#6466](https://github.com/mrveiss/AutoBot-AI/pull/6466))
+
+- *(security)* Wire audit_record into knowledge and API key mutation endpoints (#6386) (#6444) ([#6444](https://github.com/mrveiss/AutoBot-AI/pull/6444))
+
+- *(ui)* Migrate Font Awesome icons to inline SVG in views + components (#4805) ([#6432](https://github.com/mrveiss/AutoBot-AI/pull/6432))
+
+- *(browser)* Snapshot-with-regions endpoint + region overlay (#5136) ([#6424](https://github.com/mrveiss/AutoBot-AI/pull/6424))
+
+- *(perf)* Move memory write-path off chat hot path via stop/pre-compact hooks (#5073) (#6441) ([#6441](https://github.com/mrveiss/AutoBot-AI/pull/6441))
+
+- *(chat)* Tiered L0-L3 context wake-up to replace unconditional prompt injection (#5066) (#6436) ([#6436](https://github.com/mrveiss/AutoBot-AI/pull/6436))
+
+- *(mcp)* Expose AutoBot memory/KB/graph as MCP server for external clients (#5072) (#6435) ([#6435](https://github.com/mrveiss/AutoBot-AI/pull/6435))
+
+- *(agents)* Per-agent diary with background append and runtime discovery (#5071) (#6434) ([#6434](https://github.com/mrveiss/AutoBot-AI/pull/6434))
+
+- *(skills)* Open skill-manifest standard + external repo import (#5063) (#6427) ([#6427](https://github.com/mrveiss/AutoBot-AI/pull/6427))
+
+- *(onboarding)* Starter presets + system-health doctor for first-run UX (#5061) (#6426) ([#6426](https://github.com/mrveiss/AutoBot-AI/pull/6426))
+
+- *(memory)* Verbatim conversational-memory lane alongside summarized store (#5070) (#6425) ([#6425](https://github.com/mrveiss/AutoBot-AI/pull/6425))
+
+- *(schemas_chat)* Type chat_sessions DataResponse endpoints (#6405) (#6408) ([#6408](https://github.com/mrveiss/AutoBot-AI/pull/6408))
+
+- *(security)* Add structured audit log service with Redis storage and admin query API (#4456) (#6385) ([#6385](https://github.com/mrveiss/AutoBot-AI/pull/6385))
+
+- *(backend)* Add append-only compliance event log with Redis storage and admin query API (#4461) (#6365) ([#6365](https://github.com/mrveiss/AutoBot-AI/pull/6365))
+
+- *(frontend)* Add 'Open in new window' button to DesktopInterface toolbar (#6362) (#6364) ([#6364](https://github.com/mrveiss/AutoBot-AI/pull/6364))
+
+- *(frontend)* Wire DesktopInterface VNC into /slm/tools/novnc view and chat tab (#4977) (#6359) ([#6359](https://github.com/mrveiss/AutoBot-AI/pull/6359))
+
+- *(frontend)* Wire useRequestQueue into ChatController.sendMessage for concurrency control (#6313) (#6355) ([#6355](https://github.com/mrveiss/AutoBot-AI/pull/6355))
+
+- *(plugins)* Add Marketplace tab to PluginsView — merged from standalone /marketplace (#6347)
+
+- *(chat)* Add sources field to chat messages for RAG citation tracking (#4448) (#6310) ([#6310](https://github.com/mrveiss/AutoBot-AI/pull/6310))
+
+- *(skills)* Add MCPSpan tracing per tool call with Redis storage and traces API (#4413) (#6308) ([#6308](https://github.com/mrveiss/AutoBot-AI/pull/6308))
+
+- *(skills)* Add builtin web_fetch, youtube_transcript, github_search, rss_reader skill entries (#4422) (#6296) ([#6296](https://github.com/mrveiss/AutoBot-AI/pull/6296))
+
+- *(frontend)* Add useRequestQueue composable with priority queue and deduplication (#4415) (#6295) ([#6295](https://github.com/mrveiss/AutoBot-AI/pull/6295))
+
+- *(frontend)* Add signal?: AbortSignal to RequestOptions in ApiClient (#6257) (#6267) ([#6267](https://github.com/mrveiss/AutoBot-AI/pull/6267))
+
+- *(frontend)* Migrate multi-value spacing shorthands to design tokens (#4947) (#6239) ([#6239](https://github.com/mrveiss/AutoBot-AI/pull/6239))
+
+- *(tooling)* Add resolve_schema_conflicts.py with AST validation (#6113) (#6208) ([#6208](https://github.com/mrveiss/AutoBot-AI/pull/6208))
+
+- *(composables)* Add useConfirmDialog + ConfirmDialog.vue; register in App.vue (#6092) (#6172) ([#6172](https://github.com/mrveiss/AutoBot-AI/pull/6172))
+
+- *(lint)* Add no-local-schemas pre-commit hook to enforce domain schema separation (#6056) (#6124) ([#6124](https://github.com/mrveiss/AutoBot-AI/pull/6124))
+
+- *(types)* Eliminate any types in composables and stores (#5950) (#6121) ([#6121](https://github.com/mrveiss/AutoBot-AI/pull/6121))
+
+- *(api)* Add @with_error_handling to all remaining API routes — full coverage (#5999) (#6067) ([#6067](https://github.com/mrveiss/AutoBot-AI/pull/6067))
+
+- *(composables)* Add AbortController race protection to 7 fetchWithAuth composables (#5944) (#6065) ([#6065](https://github.com/mrveiss/AutoBot-AI/pull/6065))
+
+- *(composables)* Add AbortController race protection to 7 fetchWithAuth composables (#5944) (#6063) ([#6063](https://github.com/mrveiss/AutoBot-AI/pull/6063))
+
+- *(api)* Add @with_error_handling to all remaining API routes — full coverage (#5999) (#6062) ([#6062](https://github.com/mrveiss/AutoBot-AI/pull/6062))
+
+- *(tools)* Add schema-split scripts for future domain re-splits (#5932) (#5972) ([#5972](https://github.com/mrveiss/AutoBot-AI/pull/5972))
+
+- *(lint)* Add single-assignment variable tracking to check_response_models (#5926) (#5941) ([#5941](https://github.com/mrveiss/AutoBot-AI/pull/5941))
+
+- *(lint)* Add check_response_models pre-commit hook for DataResponse safety (#5913) (#5918) ([#5918](https://github.com/mrveiss/AutoBot-AI/pull/5918))
+
+- *(tools)* Add ToolOutputFilter 15-method pipeline (#5862) ([#5886](https://github.com/mrveiss/AutoBot-AI/pull/5886))
+
+- *(tools)* Add ToolOutputFilter service with YAML config and 3 integration points (#5862) (#5882) ([#5882](https://github.com/mrveiss/AutoBot-AI/pull/5882))
+
+- *(planner)* Wire compress_description into chat_completion_optimized (#5827) (#5858) ([#5858](https://github.com/mrveiss/AutoBot-AI/pull/5858))
+
+- *(api)* Add response_model= to wake_word, analytics_cost, conversation_files, files (#5317) (#5833) ([#5833](https://github.com/mrveiss/AutoBot-AI/pull/5833))
+
+- *(api)* Add response_model= to advanced_control, analytics, integration_github, npu_workers (#5317) (#5832) ([#5832](https://github.com/mrveiss/AutoBot-AI/pull/5832))
+
+- *(api)* Add response_model= to remaining analytics endpoints (#5317) (#5821) ([#5821](https://github.com/mrveiss/AutoBot-AI/pull/5821))
+
+- *(api)* Add response_model= to analytics_architecture, cfg, code, export, pattern_learning, quality (#5317) (#5818) ([#5818](https://github.com/mrveiss/AutoBot-AI/pull/5818))
+
+- *(api)* Add response_model= to remaining knowledge endpoints (#5317) (#5813) ([#5813](https://github.com/mrveiss/AutoBot-AI/pull/5813))
+
+- *(api)* Add response_model= to remaining knowledge endpoints (#5317) (#5811) ([#5811](https://github.com/mrveiss/AutoBot-AI/pull/5811))
+
+- *(api)* Add response_model= to cache_management, monitoring, settings (#5317) (#5810) ([#5810](https://github.com/mrveiss/AutoBot-AI/pull/5810))
+
+- *(api)* Add response_model= to mcp_registry, knowledge_ai_stack, http_client_mcp, feature_flags, database_mcp (#5317) ([#5793](https://github.com/mrveiss/AutoBot-AI/pull/5793))
+
+- *(api)* Add response_model= to logs, git_mcp, analytics_llm_patterns, voice, skills_governance (#5317) ([#5792](https://github.com/mrveiss/AutoBot-AI/pull/5792))
+
+- *(api)* Add response_model= to research_browser, metrics, enterprise_features, web_research_settings, orchestration (#5317) ([#5791](https://github.com/mrveiss/AutoBot-AI/pull/5791))
+
+- *(api)* Add response_model= to analytics_bug_prediction, continuous_learning, maintenance, precommit (#5317) (#5789) ([#5789](https://github.com/mrveiss/AutoBot-AI/pull/5789))
+
+- *(api)* Add response_model= to templates, state_tracking, secrets, development_speedup, analytics_code_review (#5317) ([#5785](https://github.com/mrveiss/AutoBot-AI/pull/5785))
+
+- *(api)* Add response_model= to knowledge_metadata, knowledge_collections, knowledge_categories, validation_dashboard (#5317) ([#5784](https://github.com/mrveiss/AutoBot-AI/pull/5784))
+
+- *(api)* Add response_model= to analytics precommit, maintenance, continuous_learning, bug_prediction (#5317) ([#5783](https://github.com/mrveiss/AutoBot-AI/pull/5783))
+
+- *(api)* Add response_model= to filesystem_mcp, knowledge_tags, scheduler, error_monitoring (#5317) ([#5782](https://github.com/mrveiss/AutoBot-AI/pull/5782))
+
+- *(api)* Add response_model= to playwright, skills, log_forwarding, ide_integration (#5317) ([#5781](https://github.com/mrveiss/AutoBot-AI/pull/5781))
+
+- *(api)* Add response_model= to system, security_assessment, memory, agent_terminal (#5317) ([#5780](https://github.com/mrveiss/AutoBot-AI/pull/5780))
+
+- *(api)* Add response_model= to llm endpoints (#5317) ([#5765](https://github.com/mrveiss/AutoBot-AI/pull/5765))
+
+- *(api)* Add response_model= to chat endpoints (#5317) ([#5764](https://github.com/mrveiss/AutoBot-AI/pull/5764))
+
+- *(api)* Add response_model= to agent and ai_stack endpoints (#5317) (#5763) ([#5763](https://github.com/mrveiss/AutoBot-AI/pull/5763))
+
+- *(api)* Add response_model= to chat endpoints (#5317) (#5762) ([#5762](https://github.com/mrveiss/AutoBot-AI/pull/5762))
+
+- *(api)* Add response_model= to vnc_manager, vnc_mcp, vnc_proxy, browser_mcp endpoints (#5317) (#5759) ([#5759](https://github.com/mrveiss/AutoBot-AI/pull/5759))
+
+- *(api)* Add response_model= to code_intelligence, code_search endpoints (#5317) (#5757) ([#5757](https://github.com/mrveiss/AutoBot-AI/pull/5757))
+
+- *(api)* Add schemas_common.py and wire response_model into terminal endpoints (#5739) (#5755) ([#5755](https://github.com/mrveiss/AutoBot-AI/pull/5755))
+
+- *(redis)* Add AsyncRedisClientLockedMixin; fix unawaited bug + migrate analytics_embedding_patterns (#5710) (#5719) ([#5719](https://github.com/mrveiss/AutoBot-AI/pull/5719))
+
+- *(utils)* Add async_lazy_singleton primitive + migrate 7 async singleton patterns (#5632) (#5658) ([#5658](https://github.com/mrveiss/AutoBot-AI/pull/5658))
+
+- *(composables)* UsePollingJob accepts Ref<number> | number for intervalMs (#5586) (#5635) ([#5635](https://github.com/mrveiss/AutoBot-AI/pull/5635))
+
+- *(provision)* Clean task names, phase chips, heartbeat indicator (#5610)
+
+- *(provision)* Add slow-task hints for pip filtering, package installs, rsync
+
+- *(install)* Stream Ansible output live during deployment
+
+- *(backend)* Add response_model= audit report + first batch of 7 endpoints (#5317) (#5599) ([#5599](https://github.com/mrveiss/AutoBot-AI/pull/5599))
+
+- *(frontend)* Generate api.ts from live OpenAPI spec (898 schemas, #5317)
+
+- *(api-contract)* Add 85 frontend type aliases for all #5317 KB response/request schemas (#5488) (#5555) ([#5555](https://github.com/mrveiss/AutoBot-AI/pull/5555))
+
+- *(useFetchEndpoint)* Per-request context hook threaded through callbacks (#5457) (#5523) ([#5523](https://github.com/mrveiss/AutoBot-AI/pull/5523))
+
+- *(backend)* Add response_model= to knowledge_mcp.py and knowledge_rag_feedback.py (#5317 batch 4c) (#5501) ([#5501](https://github.com/mrveiss/AutoBot-AI/pull/5501))
+
+- *(backend)* Add response_model= to knowledge_mcp.py and knowledge_rag_feedback.py (#5317 batch 4c) (#5500) ([#5500](https://github.com/mrveiss/AutoBot-AI/pull/5500))
+
+- *(backend)* Add response_model= to api/knowledge_vectorization.py endpoints (#5317 batch 4a) (#5499) ([#5499](https://github.com/mrveiss/AutoBot-AI/pull/5499))
+
+- *(backend)* Add response_model= to api/knowledge_maintenance.py endpoints (#5317 batch 3a) (#5497) ([#5497](https://github.com/mrveiss/AutoBot-AI/pull/5497))
+
+- *(backend)* Add response_model= to api/knowledge_population.py endpoints (#5317 batch 3b) (#5496) ([#5496](https://github.com/mrveiss/AutoBot-AI/pull/5496))
+
+- *(backend)* Add response_model= to api/knowledge_rag.py endpoints (#5317 batch 3c) (#5495) ([#5495](https://github.com/mrveiss/AutoBot-AI/pull/5495))
+
+- *(backend)* Add response_model= to api/knowledge_search.py endpoints (#5317 batch 2) (#5492) ([#5492](https://github.com/mrveiss/AutoBot-AI/pull/5492))
+
+- *(backend)* Add response_model= to remaining 20 api/knowledge.py endpoints (#5317 batch 1b) (#5483) ([#5483](https://github.com/mrveiss/AutoBot-AI/pull/5483))
+
+- *(backend)* Add response_model= to 13 api/knowledge.py endpoints (#5317 batch 1a) (#5480) ([#5480](https://github.com/mrveiss/AutoBot-AI/pull/5480))
+
+- *(useFocusTrap)* IsTabbable filter for aria-hidden + inert + display:none (closes #5373) (#5481) ([#5481](https://github.com/mrveiss/AutoBot-AI/pull/5481))
+
+- *(observability)* Wire 10+ KB degradation sites with differentiated reason labels (#5407) (#5451) ([#5451](https://github.com/mrveiss/AutoBot-AI/pull/5451))
+
+- *(composables)* Extract useInitialFocus + full-kit 2 missed dialogs (closes #5410 #5411) (#5417) ([#5417](https://github.com/mrveiss/AutoBot-AI/pull/5417))
+
+- *(utils)* Wire in semantic_chunker_gpu_optimized module (#5395 follow-up) (#5415) ([#5415](https://github.com/mrveiss/AutoBot-AI/pull/5415))
+
+- *(useFetchEndpoint)* FallbackData option + migrate _fetchEnvironmentExportData (#5389) (#5409) ([#5409](https://github.com/mrveiss/AutoBot-AI/pull/5409))
+
+- *(knowledge)* Add AsyncBaseCollection + AsyncBaseClient ABCs + ChromaDB/InMemory adapters (#5316) (#5400) ([#5400](https://github.com/mrveiss/AutoBot-AI/pull/5400))
+
+- *(composables)* Extract useFocusRestore + migrate 3 dialogs (#5356) (#5382) ([#5382](https://github.com/mrveiss/AutoBot-AI/pull/5382))
+
+- *(analytics)* Per-section loading spinners in Hardcodes/Duplicates/Declarations (#5368) (#5376) ([#5376](https://github.com/mrveiss/AutoBot-AI/pull/5376))
+
+- *(composables)* Extract useFocusTrap + migrate BaseModal + HostSelectionDialog (#5130) (#5343) ([#5343](https://github.com/mrveiss/AutoBot-AI/pull/5343))
+
+- *(observability)* Add Prometheus counter + warning log on kb_connected=false (#5319) (#5346) ([#5346](https://github.com/mrveiss/AutoBot-AI/pull/5346))
+
+- *(composables)* Add selectByKey/toggleByKey to useBatchSelection + migrate 4 consumers (#5328) (#5329) ([#5329](https://github.com/mrveiss/AutoBot-AI/pull/5329))
+
+- *(composables)* Extract useExpansion<Key> primitive + migrate 8 sites (#5306) (#5308) ([#5308](https://github.com/mrveiss/AutoBot-AI/pull/5308))
+
+- *(knowledge)* Distinguish empty-KB vs broken-KB with clear CTA panels (#5201) (#5287) ([#5287](https://github.com/mrveiss/AutoBot-AI/pull/5287))
+
+- *(shared)* Add now_utc() helper + migrate 23 dataclass default_factory sites (#5211 phases B1+B2) (#5289) ([#5289](https://github.com/mrveiss/AutoBot-AI/pull/5289))
+
+- *(composables)* Extract useDebouncedSearch primitive (#5198) (#5285) ([#5285](https://github.com/mrveiss/AutoBot-AI/pull/5285))
+
+- *(composables)* Extract useFakeProgress + migrate KnowledgeAdvanced sites (#5237) (#5275) ([#5275](https://github.com/mrveiss/AutoBot-AI/pull/5275))
+
+- *(backend)* Expose KB stats as Pydantic response_models for OpenAPI type-gen (#5248) (#5274) ([#5274](https://github.com/mrveiss/AutoBot-AI/pull/5274))
+
+- *(ui)* Migrate Font Awesome to Icon component in 4 ui files (#5025) (#5255) ([#5255](https://github.com/mrveiss/AutoBot-AI/pull/5255))
+
+- *(composables)* Extract useBatchSelection + refactor useKnowledgeVectorization to use it (#5192) (#5242) ([#5242](https://github.com/mrveiss/AutoBot-AI/pull/5242))
+
+- *(composables)* Extract usePollingJob<T> + migrate KB job-status pollers (#5191) (#5241) ([#5241](https://github.com/mrveiss/AutoBot-AI/pull/5241))
+
+- *(platform)* Add OpenAPI-driven frontend type generation (#5209) (#5229) ([#5229](https://github.com/mrveiss/AutoBot-AI/pull/5229))
+
+- *(visual)* Visual regression tests for Storybook stories (#5077) (#5221) ([#5221](https://github.com/mrveiss/AutoBot-AI/pull/5221))
+
+- *(tools)* Add pre-push git hook enforcing Phase 0c + Phase 6 (#5142 #5143) (#5205) ([#5205](https://github.com/mrveiss/AutoBot-AI/pull/5205))
+
+- *(docs)* Mirror team-implement skill into repo (#5094) (#5188) ([#5188](https://github.com/mrveiss/AutoBot-AI/pull/5188))
+
+- *(tools)* Add tools/codemods/ with proven Vue parseApiResponse codemod (#5150) (#5185) ([#5185](https://github.com/mrveiss/AutoBot-AI/pull/5185))
+
+- *(composables)* Add useApiResource<T> reactive primitive (#5149) (#5161) ([#5161](https://github.com/mrveiss/AutoBot-AI/pull/5161))
+
+- *(benchmarks)* Enforce held-out dev/test split for RAG benchmarks (#5074) (#5146) ([#5146](https://github.com/mrveiss/AutoBot-AI/pull/5146))
+
+- *(rag)* Introduce BaseCollection + BaseClient ABCs for pluggable vector backends (#5062) (#5129) ([#5129](https://github.com/mrveiss/AutoBot-AI/pull/5129))
+
+- *(events)* Add canonical event_type constants module to prevent casing drift (#5014)
+
+- *(security)* Prompt-injection sanitizer for KB queries and documents (#5064) (#5117) ([#5117](https://github.com/mrveiss/AutoBot-AI/pull/5117))
+
+- *(primitives)* Add bounded_gather helper + unit tests (#5059)
+
+- *(knowledge)* Per-org LLM and embedding model config with ssot fallback (#4451)
+
+- *(knowledge)* Add document_sync_queues model with priority-ordered re-indexing (#4453)
+
+- *(knowledge)* Cleanup_orphan_documents + cleanup_generated_files scheduled tasks (#4455)
+
+- *(knowledge)* Add tier attribute to connectors and KnowledgeBrowser readiness badge (#4421)
+
+- *(knowledge)* Add /connectors/health endpoint aggregating test_connection() across registry (#4420)
+
+- *(testing)* Report missing requirements.txt deps in pytest session header (#5032)
+
+- *(ui)* Migrate Font Awesome icons to inline SVG via shared Icon component (#4805)
+
+- *(chat)* Add multi-model comparison fan-out with concurrent SSE streaming (#4414)
+
+- *(api)* Add OpenAI-compatible /v1/chat/completions and /v1/models endpoints (#4447)
+
+- *(usage)* Add personal tab, period selector, and admin tab to UsageView (#4442)
+
+- *(nav)* Wire useNavOverflow into desktop nav — overflow items collapse to More dropdown
+
+- *(nav)* Add NavOverflowMenu component with teleported dropdown and active-route highlight
+
+- *(nav)* Add useNavOverflow composable with ResizeObserver-based overflow detection
+
+- *(media)* Add Jina Reader fast-path to LinkPipeline with BeautifulSoup fallback (#4419)
+
+- *(i18n)* Add CI check script for missing i18n keys (#4826)
+
+- *(rag)* Wire rag_benchmarks into RetrievalLearner feedback loop (#4676)
+
+- *(agent_terminal)* Add countdown timer to tool approval dialog (#4960)
+
+- *(kb)* Search() on DocIndexerService merges autobot_docs into RAGService results (#4953)
+
+- *(about)* Replace placeholder with real About page content
+
+- *(rag)* Consume source_provenance in reranking/response (#4836)
+
+- *(knowledge)* Wire CodeIndexer into DocIndexer pipeline (#4835)
+
+- *(mesh)* Wire CommunityClusterer into production scheduler (#4834)
+
+- *(knowledge)* Add tree-sitter AST code indexer with SHA-256 cache (#4820)
+
+- *(mesh)* Add CommunityCluserer with Leiden anchor seeding (#4819)
+
+- *(mesh)* Add get_anchor_neighbors() to MeshDB + MeshDBAdapter (#4819)
+
+- *(mesh)* Add source_provenance field to GraphRAGService relation metadata (#4818)
+
+- *(knowledge)* Autonomous improvement loop — self-directed RAG/synthesis optimization (#4680) (#4782) ([#4782](https://github.com/mrveiss/AutoBot-AI/pull/4782))
+
+- *(knowledge)* Autonomous synthesis prompt evolution — UCB1 variant selection with provenance-based scoring (#4675) (#4777) ([#4777](https://github.com/mrveiss/AutoBot-AI/pull/4777))
+
+- *(frontend)* Wire DesktopContextPanel into DesktopInterface as collapsible context panel (#4771) (#4776) ([#4776](https://github.com/mrveiss/AutoBot-AI/pull/4776))
+
+- *(frontend)* Wire DesktopView.vue as /desktop route — re-enables direct desktop access (#4704) (#4773) ([#4773](https://github.com/mrveiss/AutoBot-AI/pull/4773))
+
+- *(slm-frontend)* Wire ServicesView.vue as direct /services route (#4762) (#4772) ([#4772](https://github.com/mrveiss/AutoBot-AI/pull/4772))
+
+- *(rag)* Session-adaptive reranking — close feedback loop into live weights (#4690) (#4768) ([#4768](https://github.com/mrveiss/AutoBot-AI/pull/4768))
+
+- *(knowledge)* Evolutionary lineage tracking — parent→child chain for synthesis outputs and KB entities (#4681) (#4767) ([#4767](https://github.com/mrveiss/AutoBot-AI/pull/4767))
+
+- *(frontend)* Wire AgentRegistryView into router at /agents/registry (#4703)
+
+- *(agents)* Add circuit breaker unit tests for issue #4694
+
+- *(agents)* Add circuit breaker for unhealthy distributed agents (#4694)
+
+- *(slm-frontend)* Wire RolesView.vue into router (#4706) (#4752) ([#4752](https://github.com/mrveiss/AutoBot-AI/pull/4752))
+
+- *(slm-frontend)* Wire InfrastructureSettings.vue into router (#4705) (#4751) ([#4751](https://github.com/mrveiss/AutoBot-AI/pull/4751))
+
+- *(frontend)* Wire AgentRegistryView into router at /agents/registry (#4703) (#4750) ([#4750](https://github.com/mrveiss/AutoBot-AI/pull/4750))
+
+- *(agents)* Add circuit breaker for unhealthy distributed agents (#4694) (#4747) ([#4747](https://github.com/mrveiss/AutoBot-AI/pull/4747))
+
+- *(agents)* Add self-critique reflection pass in subagent orchestrator (#4691)
+
+- *(a2a)* Add self-evaluation quality gate before COMPLETED state (#4687)
+
+- *(knowledge)* Add Cognition Store seeding layer to prevent cold-start (#4679)
+
+- *(knowledge)* Per-collection synthesis_model override in synthesis_schema.yaml (#4688)
+
+- *(rag)* Add UCB1 sampling to RetrievalLearner for exploration/exploitation balance (#4674)
+
+- *(rag)* Add RealKBBenchmarks with real ChromaDB precision@k tests (#4697)
+
+- *(knowledge)* Route synthesis output to schema-defined synthesis_target collections (#4635) (#4642) ([#4642](https://github.com/mrveiss/AutoBot-AI/pull/4642))
+
+- *(knowledge)* Wire synthesis_schema into KBSynthesizer prompt selection (#4614) (#4629) ([#4629](https://github.com/mrveiss/AutoBot-AI/pull/4629))
+
+- *(knowledge)* Wire synthesis_schema into KBSynthesizer prompt selection (#4614) (#4623) ([#4623](https://github.com/mrveiss/AutoBot-AI/pull/4623))
+
+- *(knowledge)* Add synthesis provenance log to Redis stream (#4567) (#4588) ([#4588](https://github.com/mrveiss/AutoBot-AI/pull/4588))
+
+- *(knowledge)* Add schema-driven synthesis config to DocIndexer (#4565) (#4586) ([#4586](https://github.com/mrveiss/AutoBot-AI/pull/4586))
+
+- *(knowledge)* Add semantic contradiction detection + /knowledge/lint endpoint (#4566) (#4587) ([#4587](https://github.com/mrveiss/AutoBot-AI/pull/4587))
+
+- *(knowledge)* Add LLM synthesis layer for KB wiki pages (#4564) (#4585) ([#4585](https://github.com/mrveiss/AutoBot-AI/pull/4585))
+
+- *(a2a)* SSE streaming + sliding TTL for A2A task polling (#4554) (#4558) ([#4558](https://github.com/mrveiss/AutoBot-AI/pull/4558))
+
+- *(llm)* Multi-format chat templates (ChatML, Zephyr, Vicuna) for local providers (#4486) (#4516) ([#4516](https://github.com/mrveiss/AutoBot-AI/pull/4516))
+
+- *(execution)* Code_interpreter tool — model-callable Python sandbox (#4485) (#4515) ([#4515](https://github.com/mrveiss/AutoBot-AI/pull/4515))
+
+- *(prompts)* YAML-sectioned system prompt format with per-section overrides (#4484) (#4514) ([#4514](https://github.com/mrveiss/AutoBot-AI/pull/4514))
+
+- *(tools)* Pydantic schema self-correction retry loop for tool validation (#4482) (#4496) ([#4496](https://github.com/mrveiss/AutoBot-AI/pull/4496))
+
+- *(agent)* Inject first-turn context hint on iteration 0 (#4481) (#4495) ([#4495](https://github.com/mrveiss/AutoBot-AI/pull/4495))
+
+- *(auth)* Wire user-management router and add AdminUsersView (#1801) (#4476) ([#4476](https://github.com/mrveiss/AutoBot-AI/pull/4476))
+
+- *(marketplace)* Install/uninstall endpoints and MarketplaceView UI (#1803) (#4473) ([#4473](https://github.com/mrveiss/AutoBot-AI/pull/4473))
+
+- *(research)* AutoResearch integration with experiment loop and nav link (#1440) (#4472) ([#4472](https://github.com/mrveiss/AutoBot-AI/pull/4472))
+
+- *(marketplace)* Plugin and agent marketplace catalog API (#1803) (#4470) ([#4470](https://github.com/mrveiss/AutoBot-AI/pull/4470))
+
+- *(auth)* Add self-signup and user role management endpoints (#1801) (#4469) ([#4469](https://github.com/mrveiss/AutoBot-AI/pull/4469))
+
+- *(usage)* Add POST /record endpoint and UsageView frontend (#1807)
+
+- *(usage)* Add POST /usage/record endpoint for LLM event ingestion (#1807)
+
+- *(ui)* Mobile-responsive layout and navigation (#1804)
+
+- *(agents)* Integrate HeartbeatPanel with live events (#1522) ([#4440](https://github.com/mrveiss/AutoBot-AI/pull/4440))
+
+- *(usage)* Add usage metering and cost tracking API (#1807) ([#4439](https://github.com/mrveiss/AutoBot-AI/pull/4439))
+
+- *(chat)* Implement bidirectional session sync between local store and backend (#4352) (#4417) ([#4417](https://github.com/mrveiss/AutoBot-AI/pull/4417))
+
+- *(views)* Wire orphaned AboutView (#4267) (#4410) ([#4410](https://github.com/mrveiss/AutoBot-AI/pull/4410))
+
+- *(views)* Wire orphaned HomeView (#4266) (#4402) ([#4402](https://github.com/mrveiss/AutoBot-AI/pull/4402))
+
+- *(hooks)* Wire prompt building hooks (#4265) (#4401) ([#4401](https://github.com/mrveiss/AutoBot-AI/pull/4401))
+
+- *(router)* Register error_resilience and user_management routers (#4400) ([#4400](https://github.com/mrveiss/AutoBot-AI/pull/4400))
+
+- *(orchestration)* Autonomous subagent spawning for parallel workstreams (#4348)
+
+- *(hooks)* Wire remaining error/loop hooks (#4262) (#4384) ([#4384](https://github.com/mrveiss/AutoBot-AI/pull/4384))
+
+- Add funding infrastructure for Phase 1.4 (#4393) ([#4393](https://github.com/mrveiss/AutoBot-AI/pull/4393))
+
+- *(scheduler)* Cron-scheduled automation tasks (#4347) (#4388) ([#4388](https://github.com/mrveiss/AutoBot-AI/pull/4388))
+
+- *(orchestration)* Autonomous subagent spawning for parallel workstreams (#4348) (#4387) ([#4387](https://github.com/mrveiss/AutoBot-AI/pull/4387))
+
+- *(hooks)* Wire RAG and response hooks (#4263) (#4385) ([#4385](https://github.com/mrveiss/AutoBot-AI/pull/4385))
+
+- *(hooks)* Wire continuation and approval hooks (#4264) (#4386) ([#4386](https://github.com/mrveiss/AutoBot-AI/pull/4386))
+
+- *(memory)* Provider-based memory architecture (#4344)
+
+- *(memory)* Provider-based memory architecture (#4344) (#4381) ([#4381](https://github.com/mrveiss/AutoBot-AI/pull/4381))
+
+- *(execution)* Pluggable execution backends (Modal, Docker, SSH) (#4343) (#4378) ([#4378](https://github.com/mrveiss/AutoBot-AI/pull/4378))
+
+- *(security)* Prompt injection detection in context files (#4345) (#4379) ([#4379](https://github.com/mrveiss/AutoBot-AI/pull/4379))
+
+- *(execution)* Pluggable execution backends (#4343)
+
+- *(security)* Prompt injection detection in context files (#4345)
+
+- *(skills)* Skill relevance ranking at prompt time (#4337) (#4364) ([#4364](https://github.com/mrveiss/AutoBot-AI/pull/4364))
+
+- *(skills)* Skill relevance ranking at prompt time (#4337)
+
+- *(skills)* Autonomous skill extraction from conversations (#4338)
+
+- *(hooks)* Wire core LLM hooks (#4259) (#4370) ([#4370](https://github.com/mrveiss/AutoBot-AI/pull/4370))
+
+- *(hooks)* Wire session lifecycle hooks (#4260) (#4371) ([#4371](https://github.com/mrveiss/AutoBot-AI/pull/4371))
+
+- *(hooks)* Wire tool execution hooks (#4261) (#4372) ([#4372](https://github.com/mrveiss/AutoBot-AI/pull/4372))
+
+- *(gateway)* Unified multi-platform message gateway (#4340) (#4373) ([#4373](https://github.com/mrveiss/AutoBot-AI/pull/4373))
+
+- *(llm)* Model provider flexibility and vendor-agnostic switching (#4341) (#4374) ([#4374](https://github.com/mrveiss/AutoBot-AI/pull/4374))
+
+- *(resilience)* Error isolation and graceful degradation (#4342) (#4375) ([#4375](https://github.com/mrveiss/AutoBot-AI/pull/4375))
+
+- *(skills)* Skill relevance ranking at prompt time (#4337)
+
+- *(skills)* Autonomous skill extraction from conversations (#4338)
+
+- *(hooks)* Wire core LLM hooks (#4259)
+
+- *(hooks)* Wire tool execution hooks (#4261)
+
+- *(gateway)* Unified multi-platform message gateway (#4340)
+
+- *(llm)* Model provider flexibility and vendor-agnostic switching (#4341)
+
+- *(resilience)* Error isolation and graceful degradation (#4342)
+
+- *(skills)* Skill relevance ranking at prompt time (#4337)
+
+- *(skills)* Autonomous skill extraction from conversations (#4338)
+
+- *(skills)* Usage metrics and health tracking (#4339) (#4366) ([#4366](https://github.com/mrveiss/AutoBot-AI/pull/4366))
+
+- *(integrations)* Add rate limiting to GitHub and Slack (#4162) (#4249) ([#4249](https://github.com/mrveiss/AutoBot-AI/pull/4249))
+
+- *(integrations)* Add rate limiting to GitHub and Slack (#4162)
+
+- *(kb)* Add persistent editable AI output documents (#3245)
+
+- *(integration)* Slack integration for notifications and approvals (#4098)
+
+- *(integration)* GitHub API integration for code context and reviews (#4097)
+
+- *(frontend)* Integrate ThemeToggle into PreferencesPanel (#3286)
+
+- *(frontend)* I18n - multi-language support (#3272)
+
+- Service-to-service auth enforcement (#3394) (#4223) ([#4223](https://github.com/mrveiss/AutoBot-AI/pull/4223))
+
+- *(fullstack)* Model manager - dynamic LLM model list (#3280) (#4164) ([#4164](https://github.com/mrveiss/AutoBot-AI/pull/4164))
+
+- *(fullstack)* Plugin/extension system (#4165) ([#4165](https://github.com/mrveiss/AutoBot-AI/pull/4165))
+
+- *(backend)* Centralized input validation middleware (#3274) (#4169) ([#4169](https://github.com/mrveiss/AutoBot-AI/pull/4169))
+
+- *(fullstack)* Offline mode - core functionality (#3275) (#4170) ([#4170](https://github.com/mrveiss/AutoBot-AI/pull/4170))
+
+- *(autoresearch)* Resume + retry-failures for experiment runner (#3261) (#4209) ([#4209](https://github.com/mrveiss/AutoBot-AI/pull/4209))
+
+- *(frontend)* Complete Knowledge Manager UI (#3270) (#4168) ([#4168](https://github.com/mrveiss/AutoBot-AI/pull/4168))
+
+- *(backend)* Implement circuit breaker pattern (#3271) (#4171) ([#4171](https://github.com/mrveiss/AutoBot-AI/pull/4171))
+
+- Capture deployment/playbook outputs (#4175) (#4198) ([#4198](https://github.com/mrveiss/AutoBot-AI/pull/4198))
+
+- *(chat)* Stream agent chain-of-thought to frontend in real time (#3232) (#4207) ([#4207](https://github.com/mrveiss/AutoBot-AI/pull/4207))
+
+- *(llm)* Prompt_prefix per model in YAML registry (#3263) (#4208) ([#4208](https://github.com/mrveiss/AutoBot-AI/pull/4208))
+
+- *(autoresearch)* Enriched store indexing with missing spec fields (#3212) (#4210) ([#4210](https://github.com/mrveiss/AutoBot-AI/pull/4210))
+
+- *(llm)* Persist provider_metadata on LLMResponse (#3262) (#4211) ([#4211](https://github.com/mrveiss/AutoBot-AI/pull/4211))
+
+- *(knowledge)* Audio/video/YouTube ingestion via Whisper (#3243) (#4212) ([#4212](https://github.com/mrveiss/AutoBot-AI/pull/4212))
+
+- *(autoresearch)* Required_temperature and system_prompt per experiment task (#3259) (#4213) ([#4213](https://github.com/mrveiss/AutoBot-AI/pull/4213))
+
+- *(chat-workflow)* Content-aware tool-call loop detection (#3254) (#4214) ([#4214](https://github.com/mrveiss/AutoBot-AI/pull/4214))
+
+- *(knowledge)* Project-scoped boards for namespaced isolation (#3242) (#4215) ([#4215](https://github.com/mrveiss/AutoBot-AI/pull/4215))
+
+- *(knowledge)* Persistent editable AI output documents (#3245) (#4216) ([#4216](https://github.com/mrveiss/AutoBot-AI/pull/4216))
+
+- *(notifications)* Implement automated CI notification suppression (#4167) (#4222) ([#4222](https://github.com/mrveiss/AutoBot-AI/pull/4222))
+
+- *(slack)* Approval workflow integration (#4163) (#4221) ([#4221](https://github.com/mrveiss/AutoBot-AI/pull/4221))
+
+- *(branch-health)* Implement branch divergence monitoring (#4112) (#4219) ([#4219](https://github.com/mrveiss/AutoBot-AI/pull/4219))
+
+- *(automation)* Implement automated branch cleanup workflows (#4110) (#4218) ([#4218](https://github.com/mrveiss/AutoBot-AI/pull/4218))
+
+- *(monitoring)* Add MCP worker restart budget tracking (#4109) (#4217) ([#4217](https://github.com/mrveiss/AutoBot-AI/pull/4217))
+
+- *(perf)* Memoize expensive computed properties in analytics dashboards (#4036)
+
+- *(ui)* Hotkey command palette with agent personalities (#4095)
+
+- *(chat)* Add ON_PROMPT_READY plugin hooks + telemetry middleware (#3405)
+
+- *(slm)* Add remote shell execution API and distributed_shell workflow step (#3406)
+
+- *(integration)* Notion integration for knowledge base and task tracking (#4099)
+
+- *(events)* Capture and publish task artifacts as evidence (#4094)
+
+- *(agent)* Approval workflow for sensitive operations (#4092)
+
+- *(slm)* Implement autobot-backend Docker deployment API bridge (#3407)
+
+- *(backend)* Dynamic FastAPI endpoint discovery for LLM self-awareness (#3295)
+
+- *(backend)* Complete MCP manual integration (#3287)
+
+- *(testing)* Establish comprehensive automated test coverage framework (#3285)
+
+- *(backend)* Implement knowledge base suggestion logic (#3284)
+
+- *(frontend)* Implement toast notification system (#3283)
+
+- *(fullstack)* Collaborative multi-user support (#3282)
+
+- *(llm)* Add Anthropic and Groq provider adapters (#4096)
+
+- Update issue templates with streamlined bug and feature request forms
+
+- *(backend)* Implement audit logging system (#3277)
+
+- *(frontend)* Implement terminal tab completion (#3279)
+
+- *(knowledge)* Implement Redis-backed task status tracking for async populate (#4103)
+
+- *(agents)* Distribute MCP tool capabilities across agent roster (#3386) (#4104) ([#4104](https://github.com/mrveiss/AutoBot-AI/pull/4104))
+
+- *(rag)* Semantic chunking, fact extraction, entity resolution (#3395) (#4093) ([#4093](https://github.com/mrveiss/AutoBot-AI/pull/4093))
+
+- *(causality-tier4)* Knowledge-grounded agent reasoning - prevent hallucinations via KB grounding
+
+- *(perf)* Memoize analytics computations (#4036) (#4079) ([#4079](https://github.com/mrveiss/AutoBot-AI/pull/4079))
+
+- *(perf)* Optimize base64 thumbnail generation (#4038)
+
+- *(perf)* Debounce search and filter inputs (#4035) (#4075) ([#4075](https://github.com/mrveiss/AutoBot-AI/pull/4075))
+
+- *(perf)* Fix fixed-height containers causing layout thrashing (#4034) (#4074) ([#4074](https://github.com/mrveiss/AutoBot-AI/pull/4074))
+
+- *(perf)* Add loading='lazy' to images for deferred loading (#4033) (#4073) ([#4073](https://github.com/mrveiss/AutoBot-AI/pull/4073))
+
+- *(causality)* Tier 3 architectural - CausalInferenceEngine, DAG validation, error recovery
+
+- *(causality)* Tier 2 medium impact - RAG extraction, counterfactual, analytics
+
+- *(causality)* Tier 1 quick wins - CoT annotations, root-cause API, causal reasoning
+
+- *(knowledge)* Memory graph semantic search — query processor and hybrid scoring (#3384)
+
+- *(perf)* Virtual scrolling for large lists (#4037) (#4071) ([#4071](https://github.com/mrveiss/AutoBot-AI/pull/4071))
+
+- Add contribution section to README
+
+- Add CONTRIBUTORS.md guide for community
+
+- Add GitHub Actions workflow for auto-triage
+
+- Add general issue template
+
+- *(ansible)* Add single-host deployment inventory configuration (#2961)
+
+- *(perf)* Add virtual scrolling composable and integration guide (#4037)
+
+- *(perf)* Add Web Worker for video thumbnail generation (#4038)
+
+- *(pwa)* Add Service Worker and manifest for offline support (#4041)
+
+- Phase-2.3-github-seo-optimize-for-self-hosted-keyword
+
+- *(perf)* Add debounce to search/filter handlers (#4035) (#4049) ([#4049](https://github.com/mrveiss/AutoBot-AI/pull/4049))
+
+- Add issue templates, PR template, contributing guidelines, and funding config (#4031) ([#4031](https://github.com/mrveiss/AutoBot-AI/pull/4031))
+
+- *(frontend)* Add KB full-text search result viewer (#3296) (#3920) ([#3920](https://github.com/mrveiss/AutoBot-AI/pull/3920))
+
+- *(backend)* Implement agent usage tracking (#3921) ([#3921](https://github.com/mrveiss/AutoBot-AI/pull/3921))
+
+- *(backend)* Custom success criteria for workflow orchestrator (#3919) ([#3919](https://github.com/mrveiss/AutoBot-AI/pull/3919))
+
+- *(dev)* Extend hardcoding prevention hook — DB DSNs + timeouts (#3397) ([#3929](https://github.com/mrveiss/AutoBot-AI/pull/3929))
+
+- *(frontend)* Web research settings UI (#3850) ([#3924](https://github.com/mrveiss/AutoBot-AI/pull/3924))
+
+- *(i18n)* Language switcher — globe icon in nav with cross-device sync (#3901) ([#3915](https://github.com/mrveiss/AutoBot-AI/pull/3915))
+
+- *(frontend)* Wire up step editor in AdvancedStepConfirmationModal (#3894) ([#3894](https://github.com/mrveiss/AutoBot-AI/pull/3894))
+
+- *(frontend)* Add web research settings UI (#3896) ([#3896](https://github.com/mrveiss/AutoBot-AI/pull/3896))
+
+- *(backend)* Add hardware priority updates API endpoint (#3895) ([#3895](https://github.com/mrveiss/AutoBot-AI/pull/3895))
+
+- *(agents)* Stream chain-of-thought events to frontend in real time (#3889) ([#3889](https://github.com/mrveiss/AutoBot-AI/pull/3889))
+
+- *(autoresearch)* Wire real scorers + benchmark, add agent registration path (#3208) (#3876) ([#3876](https://github.com/mrveiss/AutoBot-AI/pull/3876))
+
+- *(config)* Config management enhancements — startup validation and sync API (#3398) (#3834) ([#3834](https://github.com/mrveiss/AutoBot-AI/pull/3834))
+
+- *(agent-loop)* Content-aware repetitive tool-call detection (#3255) (#3832) ([#3832](https://github.com/mrveiss/AutoBot-AI/pull/3832))
+
+- *(llm)* Migrate chat completion calls to vLLM optimised API (#3389) (#3835) ([#3835](https://github.com/mrveiss/AutoBot-AI/pull/3835))
+
+- *(hardening)* WebSocket auth, shared WorkflowMemory, register PermissionExtension in lifespan (#3009, tasks 10-12) (#3857) ([#3857](https://github.com/mrveiss/AutoBot-AI/pull/3857))
+
+- *(hardening)* Tool SDK Registry + ToolRegistry SDK dispatch + PermissionEnforcementExtension (#3009, tasks 7-9) (#3853) ([#3853](https://github.com/mrveiss/AutoBot-AI/pull/3853))
+
+- *(memory-graph)* REST endpoints for invalidate_entity and invalidate_relation (#3810) (#3854) ([#3854](https://github.com/mrveiss/AutoBot-AI/pull/3854))
+
+- *(hardening)* Tasks 3-6 + perf(memory): fix O(n) get_all_facts scan (#3009, #3808) (#3846) ([#3846](https://github.com/mrveiss/AutoBot-AI/pull/3846))
+
+- *(memory)* Wire WorkingMemory/EssentialStory/AgentDiary into UnifiedMemoryManager (#3822) ([#3822](https://github.com/mrveiss/AutoBot-AI/pull/3822))
+
+- *(memory)* Temporal fact validity — valid_from/valid_to on memory graph (#3790) (#3807) ([#3807](https://github.com/mrveiss/AutoBot-AI/pull/3807))
+
+- *(memory)* Essential story layer — always-loaded compact memory summary (#3787) (#3804) ([#3804](https://github.com/mrveiss/AutoBot-AI/pull/3804))
+
+- *(knowledge)* Semantic duplicate guard on individual fact writes (#3788) (#3805) ([#3805](https://github.com/mrveiss/AutoBot-AI/pull/3805))
+
+- *(memory)* Essential story layer — always-loaded compact memory summary (#3793) ([#3793](https://github.com/mrveiss/AutoBot-AI/pull/3793))
+
+- *(memory)* Temporal fact validity — valid_from/valid_to on memory graph entities and relations (#3798) ([#3798](https://github.com/mrveiss/AutoBot-AI/pull/3798))
+
+- *(agents)* Per-agent cross-session diary — persistent agent journal in KB (#3792) ([#3792](https://github.com/mrveiss/AutoBot-AI/pull/3792))
+
+- *(knowledge)* Semantic duplicate guard on individual fact writes (#3788) (#3800) ([#3800](https://github.com/mrveiss/AutoBot-AI/pull/3800))
+
+- *(ansible)* Add deploy-hybrid-docker.yml and docker Ansible role (#3424) (#3786) ([#3786](https://github.com/mrveiss/AutoBot-AI/pull/3786))
+
+- *(agents)* Enforce memory read/write via pipeline lifecycle hooks (#3777) ([#3777](https://github.com/mrveiss/AutoBot-AI/pull/3777))
+
+- *(memory)* Context-adaptive memory compression for small-context models (#3776) ([#3776](https://github.com/mrveiss/AutoBot-AI/pull/3776))
+
+- *(memory)* Redis-backed session-scoped working memory with TTL (#3775) ([#3775](https://github.com/mrveiss/AutoBot-AI/pull/3775))
+
+- *(frontend)* Add KB vectorization status badge, action button, batch toolbar, progress modal (#3388) (#3774) ([#3774](https://github.com/mrveiss/AutoBot-AI/pull/3774))
+
+- *(slm)* Redis service management UI — start/stop/restart controls (#3381) ([#3740](https://github.com/mrveiss/AutoBot-AI/pull/3740))
+
+- *(backend)* Persist code-review results in Redis + GET /review/{id} endpoint (#3716) ([#3735](https://github.com/mrveiss/AutoBot-AI/pull/3735))
+
+- *(frontend)* Wrap router-view with ErrorBoundary in App.vue (#3375) ([#3739](https://github.com/mrveiss/AutoBot-AI/pull/3739))
+
+- *(slm)* Implement autobot-admin CLI with reset-password subcommand (#3691) ([#3718](https://github.com/mrveiss/AutoBot-AI/pull/3718))
+
+- *(analytics)* Scope quality/review/evolution/generation to project source_root (#3441) ([#3705](https://github.com/mrveiss/AutoBot-AI/pull/3705))
+
+- *(slm)* Add component selector to File Drift Check UI (#3433) ([#3679](https://github.com/mrveiss/AutoBot-AI/pull/3679))
+
+- *(ansible)* Add pre-flight code_source sync to deploy playbooks (#3604) ([#3677](https://github.com/mrveiss/AutoBot-AI/pull/3677))
+
+- *(slm)* Add admin password reset to user management UI (#3625) ([#3626](https://github.com/mrveiss/AutoBot-AI/pull/3626))
+
+- *(memory-graph)* Consolidate into single autobot_memory_graph with semantic search (#3612) (#3616) ([#3616](https://github.com/mrveiss/AutoBot-AI/pull/3616))
+
+- *(rag)* Per-user annotation signals for personalized RAG retrieval (#3240) (#3610) ([#3610](https://github.com/mrveiss/AutoBot-AI/pull/3610))
+
+- *(ansible)* Add sync-code-source.yml to push code from controller to SLM (#3604)
+
+- *(llm)* YAML-driven per-model parameter registry (#3257)
+
+- *(ansible)* Display code_source staleness metrics in pre-flight sync (#3593) ([#3595](https://github.com/mrveiss/AutoBot-AI/pull/3595))
+
+- *(chat-workflow)* Content-aware tool-call loop detection in LangGraph chat graph (#3254) (#3577) ([#3577](https://github.com/mrveiss/AutoBot-AI/pull/3577))
+
+- *(llm)* Anthropic extended thinking / reasoning budget support (#3258) (#3575) ([#3575](https://github.com/mrveiss/AutoBot-AI/pull/3575))
+
+- *(frontend)* Wire DesktopView and CustomDashboard into router and nav (#3502) ([#3506](https://github.com/mrveiss/AutoBot-AI/pull/3506))
+
+- *(analytics)* Merge quality/review/evolution/generation into per-project codebase analytics (#3436)
+
+- *(slm)* Deployed-vs-source file drift detection (#2834) (#3430) ([#3430](https://github.com/mrveiss/AutoBot-AI/pull/3430))
+
+- *(e2e)* Restore kb-librarian-api.spec.ts for /api/kb-librarian endpoints (#3402) (#3418) ([#3418](https://github.com/mrveiss/AutoBot-AI/pull/3418))
+
+- *(autoresearch)* Quality-diversity archive replacing top-K in PromptOptimizer (#3222) (#3419) ([#3419](https://github.com/mrveiss/AutoBot-AI/pull/3419))
+
+- *(slm)* Implement autobot-backend Docker deployment API bridge (SLM → Ansible → Docker) (#3416) ([#3416](https://github.com/mrveiss/AutoBot-AI/pull/3416))
+
+- *(slm)* Add remote shell execution API + distributed_shell workflow step type for fleet parallelism (#3417) ([#3417](https://github.com/mrveiss/AutoBot-AI/pull/3417))
+
+- *(chat)* Add ON_PROMPT_READY plugin hooks + telemetry-based prompt middleware example (#3414) ([#3414](https://github.com/mrveiss/AutoBot-AI/pull/3414))
+
+- *(monitoring)* Wire HealthCollector state-change events to workflow trigger + notification pipeline (#3415) ([#3415](https://github.com/mrveiss/AutoBot-AI/pull/3415))
+
+- *(backend)* Register kb_librarian router at /api/kb-librarian, add auth guards (#3402) (#3403) ([#3403](https://github.com/mrveiss/AutoBot-AI/pull/3403))
+
+- *(knowledge-graph)* Add 3D force-graph view toggle (#3330) (#3365) ([#3365](https://github.com/mrveiss/AutoBot-AI/pull/3365))
+
+- *(knowledge-graph)* Add 3D force-graph view toggle (#3330) ([#3359](https://github.com/mrveiss/AutoBot-AI/pull/3359))
+
+- *(autoresearch)* Self-referential meta-agent for code-level improvement (#3224) ([#3344](https://github.com/mrveiss/AutoBot-AI/pull/3344))
+
+- *(slm-frontend)* Add typed response interfaces for security API endpoints (#3184) (#3343) ([#3343](https://github.com/mrveiss/AutoBot-AI/pull/3343))
+
+- *(backend)* Add /api/project/* and /api/phases/* endpoints (#3331) (#3339) ([#3339](https://github.com/mrveiss/AutoBot-AI/pull/3339))
+
+- *(autoresearch)* Docker per-experiment isolation in ExperimentRunner (#3320) ([#3320](https://github.com/mrveiss/AutoBot-AI/pull/3320))
+
+- *(autoresearch)* Quality-diversity archive replacing top-K in PromptOptimizer (#3321) ([#3321](https://github.com/mrveiss/AutoBot-AI/pull/3321))
+
+- *(autoresearch)* Staged eval — cheap-first scorer chain gating (#3221) (#3319) ([#3319](https://github.com/mrveiss/AutoBot-AI/pull/3319))
+
+- *(changelog)* Add fragment-based changelog system (A+B)
+
+- *(wizard)* Pre-fill API key secrets on re-run (#3226)
+
+- *(frontend)* AutoResearch experiment dashboard (#3201) (#3207) ([#3207](https://github.com/mrveiss/AutoBot-AI/pull/3207))
+
+- *(autoresearch)* Prompt optimizer + API endpoints + M3 integration (#3200) (#3206) ([#3206](https://github.com/mrveiss/AutoBot-AI/pull/3206))
+
+- *(autoresearch)* Knowledge synthesizer + enriched ChromaDB indexing (#3199) (#3203) ([#3203](https://github.com/mrveiss/AutoBot-AI/pull/3203))
+
+- *(autoresearch)* Scorer interface + 3 implementations (#3198) (#3202) ([#3202](https://github.com/mrveiss/AutoBot-AI/pull/3202))
+
+- *(frontend)* Add real-time workflow execution dashboard (#2155) (#3181) ([#3181](https://github.com/mrveiss/AutoBot-AI/pull/3181))
+
+- *(wizard)* Add API keys step for HF_TOKEN and gated model licenses (#3079)
+
+- *(frontend)* Restore agent settings panel with runtime config (#1822) (#3177) ([#3177](https://github.com/mrveiss/AutoBot-AI/pull/3177))
+
+- *(backend)* Add conversation export and import API (#1808) (#3176) ([#3176](https://github.com/mrveiss/AutoBot-AI/pull/3176))
+
+- *(backend)* Add malloc_trim(0) to clean_memory() for Linux heap reclamation (#3165) (#3170) ([#3170](https://github.com/mrveiss/AutoBot-AI/pull/3170))
+
+- *(notifications)* Add UI for per-workflow notification config (#3139) (#3161) ([#3161](https://github.com/mrveiss/AutoBot-AI/pull/3161))
+
+- *(optimization)* Assemble end-to-end LayerInference pipeline (#3140) (#3160) ([#3160](https://github.com/mrveiss/AutoBot-AI/pull/3160))
+
+- *(optimization)* Add empty-weight model inspection for hardware routing (#1945) (#3159) ([#3159](https://github.com/mrveiss/AutoBot-AI/pull/3159))
+
+- *(frontend)* Add API key configuration step to setup wizard (#3079) (#3156) ([#3156](https://github.com/mrveiss/AutoBot-AI/pull/3156))
+
+- *(workflow)* Add UI for per-workflow notification config (#3139) (#3154) ([#3154](https://github.com/mrveiss/AutoBot-AI/pull/3154))
+
+- *(backend)* Add DELETE /sessions/{id}/checkpoints endpoint (#1482) (#3157) ([#3157](https://github.com/mrveiss/AutoBot-AI/pull/3157))
+
+- *(frontend)* Add togglable quick-actions bar in ChatInput (#1569) (#3155) ([#3155](https://github.com/mrveiss/AutoBot-AI/pull/3155))
+
+- *(frontend)* Add HeartbeatPanel route at /agents/heartbeat (#1521) (#3150) ([#3150](https://github.com/mrveiss/AutoBot-AI/pull/3150))
+
+- *(backend)* Add multi-provider LLM abstraction layer (#1806) (#3145) ([#3145](https://github.com/mrveiss/AutoBot-AI/pull/3145))
+
+- *(npu)* Implement prefetch/overlap I/O pattern (#1944) (#3143) ([#3143](https://github.com/mrveiss/AutoBot-AI/pull/3143))
+
+- *(backend)* Wire quantization config to HfQuantizer in OptimizationRouter (#1943) (#3141) ([#3141](https://github.com/mrveiss/AutoBot-AI/pull/3141))
+
+- *(backend)* Wire NotificationService into workflow executor events (#3101) (#3133) ([#3133](https://github.com/mrveiss/AutoBot-AI/pull/3133))
+
+- *(backend)* Register LayerInferenceEngine as LLM provider in routing (#3104) (#3136) ([#3136](https://github.com/mrveiss/AutoBot-AI/pull/3136))
+
+- *(backend)* Wire NotificationService into workflow executor events (#3101)
+
+- *(backend)* Auto-inject WorkflowMemory findings into agent prompt context (#3099)
+
+- *(backend)* Register LayerInferenceEngine as LLM provider (#3104)
+
+- *(backend)* Replace mcp_sync HTTP-only client with transport-agnostic MCPClient (#3103)
+
+- *(frontend)* Wire full code intelligence features into codebase analytics (#3073) ([#3093](https://github.com/mrveiss/AutoBot-AI/pull/3093))
+
+- *(frontend)* Add navigation tabs for orphaned analytics sub-routes (#3067) ([#3091](https://github.com/mrveiss/AutoBot-AI/pull/3091))
+
+- *(inference)* Add layer-by-layer inference mode for batch processing (#1946) (#3089) ([#3089](https://github.com/mrveiss/AutoBot-AI/pull/3089))
+
+- *(inference)* Add meta device eviction for processed layers (#1952) (#3088) ([#3088](https://github.com/mrveiss/AutoBot-AI/pull/3088))
+
+- *(inference)* Add attention backend fallback chain (#1951) (#3085) ([#3085](https://github.com/mrveiss/AutoBot-AI/pull/3085))
+
+- *(inference)* Add HfQuantizer integration for GPTQ/AWQ models (#1954) (#3083) ([#3083](https://github.com/mrveiss/AutoBot-AI/pull/3083))
+
+- *(frontend)* Add data-testid attributes to RedisServiceControl.vue (#3069) (#3080) ([#3080](https://github.com/mrveiss/AutoBot-AI/pull/3080))
+
+- *(inference)* Add layer-aligned KV cache management (#1964) (#3074) ([#3074](https://github.com/mrveiss/AutoBot-AI/pull/3074))
+
+- *(backend)* Add web pipeline Phase 1 — XHR interceptor + accessibility snapshot (#1967) (#3071) ([#3071](https://github.com/mrveiss/AutoBot-AI/pull/3071))
+
+- *(slm)* Add provision log streaming with heartbeat for long tasks (#3033) (#3068) ([#3068](https://github.com/mrveiss/AutoBot-AI/pull/3068))
+
+- *(orchestration)* Add sub-workflow composition as reusable blocks (#2143) (#3063) ([#3063](https://github.com/mrveiss/AutoBot-AI/pull/3063))
+
+- *(browser)* Add local ML-based CAPTCHA solver via NPU (#1974) (#3064) ([#3064](https://github.com/mrveiss/AutoBot-AI/pull/3064))
+
+- *(backend)* Add workflow input forms and output formatting (#2161) (#3060) ([#3060](https://github.com/mrveiss/AutoBot-AI/pull/3060))
+
+- *(backend)* Add workflow version history and rollback (#2145) (#3058) ([#3058](https://github.com/mrveiss/AutoBot-AI/pull/3058))
+
+- *(backend)* Add event-driven trigger system for workflows (#2139) (#3050) ([#3050](https://github.com/mrveiss/AutoBot-AI/pull/3050))
+
+- *(backend)* Add workflow export/import and sharing (#2165) (#3048) ([#3048](https://github.com/mrveiss/AutoBot-AI/pull/3048))
+
+- *(backend)* Add multi-channel notification service for workflows (#2157) (#3047) ([#3047](https://github.com/mrveiss/AutoBot-AI/pull/3047))
+
+- *(orchestration)* Add shared memory between parallel workflow agents (#3019) (#3046) ([#3046](https://github.com/mrveiss/AutoBot-AI/pull/3046))
+
+- *(security)* Add JWT authentication to all WebSocket endpoints (#2818) (#3040) ([#3040](https://github.com/mrveiss/AutoBot-AI/pull/3040))
+
+- *(orchestration)* Add workflow dry-run validation and debug mode (#2148) (#3038) ([#3038](https://github.com/mrveiss/AutoBot-AI/pull/3038))
+
+- *(security)* Add PreToolUse hooks for command blocking, secret scanning, and file protection (#3021, #3022, #3026) ([#3035](https://github.com/mrveiss/AutoBot-AI/pull/3035))
+
+- *(orchestration)* Add workflow resume-from-failure and error handlers (#2154) (#3036) ([#3036](https://github.com/mrveiss/AutoBot-AI/pull/3036))
+
+- *(shared)* Add unified tool SDK with input validation and permissions (#3018) (#3037) ([#3037](https://github.com/mrveiss/AutoBot-AI/pull/3037))
+
+- *(shared)* Add feature flag system for optional subsystems (#3017) (#3034) ([#3034](https://github.com/mrveiss/AutoBot-AI/pull/3034))
+
+- *(research)* Add AutoResearch M2 orchestrator with web search (#2599) (#3023) ([#3023](https://github.com/mrveiss/AutoBot-AI/pull/3023))
+
+- *(orchestration)* Add structured variable piping between workflow steps (#2141) (#3008) ([#3008](https://github.com/mrveiss/AutoBot-AI/pull/3008))
+
+- *(rag)* Add agentic RAG with search-as-tool and iterative retrieval (#1718) (#3004) ([#3004](https://github.com/mrveiss/AutoBot-AI/pull/3004))
+
+- *(orchestration)* Add DAG executor for conditional workflow branching (#2140) (#3003) ([#3003](https://github.com/mrveiss/AutoBot-AI/pull/3003))
+
+- *(research)* Add native OSINT intelligence sweep engine (#1949) (#3001) ([#3001](https://github.com/mrveiss/AutoBot-AI/pull/3001))
+
+- *(mcp)* Add full MCP spec support with stdio/SSE/HTTP transports (#2133) (#2999) ([#2999](https://github.com/mrveiss/AutoBot-AI/pull/2999))
+
+- *(shared)* Add delta engine for change detection monitoring (#1947) (#2996) ([#2996](https://github.com/mrveiss/AutoBot-AI/pull/2996))
+
+- *(mesh)* Add concrete MeshDB/MeshGraph PostgreSQL adapter (#2548) (#2994) ([#2994](https://github.com/mrveiss/AutoBot-AI/pull/2994))
+
+- *(slm)* Report partial success for update discovery (#1816) (#2993) ([#2993](https://github.com/mrveiss/AutoBot-AI/pull/2993))
+
+- *(backend)* Make chat message timeout configurable (#1907) (#2992) ([#2992](https://github.com/mrveiss/AutoBot-AI/pull/2992))
+
+- *(rag)* Add retrieval pattern distillation (#2095) (#2988) ([#2988](https://github.com/mrveiss/AutoBot-AI/pull/2988))
+
+- *(security)* Add adaptive threat detection learner (#2110) (#2986) ([#2986](https://github.com/mrveiss/AutoBot-AI/pull/2986))
+
+- *(backend)* Add Q-Learning reinforcement router (#2092) (#2982) ([#2982](https://github.com/mrveiss/AutoBot-AI/pull/2982))
+
+- *(shared)* Add multi-tier alert cooldown system (#1948) (#2979) ([#2979](https://github.com/mrveiss/AutoBot-AI/pull/2979))
+
+- *(llm)* Enable model pulling by default after Ollama install (#2960) (#2974) ([#2974](https://github.com/mrveiss/AutoBot-AI/pull/2974))
+
+- *(rag)* Wire staleness propagation into reindexing and reranking (#2547) (#2976) ([#2976](https://github.com/mrveiss/AutoBot-AI/pull/2976))
+
+- *(backend)* Add work-stealing for stale agent tasks (#2109) (#2975) ([#2975](https://github.com/mrveiss/AutoBot-AI/pull/2975))
+
+- *(slm)* Add failure_reason column to FleetSyncJobModel (#1980) (#2973) ([#2973](https://github.com/mrveiss/AutoBot-AI/pull/2973))
+
+- *(backend)* Support multi-GPU VRAM detection (#2032) (#2971) ([#2971](https://github.com/mrveiss/AutoBot-AI/pull/2971))
+
+- *(rag)* Add MMR diversity scoring to reranker (#2090) (#2968) ([#2968](https://github.com/mrveiss/AutoBot-AI/pull/2968))
+
+- *(mesh)* Persist EWC++ weights and importance to Redis (#2546) (#2967) ([#2967](https://github.com/mrveiss/AutoBot-AI/pull/2967))
+
+- *(slm)* Serve SLM at /slm subroute for single-host (#2716) (#2965) ([#2965](https://github.com/mrveiss/AutoBot-AI/pull/2965))
+
+- *(backend)* Add Apple Silicon GPU detection (#2014) (#2963) ([#2963](https://github.com/mrveiss/AutoBot-AI/pull/2963))
+
+- *(backend)* Add per-worker task tracking to failover monitor (#2496)
+
+- *(backend)* Auto-create idx:agent_memory vector index on startup (#2645)
+
+- *(config)* Add missing agents to agents.yaml (#2815)
+
+- *(ansible)* Auto-register VNC credentials in SLM database (#2926) (#2937) ([#2937](https://github.com/mrveiss/AutoBot-AI/pull/2937))
+
+- *(backend)* Add .env drift detection against SSOT config (#2650) (#2938) ([#2938](https://github.com/mrveiss/AutoBot-AI/pull/2938))
+
+- *(deploy)* Pre-check node SSH reachability before provisioning (#2897) (#2903) ([#2903](https://github.com/mrveiss/AutoBot-AI/pull/2903))
+
+- *(deploy)* Auto-pull code_source before Ansible playbook runs (#2896) (#2902) ([#2902](https://github.com/mrveiss/AutoBot-AI/pull/2902))
+
+- *(ansible)* Add VNC node bootstrap and provisioning workflow (#1525, #2407)
+
+- *(setup-wizard)* Stream Ansible provisioning logs via WebSocket (#2754) (#2812) ([#2812](https://github.com/mrveiss/AutoBot-AI/pull/2812))
+
+- *(config)* Implement 6-tier agent-model mapping (#2553) ([#2800](https://github.com/mrveiss/AutoBot-AI/pull/2800))
+
+- *(redis-mcp)* Auto-expire agent memory keys with 24h TTL (#2646) (#2788) ([#2788](https://github.com/mrveiss/AutoBot-AI/pull/2788))
+
+- *(ansible)* Extract shared dependency roles (nginx, python312, nodejs) (#2747)
+
+- *(install)* Auto-assign SLM Manager as code source during install (#2755)
+
+- *(docs)* Add end-user documentation and guides (#1805) (#2713) ([#2713](https://github.com/mrveiss/AutoBot-AI/pull/2713))
+
+- *(autoresearch)* Standalone experiment runner + result store (#2597) ([#2615](https://github.com/mrveiss/AutoBot-AI/pull/2615))
+
+- *(fleet)* Add re-enroll endpoint and UI for decommissioned nodes (#2681)
+
+- *(mcp)* Add Redis MCP Bridge with 25 tools (#2511) ([#2614](https://github.com/mrveiss/AutoBot-AI/pull/2614))
+
+- *(mcp)* Tool prompt injection, cache TTL, and RBAC filtering (#2596, #2598) ([#2621](https://github.com/mrveiss/AutoBot-AI/pull/2621))
+
+- *(workflow)* Vision step chaining, SSOT URL, and web OCR pipeline (#2601) ([#2613](https://github.com/mrveiss/AutoBot-AI/pull/2613))
+
+- *(chat)* Add web_search convenience tool and sync tool docs (#2306, #2593, #2594) ([#2575](https://github.com/mrveiss/AutoBot-AI/pull/2575))
+
+- *(workflows)* Implement DROP_OLDEST with cancellation callback (#2573) ([#2602](https://github.com/mrveiss/AutoBot-AI/pull/2602))
+
+- *(mcp)* Dynamic tool discovery and dispatch for agents (#2513) ([#2590](https://github.com/mrveiss/AutoBot-AI/pull/2590))
+
+- *(workflow)* Add vision step execution handlers (#2397) ([#2581](https://github.com/mrveiss/AutoBot-AI/pull/2581))
+
+- *(chat)* Auto-inject tools reminder after invalid tool calls (#2310) ([#2567](https://github.com/mrveiss/AutoBot-AI/pull/2567))
+
+- *(agents)* Align agent-model mapping with 6-tier SSOT architecture (#2553)
+
+- *(inference)* Layered inference profiler with per-stage timing (#1956) ([#2549](https://github.com/mrveiss/AutoBot-AI/pull/2549))
+
+- *(inference)* Flash Attention v2 with variable-length sequences (#1955) ([#2541](https://github.com/mrveiss/AutoBot-AI/pull/2541))
+
+- *(workflows)* Safety limits with per-step timeouts and cost budgets (#2159) ([#2550](https://github.com/mrveiss/AutoBot-AI/pull/2550))
+
+- *(llm)* Active token budget optimization with context compaction (#2098) ([#2538](https://github.com/mrveiss/AutoBot-AI/pull/2538))
+
+- *(inference)* Only-last-logit optimization for generation (#1968) ([#2545](https://github.com/mrveiss/AutoBot-AI/pull/2545))
+
+- *(mesh)* BFS staleness propagation on Neural Mesh knowledge graph (#2111) ([#2543](https://github.com/mrveiss/AutoBot-AI/pull/2543))
+
+- *(mesh)* EWC++ catastrophic forgetting prevention for EdgeLearner (#2097) ([#2539](https://github.com/mrveiss/AutoBot-AI/pull/2539))
+
+
+### Miscellaneous
+
+- Merge main into Dev_new_gui to resolve PR #9300 conflicts (#9321) ([#9321](https://github.com/mrveiss/AutoBot-AI/pull/9321))
+
+- *(ci/visual)* Regenerate Storybook visual baselines on CI runner (MVA-1480) (#8933) ([#8933](https://github.com/mrveiss/AutoBot-AI/pull/8933))
+
+- *(deps)* Bump the npm_and_yarn group across 3 directories with 2 updates (#8904) ([#8904](https://github.com/mrveiss/AutoBot-AI/pull/8904))
+
+- *(npu)* Fix suggest_profile docstring mismatch + _load_tiers bugs (GH#8674) (#8887) ([#8887](https://github.com/mrveiss/AutoBot-AI/pull/8887))
+
+- *(ci)* Fix pre-existing flake8 violations blocking code-quality CI (MVA-1334) ([#8848](https://github.com/mrveiss/AutoBot-AI/pull/8848))
+
+- *(nav)* Remove dead adminOnly filter in App.vue (GH#8811) (#8820) ([#8820](https://github.com/mrveiss/AutoBot-AI/pull/8820))
+
+- *(ci)* Fix pre-existing flake8 violations blocking code-quality CI (MVA-1187) (#8731) ([#8731](https://github.com/mrveiss/AutoBot-AI/pull/8731))
+
+- *(ci)* Fix pre-existing Black formatting violations in Dev_new_gui (MVA-1173) ([#8725](https://github.com/mrveiss/AutoBot-AI/pull/8725))
+
+- *(orchestration)* Call task_workspace.release() on task completion/cancel (MVA-1152) (#8721) ([#8721](https://github.com/mrveiss/AutoBot-AI/pull/8721))
+
+- *(deps)* Update starlette requirement in /autobot-slm-backend (#8612) ([#8612](https://github.com/mrveiss/AutoBot-AI/pull/8612))
+
+- *(deps-dev)* Bump jsdom from 29.1.0 to 29.1.1 in /autobot-frontend (#8621) ([#8621](https://github.com/mrveiss/AutoBot-AI/pull/8621))
+
+- *(deps)* Update huggingface-hub requirement in /autobot-tts-worker (#8629) ([#8629](https://github.com/mrveiss/AutoBot-AI/pull/8629))
+
+- *(deps)* Bump jsonschema from 4.24.0 to 4.26.0 (#8637) ([#8637](https://github.com/mrveiss/AutoBot-AI/pull/8637))
+
+- *(deps)* Update transformers requirement (#8640) ([#8640](https://github.com/mrveiss/AutoBot-AI/pull/8640))
+
+- *(deps)* Bump docker/setup-buildx-action from 4.0.0 to 4.1.0 (#8609) ([#8609](https://github.com/mrveiss/AutoBot-AI/pull/8609))
+
+- *(deps)* Update tree-sitter requirement in /autobot-backend (#8610) ([#8610](https://github.com/mrveiss/AutoBot-AI/pull/8610))
+
+- *(deps)* Bump codecov/codecov-action from 6.0.0 to 6.0.1 (#8611) ([#8611](https://github.com/mrveiss/AutoBot-AI/pull/8611))
+
+- *(deps)* Update weasyprint requirement in /autobot-backend (#8613) ([#8613](https://github.com/mrveiss/AutoBot-AI/pull/8613))
+
+- *(deps)* Update xxhash requirement from >=3.6.0 to >=3.7.0 (#8638) ([#8638](https://github.com/mrveiss/AutoBot-AI/pull/8638))
+
+- *(deps)* Update huggingface-hub requirement (#8641) ([#8641](https://github.com/mrveiss/AutoBot-AI/pull/8641))
+
+- *(deps)* Update uvicorn requirement (#8642) ([#8642](https://github.com/mrveiss/AutoBot-AI/pull/8642))
+
+- *(deps)* Bump actions/checkout from 4.1.1 to 6.0.2 (#8614) ([#8614](https://github.com/mrveiss/AutoBot-AI/pull/8614))
+
+- *(deps)* Update fastapi requirement in /autobot-slm-backend (#8615) ([#8615](https://github.com/mrveiss/AutoBot-AI/pull/8615))
+
+- *(deps)* Update numpy requirement in /autobot-backend (#8616) ([#8616](https://github.com/mrveiss/AutoBot-AI/pull/8616))
+
+- *(deps)* Update opentelemetry-instrumentation-redis requirement (#8617) ([#8617](https://github.com/mrveiss/AutoBot-AI/pull/8617))
+
+- *(deps)* Update uvicorn requirement in /autobot-slm-backend (#8618) ([#8618](https://github.com/mrveiss/AutoBot-AI/pull/8618))
+
+- *(deps)* Update cachetools requirement in /autobot-backend (#8619) ([#8619](https://github.com/mrveiss/AutoBot-AI/pull/8619))
+
+- *(deps-dev)* Bump @vitest/coverage-v8 in /autobot-frontend (#8620) ([#8620](https://github.com/mrveiss/AutoBot-AI/pull/8620))
+
+- *(deps-dev)* Bump vue-tsc in /autobot-slm-frontend (#8622) ([#8622](https://github.com/mrveiss/AutoBot-AI/pull/8622))
+
+- *(deps-dev)* Bump jiti from 2.6.1 to 2.7.0 in /autobot-frontend (#8623) ([#8623](https://github.com/mrveiss/AutoBot-AI/pull/8623))
+
+- *(deps-dev)* Bump @storybook/vue3-vite in /autobot-slm-frontend (#8624) ([#8624](https://github.com/mrveiss/AutoBot-AI/pull/8624))
+
+- *(deps-dev)* Bump oxlint from 1.63.0 to 1.66.0 in /autobot-frontend (#8625) ([#8625](https://github.com/mrveiss/AutoBot-AI/pull/8625))
+
+- *(deps-dev)* Bump postcss in /autobot-slm-frontend (#8626) ([#8626](https://github.com/mrveiss/AutoBot-AI/pull/8626))
+
+- *(deps)* Bump vega-embed from 6.29.0 to 7.1.0 in /autobot-frontend (#8627) ([#8627](https://github.com/mrveiss/AutoBot-AI/pull/8627))
+
+- *(deps)* Update fastapi requirement in /autobot-tts-worker (#8628) ([#8628](https://github.com/mrveiss/AutoBot-AI/pull/8628))
+
+- *(deps)* Update numpy requirement in /autobot-tts-worker (#8630) ([#8630](https://github.com/mrveiss/AutoBot-AI/pull/8630))
+
+- *(deps)* Update numpy requirement in /autobot-npu-worker (#8631) ([#8631](https://github.com/mrveiss/AutoBot-AI/pull/8631))
+
+- *(deps)* Update chromadb requirement (#8632) ([#8632](https://github.com/mrveiss/AutoBot-AI/pull/8632))
+
+- *(deps)* Update faiss-cpu requirement from >=1.13.2 to >=1.14.2 (#8633) ([#8633](https://github.com/mrveiss/AutoBot-AI/pull/8633))
+
+- *(deps)* Update protobuf requirement (#8634) ([#8634](https://github.com/mrveiss/AutoBot-AI/pull/8634))
+
+- *(deps)* Update pydantic requirement (#8635) ([#8635](https://github.com/mrveiss/AutoBot-AI/pull/8635))
+
+- *(deps)* Update anthropic requirement from >=0.87.0 to >=0.104.1 (#8636) ([#8636](https://github.com/mrveiss/AutoBot-AI/pull/8636))
+
+- *(deps)* Bump click from 8.1.8 to 8.4.1 (#8639) ([#8639](https://github.com/mrveiss/AutoBot-AI/pull/8639))
+
+- *(ci)* Update vue-tsc baseline from 93 to 236
+
+- *(deps)* Bump numpy>=2.4.5 (npu-worker) + transformers>=5.8.1 (tts-worker)
+
+- *(deps-dev)* Bump eslint (#8123) ([#8123](https://github.com/mrveiss/AutoBot-AI/pull/8123))
+
+- *(deps)* Bump undici (#8122) ([#8122](https://github.com/mrveiss/AutoBot-AI/pull/8122))
+
+- *(deps-dev)* Bump vite from 8.0.9 to 8.0.13 in /autobot-slm-frontend (#8121) ([#8121](https://github.com/mrveiss/AutoBot-AI/pull/8121))
+
+- *(deps-dev)* Bump playwright in /autobot-frontend (#8120) ([#8120](https://github.com/mrveiss/AutoBot-AI/pull/8120))
+
+- *(deps-dev)* Bump @types/node in /autobot-slm-frontend (#8119) ([#8119](https://github.com/mrveiss/AutoBot-AI/pull/8119))
+
+- *(deps)* Bump dompurify from 3.4.2 to 3.4.5 in /autobot-frontend (#8118) ([#8118](https://github.com/mrveiss/AutoBot-AI/pull/8118))
+
+- *(deps)* Bump vue-i18n in /autobot-slm-frontend (#8117) ([#8117](https://github.com/mrveiss/AutoBot-AI/pull/8117))
+
+- *(deps)* Bump apexcharts from 5.10.4 to 5.12.0 in /autobot-frontend (#8116) ([#8116](https://github.com/mrveiss/AutoBot-AI/pull/8116))
+
+- *(deps-dev)* Bump @types/node in /autobot-frontend (#8113) ([#8113](https://github.com/mrveiss/AutoBot-AI/pull/8113))
+
+- *(deps)* Bump onnxruntime-web in /autobot-frontend (#8112) ([#8112](https://github.com/mrveiss/AutoBot-AI/pull/8112))
+
+- *(deps)* Update pydantic requirement (#8140) ([#8140](https://github.com/mrveiss/AutoBot-AI/pull/8140))
+
+- *(deps)* Update huggingface-hub requirement (#8139) ([#8139](https://github.com/mrveiss/AutoBot-AI/pull/8139))
+
+- *(deps)* Update pytest requirement (#8138) ([#8138](https://github.com/mrveiss/AutoBot-AI/pull/8138))
+
+- *(deps)* Update spacy requirement (#8137) ([#8137](https://github.com/mrveiss/AutoBot-AI/pull/8137))
+
+- *(deps)* Update llama-index-core requirement (#8136) ([#8136](https://github.com/mrveiss/AutoBot-AI/pull/8136))
+
+- *(deps)* Update transformers requirement (#8135) ([#8135](https://github.com/mrveiss/AutoBot-AI/pull/8135))
+
+- *(deps)* Update torch requirement in /autobot-tts-worker (#8133) ([#8133](https://github.com/mrveiss/AutoBot-AI/pull/8133))
+
+- *(deps)* Bump aiofiles from 24.1.0 to 25.1.0 (#8132) ([#8132](https://github.com/mrveiss/AutoBot-AI/pull/8132))
+
+- *(deps)* Bump uvicorn from 0.35.0 to 0.47.0 (#8131) ([#8131](https://github.com/mrveiss/AutoBot-AI/pull/8131))
+
+- *(deps)* Update datasketch requirement from >=1.9.0 to >=1.10.0 (#8130) ([#8130](https://github.com/mrveiss/AutoBot-AI/pull/8130))
+
+- *(deps)* Update python-multipart requirement in /autobot-tts-worker (#8129) ([#8129](https://github.com/mrveiss/AutoBot-AI/pull/8129))
+
+- *(deps)* Bump kombu from 5.5.4 to 5.6.2 (#8128) ([#8128](https://github.com/mrveiss/AutoBot-AI/pull/8128))
+
+- *(deps)* Update langgraph requirement (#8127) ([#8127](https://github.com/mrveiss/AutoBot-AI/pull/8127))
+
+- *(deps)* Update playwright requirement in /autobot-browser-worker (#8126) ([#8126](https://github.com/mrveiss/AutoBot-AI/pull/8126))
+
+- *(deps)* Update torch requirement in /autobot-npu-worker (#8124) ([#8124](https://github.com/mrveiss/AutoBot-AI/pull/8124))
+
+- *(deps)* Update langgraph requirement in /autobot-backend (#8115) ([#8115](https://github.com/mrveiss/AutoBot-AI/pull/8115))
+
+- *(deps)* Update torch requirement in /autobot-backend (#8114) ([#8114](https://github.com/mrveiss/AutoBot-AI/pull/8114))
+
+- *(deps)* Update prometheus-client requirement (#8111) ([#8111](https://github.com/mrveiss/AutoBot-AI/pull/8111))
+
+- *(deps)* Update cachetools requirement in /autobot-backend (#8110) ([#8110](https://github.com/mrveiss/AutoBot-AI/pull/8110))
+
+- *(deps)* Update python-multipart requirement in /autobot-slm-backend (#8109) ([#8109](https://github.com/mrveiss/AutoBot-AI/pull/8109))
+
+- *(deps)* Update networkx requirement in /autobot-backend (#8108) ([#8108](https://github.com/mrveiss/AutoBot-AI/pull/8108))
+
+- *(deps)* Update uvicorn requirement in /autobot-slm-backend (#8107) ([#8107](https://github.com/mrveiss/AutoBot-AI/pull/8107))
+
+- *(deps)* Update vllm requirement in /autobot-backend (#8105) ([#8105](https://github.com/mrveiss/AutoBot-AI/pull/8105))
+
+- *(deps)* Bump sigstore/cosign-installer from 3.7.0 to 4.1.2 (#8106) ([#8106](https://github.com/mrveiss/AutoBot-AI/pull/8106))
+
+- *(deps)* Bump actions/download-artifact from 4 to 8 (#8104) ([#8104](https://github.com/mrveiss/AutoBot-AI/pull/8104))
+
+- *(deps)* Bump actions/setup-node from 4.0.2 to 6.4.0 (#8103) ([#8103](https://github.com/mrveiss/AutoBot-AI/pull/8103))
+
+- *(deps)* Bump the npm_and_yarn group across 6 directories with 4 updates (#8018) ([#8018](https://github.com/mrveiss/AutoBot-AI/pull/8018))
+
+- *(docs)* Enforce PR template with Thinking Path + Model Used CI check (#6474) (#7937) ([#7937](https://github.com/mrveiss/AutoBot-AI/pull/7937))
+
+- *(api)* Remove _get_llm_interface() compat wrapper (#6944)
+
+- *(tools)* Rename audit-unwired-trackers.py to audit_unwired_trackers.py (#7009) (#7844) ([#7844](https://github.com/mrveiss/AutoBot-AI/pull/7844))
+
+- *(ansible)* Delete dead redis.service.j2 template (#6954) (#7806) ([#7806](https://github.com/mrveiss/AutoBot-AI/pull/7806))
+
+- *(deps)* Phase D batch 4 — remove ast-tools + OTel floor fix + Dependabot grouping (#6959, #6960, #6961) ([#7784](https://github.com/mrveiss/AutoBot-AI/pull/7784))
+
+- *(docs)* Enforce PR template with Thinking Path + Model Used CI check (#6474) (#7735) ([#7735](https://github.com/mrveiss/AutoBot-AI/pull/7735))
+
+- *(ci/visual-regression)* Commit generated baselines from ubuntu-latest CI (GH#7410)
+
+- *(deps)* Update onnxruntime requirement (#7589) ([#7589](https://github.com/mrveiss/AutoBot-AI/pull/7589))
+
+- *(deps)* Update googleapis-common-protos requirement (#7588) ([#7588](https://github.com/mrveiss/AutoBot-AI/pull/7588))
+
+- *(deps)* Update aiohttp requirement (#7587) ([#7587](https://github.com/mrveiss/AutoBot-AI/pull/7587))
+
+- *(deps)* Update openvino requirement (#7586) ([#7586](https://github.com/mrveiss/AutoBot-AI/pull/7586))
+
+- *(deps)* Update huggingface-hub requirement (#7585) ([#7585](https://github.com/mrveiss/AutoBot-AI/pull/7585))
+
+- *(deps)* Update uvicorn requirement (#7584) ([#7584](https://github.com/mrveiss/AutoBot-AI/pull/7584))
+
+- *(deps)* Bump pypdf from 6.10.2 to 6.11.0 (#7583) ([#7583](https://github.com/mrveiss/AutoBot-AI/pull/7583))
+
+- *(deps)* Bump langchain-classic from 1.0.2 to 1.0.7 (#7582) ([#7582](https://github.com/mrveiss/AutoBot-AI/pull/7582))
+
+- *(deps)* Update mcp requirement from >=1.27.0 to >=1.27.1 (#7581) ([#7581](https://github.com/mrveiss/AutoBot-AI/pull/7581))
+
+- *(deps)* Update asyncssh requirement from >=2.22.0 to >=2.23.0 (#7580) ([#7580](https://github.com/mrveiss/AutoBot-AI/pull/7580))
+
+- *(deps)* Bump playwright from 1.54.0 to 1.59.0 (#7579) ([#7579](https://github.com/mrveiss/AutoBot-AI/pull/7579))
+
+- *(deps)* Bump zod (#7578) ([#7578](https://github.com/mrveiss/AutoBot-AI/pull/7578))
+
+- *(deps)* Update fastapi requirement in /autobot-tts-worker (#7577) ([#7577](https://github.com/mrveiss/AutoBot-AI/pull/7577))
+
+- *(deps)* Update transformers requirement in /autobot-tts-worker (#7576) ([#7576](https://github.com/mrveiss/AutoBot-AI/pull/7576))
+
+- *(deps)* Update python-multipart requirement in /autobot-tts-worker (#7575) ([#7575](https://github.com/mrveiss/AutoBot-AI/pull/7575))
+
+- *(deps-dev)* Bump @types/node (#7574) ([#7574](https://github.com/mrveiss/AutoBot-AI/pull/7574))
+
+- *(deps-dev)* Bump eslint-plugin-vue in /autobot-slm-frontend (#7563) ([#7563](https://github.com/mrveiss/AutoBot-AI/pull/7563))
+
+- *(deps-dev)* Bump typescript-eslint in /autobot-slm-frontend (#7562) ([#7562](https://github.com/mrveiss/AutoBot-AI/pull/7562))
+
+- *(deps-dev)* Bump vite-plugin-vue-devtools in /autobot-frontend (#7561) ([#7561](https://github.com/mrveiss/AutoBot-AI/pull/7561))
+
+- *(deps)* Bump vue-router in /autobot-slm-frontend (#7560) ([#7560](https://github.com/mrveiss/AutoBot-AI/pull/7560))
+
+- *(deps)* Update llama-index-core requirement in /autobot-backend (#7558) ([#7558](https://github.com/mrveiss/AutoBot-AI/pull/7558))
+
+- *(deps)* Bump dorny/paths-filter from 3.0.3 to 4.0.1 (#7557) ([#7557](https://github.com/mrveiss/AutoBot-AI/pull/7557))
+
+- *(deps)* Update opentelemetry-instrumentation-fastapi requirement (#7555) ([#7555](https://github.com/mrveiss/AutoBot-AI/pull/7555))
+
+- *(deps)* Bump actions/setup-node from 4.0.1 to 6.4.0 (#7554) ([#7554](https://github.com/mrveiss/AutoBot-AI/pull/7554))
+
+- *(deps)* Update langchain-core requirement in /autobot-backend (#7553) ([#7553](https://github.com/mrveiss/AutoBot-AI/pull/7553))
+
+- *(deps-dev)* Bump start-server-and-test in /autobot-frontend (#7552) ([#7552](https://github.com/mrveiss/AutoBot-AI/pull/7552))
+
+- *(deps)* Bump actions/checkout from 4 to 6 (#7551) ([#7551](https://github.com/mrveiss/AutoBot-AI/pull/7551))
+
+- *(deps)* Update langchain-ollama requirement in /autobot-backend (#7550) ([#7550](https://github.com/mrveiss/AutoBot-AI/pull/7550))
+
+- *(deps)* Bump @tanstack/vue-virtual in /autobot-frontend (#7549) ([#7549](https://github.com/mrveiss/AutoBot-AI/pull/7549))
+
+- *(deps)* Update python-multipart requirement in /autobot-slm-backend (#7548) ([#7548](https://github.com/mrveiss/AutoBot-AI/pull/7548))
+
+- *(deps)* Update paramiko requirement in /autobot-backend (#7547) ([#7547](https://github.com/mrveiss/AutoBot-AI/pull/7547))
+
+- *(deps)* Update pydantic-settings requirement (#7546) ([#7546](https://github.com/mrveiss/AutoBot-AI/pull/7546))
+
+- *(deps)* Update paramiko requirement in /autobot-slm-backend (#7545) ([#7545](https://github.com/mrveiss/AutoBot-AI/pull/7545))
+
+- *(deps-dev)* Bump eslint-plugin-oxlint in /autobot-frontend (#7556) ([#7556](https://github.com/mrveiss/AutoBot-AI/pull/7556))
+
+- *(deps-dev)* Bump oxlint from 1.58.0 to 1.63.0 in /autobot-frontend (#7559) ([#7559](https://github.com/mrveiss/AutoBot-AI/pull/7559))
+
+- *(frontend/types)* Clear two TS2339 composable hotspots — 110→93 (partial #7275) (#7500) ([#7500](https://github.com/mrveiss/AutoBot-AI/pull/7500))
+
+- *(frontend/types)* Clear TS18046 in composables — 76→11 (closes #7274) (#7494) ([#7494](https://github.com/mrveiss/AutoBot-AI/pull/7494))
+
+- *(frontend/types)* Clear Storybook stories vue-tsc cluster — 64 errors → 0 (closes #7273) (#7486) ([#7486](https://github.com/mrveiss/AutoBot-AI/pull/7486))
+
+- *(lint)* Zero flake8 errors — 642 → 0 (closes #7360, completes #6946) (#7395) ([#7395](https://github.com/mrveiss/AutoBot-AI/pull/7395))
+
+- *(format)* Black reformat 1322 backend files (closes #7046, #6946) (#7338) ([#7338](https://github.com/mrveiss/AutoBot-AI/pull/7338))
+
+- *(deps-dev)* Bump prettier from 3.8.1 to 3.8.3 in /autobot-frontend (#7295) ([#7295](https://github.com/mrveiss/AutoBot-AI/pull/7295))
+
+- *(deps)* Bump github/codeql-action from 4.35.3 to 4.35.4 (#7294) ([#7294](https://github.com/mrveiss/AutoBot-AI/pull/7294))
+
+- *(deps)* Bump vue from 3.5.31 to 3.5.34 in /autobot-frontend (#7293) ([#7293](https://github.com/mrveiss/AutoBot-AI/pull/7293))
+
+- *(deps)* Update tree-sitter-javascript requirement (#7292) ([#7292](https://github.com/mrveiss/AutoBot-AI/pull/7292))
+
+- *(deps)* Update authlib requirement in /autobot-slm-backend (#7290) ([#7290](https://github.com/mrveiss/AutoBot-AI/pull/7290))
+
+- *(deps-dev)* Bump @tailwindcss/postcss in /autobot-frontend (#7288) ([#7288](https://github.com/mrveiss/AutoBot-AI/pull/7288))
+
+- *(deps)* Update pydantic requirement in /autobot-slm-backend (#7287) ([#7287](https://github.com/mrveiss/AutoBot-AI/pull/7287))
+
+- *(deps)* Update numpy requirement in /autobot-backend (#7286) ([#7286](https://github.com/mrveiss/AutoBot-AI/pull/7286))
+
+- *(deps)* Update sentence-transformers requirement (#7285) ([#7285](https://github.com/mrveiss/AutoBot-AI/pull/7285))
+
+- *(deps)* Update chromadb requirement in /autobot-backend (#7284) ([#7284](https://github.com/mrveiss/AutoBot-AI/pull/7284))
+
+- *(deps)* Update numpy requirement in /autobot-tts-worker (#7311) ([#7311](https://github.com/mrveiss/AutoBot-AI/pull/7311))
+
+- *(deps)* Bump structlog from 25.4.0 to 25.5.0 (#7326) ([#7326](https://github.com/mrveiss/AutoBot-AI/pull/7326))
+
+- *(deps)* Bump langchain from 1.2.13 to 1.2.18 (#7325) ([#7325](https://github.com/mrveiss/AutoBot-AI/pull/7325))
+
+- *(deps)* Update numpy requirement (#7321) ([#7321](https://github.com/mrveiss/AutoBot-AI/pull/7321))
+
+- *(deps)* Update fastapi requirement (#7320) ([#7320](https://github.com/mrveiss/AutoBot-AI/pull/7320))
+
+- *(deps)* Update tokenizers requirement (#7319) ([#7319](https://github.com/mrveiss/AutoBot-AI/pull/7319))
+
+- *(deps)* Update openvino requirement in /autobot-npu-worker (#7318) ([#7318](https://github.com/mrveiss/AutoBot-AI/pull/7318))
+
+- *(deps)* Update numpy requirement in /autobot-npu-worker (#7317) ([#7317](https://github.com/mrveiss/AutoBot-AI/pull/7317))
+
+- *(deps)* Update python-json-logger requirement (#7316) ([#7316](https://github.com/mrveiss/AutoBot-AI/pull/7316))
+
+- *(deps)* Update llama-index requirement (#7315) ([#7315](https://github.com/mrveiss/AutoBot-AI/pull/7315))
+
+- *(deps)* Update packaging requirement (#7314) ([#7314](https://github.com/mrveiss/AutoBot-AI/pull/7314))
+
+- *(deps)* Update uvicorn requirement in /autobot-tts-worker (#7312) ([#7312](https://github.com/mrveiss/AutoBot-AI/pull/7312))
+
+- *(deps)* Update huggingface-hub requirement in /autobot-tts-worker (#7310) ([#7310](https://github.com/mrveiss/AutoBot-AI/pull/7310))
+
+- *(deps)* Update playwright requirement in /autobot-browser-worker (#7307) ([#7307](https://github.com/mrveiss/AutoBot-AI/pull/7307))
+
+- *(deps-dev)* Bump eslint in /autobot-slm-frontend (#7303) ([#7303](https://github.com/mrveiss/AutoBot-AI/pull/7303))
+
+- *(deps-dev)* Bump tailwindcss in /autobot-slm-frontend (#7302) ([#7302](https://github.com/mrveiss/AutoBot-AI/pull/7302))
+
+- *(deps-dev)* Bump @types/node in /autobot-slm-frontend (#7301) ([#7301](https://github.com/mrveiss/AutoBot-AI/pull/7301))
+
+- *(deps-dev)* Bump vue-tsc from 3.2.6 to 3.2.8 in /autobot-frontend (#7300) ([#7300](https://github.com/mrveiss/AutoBot-AI/pull/7300))
+
+- *(deps-dev)* Bump @types/node in /autobot-frontend (#7298) ([#7298](https://github.com/mrveiss/AutoBot-AI/pull/7298))
+
+- *(deps)* Bump the npm_and_yarn group across 6 directories with 5 updates (#7281) ([#7281](https://github.com/mrveiss/AutoBot-AI/pull/7281))
+
+- *(deps)* Bump the npm_and_yarn group across 6 directories with 4 updates (#7130) ([#7130](https://github.com/mrveiss/AutoBot-AI/pull/7130))
+
+- *(deps)* Bump the uv group across 2 directories with 1 update (#7129) ([#7129](https://github.com/mrveiss/AutoBot-AI/pull/7129))
+
+- *(install)* Mark install.sh as executable in git tree (mode +x) (#7063) ([#7063](https://github.com/mrveiss/AutoBot-AI/pull/7063))
+
+- *(format)* Black autobot_shared + autobot-slm-backend (65 files, partial #6946) (#6974) ([#6974](https://github.com/mrveiss/AutoBot-AI/pull/6974))
+
+- *(frontend/ui)* Remove dead useAppStore import in SystemStatusNotification (#6879) (#6963) ([#6963](https://github.com/mrveiss/AutoBot-AI/pull/6963))
+
+- *(security)* Delete deprecated command_executor.py shim (#6515) (#6952) ([#6952](https://github.com/mrveiss/AutoBot-AI/pull/6952))
+
+- *(deps)* Update python-multipart requirement in /autobot-slm-backend (#6883) ([#6883](https://github.com/mrveiss/AutoBot-AI/pull/6883))
+
+- *(deps)* Bump dompurify from 3.4.1 to 3.4.2 in /autobot-frontend (#6898) ([#6898](https://github.com/mrveiss/AutoBot-AI/pull/6898))
+
+- *(deps)* Bump cytoscape from 3.33.1 to 3.33.3 in /autobot-frontend (#6895) ([#6895](https://github.com/mrveiss/AutoBot-AI/pull/6895))
+
+- *(deps-dev)* Bump @vitejs/plugin-vue in /autobot-frontend (#6894) ([#6894](https://github.com/mrveiss/AutoBot-AI/pull/6894))
+
+- *(deps)* Bump axios from 1.15.2 to 1.16.0 in /autobot-slm-frontend (#6901) ([#6901](https://github.com/mrveiss/AutoBot-AI/pull/6901))
+
+- *(deps-dev)* Bump tailwindcss in /autobot-frontend (#6896) ([#6896](https://github.com/mrveiss/AutoBot-AI/pull/6896))
+
+- *(deps)* Update opentelemetry-instrumentation-fastapi requirement (#6890) ([#6890](https://github.com/mrveiss/AutoBot-AI/pull/6890))
+
+- *(deps)* Update fastapi requirement in /autobot-slm-backend (#6884) ([#6884](https://github.com/mrveiss/AutoBot-AI/pull/6884))
+
+- *(deps)* Update langgraph-checkpoint-redis requirement (#6885) ([#6885](https://github.com/mrveiss/AutoBot-AI/pull/6885))
+
+- *(deps)* Update opentelemetry-instrumentation-aiohttp-client requirement (#6893) ([#6893](https://github.com/mrveiss/AutoBot-AI/pull/6893))
+
+- *(deps)* Update opentelemetry-instrumentation-aiohttp-client requirement (#6892) ([#6892](https://github.com/mrveiss/AutoBot-AI/pull/6892))
+
+- *(deps)* Update ast-tools requirement in /autobot-backend (#6886) ([#6886](https://github.com/mrveiss/AutoBot-AI/pull/6886))
+
+- *(deps)* Update psycopg2-binary requirement in /autobot-slm-backend (#6887) ([#6887](https://github.com/mrveiss/AutoBot-AI/pull/6887))
+
+- *(deps)* Update fastapi requirement in /autobot-backend (#6889) ([#6889](https://github.com/mrveiss/AutoBot-AI/pull/6889))
+
+- *(deps-dev)* Bump eslint-plugin-vue in /autobot-slm-frontend (#6897) ([#6897](https://github.com/mrveiss/AutoBot-AI/pull/6897))
+
+- *(deps)* Bump opentelemetry-api in /autobot-backend (#6888) ([#6888](https://github.com/mrveiss/AutoBot-AI/pull/6888))
+
+- *(deps)* Update opentelemetry-exporter-otlp requirement (#6891) ([#6891](https://github.com/mrveiss/AutoBot-AI/pull/6891))
+
+- *(deps-dev)* Bump @vitejs/plugin-vue in /autobot-slm-frontend (#6899) ([#6899](https://github.com/mrveiss/AutoBot-AI/pull/6899))
+
+- *(deps-dev)* Bump eslint-plugin-cypress in /autobot-frontend (#6900) ([#6900](https://github.com/mrveiss/AutoBot-AI/pull/6900))
+
+- *(ci)* Test + CI-integrate hardcoded-values pre-commit hook (#6725) (#6762) ([#6762](https://github.com/mrveiss/AutoBot-AI/pull/6762))
+
+- *(prompts)* Inject SSOT VM/port vars into chat prompt templates (#6724) (#6742) ([#6742](https://github.com/mrveiss/AutoBot-AI/pull/6742))
+
+- *(cleanup)* Delete stale audit artifacts (#6716) (#6717) ([#6717](https://github.com/mrveiss/AutoBot-AI/pull/6717))
+
+- *(chat)* Remove duplicate stacked @with_error_handling decorators (#6501) (#6518) ([#6518](https://github.com/mrveiss/AutoBot-AI/pull/6518))
+
+- *(chat_workflow)* Remove dead _append_verbatim_turn method (#6450) (#6477) ([#6477](https://github.com/mrveiss/AutoBot-AI/pull/6477))
+
+- *(deps)* Bump dompurify from 3.4.0 to 3.4.1 in /autobot-frontend (#6334) ([#6334](https://github.com/mrveiss/AutoBot-AI/pull/6334))
+
+- *(deps-dev)* Bump postcss in /autobot-slm-frontend (#6333) ([#6333](https://github.com/mrveiss/AutoBot-AI/pull/6333))
+
+- *(deps)* Bump axios from 1.15.1 to 1.15.2 in /autobot-slm-frontend (#6332) ([#6332](https://github.com/mrveiss/AutoBot-AI/pull/6332))
+
+- *(deps-dev)* Bump vue-tsc in /autobot-slm-frontend (#6331) ([#6331](https://github.com/mrveiss/AutoBot-AI/pull/6331))
+
+- *(deps-dev)* Bump jsdom from 29.0.1 to 29.1.0 in /autobot-frontend (#6330) ([#6330](https://github.com/mrveiss/AutoBot-AI/pull/6330))
+
+- *(deps-dev)* Bump vitest from 4.1.4 to 4.1.5 in /autobot-frontend (#6329) ([#6329](https://github.com/mrveiss/AutoBot-AI/pull/6329))
+
+- *(deps-dev)* Bump msw from 2.12.14 to 2.13.6 in /autobot-frontend (#6328) ([#6328](https://github.com/mrveiss/AutoBot-AI/pull/6328))
+
+- *(deps)* Update opentelemetry-instrumentation-redis requirement (#6327) ([#6327](https://github.com/mrveiss/AutoBot-AI/pull/6327))
+
+- *(deps)* Update pydantic requirement in /autobot_shared (#6326) ([#6326](https://github.com/mrveiss/AutoBot-AI/pull/6326))
+
+- *(deps)* Update pandas requirement in /autobot-backend (#6325) ([#6325](https://github.com/mrveiss/AutoBot-AI/pull/6325))
+
+- *(deps-dev)* Bump eslint-plugin-vue in /autobot-frontend (#6324) ([#6324](https://github.com/mrveiss/AutoBot-AI/pull/6324))
+
+- *(deps)* Update opentelemetry-api requirement in /autobot_shared (#6323) ([#6323](https://github.com/mrveiss/AutoBot-AI/pull/6323))
+
+- *(deps)* Update graspologic requirement in /autobot-backend (#6322) ([#6322](https://github.com/mrveiss/AutoBot-AI/pull/6322))
+
+- *(deps)* Update openai requirement in /autobot-backend (#6321) ([#6321](https://github.com/mrveiss/AutoBot-AI/pull/6321))
+
+- *(deps)* Update cryptography requirement in /autobot-slm-backend (#6320) ([#6320](https://github.com/mrveiss/AutoBot-AI/pull/6320))
+
+- *(deps)* Update mcp requirement in /autobot-backend (#6319) ([#6319](https://github.com/mrveiss/AutoBot-AI/pull/6319))
+
+- *(deps)* Update uvicorn requirement in /autobot-slm-backend (#6318) ([#6318](https://github.com/mrveiss/AutoBot-AI/pull/6318))
+
+- *(deps)* Update uvicorn requirement in /autobot-backend (#6317) ([#6317](https://github.com/mrveiss/AutoBot-AI/pull/6317))
+
+- *(deps)* Bump actions/setup-node from 4 to 6 (#6316) ([#6316](https://github.com/mrveiss/AutoBot-AI/pull/6316))
+
+- *(deps)* Update authlib requirement in /autobot-slm-backend (#6315) ([#6315](https://github.com/mrveiss/AutoBot-AI/pull/6315))
+
+- *(backend)* Wire IsolatedBridgeRegistry graceful shutdown on backend exit (#4107) (#6287) ([#6287](https://github.com/mrveiss/AutoBot-AI/pull/6287))
+
+- *(deps)* Remove dead llama-index-vector-stores-redis and llama-index-readers-file (#6127) (#6207) ([#6207](https://github.com/mrveiss/AutoBot-AI/pull/6207))
+
+- *(composables)* Delete useAsyncOperation.ts and AsyncOperationExample.vue — all callers migrated (#6020) (#6117) ([#6117](https://github.com/mrveiss/AutoBot-AI/pull/6117))
+
+- *(redis)* Migrate 3 remaining get_redis_client(async_client=True) callers to get_async_redis_client() (#5661) (#5668) ([#5668](https://github.com/mrveiss/AutoBot-AI/pull/5668))
+
+- *(services)* Delete byte-identical CronScheduler duplicate in services/scheduler/ (#5428) (#5459) ([#5459](https://github.com/mrveiss/AutoBot-AI/pull/5459))
+
+- *(infra)* Delete dead commented import for non-existent SemanticChunker class (#5396) (#5404) ([#5404](https://github.com/mrveiss/AutoBot-AI/pull/5404))
+
+- *(deps-dev)* Bump vite from 7.3.2 to 8.0.9 in /autobot-slm-frontend (#5300) ([#5300](https://github.com/mrveiss/AutoBot-AI/pull/5300))
+
+- *(deps-dev)* Bump eslint-plugin-cypress in /autobot-frontend (#5298) ([#5298](https://github.com/mrveiss/AutoBot-AI/pull/5298))
+
+- *(deps-dev)* Bump typescript in /autobot-slm-frontend (#5303) ([#5303](https://github.com/mrveiss/AutoBot-AI/pull/5303))
+
+- *(deps)* Bump three and @types/three in /autobot-frontend (#5302) ([#5302](https://github.com/mrveiss/AutoBot-AI/pull/5302))
+
+- *(deps)* Bump codecov/codecov-action from 4 to 6 (#5296) ([#5296](https://github.com/mrveiss/AutoBot-AI/pull/5296))
+
+- *(deps)* Bump docker/build-push-action from 4 to 7 (#5295) ([#5295](https://github.com/mrveiss/AutoBot-AI/pull/5295))
+
+- *(deps)* Bump actions/upload-artifact from 4 to 7 (#5294) ([#5294](https://github.com/mrveiss/AutoBot-AI/pull/5294))
+
+- *(deps)* Bump axios from 1.15.0 to 1.15.1 in /autobot-slm-frontend (#5301) ([#5301](https://github.com/mrveiss/AutoBot-AI/pull/5301))
+
+- *(deps-dev)* Bump vite from 8.0.5 to 8.0.9 in /autobot-frontend (#5297) ([#5297](https://github.com/mrveiss/AutoBot-AI/pull/5297))
+
+- *(deps-dev)* Bump happy-dom in /autobot-frontend (#5299) ([#5299](https://github.com/mrveiss/AutoBot-AI/pull/5299))
+
+- *(deps-dev)* Bump eslint from 10.2.0 to 10.2.1 in /autobot-frontend (#5304) ([#5304](https://github.com/mrveiss/AutoBot-AI/pull/5304))
+
+- *(frontend)* Delete useApiRequest (0 callers) (#5183) (#5217) ([#5217](https://github.com/mrveiss/AutoBot-AI/pull/5217))
+
+- *(cleanup)* Remove accidentally-committed MERGE_PLAN.md + gitignore agent scratch (#5098)
+
+- *(deps)* Bump 3d-force-graph in /autobot-frontend
+
+- *(deps-dev)* Bump @types/node in /autobot-slm-frontend
+
+- *(deps)* Bump docker/setup-buildx-action from 3 to 4
+
+- *(deps)* Bump actions/checkout from 4 to 6
+
+- *(deps)* Bump actions/upload-artifact from 4 to 7
+
+- *(deps-dev)* Bump @types/node in /autobot-frontend
+
+- *(deps-dev)* Bump typescript in /autobot-frontend
+
+- *(deps-dev)* Bump cypress in /autobot-frontend
+
+- *(deps-dev)* Bump eslint from 10.1.0 to 10.2.0 in /autobot-frontend
+
+- *(deps)* Bump vue from 3.5.31 to 3.5.32 in /autobot-slm-frontend
+
+- *(deps-dev)* Bump typescript-eslint in /autobot-slm-frontend
+
+- Update package-lock.json after vitest run
+
+- *(release)* Merge Dev_new_gui into main — 486 commits, 25+ batch PRs
+
+- *(deps)* Bump the npm_and_yarn group across 2 directories with 2 updates
+
+- *(deps)* Bump the npm_and_yarn group across 5 directories with 2 updates (#4845) ([#4845](https://github.com/mrveiss/AutoBot-AI/pull/4845))
+
+- *(deps)* Bump the npm_and_yarn group across 2 directories with 2 updates (#4844) ([#4844](https://github.com/mrveiss/AutoBot-AI/pull/4844))
+
+- *(deps)* Add networkx, graspologic, tree-sitter for mesh+AST gaps (#4818 #4819 #4820)
+
+- *(deps)* Bump follow-redirects (#4596) ([#4596](https://github.com/mrveiss/AutoBot-AI/pull/4596))
+
+- *(dead-code)* Remove orphaned HomeView.vue and TheWelcome.vue (#4510)
+
+- *(py312)* Target only Python 3.12 in black config
+
+- *(deps)* Bump actions/github-script from 4 to 9 (#4329) ([#4329](https://github.com/mrveiss/AutoBot-AI/pull/4329))
+
+- *(deps)* Bump actions/download-artifact from 4 to 8 (#4330) ([#4330](https://github.com/mrveiss/AutoBot-AI/pull/4330))
+
+- *(deps)* Bump softprops/action-gh-release from 2 to 3 (#4331) ([#4331](https://github.com/mrveiss/AutoBot-AI/pull/4331))
+
+- *(deps-dev)* Bump vitest from 4.1.2 to 4.1.4 in /autobot-frontend (#4332) ([#4332](https://github.com/mrveiss/AutoBot-AI/pull/4332))
+
+- *(deps-dev)* Bump cypress in /autobot-frontend (#4334) ([#4334](https://github.com/mrveiss/AutoBot-AI/pull/4334))
+
+- *(deps-dev)* Bump @vitest/eslint-plugin in /autobot-frontend (#4335) ([#4335](https://github.com/mrveiss/AutoBot-AI/pull/4335))
+
+- *(deps-dev)* Bump start-server-and-test in /autobot-frontend (#4336) ([#4336](https://github.com/mrveiss/AutoBot-AI/pull/4336))
+
+- *(frontend)* Update package dependencies
+
+- *(install)* Add validation for required service distributions (#4130)
+
+- *(claude)* Add pre-commit hook for mass deletion detection (#4111)
+
+- *(deps)* Bump the npm_and_yarn group across 2 directories with 1 update
+
+- *(deps)* Bump the npm_and_yarn group across 2 directories with 1 update (#4077) ([#4077](https://github.com/mrveiss/AutoBot-AI/pull/4077))
+
+- *(infrastructure)* Remove hardcoded .19 host references
+
+- *(infrastructure)* Add pre-deployment validation (#4056) (#4072) ([#4072](https://github.com/mrveiss/AutoBot-AI/pull/4072))
+
+- *(redis)* Clarify async client initialization pattern in documentation (#3972)
+
+- *(redis)* Update MANDATORY USAGE PATTERN docstring (#4058) (#4068) ([#4068](https://github.com/mrveiss/AutoBot-AI/pull/4068))
+
+- *(redis)* Add get_async_redis_client to __all__ (#4057) (#4069) ([#4069](https://github.com/mrveiss/AutoBot-AI/pull/4069))
+
+- *(infrastructure)* Update browser-worker uvicorn config (#4062) (#4064) ([#4064](https://github.com/mrveiss/AutoBot-AI/pull/4064))
+
+- *(infrastructure)* Update autobot-browser-worker.service template to Node.js/Express (#4062)
+
+- Remove old issue worktree directories (#3205, #3938)
+
+- *(redis)* Clarify async client initialization pattern in docstring (#3972) (#4042) ([#4042](https://github.com/mrveiss/AutoBot-AI/pull/4042))
+
+- *(redis)* Clarify async client initialization pattern in documentation (#3972) (#3993) ([#3993](https://github.com/mrveiss/AutoBot-AI/pull/3993))
+
+- *(redis)* Clarify async client initialization pattern in documentation (#3972)
+
+- *(deps)* Bump npm_and_yarn dependencies across 4 directories
+
+- *(deps)* Bump the npm_and_yarn group across 4 directories with 2 updates
+
+- *(deps)* Bump the npm_and_yarn group across 4 directories with 2 updates (#3949) ([#3949](https://github.com/mrveiss/AutoBot-AI/pull/3949))
+
+- *(retry)* Remove tenacity from llm_pattern_analyzer_test.py (#3936)
+
+- *(autoresearch)* Refactor _register_autoresearch_hypothesis_target (#3884) (#3951) ([#3951](https://github.com/mrveiss/AutoBot-AI/pull/3951))
+
+- *(agents)* Remove duplicate session_id assignment in sentiment_analysis_agent.py (#3944) (#3950) ([#3950](https://github.com/mrveiss/AutoBot-AI/pull/3950))
+
+- *(config)* Delete tombstoned config.py — shadowed by config/ package (#3933) (#3934) ([#3934](https://github.com/mrveiss/AutoBot-AI/pull/3934))
+
+- *(backend)* Migrate models/settings.py — 8 BaseSettings to pydantic v2 model_config (#3911) ([#3923](https://github.com/mrveiss/AutoBot-AI/pull/3923))
+
+- *(config)* Remove leftover Issue:#3803 comment from TimeoutConfig (#3912) ([#3922](https://github.com/mrveiss/AutoBot-AI/pull/3922))
+
+- *(mcp)* Delete dead mcp_manual_integration.py (#3849) ([#3906](https://github.com/mrveiss/AutoBot-AI/pull/3906))
+
+- *(config)* Tombstone root-level config.py ConfigManager; migrate top callers to ssot_config (#3829) ([#3909](https://github.com/mrveiss/AutoBot-AI/pull/3909))
+
+- *(backend)* Delete dead type_definitions/ package (#3839) (#3892) ([#3892](https://github.com/mrveiss/AutoBot-AI/pull/3892))
+
+- *(autoresearch)* Rename test_issue_3208.py to benchmark_test.py (#3883) (#3893) ([#3893](https://github.com/mrveiss/AutoBot-AI/pull/3893))
+
+- *(types)* Rename 3 competing TaskComplexity enums to distinct names (#3878) ([#3878](https://github.com/mrveiss/AutoBot-AI/pull/3878))
+
+- *(backend)* Delete confirmed dead root-level modules (#3847) (#3887) ([#3887](https://github.com/mrveiss/AutoBot-AI/pull/3887))
+
+- *(config)* Refactor sync_config to ≤65 lines per function (#3863) (#3888) ([#3888](https://github.com/mrveiss/AutoBot-AI/pull/3888))
+
+- Post-merge polish — hoist diary fetch limit, document property_graph serialisation, explain FeatureConfig alias suffixes
+
+- *(backend)* Add TimeoutConfig to SSOT config (#3820) ([#3820](https://github.com/mrveiss/AutoBot-AI/pull/3820))
+
+- *(ansible)* Move _SECRET_TO_ANSIBLE_VAR to shared location (#3778) (#3819) ([#3819](https://github.com/mrveiss/AutoBot-AI/pull/3819))
+
+- *(autoresearch)* Deduplicate _NOTIFY_KEY format string (#3795) (#3818) ([#3818](https://github.com/mrveiss/AutoBot-AI/pull/3818))
+
+- *(backend)* Use config.path.docs_path in mcp_manual_integration (#3802) (#3817) ([#3817](https://github.com/mrveiss/AutoBot-AI/pull/3817))
+
+- *(backend)* Delete legacy chat_history_manager.py monolith (#3838) ([#3842](https://github.com/mrveiss/AutoBot-AI/pull/3842))
+
+- *(backend)* Expand hardcoding prevention for file paths and model names (#3397) (#3799) ([#3799](https://github.com/mrveiss/AutoBot-AI/pull/3799))
+
+- *(ansible)* Move _SECRET_TO_ANSIBLE_VAR to shared location to avoid drift (#3778) (#3782) ([#3782](https://github.com/mrveiss/AutoBot-AI/pull/3782))
+
+- *(chat-workflow)* Remove orphaned system_prompt param from _build_full_prompt (#3794) (#3801) ([#3801](https://github.com/mrveiss/AutoBot-AI/pull/3801))
+
+- *(frontend)* Add i18n keys for KB vectorization UI components (#3785) ([#3785](https://github.com/mrveiss/AutoBot-AI/pull/3785))
+
+- *(frontend)* Adopt getApiBase() in AppConfig.js and ServiceDiscovery.js (#3751) (#3769) ([#3769](https://github.com/mrveiss/AutoBot-AI/pull/3769))
+
+- *(frontend)* Adopt getApiBase() in ApiClientMonitor.js (#3752) (#3767) ([#3767](https://github.com/mrveiss/AutoBot-AI/pull/3767))
+
+- *(frontend)* Adopt getApiBase() in remaining 7 SecretsApiClient.js paths (#3746) (#3757) ([#3757](https://github.com/mrveiss/AutoBot-AI/pull/3757))
+
+- *(frontend)* Adopt getApiBase() in JS utility files (#3726) (#3730) ([#3730](https://github.com/mrveiss/AutoBot-AI/pull/3730))
+
+- *(slm-frontend)* Replace remaining 2 hardcoded /api/ with getSlmApiBase() (#3725) (#3733) ([#3733](https://github.com/mrveiss/AutoBot-AI/pull/3733))
+
+- *(tests)* Extend get_test_backend_url() to remaining 14 backend test files (#3661) (#3727) ([#3727](https://github.com/mrveiss/AutoBot-AI/pull/3727))
+
+- *(analytics)* Fix flake8 E501 line-length violation in analytics_evolution.py (#3724) (#3741) ([#3741](https://github.com/mrveiss/AutoBot-AI/pull/3741))
+
+- *(dev)* Uncomment aiosqlite in autobot-backend/requirements.txt (#3723) (#3745) ([#3745](https://github.com/mrveiss/AutoBot-AI/pull/3745))
+
+- *(dev)* Add requirements-dev.txt with structlog and aiosqlite (#3723) ([#3736](https://github.com/mrveiss/AutoBot-AI/pull/3736))
+
+- *(backend)* Add explicit encoding='utf-8' to file I/O (#3391) ([#3710](https://github.com/mrveiss/AutoBot-AI/pull/3710))
+
+- *(frontend)* Adopt getApiBase() in analytics Vue components (#3681) ([#3708](https://github.com/mrveiss/AutoBot-AI/pull/3708))
+
+- *(frontend)* Adopt getApiBase() in knowledge Vue components (Phase 5c) (#3629) ([#3700](https://github.com/mrveiss/AutoBot-AI/pull/3700))
+
+- *(frontend)* Adopt getApiBase() in security, visualizations, workflow, and research Vue components (#3684) (#3706) ([#3706](https://github.com/mrveiss/AutoBot-AI/pull/3706))
+
+- *(frontend)* Adopt getApiBase() in knowledge Vue components (#3682) (#3703) ([#3703](https://github.com/mrveiss/AutoBot-AI/pull/3703))
+
+- *(frontend)* Replace hardcoded /api/advanced/ with getApiBase() in BusinessIntelligenceView (#3674) ([#3704](https://github.com/mrveiss/AutoBot-AI/pull/3704))
+
+- *(frontend)* Use getApiBase() instead of getBackendUrl() in notification composables (#3675) ([#3697](https://github.com/mrveiss/AutoBot-AI/pull/3697))
+
+- *(infrastructure)* Standardise Redis file ownership to autobot:autobot (#3396) ([#3696](https://github.com/mrveiss/AutoBot-AI/pull/3696))
+
+- *(slm-frontend)* Replace hardcoded /autobot-api/ with getBackendUrl() (#3652) (no-op — already in #3662) ([#3694](https://github.com/mrveiss/AutoBot-AI/pull/3694))
+
+- *(frontend)* Adopt getApiBase() in chat Vue components (Phase 5b) ([#3690](https://github.com/mrveiss/AutoBot-AI/pull/3690))
+
+- *(frontend)* Adopt getApiBase() in Vue components and views (Phase 4) ([#3678](https://github.com/mrveiss/AutoBot-AI/pull/3678))
+
+- *(ci)* Add doc linting to catch stale file references in developer guides (#3425) ([#3692](https://github.com/mrveiss/AutoBot-AI/pull/3692))
+
+- *(slm-frontend)* Replace hardcoded /api/ with getSlmApiBase() (#3627) (#3676) ([#3676](https://github.com/mrveiss/AutoBot-AI/pull/3676))
+
+- *(frontend)* Remove duplicate getApiBase() declarations from ssot-config.ts (#3628) ([#3665](https://github.com/mrveiss/AutoBot-AI/pull/3665))
+
+- *(slm-frontend)* Replace hardcoded /autobot-api/ with getBackendUrl() ([#3662](https://github.com/mrveiss/AutoBot-AI/pull/3662))
+
+- *(tests)* Replace hardcoded localhost:8001 with get_test_backend_url() helper ([#3660](https://github.com/mrveiss/AutoBot-AI/pull/3660))
+
+- *(frontend)* Remove duplicate getApiBase() declarations from ssot-config.ts (#3631) ([#3663](https://github.com/mrveiss/AutoBot-AI/pull/3663))
+
+- *(ci)* Align isort line_length with Black at 120 in pyproject.toml (#3408) ([#3657](https://github.com/mrveiss/AutoBot-AI/pull/3657))
+
+- *(frontend)* Adopt getApiBase() in stores, models, and components (#3631) (#3641) ([#3641](https://github.com/mrveiss/AutoBot-AI/pull/3641))
+
+- *(frontend)* Adopt getApiBase() in service and utils layer (#3629) ([#3638](https://github.com/mrveiss/AutoBot-AI/pull/3638))
+
+- *(frontend)* Adopt getApiBase() in composables (#3630) ([#3633](https://github.com/mrveiss/AutoBot-AI/pull/3633))
+
+- *(slm-frontend)* Replace hardcoded /api/ with getSlmApiBase() in 3 remaining files (#3627) ([#3634](https://github.com/mrveiss/AutoBot-AI/pull/3634))
+
+- *(frontend)* Add getApiBase() to ssot-config for configurable API prefix (#3628) ([#3632](https://github.com/mrveiss/AutoBot-AI/pull/3632))
+
+- *(deps-dev)* Bump eslint-plugin-oxlint in /autobot-frontend (#3603) ([#3603](https://github.com/mrveiss/AutoBot-AI/pull/3603))
+
+- *(deps-dev)* Bump @playwright/test in /autobot-frontend (#3602) ([#3602](https://github.com/mrveiss/AutoBot-AI/pull/3602))
+
+- *(deps-dev)* Bump @types/node in /autobot-frontend (#3601) ([#3601](https://github.com/mrveiss/AutoBot-AI/pull/3601))
+
+- *(deps-dev)* Bump esbuild from 0.27.4 to 0.28.0 in /autobot-frontend (#3600) ([#3600](https://github.com/mrveiss/AutoBot-AI/pull/3600))
+
+- *(deps)* Bump vue-i18n from 11.3.0 to 11.3.1 in /autobot-frontend (#3599) ([#3599](https://github.com/mrveiss/AutoBot-AI/pull/3599))
+
+- *(deps)* Bump docker/build-push-action from 5 to 7 (#3598) ([#3598](https://github.com/mrveiss/AutoBot-AI/pull/3598))
+
+- *(deps)* Bump docker/login-action from 3 to 4 (#3597) ([#3597](https://github.com/mrveiss/AutoBot-AI/pull/3597))
+
+- *(deps)* Bump actions/checkout from 4 to 6 (#3596) ([#3596](https://github.com/mrveiss/AutoBot-AI/pull/3596))
+
+- Enforce Black + isort formatting in pre-commit and CI (#3571) ([#3571](https://github.com/mrveiss/AutoBot-AI/pull/3571))
+
+- *(backend)* Delete dead api/phase_management.py superseded by api/phases.py (#3504) ([#3508](https://github.com/mrveiss/AutoBot-AI/pull/3508))
+
+- *(deps)* Bump the npm_and_yarn group across 5 directories with 3 updates
+
+- *(deps)* Bump the npm_and_yarn group across 2 directories with 2 updates (#3623) ([#3623](https://github.com/mrveiss/AutoBot-AI/pull/3623))
+
+- *(deps)* Bump defu (#3624) ([#3624](https://github.com/mrveiss/AutoBot-AI/pull/3624))
+
+- *(backend)* Delete deprecated terminal modules, update tests to ConsolidatedTerminalWebSocket (#3357) (#3373) ([#3373](https://github.com/mrveiss/AutoBot-AI/pull/3373))
+
+- *(backend)* Clarify kb_librarian is internal-only, delete unreachable e2e tests (#3348) (#3368) ([#3368](https://github.com/mrveiss/AutoBot-AI/pull/3368))
+
+- *(backend)* Delete dead code mesh_brain.py and monitoring_compat.py (#3354) (#3367) ([#3367](https://github.com/mrveiss/AutoBot-AI/pull/3367))
+
+- *(docs)* Remove stale phase-D analysis reports — issues filed (#3374, #3375, #3376)
+
+- *(frontend)* Tailwind v4 audit — verify no remaining v3 patterns (#3153) (#3361) ([#3361](https://github.com/mrveiss/AutoBot-AI/pull/3361))
+
+- *(deps)* Bump the npm_and_yarn group across 5 directories with 2 updates (#3269) ([#3269](https://github.com/mrveiss/AutoBot-AI/pull/3269))
+
+- *(docs)* Move docs/CHANGELOG.md into docs/changelog/ (#3317) ([#3317](https://github.com/mrveiss/AutoBot-AI/pull/3317))
+
+- *(docs)* Delete stale planning/tasks/ breakdown files (#3316) ([#3316](https://github.com/mrveiss/AutoBot-AI/pull/3316))
+
+- *(gitignore)* Ignore Obsidian workspace.json in docs vault
+
+- *(deps)* Bump the pip group across 3 directories with 3 updates ([#3213](https://github.com/mrveiss/AutoBot-AI/pull/3213))
+
+- *(deps)* Resolve merge conflicts with Dev_new_gui
+
+- *(ansible)* Audit and document clean task single-host guards (#2836) (#2947) ([#2947](https://github.com/mrveiss/AutoBot-AI/pull/2947))
+
+- *(ansible)* Move autobot_key to /etc/autobot/ssh/ for multi-user access (#2828) (#2936) ([#2936](https://github.com/mrveiss/AutoBot-AI/pull/2936))
+
+- *(deps)* Bump the pip group across 2 directories with 2 updates (#2928) ([#2928](https://github.com/mrveiss/AutoBot-AI/pull/2928))
+
+- *(deps-dev)* Bump eslint from 9.39.4 to 10.1.0 in /autobot-frontend (#2892) ([#2892](https://github.com/mrveiss/AutoBot-AI/pull/2892))
+
+- *(deps-dev)* Bump typescript in /autobot-frontend (#2889) ([#2889](https://github.com/mrveiss/AutoBot-AI/pull/2889))
+
+- *(deps-dev)* Bump start-server-and-test in /autobot-frontend (#2893) ([#2893](https://github.com/mrveiss/AutoBot-AI/pull/2893))
+
+- *(deps-dev)* Bump @types/cookie in /autobot-frontend (#2891) ([#2891](https://github.com/mrveiss/AutoBot-AI/pull/2891))
+
+- *(backend)* Remove stale TODO comments referencing closed issues (#2867) (#2895) ([#2895](https://github.com/mrveiss/AutoBot-AI/pull/2895))
+
+- *(deps)* Bump uv group — cryptography 46.0.6, langchain-core 1.2.22 ([#2619](https://github.com/mrveiss/AutoBot-AI/pull/2619))
+
+- *(deps)* Bump cryptography 46.0.6 and langchain-core 1.2.22 (pip group) ([#2618](https://github.com/mrveiss/AutoBot-AI/pull/2618))
+
+- *(deps-dev)* Bump happy-dom
+
+- *(deps-dev)* Bump eslint-plugin-oxlint in /autobot-frontend
+
+- *(deps)* Bump opentelemetry-api in /autobot-backend
+
+- *(deps)* Bump actions/checkout from 4 to 6
+
+- *(deps)* Bump codecov/codecov-action from 5 to 6
+
+- *(deps-dev)* Bump autoprefixer in /autobot-frontend
+
+- *(deps-dev)* Bump @vitejs/plugin-vue-jsx in /autobot-frontend
+
+- *(deps)* Bump the pip group across 3 directories with 3 updates
+
+- *(deps)* Audit and clean stale comments in requirements.txt files (#2471)
+
+- *(devops)* Add stale worktree cleanup script (#2467)
+
+
+### Performance
+
+- *(voice-rbac)* Cache tool counts + _is_admin helper (#8979 #8980) (#9032) ([#9032](https://github.com/mrveiss/AutoBot-AI/pull/9032))
+
+- *(voice-rbac)* Replace N+1 bundle loop with Promise.all (MVA-1163) (#8712) ([#8712](https://github.com/mrveiss/AutoBot-AI/pull/8712))
+
+- *(vector-search)* Batch ChromaDB queries, expand search cache, add SQ8 quantization (#8153, #8154, #8155) (#8363) ([#8363](https://github.com/mrveiss/AutoBot-AI/pull/8363))
+
+- *(classification,llm-cache)* Add request dedup, batch classify, and semantic cache (#8164, #8168) (#8358) ([#8358](https://github.com/mrveiss/AutoBot-AI/pull/8358))
+
+- *(npu)* Add Redis-backed L2 embedding cache across uvicorn workers (#8159) (#8356) ([#8356](https://github.com/mrveiss/AutoBot-AI/pull/8356))
+
+- *(vector-search)* Wire IVFPQ index via FAISS for autobot_memory (#8157) (#8355) ([#8355](https://github.com/mrveiss/AutoBot-AI/pull/8355))
+
+- *(embedding-cache)* Replace fixed LRU with ARC for hot-query resilience (#8156) (#8354) ([#8354](https://github.com/mrveiss/AutoBot-AI/pull/8354))
+
+- *(redis,async)* Pipeline N+1 expire calls, atomic SET EX, async file I/O (#8162,#8163,#8165) ([#8349](https://github.com/mrveiss/AutoBot-AI/pull/8349))
+
+- *(code-analysis)* Add AST cache to eliminate O(2N) re-parsing in cross-file finalize pass (#7902) ([#7902](https://github.com/mrveiss/AutoBot-AI/pull/7902))
+
+- *(llm)* Deterministic payload ordering to maximise cache hits (#7368) (#7867) ([#7867](https://github.com/mrveiss/AutoBot-AI/pull/7867))
+
+- *(skill-router)* Prepared-runtime-facts pattern for skill router + LLM gateway (#7370) ([#7691](https://github.com/mrveiss/AutoBot-AI/pull/7691))
+
+- *(chat/search_web)* Eliminate duplicate Playwright call in fetch_full fallback (closes #7478) (#7491) ([#7491](https://github.com/mrveiss/AutoBot-AI/pull/7491))
+
+- *(web_fetch)* Collapse _fetch_bs4 double round-trip into single request (closes #7459) (#7480) ([#7480](https://github.com/mrveiss/AutoBot-AI/pull/7480))
+
+- *(voice)* Make _TTS_PIPELINE_DEPTH env-configurable; default 2 (#6811) (#6812) ([#6812](https://github.com/mrveiss/AutoBot-AI/pull/6812))
+
+- *(api/skills)* Replace N sequential redis.get() calls with single mget() in traces endpoint (#6312) (#6348) ([#6348](https://github.com/mrveiss/AutoBot-AI/pull/6348))
+
+- *(planner)* Add tool description compressor with Redis cache (#5065) (#5822) ([#5822](https://github.com/mrveiss/AutoBot-AI/pull/5822))
+
+- *(frontend)* Lazy-load cytoscape in KnowledgeGraph.vue via useCytoscapeLibrary (#5234)
+
+- *(knowledge)* Refactor LineageService.get_ancestors() to O(depth) via per-ID lookup (#4788)
+
+- *(frontend)* Add keep-alive for ChatInterface to reduce remounting (#4356) (#4376) ([#4376](https://github.com/mrveiss/AutoBot-AI/pull/4376))
+
+- *(frontend)* Add keep-alive wrapper for ChatInterface to reduce remounting (#4356)
+
+- *(frontend)* Add keep-alive for ChatInterface to reduce remounting (#4356) (#4369) ([#4369](https://github.com/mrveiss/AutoBot-AI/pull/4369))
+
+- *(frontend)* Implement virtual scrolling for KnowledgeEntries list (#4011)
+
+- *(frontend)* Extract analytics tab SVGs to sprite sheet (#4014)
+
+- *(frontend)* Use blob URLs instead of base64 for thumbnails (#4012)
+
+- *(frontend)* Optimize CodeQualityDashboard computed properties and memoize utilities (#4010)
+
+- *(frontend)* Implement offline caching with service worker (#4015)
+
+- *(frontend)* Apply CSS containment to prevent layout thrashing (#4008)
+
+- *(frontend)* Fix debounce import and usage in KnowledgeGraph (#4009)
+
+- *(frontend)* Lazy-load Cytoscape graph components (#3998) (#4082) ([#4082](https://github.com/mrveiss/AutoBot-AI/pull/4082))
+
+- *(frontend)* Add CSS containment to chart/card/panel components (#4005) (#4078) ([#4078](https://github.com/mrveiss/AutoBot-AI/pull/4078))
+
+- *(analytics)* Memoize expensive computed properties in dashboards (#4036) (#4043) ([#4043](https://github.com/mrveiss/AutoBot-AI/pull/4043))
+
+- *(frontend)* Debounce search/filter handlers to reduce graph re-renders (#4034) (#4046) ([#4046](https://github.com/mrveiss/AutoBot-AI/pull/4046))
+
+- *(frontend)* Add loading='lazy' to deferred images (#4033) (#4045) ([#4045](https://github.com/mrveiss/AutoBot-AI/pull/4045))
+
+- *(deps)* Optimize PROTOCOL_BUFFERS workaround for ChromaDB (#3973) (#3978) ([#3978](https://github.com/mrveiss/AutoBot-AI/pull/3978))
+
+- *(backend)* Convert delete_session os.remove() to async (#3812) ([#3812](https://github.com/mrveiss/AutoBot-AI/pull/3812))
+
+- *(backend)* Convert file I/O to aiofiles in chat_history_manager and simple_pty (#3783) ([#3783](https://github.com/mrveiss/AutoBot-AI/pull/3783))
+
+- *(autoresearch)* Replace HumanReviewScorer polling loop with BLPOP (#3781) ([#3781](https://github.com/mrveiss/AutoBot-AI/pull/3781))
+
+- *(startup)* Parallelize Phase 1 critical services into 4 tiers (#3015) (#3043) ([#3043](https://github.com/mrveiss/AutoBot-AI/pull/3043))
+
+- *(backend)* Convert 10 heavy module-level imports to lazy loading (#3016) (#3045) ([#3045](https://github.com/mrveiss/AutoBot-AI/pull/3045))
+
+- *(backend)* Cache get_local_ips() with 60s TTL (#2791) (#2929) ([#2929](https://github.com/mrveiss/AutoBot-AI/pull/2929))
+
+- *(autoresearch)* Parallelize get_stats() with asyncio.gather (#2718) (#2786) ([#2786](https://github.com/mrveiss/AutoBot-AI/pull/2786))
+
+- *(autoresearch)* Batch Redis calls in get_stats to fix N+1 pattern (#2684) (#2710) ([#2710](https://github.com/mrveiss/AutoBot-AI/pull/2710))
+
+
+### Refactoring
+
+- *(frontend)* Consolidate ChartCell.vue implementations (#9220) (#9332) ([#9332](https://github.com/mrveiss/AutoBot-AI/pull/9332))
+
+- *(frontend)* Complete useGlobalWebSocket migration to useEventBus (#9062) (#9211) ([#9211](https://github.com/mrveiss/AutoBot-AI/pull/9211))
+
+- *(voice)* Consolidate VALID_BUNDLES and BundleAssignRequest into voice_bundle_constants.py (#9048) (#9186) ([#9186](https://github.com/mrveiss/AutoBot-AI/pull/9186))
+
+- *(backend)* Consolidate STARTUP_ERROR_FILE to autobot_shared (#9066) (#9156) ([#9156](https://github.com/mrveiss/AutoBot-AI/pull/9156))
+
+- *(frontend)* Extract PresetFormBody.vue — eliminates duplication (#MVA-1951) ([#9152](https://github.com/mrveiss/AutoBot-AI/pull/9152))
+
+- *(frontend)* Remove orphaned ChatInterface.ts composable (#9062) ([#9150](https://github.com/mrveiss/AutoBot-AI/pull/9150))
+
+- *(frontend)* Consolidate virtual scroll, WebSocket migration, host composables (#9061 #9062 #9063) (#9121) ([#9121](https://github.com/mrveiss/AutoBot-AI/pull/9121))
+
+- *(enums)* Consolidate TrustLevel to reference a2a vs skills domains (#8957)
+
+- *(enums)* Consolidate AccessLevelFilter to reference AccessLevel values (#8958)
+
+- *(auth)* Move connector auth objects to autobot_shared (GH#8962)
+
+- *(llc)* Remove dead enhanced_background_init and unreachable helpers (MVA-922) (#8500) ([#8500](https://github.com/mrveiss/AutoBot-AI/pull/8500))
+
+- *(llc/8229)* Rename HeartbeatScheduler → RoutineScheduler, move to routine_scheduler.py
+
+- *(async)* Phase 1 — unify task queues onto Celery, delete BackgroundTaskManager (#6505) (#8441) ([#8441](https://github.com/mrveiss/AutoBot-AI/pull/8441))
+
+- *(async)* Phase 1 — unify task queues onto Celery (#6505) (#8426) ([#8426](https://github.com/mrveiss/AutoBot-AI/pull/8426))
+
+- *(backend)* Deduplicate router registrations + document registry (#4203) (#8366) ([#8366](https://github.com/mrveiss/AutoBot-AI/pull/8366))
+
+- *(frontend/icons)* Phase 2 — migrate 199 files FA→Icon.vue, fix AddSourceModal submit button (#8295) ([#8338](https://github.com/mrveiss/AutoBot-AI/pull/8338))
+
+- *(frontend/ws)* Phase 2 — migrate useLiveEvents callers to useEventBus (#8292) ([#8337](https://github.com/mrveiss/AutoBot-AI/pull/8337))
+
+- *(events)* Migrate 22 files from direct EventManager/LiveEventManager to events.bus (#8291) ([#8333](https://github.com/mrveiss/AutoBot-AI/pull/8333))
+
+- *(events/audit/ws)* Minimum-safe consolidation of duplicated systems (#6475, #6486, #6488) (#8294) ([#8294](https://github.com/mrveiss/AutoBot-AI/pull/8294))
+
+- *(resilience,async)* Min-safe consolidation #6494 #6495 (#8298) ([#8298](https://github.com/mrveiss/AutoBot-AI/pull/8298))
+
+- *(async)* Wakeup coalescing + scheduler docs (#6472, #6505, #6507) (#8270) ([#8270](https://github.com/mrveiss/AutoBot-AI/pull/8270))
+
+- *(backend)* Complete optional_import migration for remaining 5 modules (#7895) (#8090) ([#8090](https://github.com/mrveiss/AutoBot-AI/pull/8090))
+
+- *(orchestration)* Unify AgentRegistry, decompose WorkflowExecutor god class (#6828, #6827, #6826) ([#8082](https://github.com/mrveiss/AutoBot-AI/pull/8082))
+
+- *(frontend)* Rename useWorkflowBuilder.WorkflowPlan → OrchestratorWorkflowPlan (closes #7228) (#7998) ([#7998](https://github.com/mrveiss/AutoBot-AI/pull/7998))
+
+- *(system-health)* Retire legacy health vocab — use probe vocab everywhere (#6909) (#7917) ([#7917](https://github.com/mrveiss/AutoBot-AI/pull/7917))
+
+- *(frontend)* Deduplicate *HealthResponse interfaces and probe-status mapping (#6920) (#7916) ([#7916](https://github.com/mrveiss/AutoBot-AI/pull/7916))
+
+- *(voice)* Migrate VoiceConversationOverlay to useVoiceOutput for wsConnected (GH #6825) (#7908) ([#7908](https://github.com/mrveiss/AutoBot-AI/pull/7908))
+
+- *(orchestration)* Decompose ExecutionStrategyHandler into Strategy pattern (GH #6830) (#7903) ([#7903](https://github.com/mrveiss/AutoBot-AI/pull/7903))
+
+- *(backend)* Phase 4 sunset — delete 44 grace-period /health routes (#6902) (#7905) ([#7905](https://github.com/mrveiss/AutoBot-AI/pull/7905))
+
+- *(frontend)* Swap space-x-* with gap-* for flex containers (#6841) (#7900) ([#7900](https://github.com/mrveiss/AutoBot-AI/pull/7900))
+
+- *(backend)* Migrate log_forwarder to optional_import; mark single-symbol sites deferred (#7007) (#7892) ([#7892](https://github.com/mrveiss/AutoBot-AI/pull/7892))
+
+- *(tooling)* DRY closure-gate wiring check into check-new-module-callers.sh (#6930) (#7891) ([#7891](https://github.com/mrveiss/AutoBot-AI/pull/7891))
+
+- *(llm)* Rename llm_interface_pkg to llm_shared post-LLMInterface retirement (#6941)
+
+- *(chat)* Make ChatHistoryManager.add_message keyword-only (#7084)
+
+- *(frontend/knowledge)* Add Storybook stories for 43 components (#6846) (#7862) ([#7862](https://github.com/mrveiss/AutoBot-AI/pull/7862))
+
+- *(frontend/analytics)* Add Storybook stories for 32 components (#6847) (#7861) ([#7861](https://github.com/mrveiss/AutoBot-AI/pull/7861))
+
+- *(frontend/chat)* Add Storybook stories for 28 chat components (#6848) (#7860) ([#7860](https://github.com/mrveiss/AutoBot-AI/pull/7860))
+
+- *(frontend/terminal)* Add Storybook stories for 14 components (#6849) (#7858) ([#7858](https://github.com/mrveiss/AutoBot-AI/pull/7858))
+
+- *(backend)* Migrate hand-rolled singletons to lazy_singleton (#7445) (#7856) ([#7856](https://github.com/mrveiss/AutoBot-AI/pull/7856))
+
+- *(typing)* Adopt PEP 604 X|None codemod; clean Optional imports (#7443) (#7855) ([#7855](https://github.com/mrveiss/AutoBot-AI/pull/7855))
+
+- *(infra)* Add autobot doctor CLI for startup repair (#7371) (#7854) ([#7854](https://github.com/mrveiss/AutoBot-AI/pull/7854))
+
+- *(chat)* Decompose handleStreamingResponse into focused methods (#7693) (#7850) ([#7850](https://github.com/mrveiss/AutoBot-AI/pull/7850))
+
+- *(frontend/workflow)* Add Storybook stories for 11 workflow components (#6851) (#7848) ([#7848](https://github.com/mrveiss/AutoBot-AI/pull/7848))
+
+- *(frontend/charts)* Add Storybook stories for 11 chart components (#6850) (#7847) ([#7847](https://github.com/mrveiss/AutoBot-AI/pull/7847))
+
+- *(frontend/file-browser)* Add Storybook stories for 7 file-browser components (#6852) (#7845) ([#7845](https://github.com/mrveiss/AutoBot-AI/pull/7845))
+
+- *(frontend/settings)* Add Storybook stories for 6 settings components (#6853) (#7843) ([#7843](https://github.com/mrveiss/AutoBot-AI/pull/7843))
+
+- *(frontend/manpage)* Add Storybook stories for 6 manpage components (#6855) (#7842) ([#7842](https://github.com/mrveiss/AutoBot-AI/pull/7842))
+
+- *(frontend/collaboration)* Add Storybook stories for 6 collaboration components (#6854) (#7841) ([#7841](https://github.com/mrveiss/AutoBot-AI/pull/7841))
+
+- *(frontend/autoresearch)* Add Storybook stories for 4 autoresearch components (#6862) (#7840) ([#7840](https://github.com/mrveiss/AutoBot-AI/pull/7840))
+
+- *(frontend/visualizations)* Add Storybook stories for 5 visualization components (#6857) (#7839) ([#7839](https://github.com/mrveiss/AutoBot-AI/pull/7839))
+
+- *(frontend/operations)* Add Storybook stories for 5 operations components (#6856) (#7838) ([#7838](https://github.com/mrveiss/AutoBot-AI/pull/7838))
+
+- *(frontend/desktop)* Add Storybook stories for 4 desktop components (#6860) (#7836) ([#7836](https://github.com/mrveiss/AutoBot-AI/pull/7836))
+
+- *(frontend/feature-flags)* Add Storybook stories for 4 feature-flag components (#6861) (#7834) ([#7834](https://github.com/mrveiss/AutoBot-AI/pull/7834))
+
+- *(frontend/vision)* Add Storybook stories for 4 vision components (#6859) (#7833) ([#7833](https://github.com/mrveiss/AutoBot-AI/pull/7833))
+
+- *(frontend/secrets)* Add Storybook stories for SecretAuditLog, SecretVault, and ShareSecretDialog (#6863) (#7832) ([#7832](https://github.com/mrveiss/AutoBot-AI/pull/7832))
+
+- *(frontend/plugins)* Add Storybook stories for MarketplaceSourcesModal and PluginInstallModal (#6868) (#7831) ([#7831](https://github.com/mrveiss/AutoBot-AI/pull/7831))
+
+- *(frontend/audit)* Add Storybook stories for 4 audit components (#6858) (#7830) ([#7830](https://github.com/mrveiss/AutoBot-AI/pull/7830))
+
+- *(frontend/browser)* Add Storybook stories for BrowserSessionManager and InteractiveScreenshot (#6867) (#7826) ([#7826](https://github.com/mrveiss/AutoBot-AI/pull/7826))
+
+- *(frontend/async)* Add Storybook stories for AsyncComponentWrapper and AsyncErrorFallback (#6866) (#7825) ([#7825](https://github.com/mrveiss/AutoBot-AI/pull/7825))
+
+- *(frontend/agents)* Add Storybook stories for AgentSettingsPanel and HeartbeatPanel (#6865) (#7824) ([#7824](https://github.com/mrveiss/AutoBot-AI/pull/7824))
+
+- *(middleware,skills)* GH#6919 log on legacy health intercept + GH#6877 remove stale generate_structured note (#7805) ([#7805](https://github.com/mrveiss/AutoBot-AI/pull/7805))
+
+- *(frontend)* Phase C batch 6 — icon system + ESLint console guard (GH#6935, GH#6937, GH#7085) (#7794) ([#7794](https://github.com/mrveiss/AutoBot-AI/pull/7794))
+
+- *(llm)* Consolidate UnifiedLLMInterface + MockLLMInterface + AgentProfile overlap (#6942, #6943, #6931) (#7791) ([#7791](https://github.com/mrveiss/AutoBot-AI/pull/7791))
+
+- *(frontend)* Phase C batch 5 — i18n audit + Storybook DRY + size/variant enums (GH#6936, GH#6939, GH#6979) ([#7786](https://github.com/mrveiss/AutoBot-AI/pull/7786))
+
+- *(schemas)* Consolidate duplicate lowercase-id regex + rename FailsafeLLMResponse (GH#6958, GH#6978, GH#6977) ([#7785](https://github.com/mrveiss/AutoBot-AI/pull/7785))
+
+- *(frontend/api)* Consolidate API + error + notification surfaces (GH#7446, GH#7447, GH#7448)
+
+- *(pydantic)* Migrate v1 patterns to v2 across 6 files (#7442) (#7749) ([#7749](https://github.com/mrveiss/AutoBot-AI/pull/7749))
+
+- *(logging)* Migrate 1,141 callsites to canonical logging_manager.get_logger (GH#7438) (#7740) ([#7740](https://github.com/mrveiss/AutoBot-AI/pull/7740))
+
+- *(config)* Migrate all 675 os.getenv/os.environ callsites to ssot_config (#7437) ([#7745](https://github.com/mrveiss/AutoBot-AI/pull/7745))
+
+- *(constants)* Consolidate 12 backend constants files into autobot_shared/ssot_constants.py (GH#7440)
+
+- *(frontend/security)* Add Storybook stories for 3 security components (#6864) (#7738) ([#7738](https://github.com/mrveiss/AutoBot-AI/pull/7738))
+
+- *(frontend)* Complete useApiWithState Group 3 composables migration (#7600) ([#7672](https://github.com/mrveiss/AutoBot-AI/pull/7672))
+
+- *(llm)* Phase 2 — move provider implementations to llm_interface_pkg/providers/ (GH#7637) ([#7674](https://github.com/mrveiss/AutoBot-AI/pull/7674))
+
+- *(auth)* Deduplicate SYSTEM_PERMISSIONS/SYSTEM_ROLES + fix stray jwt import (MVA-125) (#7601) ([#7601](https://github.com/mrveiss/AutoBot-AI/pull/7601))
+
+- *(frontend/api)* Deprecate useApi, migrate to useFetchEndpoint/useApiClient (#6487) (#7599) ([#7599](https://github.com/mrveiss/AutoBot-AI/pull/7599))
+
+- *(security)* Consolidate SSRF guards into autobot_shared.url_safety (#6533) (#7594) ([#7594](https://github.com/mrveiss/AutoBot-AI/pull/7594))
+
+- *(auth)* Move Permission/Role/ROLE_PERMISSIONS to autobot_shared — Phase 1 of #6511 (#7565) ([#7565](https://github.com/mrveiss/AutoBot-AI/pull/7565))
+
+- *(web_fetch)* Extract SSRF guard to autobot_shared.url_safety (closes #7477) (#7490) ([#7490](https://github.com/mrveiss/AutoBot-AI/pull/7490))
+
+- *(media/link)* Extract _parse_jina_output to autobot_shared.jina_parser (closes #7460) (#7487) ([#7487](https://github.com/mrveiss/AutoBot-AI/pull/7487))
+
+- *(web_fetch)* Remove unreachable defensive guard in is_allowed (closes #7461) (#7475) ([#7475](https://github.com/mrveiss/AutoBot-AI/pull/7475))
+
+- *(test/knowledge)* Migrate test_synthesis_provenance.py — partial canonical (#7280 round 10) (#7470) ([#7470](https://github.com/mrveiss/AutoBot-AI/pull/7470))
+
+- *(test/rag)* Migrate rag_service_events_test.py to canonical fixture (#7280 round 8) (#7424) ([#7424](https://github.com/mrveiss/AutoBot-AI/pull/7424))
+
+- *(types)* Document command_execution.RiskLevel divergence + bridge to canonical (closes #7258) (#7417) ([#7417](https://github.com/mrveiss/AutoBot-AI/pull/7417))
+
+- *(types)* Rename causal_inference_engine.Severity → CausalSeverity (closes #7255) (#7416) ([#7416](https://github.com/mrveiss/AutoBot-AI/pull/7416))
+
+- *(types)* Consolidate anti_pattern_detector.Severity onto canonical (closes #7253) (#7414) ([#7414](https://github.com/mrveiss/AutoBot-AI/pull/7414))
+
+- *(test/audit)* Migrate audit_logger_test.py to canonical pipeline fixture (#7280 round 7) (#7412) ([#7412](https://github.com/mrveiss/AutoBot-AI/pull/7412))
+
+- *(test/audit)* Migrate audit_log_test.py to canonical pipeline fixture (#7280 round 6) (#7408) ([#7408](https://github.com/mrveiss/AutoBot-AI/pull/7408))
+
+- *(test/retrieval_learner)* Migrate to canonical async-redis fixture (#7280 round 5) (#7388) ([#7388](https://github.com/mrveiss/AutoBot-AI/pull/7388))
+
+- *(test/mesh)* Migrate edge_learner_test.py to canonical fixture (#7280 round 4) (#7383) ([#7383](https://github.com/mrveiss/AutoBot-AI/pull/7383))
+
+- *(test/knowledge)* Migrate knowledge_base_async_test.py to canonical fixture (#7280 round 3) (#7381) ([#7381](https://github.com/mrveiss/AutoBot-AI/pull/7381))
+
+- *(tests)* Migrate workflow_versioning_test.py to canonical async-redis fixture (#7280 round 1) (#7340) ([#7340](https://github.com/mrveiss/AutoBot-AI/pull/7340))
+
+- *(security)* Consolidate per-IP rate limit into autobot_shared.rate_limit (#7271 + #7270) (#7327) ([#7327](https://github.com/mrveiss/AutoBot-AI/pull/7327))
+
+- *(ansible)* Extract reusable stat_tls_certs.yml helper (#7272) (#7278) ([#7278](https://github.com/mrveiss/AutoBot-AI/pull/7278))
+
+- *(frontend/composables)* Extract useProbeBackedHealth + ProbeResponse (#7247, #7248) (#7277) ([#7277](https://github.com/mrveiss/AutoBot-AI/pull/7277))
+
+- *(types)* Consolidate Workflow/Job *Status enums onto canonical TaskStatus + add lint rule (closes #6973) (#7266) ([#7266](https://github.com/mrveiss/AutoBot-AI/pull/7266))
+
+- *(types)* Consolidate 11 Severity/Risk/Level duplicates onto canonical (closes #6689) (#7261) ([#7261](https://github.com/mrveiss/AutoBot-AI/pull/7261))
+
+- *(status)* Consolidate 5 TaskStatus duplicates into canonical (closes #6520) (#7241) ([#7241](https://github.com/mrveiss/AutoBot-AI/pull/7241))
+
+- *(ansible)* Shared idempotent apt-repository helper across 7 roles (closes #7218) (#7239) ([#7239](https://github.com/mrveiss/AutoBot-AI/pull/7239))
+
+- *(frontend)* Rename useWorkflowBuilder.WorkflowPlan → OrchestratorWorkflowPlan (closes #7228) (#7236) ([#7236](https://github.com/mrveiss/AutoBot-AI/pull/7236))
+
+- *(hooks)* Migrate 5 file-scanning hooks to lib/_common.sh (#7203 partial) (#7214) ([#7214](https://github.com/mrveiss/AutoBot-AI/pull/7214))
+
+- *(infra/shared)* Re-export mocks from canonical autobot-backend SSOT (#7125) (#7191) ([#7191](https://github.com/mrveiss/AutoBot-AI/pull/7191))
+
+- *(intelligence)* Move demos to runner scripts so they actually run (#7127) (#7183) ([#7183](https://github.com/mrveiss/AutoBot-AI/pull/7183))
+
+- *(tests)* Extract canonical make_llm_response fixture (#7134) (#7139) ([#7139](https://github.com/mrveiss/AutoBot-AI/pull/7139))
+
+- *(ansible)* Consolidate 6 role clean.yml into shared parameterized tasks (closes #7058) (#7136) ([#7136](https://github.com/mrveiss/AutoBot-AI/pull/7136))
+
+- *(packaging)* Drop autobot_shared/requirements.txt — pyproject.toml is now canonical (closes #7040) (#7113) ([#7113](https://github.com/mrveiss/AutoBot-AI/pull/7113))
+
+- *(ansible/provision)* Mirror cleanup-side shared facts in provision gates (#7051) (#7064) ([#7064](https://github.com/mrveiss/AutoBot-AI/pull/7064))
+
+- *(ansible)* Shared role-active facts replace per-role cleanup gates (#7031) (#7050) ([#7050](https://github.com/mrveiss/AutoBot-AI/pull/7050))
+
+- *(packaging)* Autobot_shared setup.py → pyproject.toml (closes #7016) (#7022) ([#7022](https://github.com/mrveiss/AutoBot-AI/pull/7022))
+
+- *(observability)* Probe_long_running uses public accessor (#6921) (#7004) ([#7004](https://github.com/mrveiss/AutoBot-AI/pull/7004))
+
+- *(frontend)* DesignTokens story imports from canonical tokens.ts (#6938) (#7000) ([#7000](https://github.com/mrveiss/AutoBot-AI/pull/7000))
+
+- *(schemas)* Retire duplicate ModelPricingInfo (#6668) (#6967) ([#6967](https://github.com/mrveiss/AutoBot-AI/pull/6967))
+
+- *(llm)* Retire LLMInterface god-class — full migration to LLMService (#3185) (#6881) ([#6881](https://github.com/mrveiss/AutoBot-AI/pull/6881))
+
+- *(orchestration)* Rename enhanced WorkflowPlanner → StrategyPlanner (#6817) (#6923) ([#6923](https://github.com/mrveiss/AutoBot-AI/pull/6923))
+
+- *(agents)* Rename AgentCapability dataclass → AgentCapabilityDescriptor (#6818) (#6924) ([#6924](https://github.com/mrveiss/AutoBot-AI/pull/6924))
+
+- *(orchestration)* Move subagent_dispatcher to enhanced_orchestration (#6822) (#6925) ([#6925](https://github.com/mrveiss/AutoBot-AI/pull/6925))
+
+- *(system-health)* Composable probe helpers + migrate 14 probes to one-liners (#6904) (#6911) ([#6911](https://github.com/mrveiss/AutoBot-AI/pull/6911))
+
+- *(backend)* Consolidate 45 /health endpoints behind register_health_probe registry (#3333) (#6870) ([#6870](https://github.com/mrveiss/AutoBot-AI/pull/6870))
+
+- *(media)* Consolidate 5 Pipeline __init__ blocks via class-level constants (#6779) (#6835) ([#6835](https://github.com/mrveiss/AutoBot-AI/pull/6835))
+
+- *(voice)* Unify duplicate /api/voice/stream WS — single owner (#6788) (#6810) ([#6810](https://github.com/mrveiss/AutoBot-AI/pull/6810))
+
+- *(chat)* Delete duplicate useAppStore.sessions store (#6813) (#6815) ([#6815](https://github.com/mrveiss/AutoBot-AI/pull/6815))
+
+- *(schemas)* Alias GitHubProviderInfo to VCSProviderInfo — identical shape (#6792) (#6804) ([#6804](https://github.com/mrveiss/AutoBot-AI/pull/6804))
+
+- *(schemas)* Remove duplicate IDE schemas from ide_integration.py (#6042) (#6612) ([#6612](https://github.com/mrveiss/AutoBot-AI/pull/6612))
+
+- *(schemas)* Migrate Phase 39 endpoint schemas — http_client_mcp (#6042) (#6610) ([#6610](https://github.com/mrveiss/AutoBot-AI/pull/6610))
+
+- *(schemas)* Migrate Phase 38 endpoint schemas — analytics_bug_prediction (#6042) (#6608) ([#6608](https://github.com/mrveiss/AutoBot-AI/pull/6608))
+
+- *(schemas)* Migrate Phase 37 endpoint schemas — 5 files, 10 classes (#6042) (#6607) ([#6607](https://github.com/mrveiss/AutoBot-AI/pull/6607))
+
+- *(schemas)* Migrate Phase 36 endpoint schemas — 6 files, 12 classes (#6042) (#6603) ([#6603](https://github.com/mrveiss/AutoBot-AI/pull/6603))
+
+- *(schemas)* Migrate Phase 35 endpoint schemas — 7 files, 8 classes (#6042) (#6601) ([#6601](https://github.com/mrveiss/AutoBot-AI/pull/6601))
+
+- *(schemas)* Migrate Phase 34 endpoint schemas — 8 files, 8 classes (#6042) (#6598) ([#6598](https://github.com/mrveiss/AutoBot-AI/pull/6598))
+
+- *(schemas)* Migrate Phase 33 endpoint schemas — 6 files, 12 classes (#6042) (#6582) ([#6582](https://github.com/mrveiss/AutoBot-AI/pull/6582))
+
+- *(schemas)* Migrate Phase 32 endpoint schemas — ide_integration.py 15 classes + 4 enums (#6042) (#6581) ([#6581](https://github.com/mrveiss/AutoBot-AI/pull/6581))
+
+- *(schemas)* Migrate Phase 31 endpoint schemas — batch_jobs.py 10 classes + 2 enums (#6042) (#6574) ([#6574](https://github.com/mrveiss/AutoBot-AI/pull/6574))
+
+- *(schemas)* Migrate Phase 30 endpoint schemas — 2 files, 13 classes + 5 enums (#6042) (#6573) ([#6573](https://github.com/mrveiss/AutoBot-AI/pull/6573))
+
+- *(async)* Delete dead services/scheduling/ package (#6507) (#6564) ([#6564](https://github.com/mrveiss/AutoBot-AI/pull/6564))
+
+- *(schemas)* Migrate Phase 29 endpoint schemas — 2 files, 9 classes (#6042) (#6567) ([#6567](https://github.com/mrveiss/AutoBot-AI/pull/6567))
+
+- *(schemas)* Migrate Phase 28 endpoint schemas — 2 files, 8 classes + 2 enums (#6042) (#6561) ([#6561](https://github.com/mrveiss/AutoBot-AI/pull/6561))
+
+- *(schemas)* Migrate Phase 27 endpoint schemas — 2 files, 10 classes + 4 enums (#6042) (#6557) ([#6557](https://github.com/mrveiss/AutoBot-AI/pull/6557))
+
+- *(schemas)* Migrate Phase 26 endpoint schemas — 2 files, 6 classes + 7 enums (#6042) (#6554) ([#6554](https://github.com/mrveiss/AutoBot-AI/pull/6554))
+
+- *(schemas)* Migrate Phase 25 endpoint schemas — 2 files, 6 classes + 4 enums (#6042) (#6553) ([#6553](https://github.com/mrveiss/AutoBot-AI/pull/6553))
+
+- *(schemas)* Migrate Phase 24 endpoint schemas — 2 files, 7 classes (#6042) (#6552) ([#6552](https://github.com/mrveiss/AutoBot-AI/pull/6552))
+
+- *(schemas)* Migrate Phase 23 endpoint schemas — 5 files, 15 classes (#6042) (#6548) ([#6548](https://github.com/mrveiss/AutoBot-AI/pull/6548))
+
+- *(plugins)* Replace _VALID_* sets with Enums; promote BUILTIN_SOURCE_ID; close #6526 (#6534) (#6547) ([#6547](https://github.com/mrveiss/AutoBot-AI/pull/6547))
+
+- *(schemas)* Migrate Phase 22 endpoint schemas — 6 files, 18 classes (#6042) (#6545) ([#6545](https://github.com/mrveiss/AutoBot-AI/pull/6545))
+
+- *(async)* Unify progress tracking via task_execution_tracker (#6506) (#6531) ([#6531](https://github.com/mrveiss/AutoBot-AI/pull/6531))
+
+- *(browser)* Extract region-marking state into useRegionMarking composable (#6447) (#6543) ([#6543](https://github.com/mrveiss/AutoBot-AI/pull/6543))
+
+- *(schemas)* Migrate Phase 21 endpoint schemas — 8 files, 24 classes (#6042) (#6544) ([#6544](https://github.com/mrveiss/AutoBot-AI/pull/6544))
+
+- *(chat)* Type process_chat_message and _execute_enhanced_chat_pipeline returns (#6502) (#6519) ([#6519](https://github.com/mrveiss/AutoBot-AI/pull/6519))
+
+- *(schemas)* Migrate Phase 20 endpoint schemas — 8 files, 24 classes (#6042) (#6535) ([#6535](https://github.com/mrveiss/AutoBot-AI/pull/6535))
+
+- *(app)* Replace isLoginPage path-check with route meta.isPublic (#6508) (#6517) ([#6517](https://github.com/mrveiss/AutoBot-AI/pull/6517))
+
+- *(schemas)* Migrate Phase 19 endpoint schemas — 4 files, 16 classes (#6042) (#6522) ([#6522](https://github.com/mrveiss/AutoBot-AI/pull/6522))
+
+- *(schemas)* Migrate Phase 18 endpoint schemas — 4 files, 16 classes (#6042) (#6516) ([#6516](https://github.com/mrveiss/AutoBot-AI/pull/6516))
+
+- *(schemas)* Migrate Phase 17 endpoint schemas — 5 files, 20 classes (#6042) (#6513) ([#6513](https://github.com/mrveiss/AutoBot-AI/pull/6513))
+
+- *(schemas)* Migrate Phase 16 endpoint schemas — 6 files, 24 classes + 1 enum (#6042) (#6503) ([#6503](https://github.com/mrveiss/AutoBot-AI/pull/6503))
+
+- *(schemas)* Migrate Phase 15 endpoint schemas — 5 files, 22 classes (#6042) (#6491) ([#6491](https://github.com/mrveiss/AutoBot-AI/pull/6491))
+
+- *(schemas)* Migrate Phase 14 endpoint schemas — 3 files, 15 classes (#6042) (#6484) ([#6484](https://github.com/mrveiss/AutoBot-AI/pull/6484))
+
+- *(schemas)* Phase 13 — migrate 20 classes (knowledge, multimodal, NL search, prometheus MCP) (#6042) (#6483) ([#6483](https://github.com/mrveiss/AutoBot-AI/pull/6483))
+
+- *(schemas)* Migrate Phase 12 endpoint schemas — 3 analytics files, 18 classes + 11 enums (#6042) (#6467) ([#6467](https://github.com/mrveiss/AutoBot-AI/pull/6467))
+
+- *(schemas)* Migrate Phase 11 endpoint schemas — 2 files, 10 classes (#6042) (#6463) ([#6463](https://github.com/mrveiss/AutoBot-AI/pull/6463))
+
+- *(schemas)* Migrate Phase 10 endpoint schemas — 6 files, 41 classes (#6042) (#6458) ([#6458](https://github.com/mrveiss/AutoBot-AI/pull/6458))
+
+- *(app)* Replace isChatPage path-check with route meta hideFooter (#6417 #6418) (#6461) ([#6461](https://github.com/mrveiss/AutoBot-AI/pull/6461))
+
+- *(nav)* Move /operations under /analytics/operations sub-route (#6347)
+
+- *(execution_strategies)* Extract _is_required_failure helper, fix gather exception handling, fix _wait_for_dependencies terminal status, add group_stages_fn to _make_handler (#6448 #6449 #6454 #6455) (#6456) ([#6456](https://github.com/mrveiss/AutoBot-AI/pull/6456))
+
+- *(schemas)* Migrate Phase 9 endpoint schemas — 6 files, 52 classes (#6042) (#6437) ([#6437](https://github.com/mrveiss/AutoBot-AI/pull/6437))
+
+- *(schemas)* Migrate local BaseModel subclasses to domain schema files phases 1–8 (#6042) ([#6370](https://github.com/mrveiss/AutoBot-AI/pull/6370))
+
+- *(schemas_agent)* Move execution_time to AgentTaskData base class (#6406) (#6409) ([#6409](https://github.com/mrveiss/AutoBot-AI/pull/6409))
+
+- *(orchestration)* 5 targeted fixes from discovery audit (#6399 #6400 #6401 #6402 #6403) (#6404) ([#6404](https://github.com/mrveiss/AutoBot-AI/pull/6404))
+
+- *(schemas_agent)* MultiAgentCoordinationData inherits AgentTaskData (#6389) (#6398) ([#6398](https://github.com/mrveiss/AutoBot-AI/pull/6398))
+
+- *(chat_utils)* Rename create_success_response → create_chat_response (#6388) (#6397) ([#6397](https://github.com/mrveiss/AutoBot-AI/pull/6397))
+
+- *(workflow_runner)* Extract CollaborationCoordinator and AgentRouter (#6393 #6392) ([#6396](https://github.com/mrveiss/AutoBot-AI/pull/6396))
+
+- *(utils)* Create_success_response() returns DataResponse[T] generic (#6371) (#6380) ([#6380](https://github.com/mrveiss/AutoBot-AI/pull/6380))
+
+- *(api)* Add schemas_ai_stack.py — type 14 opaque AI Stack endpoint data payloads (#6372) (#6379) ([#6379](https://github.com/mrveiss/AutoBot-AI/pull/6379))
+
+- *(schemas)* Extract AgentTaskData base — reduce duplication in 3-4 agent execution models (#6373) (#6378) ([#6378](https://github.com/mrveiss/AutoBot-AI/pull/6378))
+
+- *(orchestrator)* Decompose god class into collaborators (#5058) ([#6375](https://github.com/mrveiss/AutoBot-AI/pull/6375))
+
+- *(api)* DataResponse[T] generic — type 23 agent/ai_stack endpoints (#5772) (#6369) ([#6369](https://github.com/mrveiss/AutoBot-AI/pull/6369))
+
+- *(api/knowledge_boards)* Migrate _get_redis(req) to kb.redis() (#6360) (#6368) ([#6368](https://github.com/mrveiss/AutoBot-AI/pull/6368))
+
+- *(nav)* Move operations after secrets so it falls into overflow menu (#6347)
+
+- *(plugins)* Convert marketplace to /plugins/marketplace child route (#6347)
+
+- *(shared)* Extract fire-and-forget Redis write helper to autobot_shared; wire into mcp_trace (#6335) (#6350) ([#6350](https://github.com/mrveiss/AutoBot-AI/pull/6350))
+
+- *(nav)* Reorder nav, merge usage into analytics, marketplace into plugins (#6347)
+
+- *(services/ai_stack_client)* Extract _handle_transient_error to remove duplicate retry logic (#6307) (#6344) ([#6344](https://github.com/mrveiss/AutoBot-AI/pull/6344))
+
+- *(api)* Consolidate 5 rate limiters into shared autobot_shared/rate_limiter.py (#4460) (#6309) ([#6309](https://github.com/mrveiss/AutoBot-AI/pull/6309))
+
+- *(composables)* Migrate 11 composables from manual isLoading to useLoadingState (#5869) ([#5878](https://github.com/mrveiss/AutoBot-AI/pull/5878))
+
+- *(composables)* Migrate remaining manual isLoading patterns to useLoadingState (#5869) (#5875) ([#5875](https://github.com/mrveiss/AutoBot-AI/pull/5875))
+
+- *(composables)* Migrate useTLSCredentials to useLoadingState (#5869) (#5874) ([#5874](https://github.com/mrveiss/AutoBot-AI/pull/5874))
+
+- *(composables)* Extract useLoadingState from useBrowserAutomation (#5861) (#5867) ([#5867](https://github.com/mrveiss/AutoBot-AI/pull/5867))
+
+- *(api)* Replace response_model=None with typed schemas in chat_sessions, chat, chat_knowledge, chat_compare (#5773) (#5838) ([#5838](https://github.com/mrveiss/AutoBot-AI/pull/5838))
+
+- *(composables)* Implement useFetchEndpoint on top of useApiResource for unified race handling (#5180) (#5817) ([#5817](https://github.com/mrveiss/AutoBot-AI/pull/5817))
+
+- *(composables)* Implement useFetchEndpoint on top of useApiResource for unified race handling (#5180) (#5808) ([#5808](https://github.com/mrveiss/AutoBot-AI/pull/5808))
+
+- *(knowledge)* Type gpu_vector_search.py client params as BaseClient (#5732) (#5797) ([#5797](https://github.com/mrveiss/AutoBot-AI/pull/5797))
+
+- *(knowledge)* Migrate autonomous_loop.py from chromadb.EphemeralClient to knowledge backends AsyncInMemoryClient (#5732) (#5788) ([#5788](https://github.com/mrveiss/AutoBot-AI/pull/5788))
+
+- *(redis)* Upgrade UserBehaviorAnalytics to AsyncRedisClientLockedMixin (#5770) (#5776) ([#5776](https://github.com/mrveiss/AutoBot-AI/pull/5776))
+
+- *(composables)* Deprecate useAnalyticsFetch as thin alias of useAnalyticsEndpoint (#5172) (#5771) ([#5771](https://github.com/mrveiss/AutoBot-AI/pull/5771))
+
+- *(analytics)* Move budget alert Redis ops into LLMCostTracker methods (#5731) (#5761) ([#5761](https://github.com/mrveiss/AutoBot-AI/pull/5761))
+
+- *(redis)* Migrate user_behavior_analytics to AsyncRedisClientMixin (#5730) (#5760) ([#5760](https://github.com/mrveiss/AutoBot-AI/pull/5760))
+
+- *(llm_cache)* Remove dead get_llm_cache_async export (#5740) (#5745) ([#5745](https://github.com/mrveiss/AutoBot-AI/pull/5745))
+
+- *(redis)* Add AsyncRedisClientMixin and migrate 9 services to eliminate lazy-init boilerplate (#5671) (#5705) ([#5705](https://github.com/mrveiss/AutoBot-AI/pull/5705))
+
+- *(vision)* Pass refreshInterval ref directly to usePollingJob, drop watch+restart (#5644) (#5653) ([#5653](https://github.com/mrveiss/AutoBot-AI/pull/5653))
+
+- *(vision)* Pass refreshInterval ref directly to usePollingJob, drop watch+restart (#5644) (#5650) ([#5650](https://github.com/mrveiss/AutoBot-AI/pull/5650))
+
+- *(utils)* Add lazy_optional_singleton + complete task_queue and secure_sandbox migrations (#5576) (#5634) ([#5634](https://github.com/mrveiss/AutoBot-AI/pull/5634))
+
+- *(singleton)* Extract _SkillsEngineManager class for lifecycle-aware engine management (#5629) (#5637) ([#5637](https://github.com/mrveiss/AutoBot-AI/pull/5637))
+
+- *(singleton)* Extract _OllamaPoolManager class for lifecycle-aware pool management (#5628) (#5636) ([#5636](https://github.com/mrveiss/AutoBot-AI/pull/5636))
+
+- *(utils)* Migrate 12 module-level threading.Lock() singleton patterns to lazy_singleton phase 3 (#5619) (#5625) ([#5625](https://github.com/mrveiss/AutoBot-AI/pull/5625))
+
+- *(utils)* Migrate 40 module-level threading.Lock() singleton patterns to lazy_singleton phase 2 (#5579) (#5618) ([#5618](https://github.com/mrveiss/AutoBot-AI/pull/5618))
+
+- *(ui)* Replace Font Awesome icon in EmptyState with Icon component (#5606) (#5615) ([#5615](https://github.com/mrveiss/AutoBot-AI/pull/5615))
+
+- *(composables)* Migrate 10 composables from raw setInterval to usePollingJob (#5604) (#5612) ([#5612](https://github.com/mrveiss/AutoBot-AI/pull/5612))
+
+- *(utils)* Migrate task_queue get_task_queue() to lazy_singleton — missed in #5529 (#5578) (#5583) ([#5583](https://github.com/mrveiss/AutoBot-AI/pull/5583))
+
+- *(knowledge)* Replace Dict[str, Any] with CategoryMeta TypedDict (#5591) (#5596) ([#5596](https://github.com/mrveiss/AutoBot-AI/pull/5596))
+
+- *(knowledge)* Migrate remaining production callers onto BaseCollection/BaseClient ABCs (#5194) (#5600) ([#5600](https://github.com/mrveiss/AutoBot-AI/pull/5600))
+
+- *(knowledge)* Split facts.py into ingestion/entries/query schema modules (#5486) (#5597) ([#5597](https://github.com/mrveiss/AutoBot-AI/pull/5597))
+
+- *(frontend)* Replace 7 raw setInterval loops with usePollingJob (#5561) (#5582) ([#5582](https://github.com/mrveiss/AutoBot-AI/pull/5582))
+
+- *(slm-backend)* Extract _extract_failure_summary to ansible_utils (#5564) (#5581) ([#5581](https://github.com/mrveiss/AutoBot-AI/pull/5581))
+
+- *(events)* Replace string literals with event_type constants (#5131) (#5580) ([#5580](https://github.com/mrveiss/AutoBot-AI/pull/5580))
+
+- *(tests)* Consolidate _FakeConnector into tests/helpers/fake_connector.py (#5558) (#5573) ([#5573](https://github.com/mrveiss/AutoBot-AI/pull/5573))
+
+- *(tests)* Consolidate _FakeKB into tests/helpers/fake_kb.py (#5557) (#5572) ([#5572](https://github.com/mrveiss/AutoBot-AI/pull/5572))
+
+- *(utils)* Migrate 13 threading.Lock() singletons to lazy_singleton (#5529) (#5571) ([#5571](https://github.com/mrveiss/AutoBot-AI/pull/5571))
+
+- *(composables)* SourceManager + CodebaseAnalyticsLanding → usePollingJob (#5508) (#5565) ([#5565](https://github.com/mrveiss/AutoBot-AI/pull/5565))
+
+- *(frontend)* Migrate 5 single-key expand toggles to useExpansion (#5521) (#5556) ([#5556](https://github.com/mrveiss/AutoBot-AI/pull/5556))
+
+- *(frontend)* Migrate 6 setInterval polling loops to usePollingJob (#5535) (#5554) ([#5554](https://github.com/mrveiss/AutoBot-AI/pull/5554))
+
+- *(composables)* SourceManager + CodebaseAnalyticsLanding → usePollingJob (#5508) (#5553) ([#5553](https://github.com/mrveiss/AutoBot-AI/pull/5553))
+
+- *(frontend)* Migrate 2 boolean-map expansions to useExpansion (#5522) (#5552) ([#5552](https://github.com/mrveiss/AutoBot-AI/pull/5552))
+
+- *(frontend)* Migrate 5 single-key expand toggles to useExpansion (#5521) (#5551) ([#5551](https://github.com/mrveiss/AutoBot-AI/pull/5551))
+
+- *(utils)* Add arg-guard to lazy_singleton — raise on mismatched non-first-call args (#5445) (#5548) ([#5548](https://github.com/mrveiss/AutoBot-AI/pull/5548))
+
+- *(schemas)* Fix extra=allow on request models; complete inline request model migration (#5536, #5537) (#5547) ([#5547](https://github.com/mrveiss/AutoBot-AI/pull/5547))
+
+- *(npu-worker)* Extract aiohttp_with_backoff primitive, migrate config_bootstrap + backend_telemetry (#5430) (#5542) ([#5542](https://github.com/mrveiss/AutoBot-AI/pull/5542))
+
+- *(backend)* Datetime.now(timezone.utc) → now_utc() consistency pass (#5514) (#5533) ([#5533](https://github.com/mrveiss/AutoBot-AI/pull/5533))
+
+- *(schemas)* Migrate BatchVectorizeRequest and ReindexWithContextRequest from inline to knowledge/schemas/ (#5528) (#5530) ([#5530](https://github.com/mrveiss/AutoBot-AI/pull/5530))
+
+- *(services)* Collapse claude_agent_service into re-export shim — specialized_agent_service canonical (#5429) (#5527) ([#5527](https://github.com/mrveiss/AutoBot-AI/pull/5527))
+
+- *(tests)* Consolidate FakeRedis implementations into tests/helpers/fake_redis.py (#5431) (#5526) ([#5526](https://github.com/mrveiss/AutoBot-AI/pull/5526))
+
+- *(utils)* Extract lazy_singleton primitive, migrate 3 chunker factories (#5423) (#5525) ([#5525](https://github.com/mrveiss/AutoBot-AI/pull/5525))
+
+- *(composables)* PatternAnalysis 4-key accordion → useExpansion<Section> (#5505) (#5520) ([#5520](https://github.com/mrveiss/AutoBot-AI/pull/5520))
+
+- *(composables)* 4 single-key expand toggles → useExpansion<Key> (#5506) (#5519) ([#5519](https://github.com/mrveiss/AutoBot-AI/pull/5519))
+
+- *(composables)* KnowledgePersistenceDialog boolean-map → useBatchSelection (#5507) (#5518) ([#5518](https://github.com/mrveiss/AutoBot-AI/pull/5518))
+
+- *(composables)* DocumentOverview.vue reactive(Set) → useExpansion (#5504) (#5517) ([#5517](https://github.com/mrveiss/AutoBot-AI/pull/5517))
+
+- *(npu-worker)* Collapse 5 config getters in config_bootstrap.py (#5436) (#5485) ([#5485](https://github.com/mrveiss/AutoBot-AI/pull/5485))
+
+- *(api)* Remove redundant .replace("Z", "+00:00") inside parse_utc_iso (#5473) (#5474) ([#5474](https://github.com/mrveiss/AutoBot-AI/pull/5474))
+
+- *(infra)* Tighten except Exception to specific types in verify_knowledge_consistency (#5441) (#5461) ([#5461](https://github.com/mrveiss/AutoBot-AI/pull/5461))
+
+- *(lint+api)* Shared lint scan helper + analytics.py parse_utc_iso adoption (#5448, #5449) (#5453) ([#5453](https://github.com/mrveiss/AutoBot-AI/pull/5453))
+
+- *(analytics)* Migrate exportReport through parseResponse hook (#5388) (#5402) ([#5402](https://github.com/mrveiss/AutoBot-AI/pull/5402))
+
+- *(utils)* Extract SemanticChunkerBase + collapse shared pipeline (#5363) (#5392) ([#5392](https://github.com/mrveiss/AutoBot-AI/pull/5392))
+
+- *(analytics)* DRY sources endpoint + parseResponse hook + audit doc (#5276) (#5386) ([#5386](https://github.com/mrveiss/AutoBot-AI/pull/5386))
+
+- *(codebase-analytics)* Env-analysis normalizer parity (#5367) (#5375) ([#5375](https://github.com/mrveiss/AutoBot-AI/pull/5375))
+
+- *(knowledge_collaboration)* Rename aioredis_client parameter to redis (#5337) (#5354) ([#5354](https://github.com/mrveiss/AutoBot-AI/pull/5354))
+
+- *(codebase-analytics)* Rename _DEFAULT_HARDCODE_SEVERITY → public (#5348) (#5355) ([#5355](https://github.com/mrveiss/AutoBot-AI/pull/5355))
+
+- *(backend)* Migrate Pattern A timing + cutoff sites in 10 files (#5211 phase B3.2) (#5342) ([#5342](https://github.com/mrveiss/AutoBot-AI/pull/5342))
+
+- *(analytics)* Remove orphaned refactoringSuggestions ref (#5340) (#5341) ([#5341](https://github.com/mrveiss/AutoBot-AI/pull/5341))
+
+- *(base-table)* Collapse toggleRowSelection to toggleByKey (#5333) (#5335) ([#5335](https://github.com/mrveiss/AutoBot-AI/pull/5335))
+
+- *(knowledge)* Rename aioredis_client -> _aioredis_client + lint guard (Closes #5225) (#5330) ([#5330](https://github.com/mrveiss/AutoBot-AI/pull/5330))
+
+- *(base-table)* Adopt useBatchSelection for row selection (closes #5283) (#5325) ([#5325](https://github.com/mrveiss/AutoBot-AI/pull/5325))
+
+- *(composables)* Delegate toggle/select to *ByKey primitives (#5331) (#5332) ([#5332](https://github.com/mrveiss/AutoBot-AI/pull/5332))
+
+- *(analytics)* Consolidate 4 duplicate HardcodedValue type defs (#5311) (#5324) ([#5324](https://github.com/mrveiss/AutoBot-AI/pull/5324))
+
+- *(analytics)* Migrate 6 expansion sites from Record/Array to useExpansion (#5323) (#5327) ([#5327](https://github.com/mrveiss/AutoBot-AI/pull/5327))
+
+- *(composables)* Migrate useConversationFiles selection to useBatchSelection (#5322) (#5326) ([#5326](https://github.com/mrveiss/AutoBot-AI/pull/5326))
+
+- *(integrations)* Migrate Pattern A timing to time.monotonic (#5211 phase B3) (#5321) ([#5321](https://github.com/mrveiss/AutoBot-AI/pull/5321))
+
+- *(knowledge)* Migrate 2 production callers onto BaseCollection ABC (#5194) (#5310) ([#5310](https://github.com/mrveiss/AutoBot-AI/pull/5310))
+
+- *(frontend)* Migrate callers off useKnowledgeBase BC shim (#5193) (#5309) ([#5309](https://github.com/mrveiss/AutoBot-AI/pull/5309))
+
+- *(codebase-analytics)* Import _DEFAULT_HARDCODE_SEVERITY from analyzers (#5312) (#5314) ([#5314](https://github.com/mrveiss/AutoBot-AI/pull/5314))
+
+- *(components)* Adopt useBatchSelection in 4 non-knowledge components (#5283) (#5288) ([#5288](https://github.com/mrveiss/AutoBot-AI/pull/5288))
+
+- *(frontend)* Complete reactive refs migration for useKnowledgeFacts/Files/Jobs (#5195) (#5286) ([#5286](https://github.com/mrveiss/AutoBot-AI/pull/5286))
+
+- *(knowledge)* Migrate batch-select state to useBatchSelection composable (#5247) (#5278) ([#5278](https://github.com/mrveiss/AutoBot-AI/pull/5278))
+
+- *(knowledge)* Migrate KB mixin self.aioredis_client callers to self.redis() (Part of #5225, Phase 3) (#5272) ([#5272](https://github.com/mrveiss/AutoBot-AI/pull/5272))
+
+- *(analytics)* Migrate useIndexingJob + useDashboardLoaders fetches (#5257)
+
+- *(typescript)* Delete parseApiResponse entirely (#5033) (#5246) ([#5246](https://github.com/mrveiss/AutoBot-AI/pull/5246))
+
+- *(knowledge)* Batch embeddings + collapse duplicate NPU-first branch (#5231) (#5262) ([#5262](https://github.com/mrveiss/AutoBot-AI/pull/5262))
+
+- *(knowledge)* Migrate remaining kb.aioredis_client direct access to KB.redis() (#5230) (#5261) ([#5261](https://github.com/mrveiss/AutoBot-AI/pull/5261))
+
+- *(analytics)* Migrate useCrossLanguageAnalysis to useFetchEndpoint (#5253)
+
+- *(api)* Migrate 21 cross-module kb.aioredis_client sites to kb.redis() (#5225 phase 1) (#5252) ([#5252](https://github.com/mrveiss/AutoBot-AI/pull/5252))
+
+- *(analytics)* Migrate CodebaseAnalyticsLanding + useSourceRegistry fetches (#5153 scope B)
+
+- *(composables)* Extend useFetchEndpoint with onResponse + reset; migrate last 2 hand-rolled fetchers (#5235)
+
+- *(backend)* Migrate Phase 3 datetime.utcnow() producers to utc_timestamp() (#5178 part B phase 3) (#5236) ([#5236](https://github.com/mrveiss/AutoBot-AI/pull/5236))
+
+- *(backend)* Migrate Phase 2 datetime.utcnow() producers to utc_timestamp() (#5178 part B phase 2) (#5233) ([#5233](https://github.com/mrveiss/AutoBot-AI/pull/5233))
+
+- *(composables)* Migrate remaining 3 useAnalyticsFetch consumers and delete the helper (#5208)
+
+- *(composables)* POC migrate useConfigDuplicates from useAnalyticsFetch -> useFetchEndpoint (#5208)
+
+- *(charts)* Extract useCytoscapeLibrary composable (#5206)
+
+- *(knowledge)* Migrate /api/embeddings direct callers to services.npu_client canonical (#5182) (#5219) ([#5219](https://github.com/mrveiss/AutoBot-AI/pull/5219))
+
+- *(knowledge)* Add KB.redis() public accessor; migrate 4 production call sites (#5184) (#5218) ([#5218](https://github.com/mrveiss/AutoBot-AI/pull/5218))
+
+- *(llm)* Migrate agent_loop/think_tool to call_ollama_generate (#5181) (#5216) ([#5216](https://github.com/mrveiss/AutoBot-AI/pull/5216))
+
+- *(backend)* Migrate Phase 1 datetime.utcnow() producers to utc_timestamp() (#5178 part B phase 1) (#5213) ([#5213](https://github.com/mrveiss/AutoBot-AI/pull/5213))
+
+- *(composables)* Complete the rehome — delete alias, migrate call-sites, add DELETE support (#5174) (#5187) ([#5187](https://github.com/mrveiss/AutoBot-AI/pull/5187))
+
+- *(frontend)* Remove parseApiResponse wrapper in 17 knowledge Vue components (#5033) (#5177) ([#5177](https://github.com/mrveiss/AutoBot-AI/pull/5177))
+
+- *(redis)* Route backend accessors through autobot_shared canonical (#5101) (#5171) ([#5171](https://github.com/mrveiss/AutoBot-AI/pull/5171))
+
+- *(frontend)* Make knowledge composables return reactive refs + managed fetch state (#5149) (#5167) ([#5167](https://github.com/mrveiss/AutoBot-AI/pull/5167))
+
+- *(llm)* Migrate rlm/benchmark.py _generate to call_ollama_generate (#5155) (#5166) ([#5166](https://github.com/mrveiss/AutoBot-AI/pull/5166))
+
+- *(composables)* Rehome useAnalyticsEndpoint -> useFetchEndpoint with flipped defaults (#5153 C)
+
+- *(analytics)* Extend useAnalyticsEndpoint with POST+body, migrate useCodeSmellAnalysis (#5153)
+
+- *(analytics)* Extract runTimed helper (#5153 D-2)
+
+- *(frontend)* Audit + POC migration of fetcher boilerplate to useAnalyticsEndpoint (#5154) (#5164) ([#5164](https://github.com/mrveiss/AutoBot-AI/pull/5164))
+
+- *(shared)* Add utc_timestamp_z() and migrate workflow_versioning._utc_now (#5152) (#5163) ([#5163](https://github.com/mrveiss/AutoBot-AI/pull/5163))
+
+- *(frontend)* Rationalize loading composables (#5108) (#5156) ([#5156](https://github.com/mrveiss/AutoBot-AI/pull/5156))
+
+- *(frontend)* Move formatters out of types/ + consolidate duplicates (#5107) (#5148) ([#5148](https://github.com/mrveiss/AutoBot-AI/pull/5148))
+
+- *(llm)* Extract shared call_ollama_generate helper (#5102) (#5147) ([#5147](https://github.com/mrveiss/AutoBot-AI/pull/5147))
+
+- *(frontend)* Split useKnowledgeBase into 6 domain composables + drop dead try/catch boilerplate (#5122 #5123) (#5145) ([#5145](https://github.com/mrveiss/AutoBot-AI/pull/5145))
+
+- *(analytics)* Extract useAnalyticsEndpoint<T> composable (#5112) (#5137) ([#5137](https://github.com/mrveiss/AutoBot-AI/pull/5137))
+
+- *(shared)* Consolidate UTC-timestamp helpers into autobot_shared.time_utils (#5106) (#5126) ([#5126](https://github.com/mrveiss/AutoBot-AI/pull/5126))
+
+- *(redis)* Consolidate _decode helpers into autobot_shared.redis_utils (#5100) (#5125) ([#5125](https://github.com/mrveiss/AutoBot-AI/pull/5125))
+
+- *(frontend)* Remove no-op 'const data = response' aliases in useKnowledgeBase (#5092) (#5128) ([#5128](https://github.com/mrveiss/AutoBot-AI/pull/5128))
+
+- *(knowledge)* Migrate facts.py embedding path to services.npu_client canonical helpers (#5105) (#5127) ([#5127](https://github.com/mrveiss/AutoBot-AI/pull/5127))
+
+- *(frontend)* Unify uploadKnowledgeFile with apiClient pattern (#5093) (#5116) ([#5116](https://github.com/mrveiss/AutoBot-AI/pull/5116))
+
+- *(orchestrator)* Preserve unbounded gather behavior via len(coros) (#5059)
+
+- *(orchestrator)* Migrate to bounded_gather primitive (#5059, closes #5059)
+
+- *(typescript)* Delete parseApiResponse from useKnowledgeBase (#5033) (#5091) ([#5091](https://github.com/mrveiss/AutoBot-AI/pull/5091))
+
+- *(knowledge)* Add ConnectorRegistry public API; replace 3 _connectors private accesses (#5057) (#5089) ([#5089](https://github.com/mrveiss/AutoBot-AI/pull/5089))
+
+- *(typescript)* Delete parseApiResponse from useKnowledgeVectorization (#5033)
+
+- *(backend)* Clean up stale AgentOrchestrator reference in agent_config (#5040)
+
+- *(backend)* Remove all backward-compat shims and name aliases (#5040)
+
+- *(backend)* Align ResourceFactory and tests with single Orchestrator (#5040, closes #5038, #5039)
+
+- *(services)* Rename specialized orchestrators (SLM, deployment, subagent, loop, workflow, agent) (#5040)
+
+- *(orchestrator)* Rename ConsolidatedOrchestrator → Orchestrator (single conductor, #5040)
+
+- *(orchestrator)* Merge EnhancedMultiAgentOrchestrator into ConsolidatedOrchestrator (#5040)
+
+- *(testing)* Check deps via importlib.metadata instead of find_spec (#5044)
+
+- *(ui)* Remove spinner special-case from Icon.vue (#5043)
+
+- *(typescript)* Make parseApiResponse generic + type 77 call sites (#4438)
+
+- *(tokens)* Rename --spacing-44px to --touch-target-min, inline --spacing-140px (#5036)
+
+- *(ui)* Type Icon 'name' prop as union of registry keys (#5035)
+
+- *(backend)* Clean up stale EnhancedOrchestrator docstrings (#4048)
+
+- *(backend)* Consolidate orchestrator files 5→4 (#4048)
+
+- *(llm)* Split llm_multi_provider into plugin-per-provider architecture (#4411)
+
+- *(frontend)* Add ManPageManager stub and barrel index files for TS7016 compatibility (#4534)
+
+- *(extensions)* Register LoggingExtension builtin extension (#4182) (#4883) ([#4883](https://github.com/mrveiss/AutoBot-AI/pull/4883))
+
+- *(config)* Complete ConfigManager → get_config_manager() migration (#4047) (#4870) ([#4870](https://github.com/mrveiss/AutoBot-AI/pull/4870))
+
+- *(backend)* Remove backward-compat shim orchestrator files (#3393) (#4869) ([#4869](https://github.com/mrveiss/AutoBot-AI/pull/4869))
+
+- *(backend)* Replace deprecated get_event_loop() with get_running_loop() (#4717)
+
+- *(docs)* Remove incorrect ON_ prefix from HookPoint docstring examples (#4391)
+
+- *(tools)* Move 12 inline _BUILTIN_TOOL_SCHEMAS to authoritative schema constants per tool module (#4726) (#4784) ([#4784](https://github.com/mrveiss/AutoBot-AI/pull/4784))
+
+- *(slm-frontend)* Delete deprecated NodesSettings.vue (#4707) (#4774) ([#4774](https://github.com/mrveiss/AutoBot-AI/pull/4774))
+
+- *(components)* Wire orphaned OperationDetail component (#4270) (#4770) ([#4770](https://github.com/mrveiss/AutoBot-AI/pull/4770))
+
+- *(components)* Wire orphaned OperationDetail component (#4270) (#4769) ([#4769](https://github.com/mrveiss/AutoBot-AI/pull/4769))
+
+- *(rag)* Wire NeuralMeshRetriever deletion — remove 488-line dead class and tests (#4724) (#4748) ([#4748](https://github.com/mrveiss/AutoBot-AI/pull/4748))
+
+- *(routing)* Consolidate nav — remove orphan routes, merge into parent tabs
+
+- *(components)* Wire CodeEvolutionTimeline (#4268) (#4349) ([#4349](https://github.com/mrveiss/AutoBot-AI/pull/4349))
+
+- *(components)* Wire KnowledgeMainCategories (#4282)
+
+- *(components)* Wire FlagChangeHistory (#4271)
+
+- *(components)* Wire AccessMetrics (#4269)
+
+- *(router)* Register presence_ws router (#4257)
+
+- *(router)* Register self_capabilities router (#4258)
+
+- *(router)* Register manual_mcp router (#4256)
+
+- *(router)* Register knowledge_grounding router (#4255)
+
+- *(router)* Register diagnostics router (#4254)
+
+- *(router)* Register analytics_export router (#4253)
+
+- *(router)* Register analytics_cost router (#4252)
+
+- *(router)* Register analytics_code router in feature_routers (#4251)
+
+- *(backend)* Consolidate router registries (#4203)
+
+- *(extensions)* Redesign hook invocation strategy (#4202)
+
+- *(frontend)* Wire orphaned views (#4185)
+
+- *(frontend)* Audit design-implementation gap (#4194)
+
+- *(frontend)* Audit orphaned Vue components (#4184)
+
+- *(extensions)* Register SecretMaskingExtension builtin extension (#4183)
+
+- *(backend)* Register unregistered API routers (#4179)
+
+- *(backend)* Register 6 unregistered knowledge routers (#4179)
+
+- *(backend)* Register 17 unregistered API routers (#4180)
+
+- *(extensions)* Wire uninvoked HookPoints (#4181)
+
+- *(components)* Wire orphaned component KnowledgeScopeSelector (#4276)
+
+- *(components)* Wire orphaned component EnforcementModeSelector (#4273)
+
+- *(components)* Wire orphaned component RelationshipViewer (#4272)
+
+- *(components)* Delete orphaned KnowledgeScopeSelector component (#4276)
+
+- *(components)* Wire orphaned component KnowledgeContentViewer (#4278)
+
+- *(components)* Wire orphaned component StableLoadingState (#4283)
+
+- *(components)* Wire orphaned component KnowledgeBrowserHeader (#4284) (#4321) ([#4321](https://github.com/mrveiss/AutoBot-AI/pull/4321))
+
+- *(components)* Delete orphaned IconTooling component (#4287) (#4319) ([#4319](https://github.com/mrveiss/AutoBot-AI/pull/4319))
+
+- *(components)* Wire orphaned component FilePathNavigation (#4286) (#4317) ([#4317](https://github.com/mrveiss/AutoBot-AI/pull/4317))
+
+- *(browser-worker)* Extract automation code from src/ (#4310) (#4316) ([#4316](https://github.com/mrveiss/AutoBot-AI/pull/4316))
+
+- *(npu-worker)* Extract NPU integration code from backend (#4311) (#4315) ([#4315](https://github.com/mrveiss/AutoBot-AI/pull/4315))
+
+- *(provisioning)* Replace timeout-based waits with retry-based health checks across all critical services
+
+- *(cleanup)* Remove dead code icon components and shadow router (#4288 #4289 #4290 #4291 #4292) ([#4304](https://github.com/mrveiss/AutoBot-AI/pull/4304))
+
+- *(ansible)* Centralize ChromaDB/AI-Stack config generation (#4087)
+
+- *(knowledge)* Async background task for populate_autobot_docs (#4103)
+
+- *(config)* Migrate infrastructure callers from ConfigManager to ssot_config (#3829) (#4101) ([#4101](https://github.com/mrveiss/AutoBot-AI/pull/4101))
+
+- *(ai-stack)* Unified service account to autobot:autobot (#4091)
+
+- *(config)* Eliminate double ConfigManager instantiation in chat_history (#3945) (#4081) ([#4081](https://github.com/mrveiss/AutoBot-AI/pull/4081))
+
+- *(html)* Remove redundant role="button" and fix duplicate var (#4039)
+
+- *(svg)* Extract inline SVG to sprite sheets (#4040)
+
+- *(redis)* Migrate get_redis_client(async_client=True) to get_async_redis_client (#4059) (#4070) ([#4070](https://github.com/mrveiss/AutoBot-AI/pull/4070))
+
+- *(service-worker)* Enhance caching strategy with expiration and offline fallback (#4041)
+
+- *(nav)* Move browser-automation from main menu to Automation sidebar
+
+- Enhance feature request template with triage guidance
+
+- Enhance bug report template with triage guidance
+
+- *(perf)* Add SVG sprite sheets for icon optimization (#4040)
+
+- *(a11y)* Replace non-semantic HTML with proper buttons (#4039)
+
+- *(services)* Migrate DistributedServiceDiscovery to AsyncInitializable (#3947) (#4022) ([#4022](https://github.com/mrveiss/AutoBot-AI/pull/4022))
+
+- *(agents)* Migrate 3 agents to StandardizedAgent base class (#3387) (#3989) ([#3989](https://github.com/mrveiss/AutoBot-AI/pull/3989))
+
+- *(backend)* Consolidate orchestrator files (#3393) (#3982) ([#3982](https://github.com/mrveiss/AutoBot-AI/pull/3982))
+
+- *(config)* Migrate 27 ConfigManager() callers to get_config_manager() (#3829) (#3981) ([#3981](https://github.com/mrveiss/AutoBot-AI/pull/3981))
+
+- *(services)* Migrate 4 singletons to AsyncInitializable lazy-init pattern (#3390) (#3935) ([#3935](https://github.com/mrveiss/AutoBot-AI/pull/3935))
+
+- *(config)* Migrate 8 ConfigManager callers to ssot_config (#3829) (#3932) ([#3932](https://github.com/mrveiss/AutoBot-AI/pull/3932))
+
+- *(retry)* Standardize all retry/backoff on retry_mechanism.py (#3830) (#3928) ([#3928](https://github.com/mrveiss/AutoBot-AI/pull/3928))
+
+- *(frontend)* Route raw WebSocket() calls through useWebSocket composable (#3841) ([#3913](https://github.com/mrveiss/AutoBot-AI/pull/3913))
+
+- *(auth)* Extract JWT/bcrypt core into autobot_shared — eliminate SLM duplication (#3840) ([#3910](https://github.com/mrveiss/AutoBot-AI/pull/3910))
+
+- *(backend)* Migrate singletons to AsyncInitializable lazy-init (#3885) ([#3885](https://github.com/mrveiss/AutoBot-AI/pull/3885))
+
+- *(knowledge)* Consolidate vector search under VectorSearchEngine (#3828) (#3879) ([#3879](https://github.com/mrveiss/AutoBot-AI/pull/3879))
+
+- *(http)* Consolidate HTTP clients — TracedHttpClient wraps HTTPClientManager, extract sign_request (#3827) (#3870) ([#3870](https://github.com/mrveiss/AutoBot-AI/pull/3870))
+
+- *(chat)* Tombstone legacy conversation.py, remove dead ConversationManager from orchestrator (#3831) (#3865) ([#3865](https://github.com/mrveiss/AutoBot-AI/pull/3865))
+
+- *(backend)* Consolidate terminal API implementations, remove compat aliases (#3383) (#3833) ([#3833](https://github.com/mrveiss/AutoBot-AI/pull/3833))
+
+- *(llm)* Consolidate llm_providers/ with llm_interface_pkg adapters (#3185) ([#3837](https://github.com/mrveiss/AutoBot-AI/pull/3837))
+
+- *(tests)* Co-locate single-module tests from autobot-backend/ root (#3364) ([#3712](https://github.com/mrveiss/AutoBot-AI/pull/3712))
+
+- *(backend)* Remove dead doc_generation_threshold attribute (#3656) ([#3669](https://github.com/mrveiss/AutoBot-AI/pull/3669))
+
+- *(agents)* Cap exponential backoff in agent_client.py via exponential_backoff_delay (#3658) ([#3666](https://github.com/mrveiss/AutoBot-AI/pull/3666))
+
+- *(backend)* Give context_window_manager its own config YAML (#3650) ([#3668](https://github.com/mrveiss/AutoBot-AI/pull/3668))
+
+- *(agents)* Declare _get_system_prompt @abstractmethod in StandardizedAgent (#3606) ([#3645](https://github.com/mrveiss/AutoBot-AI/pull/3645))
+
+- *(backend)* Remove dead AgentThresholds import and replace magic 0.8 in orchestrator.py (#3607) ([#3644](https://github.com/mrveiss/AutoBot-AI/pull/3644))
+
+- *(helpers)* Cap exponential backoff via TimingConstants (#3565) ([#3643](https://github.com/mrveiss/AutoBot-AI/pull/3643))
+
+- *(helpers)* Remove duplicate raise_not_found_error in catalog_http_exceptions (#3566) ([#3642](https://github.com/mrveiss/AutoBot-AI/pull/3642))
+
+- *(helpers)* Add extra_data support to TaskResult (#3564) ([#3640](https://github.com/mrveiss/AutoBot-AI/pull/3640))
+
+- *(constants)* Add TTL_1_HOUR/TTL_5_MINUTES and replace raw cache TTL literals (#3614) (#3617) ([#3617](https://github.com/mrveiss/AutoBot-AI/pull/3617))
+
+- *(agents)* Migrate 6 agents to StandardizedAgent base class (#3387)
+
+- *(backend)* Consolidate orchestrator files — delete enhanced_orchestrator.py (#3393) ([#3589](https://github.com/mrveiss/AutoBot-AI/pull/3589))
+
+- *(backend)* Consolidate orchestrator files — delete enhanced_orchestrator.py (#3393)
+
+- *(backend)* Consolidate 4 competing terminal API implementations (#3383) (#3576) ([#3576](https://github.com/mrveiss/AutoBot-AI/pull/3576))
+
+- *(constants)* Add TaskStatus.PARTIALLY_COMPLETED — wire 2 orchestration sites (#3578) ([#3580](https://github.com/mrveiss/AutoBot-AI/pull/3580))
+
+- *(analytics)* Extract _resolve_source_or_404 to shared helper (#3440) (#3573) ([#3573](https://github.com/mrveiss/AutoBot-AI/pull/3573))
+
+- *(constants)* Wire ERR_EXPERIMENT_NOT_FOUND (#3562) ([#3570](https://github.com/mrveiss/AutoBot-AI/pull/3570))
+
+- *(constants)* TaskStatus defaults in orchestration/types.py (#3563) ([#3569](https://github.com/mrveiss/AutoBot-AI/pull/3569))
+
+- *(constants)* Enforce StatusEnum in orchestration production code (#3544) ([#3560](https://github.com/mrveiss/AutoBot-AI/pull/3560))
+
+- *(constants)* Complete error_constants adoption (#3550) ([#3559](https://github.com/mrveiss/AutoBot-AI/pull/3559))
+
+- *(constants)* Centralize Redis TTL and async timeout constants (#3529) ([#3543](https://github.com/mrveiss/AutoBot-AI/pull/3543))
+
+- *(constants)* Enforce ModelConstants — replace hardcoded model strings (#3528) (#3542) ([#3542](https://github.com/mrveiss/AutoBot-AI/pull/3542))
+
+- *(constants)* Create api_constants.py — centralize API path strings (#3531) (#3540) ([#3540](https://github.com/mrveiss/AutoBot-AI/pull/3540))
+
+- *(constants)* Create error_constants.py — centralize repeated error strings (#3530) (#3539) ([#3539](https://github.com/mrveiss/AutoBot-AI/pull/3539))
+
+- *(constants)* Enforce StatusEnum in tests — replace hardcoded status strings (#3533) (#3537) ([#3537](https://github.com/mrveiss/AutoBot-AI/pull/3537))
+
+- *(setup_wizard)* Replace port magic numbers with _ROLE_INFRA_VARS and _CHROMADB_PORT constant (#3526) ([#3527](https://github.com/mrveiss/AutoBot-AI/pull/3527))
+
+- *(backend)* Introduce get_config DI dependency for global_config_manager (#3455) ([#3455](https://github.com/mrveiss/AutoBot-AI/pull/3455))
+
+- *(slm)* Reuse DEFAULT_REPO_PATH from git_tracker in drift_checker (#3434) ([#3454](https://github.com/mrveiss/AutoBot-AI/pull/3454))
+
+- *(analytics)* Remove unneeded flat-path redirect routes (#3436)
+
+- *(backend)* Deprecate 9 redundant health endpoints, keep /api/system/health primary (#3333) (#3353) ([#3353](https://github.com/mrveiss/AutoBot-AI/pull/3353))
+
+- *(backend)* Document KB API boundaries, deprecate unregistered kb_librarian routes (#3336) (#3347) ([#3347](https://github.com/mrveiss/AutoBot-AI/pull/3347))
+
+- *(backend)* Deprecate base_terminal, simple/secure_terminal_websocket in favour of terminal.py (#3332) (#3346) ([#3346](https://github.com/mrveiss/AutoBot-AI/pull/3346))
+
+- *(backend)* Deprecate duplicate /settings/settings endpoints, fix audit middleware stale /api/config refs (#3334) (#3345) ([#3345](https://github.com/mrveiss/AutoBot-AI/pull/3345))
+
+- *(slm-frontend)* Export useSlmApi internal interfaces to shared types (#3196) (#3342) ([#3342](https://github.com/mrveiss/AutoBot-AI/pull/3342))
+
+- *(slm-frontend)* Extract formatRelativeTime to shared dateUtils (#3314) (#3318) ([#3318](https://github.com/mrveiss/AutoBot-AI/pull/3318))
+
+- Extract shared escapeHtml utility, remove duplicates (#3215) (#3256) ([#3256](https://github.com/mrveiss/AutoBot-AI/pull/3256))
+
+- *(chat)* Expose load_full_session public API to avoid private method access (#3189) (#3252) ([#3252](https://github.com/mrveiss/AutoBot-AI/pull/3252))
+
+- *(frontend)* Extract shared escapeHtml utility from duplicated implementations (#3215) (#3251) ([#3251](https://github.com/mrveiss/AutoBot-AI/pull/3251))
+
+- *(ansible)* Move all inline template defaults to role defaults/main.yml (#3226)
+
+- Condense CLAUDE.md, extract full rules to dedicated docs
+
+- Rename autobot-shared to autobot_shared, remove symlink workarounds (#2934)
+
+- *(frontend)* Consolidate code-intelligence into /analytics/codebase (#3067, #3073)
+
+- *(chat)* Simplify callers to use kwargs directly instead of functools.partial (#2958) (#2978) ([#2978](https://github.com/mrveiss/AutoBot-AI/pull/2978))
+
+- *(backend)* Decompose _generate_dynamic_inventory into 5 helpers (#2823) (#2945) ([#2945](https://github.com/mrveiss/AutoBot-AI/pull/2945))
+
+- *(frontend)* Remove 7 orphaned workflow sub-components (#2819) (#2920) ([#2920](https://github.com/mrveiss/AutoBot-AI/pull/2920))
+
+- *(config)* Centralize Redis DB allocation — load from YAML SSOT (#2670) (#2804) ([#2804](https://github.com/mrveiss/AutoBot-AI/pull/2804))
+
+- *(frontend)* Replace error.value race with errors array (#2626) ([#2792](https://github.com/mrveiss/AutoBot-AI/pull/2792))
+
+- *(config)* Centralize Redis DB allocation (#2670) ([#2790](https://github.com/mrveiss/AutoBot-AI/pull/2790))
+
+- *(infra)* Replace hardcoded model strings with SSOT (#2584) ([#2784](https://github.com/mrveiss/AutoBot-AI/pull/2784))
+
+- *(backend)* Derive ToolRegistry tools from shared constant (#2609) ([#2783](https://github.com/mrveiss/AutoBot-AI/pull/2783))
+
+- *(backend)* Migrate Pydantic V1 patterns to V2 (#2630) ([#2781](https://github.com/mrveiss/AutoBot-AI/pull/2781))
+
+- *(frontend)* Align ConsoleLogEntry with variadic log() (#2627) ([#2778](https://github.com/mrveiss/AutoBot-AI/pull/2778))
+
+- *(shared)* Consolidate local-node detection into network_utils (#2759) (#2774) ([#2774](https://github.com/mrveiss/AutoBot-AI/pull/2774))
+
+- *(analytics)* Extract resolve_source_root into shared helper (#2760) (#2772) ([#2772](https://github.com/mrveiss/AutoBot-AI/pull/2772))
+
+- *(workflow)* Remove redundant StepTimeoutError except clause (#2746) (#2771) ([#2771](https://github.com/mrveiss/AutoBot-AI/pull/2771))
+
+- *(devops)* Extract shared backend env vars (#2727) ([#2777](https://github.com/mrveiss/AutoBot-AI/pull/2777))
+
+- *(devops)* Extract shared backend env vars to DRY up playbooks (#2727)
+
+- *(analytics)* Extract methods from long analytics functions (#2735) ([#2739](https://github.com/mrveiss/AutoBot-AI/pull/2739))
+
+- *(chat)* Extract methods from long chat/service functions (#2735) ([#2743](https://github.com/mrveiss/AutoBot-AI/pull/2743))
+
+- *(api)* Extract methods from long API functions (#2735) ([#2742](https://github.com/mrveiss/AutoBot-AI/pull/2742))
+
+- *(services)* Extract methods from long functions (#2735) ([#2741](https://github.com/mrveiss/AutoBot-AI/pull/2741))
+
+- *(config)* Migrate hardcoded values to SSOT config (#2671)
+
+- *(agents)* Simplify to 3-tier model mapping with gemma3:4b (#2553)
+
+- *(infra)* Replace 58 print() calls with logger in seq_auth_setup.py (#2569) (#2574) ([#2574](https://github.com/mrveiss/AutoBot-AI/pull/2574))
+
+- *(infra)* Replace 46 print() calls with logger in setup_seq_analytics.py (#2554) (#2566) ([#2566](https://github.com/mrveiss/AutoBot-AI/pull/2566))
+
+- *(backend)* Remove unused PROMPTS_DIR constant (#2498)
+
+- *(backend)* Remove duplicate prompts/chat/, keep backend resources copy (#2472)
+
+- Consolidate duplicate prompt files to single source (#2472)
+
+- Consolidate duplicate prompt files (#2472) ([#2483](https://github.com/mrveiss/AutoBot-AI/pull/2483))
+
+- *(backend)* Decompose scanner.py orchestrator (#2364) (#2474) ([#2474](https://github.com/mrveiss/AutoBot-AI/pull/2474))
+
+
+### Styling
+
+- *(base)* Apply Black formatting to 5 files in Dev_new_gui (MVA-2892)
+
+- Fix Black formatting in celery_app.py
+
+- Fix Black formatting violations
+
+- *(formatting)* Fix Black and isort violations on 6 files
+
+- *(formatting)* Fix Black formatting on 5 pre-existing files
+
+- *(frontend)* Remove banned design patterns from chat and SLM UIs (#9013)
+
+- Fix isort ordering in test_model_param_registry.py
+
+- Fix Black formatting in test_model_param_registry.py (blank line after import)
+
+- *(backend)* Black-format 5 pre-existing unformatted files (MVA-1307-black) (#8832) ([#8832](https://github.com/mrveiss/AutoBot-AI/pull/8832))
+
+- *(ci)* Black format agent_loop/types.py, npu_models.py, loop.py (MVA-1141 followup)
+
+- *(ci)* Black format 4 files from merged #8648/#8658 (MVA-1141 followup)
+
+- *(ci)* Remove 125 unused imports to fix flake8 F401 (code-quality CI)
+
+- Fix isort on 5 base-branch files (unblock code-quality CI on all PRs)
+
+- Fix isort import ordering on 13 files (unblock code-quality CI)
+
+- Apply Black formatting to 6 files (unblock code-quality CI)
+
+- Fix isort import ordering on LLC/services/tests files
+
+- Apply Black formatting to base LLC/agents files
+
+- Fix isort import ordering on LLC/services/tests files
+
+- Apply Black formatting (line-length=120) on issue-8253
+
+- Fix isort import ordering on LLC/services/tests files
+
+- Apply Black formatting (line-length=120) to LLC/agents dirs
+
+- Fix isort import ordering on LLC/services/tests files
+
+- Apply Black formatting to base LLC/agents files
+
+- Apply Black formatting (line-length=120) on issue-8258
+
+- Fix isort import ordering on LLC/services/tests files
+
+- Apply Black formatting to base LLC/agents files
+
+- Apply Black formatting (line-length=120) on issue-8260
+
+- Fix isort import ordering on LLC/services/tests files
+
+- Apply Black formatting to base LLC/agents files
+
+- Fix isort import ordering on LLC/services/tests files
+
+- Apply Black formatting to base LLC/agents files
+
+- Apply Black formatting (line-length=120) on issue-8252
+
+- Apply Black formatting (line-length=120) on issue-8254
+
+- Apply Black formatting to base LLC/agents files
+
+- Apply Black formatting (line-length=120) on LLC P6 company import
+
+- Apply Black formatting to base LLC/agents files
+
+- Apply Black formatting (line-length=120) on LLC P5 artifact ingestor
+
+- Apply Black formatting to base LLC/agents files
+
+- Apply Black formatting (line-length=120) on issue-8257
+
+- Apply Black formatting to base LLC/agents files
+
+- Apply Black formatting (line-length=120) on LLC P5 agent diary
+
+- Apply Black formatting to base LLC/agents files
+
+- Apply Black formatting (line-length=120) on LLC P5 KB collections
+
+- Apply Black formatting (line-length=120) on LLC P5 heartbeat context builder
+
+- *(llc/8225)* Apply Black formatting to remaining PR files (line-length=120)
+
+- *(llc/8225)* Apply Black formatting (line-length=120)
+
+- *(mva454/mva468)* Autoflake cleanup + pre-commit py3.12 + health check journalctl (#7709, #7686) ([#7822](https://github.com/mrveiss/AutoBot-AI/pull/7822))
+
+- Fix Black formatting regressions in Dev_new_gui (MVA-454) (#7815) ([#7815](https://github.com/mrveiss/AutoBot-AI/pull/7815))
+
+- *(a2a)* Black formatting for pii_pipeline + task_executor (#7355)
+
+- *(ci)* Fix Black 3.12 + isort + unused import in test file — unblocks code-quality CI (MVA-303) ([#7704](https://github.com/mrveiss/AutoBot-AI/pull/7704))
+
+- Fix import sorting with isort (MVA-160)
+
+- Apply Black formatting to fix CI code-quality check (MVA-160)
+
+- Apply Black formatting to run_jwt files (CI fix)
+
+- Apply Black formatting to chat_phase2_test.py (CI fix)
+
+- Isort 21 pre-existing import-sort failures to fix code-quality CI
+
+- Fix pre-existing Black formatting failures on Dev_new_gui ([#7645](https://github.com/mrveiss/AutoBot-AI/pull/7645))
+
+- Black-format 9 files at line-length=120 (MVA-68) (#7532) ([#7532](https://github.com/mrveiss/AutoBot-AI/pull/7532))
+
+- Black + isort format restoration (closes #7225 part 2) (#7515) ([#7515](https://github.com/mrveiss/AutoBot-AI/pull/7515))
+
+- *(tokens)* Remove 3 unused --spacing-micro-* tokens (#5036) (#5224) ([#5224](https://github.com/mrveiss/AutoBot-AI/pull/5224))
+
+- *(tokens)* Delete pixel-value spacing tokens; round call sites to rem scale (#5036)
+
+- *(tokens)* Add missing spacing tokens for negative margins and non-standard sizes (#4948)
+
+- *(tokens)* Replace hardcoded padding/margin/gap with spacing design tokens (#4651) ([#4942](https://github.com/mrveiss/AutoBot-AI/pull/4942))
+
+- *(tokens)* Replace hardcoded padding/margin/gap values with spacing design tokens (#4651)
+
+- *(tokens)* Replace hardcoded transition values with design tokens (#4590) (#4613) ([#4613](https://github.com/mrveiss/AutoBot-AI/pull/4613))
+
+- *(tokens)* Replace hardcoded font-size values with design tokens (#4589) (#4612) ([#4612](https://github.com/mrveiss/AutoBot-AI/pull/4612))
+
+- *(tokens)* Replace hardcoded border-radius values with design tokens (#4559) (#4611) ([#4611](https://github.com/mrveiss/AutoBot-AI/pull/4611))
+
+- Reformat all Python files with Black --line-length=120 (#4124) ([#4250](https://github.com/mrveiss/AutoBot-AI/pull/4250))
+
+- Apply Black formatting to 89 Python files (#3408) ([#3409](https://github.com/mrveiss/AutoBot-AI/pull/3409))
+
+- Fix isort import ordering across 16 Python files
+
+- *(slm,shared)* Apply Black formatting to slm-backend and autobot_shared
+
+- *(backend)* Apply Black formatting to skills, tests, utils modules
+
+- *(backend)* Apply Black formatting to orchestration, security, services modules
+
+- *(backend)* Apply Black formatting to agents, api, knowledge, llm, multimodal modules
+
+- *(slm)* Restore unicode section headers in setup_wizard.py (#2951) (#2998) ([#2998](https://github.com/mrveiss/AutoBot-AI/pull/2998))
+
+- *(backend)* Auto-format 53 Python files with Black + isort (#2919) (#2942) ([#2942](https://github.com/mrveiss/AutoBot-AI/pull/2942))
+
+- Apply Black formatting to 9 mesh_brain/neural_mesh files (#2582) ([#2589](https://github.com/mrveiss/AutoBot-AI/pull/2589))
+
+
+### Testing
+
+- *(voice)* Fix TTL override test — reload ssot_config before telemetry module (#7421)
+
+- *(config)* Regression guard for logging_manager on config-manager init path (MVA-1465, GH#8766) ([#8903](https://github.com/mrveiss/AutoBot-AI/pull/8903))
+
+- *(a2a)* Add regression test for get_trust_manager() lazy_singleton (MVA-1359 / GH#8741) (#8888) ([#8888](https://github.com/mrveiss/AutoBot-AI/pull/8888))
+
+- *(llm/tiered-routing)* Add long_context tier routing tests (MVA-1372) ([#8863](https://github.com/mrveiss/AutoBot-AI/pull/8863))
+
+- *(heartbeat)* Integration test for paused agent wakeup queue drain (GH#6476 AC-9) (#8733)
+
+- *(heartbeat)* Integration test for paused agent wakeup queue drain (GH#6476 AC-9) ([#8793](https://github.com/mrveiss/AutoBot-AI/pull/8793))
+
+- *(auth)* Unit tests for authenticate_websocket user_id forwarding (MVA-914) ([#8716](https://github.com/mrveiss/AutoBot-AI/pull/8716))
+
+- *(autoresearch)* Add edge-case and endpoint coverage (#3211) (#8364) ([#8364](https://github.com/mrveiss/AutoBot-AI/pull/8364))
+
+- *(ci)* Add authenticated-WebSocket smoke tests for /ws/live and /ws/events (#6699) (#8273) ([#8273](https://github.com/mrveiss/AutoBot-AI/pull/8273))
+
+- *(hooks)* Add 27-case test suite for block-dangerous-commands.sh (#8262)
+
+- *(system-health)* Add probe data-contract tests for batch_jobs and long_running (#6916) (#7924) ([#7924](https://github.com/mrveiss/AutoBot-AI/pull/7924))
+
+- *(slm/rbac)* Add 22 unit tests for Redis L2 cache + pub/sub invalidation (MVA-313 / GH#7568) (#8046) ([#8046](https://github.com/mrveiss/AutoBot-AI/pull/8046))
+
+- *(ci)* Run audit-unwired-trackers tests before cron audit (#6929) (#7873) ([#7873](https://github.com/mrveiss/AutoBot-AI/pull/7873))
+
+- *(redis-mocks)* Migrate 3 test files to canonical mock helpers (closes #7753) ([#7857](https://github.com/mrveiss/AutoBot-AI/pull/7857))
+
+- *(celery)* Add regression test for task registration to prevent repeat of unregistered-task bug (#7766) (#7829) ([#7829](https://github.com/mrveiss/AutoBot-AI/pull/7829))
+
+- *(enhanced_orchestration)* Phase 2+3 integration tests for GH#7268 (#7770) ([#7770](https://github.com/mrveiss/AutoBot-AI/pull/7770))
+
+- *(rbac,marketplace)* RBAC cache-invalidation + HTTP-422 tests (GH#7609, GH#7328) (#7751) ([#7751](https://github.com/mrveiss/AutoBot-AI/pull/7751))
+
+- *(slm/rbac)* 22 unit tests for Redis L2 cache + pub/sub invalidation (MVA-313 / GH#7568) ([#7718](https://github.com/mrveiss/AutoBot-AI/pull/7718))
+
+- *(scheduler)* Add integration tests for multi-worker restart recovery (MVA-160)
+
+- *(auth)* Cross-service parity test + docs/architecture/auth.md (MVA-127) ([#7633](https://github.com/mrveiss/AutoBot-AI/pull/7633))
+
+- *(security)* P0 regression tests for GH #6568 / #6838 / #6876 (#6570) (#7542) ([#7542](https://github.com/mrveiss/AutoBot-AI/pull/7542))
+
+- *(chat_history/cache)* Pin TTL resolver + document env-var override (#6743) (#7363) ([#7363](https://github.com/mrveiss/AutoBot-AI/pull/7363))
+
+- *(api/code-sync)* Unit tests for POST /drift/resolve (closes #7224) (#7231) ([#7231](https://github.com/mrveiss/AutoBot-AI/pull/7231))
+
+- *(hooks)* Unit tests for lib/_common.sh — 9 cases (closes #7193) (#7195) ([#7195](https://github.com/mrveiss/AutoBot-AI/pull/7195))
+
+- *(ci)* Cover vars_files codepath + diff-guard fact-file dup (#7094 + #7095) ([#7114](https://github.com/mrveiss/AutoBot-AI/pull/7114))
+
+- *(ci)* Regression guard for shared role_*_active facts (#7056) (#7068) ([#7068](https://github.com/mrveiss/AutoBot-AI/pull/7068))
+
+- *(autobot_shared)* Add MissingDep unit tests (#6807) (#6969) ([#6969](https://github.com/mrveiss/AutoBot-AI/pull/6969))
+
+- *(hooks)* Cover the 8 untested check_* categories of the hardcoded-values hook (closes #6786) (#6945) ([#6945](https://github.com/mrveiss/AutoBot-AI/pull/6945))
+
+- *(ci)* Add backend startup-import smoke test (#6540) (#6673) ([#6673](https://github.com/mrveiss/AutoBot-AI/pull/6673))
+
+- *(nav)* Add navItems coverage test for requiresAuth routes (#6499) (#6542) ([#6542](https://github.com/mrveiss/AutoBot-AI/pull/6542))
+
+- *(mcp)* Add integration tests for isolated MCP bridge deployment (#4106) (#6445) ([#6445](https://github.com/mrveiss/AutoBot-AI/pull/6445))
+
+- *(mcp)* Add concurrency test for unique request IDs in isolated bridge runtime (#4105) (#6384) ([#6384](https://github.com/mrveiss/AutoBot-AI/pull/6384))
+
+- *(shared)* Add rate_limiter_test.py covering sliding-window logic and graceful Redis fallback (#6337) (#6353) ([#6353](https://github.com/mrveiss/AutoBot-AI/pull/6353))
+
+- *(lint)* Add tests and extend check_response_models to SuccessMessageResponse/SuccessDataResponse (#5924 #5925) (#5931) ([#5931](https://github.com/mrveiss/AutoBot-AI/pull/5931))
+
+- *(composables)* Add useApiResource tests for abortPrior:false and zero-arg fetcher semantics (#5803) (#5863) ([#5863](https://github.com/mrveiss/AutoBot-AI/pull/5863))
+
+- *(browser)* Add URL normalization unit tests for VisualBrowserPanel (#5575) (#5778) ([#5778](https://github.com/mrveiss/AutoBot-AI/pull/5778))
+
+- *(utils)* Add lazy_optional_singleton unit tests (#5645) (#5654) ([#5654](https://github.com/mrveiss/AutoBot-AI/pull/5654))
+
+- *(utils)* Add lazy_optional_singleton unit tests (#5645) (#5651) ([#5651](https://github.com/mrveiss/AutoBot-AI/pull/5651))
+
+- *(knowledge)* Grow RAG ground-truth eval dataset from 5 to ≥50 queries (#5196) (#5640) ([#5640](https://github.com/mrveiss/AutoBot-AI/pull/5640))
+
+- *(provision)* Update heartbeat assertion for task-name-always-shown (#5607)
+
+- *(autobot_shared)* Add singleton_factory_test.py — lazy_singleton arg-guard and thread-safety (#5568) (#5574) ([#5574](https://github.com/mrveiss/AutoBot-AI/pull/5574))
+
+- *(utils)* Add pytest structural tests for OptimizedSemanticChunker (#5439) (#5544) ([#5544](https://github.com/mrveiss/AutoBot-AI/pull/5544))
+
+- *(backend)* Migrate asyncio.run() test runners to @pytest.mark.asyncio (#5435) (#5543) ([#5543](https://github.com/mrveiss/AutoBot-AI/pull/5543))
+
+- *(conftest)* Add mock_llm fixture to root conftest (#5432) (#5484) ([#5484](https://github.com/mrveiss/AutoBot-AI/pull/5484))
+
+- *(utils)* Redis-mocked tests for _mark_orphans + get_status auto-recovery (#5463) (#5466) ([#5466](https://github.com/mrveiss/AutoBot-AI/pull/5466))
+
+- *(frontend)* Fix 4 pre-existing baseline test failures (#5366) (#5446) ([#5446](https://github.com/mrveiss/AutoBot-AI/pull/5446))
+
+- *(analytics)* Component unit tests for Hardcodes/Duplicates/Declarations sections (#5369) (#5378) ([#5378](https://github.com/mrveiss/AutoBot-AI/pull/5378))
+
+- *(api)* Freeze api_endpoint_migrations_test.py pending audit (#5359) (#5362) ([#5362](https://github.com/mrveiss/AutoBot-AI/pull/5362))
+
+- *(api)* Fix TestVectorizeExistingFactsEndpoint (#5336) (#5353) ([#5353](https://github.com/mrveiss/AutoBot-AI/pull/5353))
+
+- *(knowledge)* Fix KnowledgeBase imports after _composed.py refactor (#5292) (#5352) ([#5352](https://github.com/mrveiss/AutoBot-AI/pull/5352))
+
+- *(codebase-analytics)* Contract tests for /hardcodes normalizer (#5313) (#5334) ([#5334](https://github.com/mrveiss/AutoBot-AI/pull/5334))
+
+- *(api)* Update stale source-inspection assertion for kb.redis() (#5338) (#5339) ([#5339](https://github.com/mrveiss/AutoBot-AI/pull/5339))
+
+- *(knowledge)* Migrate 27 test-mock sites to KB.redis() pattern (#5282) (#5293) ([#5293](https://github.com/mrveiss/AutoBot-AI/pull/5293))
+
+- *(lint)* Add unit tests for check_no_utcnow_isoformat.py (#5269) (#5279) ([#5279](https://github.com/mrveiss/AutoBot-AI/pull/5279))
+
+- *(knowledge_audit)* Fix 3 tests that bypass FastAPI injection (#5254) (#5273) ([#5273](https://github.com/mrveiss/AutoBot-AI/pull/5273))
+
+- *(shared)* Add unit tests for autobot_shared.time_utils helpers (#5170) (#5175) ([#5175](https://github.com/mrveiss/AutoBot-AI/pull/5175))
+
+- *(knowledge)* Type useKnowledgeBase.test.ts mock fixtures — drop 'as any' casts (#5034)
+
+- *(rag)* Add coverage for RAGService._get_kb_synthesis_context multi-collection path (#4659) ([#4950](https://github.com/mrveiss/AutoBot-AI/pull/4950))
+
+- *(rag)* Add coverage for RAGService._get_kb_synthesis_context multi-collection path (#4659)
+
+- *(knowledge)* Add coverage for _find_collection_config and _run_kb_synthesis (#4658) ([#4949](https://github.com/mrveiss/AutoBot-AI/pull/4949))
+
+- *(knowledge)* Add coverage for _find_collection_config and _run_kb_synthesis (#4658)
+
+- *(rag)* Verify staleness-penalty × provenance-boost ordering in ResultReranker (#4897) ([#4941](https://github.com/mrveiss/AutoBot-AI/pull/4941))
+
+- *(rag)* Verify staleness-penalty × provenance-boost ordering in ResultReranker (#4897)
+
+- *(mesh)* Add CommunityClusterer-with-MeshDbAdapter integration test (#4864) (#4879) ([#4879](https://github.com/mrveiss/AutoBot-AI/pull/4879))
+
+- *(agent)* Add unit tests for first_turn_note injection in agent loop (#4563)
+
+- *(a2a)* Assert _save() calls expire on _KEY_TASKS with correct TTL (#4649)
+
+- *(a2a)* Add coverage for _event_generator task-expiry and reader-exception paths (#4650) (#4832) ([#4832](https://github.com/mrveiss/AutoBot-AI/pull/4832))
+
+- *(agents)* Add unit tests for slack_hook.py lazy init and async methods (#4535) (#4809) ([#4809](https://github.com/mrveiss/AutoBot-AI/pull/4809))
+
+- *(a2a)* Add SSE stream endpoint tests for critical _event_generator paths (#4627) (#4640) ([#4640](https://github.com/mrveiss/AutoBot-AI/pull/4640))
+
+- *(a2a)* Assert get_task() slides TTL on all three Redis keys (#4626) (#4639) ([#4639](https://github.com/mrveiss/AutoBot-AI/pull/4639))
+
+- *(a2a)* Add unit tests for publish_event() happy path and failure isolation (#4606) (#4618) ([#4618](https://github.com/mrveiss/AutoBot-AI/pull/4618))
+
+- *(tools)* Add unit tests for Pydantic schema self-correction retry loop (#4522) (#4556) ([#4556](https://github.com/mrveiss/AutoBot-AI/pull/4556))
+
+- *(marketplace)* Add unit tests for catalog API and validate seed data (#4521) (#4555) ([#4555](https://github.com/mrveiss/AutoBot-AI/pull/4555))
+
+- *(execution)* Add unit tests for code_interpreter tool (#4520) (#4549) ([#4549](https://github.com/mrveiss/AutoBot-AI/pull/4549))
+
+- *(prompts)* Add unit tests for YAML-sectioned prompt format (#4519) (#4548) ([#4548](https://github.com/mrveiss/AutoBot-AI/pull/4548))
+
+- *(llm)* Add unit tests for OllamaProvider.chat_completion template path (#4526) (#4547) ([#4547](https://github.com/mrveiss/AutoBot-AI/pull/4547))
+
+- *(doc_indexer)* Add comprehensive DocIndexerService test coverage (#4383) (#4405) ([#4405](https://github.com/mrveiss/AutoBot-AI/pull/4405))
+
+- *(frontend)* Add comprehensive tests for useSvgIcons composable (#4204)
+
+- *(kb)* Add boards API tests and fix Pydantic V1 validator (#3242)
+
+- *(composables)* Add comprehensive unit tests for useKnowledgeBase (#4233)
+
+- *(services)* Add AsyncInitializable tests for DistributedServiceDiscovery (#3947) (#4189) ([#4189](https://github.com/mrveiss/AutoBot-AI/pull/4189))
+
+- *(llm)* Add tests for vLLM model name analytics recording (#3943)
+
+- Replace asyncio.get_event_loop() with asyncio.run() (#3605) ([#3639](https://github.com/mrveiss/AutoBot-AI/pull/3639))
+
+- Add unit tests for drift_checker.py (#3428) (#3574) ([#3574](https://github.com/mrveiss/AutoBot-AI/pull/3574))
+
+- *(slm)* Fix code_source_test.py collection — add python-multipart stub (#3525) (#3532) ([#3532](https://github.com/mrveiss/AutoBot-AI/pull/3532))
+
+- *(slm)* Add conftest.py so api/nodes_execution_test.py collects in dev (#3499) (#3511) ([#3511](https://github.com/mrveiss/AutoBot-AI/pull/3511))
+
+- *(slm)* Add models.database to sys.modules stub in _ensure_local_node tests (#3479) (#3485) ([#3485](https://github.com/mrveiss/AutoBot-AI/pull/3485))
+
+- *(frontend)* Add automated test coverage for file upload components (#3376) (#3456) ([#3456](https://github.com/mrveiss/AutoBot-AI/pull/3456))
+
+- *(security)* Add coverage for domain_security wildcard-to-regex (#3217) (#3250) ([#3250](https://github.com/mrveiss/AutoBot-AI/pull/3250))
+
+- *(autoresearch)* Add runner, routes, and ChromaDB indexing tests (#2637) (#3075) ([#3075](https://github.com/mrveiss/AutoBot-AI/pull/3075))
+
+- Add edge case tests for flash attention and token optimizer (#2576) ([#2592](https://github.com/mrveiss/AutoBot-AI/pull/2592))
+
+
+### WIP
+
+- Preserve work from issue-3294
+
+- Preserve work from issue-3291 (#4241) ([#4241](https://github.com/mrveiss/AutoBot-AI/pull/4241))
+
+- Preserve work from issue-3290 (#4240) ([#4240](https://github.com/mrveiss/AutoBot-AI/pull/4240))
+
+- Preserve work from issue-3281 (#4239) ([#4239](https://github.com/mrveiss/AutoBot-AI/pull/4239))
+
+- Preserve work from issue-4095
+
+- Preserve work from issue-4094
+
+
+### A11y
+
+- *(ui)* Fix ARIA roles, touch targets, and keyboard access in 6 UI components (#4806) (#5584) ([#5584](https://github.com/mrveiss/AutoBot-AI/pull/5584))
+
+- *(ChatSidebar)* Remove duplicate chatHistory label from mobile header (#5456) (#5549) ([#5549](https://github.com/mrveiss/AutoBot-AI/pull/5549))
+
+- *(dialogs)* Add focus trap + escape + restore to 8 modal dialogs (#5371) (#5390) ([#5390](https://github.com/mrveiss/AutoBot-AI/pull/5390))
+
+
+### Arch
+
+- *(chat)* Phase 4 observability and rollout gate (MVA-165 / GH#7590) ([#7701](https://github.com/mrveiss/AutoBot-AI/pull/7701))
+
+- *(frontend)* Phase 3 chat store consolidation — SSOT enforcement (#7573) ([#7690](https://github.com/mrveiss/AutoBot-AI/pull/7690))
+
+- *(chat)* Phase 2 backend persistence consolidation (MVA-161) ([#7652](https://github.com/mrveiss/AutoBot-AI/pull/7652))
+
+- *(chat)* Phase 2 backend persistence consolidation (#7572)
+
+- *(mcp)* Add process/container isolation for MCP tool bridges (#4089) ([#4089](https://github.com/mrveiss/AutoBot-AI/pull/4089))
+
+- *(orchestration)* Unified graph model for DAG executor and LangGraph (#3228) (#3836) ([#3836](https://github.com/mrveiss/AutoBot-AI/pull/3836))
+
+- *(knowledge)* Replace Redis adjacency list with queryable property graph (#3230) (#3844) ([#3844](https://github.com/mrveiss/AutoBot-AI/pull/3844))
+
+
+### Audit
+
+- *(ansible)* Standardize become: yes→true across all playbooks (#7454) (#7782) ([#7782](https://github.com/mrveiss/AutoBot-AI/pull/7782))
+
+
+### Batch
+
+- *(L)* Code-analysis consolidation + LLC interfaces + gateway + audit #6757 #8261 #8268 #8290 #8312 ([#8378](https://github.com/mrveiss/AutoBot-AI/pull/8378))
+
+
+### Benchmark
+
+- *(belief-state)* A/B measurement — 3/5 tasks ≥10% token reduction (MVA-1408) ([#8874](https://github.com/mrveiss/AutoBot-AI/pull/8874))
+
+
+### Bug
+
+- *(llc)* Skip LivenessMonitor DB checks in single_user mode (#9089) (#9145) ([#9145](https://github.com/mrveiss/AutoBot-AI/pull/9145))
+
+- *(knowledge/base)* Guard __del__ against unset self.initialized (#5357) (#5360) ([#5360](https://github.com/mrveiss/AutoBot-AI/pull/5360))
+
+- *(backend)* Fix ChatHistoryManager create_task race with explicit initialize() (#3797) (#3815) ([#3815](https://github.com/mrveiss/AutoBot-AI/pull/3815))
+
+- *(memory)* Validate compression_threshold <= context_window_tokens at load (#3811) (#3855) ([#3855](https://github.com/mrveiss/AutoBot-AI/pull/3855))
+
+
+### Build
+
+- *(format)* Add scripts/format.sh wrapper + make targets — pin py3.12 settings (#7249) (#7262) ([#7262](https://github.com/mrveiss/AutoBot-AI/pull/7262))
+
+
+### Cleanup
+
+- *(backend)* Remove stale run_autobot from process detection keywords (#2564)
+
+- *(backend)* Remove placeholder Issue #XXX comment (#2481)
+
+- *(devops)* Remove orphaned init-databases.sh (#2491)
+
+
+### Config
+
+- Mark remaining 71 edge-case os.getenv calls with ssot-config-exempt (closes GH#7743) (#7870) ([#7870](https://github.com/mrveiss/AutoBot-AI/pull/7870))
+
+
+### Debug
+
+- *(devops)* Trace slm_host pipe lookup and whoami in VNC role
+
+- *(devops)* Extended VNC slm_api_url debug with hostvars chain
+
+- *(devops)* Add temporary debug output for VNC slm_api_url resolution
+
+
+### Deprecate
+
+- *(orchestrator)* Add DeprecationWarning to process_user_request (closes GH#7423) (#7752) ([#7752](https://github.com/mrveiss/AutoBot-AI/pull/7752))
+
+
+### Deps
+
+- Llama-index 0.13→0.14 migration (#2642) (#4206) ([#4206](https://github.com/mrveiss/AutoBot-AI/pull/4206))
+
+- *(frontend)* Upgrade SLM frontend to eslint 10 with unified typescript-eslint (#2639) (#3132) ([#3132](https://github.com/mrveiss/AutoBot-AI/pull/3132))
+
+- *(backend)* Standardize numpy 2.x pins and upgrade opencv (#1971)
+
+- *(frontend)* Unblock TypeScript 6 upgrade by removing unused vitest-mock-extended (#2640)
+
+- *(python)* Upgrade infrastructure & worker requirements (#2558) ([#2620](https://github.com/mrveiss/AutoBot-AI/pull/2620))
+
+- *(python)* Upgrade backend requirements to latest compatible (#2557) ([#2610](https://github.com/mrveiss/AutoBot-AI/pull/2610))
+
+- *(slm-frontend)* Upgrade npm packages to latest compatible (#2561)
+
+- *(infra)* Align Ansible node OpenTelemetry pins with main requirements (#2562)
+
+- *(frontend)* Upgrade npm packages to latest including major versions (#2559)
+
+
+### Discovery
+
+- *(backend)* Implement missing BackupScheduler (backup/scheduler.py) (#7912) (#8091) ([#8091](https://github.com/mrveiss/AutoBot-AI/pull/8091))
+
+- *(i18n)* Add CI check for en.json→locale completeness (#5829) (#5840) ([#5840](https://github.com/mrveiss/AutoBot-AI/pull/5840))
+
+
+### Enhance
+
+- *(verify_knowledge_consistency)* Add --deep flag for vector-shape chunker consistency check (#5440) (#5550) ([#5550](https://github.com/mrveiss/AutoBot-AI/pull/5550))
+
+
+### Enhancement
+
+- *(ci)* Extend check-pre-commit-hook-pr.sh for Python validators; retire 2 per-hook wrappers (closes #6991) (#7852) ([#7852](https://github.com/mrveiss/AutoBot-AI/pull/7852))
+
+- *(llm)* Expose per-request LLM cost via x-llm-cost header (#6589) (#7543) ([#7543](https://github.com/mrveiss/AutoBot-AI/pull/7543))
+
+- *(llm)* Reserve auto model names for tiered LLM routing (#6592) (#7528) ([#7528](https://github.com/mrveiss/AutoBot-AI/pull/7528))
+
+
+### Governance
+
+- Delegate batch-implement wiring check to canonical script (#7894) (#8096) ([#8096](https://github.com/mrveiss/AutoBot-AI/pull/8096))
+
+
+### Hotfix
+
+- *(migrations)* Fix 4 duplicate LLC Alembic revision IDs + deferred FK chain ([#8466](https://github.com/mrveiss/AutoBot-AI/pull/8466))
+
+- *(migrations)* Fix 4 duplicate LLC Alembic revision IDs (20260523_022) (#8464) ([#8464](https://github.com/mrveiss/AutoBot-AI/pull/8464))
+
+
+### I18n
+
+- *(frontend)* Backfill ui.offlineBanner.* across 10 locales (#6988) (#7874) ([#7874](https://github.com/mrveiss/AutoBot-AI/pull/7874))
+
+- *(frontend/ui)* Wire OfflineBanner through vue-i18n (#6878) (#6953) ([#6953](https://github.com/mrveiss/AutoBot-AI/pull/6953))
+
+- *(nav)* Add translated nav.about key to all non-English locales (#6366) (#6377) ([#6377](https://github.com/mrveiss/AutoBot-AI/pull/6377))
+
+- Add missing en.json fallback keys to 10 locale files (#5004) (#5820) ([#5820](https://github.com/mrveiss/AutoBot-AI/pull/5820))
+
+- *(analytics)* Add hardcodes keys to 10 non-English locales (#5004 partial) (#5383) ([#5383](https://github.com/mrveiss/AutoBot-AI/pull/5383))
+
+
+### Impl
+
+- *(frontend/css)* Refactor scoped styles to canonical theming (#7880) (#8274) ([#8274](https://github.com/mrveiss/AutoBot-AI/pull/8274))
+
+- *(frontend)* Promote runtimeHttpProto to top-level export (#6809) ([#7913](https://github.com/mrveiss/AutoBot-AI/pull/7913))
+
+
+### Improvement
+
+- *(ci)* Add disk-space threshold guard and composite action for smoke-test cleanup (GH#8914) ([#8916](https://github.com/mrveiss/AutoBot-AI/pull/8916))
+
+
+### Infra
+
+- *(gitignore)* Exclude .claude/scheduled_tasks.lock (#6980) (#7846) ([#7846](https://github.com/mrveiss/AutoBot-AI/pull/7846))
+
+- *(tests)* Create tests/helpers/ directory as shared-fixture infrastructure (#5437) (#5460) ([#5460](https://github.com/mrveiss/AutoBot-AI/pull/5460))
+
+
+### Lint
+
+- Add pre-commit hook for i18n plural third arg (#7155) (#7875) ([#7875](https://github.com/mrveiss/AutoBot-AI/pull/7875))
+
+- *(frontend)* Add vue/no-undef-components error rule to catch missing imports (#6236) (#6278) ([#6278](https://github.com/mrveiss/AutoBot-AI/pull/6278))
+
+
+### Merge
+
+- Rate limiting integration (#4162)
+
+- Resolve conflicts from Dev_new_gui optimization merge
+
+- Combine orchestrator and scroll fixes from temp-3949 ([#3975](https://github.com/mrveiss/AutoBot-AI/pull/3975))
+
+- Resolve conflict with Dev_new_gui, keep upgraded package versions
+
+
+### Migrate
+
+- *(composables)* UseWorkflowBuilder/usePatternAnalysis/useVoiceProfiles/useWorkflowTemplates to useLoadingState (#5942) (#5952) ([#5952](https://github.com/mrveiss/AutoBot-AI/pull/5952))
+
+- *(composables)* UseLoadingState sweep batch 3 — 12 composables (#5921) ([#5929](https://github.com/mrveiss/AutoBot-AI/pull/5929))
+
+- *(composables)* UseVncControls/useVncConnection/usePlugins to useLoadingState; fix doc (#5909 #5910) (#5915) ([#5915](https://github.com/mrveiss/AutoBot-AI/pull/5915))
+
+
+### Monitor
+
+- *(ci)* Alert on stale self-hosted runner state (closes #7045) (#7787) ([#7787](https://github.com/mrveiss/AutoBot-AI/pull/7787))
+
+
+### Observability
+
+- *(backend)* Aggregate feature-router load results across workers via Redis (#6808) (#7872) ([#7872](https://github.com/mrveiss/AutoBot-AI/pull/7872))
+
+- *(health)* Complete #6919 — user_agent label + INFO log + tests + docs (#7812) ([#7812](https://github.com/mrveiss/AutoBot-AI/pull/7812))
+
+- *(health)* Add logging/metering to SunsetLegacyHealthMiddleware (#6919) (#7807) ([#7807](https://github.com/mrveiss/AutoBot-AI/pull/7807))
+
+
+### Ops
+
+- *(chromadb)* Standalone service — wire backend dependency and fix health check endpoints (MVA-1445) ([#8894](https://github.com/mrveiss/AutoBot-AI/pull/8894))
+
+
+### Preserve
+
+- *(#7007)* Refactor(backend): migrate log_forwarder to optional_import; mark single-symbol sites deferred (#7007) (#7971) ([#7971](https://github.com/mrveiss/AutoBot-AI/pull/7971))
+
+
+### Refact
+
+- *(docker)* Extract shared nginx config to nginx-common.conf + nginx-locations.conf (#6252) (#6274) ([#6274](https://github.com/mrveiss/AutoBot-AI/pull/6274))
+
+- *(composables)* Wave 5 — migrate 12 composables from fetchWithAuth to useFetchEndpoint/apiClient (#6224) (#6250) ([#6250](https://github.com/mrveiss/AutoBot-AI/pull/6250))
+
+- *(orchestration)* Consolidate duplicate AgentCapability enum — enhanced_orchestration imports from orchestration.types (#6192) (#6214) ([#6214](https://github.com/mrveiss/AutoBot-AI/pull/6214))
+
+- *(components)* Extract inline fetching from InviteUserDialog to useCollaborationInvites (#6091) (#6206) ([#6206](https://github.com/mrveiss/AutoBot-AI/pull/6206))
+
+- *(composables)* Create useCollaborationInvite and migrate InviteUserDialog fetchWithAuth (#6091) (#6204) ([#6204](https://github.com/mrveiss/AutoBot-AI/pull/6204))
+
+- *(composables)* Create useThreatIntelligence and migrate ThreatIntelligenceDashboard fetchWithAuth (#6090) (#6203) ([#6203](https://github.com/mrveiss/AutoBot-AI/pull/6203))
+
+- *(components)* Extract fetchWithAuth from HostSelector (terminal/) to useHostSelection (#6089) (#6202) ([#6202](https://github.com/mrveiss/AutoBot-AI/pull/6202))
+
+- *(composables)* Migrate CommandPermissionDialog fetchWithAuth to useCommandApproval (#6088) (#6201) ([#6201](https://github.com/mrveiss/AutoBot-AI/pull/6201))
+
+- *(composables)* Migrate HostSelector (ui/) fetchWithAuth to useHostSelection (#6087) (#6200) ([#6200](https://github.com/mrveiss/AutoBot-AI/pull/6200))
+
+- *(composables)* Create useKnowledgeMaintenance and migrate KnowledgeMaintenance fetchWithAuth (#6053) (#6199) ([#6199](https://github.com/mrveiss/AutoBot-AI/pull/6199))
+
+- *(knowledge)* Extract inline fetching from KnowledgeStats to useKnowledgeStats (#6052) (#6198) ([#6198](https://github.com/mrveiss/AutoBot-AI/pull/6198))
+
+- *(knowledge)* Extract inline fetching from CleanupStatistics to useKnowledgeCleanupStats (#6051) (#6190) ([#6190](https://github.com/mrveiss/AutoBot-AI/pull/6190))
+
+- *(knowledge)* Extract inline fetching from GraphRAGQuery to useKnowledgeGraphRAG (#6050) (#6189) ([#6189](https://github.com/mrveiss/AutoBot-AI/pull/6189))
+
+- *(knowledge)* Extract inline fetching from MemoryOrphanManager to useKnowledgeOrphans (#6048) (#6188) ([#6188](https://github.com/mrveiss/AutoBot-AI/pull/6188))
+
+- *(knowledge)* Extract inline fetching from EntityGraphManager to useKnowledgeEntityGraph (#6046) (#6187) ([#6187](https://github.com/mrveiss/AutoBot-AI/pull/6187))
+
+- *(knowledge)* Extract inline fetching from KnowledgeSystemDocs to useKnowledgeSystemDocs (#6045) (#6186) ([#6186](https://github.com/mrveiss/AutoBot-AI/pull/6186))
+
+- *(composables)* Migrate KnowledgeCategories fetchWithAuth to useKnowledgeCategories (#6049) (#6185) ([#6185](https://github.com/mrveiss/AutoBot-AI/pull/6185))
+
+- *(knowledge)* Extract inline fetching from SessionOrphanManager to useKnowledgeOrphans (#6047) (#6184) ([#6184](https://github.com/mrveiss/AutoBot-AI/pull/6184))
+
+- *(knowledge)* Extract inline fetching from CategoryEditModal to useKnowledgeCategories (#6044) (#6183) ([#6183](https://github.com/mrveiss/AutoBot-AI/pull/6183))
+
+- *(knowledge)* Extract inline fetching from DeduplicationManager to useKnowledgeDeduplication (#6043) (#6182) ([#6182](https://github.com/mrveiss/AutoBot-AI/pull/6182))
+
+- *(knowledge)* Extract inline fetching from FailedVectorizationsManager to useKnowledgeVectorization (#6041) (#6181) ([#6181](https://github.com/mrveiss/AutoBot-AI/pull/6181))
+
+- *(knowledge)* Extract inline fetching from KnowledgeGraph to useKnowledgeGraph (#6040) (#6180) ([#6180](https://github.com/mrveiss/AutoBot-AI/pull/6180))
+
+- *(knowledge)* Extract inline fetching from KnowledgePromptEditor to useKnowledgePrompt (#6039) (#6179) ([#6179](https://github.com/mrveiss/AutoBot-AI/pull/6179))
+
+- *(knowledge)* Extract inline fetching from BackupManager to useKnowledgeBackup (#6038) (#6178) ([#6178](https://github.com/mrveiss/AutoBot-AI/pull/6178))
+
+- *(composables)* Extract fetchWithAuth from SystemArchitectureDiagram to useSystemArchitectureData (#6085) (#6177) ([#6177](https://github.com/mrveiss/AutoBot-AI/pull/6177))
+
+- *(composables)* Extract fetchWithAuth from SecretsManager to useSecretsAuditApi (#6081) (#6176) ([#6176](https://github.com/mrveiss/AutoBot-AI/pull/6176))
+
+- *(composables)* Extract fetchWithAuth from AgentActivityVisualization to useAgentActivityData (#6079) (#6175) ([#6175](https://github.com/mrveiss/AutoBot-AI/pull/6175))
+
+- *(knowledge)* Extract inline fetching from KnowledgeBrowser to useKnowledgeBrowser (#6037) (#6174) ([#6174](https://github.com/mrveiss/AutoBot-AI/pull/6174))
+
+- *(components)* Extract inline fetching from FileBrowser to useFileBrowser (#6075) (#6173) ([#6173](https://github.com/mrveiss/AutoBot-AI/pull/6173))
+
+- *(chat)* Extract fetchWithAuth from TranslationShortcutPanel to useChatTranslation (#6077) (#6170) ([#6170](https://github.com/mrveiss/AutoBot-AI/pull/6170))
+
+- *(components)* Extract fetchWithAuth from DocumentationSearchSidebar to useDocumentationSearch (#6076) (#6169) ([#6169](https://github.com/mrveiss/AutoBot-AI/pull/6169))
+
+- *(composables)* Migrate useBackgroundTask clearStuckTasks to ApiClient; document postAnalyze + poll exemptions (#6033) (#6168) ([#6168](https://github.com/mrveiss/AutoBot-AI/pull/6168))
+
+- *(composables)* Migrate useCommandApproval fetchWithAuth POST to ApiClient; exempt polling GET (#6032) (#6167) ([#6167](https://github.com/mrveiss/AutoBot-AI/pull/6167))
+
+- *(components)* Extract fetchWithAuth from PopoutChromiumBrowser to useBrowserSessionData (#6074) (#6165) ([#6165](https://github.com/mrveiss/AutoBot-AI/pull/6165))
+
+- *(composables)* Extract fetchWithAuth from CodeEvolutionTimeline to composable (#6072) (#6164) ([#6164](https://github.com/mrveiss/AutoBot-AI/pull/6164))
+
+- *(composables)* Extract fetchWithAuth from ConversationFlowDashboard to useConversationFlowData (#6071) (#6163) ([#6163](https://github.com/mrveiss/AutoBot-AI/pull/6163))
+
+- *(composables)* Migrate ShareSourceModal fetchWithAuth to useSourceRegistry (#6070) (#6161) ([#6161](https://github.com/mrveiss/AutoBot-AI/pull/6161))
+
+- *(composables)* Migrate useWorkflowTemplates fetchWithAuth to ApiClient (#6029) (#6159) ([#6159](https://github.com/mrveiss/AutoBot-AI/pull/6159))
+
+- *(composables)* Migrate useToolApproval fetchWithAuth POST to ApiClient (#6028) (#6158) ([#6158](https://github.com/mrveiss/AutoBot-AI/pull/6158))
+
+- *(composables)* Extract fetchWithAuth from CodebaseAnalytics to composable (#6068) (#6157) ([#6157](https://github.com/mrveiss/AutoBot-AI/pull/6157))
+
+- *(composables)* Create useSourceRegistry and migrate AddSourceModal fetchWithAuth (#6069) (#6156) ([#6156](https://github.com/mrveiss/AutoBot-AI/pull/6156))
+
+- *(terminal)* Extract fetchWithAuth from Terminal to useTerminalStore (#6080) (#6155) ([#6155](https://github.com/mrveiss/AutoBot-AI/pull/6155))
+
+- *(chat)* Extract fetchWithAuth from ChatMessages to chat composables (#6078) (#6154) ([#6154](https://github.com/mrveiss/AutoBot-AI/pull/6154))
+
+- *(knowledge)* Extract fetchWithAuth from EntityExtractor to useKnowledgeEntities (#6054) (#6153) ([#6153](https://github.com/mrveiss/AutoBot-AI/pull/6153))
+
+- *(composables)* Extract fetchWithAuth from LogPatternDashboard to useLogPatternData (#6064) (#6151) ([#6151](https://github.com/mrveiss/AutoBot-AI/pull/6151))
+
+- *(composables)* Extract fetchWithAuth from CodeGenerationDashboard to useCodeGenerationData (#6060) (#6150) ([#6150](https://github.com/mrveiss/AutoBot-AI/pull/6150))
+
+- *(composables)* Extract fetchWithAuth from LLMPatternDashboard to useLLMPatternData (#6059) (#6149) ([#6149](https://github.com/mrveiss/AutoBot-AI/pull/6149))
+
+- *(composables)* Extract fetchWithAuth from TechnicalDebtDashboard to useTechnicalDebtData (#6058) (#6147) ([#6147](https://github.com/mrveiss/AutoBot-AI/pull/6147))
+
+- *(composables)* Extract fetchWithAuth from SourceManager to useAnalyticsSourceManagement (#6057) (#6146) ([#6146](https://github.com/mrveiss/AutoBot-AI/pull/6146))
+
+- *(composables)* Extract fetchWithAuth from CodeQualityDashboard to useCodeQualityData (#6055) (#6145) ([#6145](https://github.com/mrveiss/AutoBot-AI/pull/6145))
+
+- *(composables)* Migrate useAnalyticsDebug fetchWithAuth to ApiClient (#6027) (#6142) ([#6142](https://github.com/mrveiss/AutoBot-AI/pull/6142))
+
+- *(composables)* Migrate useBugPrediction loadCachedBugPrediction fetchWithAuth to ApiClient (#6026) (#6141) ([#6141](https://github.com/mrveiss/AutoBot-AI/pull/6141))
+
+- *(composables)* Migrate usePatternAnalysis GET/DELETE/POST helpers to ApiClient (#6025) (#6140) ([#6140](https://github.com/mrveiss/AutoBot-AI/pull/6140))
+
+- *(composables)* Migrate useVoiceProfiles fetchWithAuth to useFetchEndpoint + ApiClient (#6023) (#6133) ([#6133](https://github.com/mrveiss/AutoBot-AI/pull/6133))
+
+- *(composables)* Migrate useEnvironmentAnalysis fetchWithAuth GET to useFetchEndpoint (#6022) (#6132) ([#6132](https://github.com/mrveiss/AutoBot-AI/pull/6132))
+
+- *(visualizations)* Extract ResourceHeatmap inline fetching to useResourceMetrics (#6086) (#6120) ([#6120](https://github.com/mrveiss/AutoBot-AI/pull/6120))
+
+- *(research)* Extract CaptchaNotification inline fetching to useCaptchaStatus (#6082) (#6119) ([#6119](https://github.com/mrveiss/AutoBot-AI/pull/6119))
+
+- *(manpage)* Migrate ManPageManager from useAsyncOperation to useLoadingState (#6110) (#6114) ([#6114](https://github.com/mrveiss/AutoBot-AI/pull/6114))
+
+- *(api)* Add named Pydantic schemas for 34 misc endpoints (#5991) (#6107) ([#6107](https://github.com/mrveiss/AutoBot-AI/pull/6107))
+
+- *(ui)* Refactor UnifiedLoadingView to props-driven, delete useUnifiedLoading singleton (#6021) (#6108) ([#6108](https://github.com/mrveiss/AutoBot-AI/pull/6108))
+
+- *(knowledge)* Migrate KnowledgeBrowser from useAsyncOperation to useLoadingState (#6018) (#6109) ([#6109](https://github.com/mrveiss/AutoBot-AI/pull/6109))
+
+- *(api)* Add named Pydantic schemas for 77 code/integration endpoints (#5987) (#6105) ([#6105](https://github.com/mrveiss/AutoBot-AI/pull/6105))
+
+- *(api)* Add named Pydantic schemas for 51 workflow endpoints (#5989) (#6106) ([#6106](https://github.com/mrveiss/AutoBot-AI/pull/6106))
+
+- *(api)* Add named Pydantic schemas to system management endpoints (#5990) (#6104) ([#6104](https://github.com/mrveiss/AutoBot-AI/pull/6104))
+
+- *(knowledge)* Migrate FailedVectorizationsManager from useAsyncOperation to useLoadingState (#6019) (#6103) ([#6103](https://github.com/mrveiss/AutoBot-AI/pull/6103))
+
+- *(api)* Add named Pydantic schemas for 37 knowledge endpoints (#5984) (#6102) ([#6102](https://github.com/mrveiss/AutoBot-AI/pull/6102))
+
+- *(api)* Add named Pydantic schemas for 42 analytics endpoints (#5983) (#6101) ([#6101](https://github.com/mrveiss/AutoBot-AI/pull/6101))
+
+- *(api)* Add named schemas for 19 agent/auth/chat response_model=None endpoints (#5985) (#6100) ([#6100](https://github.com/mrveiss/AutoBot-AI/pull/6100))
+
+- *(api)* Add named Pydantic schemas for 42 analytics endpoints (#5983) (#6099) ([#6099](https://github.com/mrveiss/AutoBot-AI/pull/6099))
+
+- *(backend)* Replace 20+ manual module-level singletons with lazy_singleton (#5948) (#6098) ([#6098](https://github.com/mrveiss/AutoBot-AI/pull/6098))
+
+- *(components)* Migrate remaining 3 components to useLoadingState (#5949) (#6097) ([#6097](https://github.com/mrveiss/AutoBot-AI/pull/6097))
+
+- *(knowledge)* Migrate SystemKnowledgeManager from useAsyncOperation to useLoadingState (#6017) (#6096) ([#6096](https://github.com/mrveiss/AutoBot-AI/pull/6096))
+
+- *(desktop)* Migrate DesktopInterface from useAsyncOperation to useLoadingState (#6016) (#6095) ([#6095](https://github.com/mrveiss/AutoBot-AI/pull/6095))
+
+- *(ui)* Migrate CommandPermissionDialog from useAsyncOperation to useLoadingState (#6015) (#6094) ([#6094](https://github.com/mrveiss/AutoBot-AI/pull/6094))
+
+- *(frontend)* Migrate LoginForm + KnowledgeGraph + KnowledgeSystemDocs to useLoadingState (#5949) (#6084) ([#6084](https://github.com/mrveiss/AutoBot-AI/pull/6084))
+
+- *(api)* Add named schemas for 12 agent/auth/chat endpoints (#5985) (#6073) ([#6073](https://github.com/mrveiss/AutoBot-AI/pull/6073))
+
+- *(services)* Migrate 9 service files from hand-rolled _get_redis() to AsyncRedisClientMixin (#5946) (#6066) ([#6066](https://github.com/mrveiss/AutoBot-AI/pull/6066))
+
+- *(services)* Migrate 9 service files from hand-rolled _get_redis() to AsyncRedisClientMixin (#5946) (#6061) ([#6061](https://github.com/mrveiss/AutoBot-AI/pull/6061))
+
+- *(api)* Merge terminal_models.py into schemas_terminal.py (#5996) (#6013) ([#6013](https://github.com/mrveiss/AutoBot-AI/pull/6013))
+
+- *(api)* Merge analytics_models.py into schemas_analytics.py (#5996) (#6012) ([#6012](https://github.com/mrveiss/AutoBot-AI/pull/6012))
+
+- *(api)* Merge knowledge_models.py into schemas_knowledge.py (#5996) (#6011) ([#6011](https://github.com/mrveiss/AutoBot-AI/pull/6011))
+
+- *(api)* Merge analytics_models.py into schemas_analytics.py (#5996) (#6010) ([#6010](https://github.com/mrveiss/AutoBot-AI/pull/6010))
+
+- *(api)* Merge terminal_models.py into schemas_terminal.py (#5996) (#6009) ([#6009](https://github.com/mrveiss/AutoBot-AI/pull/6009))
+
+- *(api)* Merge analytics_models.py into schemas_analytics.py (#5996) (#6008) ([#6008](https://github.com/mrveiss/AutoBot-AI/pull/6008))
+
+- *(api)* Add named Pydantic schemas to 61 response_model=None endpoints (#5960) (#6007) ([#6007](https://github.com/mrveiss/AutoBot-AI/pull/6007))
+
+- *(config)* Consolidate LMSTUDIO_HOST into ssot_config.py, replace 3 scattered os.getenv calls (#6000) (#6005) ([#6005](https://github.com/mrveiss/AutoBot-AI/pull/6005))
+
+- *(config)* Move VNC_PASSWD_FILE into PathConfig.vnc_passwd_file in ssot_config.py (#6001) (#6004) ([#6004](https://github.com/mrveiss/AutoBot-AI/pull/6004))
+
+- *(services)* Extract 5.0s eviction poll deadline to _EVICTION_POLL_SECONDS constant (#6002) (#6003) ([#6003](https://github.com/mrveiss/AutoBot-AI/pull/6003))
+
+- *(api)* Move GoalRequest/GoalResponse/HealthResponse from intelligent_agent.py to schemas_agent.py (#5977) (#5992) ([#5992](https://github.com/mrveiss/AutoBot-AI/pull/5992))
+
+- *(api)* Move GoalRequest/GoalResponse/HealthResponse from intelligent_agent.py to schemas_agent.py (#5977) (#5988) ([#5988](https://github.com/mrveiss/AutoBot-AI/pull/5988))
+
+- *(api)* Move GoalRequest/GoalResponse/HealthResponse from intelligent_agent.py to schemas_agent.py (#5977) (#5982) ([#5982](https://github.com/mrveiss/AutoBot-AI/pull/5982))
+
+- *(api)* Resolve schema name collisions from #5799 domain split (#5935 #5936 #5937) (#5951) ([#5951](https://github.com/mrveiss/AutoBot-AI/pull/5951))
+
+- *(composables)* Migrate useEnvironmentAnalysis to useLoadingState (#5923) (#5939) ([#5939](https://github.com/mrveiss/AutoBot-AI/pull/5939))
+
+- *(composables)* Replace axios with ApiClient + useLoadingState in useEvolution (#5922) (#5938) ([#5938](https://github.com/mrveiss/AutoBot-AI/pull/5938))
+
+- *(api)* Add proper named response schemas for 52 reverted endpoints (#5912) ([#5930](https://github.com/mrveiss/AutoBot-AI/pull/5930))
+
+- *(api)* Split schemas_common.py into 7 per-domain modules (#5799) ([#5916](https://github.com/mrveiss/AutoBot-AI/pull/5916))
+
+- *(api)* Migrate 16 schemas to SuccessMessageResponse base (#5905) (#5911) ([#5911](https://github.com/mrveiss/AutoBot-AI/pull/5911))
+
+- *(api)* Add SuccessMessageResponse and SuccessDataResponse base models (#5844) (#5876) ([#5876](https://github.com/mrveiss/AutoBot-AI/pull/5876))
+
+- *(api)* Remove unused SuccessResponse import from 82 API files (#5846) (#5865) ([#5865](https://github.com/mrveiss/AutoBot-AI/pull/5865))
+
+- *(api)* Add response_model= to all remaining FastAPI endpoints — 100% coverage (#5317) (#5834) ([#5834](https://github.com/mrveiss/AutoBot-AI/pull/5834))
+
+
+### Sec
+
+- *(deps)* Bump qs past CVE-2026-8723 in mcp-structured-thinking (MVA-1311) ([#8842](https://github.com/mrveiss/AutoBot-AI/pull/8842))
+
+- *(backend)* Block SSRF in ExternalSkillImporter.import_git_repo (MVA-1307) (#8826) ([#8826](https://github.com/mrveiss/AutoBot-AI/pull/8826))
+
+- *(scanning)* Exclude vendored JS bundles from secret scanning (MVA-1306) (#8823) ([#8823](https://github.com/mrveiss/AutoBot-AI/pull/8823))
+
+- Bump langchain >=1.2.24 across all requirements files (PVE-2026-88512) (#8681) ([#8681](https://github.com/mrveiss/AutoBot-AI/pull/8681))
+
+- Enforce aud claim in validate_run_jwt to prevent cross-validator token reuse (MVA-155)
+
+- *(slm)* Refuse SSH connection when no known_hosts file exists (#3469) (#3505) ([#3505](https://github.com/mrveiss/AutoBot-AI/pull/3505))
+
+
+### Security
+
+- *(transcriber)* Fix arbitrary file read vulnerability (#9214) ([#9306](https://github.com/mrveiss/AutoBot-AI/pull/9306))
+
+- *(transcriber)* Sanitize error responses to prevent information leakage (#9216) (#9311) ([#9311](https://github.com/mrveiss/AutoBot-AI/pull/9311))
+
+- *(external_importer)* Fix SSRF vulnerability (MVA-2584) (#9313) ([#9313](https://github.com/mrveiss/AutoBot-AI/pull/9313))
+
+- *(transcriber)* Add user ownership checks to prevent IDOR (#9215) (#9307) ([#9307](https://github.com/mrveiss/AutoBot-AI/pull/9307))
+
+- *(embed)* Add per-IP rate limiting with spoofing protection (#9180) ([#9180](https://github.com/mrveiss/AutoBot-AI/pull/9180))
+
+- *(auth+embed)* Rate-limit shared link access + embed origin allowlist (#9127 #9117) (#9140) ([#9140](https://github.com/mrveiss/AutoBot-AI/pull/9140))
+
+- *(audit)* Fix emit() outside try-block in set_user_bundle (GH#8982) (#9082) ([#9082](https://github.com/mrveiss/AutoBot-AI/pull/9082))
+
+- *(execution)* Add ownership check on snapshot restore/delete (GH#8968) (#9080) ([#9080](https://github.com/mrveiss/AutoBot-AI/pull/9080))
+
+- *(a2a)* Default-deny callers without X-A2A-Agent-Id header ([#8783](https://github.com/mrveiss/AutoBot-AI/pull/8783))
+
+- Bump vulnerable dependencies for GH#8323-#8326 CVEs (MVA-707) ([#8335](https://github.com/mrveiss/AutoBot-AI/pull/8335))
+
+- *(ci)* Add semgrep custom rules + cosign image signing (MVA-207) (#7708) ([#7708](https://github.com/mrveiss/AutoBot-AI/pull/7708))
+
+- *(ci)* Add semgrep custom rules + cosign image signing (MVA-207)
+
+- *(onboarding)* Auth-gate /presets, /doctor, /apply (#6568) ([#7527](https://github.com/mrveiss/AutoBot-AI/pull/7527))
+
+- *(P1)* /v1/chat/completions rate limit via Redis sorted-set (#6588) (#7263) ([#7263](https://github.com/mrveiss/AutoBot-AI/pull/7263))
+
+- *(P1)* Fix 2 regressions + 2 test rots in EnhancedSecurityLayer (#7161) (#7232) ([#7232](https://github.com/mrveiss/AutoBot-AI/pull/7232))
+
+- *(P1)* Remove committed Fernet encryption key from repo (#7088) ([#7108](https://github.com/mrveiss/AutoBot-AI/pull/7108))
+
+- *(deps)* Bump uuid 8/9/11 → 14.0.0 — fix buffer bounds check CVE (#5665)
+
+- *(codeql)* Fix JS/TS frontend CodeQL alerts (#5697) (#5706) ([#5706](https://github.com/mrveiss/AutoBot-AI/pull/5706))
+
+- *(codeql)* Fix py/incomplete-url-substring-sanitization in 2 test files (#5696) (#5703) ([#5703](https://github.com/mrveiss/AutoBot-AI/pull/5703))
+
+- *(codeql)* Fix bad-tag-filter, polynomial-redos, full-ssrf (#5695) (#5702) ([#5702](https://github.com/mrveiss/AutoBot-AI/pull/5702))
+
+- *(codeql)* Fix ldap-injection, command-injection, weak-hashing (#5694) (#5701) ([#5701](https://github.com/mrveiss/AutoBot-AI/pull/5701))
+
+- *(codeql)* Fix py/clear-text-logging-sensitive-data in 8 locations (#5693) (#5700) ([#5700](https://github.com/mrveiss/AutoBot-AI/pull/5700))
+
+- *(codeql)* Fix py/stack-trace-exposure in 14 remaining locations (#5692) (#5699) ([#5699](https://github.com/mrveiss/AutoBot-AI/pull/5699))
+
+- *(codeql)* Suppress py/path-injection false positives in 9 files (#5691) (#5698) ([#5698](https://github.com/mrveiss/AutoBot-AI/pull/5698))
+
+- Convert # codeql-suppress to # codeql[...] across 20 files (#5675) ([#5688](https://github.com/mrveiss/AutoBot-AI/pull/5688))
+
+- Safe_http_detail helper + fix all str(exc) leaks in HTTP responses (#5680 #5676 #5678 #5679) ([#5687](https://github.com/mrveiss/AutoBot-AI/pull/5687))
+
+- Resolve all 22 CodeQL code-scanning alerts ([#5672](https://github.com/mrveiss/AutoBot-AI/pull/5672))
+
+- *(deps)* Bump vulnerable dependencies to fix all open Dependabot alerts (#5656) (#5663) ([#5663](https://github.com/mrveiss/AutoBot-AI/pull/5663))
+
+- *(codeql)* Fix SSRF, command injection, LDAP injection, ReDoS, clear-text storage (#1733) (#2552) ([#2552](https://github.com/mrveiss/AutoBot-AI/pull/2552))
+
+- *(docker)* Fix TLS ciphers, add HTTP/2, fix header inheritance (#1984) (#2536) ([#2536](https://github.com/mrveiss/AutoBot-AI/pull/2536))
+
+- *(docker)* Add filesystem hardening — read_only, cap_drop, tmpfs (#1983) (#2537) ([#2537](https://github.com/mrveiss/AutoBot-AI/pull/2537))
+
+- *(vnc)* Fix insecure docs example + disable AlwaysShared (#1970) (#2522) ([#2522](https://github.com/mrveiss/AutoBot-AI/pull/2522))
+
+- *(deps)* Bump pypdf >=6.8.0 → >=6.9.1 (#1972) (#2529) ([#2529](https://github.com/mrveiss/AutoBot-AI/pull/2529))
+
+- *(infra)* Redact sensitive data from log output (#2348) (#2531) ([#2531](https://github.com/mrveiss/AutoBot-AI/pull/2531))
+
+- *(neural-mesh)* Fix QueryDecomposer prompt injection + error handling (#2169) (#2528) ([#2528](https://github.com/mrveiss/AutoBot-AI/pull/2528))
+
+
+### Tech-debt
+
+- *(api)* Type DataResponse generics — Batch E long-tail (#6509) (#8376) ([#8376](https://github.com/mrveiss/AutoBot-AI/pull/8376))
+
+- *(api)* Type bare DataResponse Batch B — LLM, research, security domain (#6509) ([#8347](https://github.com/mrveiss/AutoBot-AI/pull/8347))
+
+- *(api)* Type bare DataResponse Batch A — code-analysis domain (#6509) ([#8346](https://github.com/mrveiss/AutoBot-AI/pull/8346))
+
+- *(api)* Type bare DataResponse — analytics, orchestration, enterprise domain (GH #6509 Batch D) (#8307) ([#8307](https://github.com/mrveiss/AutoBot-AI/pull/8307))
+
+- *(api)* Type bare DataResponse batch C — knowledge/chat-ext/multimodal (#6509c) ([#8299](https://github.com/mrveiss/AutoBot-AI/pull/8299))
+
+- *(backend)* Add module docstrings to 10+ undocumented files (#7457) (#7933) ([#7933](https://github.com/mrveiss/AutoBot-AI/pull/7933))
+
+- *(naming)* Clarify plugin vs extension vs skill terminology with rename (#7426) (#8005) ([#8005](https://github.com/mrveiss/AutoBot-AI/pull/8005))
+
+- *(backend/redis)* Suppress two noqa false-positives in redis scanner (#7439) (#8034) ([#8034](https://github.com/mrveiss/AutoBot-AI/pull/8034))
+
+- *(frontend/css)* Establish canonical theming pattern and tokens (#7453) (#7896) ([#7896](https://github.com/mrveiss/AutoBot-AI/pull/7896))
+
+- *(ansible)* Canonicalize role names to autobot-X form (#7053) (#7877) ([#7877](https://github.com/mrveiss/AutoBot-AI/pull/7877))
+
+- *(naming)* Clarify plugin vs extension vs skill terminology with rename (#7426) (#7869) ([#7869](https://github.com/mrveiss/AutoBot-AI/pull/7869))
+
+- *(architecture)* Enforce import boundaries for extensions/skills/plugins (#7372) (#7868) ([#7868](https://github.com/mrveiss/AutoBot-AI/pull/7868))
+
+- *(backend)* Canonical session_scope + error_handling standardization (GH#7441, GH#7435) (#7748) ([#7748](https://github.com/mrveiss/AutoBot-AI/pull/7748))
+
+- *(backend/redis)* Suppress two noqa false-positives in redis scanner (MVA-199 / GH#7439) ([#7678](https://github.com/mrveiss/AutoBot-AI/pull/7678))
+
+- *(backend/orm)* Canonical skills_session_context — standardize SQLAlchemy lifecycle (GH#7441) (#7677) ([#7677](https://github.com/mrveiss/AutoBot-AI/pull/7677))
+
+- *(helpers)* Add raise_not_found/raise_rate_limit helpers to catalog_http_exceptions (#3548) (#3557) ([#3557](https://github.com/mrveiss/AutoBot-AI/pull/3557))
+
+- *(constants)* Replace asyncio.sleep() magic numbers with TimingConstants (#3549) (#3556) ([#3556](https://github.com/mrveiss/AutoBot-AI/pull/3556))
+
+- *(helpers)* Create RedisCache JSON wrapper (#3547) (#3553) ([#3553](https://github.com/mrveiss/AutoBot-AI/pull/3553))
+
+- *(helpers)* Create TaskResult builders — 2200+ raw dicts (#3545) (#3552) ([#3552](https://github.com/mrveiss/AutoBot-AI/pull/3552))
+
+- *(helpers)* Extract PaginationParams model (#3546) (#3555) ([#3555](https://github.com/mrveiss/AutoBot-AI/pull/3555))
+
+
+### Tooling
+
+- AUTOBOT_* env-var registry with auto-generated CLAUDE_RULES.md section (#7081) (#7928) ([#7928](https://github.com/mrveiss/AutoBot-AI/pull/7928))
+
+- AUTOBOT_* env-var registry with auto-generated CLAUDE_RULES.md section (#7081) (#7876) ([#7876](https://github.com/mrveiss/AutoBot-AI/pull/7876))
+
+- Add worktree cleanup integration (closes GH#7104) (#7871) ([#7871](https://github.com/mrveiss/AutoBot-AI/pull/7871))
+
+- *(audit)* Add behavioral-grep utility for extraction audits (#7087) (#7808) ([#7808](https://github.com/mrveiss/AutoBot-AI/pull/7808))
+
+- *(lint)* Orphan-ref audit script for Vue composables (#5349) (#5364) ([#5364](https://github.com/mrveiss/AutoBot-AI/pull/5364))
+
+
+### Ux
+
+- *(dashboard)* Dirty-state indicator and save feedback for CustomDashboard (#8759) (#8809) ([#8809](https://github.com/mrveiss/AutoBot-AI/pull/8809))
+
+- *(analytics)* Unify tab nav to Icon component, remove SVG sprite (GH#8756) (#8808) ([#8808](https://github.com/mrveiss/AutoBot-AI/pull/8808))
+
+- *(chat)* Group voice header buttons with divider — fix Gestalt proximity (GH#8755, MVA-1239) ([#8804](https://github.com/mrveiss/AutoBot-AI/pull/8804))
+
+- *(nav)* Add /documents to main nav — AI Documents discoverability (GH#8757)
+
+- *(nav)* Consolidate navigation to ≤7 items — Miller's Law fix ([#8785](https://github.com/mrveiss/AutoBot-AI/pull/8785))
+
+- *(onboarding)* Replace progress dots with labeled step indicator ([#8791](https://github.com/mrveiss/AutoBot-AI/pull/8791))
+
+- *(slm-frontend/code-sync)* Move 'Pull from Source' button next to 'Refresh' in page header ([#7098](https://github.com/mrveiss/AutoBot-AI/pull/7098))
+
+
+### Wire-in
+
+- Alert_cooldown and workflow_versioning (#7799 #7801) (#7821) ([#7821](https://github.com/mrveiss/AutoBot-AI/pull/7821))
+
+- MountAllPlugins, datetime_utils, fact_extractor (#7793 #7797 #7804) (#7820) ([#7820](https://github.com/mrveiss/AutoBot-AI/pull/7820))
+
+
+## [0.2.0] - 2026-03-26
+
+### Bug Fixes
+
+- *(docker)* Set executable permission on entrypoint scripts (#2459)
+
+- *(deps)* Align all OpenTelemetry packages to 1.40.0 (#2465)
+
+- *(frontend)* Auto-load CodebaseSecurityPanel on page visit (#2404) (#2453) ([#2453](https://github.com/mrveiss/AutoBot-AI/pull/2453))
+
+- *(backend)* Return 410 Gone for LLM config write endpoints (#2400) (#2451) ([#2451](https://github.com/mrveiss/AutoBot-AI/pull/2451))
+
+- *(backend)* Add advisory lock to fleet sync guard (#2401) (#2448) ([#2448](https://github.com/mrveiss/AutoBot-AI/pull/2448))
+
+- *(frontend)* Add .vscode/settings.json exception to .gitignore (#2412)
+
+- *(backend)* Move imports after copyright header in 2 files (#2414)
+
+- *(backend)* Replace postgresql.UUID with dialect-neutral Uuid type (#2402)
+
+- *(backend)* Add missing __init__.py for search_components test discovery (#2395)
+
+- *(docs)* Update missed setup.sh refs in prompts and cleanup script (#2420)
+
+- *(docker)* Use correct networks for autobot-worker service (#2423)
+
+- *(backend)* Fix test_complex_code assertion in call_graph_resolution_test (#2393)
+
+- *(frontend)* Wire all analytics panels to load on page visit (#2390)
+
+- *(frontend)* Add withSourceId to loadRedisHealth endpoint (#2374) (#2411) ([#2411](https://github.com/mrveiss/AutoBot-AI/pull/2411))
+
+- *(security)* Remove stack trace exposure from API responses (#2195) (#2398) ([#2398](https://github.com/mrveiss/AutoBot-AI/pull/2398))
+
+- *(security)* Scope redact_secrets to workflow owner's secrets only (#2321) (#2392) ([#2392](https://github.com/mrveiss/AutoBot-AI/pull/2392))
+
+- *(slm)* Add SELECT FOR UPDATE to fleet sync guard (#1937) (#2389) ([#2389](https://github.com/mrveiss/AutoBot-AI/pull/2389))
+
+- *(frontend)* Add source_id to Redis health endpoint (#2374) ([#2384](https://github.com/mrveiss/AutoBot-AI/pull/2384))
+
+- *(npu)* Add logger and decompose oversized functions in npu_worker.py (#2346) (#2382) ([#2382](https://github.com/mrveiss/AutoBot-AI/pull/2382))
+
+- *(npu)* Add logger and decompose oversized functions in npu_worker.py (#2346) (#2377) ([#2377](https://github.com/mrveiss/AutoBot-AI/pull/2377))
+
+- *(slm)* Warn when _generate_node_id falls back from ansible_name (#2175) (#2376) ([#2376](https://github.com/mrveiss/AutoBot-AI/pull/2376))
+
+- *(analytics)* Update stale autobot-vue path references (#2016) ([#2375](https://github.com/mrveiss/AutoBot-AI/pull/2375))
+
+- *(slm)* Add unique constraint and validation on ansible_name (#2011) (#2352) ([#2352](https://github.com/mrveiss/AutoBot-AI/pull/2352))
+
+- *(analytics)* Expand INTERNAL_MODULE_PREFIXES for call graph (#2360) ([#2369](https://github.com/mrveiss/AutoBot-AI/pull/2369))
+
+- *(security)* Validate X-Forwarded-For against trusted proxies (#2252) (#2366) ([#2366](https://github.com/mrveiss/AutoBot-AI/pull/2366))
+
+- *(shared)* Re-raise HTTPException in with_error_handling decorator (#2327) (#2365) ([#2365](https://github.com/mrveiss/AutoBot-AI/pull/2365))
+
+- *(security)* Make HMAC API key secret configurable (#2160) (#2361) ([#2361](https://github.com/mrveiss/AutoBot-AI/pull/2361))
+
+- *(security)* Replace hardcoded VNC password with random generation (#1987) (#2362) ([#2362](https://github.com/mrveiss/AutoBot-AI/pull/2362))
+
+- *(agents)* Normalise task_type in clear_strategy (#2325) (#2353) ([#2353](https://github.com/mrveiss/AutoBot-AI/pull/2353))
+
+- *(rag)* Thread max_results through _diversify_results (#2200) (#2349) ([#2349](https://github.com/mrveiss/AutoBot-AI/pull/2349))
+
+- *(security)* Add TLS to websockify VNC proxy (#1962) (#2350) ([#2350](https://github.com/mrveiss/AutoBot-AI/pull/2350))
+
+- *(api)* Address code review findings from PR #2335 (#1733)
+
+- *(rag)* Persist EdgeLearner cursors to Redis (#2210) ([#2345](https://github.com/mrveiss/AutoBot-AI/pull/2345))
+
+- *(security)* Require VNC password authentication in all x11vnc launches (#1969) (#2344) ([#2344](https://github.com/mrveiss/AutoBot-AI/pull/2344))
+
+- *(workflow)* Replace pg_insert with dialect-neutral upsert (#2320) (#2334) ([#2334](https://github.com/mrveiss/AutoBot-AI/pull/2334))
+
+- *(chat)* Wire knowledge base into chat manager after Phase 2 init (#2309) (#2336) ([#2336](https://github.com/mrveiss/AutoBot-AI/pull/2336))
+
+- *(ansible)* Add fix-node-ownership playbook and sudo rsync (#2296) (#2340) ([#2340](https://github.com/mrveiss/AutoBot-AI/pull/2340))
+
+- *(ansible)* Add slm_server/infrastructure groups to production.yml (#2294) (#2339) ([#2339](https://github.com/mrveiss/AutoBot-AI/pull/2339))
+
+- *(slm)* Load db credentials in migration runner (#2293) (#2338) ([#2338](https://github.com/mrveiss/AutoBot-AI/pull/2338))
+
+- *(db)* Resolve Alembic revision collision — deduplicate 20260324_015 (#2302) (#2316) ([#2316](https://github.com/mrveiss/AutoBot-AI/pull/2316))
+
+- *(devtools)* Disable format-on-save to prevent edit conflicts (#1518) (#2332) ([#2332](https://github.com/mrveiss/AutoBot-AI/pull/2332))
+
+- *(hooks)* Reduce orphan detector false positives (#2094) (#2329) ([#2329](https://github.com/mrveiss/AutoBot-AI/pull/2329))
+
+- *(slm)* Remove \$ escape so REDIS_HOST resolves at bootstrap time (#2326) (#2330) ([#2330](https://github.com/mrveiss/AutoBot-AI/pull/2330))
+
+- *(chat)* Return error for unknown tool names instead of silent drop (#2305) (#2331) ([#2331](https://github.com/mrveiss/AutoBot-AI/pull/2331))
+
+- *(ansible)* Make SLM login resilient in update-all-nodes.yml (#2295) (#2328) ([#2328](https://github.com/mrveiss/AutoBot-AI/pull/2328))
+
+- *(monitoring)* Correct decorator order, prefix, GPU guard, tags (#2315) (#2324) ([#2324](https://github.com/mrveiss/AutoBot-AI/pull/2324))
+
+- *(test)* Mock datetime on correct module in redis_thread_safety_test (#2211) (#2319) ([#2319](https://github.com/mrveiss/AutoBot-AI/pull/2319))
+
+- *(workflow)* Eliminate race in parallel step execution (#2204) (#2318) ([#2318](https://github.com/mrveiss/AutoBot-AI/pull/2318))
+
+- *(security)* Remove path echo from _validate_admin_path 403 response (#2307) (#2317) ([#2317](https://github.com/mrveiss/AutoBot-AI/pull/2317))
+
+- *(db)* Resolve Alembic revision collision — deduplicate 20260324_015 (#2302) (#2314) ([#2314](https://github.com/mrveiss/AutoBot-AI/pull/2314))
+
+- *(routing)* Normalise task_type vocabulary for learned strategies (#2208) (#2299) ([#2299](https://github.com/mrveiss/AutoBot-AI/pull/2299))
+
+- *(topology)* Set last_updated in _update_pair (#2213) (#2297) ([#2297](https://github.com/mrveiss/AutoBot-AI/pull/2297))
+
+- *(slm)* Remove hardcoded Redis IP from bootstrap-slm.sh (#2224) (#2292) ([#2292](https://github.com/mrveiss/AutoBot-AI/pull/2292))
+
+- *(security)* Add auth to workflow-secrets API and fix path disclosure (#2303, #2304, #2311)
+
+- *(security)* Sanitize session_id in tempfile.mkdtemp prefix (#2298)
+
+- *(slm)* Fix User.roles -> User.user_roles in user_service.py
+
+- *(analytics)* Add stale collection retry for problems storage (#1712) ([#2291](https://github.com/mrveiss/AutoBot-AI/pull/2291))
+
+- *(db)* Add mesh_nodes_archive migration (#2212) ([#2284](https://github.com/mrveiss/AutoBot-AI/pull/2284))
+
+- *(logs)* Preserve subdirectory in _validate_log_path (#2194) ([#2285](https://github.com/mrveiss/AutoBot-AI/pull/2285))
+
+- *(security)* Add VNC passwd pre-check before server start (#1965) ([#2279](https://github.com/mrveiss/AutoBot-AI/pull/2279))
+
+- *(tests)* Update 8 stale mock patches to correct module name (#2261) ([#2268](https://github.com/mrveiss/AutoBot-AI/pull/2268))
+
+- *(slm)* Fix User import crash in models/__init__.py
+
+- *(hooks)* Update header comments to include new exclusions (#2273)
+
+- *(ci)* Replace global B113 bandit skip with per-file annotations (#2272)
+
+- *(shared)* Document backend coupling in redis_client imports (#2220)
+
+- *(shared)* Update redis_client.py docstring to canonical import path (#2219)
+
+- *(ci)* Add missing autoflake flags to match pre-commit (#2218)
+
+- *(docs)* Update CLAUDE.md line length to match .flake8 (120 chars) (#2217)
+
+- *(analytics)* Correct inaccurate comment about POST-based triggers (#2271) ([#2276](https://github.com/mrveiss/AutoBot-AI/pull/2276))
+
+- *(analytics)* Wire extraScans and fix debug composable init order (#2258, #2259) ([#2264](https://github.com/mrveiss/AutoBot-AI/pull/2264))
+
+- *(ci)* Add CodeQL config with scan paths and workflow (#1826) ([#2203](https://github.com/mrveiss/AutoBot-AI/pull/2203))
+
+- *(orchestrator)* Address code review findings from PR #2233 (#2235) ([#2254](https://github.com/mrveiss/AutoBot-AI/pull/2254))
+
+- *(auth)* Add typed response model for login endpoint (#2240) (#2247) ([#2247](https://github.com/mrveiss/AutoBot-AI/pull/2247))
+
+- *(auth)* Validate X-Forwarded-For against trusted proxies (#2239) (#2251) ([#2251](https://github.com/mrveiss/AutoBot-AI/pull/2251))
+
+- *(auth)* Add audit log for MFA challenge path (#2242) (#2246) ([#2246](https://github.com/mrveiss/AutoBot-AI/pull/2246))
+
+- *(auth)* Restore user_type field in /me response (#2241) (#2250) ([#2250](https://github.com/mrveiss/AutoBot-AI/pull/2250))
+
+- *(chat)* Stop silently swallowing exceptions in load_session (#1906) ([#2176](https://github.com/mrveiss/AutoBot-AI/pull/2176))
+
+- *(slm)* Remove stale SQLite references, use PostgreSQL in bootstrap (#1815) ([#2198](https://github.com/mrveiss/AutoBot-AI/pull/2198))
+
+- *(slm)* Add tablename collision check for dual SQLAlchemy bases (#1878) ([#2205](https://github.com/mrveiss/AutoBot-AI/pull/2205))
+
+- *(ci)* Make Code Quality workflow fully green (#2128) ([#2164](https://github.com/mrveiss/AutoBot-AI/pull/2164))
+
+- *(rag)* Handle abbreviations in sentence splitter to prevent false splits (#2170)
+
+- *(orchestration)* Wire WorkflowExecutor into scheduler startup (#2166) (#2201) ([#2201](https://github.com/mrveiss/AutoBot-AI/pull/2201))
+
+- *(mesh)* Clean stale Redis entries on edge sync cycle (#2053)
+
+- *(orchestration)* Add circuit breaker and parallel step execution (#2168, #2172) (#2197) ([#2197](https://github.com/mrveiss/AutoBot-AI/pull/2197))
+
+- *(scheduler)* Implement real dependency checking in WorkflowQueue (#2180) (#2187) ([#2187](https://github.com/mrveiss/AutoBot-AI/pull/2187))
+
+- *(workflow)* Warn when unsupported condition nodes are dropped on save (#2182) (#2185) ([#2185](https://github.com/mrveiss/AutoBot-AI/pull/2185))
+
+- *(rag)* Handle abbreviations in sentence splitter to prevent false splits (#2170) (#2192) ([#2192](https://github.com/mrveiss/AutoBot-AI/pull/2192))
+
+- *(rag)* Skip crude diversity filter when reranking is enabled (#2103) (#2191) ([#2191](https://github.com/mrveiss/AutoBot-AI/pull/2191))
+
+- *(reports)* Use PROJECT_ROOT for data_base path instead of relative Path (#2163) (#2190) ([#2190](https://github.com/mrveiss/AutoBot-AI/pull/2190))
+
+- *(security)* Remove str(e) from batch vectorize error response (#2173) (#2188) ([#2188](https://github.com/mrveiss/AutoBot-AI/pull/2188))
+
+- *(agents)* Wire AgentRouter to read TaskPatternLearner strategies (#2105) (#2158) ([#2158](https://github.com/mrveiss/AutoBot-AI/pull/2158))
+
+- Add placeholder states for Code Intelligence findings (#2068) (#2107) ([#2107](https://github.com/mrveiss/AutoBot-AI/pull/2107))
+
+- *(frontend)* Add missing navigation links for registered routes (#2071) (#2100) ([#2100](https://github.com/mrveiss/AutoBot-AI/pull/2100))
+
+- *(rag)* Use exclusive cursor to prevent pagination duplicates (#2102)
+
+- *(agents)* Wire AgentRouter to read TaskPatternLearner strategies (#2105) (#2158)
+
+- Add placeholder states for Code Intelligence findings (#2068) (#2107)
+
+- *(frontend)* Add missing navigation links for registered routes (#2071) (#2100)
+
+- *(rag)* Consume feedback streams with cursor tracking (#2102)
+
+- *(nodes)* Use ansible_name or ip_address for node_id hash instead of display hostname (#1936) (#2146) ([#2146](https://github.com/mrveiss/AutoBot-AI/pull/2146))
+
+- *(rag)* Align relationship extractor threshold to chunk count like entity extractor (#2052) (#2144) ([#2144](https://github.com/mrveiss/AutoBot-AI/pull/2144))
+
+- *(tracker)* Cap experiment Redis list at 10k entries with ltrim (#2031) (#2142) ([#2142](https://github.com/mrveiss/AutoBot-AI/pull/2142))
+
+- *(rag)* Use mean-pooled embeddings for RAPTOR L1+ levels instead of random (#2044) (#2127) ([#2127](https://github.com/mrveiss/AutoBot-AI/pull/2127))
+
+- *(analytics)* Remove dead _store_problem_to_chromadb with unawaited coroutine (#2017) (#2126) ([#2126](https://github.com/mrveiss/AutoBot-AI/pull/2126))
+
+- *(search)* Skip per-item BM25 recompute in bulk_delete, refresh once after batch (#2079) (#2125) ([#2125](https://github.com/mrveiss/AutoBot-AI/pull/2125))
+
+- *(search)* Use Redis EXISTS check for BM25 lazy recompute instead of sentinel (#2082) (#2124) ([#2124](https://github.com/mrveiss/AutoBot-AI/pull/2124))
+
+- *(security)* Add backward-compat dual-check for HMAC API key migration (#2083) (#2123) ([#2123](https://github.com/mrveiss/AutoBot-AI/pull/2123))
+
+- *(frontend,backend)* Replace ShareKnowledgeDialog mock data with API (#2072) (#2087) ([#2087](https://github.com/mrveiss/AutoBot-AI/pull/2087))
+
+- *(frontend)* Align ServiceStatus type with backend health response values (#2076) (#2093) ([#2093](https://github.com/mrveiss/AutoBot-AI/pull/2093))
+
+- *(frontend)* Unify ChatMessage type definitions into single canonical type (#2066) (#2088) ([#2088](https://github.com/mrveiss/AutoBot-AI/pull/2088))
+
+- *(frontend)* Wire LiveEventService into app startup and create useLiveEvents composable (#2064) (#2084) ([#2084](https://github.com/mrveiss/AutoBot-AI/pull/2084))
+
+- *(frontend)* Align KnowledgeBaseStatus type with actual backend response (#2073) (#2086) ([#2086](https://github.com/mrveiss/AutoBot-AI/pull/2086))
+
+- *(search)* Wire BM25 corpus stats recomputation into KB mutations (#2033) (#2070) ([#2070](https://github.com/mrveiss/AutoBot-AI/pull/2070))
+
+- *(pipeline)* Use chunk_id as canonical node ID in MeshSeeder (#2050) (#2062) ([#2062](https://github.com/mrveiss/AutoBot-AI/pull/2062))
+
+- *(rag)* Separate pre-rerank and post-rerank IDs in feedback events (#2035) (#2078) ([#2078](https://github.com/mrveiss/AutoBot-AI/pull/2078))
+
+- *(rag)* Forward rerank_weights from config to reranker (#2034) (#2075) ([#2075](https://github.com/mrveiss/AutoBot-AI/pull/2075))
+
+- *(model)* Compare model memory against GPU VRAM instead of system RAM (#2015) (#2063) ([#2063](https://github.com/mrveiss/AutoBot-AI/pull/2063))
+
+- *(cost)* Use exact-then-prefix model matching instead of substring (#2030) (#2061) ([#2061](https://github.com/mrveiss/AutoBot-AI/pull/2061))
+
+- *(hardware)* Check openvino_npu key instead of openvino in NPU selection (#2022) (#2054) ([#2054](https://github.com/mrveiss/AutoBot-AI/pull/2054))
+
+- *(rag)* Use analytics Redis DB for feedback stream (#2045)
+
+- *(deps)* Add spacy + scikit-learn for Neural Mesh RAG (#2043)
+
+- *(backend)* Update LLM pricing, add staleness check + fallback (#1961) (#2010) ([#2010](https://github.com/mrveiss/AutoBot-AI/pull/2010))
+
+- *(models)* Add VRAM check to dict API path + expose public API (#1966) (#2007) ([#2007](https://github.com/mrveiss/AutoBot-AI/pull/2007))
+
+- *(slm)* Wire fleet sync concurrent guard into schedule paths (#1979) (#2009) ([#2009](https://github.com/mrveiss/AutoBot-AI/pull/2009))
+
+- *(docker)* Add dev entrypoint scripts to fix bind mount issues (#1985) (#2006) ([#2006](https://github.com/mrveiss/AutoBot-AI/pull/2006))
+
+- *(analytics)* Add post-indexing verification for empty sections (#1712) (#2002) ([#2002](https://github.com/mrveiss/AutoBot-AI/pull/2002))
+
+- *(costs)* Update MODEL_PRICING with 2025-2026 models (#1961) (#1999) ([#1999](https://github.com/mrveiss/AutoBot-AI/pull/1999))
+
+- *(slm)* Auto-populate ansible_name from heartbeat hostname (#1986) (#1997) ([#1997](https://github.com/mrveiss/AutoBot-AI/pull/1997))
+
+- *(docker)* Add missing autobot_users database to init-databases.sql (#1981) (#2001) ([#2001](https://github.com/mrveiss/AutoBot-AI/pull/2001))
+
+- *(hardware)* Replace placeholder Intel detection with real OpenVINO check (#1950) (#1996) ([#1996](https://github.com/mrveiss/AutoBot-AI/pull/1996))
+
+- *(slm)* Add fleet sync guard to schedule and executor paths (#1979) (#1995) ([#1995](https://github.com/mrveiss/AutoBot-AI/pull/1995))
+
+- *(infra)* Add dependabot.yml to guard against breaking dep upgrades (#1938) (#1992) ([#1992](https://github.com/mrveiss/AutoBot-AI/pull/1992))
+
+- *(backend)* Read AUTOBOT_OLLAMA_ENDPOINT before OLLAMA_HOST fallback (#1963) (#1991) ([#1991](https://github.com/mrveiss/AutoBot-AI/pull/1991))
+
+- *(backend)* Expand GPU detection beyond RTX to all vendors (#1959) (#1989) ([#1989](https://github.com/mrveiss/AutoBot-AI/pull/1989))
+
+- *(security)* Harden VNC to require password authentication (#1939, #1940) ([#1941](https://github.com/mrveiss/AutoBot-AI/pull/1941))
+
+- *(docker)* Resolve 8 Docker deployment bugs (#1910, #1908, #1909, #1877, #1895, #1879, #1892, #1893) ([#1926](https://github.com/mrveiss/AutoBot-AI/pull/1926))
+
+- *(slm)* Add ansible_name column for proper Ansible targeting (#1814) ([#1932](https://github.com/mrveiss/AutoBot-AI/pull/1932))
+
+- *(slm)* Fleet sync startup reconciliation + concurrent guard (#1729, #1730) ([#1928](https://github.com/mrveiss/AutoBot-AI/pull/1928))
+
+- *(knowledge)* Lazy-load heavy deps to fix pipeline test imports (#1514) ([#1929](https://github.com/mrveiss/AutoBot-AI/pull/1929))
+
+- *(ci)* Replace nonexistent autobot-user-backend/ with autobot-backend/ in code-quality workflow (#1933)
+
+- Use db_service.session() instead of get_session() in a2a_card_fetcher (#1876) (#1913) ([#1913](https://github.com/mrveiss/AutoBot-AI/pull/1913))
+
+- Use Path(__file__).parent for _PROJECT_ROOT in conversation_file_manager (#1861) (#1919) ([#1919](https://github.com/mrveiss/AutoBot-AI/pull/1919))
+
+- *(backend)* Replace datetime.UTC with datetime.timezone.utc for Python 3.10 compat (#1889) (#1918) ([#1918](https://github.com/mrveiss/AutoBot-AI/pull/1918))
+
+- *(backend)* Replace nonexistent require_auth with get_current_user (#1880) (#1917) ([#1917](https://github.com/mrveiss/AutoBot-AI/pull/1917))
+
+- *(frontend)* Remove hardcoded SLM IP, use /slm proxy path as default (#1875) (#1916) ([#1916](https://github.com/mrveiss/AutoBot-AI/pull/1916))
+
+- *(testing)* Add pythonpath to pytest.ini for reliable test collection (#1884) (#1915) ([#1915](https://github.com/mrveiss/AutoBot-AI/pull/1915))
+
+- *(backend)* Break model_constants circular import with static defaults (#1882) (#1914) ([#1914](https://github.com/mrveiss/AutoBot-AI/pull/1914))
+
+- *(ci)* Remove continue-on-error from code-quality.yml checks (#1870) (#1905) ([#1905](https://github.com/mrveiss/AutoBot-AI/pull/1905))
+
+- *(config)* Add re-entry guard to prevent KeyError during circular init (#1862, #1866)
+
+- Check monitored services only for code_status in node health (#1709) (#1901) ([#1901](https://github.com/mrveiss/AutoBot-AI/pull/1901))
+
+- Persist SLM SECRET_KEY/ENCRYPTION_KEY to data/.slm_keys (#1726) (#1894) ([#1894](https://github.com/mrveiss/AutoBot-AI/pull/1894))
+
+- Add noqa: redis to NPU worker standalone Redis instantiation (#1793) (#1888) ([#1888](https://github.com/mrveiss/AutoBot-AI/pull/1888))
+
+- *(testing)* Fix pytest.ini testpaths and add directory exclusions (#1865) (#1887) ([#1887](https://github.com/mrveiss/AutoBot-AI/pull/1887))
+
+- *(backend)* Lazy-init LLMFailsafeAgent to prevent import-time crash (#1858) (#1885) ([#1885](https://github.com/mrveiss/AutoBot-AI/pull/1885))
+
+- *(backend)* Lazy-import config_manager in logging_manager to break circular import (#1862) (#1883) ([#1883](https://github.com/mrveiss/AutoBot-AI/pull/1883))
+
+- *(ci)* Remove continue-on-error from code-quality.yml checks (#1870) (#1881) ([#1881](https://github.com/mrveiss/AutoBot-AI/pull/1881))
+
+- Use AUTOBOT_BASE_DIR for CompletionTrainer model_dir (#1857) (#1874) ([#1874](https://github.com/mrveiss/AutoBot-AI/pull/1874))
+
+- Rename SLM admin users table to slm_users to resolve FK mismatch (#1854) (#1872) ([#1872](https://github.com/mrveiss/AutoBot-AI/pull/1872))
+
+- *(ci)* Remove || echo patterns from frontend test steps (#1855) (#1869) ([#1869](https://github.com/mrveiss/AutoBot-AI/pull/1869))
+
+- *(ci)* Remove || echo from frontend-test.yml test steps (#1867) (#1868) ([#1868](https://github.com/mrveiss/AutoBot-AI/pull/1868))
+
+- Use AUTOBOT_BASE_DIR for CompletionTrainer model_dir (#1857) (#1864) ([#1864](https://github.com/mrveiss/AutoBot-AI/pull/1864))
+
+- *(backend)* Resolve installed version for ESM-only packages via dpkg-query (#1856) (#1863) ([#1863](https://github.com/mrveiss/AutoBot-AI/pull/1863))
+
+- Use per-node service list in apply-system-updates verification (#1828) (#1860) ([#1860](https://github.com/mrveiss/AutoBot-AI/pull/1860))
+
+- *(ci)* Remove || echo patterns that silently swallow CI failures (#1855) (#1859) ([#1859](https://github.com/mrveiss/AutoBot-AI/pull/1859))
+
+- *(backend)* Detect Ubuntu Pro ESM security updates in check-system-updates (#1847) (#1852) ([#1852](https://github.com/mrveiss/AutoBot-AI/pull/1852))
+
+- Check analysis keywords before implementation in _categorize_agent (#1844) (#1851) ([#1851](https://github.com/mrveiss/AutoBot-AI/pull/1851))
+
+- Update test import path after agent service rename (#1846) (#1850) ([#1850](https://github.com/mrveiss/AutoBot-AI/pull/1850))
+
+- *(ci)* Remove continue-on-error from backend code quality checks (#1848) (#1849) ([#1849](https://github.com/mrveiss/AutoBot-AI/pull/1849))
+
+- *(frontend)* Resolve 11 TypeScript type errors in analytics panels (#1665) (#1843) ([#1843](https://github.com/mrveiss/AutoBot-AI/pull/1843))
+
+- No-direct-redis hook uses tokenize to skip comments and docstrings (#1829) (#1842) ([#1842](https://github.com/mrveiss/AutoBot-AI/pull/1842))
+
+- *(backend)* Classify security updates by repo origin instead of grep (#1827) (#1841) ([#1841](https://github.com/mrveiss/AutoBot-AI/pull/1841))
+
+- *(security)* Add path traversal validation to session_id (#1825) (#1840) ([#1840](https://github.com/mrveiss/AutoBot-AI/pull/1840))
+
+- No-direct-redis hook uses tokenize to skip comments and docstrings (#1829) (#1834) ([#1834](https://github.com/mrveiss/AutoBot-AI/pull/1834))
+
+- *(security)* Mask secrets and connection details in log output (#1733)
+
+- *(updates)* Remove delegate_to localhost from save report task (#1789)
+
+- *(security)* Fix JavaScript CodeQL alerts — randomness, XSS, prototype pollution (#1733)
+
+- *(updates)* Fix dpkg lock check and specific_packages parsing (#1789)
+
+- *(frontend)* Pass source_id to duplicates task, dependencies, import-tree (#1817)
+
+- *(frontend)* Restore backend-wait polling after max reconnects (#1795) (#1813) ([#1813](https://github.com/mrveiss/AutoBot-AI/pull/1813))
+
+- *(updates)* Add tab badges and fetch code sync status on mount (#1789)
+
+- *(security)* Add GH Actions permissions + fix regex/tag-filter alerts (#1733)
+
+- *(updates)* Handle multi-line Ansible output in discover parser (#1789)
+
+- *(updates)* Parse inventory to map IPs to Ansible hostnames (#1789)
+
+- *(nginx)* Inject X-Internal-API-Key into /autobot-api proxy (#1791) (#1798) ([#1798](https://github.com/mrveiss/AutoBot-AI/pull/1798))
+
+- *(tests)* Update stale autobot-user-* paths in test files (#1796) (#1799) ([#1799](https://github.com/mrveiss/AutoBot-AI/pull/1799))
+
+- *(updates)* Use ip_address for Ansible --limit instead of hostname (#1789)
+
+- *(updates)* Resolve hosts by IP when hostname doesn't match (#1789)
+
+- *(security)* Mask sensitive data in log messages (#1733)
+
+- *(security)* Add path traversal validation to prevent path injection (#1733)
+
+- *(codebase)* Add source_id filtering to remaining analytics endpoints (#1772)
+
+- *(workflow)* Re-enable POST /api/workflow/execute via workflow_automation (#1770)
+
+- *(audit)* Handle asyncio.create_task() from sync endpoint context (#1568)
+
+- *(hooks)* Add 120s timeout to flock serialization (#1765)
+
+- *(slm-frontend)* Recursive org tree rendering for deep hierarchies (#1780)
+
+- *(auth)* Accept X-Internal-API-Key in get_current_user for SLM proxy (#1779)
+
+- *(middleware)* Register LLMAwarenessMiddleware in middleware chain (#1768)
+
+- *(analytics)* Update stale directory paths in pattern_extractor (#1725)
+
+- *(rag)* Add max size limit to query_cache (#1732)
+
+- *(analytics)* Remove dead api_call_tracker code (#1731)
+
+- *(frontend)* Normalize _backendWaitTimer field initialization (#1519)
+
+- *(ansible)* Replace 36 hardcoded IPs in 13 playbooks with inventory vars (#1766)
+
+- *(security)* Fix CodeQL alerts — stack-trace exposure, path injection, command injection (#1733)
+
+- *(codebase)* Remove misleading Redis fallback for problems (#1759)
+
+- *(codebase)* Allow local source paths in _get_last_commit (#1756)
+
+- *(codebase)* Add source_id to problem documents in scanner (#1710)
+
+- *(ansible)* Replace hardcoded IPs with inventory vars in deploy-full.yml (#1744)
+
+- *(security)* Move emergency admin password hash to Ansible Vault (#1743)
+
+- *(security)* Add authentication to knowledge_vectorization endpoints (#1738)
+
+- *(security)* Correct Redis key prefix in validate-service-auth.sh (#1742)
+
+- *(knowledge)* Break long line to satisfy E501 (#1737)
+
+- *(security)* Deploy service auth keys via Ansible setup + safe rotation (#1734)
+
+- *(codebase)* Persist indexing queue to Redis for restart survival (#1717)
+
+- *(knowledge)* Address code review findings for #1513
+
+- *(knowledge)* Wire up query_cache in AdvancedRAGOptimizer (#1548)
+
+- *(analytics)* Normalize endpoints and bound api_frequencies dict (#1554)
+
+- *(knowledge)* Add _LOAD_FAILED sentinel to get_cross_encoder (#1562)
+
+- *(code-intel)* Enforce TTL check in _learn_bug_patterns_async (#1563)
+
+- *(knowledge)* Align score_threshold defaults to 0.3 across all retrieval paths (#1532)
+
+- *(codebase)* Fix sync failures, local sources, and auto-sync (#1711, #1714, #1715)
+
+- *(slm)* Persist fleet sync jobs to DB for restart survival (#1707)
+
+- *(hooks)* Skip post-checkout on file checkouts to prevent branch switching (#1705)
+
+- *(hooks)* Fix flock deadlock, fallback anchor, and permissions pattern (#1699, #1700) ([#1704](https://github.com/mrveiss/AutoBot-AI/pull/1704))
+
+- *(i18n)* Prune 461 orphaned translation keys with no EN counterpart (#1702)
+
+- *(hooks)* Serialize worktree commits via flock to prevent stash contamination (#1684)
+
+- *(hooks)* Wrap pre-commit with branch guard at git hook level (#1689)
+
+- *(prompts)* Add doc-first safeguard to 3 intent context files (#1517)
+
+- *(vllm)* Replace removed destroy_model_parallel with vllm 0.8+ cleanup (#1571)
+
+- *(hooks)* Add branch guard to abort commits on stash-induced branch switch (#1670)
+
+- *(lint)* Wrap bug_predictor.py line 1202 to fix E501 violation (#1564)
+
+- *(i18n)* RTL tests now exercise real setLocale, not mock copy (#1598)
+
+- Narrow .gitignore core.* pattern to only match core dumps (#1663)
+
+- *(frontend)* Document getSeverityColor for canvas contexts, remove dead import (#1667)
+
+- *(ci)* Resolve dep conflicts and split requirements into roles (#1655)
+
+- *(hooks)* Add worktree branch guard to prevent stash corruption (#1654)
+
+- *(config)* Add TTS worker URL mapping and shell helper port (#1648)
+
+- *(config)* Use SSOT URL properties instead of manual f-strings (#1618)
+
+- *(deps)* Align llama-index companion packages with core 0.13.0 + bump transformers 5.x (#1637, #1638)
+
+- *(chat)* Eliminate set_chat_context race on singleton (#1641)
+
+- *(config)* Replace hardcoded IPs with SSOT config in voice tests (#1618)
+
+- *(ansible)* Replace hardcoded IPs with inventory variables in update-all-nodes.yml (#1636)
+
+- *(ansible)* Deploy gaps — SLM migrations, shared ownership, NPU health (#1630, #1632, #1633, #1629)
+
+- *(slm)* Fix frontend ownership before npm build in self-sync (#1624)
+
+- *(ansible)* Sync slm_agent role files with canonical agent code (#1623)
+
+- *(slm)* Widen code_status column from VARCHAR(20) to VARCHAR(50) (#1622)
+
+- *(scheduler)* Wire default template executor for scheduled workflows (#1614)
+
+- *(chat)* Wire set_chat_context before slash command execution (#1613)
+
+- *(deploy)* Run Alembic migrations for user backend during code-sync (#1608)
+
+- *(slm)* Code_status reflects service health, not just commit match (#1605)
+
+- *(deploy)* Install pip/npm dependencies during code-sync (#1603)
+
+- *(slm)* Add pip install and frontend build to self-sync path (#1607)
+
+- *(chat)* Use correct SSOT accessors for checkpointer Redis URI (#1583)
+
+- *(middleware)* Store asyncio task refs to prevent fire-and-forget leaks (#1556)
+
+- *(i18n)* Replace physical Tailwind directional classes with logical properties (#1509)
+
+- *(memory)* Add TTL eviction to kb_librarian tool_cache and BugPredictor git caches (#1551)
+
+- *(tasks)* Clear latest_result cache key in clear_all() (#1552)
+
+- *(i18n)* Always set html[lang] and sync language on reset (#1502, #1547, #1550)
+
+- *(i18n)* Translate all remaining knowledge subsections across 6 locales (#1545)
+
+- *(security)* Require auth on GET /api/chat/sessions and remove dead code (#1543, #1542)
+
+- *(i18n)* Translate knowledge categories page and persist indexing state (#1538, #1539)
+
+- *(chat)* Empty history from wrong endpoint and response format mismatch (#1541)
+
+- *(analytics)* Prevent auto-start of analysis on mount and fix orphan API detection (#1469)
+
+- *(voice)* Remove duplicate tts_end from flush sentinel (#1537)
+
+- *(rag)* Normalize cross-encoder logits in search reranking (#1533)
+
+- *(rag)* Use real ChromaDB similarity scores and lower threshold (#1526)
+
+- *(voice)* Gapless TTS audio scheduling to eliminate chunk stuttering (#1527)
+
+- *(voice)* TTS replay, interrupt, and hallucination bugs (#1420)
+
+- *(events)* Restore LiveEventService.ts to correct #1408 version (#1511)
+
+- Remove remaining 3 feat/1408 files from Dev_new_gui (final)
+
+- Remove remaining feat/1408 files from Dev_new_gui (cont. b6326d66)
+
+- Remove feat/1408 files accidentally committed in b1628204
+
+- *(test)* Update stale src.chat_intent_detector patch paths in TestSelectContextPrompt (#1501)
+
+- *(ansible)* Replace TCP wait_for with /api/health polling in update-all-nodes.yml (#1499)
+
+- *(chat)* Enforce doc-first lookup for AutoBot setup/install questions (#1476)
+
+- *(tts)* Prime cursor on voice-enable to prevent re-speaking mid-stream content (#1491)
+
+- *(slm)* Clear NodeCredential and NodeConfig on node decommission (#1489)
+
+- *(tts)* Treat unloaded historical messages as already-spoken on session switch (#1490)
+
+- *(tts)* Prime TTS cursor on session switch to prevent re-speaking existing messages (#1488)
+
+- *(slm)* Clear service records on node decommission (#1479)
+
+- *(chat)* Auto-clear corrupted LangGraph checkpoints on graph error (#1475)
+
+- *(ansible)* Restart NPU worker and browser services after deploy (#1474)
+
+- *(security)* Add explicit Dict[str, Any] annotation for results in validate_research_safety (#1466)
+
+- *(deps)* Update stale llama-index sub-package pins to >=0.5.0,<1.0.0 (#1473)
+
+- *(chat,analytics)* LangGraph config type + scan runner concurrency (#1459, #1461)
+
+- *(websocket)* Add backend-wait mode for reconnection during restart (#1463)
+
+- *(security-scanner)* Use dict access for research results (#1465)
+
+- *(analytics)* Fix bug prediction display filter and raise file limit (#1430)
+
+- *(chat)* LangGraph checkpointer + ConfigManager model method (#1433)
+
+
+### CI/CD
+
+- *(docker)* Remove Docker Build Cloud workflow — building manually (#1809)
+
+- *(docker)* Add Docker Build Cloud workflow (#1809)
+
+
+### Documentation
+
+- *(setup)* Update PHASE_5_DEVELOPER_SETUP.md to current install paths (#2440)
+
+- *(system-state)* Replace stale setup.sh references (#2441)
+
+- Add Docker quick-start to README and INSTALL.md (#2443)
+
+- *(ops)* Document SLM-based deployment architecture in CLAUDE.md (#2342)
+
+- Add self-improvement loop, elegance gate, skills, and plans (#2245)
+
+- Add Neural Mesh RAG implementation plan (#1994)
+
+- Add Neural Mesh RAG design document (#1994)
+
+- Add web pipeline engine design document (#1967)
+
+- LangChain 1.x import compatibility verification report (#1600) (#1837) ([#1837](https://github.com/mrveiss/AutoBot-AI/pull/1837))
+
+- *(dev)* Add approach guidelines, pre-commit self-healing, and issue labels (#1771)
+
+- *(processes)* Delineate ProcessAdapter vs long_running_operations (#1751)
+
+- *(context7)* Add project metadata and how-to guides index (#1749)
+
+- Add Dependabot security remediation implementation plan (#1567)
+
+- *(plans)* Codebase analytics test suite refactor plan
+
+- *(browser)* Interactive browser control design and implementation plan (#1416)
+
+- *(claude)* Add operational Q&A research requirement to Rule 1 (#1476)
+
+
+### Features
+
+- *(docker)* Serve SLM frontend as static build via nginx (#1809)
+
+- *(frontend)* Move browser-automation route under /automation namespace (#2367)
+
+- *(slm)* Move LLM config from main frontend to SLM admin settings (#2371) (#2391) ([#2391](https://github.com/mrveiss/AutoBot-AI/pull/2391))
+
+- *(automation)* Add 6 vision node types to workflow canvas (#2381) (#2386) ([#2386](https://github.com/mrveiss/AutoBot-AI/pull/2386))
+
+- *(automation)* Add VISION sidebar group with screen analysis, video, gallery (#2380) (#2385) ([#2385](https://github.com/mrveiss/AutoBot-AI/pull/2385))
+
+- *(automation)* Remove /vision route, nav, store refs; delete VisionView (#2379) (#2387) ([#2387](https://github.com/mrveiss/AutoBot-AI/pull/2387))
+
+- *(workflow)* Add encrypted secret management for credentials (#2153) ([#2282](https://github.com/mrveiss/AutoBot-AI/pull/2282))
+
+- *(workflow)* Add per-workflow RBAC and audit trail (#2152) ([#2280](https://github.com/mrveiss/AutoBot-AI/pull/2280))
+
+- *(monitoring)* Wire GPU acceleration optimizer to API endpoints (#2267) ([#2281](https://github.com/mrveiss/AutoBot-AI/pull/2281))
+
+- *(mesh)* Add AgentTopology pruning + last_updated (#2167)
+
+- *(mesh)* Implement MeshDB methods for Pruner and Promoter (#2178)
+
+- *(db)* Add Alembic migration for agent topology tables (#2177)
+
+- *(mesh)* Add A-RAG autonomous strategy selection (#2136) (#2156) ([#2156](https://github.com/mrveiss/AutoBot-AI/pull/2156))
+
+- *(mesh)* Add topology-aware routing + agent specialization (#2138) (#2151) ([#2151](https://github.com/mrveiss/AutoBot-AI/pull/2151))
+
+- *(mesh)* Add EvidenceExtractor — sentence-level precision (#2135) (#2150) ([#2150](https://github.com/mrveiss/AutoBot-AI/pull/2150))
+
+- *(mesh)* Add AgentTopology — dynamic DAG with Hebbian evolution (#2137) (#2149) ([#2149](https://github.com/mrveiss/AutoBot-AI/pull/2149))
+
+- *(mesh)* Add QueryDecomposer — MA-RAG multi-hop decomposition (#2134) (#2147) ([#2147](https://github.com/mrveiss/AutoBot-AI/pull/2147))
+
+- Add batch vectorization endpoint (#2077) (#2106) ([#2106](https://github.com/mrveiss/AutoBot-AI/pull/2106))
+
+- *(mesh)* Add A-RAG autonomous strategy selection (#2136) (#2156)
+
+- *(mesh)* Add topology-aware routing + agent specialization (#2138) (#2151)
+
+- *(mesh)* Add EvidenceExtractor — sentence-level precision (#2135) (#2150)
+
+- *(mesh)* Add AgentTopology — dynamic DAG with Hebbian evolution (#2137) (#2149)
+
+- *(mesh)* Add QueryDecomposer — MA-RAG multi-hop decomposition (#2134) (#2147)
+
+- Add batch vectorization endpoint (#2077) (#2106)
+
+- *(mesh)* Add MeshBrainScheduler + health API endpoints (#2120)
+
+- *(mesh)* Add NodePromoter — daily anchor emergence (#2119)
+
+- *(mesh)* Add MeshPruner — weekly entropy control and decay (#2118)
+
+- *(mesh)* Add EdgeDiscoverer — LLM-based relationship naming (#2117)
+
+- *(rag)* Add mesh_retriever_enabled flag and RAGService integration (#2059)
+
+- *(mesh)* Add NeuralMeshRetriever — unified mesh-aware retrieval (#2058)
+
+- *(mesh)* Add PersonalizedPageRank for graph expansion (#2057)
+
+- *(mesh)* Add EdgeLearner — Hebbian reinforcement from retrieval feedback (#2056)
+
+- *(mesh)* Add PostgreSQL mesh schema and async MeshDB client (#2055)
+
+- *(pipeline)* Wire RAPTOR build_raptor_tree into process() (#2051) (#2074) ([#2074](https://github.com/mrveiss/AutoBot-AI/pull/2074))
+
+- *(pipeline)* Add SIMILAR_TO cosine edges to MeshSeeder (#2049) (#2065) ([#2065](https://github.com/mrveiss/AutoBot-AI/pull/2065))
+
+- *(rag)* Integrate complexity classifier into feedback hook (#2024)
+
+- *(pipeline)* Add NLP-light entity extraction mode (#2025)
+
+- *(pipeline)* Add NLP-light relationship extraction mode (#2026)
+
+- *(pipeline)* Add MeshSeeder loader for graph edge creation (#2028)
+
+- *(pipeline)* Add RAPTOR recursive clustering summarizer (#2027)
+
+- *(mesh)* Add PostgreSQL to Redis edge sync service (#2029)
+
+- *(rag)* Emit retrieval feedback events via publish_live_event (#1516) (#2023) ([#2023](https://github.com/mrveiss/AutoBot-AI/pull/2023))
+
+- *(search)* Upgrade keyword search to BM25 scoring (#1720) (#2021) ([#2021](https://github.com/mrveiss/AutoBot-AI/pull/2021))
+
+- *(search)* Configurable reranker blend weights (#2004) (#2020) ([#2020](https://github.com/mrveiss/AutoBot-AI/pull/2020))
+
+- *(search)* Add query complexity classifier (#1719) (#2018) ([#2018](https://github.com/mrveiss/AutoBot-AI/pull/2018))
+
+- *(search)* Add context tracker for multi-step retrieval (#2005) (#2019) ([#2019](https://github.com/mrveiss/AutoBot-AI/pull/2019))
+
+- *(perf)* Experiment tracker, pipeline profiler, cache benchmark (#1988) (#2008) ([#2008](https://github.com/mrveiss/AutoBot-AI/pull/2008))
+
+- *(models)* VRAM-aware model selection — prevent OOM (#1966) (#1993) ([#1993](https://github.com/mrveiss/AutoBot-AI/pull/1993))
+
+- *(docker)* Add dev override for hot-reload (#1911) ([#1935](https://github.com/mrveiss/AutoBot-AI/pull/1935))
+
+- *(docker)* Add optional TLS/HTTPS support (#1896) ([#1934](https://github.com/mrveiss/AutoBot-AI/pull/1934))
+
+- *(docker)* Resource limits + production hardening (#1897) ([#1930](https://github.com/mrveiss/AutoBot-AI/pull/1930))
+
+- Add timeout + granular error mapping to chat processing (#1797) (#1899) ([#1899](https://github.com/mrveiss/AutoBot-AI/pull/1899))
+
+- *(docker)* Ubuntu 22.04 + Python 3.12 Docker stack (#1886) ([#1886](https://github.com/mrveiss/AutoBot-AI/pull/1886))
+
+- *(frontend)* Pass source_id to all codebase analytics endpoints (#1772)
+
+- *(docker)* Fresh containerization for current codebase (#1809) (#1818) ([#1818](https://github.com/mrveiss/AutoBot-AI/pull/1818))
+
+- *(processes)* WebSocket log streaming for running processes (#1777)
+
+- *(slm-frontend)* Add admin panels for org chart, config history, processes (#1404, #1405, #1406)
+
+- *(agents)* Implement task delegation and escalation (#1753)
+
+- *(agents)* Create central SQL agents table with startup seeding (#1754)
+
+- *(config)* Wire ConfigRevisionService into mutation endpoints (#1747)
+
+- *(processes)* Wire ProcessAdapterService into app lifecycle (#1748)
+
+- *(codebase)* Add project header card in detail view (#1713)
+
+- *(codebase)* Show commit message on project cards (#1713)
+
+- *(codebase)* Frontend source_id filtering + per-source last_indexed (#1710, #1716)
+
+- *(codebase)* Add source_id filtering to query endpoints (#1710, #1716)
+
+- *(codebase)* Thread source_id through scanner and indexing pipeline (#1710)
+
+- *(knowledge)* Add GET /reindex_with_context/status endpoint (#1761)
+
+- *(processes)* Add process adapters for background task decomposition (#1406)
+
+- *(agents)* Add agent org charts with role hierarchy (#1405)
+
+- *(config)* Add config audit trail with versioning and rollback (#1404)
+
+- *(knowledge)* Add POST /reindex_with_context endpoint (#1513)
+
+- *(i18n)* Complete analytics translations for all 6 locales (#1555)
+
+- *(i18n)* Translate audit, collaboration, manpage keys (#1555)
+
+- *(i18n)* Translate 345 keys across 6 locales (#1555)
+
+- *(frontend)* Add routes for 11 analytics dashboard components (#1677)
+
+- *(i18n)* Add browser locale auto-detection with Arabic support (#1508)
+
+- *(analytics)* Shared getCssVar composable + wire uniqueEndpoints display (#1602)
+
+- *(slm)* Detect crash-looping services and degrade node status (#1604)
+
+- *(i18n)* Add Hebrew, Persian, and Urdu locale files (#1505)
+
+- *(i18n)* Translate 438 flat knowledge.* keys + common/nav across 6 locales (#1553, #1555)
+
+- *(i18n)* Add RTL layout support for Arabic and other RTL locales (#1337)
+
+- *(i18n)* Add ar.json Arabic locale file (#1337)
+
+- *(chat)* Add TTL to LangGraph Redis checkpoints (#1481)
+
+- *(analytics)* Add cached-result endpoints for background-task scans (#1540)
+
+- *(i18n)* Add voice_ids types and i18n key for voice-per-language mapping (#1333)
+
+- *(i18n)* Add agent cost tracking translation keys (#1401)
+
+- *(cost)* Per-agent cost tracking and workflow template improvements (#1401)
+
+- *(agents)* Add heartbeat router registration and HeartbeatPanel frontend (#1407)
+
+- *(events)* Register live_events in api package __init__ (#1408)
+
+- *(knowledge)* Add CONTEXT_* env vars to .env.example (#1498)
+
+- *(knowledge)* Add contextual retrieval cognifier to RAG pipeline (#1498)
+
+- *(agents)* Add heartbeat API, scheduler service, and lifespan bootstrap (#1407)
+
+- *(agents)* Add heartbeat system models and DB migration (#1407)
+
+- *(events)* Add scoped real-time event channels and frontend service (#1408)
+
+- *(analytics)* Add MD/JSON export buttons and remove dead CSS (#1493, #1496)
+
+- *(i18n)* Add ar.json Arabic locale file (#1337)
+
+- *(i18n)* Add RTL layout support for Arabic and other RTL locales (#1337)
+
+- *(chat)* Re-wire intent-based context injection into chat workflow (#1494)
+
+- *(ansible)* Add wait_for tasks after Play 2 service restarts (#1497)
+
+- *(ansible)* Add tags: [always] to housekeeping tasks in playbooks/update-all-nodes.yml (#1495)
+
+- *(ansible)* Add component tags to deploy tasks in playbooks/update-all-nodes.yml (#1492)
+
+- *(ansible)* Add restart tags to playbooks/update-all-nodes.yml (#1480)
+
+- *(slm)* Add force decommission to skip Ansible for already-removed nodes (#1479)
+
+- *(analytics)* Restore sync/delete actions and batch summary endpoint (#1468)
+
+
+### Miscellaneous
+
+- Replace stale mistral:7b-instruct refs with qwen3.5:9b (#2418) ([#2470](https://github.com/mrveiss/AutoBot-AI/pull/2470))
+
+- *(frontend)* Remove unused variables in CodebaseAnalytics.vue (#2405) ([#2466](https://github.com/mrveiss/AutoBot-AI/pull/2466))
+
+- *(frontend)* Remove orphaned VisionAutomationPage.vue (#2396)
+
+- *(deps)* Bump opentelemetry-proto in /autobot-backend
+
+- *(deps)* Bump opentelemetry-exporter-otlp in /autobot-backend
+
+- *(deps)* Bump github/codeql-action from 3 to 4
+
+- *(deps-dev)* Bump picomatch
+
+- *(deps)* Bump vue from 3.5.28 to 3.5.31 in /autobot-frontend
+
+- *(deps)* Bump onnxruntime-web in /autobot-frontend
+
+- *(deps)* Bump the npm_and_yarn group across 3 directories with 1 update
+
+- *(deps)* Bump @xterm/addon-web-links in /autobot-frontend
+
+- *(scripts)* Remove legacy setup_wizard.sh (#2425)
+
+- *(deps)* Bump the pip group across 3 directories with 3 updates
+
+- *(deps-dev)* Bump the npm_and_yarn group across 3 directories with 1 update (#1978)
+
+- *(docs)* Remove legacy setup.sh, update install references (#2420)
+
+- *(infra)* Rename setup-runner-pyenv.sh + legacy cleanup (#1924) ([#1931](https://github.com/mrveiss/AutoBot-AI/pull/1931))
+
+- Add deprecation warnings for langchain_community OllamaEmbeddings fallback (#1845) (#1853) ([#1853](https://github.com/mrveiss/AutoBot-AI/pull/1853))
+
+- *(i18n)* Extract hardcoded strings in AgentRegistryView.vue (#1820) (#1838) ([#1838](https://github.com/mrveiss/AutoBot-AI/pull/1838))
+
+- Rename claude_agent_service.py to specialized_agent_service.py (#1819) (#1832) ([#1832](https://github.com/mrveiss/AutoBot-AI/pull/1832))
+
+- Add plan docs, skills, and settings (#1771)
+
+- *(hooks)* Add post-checkout auto-install mechanism (#1692)
+
+- Add context7 platform verification token
+
+- Add context7 platform verification token
+
+- *(docs)* Document worktree --unset-upstream to prevent PR bypass (#1695)
+
+- *(ci)* Convert auto-close workflow to comment-only notification (#1659, #1660)
+
+- *(ci)* Upgrade GitHub Actions to Node.js 24 runtime (#1664)
+
+- *(ci)* Auto-close issues for PRs merged to Dev_new_gui (#1601)
+
+- *(docs)* Warn against isolation:worktree for PR-creating agents (#1597)
+
+- *(docs)* Document subagent Bash permission constraints (#1580)
+
+- *(deps)* Generate uv.lock for knowledge-base-mcp (#1578)
+
+
+### Performance
+
+- Add in-memory TTL cache for learned strategies (#2209) ([#2351](https://github.com/mrveiss/AutoBot-AI/pull/2351))
+
+- *(mesh)* Vectorize SIMILAR_TO edge extraction with numpy (#2081) (#2189) ([#2189](https://github.com/mrveiss/AutoBot-AI/pull/2189))
+
+- *(rag)* Share CrossEncoder singleton per worker process (#1549)
+
+- *(i18n)* Guard usePreferences init to run once (#1502)
+
+- *(chat)* Cache compiled graph as module-level singleton (#1483)
+
+
+### Refactoring
+
+- *(shared)* Move redis_management to autobot-shared (#2313)
+
+- *(frontend)* Decompose useSpecializedAnalysis into focused composables (#2372)
+
+- *(shared)* Extract _check_tablename_collisions into importable utility (#2413)
+
+- *(shared)* Consolidate proxy_utils into autobot-shared (#2408)
+
+- *(frontend)* Remove orphaned LLM config files (#2399)
+
+- *(infra)* Decompose oversized functions in optimize_llm_models.py (#2410)
+
+- *(config)* Remove hardcoded mistral:7b-instruct, read LLM model from .env (#2383)
+
+- *(config)* Replace hardcoded mistral:7b-instruct with DEFAULT_LLM_MODEL (#2383) (#2406) ([#2406](https://github.com/mrveiss/AutoBot-AI/pull/2406))
+
+- *(frontend)* Decompose useCodeIntelAnalysis.ts (#2260) ([#2370](https://github.com/mrveiss/AutoBot-AI/pull/2370))
+
+- *(codebase_analytics)* Decompose scanner.py god module into 5 focused sub-modules (#2013) ([#2347](https://github.com/mrveiss/AutoBot-AI/pull/2347))
+
+- Move co-located test files to tests/ directory (#2037) ([#2354](https://github.com/mrveiss/AutoBot-AI/pull/2354))
+
+- Consolidate EnhancedOrchestrator into singleton (#2207) ([#2337](https://github.com/mrveiss/AutoBot-AI/pull/2337))
+
+- Move workflow_rbac.py to services/ (#2323) ([#2343](https://github.com/mrveiss/AutoBot-AI/pull/2343))
+
+- *(frontend)* Extract shared CodeSource interface (#2238) (#2333) ([#2333](https://github.com/mrveiss/AutoBot-AI/pull/2333))
+
+- *(analytics)* Decompose CodebaseAnalytics.vue script into composables (#2228, #2230) ([#2253](https://github.com/mrveiss/AutoBot-AI/pull/2253))
+
+- *(analytics)* Continue decomposing CodebaseAnalytics.vue (#1579) ([#2236](https://github.com/mrveiss/AutoBot-AI/pull/2236))
+
+- *(orchestrator)* Consolidate overlapping orchestrators (#2181) ([#2233](https://github.com/mrveiss/AutoBot-AI/pull/2233))
+
+- *(auth)* Remove dead AuthService.authenticate_user() and verify_password() (#2227) ([#2231](https://github.com/mrveiss/AutoBot-AI/pull/2231))
+
+- *(gpu)* Reuse nvidia-smi GPU name and handle multi-GPU (#2222) ([#2237](https://github.com/mrveiss/AutoBot-AI/pull/2237))
+
+- *(frontend)* Decompose CodebaseAnalytics.vue (#1469) ([#2225](https://github.com/mrveiss/AutoBot-AI/pull/2225))
+
+- *(auth)* Deduplicate SLM login endpoints (#1922) ([#2223](https://github.com/mrveiss/AutoBot-AI/pull/2223))
+
+- *(gpu)* Cache vendor detection to avoid duplicate subprocess calls (#1990) ([#2221](https://github.com/mrveiss/AutoBot-AI/pull/2221))
+
+- *(tests)* Migrate legacy redis_client imports to autobot_shared (#2047) ([#2171](https://github.com/mrveiss/AutoBot-AI/pull/2171))
+
+- *(slm)* Consolidate User models to single UUID-PK model (#1900) (#1921) ([#1921](https://github.com/mrveiss/AutoBot-AI/pull/1921))
+
+- *(infra)* Standardize Python to deadsnakes PPA + Python 3.12 venv (#1898) (#1920) ([#1920](https://github.com/mrveiss/AutoBot-AI/pull/1920))
+
+- Extract helpers from infra scripts exceeding 65-line limit (#1792) (#1890) ([#1890](https://github.com/mrveiss/AutoBot-AI/pull/1890))
+
+- *(i18n)* Derive RTL_LOCALES from locale file _meta.dir (#1812) (#1873) ([#1873](https://github.com/mrveiss/AutoBot-AI/pull/1873))
+
+- Replace deprecated asyncio.get_event_loop() across backend (#1752) (#1839) ([#1839](https://github.com/mrveiss/AutoBot-AI/pull/1839))
+
+- *(i18n)* Derive SUPPORTED_LOCALES from locale file glob (#1675) (#1810) ([#1810](https://github.com/mrveiss/AutoBot-AI/pull/1810))
+
+- *(knowledge)* Make ContextGeneratorCognifier.is_enabled() public (#1760)
+
+- *(frontend)* Migrate 4 arrow-function getCssVar copies to shared composable (#1666)
+
+- *(config)* Derive ssot_mappings from Pydantic model defaults (#1653)
+
+- *(frontend)* Consolidate getCssVar + add getSeverityColor to shared composable (#1606, #1647)
+
+- *(analytics)* Migrate ~2,914 lines of scoped CSS to 8 panels (#1589)
+
+- *(backend)* Remove 8 dead functions found by call graph analysis (#1612)
+
+- *(analytics)* Extract 6 oversized functions from CodebaseAnalytics.vue (#1588)
+
+- *(analytics)* Decompose CodebaseAnalytics.vue into sub-components (#1469)
+
+- *(chat)* Remove unused imports and fix deprecated substr in ChatInput.vue (#1565)
+
+- *(voice)* Extract _stream_chunks_pipelined shared TTS helper (#1535, #1536)
+
+- *(analytics)* Wire up CodeSmells/Duplicates/Declarations components; remove stale UI state (#1486, #1487)
+
+- *(analytics)* Extract 3 focused sub-components from CodebaseAnalytics.vue (#1469)
+
+
+### Reverted
+
+- Remove accidental feat/1337 i18n commits from Dev_new_gui (#1506)
+
+
+### Testing
+
+- *(mesh)* Add EvidenceExtractor abbreviation-aware splitting tests (#2202) (#2359) ([#2359](https://github.com/mrveiss/AutoBot-AI/pull/2359))
+
+- *(mesh)* Add EdgeLearner multi-batch pagination test (#2214) (#2358) ([#2358](https://github.com/mrveiss/AutoBot-AI/pull/2358))
+
+- *(slm)* Add tablename collision unit test (#2226) (#2357) ([#2357](https://github.com/mrveiss/AutoBot-AI/pull/2357))
+
+- *(gpu)* Add unit tests for gpu_detection.py (#2243) (#2356) ([#2356](https://github.com/mrveiss/AutoBot-AI/pull/2356))
+
+- *(security)* Add path_validator unit tests (#2162) (#2355) ([#2355](https://github.com/mrveiss/AutoBot-AI/pull/2355))
+
+- Add unit tests for SpecializedAgentService (#1821) (#1833) ([#1833](https://github.com/mrveiss/AutoBot-AI/pull/1833))
+
+- *(i18n)* Add unit tests for detectBrowserLocale (#1674) (#1811) ([#1811](https://github.com/mrveiss/AutoBot-AI/pull/1811))
+
+- *(i18n)* Add automated RTL layout tests for setLocale() and usePreferences (#1510)
+
+
+### Build
+
+- *(deps)* Bump the npm_and_yarn group across 7 directories with 13 updates
+
+- *(deps)* Cherry-pick llama-index-core 0.13.0 bump from PR #1450
+
+- *(deps)* Bump llama-index-core in the pip group across 1 directory
+
+- *(deps)* Bump @modelcontextprotocol/sdk to 1.26.0 (security fix GHSA-345p-7cg4-v4c7)
+
+- *(deps)* Bump cryptography and pillow (safe subset of #1435)
+
+- *(deps)* Bump qs
+
+
+### Cleanup
+
+- *(orchestration)* Remove dead _check_step_dependencies (#2206) (#2378) ([#2378](https://github.com/mrveiss/AutoBot-AI/pull/2378))
+
+- Remove dead _ComplexWorkflowRequired exception (#2256) ([#2341](https://github.com/mrveiss/AutoBot-AI/pull/2341))
+
+- *(analytics)* Remove dead barrel exports for deleted components (#2262) ([#2270](https://github.com/mrveiss/AutoBot-AI/pull/2270))
+
+- *(tests)* Remove dead archive path references from llm_interface_core_test (#2265) ([#2269](https://github.com/mrveiss/AutoBot-AI/pull/2269))
+
+- *(analytics)* Remove orphaned CodebaseStatsSection.vue (#2229) ([#2275](https://github.com/mrveiss/AutoBot-AI/pull/2275))
+
+- *(analytics)* Remove 826 lines of dead CSS from CodebaseAnalytics.vue (#2244) ([#2249](https://github.com/mrveiss/AutoBot-AI/pull/2249))
+
+- *(frontend)* Remove dead defineExpose({ getCssVar }) from 2 dashboards (#1671)
+
+- *(knowledge)* Remove unused hasChanges variable in DocumentChangeFeed.vue (#1558)
+
+
+### Deps
+
+- Raise numpy lower bound to >=2.0.0 in 7 satellite requirement files (#1661)
+
+
+### Infra
+
+- *(pre-commit)* Add untracked-file warning hook (#1503)
+
+
+### Merge
+
+- Dev_new_gui → main — Docker containerization + recent fixes (#1824)
+
+- Resolve conflicts with Dev_new_gui (#2102)
+
+- Resolve conflict with Dev_new_gui in models/__init__.py (#1406)
+
+- Resolve conflicts with main — keep newer deps, drop deprecated server-github
+
+- Resolve conflict with Dev_new_gui in code_sync.py
+
+
+### Security
+
+- Fix CodeQL stack-trace-exposure + sensitive-logging alerts (#1733) ([#2335](https://github.com/mrveiss/AutoBot-AI/pull/2335))
+
+- Fix path injection CodeQL alerts (#1721) (#2101) ([#2101](https://github.com/mrveiss/AutoBot-AI/pull/2101))
+
+- Fix path injection CodeQL alerts (#1721) (#2101)
+
+- Fix stack trace exposure CodeQL alerts (#1721) (#2089) ([#2089](https://github.com/mrveiss/AutoBot-AI/pull/2089))
+
+- Fix critical injection CodeQL alerts (#1721) (#2080) ([#2080](https://github.com/mrveiss/AutoBot-AI/pull/2080))
+
+- Fix sensitive data logging/storage CodeQL alerts (#1721) (#2069) ([#2069](https://github.com/mrveiss/AutoBot-AI/pull/2069))
+
+- *(deps)* Migrate LangChain ecosystem to 1.x (#1572)
+
+- *(deps)* Replace python-jose with PyJWT (#1575)
+
+- *(deps)* Override minimatch to >=9.0.7 in frontend (#1567)
+
+- *(deps)* Remove deprecated @modelcontextprotocol/server-github (#1567)
+
+- *(deps)* Remove orphaned uv.lock in mcp-structured-thinking (no pyproject.toml) (#1567)
+
+- *(deps)* Bump vllm to >=0.14.1 (#1567)
+
+- *(deps)* Bump torch to >=2.6.0, remove <2.6.0 upper bound (#1567)
+
+- *(deps)* Bump llama-index floor to >=0.12.41 (#1567)
+
+- *(deps)* Bump transformers to >=4.53.0 in ai-stack (#1567)
+
+- *(deps)* Bump starlette to 0.49.1 and pypdf to 6.8.0 in requirements-ci (#1567)
+
+- *(deps)* Bump mcp to >=1.23.0 and langgraph to >=1.0.10 in backend (#1567)
+
+- *(deps)* Bump pypdf to >=6.8.0 in root requirements (#1567)
+
+- *(deps)* Bump pypdf, nltk, aiohttp, requests in ai-stack (#1567)
+
+- *(deps)* Bump python-multipart, pypdf, nltk, markdown, opencv, pycryptodome in shared/config (#1567)
+
+- *(deps)* Bump aiohttp, requests, scikit-learn, numpy in code_analysis (#1567)
+
+
+## [0.1.0] - 2026-03-01
+
+### Bug Fixes
+
+- *(analytics)* Store sync task reference and log errors (#1467)
+
+- *(judges)* Fail-open in production path step_evaluator (#1464)
+
+- *(analytics)* Address code review findings (#1458)
+
+- *(judges)* Fail-open when LLM judge is unavailable (#1464)
+
+- *(i18n)* Add Language tab to ProfileModal (#1451)
+
+- *(judges)* Fix test mocks for chat_completion signature (#1457)
+
+- *(setup-wizard)* Treat SLM roles as pre-existing on manager (#1455)
+
+- *(setup-wizard)* Provision logging, SLM roles, role dedup (#1455)
+
+- *(ci)* Install jq for git-cliff release workflow (#1453)
+
+- *(deploy)* Broken approval import + NPU SSOT violations (#1456)
+
+- *(ssot)* Move noqa comments to IP lines after black reformatting (#1453)
+
+- *(ssot)* Eliminate all 372 SSOT compliance violations (#1453)
+
+- *(chat)* LangGraph checkpointer + ConfigManager model method (#1433)
+
+- *(approval)* Add auth, input validation, and security hardening (#1402)
+
+- *(analytics)* Raise bug prediction file limit and fix display (#1430)
+
+- *(wizard)* Filter active roles and add infra vars to dynamic inventory (#1431)
+
+- *(approval)* Add auth, input validation, and security hardening (#1402)
+
+- *(wizard)* Filter active roles and add infra vars to dynamic inventory (#1431)
+
+- *(analytics)* Raise bug prediction file limit and fix display (#1430)
+
+- *(slm)* Route voice API through SLM backend proxy (#1429)
+
+- *(analytics)* Prevent 409 retry storm in CodebaseAnalytics (#1432)
+
+- *(frontend)* Correct knowledge index endpoint in CodebaseAnalytics (#1421)
+
+- *(workflow)* Remove duplicate openPreview declaration in WorkflowTemplateGallery.vue (#1425)
+
+- *(analytics)* Add missing currentScanId ref to scan runner (#1418)
+
+- *(ci)* Bump langchain-core 0.3.68→0.3.83 to resolve pip conflict
+
+- *(tts)* Normalize audio to 90% peak for consistent volume (#1394)
+
+- *(tts)* Normalize audio to 90% peak for consistent volume (#1394)
+
+- *(i18n)* Replace hardcoded title strings in KnowledgeUpload.vue (#1410)
+
+- *(config)* Migrate TTS worker from .22 to .24 (#1394)
+
+- *(chromadb)* Fix HNSW space, seq_id, pickle bugs in ChromaDB 0.5.23 (#1390)
+
+- *(monitoring)* Correct Prometheus metrics_path for autobot-backend (#1397)
+
+- *(ansible)* Add secure VNC password generation to vnc and browser roles (#1392)
+
+- *(analytics)* Pattern analysis batching, checkpointing and zombie cleanup (#1370)
+
+- *(chat)* Resolve 4 E501 line-length violations in SSE yield lines (#1339)
+
+- *(workflow)* Address code review feedback for WorkflowStateMachine (#1380)
+
+- *(shared)* Address code review feedback for ServiceMessageBus (#1379)
+
+- *(slm)* Add fallback SLM Manager detection by node_id prefix (#1369)
+
+- *(chat+voice)* Prevent message disappearance and voice echo loop (#1371)
+
+- *(workflow)* Completed history, view-workflow, template edit (#1367)
+
+- *(slm)* Wire DecommissionPreflightResponse as response_model (#1369)
+
+- *(security)* Add auth to MEDIUM severity API files (#1360)
+
+- *(analytics)* Consolidate dual progress blocks into single unified status bar (#1366)
+
+- *(analytics)* Prevent dual status blocks on codebase analytics (#1365)
+
+- *(chat)* Set message type immediately on stream creation to prevent filter flicker (#1364)
+
+- *(chromadb)* Paginate collection.get() to avoid SQLite 999-variable limit (#1361)
+
+- *(backend)* Add router-level auth to 16 unprotected API files (#1354)
+
+- *(backend)* Add router-level auth to 16 unprotected API files (#1354)
+
+- *(backend)* Migrate legacy ChromaDB collection configs for 0.5.x (#1355)
+
+- *(slm-backend)* Generate role-based Ansible inventory groups (#1346)
+
+- *(backend)* Call graph/bug prediction 502 + indexing watchdog (#1341)
+
+- *(templates)* Remove invalid metadata kwarg from WorkflowStep (#1338)
+
+- *(analytics)* Use background task for pattern summary fallback (#1332)
+
+- *(analytics)* Add missing clear-stuck endpoints to all bg-task routers (#1304)
+
+- *(voice)* Deploy ort-wasm-simd-threaded.mjs for hands-free VAD (#1322)
+
+- *(analytics)* Prevent false orphan detection in multi-worker backend (#1320)
+
+- *(voice)* Barge-in cancels queue worker + tts_task null guard (#1319)
+
+- *(voice)* Add COOP/COEP headers for SharedArrayBuffer + better errors (#1311)
+
+- *(chat)* Remove fleet hosts from main UI, add message type badges (#1310)
+
+- *(voice)* Filter non-response messages from auto-speak TTS
+
+- *(rag)* Category filter fallback when no documents match (#1305)
+
+- *(nginx)* Add WebSocket proxy for workflow automation (#1308)
+
+- Orchestrator attr rename, error_boundary API, stats bar alignment (#1307)
+
+- *(chat)* Dark-mode CSS, tag cleanup, and Body() annotation (#1302)
+
+- *(analytics)* Report embedding progress and lower subprocess priority (#1303)
 
 - *(release)* Use v-prefixed initial_tag to match tag_pattern (#1296)
 
@@ -189,7 +10530,7 @@ All notable changes to this project will be documented in this file.
 
 - *(skills)* Add scoring weight constants, strengthen tag test, add stub tags
 
-- *(analytics)* Replace hardcoded $HOME paths, fix PermissionError 500 (#1178)
+- *(analytics)* Replace hardcoded /home/kali paths, fix PermissionError 500 (#1178)
 
 - *(deploy)* Create backend symlink via Ansible, remove dev path (#1168)
 
@@ -581,7 +10922,7 @@ All notable changes to this project will be documented in this file.
 
 - *(ansible)* Correct PYTHONPATH and EnvironmentFile paths in service templates (#941)
 
-- Replace hardcoded $AUTOBOT_PROJECT_ROOT in 20 runtime files (#832) (#836) ([#836](https://github.com/mrveiss/AutoBot-AI/pull/836))
+- Replace hardcoded /home/kali/Desktop/AutoBot in 20 runtime files (#832) (#836) ([#836](https://github.com/mrveiss/AutoBot-AI/pull/836))
 
 - *(infra)* Remove false frontend/slm-frontend conflict - nginx virtual hosts (#926)
 
@@ -893,7 +11234,7 @@ All notable changes to this project will be documented in this file.
 
 - *(slm)* Fix 10 broken SLM frontend features (#834)
 
-- Replace hardcoded $AUTOBOT_PROJECT_ROOT with env-var lookup (#832)
+- Replace hardcoded /home/kali/Desktop/AutoBot with env-var lookup (#832)
 
 - *(slm)* Git_tracker DB fallback for rsync deployments (#829)
 
@@ -2642,6 +12983,18 @@ All notable changes to this project will be documented in this file.
 
 ### Documentation
 
+- Remove obsolete finished and legacy reports
+
+- Update stale directory paths and metrics across 245 docs (#1452)
+
+- Add design and plan docs for node decommission and message bus (#1370)
+
+- Add streaming TTS implementation plan (#1319)
+
+- Add streaming sentence-level TTS design (#1319)
+
+- *(release)* Add release system implementation plan (#1296)
+
 - Add recent plan documents and session-stop orphan hook (#1259)
 
 - *(plans)* Add pre-commit auto-formatter Claude hook design
@@ -3318,6 +13671,186 @@ All notable changes to this project will be documented in this file.
 
 
 ### Features
+
+- *(monitoring)* Extract unique compat endpoints to registered routers (#1283)
+
+- *(router)* Register services/advanced_workflow, delete obsolete prototype (#1280)
+
+- *(analytics)* Route-based source, no auto-load, stop button (#1458)
+
+- *(analytics)* Create landing page with project cards (#1458)
+
+- *(analytics)* Add landing page routes and i18n keys (#1458)
+
+- *(analytics)* Add source summary endpoint for landing page (#1458)
+
+- *(analytics)* Add cancel support to scan runner (#1458)
+
+- *(i18n)* Add translated locale files for 6 languages (#1335)
+
+- *(llm)* Add formal adapter registry for LLM backends (#1403)
+
+- *(approval)* Add approval gates for agent workflows (#1402)
+
+- *(voice)* Add language awareness to voice conversation pipeline (#1334)
+
+- *(analytics)* Convert bug prediction to background task with progress (#1418)
+
+- *(analytics)* Add background task endpoints for bug prediction (#1418)
+
+- *(analytics)* Add scan progress bar and sequential scan runner (#1418)
+
+- *(analytics)* Add useAnalyticsScanRunner composable (#1418)
+
+- *(cost)* Add per-agent cost tracking backend (#1401)
+
+- *(cost)* Add AgentCostPanel and BI dashboard integration (#1401)
+
+- *(templates)* Community template descriptions, secrets metadata, and UI (#1415)
+
+- *(templates)* Community template icon and secrets workflow usage (#1415)
+
+- *(browser)* Add interactive screenshot component and backend proxy (#1416)
+
+- *(browser)* Add interactive control endpoints to playwright-server (#1416)
+
+- *(voice)* TTS voice-per-language mapping in personality profiles (#1333)
+
+- *(secrets)* System secrets management with encrypted storage (#1417)
+
+- *(tts)* Wire vault_hf_token to tts-worker role defaults (#1411)
+
+- *(i18n)* Locale persistence in usePreferences composable (#1331)
+
+- *(i18n)* Language switcher component in Settings (#1330)
+
+- *(voice)* STT multilingual support with Whisper airgapped fallback (#1329)
+
+- *(i18n)* Wire TranslationAgent to chat tool shortcuts (#1328)
+
+- *(i18n)* Inject language instruction into all agent system prompts (#1327)
+
+- *(voice)* Add language parameter to TTS synthesize endpoint (#1326)
+
+- *(chat)* Add language parameter to chat API request models (#1325)
+
+- *(knowledge)* Consolidate doc indexing with ChromaDB as single source (#1385)
+
+- *(slm)* Async provisioning + fleet-wide role uniqueness (#1384, #1389)
+
+- *(i18n)* Extract chat/knowledge/analytics/terminal strings and fix remaining hardcoded text (#1318)
+
+- *(i18n)* Extract remaining App/desktop/feature-flag strings (#1318)
+
+- *(i18n)* Extract UI/base/auth/misc strings to translation keys (#1359)
+
+- *(workflow)* Integrate WorkflowStateMachine into workflow listing (#1380)
+
+- *(workflow)* Integrate state machine routing into workflow executor (#1380)
+
+- *(api+ui)* Add service message query API and timeline widget (#1379)
+
+- *(workflow)* Add Redis-persisted WorkflowStateMachine with route_next (#1380)
+
+- *(shared)* Add serialization helpers for ServiceMessage (#1377)
+
+- *(rag)* Add predicate-bounded cache invalidation (#1378)
+
+- *(rlm)* Add recursive document summarizer to knowledge pipeline (#1383)
+
+- *(shared)* Add ServiceMessageBus for cross-service audit trail (#1379)
+
+- *(rag)* Add topic-level retrieval context cache (#1376)
+
+- *(rag)* Add SHA-256 content fingerprinting for KB cache invalidation (#1375)
+
+- *(rlm)* Wire AdaptiveRAGRefiner into RAG optimizer (#1382)
+
+- *(rlm)* Add benchmark and adaptive RAG refinement (#1381, #1382)
+
+- *(rag)* Add context sufficiency evaluation for cached responses (#1374)
+
+- *(shared)* Add ServiceMessage schema for cross-service communication (#1377)
+
+- *(ansible)* Decouple VNC from browser-service role (#1363)
+
+- *(slm)* Wire decommission action into fleet UI (#1369)
+
+- *(rlm)* Add recursive self-reflection to LangGraph chat workflow (#1373)
+
+- *(rag)* Add semantic query cache with cosine similarity matching (#1372)
+
+- *(slm)* Add DecommissionModal component (#1369)
+
+- *(slm)* Add decommission API functions to useRoles (#1369)
+
+- *(slm)* Add decommission preflight + execute endpoints (#1369)
+
+- *(slm)* Add decommission-node Ansible playbook (#1369)
+
+- *(workflow)* Add completed workflows API client and state (#1367)
+
+- *(slm)* Add disk cleanup to remove-role playbook (#1369)
+
+- *(i18n)* Extract knowledge/workflow strings to translation keys (#1358)
+
+- *(slm)* Add DECOMMISSIONED node status (#1369)
+
+- *(browser)* Wire browser tools into chat AI tool dispatch (#1368)
+
+- *(i18n)* Extract analytics/charts strings to translation keys (#1357)
+
+- *(browser)* Expose CDP endpoint and configure custom MCP server (#1368)
+
+- *(i18n)* Batch 2 — Settings/Terminal/LLM/Profile string extraction (#1356)
+
+- *(slm)* Surface detected_roles and show running/assigned/available state per chip (#1353)
+
+- *(slm-frontend)* Group required/optional roles and auto-inject infra roles in step 5 (#1350, #1349, #1344)
+
+- *(i18n)* Extract VoiceSettingsPanel default label (#1356)
+
+- *(i18n)* Extract SettingsPanel strings to translation keys (#1356)
+
+- *(slm)* Add required and degraded_without fields to RoleInfo (#1350)
+
+- *(i18n)* Add language_code field to PersonalityProfile (#1324)
+
+- *(i18n)* Extract chat module strings to translation keys (#1318)
+
+- *(frontend)* Add tabbed layout to ProfileModal (#1340)
+
+- *(slm-frontend)* Add useTimezone composable for fleet-wide date formatting
+
+- *(i18n)* Install vue-i18n and create locale scaffolding (#1323)
+
+- *(personality)* Add built-in Rude personality profile
+
+- *(voice)* Use streaming TTS in _dispatchTranscript (#1319)
+
+- *(voice)* Replace auto-speak with sentence accumulator (#1319)
+
+- *(voice)* Add WS streaming TTS in useVoiceOutput (#1319)
+
+- *(voice)* Add sentence-level streaming TTS queue worker (#1319)
+
+- *(vision)* Restore deleted vision views and re-wire routes (#1301)
+
+- *(frontend)* Wire CodebaseAnalytics to background task endpoints (#1304)
+
+- *(analytics)* Add background pattern summary analysis (#1304)
+
+- *(analytics)* Add background dashboard overview analysis (#1304)
+
+- *(analytics)* Add BackgroundTaskManager to code intelligence (#1304)
+
+- *(analytics)* Migrate duplicate analysis to BackgroundTaskManager (#1304)
+
+- *(analytics)* Shared background task manager with Redis persistence (#1304)
+
+- *(slm)* General settings defaults, wizard card, and time sync timeout (#1306)
+
+- *(installer)* Fix install script + setup wizard end-to-end (#1294)
 
 - *(deploy)* Virtualmin-style install script + SLM setup wizard (#1294)
 
@@ -5726,6 +16259,14 @@ All notable changes to this project will be documented in this file.
 
 ### Miscellaneous
 
+- Document .worktrees/ preference in CLAUDE.md
+
+- Add .worktrees/ to .gitignore for parallel worktree support
+
+- Add Obsidian editor config files to gitignore
+
+- *(release)* Replace manual changelog with git-cliff generated version (#1296)
+
 - *(fleet)* Include slm-agent code in update-all-nodes.yml (#1164)
 
 - *(slm-agent)* Remove symlink workaround during canonical path deploy (#1163)
@@ -5945,6 +16486,20 @@ All notable changes to this project will be documented in this file.
 
 ### Performance
 
+- *(chat)* Remove per-chunk debug logging in SSE stream (#1313)
+
+- *(chat)* Use list accumulation for O(1) streaming append (#1313)
+
+- *(chat)* Batch DB writes and O(1) message lookups (#1316)
+
+- *(chat)* Yield progress indicator before RAG retrieval (#1315)
+
+- *(chat)* Virtual scrolling for message list (#1314)
+
+- *(chat)* Throttle streaming updates, memoize formatting, consolidate watchers (#1312)
+
+- *(chat)* Defer per-chunk regex filtering and tag-boundary detection (#1313)
+
 - *(analytics)* Wrap API endpoint checker in asyncio.to_thread in report
 
 - *(analytics)* Offload _count_files_and_lines to thread in pattern analyzer
@@ -6133,6 +16688,16 @@ All notable changes to this project will be documented in this file.
 
 
 ### Refactoring
+
+- *(step-evaluator)* Extract _check_judge_errors helper (#1464)
+
+- *(agents)* Consolidate web research into single module (#1443)
+
+- *(slm-frontend)* Adopt useTimezone in views (batch 2/2)
+
+- *(slm-frontend)* Adopt useTimezone in views (batch 1/2)
+
+- *(analytics)* Extract loader functions into reusable composables (#1321)
 
 - *(workflow)* Consolidate api/workflow_automation into services/ version (#1285)
 
@@ -8803,6 +19368,19 @@ All notable changes to this project will be documented in this file.
 - Preserve critical frontend component versions
 
 
+### Build
+
+- *(deps)* Bump @modelcontextprotocol/sdk to 1.26.0 (security fix GHSA-345p-7cg4-v4c7)
+
+- *(deps)* Bump cryptography and pillow (safe subset of #1435)
+
+- *(deps)* Bump qs
+
+- *(deps)* Safe dependency bumps from #1388 review
+
+- *(deps)* Safe dependency bumps from #1388 review
+
+
 ### Cleanup
 
 - Removed duplicate basic Playwright container
@@ -8871,6 +19449,8 @@ All notable changes to this project will be documented in this file.
 
 ### Infra
 
+- *(ansible)* Migrate TTS worker from .22 to .24 in inventory (#1394)
+
 - Add comprehensive infrastructure and deployment automation
 
 
@@ -8926,3 +19506,6 @@ All notable changes to this project will be documented in this file.
 ### Tools
 
 - Add comprehensive analysis and debugging utilities
+
+
+
