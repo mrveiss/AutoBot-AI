@@ -76,7 +76,7 @@
             :key="item.id"
             class="backlog-row"
             :class="{ selected: selectedIds.has(item.id) }"
-            :draggable="backlogReorderEnabled"
+            :draggable="true"
             @dragstart="onDragStart(item)"
             @dragover.prevent
             @drop="onDrop(item)"
@@ -159,7 +159,6 @@
           <div class="ac-header">
             <label>Acceptance Criteria</label>
             <button
-              v-if="suggestAcEnabled"
               class="btn-suggest"
               :disabled="!newItem.title || isSuggestingAC"
               @click="suggestAC"
@@ -229,13 +228,6 @@ const api = useApiClient()
 const route = useRoute()
 
 const companyId = computed(() => route.params.companyId as string)
-
-// Feature flags (#9861): both await a backend route that does not exist yet.
-// - backlog reorder: needs POST /api/llc/companies/{id}/backlog/reorder
-// - AC suggestion: needs an LLM-backed POST /api/llc/work-items/suggest-ac
-// Disabled by default — no dead buttons / no calls to missing endpoints.
-const backlogReorderEnabled = import.meta.env.VITE_FEATURE_LLC_BACKLOG_REORDER === 'true'
-const suggestAcEnabled = import.meta.env.VITE_FEATURE_LLC_SUGGEST_AC === 'true'
 
 const WORK_ITEM_TYPES = [
   { value: 'epic', label: 'Epic' },
@@ -328,35 +320,53 @@ function onDragStart(item: WorkItem) {
 }
 
 async function onDrop(target: WorkItem) {
-  if (!backlogReorderEnabled) return
   if (!draggedItem.value || draggedItem.value.id === target.id) return
   const fromIdx = items.value.findIndex(i => i.id === draggedItem.value!.id)
   const toIdx = items.value.findIndex(i => i.id === target.id)
   if (fromIdx === -1 || toIdx === -1) return
 
+  const previous = [...items.value]
   const reordered = [...items.value]
   const [moved] = reordered.splice(fromIdx, 1)
   reordered.splice(toIdx, 0, moved)
   items.value = reordered
   draggedItem.value = null
 
-  // Persistence: POST the new ordering to
-  // companies/{companyId}/backlog/reorder { work_item_ids: [...] }.
-  // Currently unreachable (backlogReorderEnabled === false).
-  await persistBacklogOrder(reordered)
+  await persistBacklogOrder(reordered, previous)
 }
 
-async function persistBacklogOrder(_ordered: WorkItem[]): Promise<void> {
-  // Intentionally a no-op until the reorder endpoint exists (#9861).
-  logger.warn('Backlog reorder persistence is not yet available (awaiting backend).')
+// Persist the new ordering (full desired order; backend assigns positions
+// 0..n-1). On failure, revert to the pre-drag order so the UI never diverges
+// from the server. Backend: POST /api/llc/companies/{id}/backlog/reorder (#9861).
+async function persistBacklogOrder(ordered: WorkItem[], previous: WorkItem[]): Promise<void> {
+  try {
+    await api.post(`/api/llc/companies/${companyId.value}/backlog/reorder`, {
+      work_item_ids: ordered.map(i => i.id),
+    })
+  } catch (err) {
+    logger.error('Backlog reorder failed; reverting order', err)
+    items.value = previous
+  }
 }
 
+// Request advisory acceptance criteria for the in-progress new item. Company
+// scope is derived from the org context server-side — never send company_id.
+// Backend: POST /api/llc/work-items/suggest-ac (#9861); empty list on LLM-down.
 async function suggestAC() {
-  // Awaits an LLM-backed backend route (#9861): POST work-items/suggest-ac
-  // { title, type, description } -> { suggestions: string[] }. The button is
-  // hidden until then (suggestAcEnabled === false), so this is unreachable.
-  if (!suggestAcEnabled || !newItem.value.title) return
-  logger.warn('AC suggestion is not yet available (awaiting backend).')
+  if (!newItem.value.title) return
+  isSuggestingAC.value = true
+  try {
+    const res = await api.post<{ suggestions: string[] }>(`/api/llc/work-items/suggest-ac`, {
+      title: newItem.value.title,
+      description: newItem.value.description,
+    })
+    suggestedACs.value = (res.suggestions ?? []).map(text => ({ text, selected: true }))
+  } catch (err) {
+    logger.error('AC suggestion failed', err)
+    suggestedACs.value = []
+  } finally {
+    isSuggestingAC.value = false
+  }
 }
 
 async function createItem() {

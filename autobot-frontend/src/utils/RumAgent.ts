@@ -331,9 +331,26 @@ class RumAgent {
   }
 
   // Error Monitoring
+
+  // #10352: messages that browsers surface as window 'error' events but are
+  // NOT real application errors (no stack, self-correcting). Reporting them as
+  // critical javascript_errors creates false 🚨 alarms in RUM.
+  private static readonly BENIGN_ERROR_MESSAGES = [
+    'ResizeObserver loop limit exceeded',
+    'ResizeObserver loop completed with undelivered notifications',
+  ]
+
+  static isBenignError(message: string | undefined | null): boolean {
+    if (!message) return false
+    return RumAgent.BENIGN_ERROR_MESSAGES.some((m) => message.includes(m))
+  }
+
   private monitorErrors(): void {
     // Global error handler
     window.addEventListener('error', (event) => {
+      // #10352: "ResizeObserver loop ..." is a benign browser notice (fires
+      // with no real error/stack) — never report it as a CRITICAL js error.
+      if (RumAgent.isBenignError(event.message)) return
       this.trackError('javascript_error', {
         message: event.message,
         filename: event.filename,
