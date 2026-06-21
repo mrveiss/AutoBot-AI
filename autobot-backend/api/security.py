@@ -311,9 +311,9 @@ async def get_domain_security_stats(request: Request):
         threat_status = await threat_service.get_service_status()
 
         stats = {
-            "whitelist_count": len(domain_manager._whitelist),
-            "blacklist_count": len(domain_manager._blacklist),
-            "suspicious_tlds_count": len(domain_manager._suspicious_tlds),
+            "whitelist_count": len(domain_manager.whitelist_patterns),
+            "blacklist_count": len(domain_manager.blacklist_patterns),
+            "suspicious_tlds_count": len(domain_manager.SUSPICIOUS_TLDS),
             "threat_intelligence": {
                 "enabled": threat_service.is_any_service_configured,
                 "virustotal_configured": threat_status.get("virustotal", {}).get("configured", False),
