@@ -38,7 +38,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.secrets_vault import VaultRef
 from models.secret import Secret
+from models.secret_dependency import SecretDependency
 from models.secret_grant import SecretGrant
+from services.secret_dependency_service import SecretDependencyService
 from services.secrets_access_audit import SecretAccessReport, describe_secret_access
 from services.secrets_authz import PrincipalFacts, authorize
 from services.secrets_principal_resolver import resolve_principal_facts
@@ -112,6 +114,17 @@ class SecretsCoordinator:
         if not authorize(facts, "share", owner):
             raise SecretAccessError(f"not authorized to view access for secret {secret_id}")
         return await describe_secret_access(session, secret_id)
+
+    async def describe_dependencies(
+        self, session: AsyncSession, *, user_id: uuid.UUID, permissions: set[str], secret_id: uuid.UUID
+    ) -> list[SecretDependency]:
+        """What depends on *secret_id* — the rotation/revocation impact list. Same manage-authority
+        gate as :meth:`describe_access` (owner / admin / company OWNER-ADMIN-LEAD)."""
+        facts = await self._facts(session, user_id, permissions)
+        owner = await self._owner_vault(session, secret_id)  # raises SecretNotFoundError when absent
+        if not authorize(facts, "share", owner):
+            raise SecretAccessError(f"not authorized to view dependencies for secret {secret_id}")
+        return await SecretDependencyService().what_depends_on(session, secret_id=secret_id)
 
     async def share(
         self,
