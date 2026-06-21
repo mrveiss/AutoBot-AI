@@ -15,6 +15,7 @@ import axios, { type AxiosInstance } from 'axios'
 import { useRoles, type Role, type SyncResult } from './useRoles'
 import { formatCommitHash } from '@/utils/commitHashUtils'
 import { getSlmApiBase } from '@/config/ssot-config'
+import { useAuthStore } from '@/stores/auth'
 
 // SLM Admin uses the local SLM backend API
 const API_BASE = getSlmApiBase()
@@ -213,6 +214,8 @@ export interface UpdateAllJob {
 // =============================================================================
 
 export function useCodeSync() {
+  const authStore = useAuthStore()
+
   // Create axios client
   const client: AxiosInstance = axios.create({
     baseURL: API_BASE,
@@ -229,6 +232,18 @@ export function useCodeSync() {
     }
     return config
   })
+
+  // #10369 — without a 401 handler an expired/invalid token makes the status
+  // poller spam 401s forever; log out so the UI redirects to login instead.
+  client.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      if (error.response?.status === 401) {
+        authStore.logout()
+      }
+      return Promise.reject(error)
+    }
+  )
 
   // Initialize roles composable (Issue #779)
   const rolesComposable = useRoles()
