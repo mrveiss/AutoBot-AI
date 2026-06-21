@@ -32,11 +32,11 @@ Routes:
 
 import uuid
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
@@ -45,7 +45,7 @@ from llc.deps import get_session
 from user_management.services import TenantContext
 
 from ..kb.collections import KbCollectionManager
-from ..models.enums import SprintStatus, WorkItemRelationType
+from ..models.enums import SprintStatus, WorkItemRelationType, WorkItemStatus
 from ..models.sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from ..models.work_item import LLCWorkItem, LLCWorkItemRelation
 from ..services.approval import ApprovalNotFoundError, ApprovalService, ApprovalStateError
@@ -84,6 +84,8 @@ class PortfolioResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+    # Card enrichment (#10232) — populated by list endpoints; 0 on detail reads.
+    program_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -111,6 +113,8 @@ class ProgramResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+    # Card enrichment (#10232) — populated by list endpoints; 0 on detail reads.
+    project_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -153,6 +157,9 @@ class ProjectResponse(BaseModel):
     auto_rollover: Optional[bool]
     created_at: datetime
     updated_at: datetime
+    # Card enrichment (#10232) — populated by list endpoints; defaults on detail reads.
+    open_work_item_count: int = 0
+    active_sprint_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -210,18 +217,89 @@ class SprintCloseRequest(BaseModel):
 # ------------------------------------------------------------------ Portfolio routes
 
 
+# ---------------------------------------------------------------------------
+# Card-enrichment aggregation helpers (#10232)
+#
+# Each returns a {parent_id: value} map computed with a single grouped query so
+# list endpoints stay O(1) queries — never N+1 per card.
+# ---------------------------------------------------------------------------
+_OPEN_WORK_ITEM_STATUSES = [s.value for s in WorkItemStatus if s not in (WorkItemStatus.DONE, WorkItemStatus.CANCELLED)]
+
+
+async def _count_map(session: AsyncSession, id_col, count_col, ids: List[uuid.UUID]) -> Dict[uuid.UUID, int]:
+    if not ids:
+        return {}
+    rows = (await session.execute(select(id_col, func.count(count_col)).where(id_col.in_(ids)).group_by(id_col))).all()
+    return {key: cnt for key, cnt in rows}
+
+
+async def _open_work_item_counts(session: AsyncSession, project_ids: List[uuid.UUID]) -> Dict[uuid.UUID, int]:
+    if not project_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(LLCWorkItem.project_id, func.count(LLCWorkItem.id))
+            .where(LLCWorkItem.project_id.in_(project_ids), LLCWorkItem.status.in_(_OPEN_WORK_ITEM_STATUSES))
+            .group_by(LLCWorkItem.project_id)
+        )
+    ).all()
+    return {pid: cnt for pid, cnt in rows}
+
+
+async def _active_sprint_names(session: AsyncSession, project_ids: List[uuid.UUID]) -> Dict[uuid.UUID, str]:
+    if not project_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(LLCSprint.project_id, LLCSprint.name).where(
+                LLCSprint.project_id.in_(project_ids), LLCSprint.status == SprintStatus.ACTIVE.value
+            )
+        )
+    ).all()
+    names: Dict[uuid.UUID, str] = {}
+    for pid, name in rows:  # first active sprint per project (typically one)
+        names.setdefault(pid, name)
+    return names
+
+
+def _enrich(model_cls, orm_obj, **extra):
+    """Build a response model from an ORM row, then graft the aggregate fields."""
+    resp = model_cls.model_validate(orm_obj)
+    for key, value in extra.items():
+        setattr(resp, key, value)
+    return resp
+
+
+async def _enrich_projects(session: AsyncSession, projects: List[LLCProject]) -> List[ProjectResponse]:
+    """Attach open-work-item counts + the active sprint name to project cards."""
+    pids = [p.id for p in projects]
+    open_counts = await _open_work_item_counts(session, pids)
+    active = await _active_sprint_names(session, pids)
+    return [
+        _enrich(
+            ProjectResponse,
+            p,
+            open_work_item_count=open_counts.get(p.id, 0),
+            active_sprint_name=active.get(p.id),
+        )
+        for p in projects
+    ]
+
+
 @router.get("/companies/{company_id}/portfolios", response_model=List[PortfolioResponse])
 async def list_portfolios(
     company_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> List[LLCPortfolio]:
+) -> List[PortfolioResponse]:
     # IDOR guard (#10148): reject callers accessing another company's portfolios.
     if str(company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Company not found")
     result = await session.execute(select(LLCPortfolio).where(LLCPortfolio.company_id == company_id))
-    return list(result.scalars().all())
+    portfolios = list(result.scalars().all())
+    counts = await _count_map(session, LLCProgram.portfolio_id, LLCProgram.id, [p.id for p in portfolios])
+    return [_enrich(PortfolioResponse, p, program_count=counts.get(p.id, 0)) for p in portfolios]
 
 
 @router.post("/companies/{company_id}/portfolios", response_model=PortfolioResponse, status_code=201)
@@ -302,13 +380,15 @@ async def list_programs(
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> List[LLCProgram]:
+) -> List[ProgramResponse]:
     # IDOR guard (#10148): verify the portfolio belongs to the caller's org before listing.
     pf_row = (await session.execute(select(LLCPortfolio).where(LLCPortfolio.id == portfolio_id))).scalar_one_or_none()
     if pf_row is None or str(pf_row.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Portfolio not found")
     result = await session.execute(select(LLCProgram).where(LLCProgram.portfolio_id == portfolio_id))
-    return list(result.scalars().all())
+    programs = list(result.scalars().all())
+    counts = await _count_map(session, LLCProject.program_id, LLCProject.id, [p.id for p in programs])
+    return [_enrich(ProgramResponse, p, project_count=counts.get(p.id, 0)) for p in programs]
 
 
 @router.post("/portfolios/{portfolio_id}/programs", response_model=ProgramResponse, status_code=201)
@@ -396,13 +476,13 @@ async def list_projects(
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> List[LLCProject]:
+) -> List[ProjectResponse]:
     # IDOR guard (#10148): verify the program belongs to the caller's org before listing.
     prog = (await session.execute(select(LLCProgram).where(LLCProgram.id == program_id))).scalar_one_or_none()
     if prog is None or str(prog.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Program not found")
     result = await session.execute(select(LLCProject).where(LLCProject.program_id == program_id))
-    return list(result.scalars().all())
+    return await _enrich_projects(session, list(result.scalars().all()))
 
 
 @router.get("/companies/{company_id}/projects", response_model=List[ProjectResponse])
@@ -411,7 +491,7 @@ async def list_company_projects(
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> List[LLCProject]:
+) -> List[ProjectResponse]:
     """Flat list of all projects in a company (GH#9020 — drives the timeline
     project picker; also reused by the project browser)."""
     # IDOR guard (#10148): reject callers accessing another company's projects.
@@ -420,7 +500,7 @@ async def list_company_projects(
     result = await session.execute(
         select(LLCProject).where(LLCProject.company_id == company_id).order_by(LLCProject.name)
     )
-    return list(result.scalars().all())
+    return await _enrich_projects(session, list(result.scalars().all()))
 
 
 @router.post("/programs/{program_id}/projects", response_model=ProjectResponse, status_code=201)
