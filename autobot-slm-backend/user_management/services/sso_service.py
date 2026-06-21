@@ -17,9 +17,10 @@ import secrets
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from autobot_shared.redis_client import get_redis_client
+from user_management.models.role import Role
 from user_management.models.sso import SSOProvider, SSOProviderType, UserSSOLink
 from user_management.models.user import User
 from user_management.schemas.sso import SSOProviderCreate, SSOProviderUpdate
@@ -78,24 +79,34 @@ class SSOService(BaseService):
                 "token_url": f"https://{domain}/oauth2/v1/token",
                 "userinfo_url": f"https://{domain}/oauth2/v1/userinfo",
                 "scope": "openid email profile groups",
+                # OIDC RP-initiated logout (RFC 9207 / Okta docs)
+                "end_session_endpoint": f"https://{domain}/oauth2/v1/logout",
             },
             SSOProviderType.MICROSOFT_ENTRA.value: {
                 "authorize_url": f"https://login.microsoftonline.com/{domain}/oauth2/v2.0/authorize",
                 "token_url": f"https://login.microsoftonline.com/{domain}/oauth2/v2.0/token",
                 "userinfo_url": "https://graph.microsoft.com/oidc/userinfo",
                 "scope": "openid email profile",
+                # OIDC RP-initiated logout (Microsoft Identity Platform docs)
+                "end_session_endpoint": f"https://login.microsoftonline.com/{domain}/oauth2/v2.0/logout",
             },
             SSOProviderType.GOOGLE_WORKSPACE.value: {
                 "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
                 "token_url": "https://oauth2.googleapis.com/token",  # nosec B105 - OAuth2 public token endpoint URL,
                 "userinfo_url": "https://openidconnect.googleapis.com/v1/userinfo",
                 "scope": "openid email profile",
+                # Google does NOT support RP-initiated OIDC end_session (no end_session_endpoint
+                # in their OIDC discovery doc).  The /o/oauth2/revoke endpoint revokes tokens
+                # server-side but is not an OIDC logout redirect.  Callers should handle None.
+                "end_session_endpoint": None,
             },
             SSOProviderType.GITHUB.value: {
                 "authorize_url": "https://github.com/login/oauth/authorize",
                 "token_url": "https://github.com/login/oauth/access_token",  # nosec B105 - OAuth2 public token endpoint
                 "userinfo_url": "https://api.github.com/user",
                 "scope": "user:email read:user",
+                # GitHub OAuth2 (not OIDC) — no standard end_session_endpoint
+                "end_session_endpoint": None,
             },
         }
         return templates.get(provider_type, {})
@@ -318,6 +329,20 @@ class SSOService(BaseService):
         user_data = self._extract_oauth_user_data(userinfo, provider)
         return await self._find_or_provision_user(provider, external_id, user_data)
 
+    @staticmethod
+    def _normalize_groups(raw: Any) -> list[str] | None:
+        """Normalize an IdP groups claim to list[str] or None (absent).
+
+        Returns None when the claim is absent so callers can distinguish
+        "IdP did not assert groups" from "IdP asserted an empty group list".
+        """
+        if raw is None:
+            return None
+        if isinstance(raw, list):
+            return [str(g) for g in raw]
+        # Some IdPs return a single string when the user belongs to one group.
+        return [str(raw)]
+
     def _extract_oauth_user_data(self, userinfo: dict[str, Any], provider: SSOProvider) -> dict[str, Any]:
         """Extract user data from OAuth2 userinfo."""
         email = userinfo.get("email")
@@ -328,6 +353,7 @@ class SSOService(BaseService):
             "display_name": name,
             "username": username,
             "avatar_url": userinfo.get("picture"),
+            "groups": self._normalize_groups(userinfo.get("groups")),
         }
 
     def _build_ldap_connection(self, provider: SSOProvider, username: str, password: str) -> Any:
@@ -363,10 +389,13 @@ class SSOService(BaseService):
         attr_map = provider.config.get("attribute_mapping", {})
         email = entry.get(attr_map.get("email", "mail"), [None])[0]
         display_name = entry.get(attr_map.get("display_name", "displayName"), [None])[0]
+        groups_attr = attr_map.get("groups", "memberOf")
+        raw_groups = entry.get(groups_attr)
         return {
             "email": email,
             "display_name": display_name,
             "username": entry.get(attr_map.get("username", "uid"), [None])[0],
+            "groups": self._normalize_groups(raw_groups),
         }
 
     async def authenticate_ldap(self, provider_id: uuid.UUID, username: str, password: str) -> User:
@@ -385,21 +414,19 @@ class SSOService(BaseService):
         return await self._find_or_provision_user(provider, username, user_data)
 
     def _get_saml_config(self, provider: SSOProvider) -> dict[str, Any]:
-        """Build pysaml2 config from provider settings."""
+        """Build pysaml2 config from provider settings.
+
+        SAML SLO is not yet implemented — tracked in #10281.
+        """
+        _http_post = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+        endpoints: dict[str, Any] = {
+            "assertion_consumer_service": [
+                (provider.config.get("acs_url"), _http_post),
+            ],
+        }
         return {
             "entityid": provider.config.get("sp_entity_id"),
-            "service": {
-                "sp": {
-                    "endpoints": {
-                        "assertion_consumer_service": [
-                            (
-                                provider.config.get("acs_url"),
-                                "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-                            ),
-                        ],
-                    },
-                },
-            },
+            "service": {"sp": {"endpoints": endpoints}},
             "metadata": {"remote": [{"url": provider.config.get("idp_metadata_url")}]},
         }
 
@@ -430,7 +457,13 @@ class SSOService(BaseService):
         email = attrs.get(attr_map.get("email", "email"), [None])[0]
         display_name = attrs.get(attr_map.get("display_name", "displayName"), [None])[0]
         username = attrs.get(attr_map.get("username", "uid"), [None])[0]
-        return {"email": email, "display_name": display_name, "username": username}
+        raw_groups = attrs.get(attr_map.get("groups", "groups"))
+        return {
+            "email": email,
+            "display_name": display_name,
+            "username": username,
+            "groups": self._normalize_groups(raw_groups),
+        }
 
     async def complete_saml_login(self, provider_id: uuid.UUID, saml_response: str) -> User:
         """Complete SAML login flow."""
@@ -495,14 +528,86 @@ class SSOService(BaseService):
         logger.info("Created SSO link for user %s with provider %s", user.id, provider.id)
         return link
 
+    async def _resolve_managed_roles(self, provider: SSOProvider, managed_names: set[str]) -> dict[str, Role]:
+        """Return {role_name: Role} for names resolvable in provider.org_id scope or as system roles.
+
+        A single query fetches all candidates (org-scoped + system).  When both exist for the
+        same name the org-specific row is preferred over the system role (org_id IS NULL).
+        Names with no matching row are warned and omitted from the result.
+        """
+        if not managed_names:
+            return {}
+        result = await self.session.execute(
+            select(Role).where(
+                Role.name.in_(managed_names),
+                or_(Role.org_id == provider.org_id, Role.org_id.is_(None)),
+            )
+        )
+        rows = list(result.scalars().all())
+
+        # prefer org-specific row over a system role of the same name
+        by_name: dict[str, Role] = {}
+        for r in rows:
+            existing = by_name.get(r.name)
+            if existing is None or (existing.org_id is None and r.org_id is not None):
+                by_name[r.name] = r
+
+        for name in managed_names:
+            if name not in by_name:
+                logger.warning("group_mapping references unknown role %r (org_id=%s)", name, provider.org_id)
+
+        return by_name
+
+    async def _sync_idp_groups_to_roles(self, user: User, provider: SSOProvider, groups: list[str] | None) -> None:
+        """Reconcile IdP group membership to managed instance RBAC roles.
+
+        Only roles listed in provider.group_mapping.values() are ever touched;
+        all other roles (including manual grants) are left completely unchanged.
+        If groups is None the IdP did not assert the claim — skip silently to
+        avoid stripping roles when the scope/claim is temporarily missing.
+        """
+        if not provider.group_mapping:
+            return
+        if groups is None:
+            logger.debug("IdP did not assert groups for user %s — skipping role sync", user.id)
+            return
+
+        from user_management.services.user_service import UserService  # noqa: PLC0415
+
+        user_svc = UserService(self.session)
+        managed_names: set[str] = set(provider.group_mapping.values())
+        desired_names: set[str] = {provider.group_mapping[g] for g in groups if g in provider.group_mapping}
+        name_to_role = await self._resolve_managed_roles(provider, managed_names)
+        current_roles = await user_svc.get_user_roles(user.id)
+        current_managed = {r.name for r in current_roles if r.name in managed_names}
+
+        for name, role in name_to_role.items():
+            if name in desired_names and name not in current_managed:
+                await user_svc.assign_role(user.id, role.id)
+            elif name not in desired_names and name in current_managed:
+                await user_svc.revoke_role(user.id, role.id)
+
     async def _find_or_provision_user(self, provider: SSOProvider, external_id: str, user_data: dict[str, Any]) -> User:
-        """Find existing user or provision new one via JIT."""
+        """Find existing user or provision new one via JIT.
+
+        Group→role reconciliation runs in both paths so roles re-sync on every
+        login, not only at first JIT provisioning.
+        """
         link = await self._find_existing_sso_link(provider.id, external_id)
         if link:
             link.record_login()
             await self.session.flush()
             result = await self.session.execute(select(User).where(User.id == link.user_id))
-            return result.scalar_one()
+            user = result.scalar_one()
+            try:
+                await self._sync_idp_groups_to_roles(user, provider, user_data.get("groups"))
+            except Exception:
+                logger.warning(
+                    "IdP group->role sync failed for user %s; proceeding with login",
+                    user.id,
+                    exc_info=True,
+                )
+            return user
         if not provider.allow_user_creation:
             raise SSOAuthenticationError("User not found and auto-provisioning is disabled")
         email = user_data.get("email")
@@ -512,4 +617,12 @@ class SSOService(BaseService):
         if not user:
             user = await self._create_sso_user(provider, user_data)
         await self._create_sso_link(user, provider, external_id, user_data)
+        try:
+            await self._sync_idp_groups_to_roles(user, provider, user_data.get("groups"))
+        except Exception:
+            logger.warning(
+                "IdP group->role sync failed for user %s; proceeding with login",
+                user.id,
+                exc_info=True,
+            )
         return user

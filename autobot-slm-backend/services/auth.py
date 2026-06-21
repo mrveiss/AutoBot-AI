@@ -27,6 +27,7 @@ rejected before PyJWT is invoked.
 """
 
 import logging
+import secrets
 from datetime import timedelta
 from typing import Callable
 
@@ -39,6 +40,7 @@ from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_or_none, encode_j
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 from config import settings
 from models.schemas import TokenResponse, UserCreate, UserResponse
+from services.token_denylist import is_jti_revoked
 from user_management.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -54,10 +56,19 @@ class AuthService:
         return hash_password(password)
 
     def create_access_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
-        """Create a JWT access token."""
+        """Create a JWT access token.
+
+        Every SLM-minted HS256 token receives a unique ``jti`` claim so that
+        individual tokens can be revoked via the Redis denylist without
+        invalidating other tokens issued to the same user.  Revocation is
+        enforced on the async decode path (``decode_token_async``).
+        The sync ``decode_token`` path does not check Redis — see its docstring.
+        """
+        payload = dict(data)
+        payload.setdefault("jti", secrets.token_urlsafe(16))
         default_delta = timedelta(minutes=settings.access_token_expire_minutes)
         return encode_jwt(
-            data,
+            payload,
             secret=settings.secret_key,
             expires_delta=expires_delta if expires_delta is not None else default_delta,
         )
@@ -74,6 +85,10 @@ class AuthService:
 
         Use ``decode_token_async`` in async contexts — it handles both alg
         values and performs JWKS key lookup for RS256 tokens.
+
+        **Revocation note:** ``jti`` denylist checks require Redis (async).
+        This sync path does NOT check the denylist.  Token revocation is
+        enforced on the async HTTP auth path via ``decode_token_async``.
         """
         alg = _peek_alg(token)
         if alg == "RS256":
@@ -104,7 +119,18 @@ class AuthService:
             return await verify_authority_token(token)
 
         if alg == "HS256":
-            return decode_jwt_or_none(token, settings.secret_key)
+            claims = decode_jwt_or_none(token, settings.secret_key)
+            if claims is None:
+                return None
+            jti = claims.get("jti")
+            if jti:
+                try:
+                    if await is_jti_revoked(jti):
+                        logger.warning("decode_token_async: HS256 token with jti=%r is revoked", jti)
+                        return None
+                except Exception:
+                    logger.warning("jti denylist check failed; failing open", exc_info=True)
+            return claims
 
         # alg=none or unsupported — reject
         logger.warning("decode_token_async: rejecting token with unsupported alg=%r", alg)

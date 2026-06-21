@@ -13,6 +13,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('AuthStore')
 
 interface User {
   username: string
@@ -31,6 +34,10 @@ interface MFALoginResponse {
   access_token?: string
   token_type?: string
   expires_in?: number
+}
+
+interface LogoutResponse {
+  logout_url?: string | null
 }
 
 const TOKEN_KEY = 'slm_access_token'
@@ -186,14 +193,49 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  function logout(): void {
+  /**
+   * Revoke the current token server-side, then clear local session.
+   *
+   * The backend revokes the JWT jti and (for SSO sessions) returns an IdP
+   * end_session URL. Logout must never get stuck: if the revoke call fails the
+   * local session is still cleared and the user is redirected.
+   */
+  async function logout(): Promise<void> {
+    const currentToken = token.value
+    let logoutUrl: string | null = null
+
+    if (currentToken) {
+      try {
+        const response = await fetch(`${getApiUrl()}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${currentToken}`,
+          },
+        })
+        if (response.ok) {
+          const data: LogoutResponse = await response.json()
+          logoutUrl = data.logout_url ?? null
+        } else {
+          logger.warn('Backend logout returned non-OK status', response.status)
+        }
+      } catch (e) {
+        logger.warn('Backend logout call failed; clearing session locally', e)
+      }
+    }
+
     token.value = null
     user.value = null
     sessionStorage.removeItem(TOKEN_KEY)
     sessionStorage.removeItem(USER_KEY)
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
-    router.push('/login')
+
+    if (logoutUrl) {
+      // RP-initiated logout: end the IdP session too
+      window.location.assign(logoutUrl)
+    } else {
+      router.push('/login')
+    }
   }
 
   function getAuthHeaders(): Record<string, string> {
