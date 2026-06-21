@@ -65,7 +65,7 @@ llama-index-llms-ollama>=0.10.1,<1.0.0       # Ollama LLM integration
 llama-index-embeddings-ollama>=0.9.0,<1.0.0  # Ollama embeddings
 llama-index-vector-stores-chroma>=0.5.5,<1.0.0  # ChromaDB vector store
 # LangChain 1.x ecosystem — migrated from 0.3.x to fix SSRF CVE (#1572)
-langchain>=1.3.0,<2.0.0                # Issue #1572: Migrated to 1.x; MVA-1330: floor corrected to 1.3.0 — 1.2.24 does not exist on PyPI; PVE-2026-88512 SQL injection fix
+langchain>=1.3.1,<2.0.0                # Issue #1572: Migrated to 1.x; MVA-1330: floor corrected to 1.3.0 — 1.2.24 does not exist on PyPI; PVE-2026-88512 SQL injection fix
 langchain-core>=1.3.3,<2.0.0         # Issue #1572: SSRF CVE fix requires >=1.2.11
 langchain-community>=0.4.1,<0.5.0     # Issue #1572: Compatible with langchain 1.x
 langchain-ollama>=1.1.0,<2.0.0        # Issue #1572: ChatOllama for QA chain
