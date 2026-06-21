@@ -35,7 +35,10 @@ trim = true
 
 [git]
 conventional_commits = true
-filter_unconventional = true
+# Keep non-conventional commits (~752 historically) instead of silently
+# dropping them — they fall through to the catch-all parser below and surface
+# under "Other / Uncategorized" in the changelog (#10118).
+filter_unconventional = false
 split_commits = false
 commit_preprocessors = [
     { pattern = '\\(#(\\d+)\\)', replace = "" },
@@ -51,6 +54,11 @@ commit_parsers = [
     { message = "^style", group = "Styling" },
     { message = "^test", group = "Testing" },
     { message = "^revert", group = "Reverted" },
+    # Drop merge-bubble noise (Dev_new_gui → main promotions) — not real changes.
+    { message = "^Merge ", skip = true },
+    # Catch-all: any commit that didn't match a conventional type above is
+    # bucketed here rather than dropped, so no change is invisible (#10118).
+    { message = ".*", group = "Other / Uncategorized" },
 ]
 protect_breaking_commits = false
 filter_commits = false

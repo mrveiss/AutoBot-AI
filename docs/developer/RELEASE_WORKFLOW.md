@@ -51,7 +51,7 @@ the whole time.
 Secondary findings from the audit:
 
 - None of the existing tags (`v0.1.0`–`v0.3.0`) were created by the workflow — all were manual. The pipeline has never cut a release end-to-end.
-- ~750 commits are skipped by git-cliff as non-conventional (`WARN ... skipped due to parse error`) — they simply don't appear in generated output.
+- ~750 commits were skipped by git-cliff as non-conventional (`WARN ... skipped due to parse error`) and never appeared in generated output. **Resolved (#10118):** `cliff.toml` now sets `filter_unconventional = false` and adds a catch-all `commit_parser` so non-conventional commits surface under an **"Other / Uncategorized"** section; merge-bubble commits are skipped to keep that section clean. Note this only restores *changelog visibility* — non-conventional commits still cannot drive a semver bump (that needs commit-message enforcement, tracked separately).
 
 Fix: derive the bumped version from the action's `content` output (the output
 *file* contains the version string), validate its shape, and guard against
