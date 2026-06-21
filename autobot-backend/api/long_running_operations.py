@@ -414,7 +414,7 @@ async def list_operations(
         status_filter = OperationStatus(status) if status else None
         type_filter = OperationType(operation_type) if operation_type else None
 
-        operations = manager.operation_manager.list_operations(status_filter, type_filter)
+        operations = await manager.operation_manager.list_operations(status_filter, type_filter)
         operations = operations[:limit]
 
         # Convert to response format

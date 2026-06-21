@@ -158,6 +158,9 @@ class DomainSecurityConfig:
 class DomainSecurityManager:
     """Manages domain security validation and threat intelligence"""
 
+    # TLDs treated as higher-risk in reputation scoring + reported in stats (#10384-cascade)
+    SUSPICIOUS_TLDS = [".tk", ".ml", ".ga", ".cf"]
+
     def __init__(self, config: DomainSecurityConfig | None = None):
         """Initialize domain security manager with config and compiled patterns."""
         self.config = config or DomainSecurityConfig()
@@ -644,8 +647,7 @@ class DomainSecurityManager:
                 break
 
         # TLD reputation
-        suspicious_tlds = [".tk", ".ml", ".ga", ".cf"]
-        for tld in suspicious_tlds:
+        for tld in self.SUSPICIOUS_TLDS:
             if domain.endswith(tld):
                 score -= 0.4
                 break
