@@ -315,8 +315,8 @@ class SSOService(BaseService):
 
     async def complete_oauth_login(
         self, code: str, state: str, callback_url: str, provider_id: uuid.UUID | None = None
-    ) -> User:
-        """Complete OAuth2 login flow and return authenticated user."""
+    ) -> tuple[User, uuid.UUID]:
+        """Complete OAuth2 login flow and return (user, resolved_provider_id)."""
         # Always validate state to prevent CSRF attacks
         state_provider_id, code_verifier = await self._validate_oauth_state(state)
         if provider_id is not None and provider_id != state_provider_id:
@@ -327,7 +327,8 @@ class SSOService(BaseService):
         userinfo = await self._get_oauth_userinfo(provider, token)
         external_id = userinfo.get("sub") or userinfo.get("id")
         user_data = self._extract_oauth_user_data(userinfo, provider)
-        return await self._find_or_provision_user(provider, external_id, user_data)
+        user = await self._find_or_provision_user(provider, external_id, user_data)
+        return user, provider_id
 
     @staticmethod
     def _normalize_groups(raw: Any) -> list[str] | None:
@@ -465,8 +466,8 @@ class SSOService(BaseService):
             "groups": self._normalize_groups(raw_groups),
         }
 
-    async def complete_saml_login(self, provider_id: uuid.UUID, saml_response: str) -> User:
-        """Complete SAML login flow."""
+    async def complete_saml_login(self, provider_id: uuid.UUID, saml_response: str) -> tuple[User, uuid.UUID]:
+        """Complete SAML login flow and return (user, provider_id)."""
         provider = await self.get_provider(provider_id)
         if not provider.is_active:
             raise SSOAuthenticationError(f"SSO provider {provider.name} is disabled")
@@ -474,7 +475,8 @@ class SSOService(BaseService):
         authn_response = client.parse_authn_request_response(saml_response, "POST")
         external_id = authn_response.name_id
         user_data = self._extract_saml_user_data(authn_response, provider)
-        return await self._find_or_provision_user(provider, external_id, user_data)
+        user = await self._find_or_provision_user(provider, external_id, user_data)
+        return user, provider_id
 
     async def _find_existing_sso_link(self, provider_id: uuid.UUID, external_id: str) -> UserSSOLink | None:
         """Find existing SSO link."""

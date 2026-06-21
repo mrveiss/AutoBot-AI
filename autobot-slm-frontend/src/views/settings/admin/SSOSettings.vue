@@ -495,7 +495,7 @@ onMounted(fetchProviders)
               <p>Allow user creation: <span class="font-medium">{{ provider.allow_user_creation ? 'Yes' : 'No' }}</span></p>
               <template v-if="providerHealth(provider.id)">
                 <p class="text-xs text-gray-500">
-                  Logins (7d): {{ providerHealth(provider.id)!.success_count }} success /
+                  Recent logins: {{ providerHealth(provider.id)!.success_count }} success /
                   {{ providerHealth(provider.id)!.failure_count }} failed
                 </p>
                 <p v-if="providerHealth(provider.id)!.last_success_at" class="text-xs text-gray-500">

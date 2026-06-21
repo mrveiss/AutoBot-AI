@@ -120,6 +120,60 @@ async def create_provider(
         ) from e
 
 
+@router.get("/health", response_model=list[SSOProviderHealthResponse])
+async def get_providers_health(
+    current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
+    db: AsyncSession = Depends(get_slm_db),
+    audit_db: AsyncSession = Depends(get_audit_db),
+) -> list[SSOProviderHealthResponse]:
+    """Return per-provider health summary (failed-auth counts + last-success).
+
+    Aggregates audit_logs rows with category='sso', action='login' over the
+    past SSO_HEALTH_WINDOW_DAYS days. Guarded by SECURITY_MANAGE permission.
+    """
+    context = TenantContext(is_platform_admin=True)
+    sso_service = SSOService(db, context)
+    providers, _ = await sso_service.list_providers()
+
+    window_start = datetime.now(timezone.utc) - timedelta(days=SSO_HEALTH_WINDOW_DAYS)
+
+    # Single grouped aggregation over the window
+    agg_result = await audit_db.execute(
+        select(
+            AuditLog.resource_id,
+            func.count(AuditLog.id).filter(AuditLog.success.is_(True)).label("success_count"),
+            func.count(AuditLog.id).filter(AuditLog.success.is_(False)).label("failure_count"),
+            func.max(AuditLog.timestamp).filter(AuditLog.success.is_(True)).label("last_success_at"),
+        )
+        .where(AuditLog.category == "sso")
+        .where(AuditLog.action == "login")
+        .where(AuditLog.timestamp >= window_start)
+        .group_by(AuditLog.resource_id)
+    )
+    rows = {row.resource_id: row for row in agg_result.all()}
+
+    results: list[SSOProviderHealthResponse] = []
+    for provider in providers:
+        pid_str = str(provider.id)
+        row = rows.get(pid_str)
+        success_count = int(row.success_count) if row else 0
+        failure_count = int(row.failure_count) if row else 0
+        last_success_at = row.last_success_at if row else None
+        health_status = _derive_health_status(success_count, failure_count, last_success_at, window_start)
+        results.append(
+            SSOProviderHealthResponse(
+                provider_id=provider.id,
+                name=provider.name,
+                success_count=success_count,
+                failure_count=failure_count,
+                last_success_at=last_success_at,
+                health_status=health_status,
+            )
+        )
+
+    return results
+
+
 @router.get("/{provider_id}", response_model=SSOProviderResponse)
 async def get_provider(
     provider_id: uuid.UUID,
@@ -223,57 +277,3 @@ async def get_provider_template(
 ) -> dict:
     """Get pre-filled endpoint template for a known SSO provider type."""
     return SSOService.get_provider_endpoint_template(provider_type, domain)
-
-
-@router.get("/health", response_model=list[SSOProviderHealthResponse])
-async def get_providers_health(
-    current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
-    db: AsyncSession = Depends(get_slm_db),
-    audit_db: AsyncSession = Depends(get_audit_db),
-) -> list[SSOProviderHealthResponse]:
-    """Return per-provider health summary (failed-auth counts + last-success).
-
-    Aggregates audit_logs rows with category='sso', action='login' over the
-    past SSO_HEALTH_WINDOW_DAYS days. Guarded by SECURITY_MANAGE permission.
-    """
-    context = TenantContext(is_platform_admin=True)
-    sso_service = SSOService(db, context)
-    providers, _ = await sso_service.list_providers()
-
-    window_start = datetime.now(timezone.utc) - timedelta(days=SSO_HEALTH_WINDOW_DAYS)
-
-    # Single grouped aggregation over the window
-    agg_result = await audit_db.execute(
-        select(
-            AuditLog.resource_id,
-            func.count(AuditLog.id).filter(AuditLog.success.is_(True)).label("success_count"),
-            func.count(AuditLog.id).filter(AuditLog.success.is_(False)).label("failure_count"),
-            func.max(AuditLog.timestamp).filter(AuditLog.success.is_(True)).label("last_success_at"),
-        )
-        .where(AuditLog.category == "sso")
-        .where(AuditLog.action == "login")
-        .where(AuditLog.timestamp >= window_start)
-        .group_by(AuditLog.resource_id)
-    )
-    rows = {row.resource_id: row for row in agg_result.all()}
-
-    results: list[SSOProviderHealthResponse] = []
-    for provider in providers:
-        pid_str = str(provider.id)
-        row = rows.get(pid_str)
-        success_count = int(row.success_count) if row else 0
-        failure_count = int(row.failure_count) if row else 0
-        last_success_at = row.last_success_at if row else None
-        health_status = _derive_health_status(success_count, failure_count, last_success_at, window_start)
-        results.append(
-            SSOProviderHealthResponse(
-                provider_id=provider.id,
-                name=provider.name,
-                success_count=success_count,
-                failure_count=failure_count,
-                last_success_at=last_success_at,
-                health_status=health_status,
-            )
-        )
-
-    return results

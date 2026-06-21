@@ -232,29 +232,31 @@ async def oauth_callback(
     context = TenantContext(is_platform_admin=False)
     sso_service = SSOService(db, context)
 
-    # Resolve provider_id from the OAuth state token for audit logging.
-    # The state encodes provider_id in sso_service; peek without consuming.
-    from user_management.services.sso_service import _oauth_states
-
-    _pending_provider_id = _oauth_states.get(state, "")
-    provider_id_str = str(_pending_provider_id) if _pending_provider_id else ""
+    # provider_id_str starts empty; populated from the service tuple on success.
+    # On failure the state is already consumed by complete_oauth_login so it is
+    # unavailable — that is acceptable (resource_id="" for failure audit rows).
+    provider_id_str = ""
 
     try:
         callback_url = _build_callback_url(request)
-        user = await sso_service.complete_oauth_login(code, state, callback_url)
+        user, resolved_provider_id = await sso_service.complete_oauth_login(code, state, callback_url)
+        provider_id_str = str(resolved_provider_id)
 
-        await create_audit_log(
-            audit_db,
-            category="sso",
-            action="login",
-            user_id=str(user.id),
-            username=user.username,
-            ip_address=client_ip,
-            resource_type="sso_provider",
-            resource_id=provider_id_str,
-            success=True,
-        )
-        await audit_db.commit()
+        try:
+            await create_audit_log(
+                audit_db,
+                category="sso",
+                action="login",
+                user_id=str(user.id),
+                username=user.username,
+                ip_address=client_ip,
+                resource_type="sso_provider",
+                resource_id=provider_id_str,
+                success=True,
+            )
+            await audit_db.commit()
+        except Exception as audit_err:
+            logger.warning("SSO audit write failed: %s", audit_err)
 
         # Convert User ORM object to dict-like structure for auth_service
         user_dict = type(
@@ -273,17 +275,20 @@ async def oauth_callback(
         )
     except (SSOAuthenticationError, SSOProviderNotFoundError) as e:
         logger.error("OAuth callback failed: %s", e)
-        await create_audit_log(
-            audit_db,
-            category="sso",
-            action="login",
-            ip_address=client_ip,
-            resource_type="sso_provider",
-            resource_id=provider_id_str,
-            success=False,
-            error_message=str(e),
-        )
-        await audit_db.commit()
+        try:
+            await create_audit_log(
+                audit_db,
+                category="sso",
+                action="login",
+                ip_address=client_ip,
+                resource_type="sso_provider",
+                resource_id=provider_id_str,
+                success=False,
+                error_message=str(e),
+            )
+            await audit_db.commit()
+        except Exception as audit_err:
+            logger.warning("SSO audit write failed: %s", audit_err)
         return RedirectResponse(
             url="/login?error=sso_failed",
             status_code=status.HTTP_302_FOUND,
@@ -326,17 +331,20 @@ async def ldap_login(
             login_data.password,
         )
 
-        await create_audit_log(
-            audit_db,
-            category="sso",
-            action="login",
-            user_id=str(user.id),
-            username=user.username,
-            resource_type="sso_provider",
-            resource_id=provider_id_str,
-            success=True,
-        )
-        await audit_db.commit()
+        try:
+            await create_audit_log(
+                audit_db,
+                category="sso",
+                action="login",
+                user_id=str(user.id),
+                username=user.username,
+                resource_type="sso_provider",
+                resource_id=provider_id_str,
+                success=True,
+            )
+            await audit_db.commit()
+        except Exception as audit_err:
+            logger.warning("SSO audit write failed: %s", audit_err)
 
         # Convert User ORM object to dict-like structure for auth_service
         user_dict = type(
@@ -356,17 +364,20 @@ async def ldap_login(
         }
     except SSOAuthenticationError as e:
         logger.error("LDAP login failed: %s", e)
-        await create_audit_log(
-            audit_db,
-            category="sso",
-            action="login",
-            username=login_data.username,
-            resource_type="sso_provider",
-            resource_id=provider_id_str,
-            success=False,
-            error_message=str(e),
-        )
-        await audit_db.commit()
+        try:
+            await create_audit_log(
+                audit_db,
+                category="sso",
+                action="login",
+                username=login_data.username,
+                resource_type="sso_provider",
+                resource_id=provider_id_str,
+                success=False,
+                error_message=str(e),
+            )
+            await audit_db.commit()
+        except Exception as audit_err:
+            logger.warning("SSO audit write failed: %s", audit_err)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Internal server error",
@@ -390,28 +401,29 @@ async def saml_callback(
     context = TenantContext(is_platform_admin=False)
     sso_service = SSOService(db, context)
 
+    # provider_id_str is populated once we validate the relay state via the
+    # service.  On failure before that point it remains "".
+    provider_id_str = ""
+
     try:
-        # Extract provider_id from RelayState
-        from user_management.services.sso_service import _oauth_states
+        provider_id, _ = await sso_service._validate_oauth_state(RelayState)
+        provider_id_str = str(provider_id)
+        user, _ = await sso_service.complete_saml_login(provider_id, SAMLResponse)
 
-        provider_id = _oauth_states.pop(RelayState, None)
-        provider_id_str = str(provider_id) if provider_id else ""
-        if not provider_id:
-            raise SSOAuthenticationError("Invalid SAML RelayState")
-
-        user = await sso_service.complete_saml_login(provider_id, SAMLResponse)
-
-        await create_audit_log(
-            audit_db,
-            category="sso",
-            action="login",
-            user_id=str(user.id),
-            username=user.username,
-            resource_type="sso_provider",
-            resource_id=provider_id_str,
-            success=True,
-        )
-        await audit_db.commit()
+        try:
+            await create_audit_log(
+                audit_db,
+                category="sso",
+                action="login",
+                user_id=str(user.id),
+                username=user.username,
+                resource_type="sso_provider",
+                resource_id=provider_id_str,
+                success=True,
+            )
+            await audit_db.commit()
+        except Exception as audit_err:
+            logger.warning("SSO audit write failed: %s", audit_err)
 
         # Convert User ORM object to dict-like structure for auth_service
         user_dict = type(
@@ -430,17 +442,19 @@ async def saml_callback(
         )
     except SSOAuthenticationError as e:
         logger.error("SAML callback failed: %s", e)
-        provider_id_str = locals().get("provider_id_str", "")
-        await create_audit_log(
-            audit_db,
-            category="sso",
-            action="login",
-            resource_type="sso_provider",
-            resource_id=provider_id_str,
-            success=False,
-            error_message=str(e),
-        )
-        await audit_db.commit()
+        try:
+            await create_audit_log(
+                audit_db,
+                category="sso",
+                action="login",
+                resource_type="sso_provider",
+                resource_id=provider_id_str,
+                success=False,
+                error_message=str(e),
+            )
+            await audit_db.commit()
+        except Exception as audit_err:
+            logger.warning("SSO audit write failed: %s", audit_err)
         return RedirectResponse(
             url="/login?error=sso_failed",
             status_code=status.HTTP_302_FOUND,

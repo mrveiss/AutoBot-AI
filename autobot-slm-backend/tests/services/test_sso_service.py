@@ -1147,3 +1147,77 @@ class TestFindOrProvisionUserGroupSync:
         assert len(synced_args) == 1
         _, _, groups = synced_args[0]
         assert groups is None
+# Service return-signature: complete_oauth_login / complete_saml_login (C1 fix)
+# ---------------------------------------------------------------------------
+
+
+class TestCompleteLoginReturnsTuple:
+    """complete_oauth_login and complete_saml_login must return (user, provider_id).
+
+    This tests the REAL service signature (un-stubbed) so any regression in the
+    return type is caught immediately, not hidden by MagicMock return values.
+    """
+
+    @pytest.mark.asyncio
+    async def test_complete_oauth_login_returns_tuple(self):
+        """complete_oauth_login returns (User, uuid.UUID) — not a bare User."""
+
+        import uuid as _uuid
+
+        service = _make_service()
+
+        fake_user = MagicMock()
+        fake_user.id = _uuid.uuid4()
+        fake_user.username = "oauthuser"
+
+        redis, store = _mock_redis()
+        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+            state, _verifier = await service._generate_oauth_state(_PROVIDER_ID)
+
+        provider = _make_oauth_provider()
+
+        with (
+            patch.object(service, "get_provider", AsyncMock(return_value=provider)),
+            patch.object(service, "_exchange_oauth_code", AsyncMock(return_value={"access_token": "t"})),
+            patch.object(service, "_get_oauth_userinfo", AsyncMock(return_value={"sub": "ext1", "email": "u@e.com"})),
+            patch.object(service, "_find_or_provision_user", AsyncMock(return_value=fake_user)),
+            patch.object(_sso_mod, "get_redis_client", return_value=redis),
+        ):
+            result = await service.complete_oauth_login("code", state, "https://app/cb")
+
+        assert isinstance(result, tuple), "complete_oauth_login must return a (user, provider_id) tuple"
+        user, pid = result
+        assert user is fake_user
+        assert pid == _PROVIDER_ID
+
+    @pytest.mark.asyncio
+    async def test_complete_saml_login_returns_tuple(self):
+        """complete_saml_login returns (User, uuid.UUID) — not a bare User."""
+        service = _make_service()
+
+        fake_user = MagicMock()
+        fake_user.id = uuid.uuid4()
+        fake_user.username = "samluser"
+
+        provider = _make_saml_provider()
+        provider.is_active = True
+
+        authn_response = MagicMock()
+        authn_response.name_id = "saml-ext-id"
+        authn_response.ava = {}
+
+        with (
+            patch.object(service, "get_provider", AsyncMock(return_value=provider)),
+            patch.object(
+                service,
+                "_build_saml_client",
+                MagicMock(return_value=MagicMock(parse_authn_request_response=MagicMock(return_value=authn_response))),
+            ),
+            patch.object(service, "_find_or_provision_user", AsyncMock(return_value=fake_user)),
+        ):
+            result = await service.complete_saml_login(_PROVIDER_ID, "<SAMLResponse/>")
+
+        assert isinstance(result, tuple), "complete_saml_login must return a (user, provider_id) tuple"
+        user, pid = result
+        assert user is fake_user
+        assert pid == _PROVIDER_ID
