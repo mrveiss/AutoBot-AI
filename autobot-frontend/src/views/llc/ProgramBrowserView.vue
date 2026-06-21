@@ -31,6 +31,7 @@
           <span class="status-badge" :class="`status-${p.status}`">{{ p.status }}</span>
         </div>
         <p v-if="p.description" class="card-desc">{{ p.description }}</p>
+        <p class="card-meta">{{ p.project_count }} {{ p.project_count === 1 ? 'project' : 'projects' }}</p>
       </button>
     </div>
   </div>
@@ -52,6 +53,7 @@ interface ProgramResponse {
   status: string
   created_at: string
   updated_at: string
+  project_count: number
 }
 
 const logger = createLogger('ProgramBrowserView')
@@ -172,6 +174,12 @@ onMounted(loadPrograms)
   line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.card-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, #9ca3af);
+  margin: 0;
 }
 
 .status-badge {

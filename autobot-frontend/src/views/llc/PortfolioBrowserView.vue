@@ -31,7 +31,10 @@
           <span class="status-badge" :class="`status-${p.status}`">{{ p.status }}</span>
         </div>
         <p v-if="p.description" class="card-desc">{{ p.description }}</p>
-        <p class="card-meta">Created {{ formatDate(p.created_at) }}</p>
+        <p class="card-meta">
+          {{ p.program_count }} {{ p.program_count === 1 ? 'program' : 'programs' }}
+          · Created {{ formatDate(p.created_at) }}
+        </p>
       </button>
     </div>
   </div>
@@ -52,6 +55,7 @@ interface PortfolioResponse {
   status: string
   created_at: string
   updated_at: string
+  program_count: number
 }
 
 const logger = createLogger('PortfolioBrowserView')
