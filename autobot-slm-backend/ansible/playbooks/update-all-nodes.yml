@@ -477,7 +477,7 @@
         src: "{{ deploy_tmp }}/backend.tar.gz"
         dest: /opt/autobot/
       become: true
-      when: "'01-Backend' in inventory_hostname"
+      when: "'backend' in group_names"
       tags: [backend]
 
     - name: "[PLAY 2] Backend | Deploy autobot_shared"
@@ -485,13 +485,13 @@
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: /opt/autobot/
       become: true
-      when: "'01-Backend' in inventory_hostname"
+      when: "'backend' in group_names"
       tags: [backend, shared]
 
     - name: "[PLAY 2] Backend | Fix ownership"
       command: chown --no-dereference -R autobot:autobot /opt/autobot/autobot-backend
       become: true
-      when: "'01-Backend' in inventory_hostname"
+      when: "'backend' in group_names"
       changed_when: true
       tags: [backend]
 
@@ -502,7 +502,7 @@
         group: autobot
         recurse: true
       become: true
-      when: "'01-Backend' in inventory_hostname"
+      when: "'backend' in group_names"
       tags: [backend, shared]
 
     - name: "[PLAY 2] Backend | Ensure autobot_shared symlink inside backend dir (#2651)"
@@ -514,7 +514,7 @@
         owner: autobot
         group: autobot
       become: true
-      when: "'01-Backend' in inventory_hostname"
+      when: "'backend' in group_names"
       tags: [backend, shared, symlink]
 
     - name: "[PLAY 2] Backend | Remove legacy backend symlink"
@@ -522,7 +522,7 @@
         path: /opt/autobot/autobot-backend/backend
         state: absent
       become: true
-      when: "'01-Backend' in inventory_hostname"
+      when: "'backend' in group_names"
       tags: [backend]
 
     - name: "[PLAY 2] Backend | Install Python dependencies"
@@ -536,7 +536,7 @@
         PIP_DEFAULT_TIMEOUT: "120"
       timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
       when:
-        - "'01-Backend' in inventory_hostname"
+        - "'backend' in group_names"
         - hostvars['localhost']['python_deps_changed'] | bool
       register: backend_pip_install
       tags: [backend, deps]
@@ -552,7 +552,7 @@
       register: existing_secret_key
       become: true
       become_user: autobot
-      when: "'01-Backend' in inventory_hostname"
+      when: "'backend' in group_names"
       failed_when: false
       changed_when: false
       tags: [backend, env]
@@ -560,7 +560,7 @@
     - name: "[PLAY 2] Backend | Load shared backend env vars (#2727)"
       ansible.builtin.include_vars:
         file: vars/backend-env.yml
-      when: "'01-Backend' in inventory_hostname"
+      when: "'backend' in group_names"
       tags: [backend, env]
 
     - name: "[PLAY 2] Backend | Regenerate .env from template (#2649)"
@@ -572,7 +572,7 @@
         group: autobot
         backup: true
       become: true
-      when: "'01-Backend' in inventory_hostname"
+      when: "'backend' in group_names"
       vars:
         # backend_secret_key uses a register var specific to this playbook
         backend_secret_key: "{{ existing_secret_key.stdout | default(lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true), true) }}"
@@ -584,12 +584,12 @@
       register: backend_user_mode_probe
       changed_when: false
       failed_when: false  # absent .env/var means single_user (no Postgres)
-      when: "'01-Backend' in inventory_hostname"
+      when: "'backend' in group_names"
       tags: [backend, migrate]
 
     - name: "[PLAY 2] Backend | Database migration sequence (#10001)"
       when:
-        - "'01-Backend' in inventory_hostname"
+        - "'backend' in group_names"
         - backend_user_mode_probe.stdout | default('') | trim not in ['', 'single_user']
       tags: [backend, migrate]
       block:
@@ -654,7 +654,7 @@
         state: restarted
         daemon_reload: true
       become: true
-      when: "'01-Backend' in inventory_hostname"
+      when: "'backend' in group_names"
       tags: [backend, restart]
 
     - name: "[PLAY 2] Backend | Wait for API to be ready"
@@ -667,7 +667,7 @@
       retries: 42
       delay: 10
       delegate_to: localhost
-      when: "'01-Backend' in inventory_hostname"
+      when: "'backend' in group_names"
       tags: [backend, restart]
 
     # ----- Frontend -----
@@ -676,7 +676,7 @@
         src: "{{ deploy_tmp }}/frontend.tar.gz"
         dest: /opt/autobot/
       become: true
-      when: "'02-Frontend' in inventory_hostname"
+      when: "'frontend' in group_names"
       tags: [frontend]
 
     - name: "[PLAY 2] Frontend | Fix ownership"
@@ -686,7 +686,7 @@
         group: autobot
         recurse: true
       become: true
-      when: "'02-Frontend' in inventory_hostname"
+      when: "'frontend' in group_names"
       tags: [frontend]
 
     - name: "[PLAY 2] Frontend | Install Node.js dependencies"
@@ -696,7 +696,7 @@
       become: true
       become_user: autobot
       when:
-        - "'02-Frontend' in inventory_hostname"
+        - "'frontend' in group_names"
         - hostvars['localhost']['node_deps_changed'] | bool
       register: frontend_npm_install
       tags: [frontend, deps]
@@ -707,7 +707,7 @@
         chdir: /opt/autobot/autobot-frontend
       become_user: autobot
       become: true
-      when: "'02-Frontend' in inventory_hostname"
+      when: "'frontend' in group_names"
       register: frontend_build
       tags: [frontend]
 
@@ -716,7 +716,7 @@
         name: nginx
         state: restarted
       become: true
-      when: "'02-Frontend' in inventory_hostname"
+      when: "'frontend' in group_names"
       tags: [frontend, restart]
 
     - name: "[PLAY 2] Frontend | Wait for nginx to be ready"
@@ -726,7 +726,7 @@
         timeout: 60
         delay: 5
       delegate_to: localhost
-      when: "'02-Frontend' in inventory_hostname"
+      when: "'frontend' in group_names"
       tags: [frontend, restart]
 
     # ----- NPU Worker -----
@@ -736,8 +736,7 @@
         dest: /opt/autobot/
       become: true
       when: >-
-        '03-NPU' in inventory_hostname or
-        'npu-worker' in inventory_hostname
+        'npu' in group_names
       tags: [npu, npu-worker]
 
     - name: "[PLAY 2] NPU | Fix ownership"
@@ -748,8 +747,7 @@
         recurse: true
       become: true
       when: >-
-        '03-NPU' in inventory_hostname or
-        'npu-worker' in inventory_hostname
+        'npu' in group_names
       tags: [npu, npu-worker]
 
     - name: "[PLAY 2] NPU | Install Python dependencies"
@@ -764,8 +762,7 @@
       timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
       when:
         - >-
-          '03-NPU' in inventory_hostname or
-          'npu-worker' in inventory_hostname
+          'npu' in group_names
         - hostvars['localhost']['python_deps_changed'] | bool
       register: npu_pip_install
       tags: [npu, npu-worker, deps]
@@ -776,8 +773,7 @@
         state: restarted
       become: true
       when: >-
-        '03-NPU' in inventory_hostname or
-        'npu-worker' in inventory_hostname
+        'npu' in group_names
       failed_when: false
       tags: [npu, npu-worker, restart]
 
@@ -789,8 +785,7 @@
       delay: 5
       until: npu_status.rc == 0
       when: >-
-        '03-NPU' in inventory_hostname or
-        'npu-worker' in inventory_hostname
+        'npu' in group_names
       failed_when: false
       tags: [npu, npu-worker, restart]
 
@@ -799,8 +794,7 @@
         msg: "WARNING: autobot-npu-worker not active after restart: {{ npu_status.stdout | default('unknown') }}"
       when:
         - >-
-          '03-NPU' in inventory_hostname or
-          'npu-worker' in inventory_hostname
+          'npu' in group_names
         - npu_status is defined
         - npu_status.rc | default(0) != 0
       tags: [npu, npu-worker, restart]
@@ -812,8 +806,7 @@
         dest: /opt/autobot/
       become: true
       when: >-
-        '05-Browser' in inventory_hostname or
-        'browser-automation' in inventory_hostname
+        'browser' in group_names
       tags: [browser, browser-worker]
 
     - name: "[PLAY 2] Browser | Fix ownership"
@@ -824,8 +817,7 @@
         recurse: true
       become: true
       when: >-
-        '05-Browser' in inventory_hostname or
-        'browser-automation' in inventory_hostname
+        'browser' in group_names
       tags: [browser, browser-worker]
 
     - name: "[PLAY 2] Browser | Install Python dependencies"
@@ -840,8 +832,7 @@
       timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
       when:
         - >-
-          '05-Browser' in inventory_hostname or
-          'browser-automation' in inventory_hostname
+          'browser' in group_names
         - hostvars['localhost']['python_deps_changed'] | bool
       register: browser_pip_install
       failed_when: false
@@ -853,8 +844,7 @@
         state: restarted
       become: true
       when: >-
-        '05-Browser' in inventory_hostname or
-        'browser-automation' in inventory_hostname
+        'browser' in group_names
       failed_when: false
       tags: [browser, browser-worker, restart]
 
@@ -866,8 +856,7 @@
         delay: 5
       delegate_to: localhost
       when: >-
-        '05-Browser' in inventory_hostname or
-        'browser-automation' in inventory_hostname
+        'browser' in group_names
       tags: [browser, browser-worker, restart]
 
     # ----- Shared (non-backend nodes) -----
@@ -876,7 +865,7 @@
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: /opt/autobot/
       become: true
-      when: "'01-Backend' not in inventory_hostname"
+      when: "'backend' not in group_names"
       tags: [shared]
 
     - name: "[PLAY 2] Shared | Fix ownership"
@@ -886,7 +875,7 @@
         group: autobot
         recurse: true
       become: true
-      when: "'01-Backend' not in inventory_hostname"
+      when: "'backend' not in group_names"
       tags: [shared]
 
     # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH

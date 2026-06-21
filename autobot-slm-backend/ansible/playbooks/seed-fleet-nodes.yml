@@ -47,35 +47,6 @@
       - autobot-slm-database
       - autobot-monitoring
 
-    # Map inventory hostnames to SLM deployment roles.
-    # Role names must match AVAILABLE_ROLES in api/deployments.py.
-    node_role_map:
-      01-Backend:
-        - autobot-slm-agent
-        - autobot-backend
-        - llm
-        - vnc
-      02-Frontend:
-        - autobot-slm-agent
-        - autobot-frontend
-      npu-worker:
-        - autobot-slm-agent
-        - autobot-npu-worker
-      03-AI-Stack:
-        - autobot-slm-agent
-        - autobot-ai-stack
-        - llm
-      04-Databases:
-        - autobot-slm-agent
-        - autobot-database
-      browser-automation:
-        - autobot-slm-agent
-        - autobot-browser-worker
-      05-LLM-CPU:
-        - autobot-slm-agent
-        - llm-cpu
-      06-Node-27:
-        - autobot-slm-agent
 
   tasks:
     - name: "Authenticate with SLM API"
@@ -104,10 +75,13 @@
           hostname: "{{ item }}"
           ip_address: "{{ hostvars[item].ansible_host }}"
           node_id: "{{ hostvars[item].slm_node_id }}"
+          # #10110: roles come from the node's own registration (registry-driven);
+          # the SLM manager gets its fixed role set, any other seeded host gets
+          # the slm-agent baseline and self-registers its real roles afterward.
           roles: >-
             {{ slm_manager_roles
                if item in (groups.get('slm_server', []) | default([]))
-               else (node_role_map[item] | default(['slm-agent'])) }}
+               else ['slm-agent'] }}
           ssh_user: "{{ hostvars[item].ansible_user | default('autobot') }}"
           ssh_port: 22
           auth_method: "key"
