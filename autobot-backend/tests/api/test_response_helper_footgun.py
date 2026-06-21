@@ -43,11 +43,7 @@ def _returns_undumped_helper(func: ast.AST) -> list[int]:
     bad = []
     for ret in (n for n in ast.walk(func) if isinstance(n, ast.Return)):
         val = ret.value
-        if (
-            isinstance(val, ast.Call)
-            and isinstance(val.func, ast.Name)
-            and val.func.id in _HELPERS
-        ):
+        if isinstance(val, ast.Call) and isinstance(val.func, ast.Name) and val.func.id in _HELPERS:
             bad.append(ret.lineno)
     return bad
 
