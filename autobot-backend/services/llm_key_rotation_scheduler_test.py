@@ -12,6 +12,7 @@ conftest stubs the whole ``services`` package (heavy import chain), so we load
 the module fresh from its file with apscheduler stubbed to exercise the real
 resolver logic.
 """
+
 from __future__ import annotations
 
 import importlib.util
