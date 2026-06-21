@@ -15,7 +15,7 @@ Covers:
 
 import json
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -347,7 +347,7 @@ class TestFileRetention:
         old_ts = time.time() - (91 * 86400)
         os.utime(old_file, (old_ts, old_ts))
 
-        original_unlink = old_file.__class__.unlink
+        old_file.__class__.unlink
 
         def raise_not_found(self, missing_ok=False):
             raise FileNotFoundError("already gone")
