@@ -140,7 +140,7 @@ async def _store_user_preferences_to_redis(user_id: str, preferences: UserPrefer
 
 
 @router.get("/me/preferences", response_model=DataResponse[UserPreferencesData])
-@with_error_handling
+@with_error_handling()
 async def get_user_preferences(
     request: Request,
     current_user: Dict = Depends(get_current_user),
@@ -171,7 +171,7 @@ async def get_user_preferences(
 
 
 @router.patch("/me/preferences", response_model=DataResponse[UserPreferencesData])
-@with_error_handling
+@with_error_handling()
 async def update_user_preferences(
     preferences: UserPreferences,
     request: Request,

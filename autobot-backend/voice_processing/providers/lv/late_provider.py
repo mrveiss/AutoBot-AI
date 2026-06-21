@@ -48,7 +48,7 @@ class LateProvider(SpeechProvider):
             else:
                 logger.warning(f"LATE binary check failed: {result.stderr}")
         except FileNotFoundError:
-            logger.warning(
+            logger.debug(
                 f"LATE binary not found at: {self.late_binary}. "
                 "Install LATE or set LATE_BINARY_PATH environment variable."
             )

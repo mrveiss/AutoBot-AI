@@ -21,7 +21,7 @@ psycopg2-binary>=2.9.12  # Sync PostgreSQL driver for migrations
 
 # Data validation
 pydantic[email]>=2.13.4
-pydantic-settings>=2.14.1
+pydantic-settings>=2.14.2
 typing_extensions>=4.15.0  # For Python 3.8 compatibility
 
 # Authentication
