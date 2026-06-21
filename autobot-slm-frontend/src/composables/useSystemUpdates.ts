@@ -13,6 +13,7 @@
 import { ref, computed, readonly } from 'vue'
 import axios, { type AxiosInstance } from 'axios'
 import { getSlmApiBase } from '@/config/ssot-config'
+import { useAuthStore } from '@/stores/auth'
 
 const API_BASE = getSlmApiBase()
 
@@ -84,6 +85,8 @@ export interface UpdateJob {
 // =============================================================================
 
 export function useSystemUpdates() {
+  const authStore = useAuthStore()
+
   const client: AxiosInstance = axios.create({
     baseURL: API_BASE,
     headers: { 'Content-Type': 'application/json' },
@@ -96,6 +99,18 @@ export function useSystemUpdates() {
     }
     return config
   })
+
+  // #10369 — without a 401 handler an expired/invalid token makes the badge
+  // poller spam 401s forever; log out so the UI redirects to login instead.
+  client.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      if (error.response?.status === 401) {
+        authStore.logout()
+      }
+      return Promise.reject(error)
+    }
+  )
 
   // ===========================================================================
   // Reactive State
