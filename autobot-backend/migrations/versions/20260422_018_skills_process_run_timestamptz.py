@@ -4,8 +4,8 @@
 # Author: mrveiss
 """Convert naive DateTime columns to TIMESTAMPTZ in skills and process_run tables.
 
-skills_packages.created_at, skill_repos.last_synced, skill_approvals.requested_at,
-skill_approvals.reviewed_at, skill_approvals.promoted_at, process_runs.started_at,
+skill_packages.created_at, skill_packages.promoted_at, skill_repos.last_synced,
+skill_approvals.requested_at, skill_approvals.reviewed_at, process_runs.started_at,
 process_runs.completed_at, agent_sessions.expires_at.
 
 Revision ID: 20260422_018
