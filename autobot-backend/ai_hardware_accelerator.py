@@ -282,14 +282,24 @@ class AIHardwareAccelerator:
                     health_data = await response.json()
                     npu_available = health_data.get("npu_available", False)
 
+                    # Log availability transitions only — this poll runs on a
+                    # timer, so logging every cycle floods the log when the NPU
+                    # worker is up but reports no NPU hardware (the normal case
+                    # on hosts without an Intel NPU).
+                    prev = self.device_status[HardwareDevice.NPU]
+                    first_check = prev.get("last_check") is None
+                    changed = prev.get("available") != npu_available
                     self.device_status[HardwareDevice.NPU]["available"] = npu_available
                     self.device_status[HardwareDevice.NPU]["last_check"] = datetime.now(tz=timezone.utc)
 
                     if npu_available:
-                        logger.info("NPU Worker available and ready")
+                        if first_check or changed:
+                            logger.info("NPU Worker available and ready")
                         await self._update_npu_metrics(health_data)
-                    else:
+                    elif first_check or changed:
                         logger.warning("NPU Worker connected but NPU hardware unavailable")
+                    else:
+                        logger.debug("NPU Worker connected but NPU hardware unavailable (unchanged)")
                 else:
                     logger.warning(f"NPU Worker health check failed: {response.status}")
                     self.device_status[HardwareDevice.NPU]["available"] = False

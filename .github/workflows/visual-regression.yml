@@ -64,7 +64,11 @@ jobs:
   visual-regression:
     name: Storybook visual regression
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    # A healthy full run completes well under 30 min. The Playwright config
+    # caps itself (globalTimeout) and each story's navigation (#10038); this
+    # job ceiling is the outer backstop so a hang fails fast instead of
+    # pinning the PR's check list for hours (was 360 = 6h of manual-cancel).
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
@@ -81,9 +85,30 @@ jobs:
         working-directory: autobot-frontend
         run: npm ci
 
-      - name: Install Playwright browsers (chromium only)
+      # Cache the Playwright browser binaries across runs (#10365). The cold
+      # download is slow on the serial single runner; key on the installed
+      # @playwright/test version so a bump busts the cache.
+      - name: Resolve Playwright version
+        id: pw
+        working-directory: autobot-frontend
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.pw.outputs.version }}
+
+      - name: Install Playwright browsers (cache miss — full)
+        if: steps.pw-cache.outputs.cache-hit != 'true'
         working-directory: autobot-frontend
         run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright OS deps (cache hit — browsers cached)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        working-directory: autobot-frontend
+        run: npx playwright install-deps chromium
 
       - name: Build Storybook (static)
         working-directory: autobot-frontend

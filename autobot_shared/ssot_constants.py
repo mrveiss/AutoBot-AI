@@ -282,9 +282,9 @@ MODEL_PRICING_PER_1M_TOKENS: Dict[str, Dict[str, float]] = {
     OPENAI_O3: {"input": 2.00, "output": 8.00},
     OPENAI_O3_MINI: {"input": 1.10, "output": 4.40},
     OPENAI_O4_MINI: {"input": 1.10, "output": 4.40},
-    GOOGLE_GEMINI25_PRO: {"input": 1.25, "output": 10.00},
-    GOOGLE_GEMINI25_FLASH: {"input": 0.15, "output": 0.60},
-    GOOGLE_GEMINI20_FLASH: {"input": 0.10, "output": 0.40},
+    GOOGLE_GEMINI25_PRO: {"input": 1.25, "output": 5.00},
+    GOOGLE_GEMINI25_FLASH: {"input": 0.075, "output": 0.30},
+    GOOGLE_GEMINI20_FLASH: {"input": 0.075, "output": 0.30},
     GOOGLE_GEMINI15_PRO: {"input": 1.25, "output": 5.00},
     GOOGLE_GEMINI15_FLASH: {"input": 0.075, "output": 0.30},
     DEEPSEEK_V3: {"input": 0.27, "output": 1.10},
@@ -382,6 +382,8 @@ class PathConstants:
     STATIC_DIR: Path = PROJECT_ROOT / "autobot-backend" / "static"
     FRONTEND_DIR: Path = PROJECT_ROOT / "autobot-frontend"
     TESTS_DIR: Path = PROJECT_ROOT / "autobot-backend"
+    # Temp/generated-files dir cleaned by tasks.cleanup_generated_files (#10385-adjacent)
+    TEMP_DIR: Path = DATA_DIR / "temp"
 
 
 PATH = PathConstants()
@@ -430,6 +432,9 @@ class SecurityConstants:
         "224.0.0.0/4",
         "240.0.0.0/4",
     ]
+
+    # Web ports permitted for outbound/domain network validation (#10384).
+    ALLOWED_WEB_PORTS: List[int] = [80, 443, 8080, 8443]
 
     USER_AGENT_POOL: List[str] = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",  # noqa: E501
