@@ -143,3 +143,117 @@ async def test_get_context_auto_collection_cag():
     ctx, metrics = await get_context(query="q", rag_service=rag, cag_service=cag, mode="auto", collection_mode="cag")
     assert ctx == "cag-context"
     rag.get_optimized_context.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 (KAG) — Issue #9018
+# ---------------------------------------------------------------------------
+
+from advanced_rag_optimizer import SearchResult  # noqa: E402
+
+
+def test_select_kag_enabled_returns_kag():
+    """enable_kag=True + mode='kag' → 'kag'."""
+    assert select_strategy("kag", _cfg(enable_kag=True)) == "kag"
+
+
+def test_select_kag_disabled_returns_rag():
+    """enable_kag=False + mode='kag' → 'rag' (inert)."""
+    assert select_strategy("kag", _cfg(enable_kag=False)) == "rag"
+
+
+def test_select_auto_kag_enabled_collection_kag():
+    """auto + enable_kag=True + collection_mode='kag' → 'kag'."""
+    assert select_strategy("auto", _cfg(enable_kag=True), collection_mode="kag") == "kag"
+
+
+def test_select_auto_kag_disabled_collection_kag():
+    """auto + enable_kag=False + collection_mode='kag' → 'rag'."""
+    assert select_strategy("auto", _cfg(enable_kag=False), collection_mode="kag") == "rag"
+
+
+def _make_kag_services(enable_kag: bool = True, graph_results_added: int = 2):
+    """Build rag/cag/graph_rag mocks for KAG dispatch tests."""
+    from services.graph_rag_service import GraphRAGMetrics
+
+    config = RAGConfig(enable_kag=enable_kag)
+    rag = MagicMock()
+    rag.config = config
+    rag.get_optimized_context = AsyncMock(return_value=("rag-context", RAGMetrics(total_time=0.1)))
+
+    cag = MagicMock()
+
+    results = [
+        SearchResult(
+            content="entity observation A",
+            metadata={"source": "graph_expansion"},
+            semantic_score=0.0,
+            keyword_score=0.0,
+            hybrid_score=0.9,
+            relevance_rank=1,
+            source_path="graph:EntityA",
+            chunk_index=0,
+        ),
+        SearchResult(
+            content="entity observation B",
+            metadata={"source": "graph_expansion"},
+            semantic_score=0.0,
+            keyword_score=0.0,
+            hybrid_score=0.8,
+            relevance_rank=2,
+            source_path="graph:EntityB",
+            chunk_index=0,
+        ),
+    ]
+    gmetrics = GraphRAGMetrics()
+    gmetrics.graph_results_added = graph_results_added
+    graph_rag = MagicMock()
+    graph_rag.graph_aware_search = AsyncMock(return_value=(results, gmetrics))
+    return rag, cag, graph_rag
+
+
+async def test_get_context_kag_routes_to_graph_aware_search():
+    """KAG enabled → graph_aware_search invoked; (str, RAGMetrics) with strategy=kag."""
+    rag, cag, graph_rag = _make_kag_services(enable_kag=True, graph_results_added=2)
+    ctx, metrics = await get_context(
+        query="relational q",
+        rag_service=rag,
+        cag_service=cag,
+        graph_rag_service=graph_rag,
+        mode="kag",
+    )
+    graph_rag.graph_aware_search.assert_awaited_once()
+    assert isinstance(ctx, str)
+    assert "entity observation A" in ctx and "graph:EntityA" in ctx
+    assert getattr(metrics, "strategy", None) == "kag"
+    assert metrics.graph_results_added == 2
+    rag.get_optimized_context.assert_not_called()
+
+
+async def test_get_context_kag_disabled_falls_back_to_rag():
+    """enable_kag=False → kag inert, routes to RAG, graph never called."""
+    rag, cag, graph_rag = _make_kag_services(enable_kag=False)
+    ctx, metrics = await get_context(
+        query="q",
+        rag_service=rag,
+        cag_service=cag,
+        graph_rag_service=graph_rag,
+        mode="kag",
+    )
+    assert ctx == "rag-context"
+    assert getattr(metrics, "strategy", None) == "rag"
+    graph_rag.graph_aware_search.assert_not_called()
+
+
+async def test_get_context_kag_no_service_falls_back_to_rag():
+    """KAG enabled but no GraphRAGService supplied → safe RAG fallback."""
+    rag, cag, _ = _make_kag_services(enable_kag=True)
+    ctx, metrics = await get_context(
+        query="q",
+        rag_service=rag,
+        cag_service=cag,
+        graph_rag_service=None,
+        mode="kag",
+    )
+    assert ctx == "rag-context"
+    assert getattr(metrics, "strategy", None) == "rag"

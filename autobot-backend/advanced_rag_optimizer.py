@@ -84,6 +84,8 @@ class RAGMetrics:
     documents_loaded: int = 0
     tokens_used: int = 0
     budget: int = 0
+    # KAG observability — graph-traversal results merged into context (#9018 Phase 2).
+    graph_results_added: int = 0
 
 
 @dataclass
