@@ -52,9 +52,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     define: {
-      __FEATURE_VOICE__: JSON.stringify(env.VITE_FEATURE_VOICE !== 'false'),
-      __FEATURE_VNC__: JSON.stringify(env.VITE_FEATURE_VNC !== 'false'),
-      __FEATURE_BROWSER__: JSON.stringify(env.VITE_FEATURE_BROWSER !== 'false'),
+      // #10086: removed unused __FEATURE_VOICE__/VNC/BROWSER build-time defines
+      // (zero consumers). Feature gating is standardized on the single runtime
+      // convention: navItems `VITE_FEATURE_<NAME>` + `featureDefaultVisible`.
       'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),
     },
     plugins: [vue(), vueDevTools(), vadAssetsPlugin()],

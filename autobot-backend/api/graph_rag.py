@@ -280,3 +280,76 @@ async def graph_rag_metrics(
     except Exception as e:
         logger.error("Metrics retrieval failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retrieve metrics")
+
+
+# ====================================================================
+# Issue #9018 Phase 2: KB-explorer collection graph endpoint (read-only)
+# ====================================================================
+
+
+def _serialize_graph_nodes(entities: List[Metadata]) -> List[Metadata]:
+    """Convert graph entities to explorer node dicts. Read-only; #9018 Phase 2."""
+    return [
+        {
+            "id": e.get("id"),
+            "name": e.get("name"),
+            "type": e.get("type"),
+            "observations": e.get("observations", []),
+        }
+        for e in entities
+        if e.get("id")
+    ]
+
+
+async def _collect_collection_edges(service: GraphRAGService, node_ids: List[str]) -> List[Metadata]:
+    """Gather outgoing relations for the given node ids, deduped. #9018 Phase 2."""
+    edges: List[Metadata] = []
+    seen: set = set()
+    for entity_id in node_ids:
+        relations = await service.graph.get_relations(entity_id=entity_id, direction="outgoing")
+        for rel in relations.get("relations", []):
+            key = (rel.get("from"), rel.get("to"), rel.get("type"))
+            if key in seen:
+                continue
+            seen.add(key)
+            edges.append(rel)
+    return edges
+
+
+@router.get("/collections/{collection_id}/graph")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="collection_graph",
+    error_code_prefix="GRAPH_RAG",
+)
+async def collection_graph(
+    collection_id: str,
+    service: GraphRAGService = Depends(get_graph_rag_service),
+    current_user: dict = Depends(get_current_user),
+) -> JSONResponse:
+    """Return a collection's knowledge-graph subgraph (nodes + edges).
+
+    Issue #9018 Phase 2 — read-only KB-explorer view. Reuses AutoBotMemoryGraph
+    query methods (no graph mutation). #10234: returns a plain dict via
+    JSONResponse (no response_model=Dict .model_dump footgun).
+    Issue #744: requires an authenticated user.
+    """
+    request_id = generate_request_id()
+    logger.info("[%s] Collection graph request: collection_id=%s", request_id, collection_id)
+
+    entities = await service.graph.search_entities(query=collection_id, tags=[collection_id], limit=500)
+    nodes = _serialize_graph_nodes(entities)
+    edges = await _collect_collection_edges(service, [n["id"] for n in nodes])
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "collection_id": collection_id,
+            "nodes": nodes,
+            "edges": edges,
+            "node_count": len(nodes),
+            "edge_count": len(edges),
+            "request_id": request_id,
+        },
+        media_type="application/json; charset=utf-8",
+    )
