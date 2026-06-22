@@ -311,6 +311,21 @@
   notify: restart backend
   tags: ['backend', 'deploy']
 
+# Issue #10294: plugins ship at the repo root (code_source/plugins/), a SIBLING of
+# autobot-backend/, so the autobot-backend code sync never copied them. The backend
+# resolves plugins at {{ backend_code_dir }}/plugins (AUTOBOT_BASE_DIR/plugins), which
+# did not exist → discover_plugins() found nothing and every core plugin (image/video
+# generation, kb-event, etc.) silently failed to register. Sync them into place.
+- name: Sync plugins directory from code_source (#10294)
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/plugins/"
+    dest: "{{ backend_code_dir }}/plugins/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+  notify: restart backend
+  tags: ['backend', 'deploy']
+
 # Issue #10020: The old rsync task created a real directory copy of autobot_shared
 # inside backend_install_dir (/opt/autobot/autobot-backend/autobot_shared/).
 # Because PYTHONPATH lists backend_install_dir first, that embedded copy shadowed
