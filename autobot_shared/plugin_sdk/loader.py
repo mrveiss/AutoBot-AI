@@ -266,9 +266,7 @@ class PluginLoader:
             for env in plugin.manifest.required_env
         }
 
-    def _import_plugin_class(
-        self, entry_point: str, plugin_dir: Path | None = None
-    ) -> Type[BasePlugin] | None:
+    def _import_plugin_class(self, entry_point: str, plugin_dir: Path | None = None) -> Type[BasePlugin] | None:
         """
         Import plugin class from entry point.
 
