@@ -266,6 +266,11 @@ class AuthenticationMiddleware:
         Returns default admin user dict when auth is disabled.
         """
         return {
+            # user_id/sub so user endpoints (e.g. /users/me/preferences) resolve
+            # the identity in single_user mode; without them they 401'd ('User ID
+            # not found in token') → frontend logout → login redirect loop.
+            "user_id": "admin",
+            "sub": "admin",
             "username": "admin",
             "role": "admin",
             "email": f"admin@{ssot_config.auth.domain}",
@@ -1038,6 +1043,11 @@ async def authenticate_websocket(websocket) -> dict | None:
         deployment_config = get_deployment_config()
         if deployment_config.mode == DeploymentMode.SINGLE_USER:
             return {
+                # user_id/sub so user endpoints (e.g. /users/me/preferences) can
+                # resolve the identity; without them they 401'd ('User ID not found
+                # in token') and the frontend logged out → login redirect loop.
+                "user_id": "admin",
+                "sub": "admin",
                 "username": "admin",
                 "role": "admin",
                 "email": f"admin@{ssot_config.auth.domain}",
