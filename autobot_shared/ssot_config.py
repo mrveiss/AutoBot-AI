@@ -1387,6 +1387,14 @@ class MiscConfig(BaseSettings):
     voice_toolset_bundle: str = Field(default="voice_safe", alias="AUTOBOT_VOICE_TOOLSETS")
     voice_disabled_tools: str = Field(default="", alias="AUTOBOT_VOICE_DISABLED_TOOLS")
     voice_realtime_model: str = Field(default="gpt-realtime-2", alias="AUTOBOT_VOICE_REALTIME_MODEL")
+    voice_realtime_provider: str = Field(
+        default="openai",
+        alias="AUTOBOT_VOICE_REALTIME_PROVIDER",
+        description=(
+            "Active realtime voice provider (#9025): openai | gemini | elevenlabs | ultravox. "
+            "Default openai keeps current behaviour; unconfigured/unknown selections fall back to openai."
+        ),
+    )
     voice_realtime_max_seconds: int = Field(
         default=1800,
         alias="AUTOBOT_VOICE_REALTIME_MAX_SECONDS",
