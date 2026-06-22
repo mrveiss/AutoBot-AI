@@ -8,6 +8,7 @@ Core plugins live in hyphenated dirs (plugins/core-plugins/hello-plugin) whose
 dotted entry_point (plugins.core_plugins.hello_plugin.main) is not importable.
 The loader must fall back to importing main.py by file path.
 """
+
 from __future__ import annotations
 
 import json
@@ -17,7 +18,7 @@ import pytest
 
 from autobot_shared.plugin_sdk.loader import PluginLoader
 
-_PLUGIN_MAIN = '''
+_PLUGIN_MAIN = """
 from autobot_shared.plugin_sdk.base import BasePlugin
 
 
@@ -30,7 +31,7 @@ class SamplePlugin(BasePlugin):
 
 
 # No "Plugin" alias on purpose — loader finds the BasePlugin subclass.
-'''
+"""
 
 
 def _write_plugin(root: Path, dir_name: str, entry_point: str) -> Path:

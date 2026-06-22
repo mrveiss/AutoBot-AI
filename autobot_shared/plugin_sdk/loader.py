@@ -12,12 +12,12 @@ Issue #6970 - Validate declared hooks against HOOK_REGISTRY on load.
 Issue #6971 - Raise PluginLoadError for missing required env vars.
 """
 
-import sys
 import importlib
 import importlib.util
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Dict, List, Tuple, Type
 
