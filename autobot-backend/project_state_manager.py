@@ -107,6 +107,10 @@ class ProjectStateManager:
         """Initialize project state manager with database and phase definitions."""
         if db_path is None:
             db_path = config.project_state_db_path
+        # config defaults to '' when AUTOBOT_PROJECT_STATE_DB_PATH is unset;
+        # fall back to <data_dir>/project_state.db so open('') never occurs.
+        if not db_path:
+            db_path = str(config.path.data_path / "project_state.db")
         self.db_path = db_path
         # Use centralized PathConstants (Issue #380)
         self.project_root = PATH.PROJECT_ROOT

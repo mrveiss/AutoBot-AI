@@ -532,15 +532,21 @@ class RedisServiceManager:
             logger.warning("Redis connectivity check failed: %s", e)
             return False, 0.0
 
-    def _determine_health_status(self, service_running: bool, connectivity: bool) -> str:
-        """
-        Determine overall health status based on service and connectivity.
+    def _determine_health_status(
+        self, service_running: bool, connectivity: bool, service_status: str = "unknown"
+    ) -> str:
+        """Determine overall health status based on service and connectivity.
 
-        (Issue #398: extracted helper)
+        (Issue #398: extracted helper; #10466: treat SLM-unreachable 'unknown'
+        as 'degraded' rather than 'critical' when direct Redis connectivity is ok.)
         """
         if service_running and connectivity:
             return "healthy"
-        elif service_running and not connectivity:
+        if service_running and not connectivity:
+            return "degraded"
+        # service_status == "unknown" means SLM was unreachable — we cannot confirm
+        # the systemd service state, but Redis itself may be reachable.
+        if service_status == "unknown" and connectivity:
             return "degraded"
         return "critical"
 
@@ -575,7 +581,7 @@ class RedisServiceManager:
             service_running = status.status == "running"
 
             connectivity, response_time_ms = await self._check_redis_connectivity()
-            overall_status = self._determine_health_status(service_running, connectivity)
+            overall_status = self._determine_health_status(service_running, connectivity, status.status)
             recommendations = self._generate_health_recommendations(service_running, connectivity, response_time_ms)
 
             return HealthStatus(

@@ -139,7 +139,7 @@ class SLMAgent:
         # Registration-pending backoff state (#9965).
         # 404 responses mean the node row doesn't exist yet — keep retrying
         # with bounded exponential backoff instead of treating it as fatal.
-        self._reg_backoff_seconds: float = 0  # 0 = not in backoff
+        self._reg_backoff_seconds: float = 0  # 0 = not in backoff (cap: class attr _REG_BACKOFF_CAP)
 
     def _init_buffer_db(self):
         """Initialize SQLite buffer database."""
