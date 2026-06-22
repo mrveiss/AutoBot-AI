@@ -25,8 +25,27 @@ export type ThemeVariant = 'default' | 'ember'
 /** Storage key for persisting variant preference */
 const THEME_VARIANT_STORAGE_KEY = 'autobot-theme-variant'
 
+/** All known variants — single source of truth for validation. */
+const VALID_VARIANTS: readonly ThemeVariant[] = ['default', 'ember']
+
+/**
+ * Default variant when the user has no saved preference.
+ *
+ * The user GUI ships the warm "ember" palette by default (Issue #10461 / #9274).
+ * Build-time overridable via `VITE_DEFAULT_THEME_VARIANT` so a deployment that
+ * shares this build with the /slm control plane can pin `default` and keep the
+ * current look. An unset or unrecognised value falls back to `ember`.
+ */
+function resolveDefaultVariant(): ThemeVariant {
+  const fromEnv = import.meta.env?.VITE_DEFAULT_THEME_VARIANT as string | undefined
+  if (fromEnv && (VALID_VARIANTS as readonly string[]).includes(fromEnv)) {
+    return fromEnv as ThemeVariant
+  }
+  return 'ember'
+}
+
 /** Default variant when no preference is set */
-const DEFAULT_VARIANT: ThemeVariant = 'default'
+const DEFAULT_VARIANT: ThemeVariant = resolveDefaultVariant()
 
 /** Global reactive state (singleton pattern) */
 const currentVariant = ref<ThemeVariant>(DEFAULT_VARIANT)
@@ -62,8 +81,7 @@ function saveThemeVariant(variant: ThemeVariant): void {
 function loadThemeVariant(): ThemeVariant {
   try {
     const stored = localStorage.getItem(THEME_VARIANT_STORAGE_KEY) as ThemeVariant | null
-    const validVariants: ThemeVariant[] = ['default', 'ember']
-    if (stored && validVariants.includes(stored)) {
+    if (stored && VALID_VARIANTS.includes(stored)) {
       return stored
     }
   } catch {
@@ -128,7 +146,7 @@ export function useThemeVariant() {
   /**
    * Available theme variant options
    */
-  const availableVariants: ThemeVariant[] = ['default', 'ember']
+  const availableVariants: ThemeVariant[] = [...VALID_VARIANTS]
 
   /**
    * Theme variant labels for UI display

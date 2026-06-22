@@ -60,7 +60,7 @@ async def test_pause_agent_sets_status_and_logs():
     agent_id = str(uuid.uuid4())
     actor_id = str(uuid.uuid4())
 
-    session = _mock_session(rows=[("available",)])
+    session = _mock_session(rows=[("available", None)])
     log = _activity_log_mock()
     svc = ControlsService(activity_log=log)
 
@@ -86,7 +86,7 @@ async def test_resume_agent_clears_status_and_flag():
     agent_id = str(uuid.uuid4())
     actor_id = str(uuid.uuid4())
 
-    session = _mock_session(rows=[("paused",)])
+    session = _mock_session(rows=[("paused", None)])
     log = _activity_log_mock()
     svc = ControlsService(activity_log=log)
 
@@ -109,7 +109,7 @@ async def test_terminate_agent_is_permanent():
     agent_id = str(uuid.uuid4())
     actor_id = str(uuid.uuid4())
 
-    session = _mock_session(rows=[("available",)])
+    session = _mock_session(rows=[("available", None)])
     log = _activity_log_mock()
     svc = ControlsService(activity_log=log)
 
@@ -184,7 +184,7 @@ async def test_pause_sprint_pauses_all_agents():
     sprint_result.fetchone.return_value = (sprint_id,)
 
     agent_status_result = MagicMock()
-    agent_status_result.fetchone.return_value = ("available",)
+    agent_status_result.fetchone.return_value = ("available", None)
 
     call_count = 0
 
@@ -237,7 +237,7 @@ async def test_pause_company_sets_redis_flag():
     company_id = str(uuid.uuid4())
     actor_id = str(uuid.uuid4())
 
-    session = _mock_session()
+    session = _mock_session(rows=[(company_id,)])
     log = _activity_log_mock()
     svc = ControlsService(activity_log=log)
 
@@ -259,7 +259,7 @@ async def test_resume_company_deletes_redis_flag():
     company_id = str(uuid.uuid4())
     actor_id = str(uuid.uuid4())
 
-    session = _mock_session()
+    session = _mock_session(rows=[(company_id,)])
     log = _activity_log_mock()
     svc = ControlsService(activity_log=log)
 
