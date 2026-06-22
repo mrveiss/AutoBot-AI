@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
@@ -945,11 +946,10 @@ class EnterpriseFeatureManager:
         )
 
 
-# Singleton instance (thread-safe)
-
-_enterprise_manager: EnterpriseFeatureManager | None = None
+# Singleton instance (thread-safe, lazy construction on first call)
+_enterprise_manager = lazy_singleton(EnterpriseFeatureManager)
 
 
 def get_enterprise_manager() -> EnterpriseFeatureManager:
-    """Get singleton enterprise feature manager (thread-safe)"""
+    """Get singleton enterprise feature manager (thread-safe)."""
     return _enterprise_manager()
