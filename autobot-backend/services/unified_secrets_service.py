@@ -36,6 +36,7 @@ from autobot_shared.secrets_envelope import (
     derive_vault_key,
     load_root_key,
     open_secret,
+    rewrap_dek,
     seal,
     unwrap_dek,
     wrap_dek,
@@ -189,6 +190,31 @@ class UnifiedSecretsService:
             grant.wrapped_dek = wrap_dek(
                 new_dek, self._kek(grant.grantee), grant.grantee, secret_id=str(secret_id)
             ).to_dict()
+        await session.flush()
+        return secret
+
+    async def rotate_kek(
+        self,
+        session: AsyncSession,
+        *,
+        secret_id: uuid.UUID,
+        new_root_key: bytes,
+        actor_vaults: Iterable[VaultRef],
+    ) -> Secret:
+        """Rewrap every grant from the current KEK to a KEK derived from *new_root_key*.
+
+        The sealed value (payload) is untouched; only the wrapped DEKs change.  Use this
+        when the root key is rotated: pass the new root key and every grant is migrated so
+        the secret is readable with the new key. ``actor_vaults`` must contain at least one
+        current grantee vault — the actor proves access before rewrapping is allowed.
+        """
+        secret = await self._load(session, secret_id)
+        await self._dek_via(session, secret, actor_vaults)  # authorize: actor holds access
+        for grant in await self._grants(session, secret_id):
+            old_kek = self._kek(grant.grantee)
+            new_kek = derive_vault_key(new_root_key, grant.grantee)
+            old_wrapped = WrappedDek.from_dict(grant.wrapped_dek)
+            grant.wrapped_dek = rewrap_dek(old_wrapped, old_kek, new_kek, secret_id=str(secret_id)).to_dict()
         await session.flush()
         return secret
 
