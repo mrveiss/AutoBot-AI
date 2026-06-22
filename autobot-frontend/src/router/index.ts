@@ -557,6 +557,16 @@ export const routes: RouteRecordRaw[] = [
           parent: 'analytics'
         }
       },
+      // Issue #9024: LLM model-comparison / benchmark dashboard
+      {
+        path: 'benchmark',
+        name: 'analytics-benchmark',
+        component: () => import('@/views/BenchmarkView.vue'),
+        meta: {
+          title: 'Model Benchmark',
+          parent: 'analytics'
+        }
+      },
       {
         path: 'log-patterns',
         name: 'analytics-log-patterns',

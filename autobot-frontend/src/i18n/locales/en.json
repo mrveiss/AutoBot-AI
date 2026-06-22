@@ -1407,7 +1407,9 @@
         "errors": "Errors",
         "errorsAria": "Error monitoring",
         "diagnostics": "Diagnostics",
-        "diagnosticsAria": "Failure analysis and causal inference"
+        "diagnosticsAria": "Failure analysis and causal inference",
+        "benchmark": "Benchmark",
+        "benchmarkAria": "Model benchmark and comparison"
       }
     },
     "header": {
@@ -7811,5 +7813,36 @@
       "noData": "No data",
       "metricsUnavailable": "Metrics unavailable"
     }
+  },
+  "benchmark": {
+    "title": "Model Benchmark",
+    "subtitle": "Compare quality and cost across LLM providers side by side",
+    "promptSet": "Prompt set",
+    "customPrompt": "Custom prompt",
+    "prompt": "Prompt",
+    "promptPlaceholder": "Enter a prompt to run across the selected models…",
+    "models": "Models",
+    "runBenchmark": "Run benchmark",
+    "running": "Running…",
+    "saveRun": "Save run",
+    "exportCsv": "Export CSV",
+    "quality": "Quality",
+    "rateStars": "Rate {n} stars",
+    "scatterTitle": "Cost vs Quality",
+    "scatterSubtitle": "Estimated cost (USD) plotted against your star rating",
+    "scatterSeries": "Models",
+    "axisCost": "Estimated cost (USD)",
+    "axisQuality": "Quality rating",
+    "history": "Run history",
+    "filterModel": "Filter by model",
+    "allTypes": "All types",
+    "applyFilters": "Apply",
+    "noRuns": "No saved runs yet.",
+    "date": "Date",
+    "type": "Type",
+    "modelsCol": "Models",
+    "avgQuality": "Avg quality",
+    "totalCost": "Total cost",
+    "delete": "Delete"
   }
 }
