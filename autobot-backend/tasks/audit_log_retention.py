@@ -3,133 +3,110 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Celery beat task: audit log retention cleanup (GH#8995, MVA-3044).
+Celery beat task: audit log retention cleanup (GH#8995).
 
-Removes audit log entries older than the configured TTL to prevent
-unbounded storage growth in long-running deployments.
+Prunes entries from Redis audit sorted-sets that are older than the
+configured TTL.
+
+Safe defaults: period=0 → task is a no-op.  Nothing is deleted unless
+AUTOBOT_AUDIT_RETENTION_DAYS is set to a positive integer.
 """
 
-import os
 from datetime import datetime, timedelta, timezone
-from typing import Dict
+from typing import Any, Dict
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config as ssot_config
 from celery_app import celery_app
+from services.audit.unified_audit import AuditCategory, AuditEvent
+from services.audit.unified_audit import emit as audit_emit
 
 logger = get_logger(__name__)
 
-_DEFAULT_AUDIT_RETENTION_DAYS = 365  # 1 year default for audit logs
+# Module-level constant — reads env at import time (cache.py pattern)
+_AUDIT_RETENTION_DAYS = ssot_config.audit_retention_days
+
+_AUDIT_PATTERN = "audit:*"
+
+
+def _emit_purge_audit(deleted_logs: int, retention_days: int, extra: Dict[str, Any]) -> None:
+    """Emit a single audit event summarising the purge run."""
+    audit_emit(
+        AuditEvent(
+            category=AuditCategory.SECURITY,
+            action="audit_log_retention_purge",
+            actor_id="system:retention_worker",
+            resource_type="audit_log",
+            metadata={"deleted_logs": deleted_logs, "retention_days": retention_days, **extra},
+        )
+    )
 
 
 async def _async_cleanup_expired_audit_logs(retention_days: int, dry_run: bool = False) -> Dict[str, int]:
-    """Remove audit log entries older than retention_days (async helper for Celery task).
+    """Remove audit log entries older than retention_days from Redis zsets.
 
-    Args:
-        retention_days: Number of days to retain audit logs
-        dry_run: If True, log what would be deleted without actually deleting
-
-    Returns:
-        Dict with "deleted_logs" and "errors" counts
+    Idempotent: keys already expired/deleted are silently skipped.
     """
+    if retention_days <= 0:
+        logger.info("Audit log retention disabled (retention_days=%d), skipping.", retention_days)
+        return {"deleted_logs": 0, "errors": 0}
+
     redis_client = get_redis_client()
     if not redis_client:
-        logger.warning("Redis client not available, skipping audit log retention cleanup")
+        logger.warning("Redis client unavailable — skipping audit log retention cleanup.")
         return {"deleted_logs": 0, "errors": 0}
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
-    cutoff_timestamp = cutoff.timestamp()
-
+    cutoff_ts = cutoff.timestamp()
     deleted_logs = 0
     errors = 0
 
-    try:
-        # Cleanup audit log sorted sets/keys
-        # Pattern: audit:* (assumes audit logs use timestamp-based sorted sets)
-        audit_pattern = "audit:*"
-        cursor = 0
-        while True:
-            cursor, keys = redis_client.scan(cursor, match=audit_pattern, count=100)
-            for key in keys:
-                try:
-                    # Check if it's a sorted set (audit logs typically use zsets with timestamps)
-                    key_type = redis_client.type(key)
-                    if key_type == "zset":
-                        # Remove entries with scores (timestamps) older than cutoff
-                        if dry_run:
-                            old_count = redis_client.zcount(key, "-inf", cutoff_timestamp)
-                            if old_count > 0:
-                                logger.info(
-                                    "[DRY RUN] Would remove %d old entries from %s (older than %s)",
-                                    old_count,
-                                    key,
-                                    cutoff.isoformat(),
-                                )
-                                deleted_logs += old_count
-                        else:
-                            removed = redis_client.zremrangebyscore(key, "-inf", cutoff_timestamp)
-                            if removed > 0:
-                                deleted_logs += removed
-                                logger.info(
-                                    "Removed %d old entries from %s (older than %s)",
-                                    removed,
-                                    key,
-                                    cutoff.isoformat(),
-                                )
-                    elif key_type == "string":
-                        # For string keys, check idle time
-                        idle_time = redis_client.object("IDLETIME", key)
-                        if idle_time is None:
-                            continue
+    cursor: int = 0
+    while True:
+        cursor, keys = redis_client.scan(cursor, match=_AUDIT_PATTERN, count=200)
+        for key in keys:
+            try:
+                key_type = redis_client.type(key)
+                if key_type != "zset":
+                    continue
+                if dry_run:
+                    count = redis_client.zcount(key, "-inf", cutoff_ts)
+                    if count:
+                        logger.info("[DRY RUN] Would remove %d entries from %s", count, key)
+                        deleted_logs += count
+                else:
+                    removed = redis_client.zremrangebyscore(key, "-inf", cutoff_ts)
+                    if removed:
+                        deleted_logs += removed
+                        logger.debug("Removed %d old entries from %s", removed, key)
+            except Exception as exc:
+                errors += 1
+                logger.error("Error processing audit key %s: %s", key, exc)
+        if cursor == 0:
+            break
 
-                        idle_days = idle_time / 86400
-                        if idle_days > retention_days:
-                            if dry_run:
-                                logger.info("[DRY RUN] Would delete audit key: %s (idle: %.1f days)", key, idle_days)
-                                deleted_logs += 1
-                            else:
-                                redis_client.delete(key)
-                                deleted_logs += 1
-                                logger.debug("Deleted audit key: %s (idle: %.1f days)", key, idle_days)
-
-                except Exception as exc:
-                    errors += 1
-                    logger.error("Failed to process audit key %s: %s", key, exc)
-
-            if cursor == 0:
-                break
-
-    except Exception as exc:
-        errors += 1
-        logger.error("Audit log retention cleanup failed: %s", exc)
+    if deleted_logs and not dry_run:
+        _emit_purge_audit(deleted_logs, retention_days, {"cutoff_ts": cutoff_ts})
 
     logger.info(
-        "Audit log retention cleanup: deleted_logs=%d, errors=%d, retention_days=%d, dry_run=%s",
+        "Audit log retention: deleted_logs=%d errors=%d retention_days=%d dry_run=%s",
         deleted_logs,
         errors,
         retention_days,
         dry_run,
     )
-    return {
-        "deleted_logs": deleted_logs,
-        "errors": errors,
-    }
+    return {"deleted_logs": deleted_logs, "errors": errors}
 
 
 @celery_app.task(bind=True, name="tasks.cleanup_expired_audit_logs")
 def cleanup_expired_audit_logs(self, retention_days: int = None, dry_run: bool = False) -> Dict[str, int]:
-    """Remove audit log entries older than retention_days (GH#8995, MVA-3044).
+    """Remove audit log entries older than retention_days (GH#8995).
 
-    Args:
-        retention_days: Number of days to retain audit logs. Defaults to
-                        AUTOBOT_AUDIT_RETENTION_DAYS env var or 365 days.
-        dry_run: If True, log what would be deleted without actually deleting.
-
-    Returns:
-        Dict with "deleted_logs" and "errors" counts.
+    retention_days defaults to AUTOBOT_AUDIT_RETENTION_DAYS (0 = disabled).
+    dry_run=True logs what would be deleted without making changes.
     """
     if retention_days is None:
-        retention_days = int(os.getenv("AUTOBOT_AUDIT_RETENTION_DAYS", _DEFAULT_AUDIT_RETENTION_DAYS))
-
+        retention_days = _AUDIT_RETENTION_DAYS
     return run_or_schedule(_async_cleanup_expired_audit_logs(retention_days, dry_run))
