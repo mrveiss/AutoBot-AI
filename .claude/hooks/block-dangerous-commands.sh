@@ -90,7 +90,13 @@ fi
 # checking out main locally has no legitimate use case here.
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(checkout|switch)[[:space:]]+(main|master)([[:space:]]|$)'; then
+# Optional git GLOBAL options that may sit between `git` and the subcommand
+# (#10434). `git -c core.foo=bar checkout some-branch` must not slip past the
+# branch-switch guards. Tolerate any run of -c/-C/--git-dir global options.
+# Written as a fixed-length-free ERE so GNU grep 3.7 (bash) handles it.
+GIT_GLOBAL_OPTS='(-c[[:space:]]+[^[:space:]]+[[:space:]]+|-C[[:space:]]+[^[:space:]]+[[:space:]]+|--git-dir[=[:space:]][^[:space:]]+[[:space:]]+)*'
+
+if echo "$COMMAND_TO_CHECK" | grep -qE "(^|[;&|()]+[[:space:]]*)git[[:space:]]+${GIT_GLOBAL_OPTS}(checkout|switch)[[:space:]]+(main|master)([[:space:]]|\$)"; then
   deny "Blocked: never check out main/master locally (#4113, #6512). Main is read-only; commits flow Dev_new_gui → main via release cycle. If you need to inspect main, use git log origin/main or create a worktree: git worktree add .worktrees/inspect-main main"
 fi
 
@@ -104,18 +110,20 @@ fi
 #   - file restore: `git checkout -- <path>`, `git checkout .`
 #   - detached / toggle switches: `git switch -`, `git switch --detach`
 #   - SHA / tag / Dev_new_gui checkouts
-if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+(checkout|switch)[[:space:]]'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE "(^|[;&|()]+[[:space:]]*)git[[:space:]]+${GIT_GLOBAL_OPTS}(checkout|switch)[[:space:]]"; then
   CURRENT_DIR=$(pwd)
   if [[ ! "$CURRENT_DIR" =~ \.worktrees/ ]]; then
     # New-branch creation (-b/-B/-c/--create/--orphan) anywhere in the args.
+    # ${GIT_GLOBAL_OPTS} tolerates global opts before the subcommand (#10434);
+    # the new-branch flags are still only recognised AFTER checkout/switch.
     IS_NEW_BRANCH=0
-    if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+(checkout|switch)[[:space:]]+(.*[[:space:]])?(-b|-B|-c|--create|--orphan)([[:space:]]|$)'; then
+    if echo "$COMMAND_TO_CHECK" | grep -qE "git[[:space:]]+${GIT_GLOBAL_OPTS}(checkout|switch)[[:space:]]+(.*[[:space:]])?(-b|-B|-c|--create|--orphan)([[:space:]]|\$)"; then
       IS_NEW_BRANCH=1
     fi
 
     # Explicit file restore: `git checkout -- <path>` (the `--` separator).
     IS_FILE_RESTORE=0
-    if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+checkout[[:space:]]+--([[:space:]]|$)'; then
+    if echo "$COMMAND_TO_CHECK" | grep -qE "git[[:space:]]+${GIT_GLOBAL_OPTS}checkout[[:space:]]+--([[:space:]]|\$)"; then
       IS_FILE_RESTORE=1
     fi
 
