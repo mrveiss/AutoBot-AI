@@ -58,6 +58,7 @@ from .schemas_code import (
     MCPRegistryBridgesResponse,
     MCPRegistryCacheInvalidateResponse,
     MCPRegistryCacheStatsResponse,
+    MCPRegistryHealthResponse,
     MCPRegistryInfoResponse,
     MCPRegistryStatsResponse,
     MCPRegistryToolDetailResponse,
@@ -583,6 +584,47 @@ async def _fetch_bridges_info() -> Metadata:
 # ============================================================================
 # API Endpoints
 # ============================================================================
+
+
+@router.get("/health", response_model=MCPRegistryHealthResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_mcp_registry_health",
+    error_code_prefix="MCP_REGISTRY",
+)
+async def get_mcp_registry_health() -> Metadata:
+    """Aggregate health check for the MCP registry (#10429).
+
+    The frontend MCP manager and SLM admin monitoring poll
+    GET /api/mcp/health (advertised by the registry info route) expecting an
+    aggregate of per-bridge health. It previously 404'd because only
+    /tools, /bridges, /stats and / existed. Reuses the cached bridge probe.
+    """
+    bridges_response = await get_mcp_bridges()
+    bridges = bridges_response.get("bridges", [])
+    total_bridges = bridges_response.get("total_bridges", len(bridges))
+    healthy_bridges = bridges_response.get(
+        "healthy_bridges",
+        sum(1 for b in bridges if b.get("status") == "healthy"),
+    )
+
+    if total_bridges == 0:
+        overall = "unknown"
+    elif healthy_bridges == total_bridges:
+        overall = "healthy"
+    elif healthy_bridges == 0:
+        overall = "unavailable"
+    else:
+        overall = "degraded"
+
+    return {
+        "status": overall,
+        "total_bridges": total_bridges,
+        "healthy_bridges": healthy_bridges,
+        "checks": bridges,
+        "cache_stats": mcp_cache.get_stats(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
 
 
 @router.get("/tools", response_model=MCPRegistryToolsResponse)

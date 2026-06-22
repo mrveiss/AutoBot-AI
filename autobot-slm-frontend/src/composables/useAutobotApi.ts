@@ -852,7 +852,9 @@ export function useAutobotApi() {
   }
 
   async function getBatchJobHealth(): Promise<Record<string, unknown>> {
-    const response = await client.get('/batch-jobs/health')
+    // #10429: backend exposes /batch-jobs/status (returns status: "healthy"),
+    // never /batch-jobs/health (404). Repointed to the real route.
+    const response = await client.get('/batch-jobs/status')
     return response.data
   }
 
