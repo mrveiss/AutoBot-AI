@@ -208,10 +208,17 @@ def app_client():
     """Minimal FastAPI app wiring only the backlog router for route-level tests."""
     from fastapi import FastAPI
 
-    from llc.api.backlog import router
+    from llc.api.backlog import get_session, router
 
     app = FastAPI()
     app.include_router(router, prefix="/api/llc")
+
+    # get_session raises 503 when Postgres is disabled (test env); override with a
+    # stub so request-validation (422) surfaces instead of the DB 503.
+    async def _stub_session():
+        yield AsyncMock()
+
+    app.dependency_overrides[get_session] = _stub_session
     return TestClient(app, raise_server_exceptions=True)
 
 
