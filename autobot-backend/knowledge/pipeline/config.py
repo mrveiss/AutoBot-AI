@@ -113,6 +113,34 @@ AUDIO_KNOWLEDGE_PIPELINE = {
 }
 
 
+# Issue #9018 Phase 2: KAG (Knowledge-Augmented Generation) ingestion profile.
+# Reuses the default ECL entity/relationship cognifiers and adds the
+# mesh_seeder + redis_graph loaders so entities/relations are persisted into
+# AutoBotMemoryGraph for graph-traversal retrieval. NOT always-on: selected via
+# get_kag_pipeline_config() when a collection is flagged KAG (enable_kag).
+KAG_KNOWLEDGE_PIPELINE = {
+    "name": "kag_knowledge_enrichment",
+    "batch_size": 10,
+    "extract": [
+        {"task": "classify_document", "params": {}},
+        {"task": "chunk_text", "params": {"max_tokens": 512, "overlap": 50}},
+        {"task": "extract_metadata", "params": {}},
+    ],
+    "cognify": [
+        {"task": "extract_entities", "params": {}},
+        {"task": "extract_relationships", "params": {}},
+        {"task": "summarize", "params": {"levels": ["sentence", "paragraph"]}},
+        {"task": "add_context", "params": {}},
+    ],
+    "load": [
+        {"task": "chromadb", "params": {}},
+        # Graph persistence for KAG: build entity/relationship edges into the graph.
+        {"task": "mesh_seeder", "params": {}},
+        {"task": "redis_graph", "params": {}},
+    ],
+}
+
+
 def get_default_config() -> Dict[str, Any]:
     """
     Get the default knowledge enrichment pipeline configuration.
@@ -130,3 +158,32 @@ def get_audio_pipeline_config() -> Dict[str, Any]:
         Audio pipeline configuration dict (deep copy)
     """
     return copy.deepcopy(AUDIO_KNOWLEDGE_PIPELINE)
+
+
+def get_kag_pipeline_config() -> Dict[str, Any]:
+    """Return the KAG ingestion pipeline configuration (Issue #9018 Phase 2).
+
+    Configurable profile (not always-on): callers select this for collections
+    flagged KAG so ECL entity/relationship extraction + mesh_seeder seed the
+    knowledge graph. Reuses existing cognifiers/loaders — no reimplementation.
+
+    Returns:
+        KAG pipeline configuration dict (deep copy)
+    """
+    return copy.deepcopy(KAG_KNOWLEDGE_PIPELINE)
+
+
+def select_pipeline_config(kag_enabled: bool = False) -> Dict[str, Any]:
+    """Return the ingestion pipeline config for a collection.
+
+    Issue #9018 Phase 2: a configurable profile flag, not forced on. When
+    kag_enabled is True the KAG profile (graph-seeding) is used; otherwise the
+    standard default profile is returned unchanged (inert default).
+
+    Args:
+        kag_enabled: Whether the target collection is flagged for KAG.
+
+    Returns:
+        Pipeline configuration dict (deep copy).
+    """
+    return get_kag_pipeline_config() if kag_enabled else get_default_config()

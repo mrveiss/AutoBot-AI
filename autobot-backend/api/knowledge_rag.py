@@ -124,6 +124,8 @@ def _build_search_metrics(metrics) -> dict:
         "documents_loaded": getattr(metrics, "documents_loaded", 0),
         "tokens_used": getattr(metrics, "tokens_used", 0),
         "budget": getattr(metrics, "budget", 0),
+        # Issue #9018 Phase 2: KAG graph-traversal observability.
+        "graph_results_added": getattr(metrics, "graph_results_added", 0),
     }
 
 
@@ -628,12 +630,13 @@ async def get_entity_history(
 )
 async def retrieval_context(
     request: RetrievalContextRequest,
+    http_request: Request,
     rag_service: RAGService = Depends(get_rag_service_dependency),
     current_user: dict = Depends(get_current_user),
 ):
-    """Strategy-dispatched context retrieval (RAG / CAG).
+    """Strategy-dispatched context retrieval (RAG / CAG / KAG).
 
-    Issue #9018 Phase 1.
+    Issue #9018 Phase 1 (CAG) + Phase 2 (KAG).
 
     **Parameters:**
     - **query**: Generation query string.
@@ -643,17 +646,20 @@ async def retrieval_context(
 
     **Returns:**
     - **context**: Assembled context string for LLM injection.
-    - **strategy**: Actual strategy used ('rag' or 'cag').
+    - **strategy**: Actual strategy used ('rag', 'cag' or 'kag').
     - **metrics**: Timing and result-count metrics.
     """
     from services.cag_service import CAGService
     from services.retrieval_dispatcher import get_context
 
     cag_service = CAGService(rag_service)
+    # GraphRAGService is initialized in the app lifespan; absent → kag falls back to rag.
+    graph_rag_service = getattr(http_request.app.state, "graph_rag_service", None)
     context, metrics = await get_context(
         query=request.query,
         rag_service=rag_service,
         cag_service=cag_service,
+        graph_rag_service=graph_rag_service,
         mode=request.mode,
         collection=request.collection_id,
         model=request.model,
