@@ -63,7 +63,14 @@ class PhaseProgressionManager:
         """Initialize phase progression manager with validator and configuration."""
         # Use centralized PathConstants (Issue #380)
         self.project_root = project_root or PATH.PROJECT_ROOT
-        self.validator = PhaseValidator(self.project_root)
+        # PhaseValidator lives in autobot-infrastructure — guard against MissingDep
+        # so the manager (and the llm_awareness singleton) can be constructed even
+        # when the infrastructure repo is not on PYTHONPATH (#10466).
+        try:
+            self.validator = PhaseValidator(self.project_root)
+        except Exception:
+            logger.debug("PhaseValidator unavailable; phase-progression validation disabled")
+            self.validator = None
         self.project_state = ProjectStateManager()
 
         # Progression configuration
@@ -487,6 +494,14 @@ class PhaseProgressionManager:
     async def check_progression_eligibility(self) -> Dict[str, Any]:
         """Check which phases are eligible for progression."""
         logger.info("🔍 Checking phase progression eligibility...")
+        if self.validator is None:
+            return {
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                "eligible_phases": [],
+                "blocked_phases": [],
+                "completed_phases": [],
+                "recommendations": ["PhaseValidator unavailable — install autobot-infrastructure to enable"],
+            }
         validation_results = await self.validator.validate_all_phases()
         eligibility_results = {
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
@@ -577,6 +592,8 @@ class PhaseProgressionManager:
 
     async def _validate_prerequisites(self, rules: Dict[str, Any]) -> tuple[bool, set]:
         """Validate that prerequisites are still met."""
+        if self.validator is None:
+            return False, set()
         validation_results = await self.validator.validate_all_phases()
         completed_phases = {
             name
