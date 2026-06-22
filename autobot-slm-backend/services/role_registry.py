@@ -310,7 +310,11 @@ _OPTIONAL_ROLES = [
         "display_name": "VNC Server",
         "sync_type": None,
         "source_paths": [],
-        "target_path": "",
+        # /usr/bin/Xtigervnc is the TigerVNC binary installed by tigervnc-standalone-server.
+        # Providing a non-empty target_path lets role_detector.py skip its early-exit
+        # guard (which checks only target_path) and activate path-existence + systemd
+        # checks — mirrors the postgres fix in #9853 (#9965).
+        "target_path": "/usr/bin/Xtigervnc",
         "systemd_service": "tigervncserver",
         "auto_restart": False,
         "required": False,
