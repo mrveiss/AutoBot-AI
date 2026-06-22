@@ -93,28 +93,13 @@
       when: backend_user_mode_probe.stdout | default('') | trim not in ['', 'single_user']
       tags: [migrations]
       block:
-        - name: Check for local PostgreSQL data directory (#10026)
-          ansible.builtin.stat:
-            path: /var/lib/postgresql
-          register: backend_pg_dir
+        # Fail-closed pre-migration backup (#10045): local pg_dumpall OR
+        # remote pg_dump derived from .env URL; aborts if neither is possible.
+        - name: Back up PostgreSQL before migrations (local or remote) (#10026, #10045)
+          ansible.builtin.include_tasks: _shared/tasks/pre_migration_backup.yml
+          vars:
+            pre_migration_env_file: "{{ backend_code_dir }}/.env"
 
-        - name: Back up PostgreSQL before migrations (#10026)
-          ansible.builtin.shell: |
-            set -o pipefail
-            install -d -m 0750 /opt/autobot/backups/pre-migration
-            su - postgres -c "pg_dumpall --clean --if-exists" \
-              | gzip > /opt/autobot/backups/pre-migration/backend-$(date +%s).sql.gz
-          args:
-            executable: /bin/bash
-          when: backend_pg_dir.stat.exists
-
-        - name: Warn when no local PostgreSQL to back up (#10026)
-          ansible.builtin.debug:
-            msg: >-
-              WARNING: no local PostgreSQL data directory — pre-migration
-              backup skipped. Back up the remote database before relying on
-              this deploy.
-          when: not backend_pg_dir.stat.exists
 
         - name: Run database baseline adoption (#10001)
           ansible.builtin.shell: |
