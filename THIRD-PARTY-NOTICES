@@ -27,13 +27,19 @@ mcp-structured-thinking
 
 mcp-task-manager-server
   Path:        autobot-infrastructure/shared/mcp/tools/mcp-task-manager-server/
-  License:     UNRESOLVED — the bundled LICENSE file is GNU GPL v3, but the
-               package.json `license` field declares "ISC". These conflict.
-               Until the upstream license is confirmed, treat this component as
-               GPL-3.0 (the more restrictive of the two) for compliance
-               purposes. GPL-3.0 and Apache-2.0 have one-way compatibility, so
-               this MUST be resolved before AutoBot is redistributed with this
-               component included. See repository issue tracker.
+  License:     GPL-3.0-only (license: .../mcp-task-manager-server/LICENSE)
+               RESOLVED (#10117): the bundled LICENSE file is the full, verbatim
+               GNU GPL v3 text and is the authoritative grant for this vendored
+               component. The earlier package.json `license: "ISC"` was the
+               leftover `npm init` scaffold default ("My new MCP Server",
+               v0.1.0) and has been corrected to "GPL-3.0-only" to stop the
+               metadata contradicting the LICENSE file.
+               COMPATIBILITY: GPL-3.0 is one-way INCOMPATIBLE with the AutoBot
+               Apache-2.0 distribution (#9826) — GPL-3.0 code cannot be
+               redistributed under Apache-2.0 terms. This component MUST be
+               removed, replaced, or isolated before AutoBot is redistributed
+               with it included. The keep / remove / isolate decision is a
+               human/maintainer call (see #10117).
   Copyright:   Not stated by upstream (package "My new MCP Server", v0.1.0).
 ---------------------------------------------------------------------------
 

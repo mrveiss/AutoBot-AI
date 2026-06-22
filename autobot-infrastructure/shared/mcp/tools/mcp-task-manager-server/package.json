@@ -17,7 +17,7 @@
     "mcp",
     "model-context-protocol"
   ],
-  "license": "ISC",
+  "license": "GPL-3.0-only",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@types/better-sqlite3": "^7.6.13",
