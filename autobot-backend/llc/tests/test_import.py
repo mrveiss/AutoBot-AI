@@ -114,13 +114,17 @@ async def test_preview_with_collisions() -> None:
         agents=[{"name": "Alice"}],
         goals=[{"title": "Existing Goal"}],
     )
+    # Agent and goal collision checks are scoped to target_company_id (new-company
+    # imports have no pre-existing namespace).  Pass a target company so the
+    # checks run and populate the collisions list.
+    target_company_id = uuid.uuid4()
 
     with (
         patch.object(svc, "_prefix_exists", return_value=True),
         patch.object(svc, "_agent_names_exist", return_value=["Alice"]),
         patch.object(svc, "_goal_titles_exist", return_value=["Existing Goal"]),
     ):
-        result = await svc.preview_import(tmpl)
+        result = await svc.preview_import(tmpl, target_company_id=target_company_id)
 
     types = {c["type"] for c in result["collisions"]}
     assert "issue_prefix" in types
