@@ -15,6 +15,7 @@ These verify the inbound path is actually reachable and secured:
 import hashlib
 import hmac
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -113,6 +114,77 @@ class TestFlattenMessages:
     def test_empty_envelope_yields_no_messages(self):
         assert flatten_messages({"entry": []}) == []
         assert flatten_messages({}) == []
+
+    def test_media_message_carries_media_id(self):
+        # Media messages must surface the Graph API media object id so the
+        # webhook can download/reference it (GH#10267).
+        payload = self._meta_payload("ignored")
+        msg = payload["entry"][0]["changes"][0]["value"]["messages"][0]
+        msg["type"] = "image"
+        msg.pop("text", None)
+        msg["image"] = {"id": "media-123", "mime_type": "image/jpeg"}
+        flat = flatten_messages(payload)
+        assert flat[0]["body"] == ""
+        assert flat[0]["message_type"] == "image"
+        assert flat[0]["media_id"] == "media-123"
+
+
+class TestMediaRoutingMetadata:
+    """Inbound media is attached as lightweight references, never raw bytes (GH#10481)."""
+
+    @pytest.mark.asyncio
+    async def test_media_attached_as_references_not_raw_bytes(self, monkeypatch):
+        from api import whatsapp as wa
+
+        captured: dict = {}
+
+        async def fake_process(message, **kwargs):
+            captured["message"] = message
+            return SimpleNamespace(content="ack")
+
+        async def fake_send(to, text):
+            captured["sent"] = (to, text)
+
+        # process_chat_message / history / singleton are imported lazily inside the
+        # function, so patch them at their source modules.
+        monkeypatch.setattr("api.chat.process_chat_message", fake_process)
+        monkeypatch.setattr(wa, "send_whatsapp_response", fake_send)
+        monkeypatch.setattr("utils.chat_utils.get_chat_history_manager", lambda req: object())
+        monkeypatch.setattr("utils.lazy_singleton.lazy_init_singleton", lambda state, name, cls: object())
+
+        unified = SimpleNamespace(
+            message="",
+            user_id="15551234567",
+            channel_id="15551234567",
+            metadata={"message_type": "image"},
+        )
+        request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+
+        await wa._route_to_chat_and_reply(
+            request,
+            unified,
+            media_bytes=b"\x89PNG\x00\x01\x02",
+            media_mime_type="image/png",
+            media_id="media-123",
+        )
+
+        # Caption-less media must still produce a valid (>=1 char) content — otherwise
+        # ChatMessage raises ValidationError and the inbound batch is dropped (GH#10481).
+        assert captured["message"].content == "[image attachment]"
+
+        meta = captured["message"].metadata
+        # Lightweight references attached (mirrors telegram_adapter's has_file pattern).
+        assert meta["has_file"] is True
+        assert meta["media_id"] == "media-123"
+        assert meta["mime_type"] == "image/png"
+        assert meta["file_type"] == "image"
+        assert meta["file_size"] == 7
+        # Regression GH#10481: raw bytes must NOT be persisted in chat metadata.
+        assert "file_bytes" not in meta
+        # The full metadata must be JSON-serializable — this is the persistence path
+        # (chat_history/security.py:_encrypt_data uses json.dumps with no default=str).
+        json.dumps(meta)
+        assert captured["sent"] == ("15551234567", "ack")
 
 
 class TestGatewayNormalization:
