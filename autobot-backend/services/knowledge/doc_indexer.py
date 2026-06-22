@@ -733,9 +733,7 @@ class DocIndexerService:
             embed_dim = await asyncio.to_thread(
                 self._resolve_embed_dim, embed_model_name, effective.embedding_dimension
             )
-            self._collection = await asyncio.to_thread(
-                self._resolve_collection, embed_model_name, embed_dim
-            )
+            self._collection = await asyncio.to_thread(self._resolve_collection, embed_model_name, embed_dim)
 
             doc_count = self._collection.count()
             logger.info(
