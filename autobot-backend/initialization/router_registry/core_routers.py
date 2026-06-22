@@ -24,6 +24,7 @@ from api.agent_org import router as agent_org_router  # #1405
 from api.approval_gates import router as approval_gates_router  # #1402
 from api.audit import router as audit_router
 from api.auth import router as auth_router
+from api.benchmarks import router as benchmarks_router  # Issue #9024
 from api.browser_mcp import router as browser_mcp_router
 from api.canvas import router as canvas_router  # MVA-359
 from api.chat import router as chat_router
@@ -142,6 +143,7 @@ def _get_system_routers() -> list:
         (chat_compare_router, "", ["chat", "compare"], "chat_compare"),  # Issue #4414
         (chat_embed_router, "", ["chat", "embed"], "chat_embed"),  # GH#9047
         (chat_presets_router, "", ["chat"], "chat_presets"),  # GH#8595
+        (benchmarks_router, "", ["benchmarks"], "benchmarks"),  # Issue #9024
         (collaboration_router, "", ["collaboration"], "collaboration"),
         (
             telegram_bot_router,
