@@ -196,8 +196,8 @@ if [ -n "$local_branches" ]; then
 
         issue_state=$(gh issue view "$issue_number" --json state --jq '.state' 2>/dev/null) || true
         if [ "$issue_state" = "CLOSED" ]; then
-            # Verify work is merged (check for merged PR)
-            merged_pr=$(gh pr list --search "$issue_number" --state merged --json number -q '.[0].number' 2>/dev/null) || true
+            # Verify work is merged by a PR that actually closes this issue (#10114)
+            merged_pr=$(merged_pr_for_issue "$issue_number")
             if [ -n "$merged_pr" ]; then
                 if $DRY_RUN; then
                     echo "  WOULD DELETE local: ${branch}  (#${issue_number} closed, PR #${merged_pr} merged)"
@@ -235,7 +235,7 @@ if [ -n "$remote_branches" ]; then
 
         issue_state=$(gh issue view "$issue_number" --json state --jq '.state' 2>/dev/null) || true
         if [ "$issue_state" = "CLOSED" ]; then
-            merged_pr=$(gh pr list --search "$issue_number" --state merged --json number -q '.[0].number' 2>/dev/null) || true
+            merged_pr=$(merged_pr_for_issue "$issue_number")
             if [ -n "$merged_pr" ]; then
                 if $DRY_RUN; then
                     echo "  WOULD DELETE remote: origin/${branch}  (#${issue_number} closed, PR #${merged_pr} merged)"

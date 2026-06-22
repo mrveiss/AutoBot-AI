@@ -44,10 +44,12 @@ class CompanyCreate(CompanyBase):
 
     llc_status: LLCCompanyStatus = LLCCompanyStatus.ONBOARDING
 
-    @field_validator("issue_prefix")
+    @field_validator("issue_prefix", mode="before")
     @classmethod
     def issue_prefix_uppercase(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None:
+        # mode="before": uppercase the raw input so the ^[A-Z0-9]+$ pattern accepts
+        # lowercase entries (normalise, don't reject).
+        if isinstance(v, str):
             return v.upper()
         return v
 
@@ -62,6 +64,9 @@ class CompanyUpdate(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
+    # parent_org_id is updatable (re-parenting) and cycle-guarded in update();
+    # CompanyService.update() reads it, so it must stay on the schema (#10388).
+    parent_org_id: Optional[uuid.UUID] = None
     issue_prefix: Optional[str] = Field(None, min_length=1, max_length=10, pattern=r"^[A-Z0-9]+$")
     budget_monthly_cents: Optional[int] = Field(None, ge=0)
     brand_color: Optional[str] = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")

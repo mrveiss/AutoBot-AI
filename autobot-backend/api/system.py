@@ -558,7 +558,10 @@ async def get_detailed_health(request: Request, admin_check: bool = Depends(chec
     Issue #744: Requires admin authentication.
     """
     try:
-        basic_health = await get_system_health()
+        # Issue #10460: propagate the request so registry probes can reach
+        # app.state (memory/knowledge/graph_rag/chat_knowledge). Without it
+        # every app-state probe falsely reports "request not provided".
+        basic_health = await get_system_health(request)
         detailed_components = {}
 
         # Check components

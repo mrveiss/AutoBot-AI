@@ -6,7 +6,7 @@
   "ansible_playbook": "deploy-slm-manager.yml",
   "build_steps": [
     "pip install -r requirements.txt",
-    "cd {{ slm_base_dir }}/autobot-slm-frontend && npm install && npm run build"
+    "cd {{ slm_base_dir }}/autobot-slm-frontend && npm install && npm run build:slm"
   ],
   "depends_on": [],
   "required": true,

@@ -117,14 +117,24 @@ def _make_relation(source_id, target_id):
     return rel
 
 
+_ORG = uuid.uuid4()
+
+
 def _timeline_app(project, items, relations):
     """FastAPI app whose session returns project, then items, then relations
     across the three sequential execute() calls the endpoint makes."""
+    from api.user_management.dependencies import get_current_user, require_org_context  # noqa: PLC0415
     from llc.api.sprints import router  # noqa: PLC0415
-    from user_management.database import get_async_session  # noqa: PLC0415
+    from llc.deps import get_session  # noqa: PLC0415
+    from user_management.services import TenantContext  # noqa: PLC0415
 
     app = FastAPI()
     app.include_router(router)
+
+    # The endpoint IDOR-guards on project.company_id == ctx.org_id (#10148); make
+    # the seeded project belong to the caller's org so non-404 cases pass.
+    if project is not None:
+        project.company_id = _ORG
 
     def _scalar_result(value):
         r = MagicMock()
@@ -147,7 +157,11 @@ def _timeline_app(project, items, relations):
     async def _fake_session():
         yield session
 
-    app.dependency_overrides[get_async_session] = _fake_session
+    app.dependency_overrides[get_session] = _fake_session
+    app.dependency_overrides[get_current_user] = lambda: {"id": str(_ORG)}
+    app.dependency_overrides[require_org_context] = lambda: TenantContext(
+        org_id=_ORG, user_id=_ORG, is_platform_admin=False
+    )
     return app
 
 

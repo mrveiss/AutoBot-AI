@@ -46,13 +46,18 @@ class RoleStatus:
 
     @property
     def status(self) -> str:
-        """Determine overall status."""
-        if self.path_exists and self.service_running:
-            return "active"
-        elif self.path_exists:
-            return "inactive"
-        else:
+        """Determine overall status.
+
+        - active: path exists and service running (or no service required)
+        - inactive: path exists but service is down
+        - not_installed: path absent
+        """
+        if not self.path_exists:
             return "not_installed"
+        # No service name means it's a library/passive role — path = active
+        if not self.service_name:
+            return "active"
+        return "active" if self.service_running else "inactive"
 
 
 class RoleDetector:
@@ -74,12 +79,16 @@ class RoleDetector:
         """Load role definitions from SLM server response."""
         self.roles = {}
         for defn in definitions:
-            if not defn.get("target_path"):
-                continue  # Skip roles without target path (e.g., code-source)
+            # Skip roles that have neither a target path nor a systemd service —
+            # there is nothing to detect on the node (#9965; was: skip if no
+            # target_path, which caused service-only roles like vnc to be silently
+            # omitted even when tigervncserver was running).
+            if not defn.get("target_path") and not defn.get("systemd_service"):
+                continue
 
             self.roles[defn["name"]] = RoleDefinition(
                 name=defn["name"],
-                target_path=defn["target_path"],
+                target_path=defn.get("target_path", ""),
                 systemd_service=defn.get("systemd_service"),
                 health_check_port=defn.get("health_check_port"),
             )
@@ -100,10 +109,13 @@ class RoleDetector:
         """Detect a single role."""
         status = RoleStatus()
 
-        # Check path
-        target_path = Path(role.target_path)
-        status.path_exists = target_path.exists()
-        status.path = str(target_path) if status.path_exists else None
+        # Check path (service-only roles have no target_path — always pass, #9965)
+        if role.target_path:
+            target_path = Path(role.target_path)
+            status.path_exists = target_path.exists()
+            status.path = str(target_path) if status.path_exists else None
+        else:
+            status.path_exists = True  # no path requirement
 
         # Check service
         if role.systemd_service:
@@ -115,9 +127,9 @@ class RoleDetector:
             if role.health_check_port in listening_ports:
                 status.ports.append(role.health_check_port)
 
-        # Read version if path exists
-        if status.path_exists:
-            status.version = self._read_version(target_path)
+        # Read version if path exists and path was specified
+        if status.path_exists and role.target_path:
+            status.version = self._read_version(Path(role.target_path))
 
         return status
 

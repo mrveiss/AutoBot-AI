@@ -122,6 +122,16 @@ def _mock_redis(stored: dict | None = None) -> tuple[MagicMock, dict]:
     return redis, store
 
 
+def _patch_redis(redis_or_none):
+    """Return a context manager that patches get_async_redis_client in sso_service.
+
+    sso_service calls ``await get_async_redis_client()``; patching the function
+    with an AsyncMock whose return_value is *redis_or_none* makes the await
+    resolve to the desired mock (or None to simulate Redis unavailability).
+    """
+    return patch.object(_sso_mod, "get_async_redis_client", new=AsyncMock(return_value=redis_or_none))
+
+
 # ---------------------------------------------------------------------------
 # _generate_oauth_state
 # ---------------------------------------------------------------------------
@@ -134,7 +144,7 @@ class TestGenerateOauthState:
 
         redis, store = _mock_redis()
         service = _make_service()
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+        with _patch_redis(redis):
             state, verifier = await service._generate_oauth_state(_PROVIDER_ID)
 
         assert state
@@ -150,7 +160,7 @@ class TestGenerateOauthState:
 
         redis, _ = _mock_redis()
         service = _make_service()
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+        with _patch_redis(redis):
             state, verifier = await service._generate_oauth_state(_PROVIDER_ID)
 
         expected_payload = json.dumps({"provider_id": str(_PROVIDER_ID), "code_verifier": verifier})
@@ -159,7 +169,7 @@ class TestGenerateOauthState:
     @pytest.mark.asyncio
     async def test_returns_token_even_when_redis_unavailable(self):
         service = _make_service()
-        with patch.object(_sso_mod, "get_redis_client", return_value=None):
+        with _patch_redis(None):
             state, verifier = await service._generate_oauth_state(_PROVIDER_ID)
         assert state  # token still generated; Redis write silently skipped
         assert verifier  # verifier is still returned
@@ -175,7 +185,7 @@ class TestValidateOauthState:
     async def test_round_trip_returns_provider_id(self):
         redis, store = _mock_redis()
         service = _make_service()
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+        with _patch_redis(redis):
             state, _ = await service._generate_oauth_state(_PROVIDER_ID)
             recovered_id, recovered_verifier = await service._validate_oauth_state(state)
 
@@ -187,7 +197,7 @@ class TestValidateOauthState:
         """GETDEL must make state single-use to prevent replay attacks."""
         redis, store = _mock_redis()
         service = _make_service()
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+        with _patch_redis(redis):
             state, _ = await service._generate_oauth_state(_PROVIDER_ID)
             await service._validate_oauth_state(state)  # first use succeeds
             with pytest.raises(SSOAuthenticationError, match="Invalid or expired"):
@@ -197,14 +207,14 @@ class TestValidateOauthState:
     async def test_invalid_state_raises(self):
         redis, _ = _mock_redis()
         service = _make_service()
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+        with _patch_redis(redis):
             with pytest.raises(SSOAuthenticationError, match="Invalid or expired"):
                 await service._validate_oauth_state("nonexistent-state-token")
 
     @pytest.mark.asyncio
     async def test_redis_unavailable_raises(self):
         service = _make_service()
-        with patch.object(_sso_mod, "get_redis_client", return_value=None):
+        with _patch_redis(None):
             with pytest.raises(SSOAuthenticationError, match="Redis unavailable"):
                 await service._validate_oauth_state("any-state")
 
@@ -213,7 +223,7 @@ class TestValidateOauthState:
         """Key must be consumed — no residual entry in Redis after successful validation."""
         redis, store = _mock_redis()
         service = _make_service()
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+        with _patch_redis(redis):
             state, _ = await service._generate_oauth_state(_PROVIDER_ID)
             await service._validate_oauth_state(state)
 
@@ -233,7 +243,7 @@ class TestPkceStateStorage:
 
         redis, _ = _mock_redis()
         service = _make_service()
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+        with _patch_redis(redis):
             state, verifier = await service._generate_oauth_state(_PROVIDER_ID)
 
         assert isinstance(state, str) and len(verifier) >= 43
@@ -251,7 +261,7 @@ class TestPkceStateStorage:
         verifier = "v" * 64
         store["sso:state:abc"] = json.dumps({"provider_id": str(_PROVIDER_ID), "code_verifier": verifier})
         service = _make_service()
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+        with _patch_redis(redis):
             got_pid, got_verifier = await service._validate_oauth_state("abc")
 
         assert got_pid == _PROVIDER_ID and got_verifier == verifier
@@ -262,7 +272,7 @@ class TestPkceStateStorage:
         redis, store = _mock_redis()
         store["sso:state:abc"] = str(_PROVIDER_ID)
         service = _make_service()
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+        with _patch_redis(redis):
             got_pid, got_verifier = await service._validate_oauth_state("abc")
 
         assert got_pid == _PROVIDER_ID and got_verifier is None
@@ -272,7 +282,7 @@ class TestPkceStateStorage:
         """Missing state token raises SSOAuthenticationError."""
         redis, _ = _mock_redis()
         service = _make_service()
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+        with _patch_redis(redis):
             with pytest.raises(SSOAuthenticationError):
                 await service._validate_oauth_state("nonexistent")
 
@@ -282,7 +292,7 @@ class TestPkceStateStorage:
         redis, store = _mock_redis()
         store["sso:state:abc"] = "{not-valid-json-and-not-a-uuid"
         service = _make_service()
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+        with _patch_redis(redis):
             with pytest.raises(SSOAuthenticationError):
                 await service._validate_oauth_state("abc")
 
@@ -387,7 +397,7 @@ class TestSamlRelayStateRedisRoundTrip:
             {"headers": [("Location", "https://idp.example.com/sso")]},
         )
         with (
-            patch.object(_sso_mod, "get_redis_client", return_value=redis),
+            _patch_redis(redis),
             patch.object(service, "_build_saml_client", return_value=mock_client),
         ):
             redirect_url, relay_state = await service._generate_saml_authn_request(provider)
@@ -408,7 +418,7 @@ class TestSamlRelayStateRedisRoundTrip:
             {"headers": [("Location", "https://idp.example.com/sso")]},
         )
         with (
-            patch.object(_sso_mod, "get_redis_client", return_value=redis),
+            _patch_redis(redis),
             patch.object(service, "_build_saml_client", return_value=mock_client),
         ):
             _, relay_state = await service._generate_saml_authn_request(provider)
@@ -427,7 +437,7 @@ class TestSamlRelayStateRedisRoundTrip:
             "req-id",
             {"headers": [("Location", "https://idp.example.com/sso")]},
         )
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+        with _patch_redis(redis):
             with patch.object(service, "_build_saml_client", return_value=mock_client):
                 _, relay_state = await service._generate_saml_authn_request(provider)
             recovered_id, recovered_verifier = await service._validate_oauth_state(relay_state)
@@ -449,7 +459,7 @@ class TestSamlRelayStateRedisRoundTrip:
             "req-id",
             {"headers": [("Location", "https://idp.example.com/sso")]},
         )
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+        with _patch_redis(redis):
             with patch.object(service, "_build_saml_client", return_value=mock_client):
                 _, relay_state = await service._generate_saml_authn_request(provider)
             await service._validate_oauth_state(relay_state)
@@ -468,7 +478,7 @@ class TestSamlRelayStateRedisRoundTrip:
             {"headers": [("Location", "https://idp.example.com/sso")]},
         )
         with (
-            patch.object(_sso_mod, "get_redis_client", return_value=None),
+            _patch_redis(None),
             patch.object(service, "_build_saml_client", return_value=mock_client),
         ):
             redirect_url, relay_state = await service._generate_saml_authn_request(provider)
@@ -490,7 +500,7 @@ class TestSamlRelayStateRedisRoundTrip:
             {"headers": [("Location", expected_url)]},
         )
         with (
-            patch.object(_sso_mod, "get_redis_client", return_value=redis),
+            _patch_redis(redis),
             patch.object(service, "_build_saml_client", return_value=mock_client),
         ):
             redirect_url, _ = await service._generate_saml_authn_request(provider)
@@ -1173,7 +1183,7 @@ class TestCompleteLoginReturnsTuple:
         fake_user.username = "oauthuser"
 
         redis, store = _mock_redis()
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis):
+        with _patch_redis(redis):
             state, _verifier = await service._generate_oauth_state(_PROVIDER_ID)
 
         provider = _make_oauth_provider()
@@ -1183,7 +1193,7 @@ class TestCompleteLoginReturnsTuple:
             patch.object(service, "_exchange_oauth_code", AsyncMock(return_value={"access_token": "t"})),
             patch.object(service, "_get_oauth_userinfo", AsyncMock(return_value={"sub": "ext1", "email": "u@e.com"})),
             patch.object(service, "_find_or_provision_user", AsyncMock(return_value=fake_user)),
-            patch.object(_sso_mod, "get_redis_client", return_value=redis),
+            _patch_redis(redis),
         ):
             result = await service.complete_oauth_login("code", state, "https://app/cb")
 

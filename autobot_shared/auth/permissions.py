@@ -120,137 +120,6 @@ class Role(str, Enum):
 # Canonical role-to-permission mappings.
 # Both autobot-backend (auth_rbac.py) and autobot-slm-backend import this dict
 # so that a permission added here is enforced by both services automatically.
-# Default system permissions for database seeding.
-# Tuple layout: (name, resource, action, description)
-SYSTEM_PERMISSIONS: List[tuple] = [
-    # User management
-    ("users:read", "users", "read", "View users"),
-    ("users:create", "users", "create", "Create users"),
-    ("users:update", "users", "update", "Update users"),
-    ("users:delete", "users", "delete", "Delete users"),
-    # Team management
-    ("teams:read", "teams", "read", "View teams"),
-    ("teams:create", "teams", "create", "Create teams"),
-    ("teams:manage", "teams", "manage", "Manage team members"),
-    ("teams:delete", "teams", "delete", "Delete teams"),
-    # Knowledge base
-    ("knowledge:read", "knowledge", "read", "View knowledge base"),
-    ("knowledge:write", "knowledge", "write", "Add/edit knowledge"),
-    ("knowledge:delete", "knowledge", "delete", "Delete knowledge entries"),
-    # Chat
-    ("chat:use", "chat", "use", "Use chat functionality"),
-    ("chat:history", "chat", "history", "View chat history"),
-    # Files
-    ("files:view", "files", "view", "View files"),
-    ("files:upload", "files", "upload", "Upload files"),
-    ("files:download", "files", "download", "Download files"),
-    ("files:delete", "files", "delete", "Delete files"),
-    # Settings
-    ("settings:read", "settings", "read", "View settings"),
-    ("settings:write", "settings", "write", "Modify settings"),
-    # Admin
-    ("admin:access", "admin", "access", "Access admin panel"),
-    ("admin:users", "admin", "users", "Manage all users"),
-    ("admin:organization", "admin", "organization", "Manage organization"),
-    # Audit (Issue #683: Role-Based Access Control)
-    ("audit:read", "audit", "read", "View audit logs"),
-    ("audit:write", "audit", "write", "Manage audit logs (cleanup)"),
-    # Unified secrets — team/role vault access (#10088). The system/user/company/
-    # node vaults are gated by admin / ownership / LLC-membership, so only the
-    # team and role vaults consult these RBAC permissions (services/secrets_authz).
-    ("secrets:team:read", "secrets", "team:read", "Read team-vault secrets"),
-    ("secrets:team:write", "secrets", "team:write", "Write team-vault secrets"),
-    ("secrets:team:share", "secrets", "team:share", "Share team-vault secrets"),
-    ("secrets:team:revoke", "secrets", "team:revoke", "Revoke team-vault secret grants"),
-    ("secrets:role:read", "secrets", "role:read", "Read role-vault secrets"),
-    ("secrets:role:write", "secrets", "role:write", "Write role-vault secrets"),
-    ("secrets:role:share", "secrets", "role:share", "Share role-vault secrets"),
-    ("secrets:role:revoke", "secrets", "role:revoke", "Revoke role-vault secret grants"),
-    # Service management (#10198) — gates the SLM/service-management surface.
-    ("service.management", "service", "management", "Manage services / SLM administrative surface"),
-]
-
-# Default system roles with their permissions for database seeding.
-SYSTEM_ROLES: Dict[str, Dict] = {
-    "admin": {
-        "description": "Full administrative access",
-        "priority": 100,
-        "permissions": [
-            "users:read",
-            "users:create",
-            "users:update",
-            "users:delete",
-            "teams:read",
-            "teams:create",
-            "teams:manage",
-            "teams:delete",
-            "knowledge:read",
-            "knowledge:write",
-            "knowledge:delete",
-            "chat:use",
-            "chat:history",
-            "files:view",
-            "files:upload",
-            "files:download",
-            "files:delete",
-            "settings:read",
-            "settings:write",
-            "admin:access",
-            "admin:users",
-            "admin:organization",
-            "audit:read",
-            "audit:write",
-            # Unified secrets (#10088): full team/role vault control.
-            "secrets:team:read",
-            "secrets:team:write",
-            "secrets:team:share",
-            "secrets:team:revoke",
-            "secrets:role:read",
-            "secrets:role:write",
-            "secrets:role:share",
-            "secrets:role:revoke",
-            "service.management",
-        ],
-    },
-    "user": {
-        "description": "Standard user access",
-        "priority": 50,
-        "permissions": [
-            "users:read",
-            "teams:read",
-            "knowledge:read",
-            "knowledge:write",
-            "chat:use",
-            "chat:history",
-            "files:view",
-            "files:upload",
-            "files:download",
-            "settings:read",
-            # Unified secrets (#10088): members read/write their team/role vault
-            # secrets; sharing/revoking grants stays admin-only.
-            "secrets:team:read",
-            "secrets:team:write",
-            "secrets:role:read",
-            "secrets:role:write",
-        ],
-    },
-    "readonly": {
-        "description": "Read-only access",
-        "priority": 10,
-        "permissions": [
-            "users:read",
-            "teams:read",
-            "knowledge:read",
-            "chat:history",
-            "files:view",
-            "files:download",
-            "settings:read",
-        ],
-    },
-    # Issue #744: Guest role REMOVED - security vulnerability
-    # Unauthenticated requests must be rejected, not assigned guest permissions
-}
-
 ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     Role.ADMIN: [
         Permission.API_READ,
@@ -372,3 +241,104 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.FILES_VIEW,
     ],
 }
+
+
+# ---------------------------------------------------------------------------
+# DB seeding helpers — generated from canonical sources above so a single edit
+# to Permission / ROLE_PERMISSIONS propagates automatically to both.
+# ---------------------------------------------------------------------------
+
+# Legacy colon-style secrets vault permissions required by secrets_authz policy
+# (#10088).  Not represented in the Permission enum (colon composite names) but
+# must appear in SYSTEM_PERMISSIONS and relevant SYSTEM_ROLES entries.
+_SECRETS_VAULT_LEGACY: List[tuple] = [
+    ("secrets:team:read", "secrets", "team:read", "Read team-vault secrets"),
+    ("secrets:team:write", "secrets", "team:write", "Write team-vault secrets"),
+    ("secrets:team:share", "secrets", "team:share", "Share team-vault secrets"),
+    ("secrets:team:revoke", "secrets", "team:revoke", "Revoke team-vault secret grants"),
+    ("secrets:role:read", "secrets", "role:read", "Read role-vault secrets"),
+    ("secrets:role:write", "secrets", "role:write", "Write role-vault secrets"),
+    ("secrets:role:share", "secrets", "role:share", "Share role-vault secrets"),
+    ("secrets:role:revoke", "secrets", "role:revoke", "Revoke role-vault secret grants"),
+]
+
+_SECRETS_ADMIN_PERMS: List[str] = [row[0] for row in _SECRETS_VAULT_LEGACY]
+_SECRETS_USER_PERMS: List[str] = [
+    "secrets:team:read",
+    "secrets:team:write",
+    "secrets:role:read",
+    "secrets:role:write",
+]
+
+
+def _perm_description(perm: Permission) -> str:
+    """Generate a human-readable description from a dot-style permission value."""
+    parts = perm.value.split(".")
+    resource = ".".join(parts[:-1]) if len(parts) > 1 else perm.value
+    action = parts[-1] if len(parts) > 1 else perm.value
+    return f"{action.capitalize()} {resource}"
+
+
+def _build_system_permissions() -> List[tuple]:
+    """Generate SYSTEM_PERMISSIONS from the canonical Permission enum.
+
+    Each entry: (name, resource, action, description).
+    The 'name' field equals the Permission enum value (dot-style), making it
+    the primary key used by DB seeding and parity tests.  Legacy colon-style
+    secrets:* entries are appended because the secrets_authz policy uses names
+    not representable in the dot-style enum (#10088).
+    """
+    rows: List[tuple] = []
+    for perm in Permission:
+        parts = perm.value.split(".")
+        resource = ".".join(parts[:-1]) if len(parts) > 1 else perm.value
+        action = parts[-1] if len(parts) > 1 else perm.value
+        rows.append((perm.value, resource, action, _perm_description(perm)))
+    rows.extend(_SECRETS_VAULT_LEGACY)
+    return rows
+
+
+_ROLE_META: Dict[Role, Dict] = {
+    Role.ADMIN: {"description": "Full administrative access", "priority": 100},
+    Role.OPERATOR: {"description": "Operator access for day-to-day service management", "priority": 80},
+    Role.ANALYST: {"description": "Analytics and read-heavy access", "priority": 60},
+    Role.EDITOR: {"description": "Content and knowledge editing access", "priority": 55},
+    Role.USER: {"description": "Standard user access", "priority": 50},
+    Role.READONLY: {"description": "Read-only access", "priority": 10},
+}
+
+
+def _build_system_roles() -> Dict[str, Dict]:
+    """Generate SYSTEM_ROLES from ROLE_PERMISSIONS.
+
+    Each role entry carries every dot-style permission from ROLE_PERMISSIONS plus
+    the legacy colon-style secrets:* permissions required by secrets_authz (#10088).
+    Priority and description come from _ROLE_META.
+    """
+    result: Dict[str, Dict] = {}
+    for role, perms in ROLE_PERMISSIONS.items():
+        dot_perms = [p.value if isinstance(p, Permission) else p for p in perms]
+        if role is Role.ADMIN:
+            extra = _SECRETS_ADMIN_PERMS
+        elif role is Role.USER:
+            extra = _SECRETS_USER_PERMS
+        else:
+            extra = []
+        meta = _ROLE_META.get(role, {"description": role.value, "priority": 0})
+        result[role.value] = {
+            "description": meta["description"],
+            "priority": meta["priority"],
+            "permissions": dot_perms + extra,
+        }
+    return result
+
+
+# Default system permissions for database seeding — generated from the canonical
+# Permission enum so it is always in sync.  Tuple layout: (name, resource, action, description).
+SYSTEM_PERMISSIONS: List[tuple] = _build_system_permissions()
+
+# Default system roles with their permissions for database seeding — generated
+# from ROLE_PERMISSIONS so a single edit propagates here automatically.
+# Issue #744: Guest role REMOVED — security vulnerability; unauthenticated
+# requests must be rejected, not assigned guest permissions.
+SYSTEM_ROLES: Dict[str, Dict] = _build_system_roles()

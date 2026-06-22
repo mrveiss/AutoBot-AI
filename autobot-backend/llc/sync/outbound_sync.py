@@ -439,11 +439,12 @@ class LLCOutboundSyncService:
         """Look up company PM config and dispatch to the right connector."""
         from sqlalchemy import select
 
-        from user_management.database import AsyncSessionLocal
+        from user_management.database import get_async_session_factory
         from user_management.models.organization import Organization
 
         try:
-            async with AsyncSessionLocal() as session:
+            session_factory = get_async_session_factory()
+            async with session_factory() as session:
                 row = await session.execute(
                     select(Organization.external_pm_type, Organization.external_pm_config).where(
                         Organization.id == uuid.UUID(company_id)
