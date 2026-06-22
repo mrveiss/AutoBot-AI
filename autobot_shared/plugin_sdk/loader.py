@@ -19,6 +19,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from types import ModuleType
 from typing import Dict, List, Tuple, Type
 
 from .base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
@@ -309,7 +310,7 @@ class PluginLoader:
         logger.error("No plugin class found in module: %s", entry_point)
         return None
 
-    def _import_from_file(self, entry_point: str, plugin_dir: Path | None) -> object | None:
+    def _import_from_file(self, entry_point: str, plugin_dir: Path | None) -> ModuleType | None:
         """
         File-path fallback for plugins whose directory name is not importable
         (e.g. ``core-plugins/image-generation-plugin`` -- hyphen prevents normal import).
