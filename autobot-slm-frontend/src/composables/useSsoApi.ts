@@ -90,6 +90,15 @@ interface LDAPLoginResponse {
   expires_in: number
 }
 
+export interface SSOProviderHealthResponse {
+  provider_id: string
+  name: string
+  success_count: number
+  failure_count: number
+  last_success_at: string | null
+  health_status: 'healthy' | 'warning' | 'error' | 'unknown'
+}
+
 // =============================================================================
 // Composable
 // =============================================================================
@@ -214,6 +223,13 @@ export function useSsoApi() {
     return response.data
   }
 
+  async function getProvidersHealth(): Promise<SSOProviderHealthResponse[]> {
+    const response = await client.get<SSOProviderHealthResponse[]>(
+      '/sso-providers/health'
+    )
+    return response.data
+  }
+
   return {
     // Provider CRUD
     listProviders,
@@ -226,5 +242,7 @@ export function useSsoApi() {
     getActiveProviders,
     initiateSSOLogin,
     loginWithLDAP,
+    // Health dashboard
+    getProvidersHealth,
   }
 }
