@@ -141,58 +141,135 @@ CANONICAL_ROLES: list[tuple[str, str, int]] = [
 # (ROLE_PERMISSIONS + legacy secrets:* extras for admin/user).
 CANONICAL_ROLE_GRANTS: dict[str, list[str]] = {
     "admin": [
-        "api.read", "api.write", "api.admin",
-        "knowledge.read", "knowledge.write", "knowledge.delete", "knowledge.manage",
-        "analytics.view", "analytics.export", "analytics.manage", "analytics.logs",
-        "agent.view", "agent.execute", "agent.manage", "agent.terminal",
-        "workflow.view", "workflow.create", "workflow.execute", "workflow.manage",
-        "files.view", "files.download", "files.upload", "files.delete", "files.manage",
-        "security.view", "security.audit", "security.manage",
-        "admin.users.read", "admin.users.write", "admin.config.read", "admin.config.write", "admin.system",
-        "mcp.read", "mcp.execute", "mcp.manage",
-        "batch.view", "batch.create", "batch.execute", "batch.manage",
-        "sandbox.view", "sandbox.execute", "sandbox.manage",
-        "service.management", "allow_shell_execute",
-        "secrets:team:read", "secrets:team:write", "secrets:team:share", "secrets:team:revoke",
-        "secrets:role:read", "secrets:role:write", "secrets:role:share", "secrets:role:revoke",
+        "api.read",
+        "api.write",
+        "api.admin",
+        "knowledge.read",
+        "knowledge.write",
+        "knowledge.delete",
+        "knowledge.manage",
+        "analytics.view",
+        "analytics.export",
+        "analytics.manage",
+        "analytics.logs",
+        "agent.view",
+        "agent.execute",
+        "agent.manage",
+        "agent.terminal",
+        "workflow.view",
+        "workflow.create",
+        "workflow.execute",
+        "workflow.manage",
+        "files.view",
+        "files.download",
+        "files.upload",
+        "files.delete",
+        "files.manage",
+        "security.view",
+        "security.audit",
+        "security.manage",
+        "admin.users.read",
+        "admin.users.write",
+        "admin.config.read",
+        "admin.config.write",
+        "admin.system",
+        "mcp.read",
+        "mcp.execute",
+        "mcp.manage",
+        "batch.view",
+        "batch.create",
+        "batch.execute",
+        "batch.manage",
+        "sandbox.view",
+        "sandbox.execute",
+        "sandbox.manage",
+        "service.management",
+        "allow_shell_execute",
+        "secrets:team:read",
+        "secrets:team:write",
+        "secrets:team:share",
+        "secrets:team:revoke",
+        "secrets:role:read",
+        "secrets:role:write",
+        "secrets:role:share",
+        "secrets:role:revoke",
     ],
     "operator": [
-        "api.read", "api.write",
-        "knowledge.read", "knowledge.write",
-        "analytics.view", "analytics.export",
-        "agent.view", "agent.execute",
-        "workflow.view", "workflow.create", "workflow.execute",
-        "files.view", "files.download", "files.upload",
-        "mcp.read", "mcp.execute",
-        "batch.view", "batch.create", "batch.execute",
-        "sandbox.view", "sandbox.execute",
+        "api.read",
+        "api.write",
+        "knowledge.read",
+        "knowledge.write",
+        "analytics.view",
+        "analytics.export",
+        "agent.view",
+        "agent.execute",
+        "workflow.view",
+        "workflow.create",
+        "workflow.execute",
+        "files.view",
+        "files.download",
+        "files.upload",
+        "mcp.read",
+        "mcp.execute",
+        "batch.view",
+        "batch.create",
+        "batch.execute",
+        "sandbox.view",
+        "sandbox.execute",
         "service.management",
     ],
     "analyst": [
-        "api.read", "knowledge.read",
-        "analytics.view", "analytics.export", "analytics.logs",
-        "agent.view", "workflow.view",
-        "files.view", "files.download",
-        "security.view", "mcp.read", "batch.view",
+        "api.read",
+        "knowledge.read",
+        "analytics.view",
+        "analytics.export",
+        "analytics.logs",
+        "agent.view",
+        "workflow.view",
+        "files.view",
+        "files.download",
+        "security.view",
+        "mcp.read",
+        "batch.view",
     ],
     "editor": [
-        "api.read", "api.write",
-        "knowledge.read", "knowledge.write",
-        "analytics.view", "agent.view",
-        "workflow.view", "workflow.create",
-        "files.view", "files.download", "files.upload",
-        "mcp.read", "batch.view", "batch.create",
+        "api.read",
+        "api.write",
+        "knowledge.read",
+        "knowledge.write",
+        "analytics.view",
+        "agent.view",
+        "workflow.view",
+        "workflow.create",
+        "files.view",
+        "files.download",
+        "files.upload",
+        "mcp.read",
+        "batch.view",
+        "batch.create",
     ],
     "user": [
-        "api.read", "knowledge.read", "analytics.view",
-        "agent.view", "workflow.view",
-        "files.view", "files.download",
-        "mcp.read", "batch.view",
-        "secrets:team:read", "secrets:team:write", "secrets:role:read", "secrets:role:write",
+        "api.read",
+        "knowledge.read",
+        "analytics.view",
+        "agent.view",
+        "workflow.view",
+        "files.view",
+        "files.download",
+        "mcp.read",
+        "batch.view",
+        "secrets:team:read",
+        "secrets:team:write",
+        "secrets:role:read",
+        "secrets:role:write",
     ],
     "readonly": [
-        "api.read", "knowledge.read", "analytics.view",
-        "agent.view", "workflow.view", "files.view",
+        "api.read",
+        "knowledge.read",
+        "analytics.view",
+        "agent.view",
+        "workflow.view",
+        "files.view",
     ],
 }
 
@@ -250,13 +327,11 @@ def _seed_permissions(bind: sa.engine.Connection) -> None:
     """Insert any canonical permission rows that are missing (idempotent)."""
     for name, resource, action, description in CANONICAL_PERMISSIONS:
         bind.execute(
-            sa.text(
-                """
+            sa.text("""
                 INSERT INTO permissions (id, name, resource, action, description, created_at, updated_at)
                 SELECT :id, :name, :resource, :action, :description, now(), now()
                 WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE name = :name)
-                """
-            ),
+                """),
             {
                 "id": _new_id(),
                 "name": name,
@@ -274,15 +349,13 @@ def _seed_roles(bind: sa.engine.Connection) -> None:
     """
     for name, description, priority in CANONICAL_ROLES:
         bind.execute(
-            sa.text(
-                """
+            sa.text("""
                 INSERT INTO roles (id, org_id, name, description, is_system, priority, created_at, updated_at)
                 SELECT :id, NULL, :name, :description, true, :priority, now(), now()
                 WHERE NOT EXISTS (
                     SELECT 1 FROM roles WHERE name = :name AND org_id IS NULL
                 )
-                """
-            ),
+                """),
             {
                 "id": _new_id(),
                 "name": name,
@@ -311,8 +384,7 @@ def _rebuild_system_role_grants(bind: sa.engine.Connection) -> None:
         )
         for perm_name in perm_names:
             bind.execute(
-                sa.text(
-                    """
+                sa.text("""
                     INSERT INTO role_permissions (role_id, permission_id)
                     SELECT :role_id, p.id FROM permissions p
                     WHERE p.name = :perm_name
@@ -320,8 +392,7 @@ def _rebuild_system_role_grants(bind: sa.engine.Connection) -> None:
                           SELECT 1 FROM role_permissions rp
                           WHERE rp.role_id = :role_id AND rp.permission_id = p.id
                       )
-                    """
-                ),
+                    """),
                 {"role_id": role_id, "perm_name": perm_name},
             )
 
@@ -335,12 +406,10 @@ def _drop_obsolete_colon_permissions(bind: sa.engine.Connection) -> None:
     """
     for name in OBSOLETE_COLON_PERMISSIONS:
         bind.execute(
-            sa.text(
-                """
+            sa.text("""
                 DELETE FROM role_permissions
                 WHERE permission_id IN (SELECT id FROM permissions WHERE name = :name)
-                """
-            ),
+                """),
             {"name": name},
         )
         bind.execute(
@@ -394,29 +463,64 @@ LEGACY_COLON_PERMISSIONS: list[tuple[str, str, str, str]] = [
 # operator/analyst/editor). Source: SYSTEM_ROLES at commit c1a6c133c^.
 LEGACY_ROLE_GRANTS: dict[str, list[str]] = {
     "admin": [
-        "users:read", "users:create", "users:update", "users:delete",
-        "teams:read", "teams:create", "teams:manage", "teams:delete",
-        "knowledge:read", "knowledge:write", "knowledge:delete",
-        "chat:use", "chat:history",
-        "files:view", "files:upload", "files:download", "files:delete",
-        "settings:read", "settings:write",
-        "admin:access", "admin:users", "admin:organization",
-        "audit:read", "audit:write",
-        "secrets:team:read", "secrets:team:write", "secrets:team:share", "secrets:team:revoke",
-        "secrets:role:read", "secrets:role:write", "secrets:role:share", "secrets:role:revoke",
+        "users:read",
+        "users:create",
+        "users:update",
+        "users:delete",
+        "teams:read",
+        "teams:create",
+        "teams:manage",
+        "teams:delete",
+        "knowledge:read",
+        "knowledge:write",
+        "knowledge:delete",
+        "chat:use",
+        "chat:history",
+        "files:view",
+        "files:upload",
+        "files:download",
+        "files:delete",
+        "settings:read",
+        "settings:write",
+        "admin:access",
+        "admin:users",
+        "admin:organization",
+        "audit:read",
+        "audit:write",
+        "secrets:team:read",
+        "secrets:team:write",
+        "secrets:team:share",
+        "secrets:team:revoke",
+        "secrets:role:read",
+        "secrets:role:write",
+        "secrets:role:share",
+        "secrets:role:revoke",
         "service.management",
     ],
     "user": [
-        "users:read", "teams:read",
-        "knowledge:read", "knowledge:write",
-        "chat:use", "chat:history",
-        "files:view", "files:upload", "files:download",
+        "users:read",
+        "teams:read",
+        "knowledge:read",
+        "knowledge:write",
+        "chat:use",
+        "chat:history",
+        "files:view",
+        "files:upload",
+        "files:download",
         "settings:read",
-        "secrets:team:read", "secrets:team:write", "secrets:role:read", "secrets:role:write",
+        "secrets:team:read",
+        "secrets:team:write",
+        "secrets:role:read",
+        "secrets:role:write",
     ],
     "readonly": [
-        "users:read", "teams:read", "knowledge:read", "chat:history",
-        "files:view", "files:download", "settings:read",
+        "users:read",
+        "teams:read",
+        "knowledge:read",
+        "chat:history",
+        "files:view",
+        "files:download",
+        "settings:read",
     ],
 }
 
@@ -443,13 +547,11 @@ def downgrade() -> None:
     # 1. Re-seed legacy colon permissions (service.management / secrets:* already present).
     for name, resource, action, description in LEGACY_COLON_PERMISSIONS:
         bind.execute(
-            sa.text(
-                """
+            sa.text("""
                 INSERT INTO permissions (id, name, resource, action, description, created_at, updated_at)
                 SELECT :id, :name, :resource, :action, :description, now(), now()
                 WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE name = :name)
-                """
-            ),
+                """),
             {
                 "id": _new_id(),
                 "name": name,
@@ -473,8 +575,7 @@ def downgrade() -> None:
         )
         for perm_name in perm_names:
             bind.execute(
-                sa.text(
-                    """
+                sa.text("""
                     INSERT INTO role_permissions (role_id, permission_id)
                     SELECT :role_id, p.id FROM permissions p
                     WHERE p.name = :perm_name
@@ -482,8 +583,7 @@ def downgrade() -> None:
                           SELECT 1 FROM role_permissions rp
                           WHERE rp.role_id = :role_id AND rp.permission_id = p.id
                       )
-                    """
-                ),
+                    """),
                 {"role_id": role_id, "perm_name": perm_name},
             )
 
@@ -507,12 +607,10 @@ def downgrade() -> None:
     # 4. Drop canonical-only dot permission rows (grants removed first).
     for name in _CANONICAL_ONLY_DOT_PERMISSIONS:
         bind.execute(
-            sa.text(
-                """
+            sa.text("""
                 DELETE FROM role_permissions
                 WHERE permission_id IN (SELECT id FROM permissions WHERE name = :name)
-                """
-            ),
+                """),
             {"name": name},
         )
         bind.execute(
