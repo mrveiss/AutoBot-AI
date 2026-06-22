@@ -54,7 +54,9 @@ _SLM_ROLES = [
         "systemd_service": "nginx",
         "auto_restart": False,
         "health_check_port": 443,
-        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-slm-frontend && npm install && npm run build:slm"),  # #10435: VITE_API_URL=/slm
+        "post_sync_cmd": (
+            f"cd {_BASE_DIR}/autobot-slm-frontend && npm install && npm run build:slm"
+        ),  # #10435: VITE_API_URL=/slm
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "deploy-slm-manager.yml",
