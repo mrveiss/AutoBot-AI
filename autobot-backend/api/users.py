@@ -90,7 +90,7 @@ async def _get_user_preferences_from_redis(user_id: str) -> UserPreferences:
         UserPreferences object with stored or default values
     """
     try:
-        redis_client = await get_redis_client(database=RedisDatabase.MAIN)
+        redis_client = await get_redis_client(async_client=True, database=RedisDatabase.MAIN)
 
         async def _read(field: str) -> str | None:
             raw = await redis_client.get(f"user:{user_id}:preferences:{field}")
@@ -123,7 +123,7 @@ async def _store_user_preferences_to_redis(user_id: str, preferences: UserPrefer
     Raises:
         RedisError: If Redis operation fails
     """
-    redis_client = await get_redis_client(database=RedisDatabase.MAIN)
+    redis_client = await get_redis_client(async_client=True, database=RedisDatabase.MAIN)
 
     # Store each preference under its own key (no expiration - permanent preference)
     for field in ("reasoning_effort", *_APPEARANCE_FIELDS):
