@@ -1,6 +1,15 @@
 # AutoBot SLM Nginx Configuration
 # Managed by Ansible - slm_manager role
 
+# WebSocket Upgrade/Connection map (http context).
+# Sends "Connection: upgrade" only for real WS requests and "Connection: close"
+# for plain REST GETs, so proxied HTTP/1.1 keepalive REST calls are not broken
+# by a hardcoded upgrade header (#10378).
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
 {% if slm_colocated_frontend | default(false) | bool %}
 # Co-located user backend upstream (#2829)
 # Proxies directly to uvicorn (HTTP) — no intermediate backend nginx.
@@ -348,12 +357,21 @@ server {
     }
 
     # Main AutoBot backend proxy (user backend skills, cache, etc.)
-    # /autobot-api/* → https://main_backend/api/* (strips /autobot-api prefix)
+    # /autobot-api/* → http://main_backend/api/* (strips /autobot-api prefix) (#10378)
     # Issue #1791: inject X-Internal-API-Key for service auth + WebSocket support
     location /autobot-api/ {
-        proxy_pass https://{{ autobot_backend_host }}:{{ autobot_backend_port }}/api/;
-        proxy_http_version 1.1;
+        # #10378: main backend is plain HTTP on its real port. Co-located deploys
+        # use the autobot_backend upstream (uvicorn :8001); standalone proxies to
+        # the inventory backend host/port over its configured protocol.
+{% if slm_colocated_frontend | default(false) | bool %}
+        proxy_pass http://autobot_backend/api/;
+{% else %}
+        proxy_pass {{ autobot_backend_protocol | default('http') }}://{{ autobot_backend_host }}:{{ autobot_backend_port }}/api/;
+{% if (autobot_backend_protocol | default('http')) == 'https' %}
         proxy_ssl_verify off;
+{% endif %}
+{% endif %}
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -361,9 +379,10 @@ server {
 {% if autobot_internal_api_key %}
         proxy_set_header X-Internal-API-Key "{{ autobot_internal_api_key }}";
 {% endif %}
-        # WebSocket support for /processes/{id}/stream (#1777)
+        # WebSocket support for /processes/{id}/stream (#1777). Use the
+        # $connection_upgrade map so plain REST GETs are not forced to upgrade.
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
         proxy_connect_timeout 60s;
         proxy_send_timeout 300s;
         proxy_read_timeout 300s;

@@ -119,6 +119,29 @@
     backend_slm_auth_tok: "{{ _backend_slm_auth_tok.stdout | default('') | trim }}"
   tags: ['backend', 'config']
 
+# #10400: Backend signs the service JWT with AUTOBOT_JWT_SECRET, but SLM verifies
+# it with SLM_SECRET_KEY. Provisioning never distributed the SLM key to the backend,
+# so the backend→SLM WebSocket handshake was rejected with 4001. Read SLM_SECRET_KEY
+# from /etc/autobot/slm-secrets.env (written by the slm_manager role) and surface it
+# as backend_jwt_secret so backend.env.j2 renders AUTOBOT_JWT_SECRET to the same value.
+- name: "Backend | Read SLM_SECRET_KEY from slm-secrets.env (#10400)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^SLM_SECRET_KEY=\K.*'
+      /etc/autobot/slm-secrets.env 2>/dev/null || true
+  register: _backend_slm_secret_key
+  changed_when: false
+  failed_when: false
+  no_log: true
+  tags: ['backend', 'config']
+
+- name: "Backend | Align backend_jwt_secret with SLM_SECRET_KEY when present (#10400)"
+  ansible.builtin.set_fact:
+    backend_jwt_secret: "{{ _backend_slm_secret_key.stdout | trim }}"
+  when: (_backend_slm_secret_key.stdout | default('') | trim) | length > 0
+  no_log: true
+  tags: ['backend', 'config']
+
 # #9914: Deploy the systemd unit BEFORE any stop/start so a fresh VM provisions
 # out-of-box. Previously the unit was deployed after the MVA-1633 start task, so
 # first-run on a clean node failed: "Could not find the requested service
