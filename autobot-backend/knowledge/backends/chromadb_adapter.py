@@ -49,6 +49,10 @@ class ChromaDBCollection(BaseCollection):
     def __init__(self, raw: Any) -> None:
         self._raw = raw
         self.name = getattr(raw, "name", "")
+        # Expose collection metadata so callers can read embedding provenance
+        # without reaching into the raw ChromaDB object (#10420). Mirrors the
+        # in-memory adapter, which already carries a ``metadata`` attribute.
+        self.metadata = getattr(raw, "metadata", None) or {}
 
     def add(
         self,
