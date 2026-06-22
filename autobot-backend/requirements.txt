@@ -33,13 +33,13 @@ openai>=2.43.0
 anthropic>=0.111.0
 boto3>=1.43.34                       # GH#9010: AWS Bedrock provider
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
-protobuf>=6.33.6,<7.0.0           # capped <7.0: opentelemetry-proto (otel 1.42) requires protobuf<7.0; Dependabot's 7.35.1 is unsatisfiable. 6.33.6 = latest installable (#4061)
+protobuf>=7.35.1,<8.0.0           # capped <7.0: opentelemetry-proto (otel 1.42) requires protobuf<7.0; Dependabot's 7.35.1 is unsatisfiable. 6.33.6 = latest installable (#4061)
 sentence-transformers>=5.6.0
 torch==2.12.1  # embeddings/transcriber/multimodal; installed CPU-only in the default image (#10251). GPU build via requirements-gpu.txt
 torchvision==0.27.1  # paired with torch 2.12.1; CPU-only by default (#10251)
 # torchaudio removed (#10251): not imported anywhere in the backend, and its 2.11.0 pin mismatched torch 2.12.0
 torchmetrics>=1.9.0  # Issue #904: Training metrics
-opencv-python-headless>=4.10.0,<4.11  # MVA-3684: 4.11+ needs numpy>=2 which conflicts with graspologic 3.4.4 (numpy<2.0); 4.10.x = latest numpy<2-compatible
+opencv-python-headless>=4.13.0.92,<4.14  # MVA-3684: 4.11+ needs numpy>=2 which conflicts with graspologic 3.4.4 (numpy<2.0); 4.10.x = latest numpy<2-compatible
 vanna>=2.0.2  # Issue #723: Natural language to SQL via Vanna.ai
                # SECURITY: CVE unpatched in all published releases (Dependabot alert #298,
                # dismissed tolerable_risk 2026-04-04, Issue #3445). Monitor
@@ -65,11 +65,11 @@ llama-index-llms-ollama>=0.10.1,<1.0.0       # Ollama LLM integration
 llama-index-embeddings-ollama>=0.9.0,<1.0.0  # Ollama embeddings
 llama-index-vector-stores-chroma>=0.5.5,<1.0.0  # ChromaDB vector store
 # LangChain 1.x ecosystem — migrated from 0.3.x to fix SSRF CVE (#1572)
-langchain>=1.3.1,<2.0.0                # Issue #1572 + #10386: langchain ecosystem held — 1.3.10/core 1.4.8/langgraph 1.2.6 pull langgraph-sdk 0.4.2 (websockets<16) which conflicts with required websockets>=16.0
-langchain-core>=1.3.3,<2.0.0         # Issue #1572: SSRF CVE fix requires >=1.2.11 (held with ecosystem, #10386)
-langchain-community>=0.4.1,<0.5.0     # Issue #1572: Compatible with langchain 1.x (held, #10386)
+langchain>=1.3.10,<2.0.0                # Issue #1572 + #10386: langchain ecosystem held — 1.3.10/core 1.4.8/langgraph 1.2.6 pull langgraph-sdk 0.4.2 (websockets<16) which conflicts with required websockets>=16.0
+langchain-core>=1.4.8,<2.0.0         # Issue #1572: SSRF CVE fix requires >=1.2.11 (held with ecosystem, #10386)
+langchain-community>=0.4.2,<0.5.0     # Issue #1572: Compatible with langchain 1.x (held, #10386)
 langchain-ollama>=1.1.0,<2.0.0        # Issue #1572: ChatOllama for QA chain
-langgraph>=1.2.0,<2.0.0               # Issue #1043: StateGraph (held <1.2.6 — 1.2.6 forces langgraph-sdk 0.4.2 websockets<16 vs websockets>=16.0, #10386)
+langgraph>=1.2.6,<2.0.0               # Issue #1043: StateGraph (held <1.2.6 — 1.2.6 forces langgraph-sdk 0.4.2 websockets<16 vs websockets>=16.0, #10386)
 langgraph-checkpoint-redis>=0.4.1,<1.0.0  # Issue #1043: Redis checkpointer for thread persistence
 markdownify>=1.2.2  # HTML to Markdown conversion
 mcp>=1.28.0            # MCP protocol for skill subprocesses (Issue #731)

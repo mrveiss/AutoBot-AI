@@ -4,7 +4,7 @@
 redis>=8.0.0
 
 # Data Processing and ML
-numpy>=2.4.6,<3.0.0
+numpy>=2.5.0,<3.0.0
 scikit-learn>=1.9.0
 pandas>=3.0.3
 
