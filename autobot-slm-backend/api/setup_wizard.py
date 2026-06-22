@@ -1157,7 +1157,7 @@ async def validate_fleet(
             role_row = await session.execute(select(RoleModel).where(RoleModel.name == role_name))
             role_obj = role_row.scalar_one_or_none()
             # Default required=True when the DB row is missing (fail-safe)
-            role_required_map[role_name] = (role_obj.required if role_obj is not None else True)
+            role_required_map[role_name] = role_obj.required if role_obj is not None else True
 
         missing_required_roles: list[str] = []
         inactive_optional_roles: list[str] = []
