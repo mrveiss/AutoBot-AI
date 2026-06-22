@@ -17,9 +17,11 @@ Telegram bot adapter (``api/telegram_bot.py``):
 
 Outbound replies reuse ``WhatsAppIntegration`` so opt-in enforcement, error
 handling, and PII masking are applied on the send path.
+
+Issue #10267 - Route inbound WhatsApp media/voice into chat pipeline.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -32,6 +34,7 @@ from autobot_shared.logging_manager import get_logger
 from services.gateway.gateway_manager import GatewayManager
 from services.whatsapp_service import (
     build_integration,
+    download_whatsapp_media,
     flatten_messages,
     get_whatsapp_app_secret,
     get_whatsapp_verify_token,
@@ -62,8 +65,21 @@ async def send_whatsapp_response(to: str, response_text: str) -> None:
     await integration.send_text_message({"to": to, "body": response_text})
 
 
-async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> None:
-    """Route a normalized WhatsApp message to chat and send the AI reply."""
+async def _route_to_chat_and_reply(
+    request: Request,
+    unified_message: Any,
+    media_bytes: Optional[bytes] = None,
+    media_mime_type: Optional[str] = None,
+) -> None:
+    """Route a normalized WhatsApp message to chat and send the AI reply.
+
+    Args:
+        request:         FastAPI request (used to reach app.state services).
+        unified_message: Gateway-normalized message.
+        media_bytes:     Raw media bytes downloaded from the Graph API, if the
+                         inbound message carried a media attachment (GH#10267).
+        media_mime_type: MIME type of the downloaded media, or None.
+    """
     from api.chat import process_chat_message
     from services.llm_service import LLMService
     from utils.chat_utils import get_chat_history_manager
@@ -71,6 +87,15 @@ async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> No
 
     session_id = _get_chat_session_id(unified_message.channel_id)
     request_id = generate_request_id()
+
+    extra_metadata: Dict[str, Any] = {}
+    if media_bytes is not None:
+        # Attach media to the chat message metadata mirroring telegram_adapter's has_file pattern
+        extra_metadata["has_file"] = True
+        extra_metadata["file_bytes"] = media_bytes
+        extra_metadata["file_type"] = unified_message.metadata.get("message_type", "media")
+        if media_mime_type:
+            extra_metadata["mime_type"] = media_mime_type
 
     chat_message = ChatMessage(
         content=unified_message.message,
@@ -81,6 +106,7 @@ async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> No
             "whatsapp_user_id": unified_message.user_id,
             "whatsapp_chat_id": unified_message.channel_id,
             **unified_message.metadata,
+            **extra_metadata,
         },
     )
 
@@ -138,6 +164,11 @@ async def whatsapp_webhook(request: Request) -> JSONResponse:
 
     Security: verifies the ``X-Hub-Signature-256`` HMAC over the raw body using
     the stored app secret (Meta security requirement). Fails closed.
+
+    Text messages are routed immediately.  Media messages (image/audio/voice/
+    video/document) are downloaded from the Graph API and attached to the chat
+    message as ``has_file`` metadata before dispatch, mirroring the Telegram
+    adapter's has_file flow (GH#10267).
     """
     raw_body = await request.body()
 
@@ -160,12 +191,35 @@ async def whatsapp_webhook(request: Request) -> JSONResponse:
         return JSONResponse({"status": "ok"})
 
     for raw_message in flatten_messages(webhook_body):
+        media_bytes: Optional[bytes] = None
+        media_mime_type: Optional[str] = None
+
         if not raw_message.get("body"):
-            # Non-text (media/voice) — acknowledged but not routed to text chat
-            logger.info("Received non-text WhatsApp message type=%s", raw_message.get("message_type"))
-            continue
+            # Non-text inbound message — attempt to download and route media (GH#10267)
+            media_id: Optional[str] = raw_message.get("media_id")
+            if not media_id:
+                logger.info(
+                    "Received non-text WhatsApp message type=%s (no downloadable media_id)",
+                    raw_message.get("message_type"),
+                )
+                continue
+            media_bytes, media_mime_type = await download_whatsapp_media(media_id)
+            if media_bytes is None:
+                logger.warning(
+                    "Could not download WhatsApp media (media_id=%s, type=%s) — skipping",
+                    media_id,
+                    raw_message.get("message_type"),
+                )
+                continue
+            logger.info(
+                "Downloaded WhatsApp media (media_id=%s, type=%s, size=%d bytes)",
+                media_id,
+                raw_message.get("message_type"),
+                len(media_bytes),
+            )
+
         unified_message = await gateway_manager.normalize_message(raw_message)
-        await _route_to_chat_and_reply(request, unified_message)
+        await _route_to_chat_and_reply(request, unified_message, media_bytes, media_mime_type)
 
     return JSONResponse({"status": "ok"})
 

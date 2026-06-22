@@ -13,6 +13,7 @@ Issue #9049 - Plugin capability manifest system.
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -45,6 +46,13 @@ class PluginLoader:
         self.registry = PluginRegistry()
         self.capability_checker = CapabilityChecker()
         self._logger = get_logger(__name__)
+        # Plugin name -> on-disk source directory, captured at discovery so the
+        # loader can import the module by file path. The manifest entry_point
+        # (e.g. "plugins.core_plugins.hello_plugin.main") is NOT importable: the
+        # on-disk dirs are hyphenated ("plugins/core-plugins/hello-plugin") and
+        # not on sys.path, so import_module silently failed for every core
+        # plugin (#10294).
+        self._manifest_dirs: Dict[str, Path] = {}
 
     def discover_plugins(self) -> List[PluginManifest]:
         """Discover all plugins from configured directories.
@@ -74,6 +82,7 @@ class PluginLoader:
                         data = json.load(f)
                     manifest = PluginManifest(**data)
                     manifests.append(manifest)
+                    self._manifest_dirs[manifest.name] = subdir
                     self._logger.debug(
                         "Discovered plugin: %s v%s",
                         manifest.name,
@@ -88,6 +97,69 @@ class PluginLoader:
                     )
 
         return manifests
+
+    def _import_entry_point(self, manifest: PluginManifest):
+        """Import a plugin's module, preferring file-path import (#10294).
+
+        Core plugins live in hyphenated dirs (``plugins/core-plugins/hello-plugin``)
+        that are not importable via the dotted ``entry_point``. Load the module
+        file directly from the discovered source directory; fall back to
+        ``import_module`` for plugins genuinely installed on ``sys.path``.
+
+        The module is registered in ``sys.modules`` under ``entry_point`` so that
+        intra-plugin dataclasses and relative refs resolve to the correct module name.
+        """
+        import sys
+
+        source_dir = self._manifest_dirs.get(manifest.name)
+        if source_dir is not None:
+            module_file = manifest.entry_point.rsplit(".", 1)[-1] + ".py"  # "...main" -> main.py
+            module_path = source_dir / module_file
+            if module_path.is_file():
+                spec = importlib.util.spec_from_file_location(manifest.entry_point, module_path)
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    # Register before exec so intra-plugin dataclasses/relative refs resolve.
+                    sys.modules[manifest.entry_point] = module
+                    try:
+                        spec.loader.exec_module(module)  # type: ignore[union-attr]
+                        self._logger.info(
+                            "Loaded plugin module %r from %s (file-path fallback)",
+                            manifest.entry_point,
+                            module_path,
+                        )
+                        return module
+                    except Exception as exc:
+                        sys.modules.pop(manifest.entry_point, None)
+                        self._logger.warning(
+                            "File-path fallback failed for %r at %s: %s",
+                            manifest.entry_point,
+                            module_path,
+                            exc,
+                        )
+        try:
+            return importlib.import_module(manifest.entry_point)
+        except ModuleNotFoundError as exc:
+            self._logger.error(
+                "Plugin '%s' module not importable (entry_point=%s, source_dir=%s): %s",
+                manifest.name,
+                manifest.entry_point,
+                source_dir,
+                exc,
+            )
+            return None
+
+    @staticmethod
+    def _resolve_plugin_class(module):
+        """Return the plugin class: explicit ``Plugin`` export, else a BasePlugin subclass (#10294)."""
+        plugin_class = getattr(module, "Plugin", None)
+        if isinstance(plugin_class, type) and issubclass(plugin_class, BasePlugin):
+            return plugin_class
+        for attr in vars(module).values():
+            if isinstance(attr, type) and issubclass(attr, BasePlugin) and attr is not BasePlugin:
+                if getattr(attr, "__module__", None) == module.__name__:
+                    return attr
+        return None
 
     async def load_plugin(
         self,
@@ -107,18 +179,22 @@ class PluginLoader:
             Loaded plugin instance, or None if load failed
         """
         try:
-            # Import plugin module
-            module = importlib.import_module(manifest.entry_point)
+            # Import plugin module (by file path; see _import_entry_point) (#10294)
+            module = self._import_entry_point(manifest)
+            if module is None:
+                return None
 
-            # Get Plugin class
-            if not hasattr(module, "Plugin"):
+            # Resolve the plugin class: prefer an explicit ``Plugin`` export,
+            # otherwise fall back to the module's BasePlugin subclass so a plugin
+            # that forgot the ``Plugin = MyPlugin`` alias still loads instead of
+            # silently failing to register (#10294).
+            plugin_class = self._resolve_plugin_class(module)
+            if plugin_class is None:
                 self._logger.error(
-                    "Plugin module '%s' does not export 'Plugin' class",
+                    "Plugin module '%s' exports no 'Plugin' alias or BasePlugin subclass",
                     manifest.entry_point,
                 )
                 return None
-
-            plugin_class = module.Plugin
 
             # Instantiate plugin
             plugin = plugin_class(manifest, config)
