@@ -12,6 +12,7 @@ Issue #6970 - Validate declared hooks against HOOK_REGISTRY on load.
 Issue #6971 - Raise PluginLoadError for missing required env vars.
 """
 
+import sys
 import importlib
 import importlib.util
 import json
@@ -43,6 +44,11 @@ class PluginLoader:
         """
         self.plugin_dirs = plugin_dirs or []
         self.registry = PluginRegistry()
+        # Plugin name -> on-disk directory, captured at discovery. Core plugins
+        # live in hyphenated dirs (plugins/core-plugins/hello-plugin) whose dotted
+        # entry_point (plugins.core_plugins.hello_plugin.main) is not importable;
+        # the dir lets the loader import the module file by path instead (#10294).
+        self._manifest_dirs: Dict[str, Path] = {}
 
     def discover_plugins(self) -> List[PluginManifest]:
         """
@@ -66,6 +72,7 @@ class PluginLoader:
 
                     manifest = PluginManifest(**data)
                     manifests.append(manifest)
+                    self._manifest_dirs[manifest.name] = manifest_file.parent
                     logger.info("Discovered plugin: %s v%s", manifest.name, manifest.version)
 
                 except Exception as e:
@@ -118,7 +125,7 @@ class PluginLoader:
                 )
 
             # Import plugin module
-            plugin_class = self._import_plugin_class(manifest.entry_point)
+            plugin_class = self._import_plugin_class(manifest.entry_point, self._manifest_dirs.get(manifest.name))
             if not plugin_class:
                 return None
 
@@ -260,19 +267,31 @@ class PluginLoader:
             for env in plugin.manifest.required_env
         }
 
-    def _import_plugin_class(self, entry_point: str) -> Type[BasePlugin] | None:
+    def _import_plugin_class(self, entry_point: str, plugin_dir: Path | None = None) -> Type[BasePlugin] | None:
         """
         Import plugin class from entry point.
 
+        Tries ``importlib.import_module(entry_point)`` first. When that fails
+        (core plugins whose hyphenated directory is not importable as a dotted
+        module — #10294), falls back to loading the module file from the plugin's
+        on-disk directory via ``importlib.util.spec_from_file_location``.
+
         Args:
-            entry_point: Python module path (e.g., 'plugins.hello.main')
+            entry_point: Python module path (e.g., 'plugins.core_plugins.hello_plugin.main')
+            plugin_dir:  Directory containing plugin.json — used for the file-path fallback.
 
         Returns:
             Plugin class or None on failure
         """
         try:
-            # Import module
-            module = importlib.import_module(entry_point)
+            module = None
+            try:
+                module = importlib.import_module(entry_point)
+            except ModuleNotFoundError as exc:
+                module = self._import_from_file(entry_point, plugin_dir)
+                if module is None:
+                    logger.error("Failed to import plugin module %s: %s", entry_point, exc)
+                    return None
 
             # Look for Plugin class or class with 'Plugin' suffix
             for attr_name in dir(module):
@@ -286,6 +305,30 @@ class PluginLoader:
         except Exception as e:
             logger.error("Failed to import plugin %s: %s", entry_point, e, exc_info=True)
             return None
+
+    def _import_from_file(self, entry_point: str, plugin_dir: Path | None):
+        """Load a plugin module by file path from its on-disk directory (#10294)."""
+        if plugin_dir is None:
+            return None
+        module_file = entry_point.rsplit(".", 1)[-1] + ".py"  # "...main" -> main.py
+        module_path = Path(plugin_dir) / module_file
+        if not module_path.is_file():
+            logger.error("Plugin module file not found for %s at %s", entry_point, module_path)
+            return None
+        spec = importlib.util.spec_from_file_location(entry_point, module_path)
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        # Register before exec so intra-plugin dataclasses / relative refs resolve.
+        sys.modules[entry_point] = module
+        try:
+            spec.loader.exec_module(module)
+        except Exception as exc:
+            sys.modules.pop(entry_point, None)
+            logger.error("File-path import failed for %s at %s: %s", entry_point, module_path, exc)
+            return None
+        logger.info("Loaded plugin module %s from %s (file-path fallback)", entry_point, module_path)
+        return module
 
     def get_loaded_plugins(self) -> Dict[str, BasePlugin]:
         """Get all loaded plugins."""
