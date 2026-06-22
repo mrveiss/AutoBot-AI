@@ -185,7 +185,6 @@ async def test_rewrap_unauthorized_403(client):
 @pytest.fixture()
 async def service_client(fresh_db_url):
     """App with service_principal overridden to inject service_id='test-slm'."""
-    from api.unified_secrets import service_principal as _sp
 
     assert run_alembic(["upgrade", "head"], fresh_db_url).returncode == 0
     engine = create_async_engine(fresh_db_url)
