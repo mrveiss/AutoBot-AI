@@ -22,7 +22,7 @@ import pytest
 
 from llc.models.enums import WorkItemStatus, WorkItemType
 from llc.models.review_gate import LLCReviewGatePolicy
-from llc.services.handoff import HandoffError, HandoffNotAllowed, HandoffService
+from llc.services.handoff import HandoffNotAllowed, HandoffService
 from llc.services.review_gate import (
     ReviewGatePolicyConflictError,
     ReviewGatePolicyNotFoundError,
