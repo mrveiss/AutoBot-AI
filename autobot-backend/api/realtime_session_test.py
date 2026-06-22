@@ -88,7 +88,9 @@ class TestHappyPath:
         session_cm = _mock_session(upstream_cm)
 
         with (
-            patch("api.realtime_session._get_api_key", return_value="sk-test-key"),
+            patch(
+                "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-test-key"
+            ),
             patch("aiohttp.ClientSession", return_value=session_cm),
         ):
             resp = client.post(
@@ -103,7 +105,9 @@ class TestHappyPath:
         session_cm = _mock_session(upstream_cm)
 
         with (
-            patch("api.realtime_session._get_api_key", return_value="sk-test-key"),
+            patch(
+                "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-test-key"
+            ),
             patch("aiohttp.ClientSession", return_value=session_cm),
         ):
             resp = client.post(
@@ -118,7 +122,9 @@ class TestHappyPath:
         session_cm = _mock_session(upstream_cm)
 
         with (
-            patch("api.realtime_session._get_api_key", return_value="sk-test-key"),
+            patch(
+                "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-test-key"
+            ),
             patch("aiohttp.ClientSession", return_value=session_cm),
         ):
             resp = client.post(
@@ -133,7 +139,9 @@ class TestHappyPath:
         session_cm = _mock_session(upstream_cm)
 
         with (
-            patch("api.realtime_session._get_api_key", return_value="sk-test-key"),
+            patch(
+                "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-test-key"
+            ),
             patch("aiohttp.ClientSession", return_value=session_cm),
         ):
             resp = client.post(
@@ -153,7 +161,7 @@ class TestMissingApiKey:
     """GH#7342 — no OPENAI_API_KEY configured must return 503."""
 
     def test_missing_key_returns_503(self, client: TestClient):
-        with patch("api.realtime_session._get_api_key", return_value=""):
+        with patch("voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value=""):
             resp = client.post(
                 "/api/voice/realtime/session",
                 data={"sdp": _SDP_OFFER, "session": _SESSION_JSON},
@@ -162,7 +170,7 @@ class TestMissingApiKey:
         assert resp.status_code == 503
 
     def test_missing_key_error_body(self, client: TestClient):
-        with patch("api.realtime_session._get_api_key", return_value=""):
+        with patch("voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value=""):
             resp = client.post(
                 "/api/voice/realtime/session",
                 data={"sdp": _SDP_OFFER, "session": _SESSION_JSON},
@@ -185,7 +193,9 @@ class TestUpstream401:
         session_cm = _mock_session(upstream_cm)
 
         with (
-            patch("api.realtime_session._get_api_key", return_value="sk-bad-key"),
+            patch(
+                "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-bad-key"
+            ),
             patch("aiohttp.ClientSession", return_value=session_cm),
         ):
             resp = client.post(
@@ -200,7 +210,9 @@ class TestUpstream401:
         session_cm = _mock_session(upstream_cm)
 
         with (
-            patch("api.realtime_session._get_api_key", return_value="sk-bad-key"),
+            patch(
+                "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-bad-key"
+            ),
             patch("aiohttp.ClientSession", return_value=session_cm),
         ):
             resp = client.post(
@@ -226,7 +238,9 @@ class TestUpstream5xx:
         session_cm = _mock_session(upstream_cm)
 
         with (
-            patch("api.realtime_session._get_api_key", return_value="sk-test-key"),
+            patch(
+                "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-test-key"
+            ),
             patch("aiohttp.ClientSession", return_value=session_cm),
         ):
             resp = client.post(
@@ -241,7 +255,9 @@ class TestUpstream5xx:
         session_cm = _mock_session(upstream_cm)
 
         with (
-            patch("api.realtime_session._get_api_key", return_value="sk-test-key"),
+            patch(
+                "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-test-key"
+            ),
             patch("aiohttp.ClientSession", return_value=session_cm),
         ):
             resp = client.post(
@@ -251,3 +267,56 @@ class TestUpstream5xx:
 
         body = resp.json()
         assert body.get("detail", {}).get("success") is False
+
+
+# ---------------------------------------------------------------------------
+# Multi-provider dispatch + providers endpoints (Issue #9025)
+# ---------------------------------------------------------------------------
+
+
+class TestProviderDispatch:
+    """#9025 — /session dispatches through the selected provider; default unchanged."""
+
+    def test_session_header_advertises_provider(self, client: TestClient):
+        upstream_cm = _mock_upstream(200, _SDP_ANSWER)
+        session_cm = _mock_session(upstream_cm)
+        with (
+            patch(
+                "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key",
+                return_value="sk-test-key",
+            ),
+            patch("aiohttp.ClientSession", return_value=session_cm),
+        ):
+            resp = client.post(
+                "/api/voice/realtime/session",
+                data={"sdp": _SDP_OFFER, "session": _SESSION_JSON},
+            )
+        assert resp.status_code == 200
+        assert resp.headers.get("x-realtime-provider") == "openai"
+
+
+class TestProvidersEndpoint:
+    """#9025 — GET/PATCH /providers list + select (never leaks credentials)."""
+
+    def test_list_providers_default_openai(self, client: TestClient):
+        resp = client.get("/api/voice/realtime/providers")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["selected"] == "openai"
+        ids = {p["id"] for p in body["providers"]}
+        assert {"openai", "gemini", "elevenlabs", "ultravox"} <= ids
+        # no credential leakage
+        assert "api_key" not in resp.text and "key" not in {k for p in body["providers"] for k in p}
+
+    def test_patch_selects_then_clears(self, client: TestClient):
+        resp = client.patch("/api/voice/realtime/providers", json={"provider": "gemini"})
+        assert resp.status_code == 200
+        assert resp.json()["selected"] == "gemini"
+        # clear back to default
+        resp = client.patch("/api/voice/realtime/providers", json={"provider": None})
+        assert resp.status_code == 200
+        assert resp.json()["selected"] == "openai"
+
+    def test_patch_unknown_provider_422(self, client: TestClient):
+        resp = client.patch("/api/voice/realtime/providers", json={"provider": "bogus"})
+        assert resp.status_code == 422
