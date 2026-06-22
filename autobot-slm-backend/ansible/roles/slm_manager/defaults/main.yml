@@ -80,10 +80,14 @@ slm_auth_token: ""
 # Injected into nginx proxy headers AND into backend/SLM process environments.
 autobot_internal_api_key: ""
 
-# Host and port for the user-facing AutoBot backend (HTTPS).
+# Host, port and protocol for the user-facing AutoBot backend.
 # Defaults to the inventory-derived backend host so no IP is hardcoded here.
+# #10378: the co-located backend is plain HTTP on uvicorn :8001 (nginx holds
+# 443); nothing listens on https :8443. The /autobot-api/ proxy uses the
+# autobot_backend upstream in co-located mode and these vars in standalone mode.
 autobot_backend_host: "{{ infrastructure.hosts.backend if infrastructure is defined else '127.0.0.1' }}"
-autobot_backend_port: 8443
+autobot_backend_port: 8001
+autobot_backend_protocol: http
 
 # noVNC proxy port (used by /tools/novnc/ location)
 novnc_port: 6080
