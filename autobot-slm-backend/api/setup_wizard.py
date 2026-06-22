@@ -1146,7 +1146,21 @@ async def validate_fleet(
         # Only check roles that are actually assigned to nodes (#2747)
         # Roles not yet assigned via wizard are not "missing"
         assigned_roles = (await session.execute(select(NodeRole.role_name).distinct())).scalars().all()
-        missing_roles = []
+
+        # Look up which of the assigned roles are required (#9965).
+        # Optional roles (required=False) that are assigned but not yet active
+        # should not degrade the fleet health score — report them separately.
+        from models.database import Role as RoleModel
+
+        role_required_map: dict[str, bool] = {}
+        for role_name in assigned_roles:
+            role_row = await session.execute(select(RoleModel).where(RoleModel.name == role_name))
+            role_obj = role_row.scalar_one_or_none()
+            # Default required=True when the DB row is missing (fail-safe)
+            role_required_map[role_name] = (role_obj.required if role_obj is not None else True)
+
+        missing_required_roles: list[str] = []
+        inactive_optional_roles: list[str] = []
         for role_name in assigned_roles:
             active = await session.execute(
                 select(func.count(NodeRole.id)).where(
@@ -1155,10 +1169,13 @@ async def validate_fleet(
                 )
             )
             if (active.scalar() or 0) == 0:
-                missing_roles.append(role_name)
+                if role_required_map.get(role_name, True):
+                    missing_required_roles.append(role_name)
+                else:
+                    inactive_optional_roles.append(role_name)
 
     health = "healthy"
-    if missing_roles:
+    if missing_required_roles:
         health = "degraded"
     elif online_nodes < total_nodes:
         health = "degraded"
@@ -1167,6 +1184,8 @@ async def validate_fleet(
         "health": health,
         "total_nodes": total_nodes,
         "online_nodes": online_nodes,
-        "missing_required_roles": missing_roles,
+        "missing_required_roles": missing_required_roles,
+        # Informational: optional roles assigned but not yet active — not health-degrading
+        "inactive_optional_roles": inactive_optional_roles,
         "ready": total_nodes > 0,
     }

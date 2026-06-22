@@ -136,6 +136,11 @@ class SLMAgent:
         # connection pool + SSL context allocation (#9086)
         self._session: aiohttp.ClientSession | None = None
 
+        # Registration-pending backoff state (#9965).
+        # 404 responses mean the node row doesn't exist yet — keep retrying
+        # with bounded exponential backoff instead of treating it as fatal.
+        self._reg_backoff_seconds: float = 0  # 0 = not in backoff
+
     def _init_buffer_db(self):
         """Initialize SQLite buffer database."""
         Path(self.buffer_db).parent.mkdir(parents=True, exist_ok=True)
@@ -267,6 +272,9 @@ class SLMAgent:
             },
         }
 
+    # Maximum registration-pending backoff in seconds (#9965).
+    _REG_BACKOFF_CAP: float = 300
+
     async def _send_heartbeat_request(self, payload: dict) -> bool:
         """
         Send heartbeat HTTP request to admin server.
@@ -276,7 +284,7 @@ class SLMAgent:
 
         Returns:
             True if heartbeat was accepted, False otherwise.
-        Issue #620.
+        Issue #620, #9965.
         """
         assert self._session is not None
         try:
@@ -291,15 +299,32 @@ class SLMAgent:
                     # Issue #741: Process heartbeat response
                     response_data = await response.json()
                     self._process_heartbeat_response(response_data)
+                    if self._reg_backoff_seconds:
+                        logger.info("Heartbeat accepted — node registration confirmed")
+                        self._reg_backoff_seconds = 0
                     logger.debug("Heartbeat sent successfully")
                     return True
-                else:
-                    logger.warning(
-                        "Heartbeat rejected: %s %s",
-                        response.status,
-                        await response.text(),
+                if response.status == 404:
+                    # Node row not yet created — registration still in progress.
+                    # Back off and retry; do NOT buffer or treat as fatal (#9965).
+                    new_backoff = min(
+                        max(self._reg_backoff_seconds * 2, 5),
+                        self._REG_BACKOFF_CAP,
+                    )
+                    self._reg_backoff_seconds = new_backoff
+                    logger.debug(
+                        "Heartbeat 404: node %s not yet registered — "
+                        "retrying in %.0fs (registration pending, #9965)",
+                        self.node_id,
+                        new_backoff,
                     )
                     return False
+                logger.warning(
+                    "Heartbeat rejected: %s %s",
+                    response.status,
+                    await response.text(),
+                )
+                return False
         except aiohttp.ClientError as e:
             logger.warning("Failed to send heartbeat: %s", e)
             self.buffer_event("heartbeat", payload)
@@ -418,15 +443,25 @@ class SLMAgent:
                 # Send systemd watchdog notification (prevents timeout restart)
                 sd_notify("WATCHDOG=1")
 
-                # Send heartbeat
-                success = await self.send_heartbeat()
+                try:
+                    # Send heartbeat
+                    success = await self.send_heartbeat()
 
-                # If connected, try to sync buffered events
-                if success:
-                    await self.sync_buffered_events()
+                    # If connected, try to sync buffered events
+                    if success:
+                        await self.sync_buffered_events()
+                except Exception as exc:
+                    # Catch-all: an unhandled error in any heartbeat step must
+                    # NOT kill the loop (#9965).  Log and continue.
+                    logger.exception("Unhandled error in heartbeat loop: %s", exc)
 
-                # Wait for next heartbeat
-                await asyncio.sleep(self.heartbeat_interval)
+                # When in registration-pending backoff, sleep the longer of
+                # the normal interval or the computed backoff delay (#9965).
+                sleep_secs = max(
+                    float(self.heartbeat_interval),
+                    self._reg_backoff_seconds,
+                )
+                await asyncio.sleep(sleep_secs)
 
             self._session = None
 
