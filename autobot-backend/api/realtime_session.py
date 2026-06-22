@@ -27,8 +27,8 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_config
 from voice_processing.realtime.base import RealtimeProviderError
 from voice_processing.realtime.registry import (
-    get_active_realtime_provider,
     get_active_provider_id,
+    get_active_realtime_provider,
     list_realtime_providers,
     set_active_provider,
 )
