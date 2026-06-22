@@ -14,6 +14,7 @@ Bridges the inbound WhatsApp webhook route to the reusable
   delivery (Meta security requirement).
 - Flattens Meta's nested webhook envelope into the flat shape the gateway
   ``WhatsAppAdapter`` expects, so messages can be normalized and routed to chat.
+- Downloads inbound media via the Graph API media endpoint (GH#10267).
 
 Security: access token and app secret are encrypted at rest (see
 ``autobot_shared.field_encryption``).
@@ -21,7 +22,7 @@ Security: access token and app secret are encrypted at rest (see
 
 import hashlib
 import hmac
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.field_encryption import decrypt_field, encrypt_field
 from autobot_shared.logging_manager import get_logger
@@ -149,13 +150,81 @@ def verify_webhook_signature(payload: bytes, signature_header: Optional[str], ap
     return hmac.compare_digest(provided, expected)
 
 
+async def download_whatsapp_media(media_id: str) -> Tuple[Optional[bytes], Optional[str]]:
+    """Download WhatsApp media bytes via the Graph API media endpoint.
+
+    Flow (Graph API):
+      1. GET /{media-id}  -> JSON with a short-lived ``url`` field.
+      2. GET {url} with Bearer access token -> raw media bytes.
+
+    Returns:
+        Tuple of (raw_bytes, mime_type) on success; (None, None) on failure.
+        Never raises; logs and returns (None, None) on any error.
+
+    GH#10267 -- mirrors telegram_adapter's has_file/media-download flow.
+    """
+    import aiohttp
+
+    access_token = await _get(WHATSAPP_ACCESS_TOKEN_KEY)
+    if not access_token:
+        logger.warning("Cannot download WhatsApp media — access token not configured")
+        return None, None
+
+    base_url = (await _get(WHATSAPP_BASE_URL_KEY)) or "https://graph.facebook.com/v18.0"
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            # Step 1: resolve the temporary download URL
+            async with session.get(f"{base_url}/{media_id}", headers=headers) as resp:
+                if resp.status != 200:
+                    logger.warning(
+                        "WhatsApp media metadata fetch failed (media_id=%s, status=%s)",
+                        media_id,
+                        resp.status,
+                    )
+                    return None, None
+                meta = await resp.json()
+
+            download_url = meta.get("url")
+            mime_type: Optional[str] = meta.get("mime_type")
+            if not download_url:
+                logger.warning("WhatsApp media metadata missing 'url' field (media_id=%s)", media_id)
+                return None, None
+
+            # Step 2: fetch the raw bytes
+            async with session.get(download_url, headers=headers) as resp:
+                if resp.status != 200:
+                    logger.warning(
+                        "WhatsApp media download failed (media_id=%s, status=%s)",
+                        media_id,
+                        resp.status,
+                    )
+                    return None, None
+                raw_bytes = await resp.read()
+                # Prefer Content-Type from the download response if metadata lacked it
+                if not mime_type:
+                    mime_type = resp.headers.get("Content-Type")
+                return raw_bytes, mime_type
+
+    except Exception as exc:
+        logger.error("Exception downloading WhatsApp media (media_id=%s): %s", media_id, exc)
+        return None, None
+
+
+# Media types that carry a downloadable ``id`` in the Meta webhook envelope.
+_MEDIA_MESSAGE_TYPES = frozenset({"image", "audio", "voice", "video", "document", "sticker"})
+
+
 def flatten_messages(webhook_body: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Flatten a Meta webhook envelope into adapter-ready message dicts.
 
     Meta nests messages under ``entry[].changes[].value.messages[]``. The gateway
     ``WhatsAppAdapter`` expects a flat dict with ``from``, ``chat_id``, ``body``,
-    ``id``, ``timestamp``. Only text messages carry a routable body; others are
-    flattened with an empty body and their type recorded in metadata.
+    ``id``, ``timestamp``.  Text messages carry a routable ``body``; media messages
+    (image/audio/voice/video/document/sticker) carry a ``media_id`` so the webhook
+    handler can download them and attach them to the chat pipeline (GH#10267).
     """
     flattened: List[Dict[str, Any]] = []
     for entry in webhook_body.get("entry", []):
@@ -165,15 +234,23 @@ def flatten_messages(webhook_body: Dict[str, Any]) -> List[Dict[str, Any]]:
                 sender = message.get("from", "")
                 msg_type = message.get("type", "text")
                 body = message.get("text", {}).get("body", "") if msg_type == "text" else ""
-                flattened.append(
-                    {
-                        "platform": "whatsapp",
-                        "from": sender,
-                        "chat_id": sender,
-                        "body": body,
-                        "id": message.get("id"),
-                        "timestamp": message.get("timestamp", 0),
-                        "message_type": msg_type,
-                    }
-                )
+
+                # Extract the media object id for downloadable types (GH#10267)
+                media_id: Optional[str] = None
+                if msg_type in _MEDIA_MESSAGE_TYPES:
+                    media_obj = message.get(msg_type, {})
+                    media_id = media_obj.get("id") if isinstance(media_obj, dict) else None
+
+                flat: Dict[str, Any] = {
+                    "platform": "whatsapp",
+                    "from": sender,
+                    "chat_id": sender,
+                    "body": body,
+                    "id": message.get("id"),
+                    "timestamp": message.get("timestamp", 0),
+                    "message_type": msg_type,
+                }
+                if media_id:
+                    flat["media_id"] = media_id
+                flattened.append(flat)
     return flattened

@@ -10,6 +10,7 @@ Dynamic plugin discovery and loading system.
 Issue #730 - Plugin SDK for extensible tool architecture.
 Issue #6970 - Validate declared hooks against HOOK_REGISTRY on load.
 Issue #6971 - Raise PluginLoadError for missing required env vars.
+Issue #10294 - File-path fallback for hyphenated core-plugin directories.
 """
 
 import importlib
@@ -43,6 +44,8 @@ class PluginLoader:
         """
         self.plugin_dirs = plugin_dirs or []
         self.registry = PluginRegistry()
+        # Maps plugin name -> directory containing its plugin.json (set during discover_plugins)
+        self._manifest_dirs: Dict[str, Path] = {}
 
     def discover_plugins(self) -> List[PluginManifest]:
         """
@@ -65,6 +68,8 @@ class PluginLoader:
                         data = json.load(f)
 
                     manifest = PluginManifest(**data)
+                    # Remember where on disk this plugin lives (needed for file-path fallback)
+                    self._manifest_dirs[manifest.name] = manifest_file.parent
                     manifests.append(manifest)
                     logger.info("Discovered plugin: %s v%s", manifest.name, manifest.version)
 
@@ -117,8 +122,9 @@ class PluginLoader:
                     missing_optional,
                 )
 
-            # Import plugin module
-            plugin_class = self._import_plugin_class(manifest.entry_point)
+            # Import plugin module — pass on-disk directory for file-path fallback (#10294)
+            plugin_dir = self._manifest_dirs.get(manifest.name)
+            plugin_class = self._import_plugin_class(manifest.entry_point, plugin_dir)
             if not plugin_class:
                 return None
 
@@ -260,32 +266,106 @@ class PluginLoader:
             for env in plugin.manifest.required_env
         }
 
-    def _import_plugin_class(self, entry_point: str) -> Type[BasePlugin] | None:
+    def _import_plugin_class(
+        self, entry_point: str, plugin_dir: Path | None = None
+    ) -> Type[BasePlugin] | None:
         """
         Import plugin class from entry point.
 
+        Tries ``importlib.import_module(entry_point)`` first.  When that raises
+        ``ModuleNotFoundError`` (e.g. core-plugins whose hyphenated directory is not
+        importable as a Python package -- GH#10294), falls back to loading the
+        ``main.py`` from the plugin's on-disk directory via
+        ``importlib.util.spec_from_file_location``, mirroring the approach used in
+        ``autobot-backend/api/_video_providers_loader.py``.
+
         Args:
-            entry_point: Python module path (e.g., 'plugins.hello.main')
+            entry_point: Python module path (e.g., 'plugins.core_plugins.image_generation_plugin.main')
+            plugin_dir:  Directory that contains plugin.json -- used for the file-path fallback.
 
         Returns:
             Plugin class or None on failure
         """
+        module = None
+
         try:
-            # Import module
             module = importlib.import_module(entry_point)
+        except ModuleNotFoundError as exc:
+            logger.debug(
+                "importlib.import_module(%r) failed (%s); attempting file-path fallback",
+                entry_point,
+                exc,
+            )
+            module = self._import_from_file(entry_point, plugin_dir)
 
-            # Look for Plugin class or class with 'Plugin' suffix
-            for attr_name in dir(module):
-                attr = getattr(module, attr_name)
-                if isinstance(attr, type) and issubclass(attr, BasePlugin) and attr is not BasePlugin:
-                    return attr
-
-            logger.error("No plugin class found in module: %s", entry_point)
+        if module is None:
+            logger.error("Failed to import plugin module: %s", entry_point)
             return None
 
-        except Exception as e:
-            logger.error("Failed to import plugin %s: %s", entry_point, e, exc_info=True)
-            return None
+        # Look for Plugin class or class with 'Plugin' suffix
+        for attr_name in dir(module):
+            attr = getattr(module, attr_name)
+            if isinstance(attr, type) and issubclass(attr, BasePlugin) and attr is not BasePlugin:
+                return attr
+
+        logger.error("No plugin class found in module: %s", entry_point)
+        return None
+
+    def _import_from_file(self, entry_point: str, plugin_dir: Path | None) -> object | None:
+        """
+        File-path fallback for plugins whose directory name is not importable
+        (e.g. ``core-plugins/image-generation-plugin`` -- hyphen prevents normal import).
+
+        Resolves ``main.py`` relative to *plugin_dir* (preferred) or by translating
+        the underscored entry-point path back to the hyphenated on-disk path inside
+        any configured plugin_dirs.  Registers the module under *entry_point* in
+        ``sys.modules`` so intra-plugin relative imports and dataclasses resolve.
+
+        GH#10294 -- mirrors ``autobot-backend/api/_video_providers_loader.py``.
+        """
+        import sys
+
+        # Candidate file paths, most-canonical first.
+        candidates: List[Path] = []
+
+        # 1. Use the stored manifest directory directly (most reliable).
+        if plugin_dir is not None:
+            candidates.append(plugin_dir / "main.py")
+
+        # 2. Derive the path from the entry_point by mapping underscores -> hyphens
+        #    for each segment, then looking inside every configured plugin_dir.
+        #    entry_point like "plugins.core_plugins.image_generation_plugin.main"
+        #    -> segments ["plugins", "core_plugins", "image_generation_plugin", "main"]
+        #    -> on-disk path: <plugin_root>/core-plugins/image-generation-plugin/main.py
+        parts = entry_point.split(".")
+        # Drop the leading "plugins" segment and the trailing "main" module name.
+        inner_parts = parts[1:-1] if len(parts) >= 3 else parts[:-1]
+        hyphenated_parts = [p.replace("_", "-") for p in inner_parts]
+        rel_path = Path(*hyphenated_parts) / "main.py" if hyphenated_parts else None
+
+        for base_dir in self.plugin_dirs:
+            if rel_path is not None:
+                candidates.append(base_dir / rel_path)
+
+        for path in candidates:
+            if not path.exists():
+                continue
+            try:
+                spec = importlib.util.spec_from_file_location(entry_point, path)
+                if spec is None or spec.loader is None:
+                    continue
+                module = importlib.util.module_from_spec(spec)
+                # Register before exec so intra-plugin dataclasses/relative refs resolve.
+                sys.modules[entry_point] = module
+                spec.loader.exec_module(module)  # type: ignore[union-attr]
+                logger.info("Loaded plugin module %r from %s (file-path fallback)", entry_point, path)
+                return module
+            except Exception as exc:
+                logger.warning("File-path fallback failed for %r at %s: %s", entry_point, path, exc)
+                sys.modules.pop(entry_point, None)
+                continue
+
+        return None
 
     def get_loaded_plugins(self) -> Dict[str, BasePlugin]:
         """Get all loaded plugins."""
