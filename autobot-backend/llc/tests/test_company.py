@@ -227,7 +227,8 @@ class TestSchemas:
     def test_company_update_all_optional(self):
         data = CompanyUpdate()
         assert data.name is None
-        assert data.llc_status is None
+        # llc_status is intentionally excluded from CompanyUpdate (use suspend/archive).
+        assert data.parent_org_id is None
 
     def test_tree_node_rebuild(self):
         node = CompanyTreeNode(

@@ -377,9 +377,10 @@ async def test_error_response_redis_matches_local():
 @pytest.mark.asyncio
 async def test_log_store_write_called_when_agent_logs():
     """Log output from agent's logger is captured and forwarded to run_log_store."""
+    _test_logger_name = "test.llc.adapter.logging_agent"
 
     class _LoggingAgent:
-        _logger = logging.getLogger("test.llc.adapter.logging_agent")
+        _logger = logging.getLogger(_test_logger_name)
 
         def __init__(self, **_):
             self.agent_type = "logging_agent"
@@ -398,9 +399,18 @@ async def test_log_store_write_called_when_agent_logs():
     adapter._run_log_store = store
     adapter._tasks = {}
     adapter._logs = {}
+    adapter._cancel_requested = set()
 
-    run_id = await adapter.invoke({}, {"title": "Logging test"})
-    await asyncio.sleep(0.05)
+    # The root logger defaults to WARNING in test environments; lower the
+    # test logger so INFO records actually reach the capturing handler.
+    test_log = logging.getLogger(_test_logger_name)
+    original_level = test_log.level
+    test_log.setLevel(logging.DEBUG)
+    try:
+        run_id = await adapter.invoke({}, {"title": "Logging test"})
+        await asyncio.sleep(0.05)
+    finally:
+        test_log.setLevel(original_level)
 
     store.write.assert_called_once()
     call_run_id, log_text = store.write.call_args.args
@@ -412,12 +422,13 @@ async def test_log_store_write_called_when_agent_logs():
 async def test_concurrent_log_capture_is_isolated():
     """Concurrent tasks must not mix each other's log output."""
     barrier = asyncio.Event()
-    results: dict[str, str] = {}
 
     class _BarrierAgent:
         def __init__(self, label: str, **_):
             self._label = label
             self._logger = logging.getLogger(f"test.llc.adapter.barrier.{label}")
+            # Lower the level so INFO records reach the capturing handler.
+            self._logger.setLevel(logging.DEBUG)
 
         async def process_request(self, req):
             self._logger.info("msg-from-%s", self._label)
@@ -435,6 +446,7 @@ async def test_concurrent_log_capture_is_isolated():
         adapter._run_log_store = store
         adapter._tasks = {}
         adapter._logs = {}
+        adapter._cancel_requested = set()
 
         run_id = await adapter.invoke({}, {"title": label})
         return run_id, adapter, store
@@ -603,6 +615,7 @@ async def test_integration_summarization_agent_reaches_completed():
     Verifies the run record reaches ``COMPLETED`` (maps to GH#8227's
     "succeeded" language; GH#8261 unified both into ``LLCRunStatus.COMPLETED``).
     """
+    pytest.importorskip("agents.summarization_agent", reason="Real agent module not available in unit test env")
     adapter = AutoBotAgentAdapter({"agent_class": "agents.summarization_agent.SummarizationAgent"})
     context = {
         "title": "Summarize the widget documentation",

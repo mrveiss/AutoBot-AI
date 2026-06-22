@@ -45,14 +45,14 @@ async def test_a2h_returns_structured_brief():
     }
 
     with (
-        patch("llc.kb.handoff_brief.LLCRAGAssembler") as MockRAG,
+        patch("llc.kb.handoff_brief.LLCRAGAssembler"),
         patch("llc.kb.handoff_brief.HandoffBriefGenerator.__init__", return_value=None),
     ):
         gen = HandoffBriefGenerator.__new__(HandoffBriefGenerator)
         gen.rag = MagicMock()
         gen.rag.assemble = AsyncMock(return_value=_make_rag_context())
 
-        with patch("llc.kb.handoff_brief.get_llm_service") as mock_llm_fn:
+        with patch("services.llm_service.get_llm_service") as mock_llm_fn:
             mock_llm = MagicMock()
             mock_llm.chat = AsyncMock(return_value=_make_llm_response(llm_payload))
             mock_llm_fn.return_value = mock_llm
