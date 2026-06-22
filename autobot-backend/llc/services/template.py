@@ -287,10 +287,15 @@ def _validate_no_secrets(data: Dict[str, Any], path: str = "") -> None:
 
 
 def _check_for_secret_patterns(value: str, path: str) -> None:
-    """Detect common secret patterns (keys, tokens, passwords)."""
-    lower = value.lower()
+    """Detect common secret patterns (keys, tokens, passwords).
+
+    Warns when a field whose name (path) contains a secret-like keyword holds a
+    long value — a strong signal that the template contains a raw credential
+    instead of a ``{{PLACEHOLDER}}``.
+    """
     suspicious_keys = ("password", "secret", "token", "api_key", "private_key")
-    if any(k in lower for k in suspicious_keys) and len(value) > 20:
+    path_lower = path.lower()
+    if any(k in path_lower for k in suspicious_keys) and len(value) > 20:
         logger.warning("Potential secret at path %s — value exceeds 20 chars", path)
 
 

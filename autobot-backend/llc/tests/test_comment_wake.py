@@ -17,9 +17,20 @@ from ..services.comment_wake_service import CommentWakeService
 
 
 @pytest.fixture
+def mock_session():
+    """Async session stub for the comment-wake flow."""
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.flush = AsyncMock()
+    return session
+
+
+@pytest.fixture
 def mock_agent_org_node():
-    """Mock agent_org_nodes query result."""
+    """Mock agent_org_nodes row. agent_id is the slug (#10032): the node is
+    looked up by PK but keyed downstream by this slug."""
     return {
+        "agent_id": "test-agent",
         "adapter_type": "claude_code",
         "adapter_config": {"model": "claude-sonnet-4-6"},
         "context_mode": "fat",

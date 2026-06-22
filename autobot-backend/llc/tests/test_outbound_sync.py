@@ -94,7 +94,7 @@ async def test_dispatch_jira_create():
     }
     payload = {"title": "Fix bug", "description": "Details", "type": "task"}
 
-    with patch("llc.sync.outbound_sync.JiraIntegration") as MockJira:
+    with patch("integrations.project_management_integration.JiraIntegration") as MockJira:
         instance = AsyncMock()
         instance.execute_action = AsyncMock(return_value={"issue": {"key": "PROJ-1"}})
         MockJira.return_value = instance
@@ -123,7 +123,7 @@ async def test_dispatch_trello_create():
     }
     payload = {"title": "New card", "description": "desc", "type": "task"}
 
-    with patch("llc.sync.outbound_sync.TrelloIntegration") as MockTrello:
+    with patch("integrations.project_management_integration.TrelloIntegration") as MockTrello:
         instance = AsyncMock()
         instance.execute_action = AsyncMock(return_value={"card": {}})
         MockTrello.return_value = instance
@@ -146,7 +146,7 @@ async def test_dispatch_asana_completed():
     }
     payload = {"type": "task", "external_id": "task_gid_123"}
 
-    with patch("llc.sync.outbound_sync.AsanaIntegration") as MockAsana:
+    with patch("integrations.project_management_integration.AsanaIntegration") as MockAsana:
         instance = AsyncMock()
         instance.execute_action = AsyncMock(return_value={"task": {}})
         MockAsana.return_value = instance
@@ -174,9 +174,11 @@ async def test_sync_failure_is_logged_not_raised():
     mock_org.external_pm_config = "encrypted_blob"
 
     with (
-        patch("llc.sync.outbound_sync.AsyncSessionLocal") as MockSession,
+        patch("user_management.database.get_async_session_factory") as MockSession,
         patch("llc.sync.outbound_sync._decrypt_pm_config", return_value={"project_key": "P"}),
-        patch("llc.sync.outbound_sync._dispatch_to_jira", side_effect=RuntimeError("boom")),
+        # _DISPATCHER holds the dispatch fns by value at import, so patch the dict
+        # entry (patching _dispatch_to_jira itself would not be seen).
+        patch("llc.sync.outbound_sync._DISPATCHER", {"jira": AsyncMock(side_effect=RuntimeError("boom"))}),
         patch("llc.sync.outbound_sync._log_sync_failed", new_callable=AsyncMock) as mock_log,
     ):
         mock_session = AsyncMock()
@@ -185,7 +187,7 @@ async def test_sync_failure_is_logged_not_raised():
         mock_result = MagicMock()
         mock_result.one_or_none = MagicMock(return_value=("jira", "encrypted_blob"))
         mock_session.execute = AsyncMock(return_value=mock_result)
-        MockSession.return_value = mock_session
+        MockSession.return_value.return_value = mock_session
 
         await service._sync(
             company_id="00000000-0000-0000-0000-000000000001",
@@ -205,14 +207,14 @@ async def test_sync_skips_when_no_pm_configured():
     """Companies without PM config must be silently skipped."""
     service = LLCOutboundSyncService()
 
-    with patch("llc.sync.outbound_sync.AsyncSessionLocal") as MockSession:
+    with patch("user_management.database.get_async_session_factory") as MockSession:
         mock_session = AsyncMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=None)
         mock_result = MagicMock()
         mock_result.one_or_none = MagicMock(return_value=("none", None))
         mock_session.execute = AsyncMock(return_value=mock_result)
-        MockSession.return_value = mock_session
+        MockSession.return_value.return_value = mock_session
 
         with patch("llc.sync.outbound_sync._DISPATCHER", {}) as mock_dispatcher:
             await service._sync(
@@ -257,12 +259,12 @@ async def test_integration_create_triggers_jira_sync():
     }
 
     with (
-        patch("llc.sync.outbound_sync.AsyncSessionLocal") as MockSession,
+        patch("user_management.database.get_async_session_factory") as MockSession,
         patch(
             "llc.sync.outbound_sync._decrypt_pm_config",
             return_value=pm_config,
         ),
-        patch("llc.sync.outbound_sync.JiraIntegration") as MockJira,
+        patch("integrations.project_management_integration.JiraIntegration") as MockJira,
     ):
         mock_session = AsyncMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
@@ -270,7 +272,7 @@ async def test_integration_create_triggers_jira_sync():
         mock_result = MagicMock()
         mock_result.one_or_none = MagicMock(return_value=("jira", "blob"))
         mock_session.execute = AsyncMock(return_value=mock_result)
-        MockSession.return_value = mock_session
+        MockSession.return_value.return_value = mock_session
 
         jira_instance = AsyncMock()
         jira_instance.execute_action = AsyncMock(return_value={"issue": {"key": "ABO-42"}})

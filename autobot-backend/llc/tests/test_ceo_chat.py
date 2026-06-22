@@ -249,13 +249,24 @@ def test_build_reply_decision_no_entity_id() -> None:
 
 @pytest.mark.asyncio
 async def test_rag_query_graceful_failure(svc: CeoChatService) -> None:
-    """_rag_query returns [] when ChromaDB is unavailable."""
-    with patch(
-        "llc.services.ceo_chat.get_async_chromadb_client",  # noqa: F821 — may not be importable in test env
-        side_effect=ImportError("chromadb not available"),
-        create=True,
-    ):
+    """_rag_query returns [] when ChromaDB is unavailable.
+
+    The source does a local ``from utils.async_chromadb_client import ...``
+    inside the try block, so we simulate unavailability by temporarily removing
+    the module from sys.modules so the import raises ImportError.
+    """
+    import sys
+
+    sentinel = object()
+    orig = sys.modules.get("utils.async_chromadb_client", sentinel)
+    sys.modules["utils.async_chromadb_client"] = None  # type: ignore[assignment]
+    try:
         result = await svc._rag_query("thread_id", "query text")
+    finally:
+        if orig is sentinel:
+            sys.modules.pop("utils.async_chromadb_client", None)
+        else:
+            sys.modules["utils.async_chromadb_client"] = orig
     assert result == []
 
 
