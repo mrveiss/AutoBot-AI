@@ -25,7 +25,7 @@ Each field value is a JSON-encoded run document.
 
 import json
 from datetime import datetime, timezone
-from typing import List, Literal, Optional
+from typing import List, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
