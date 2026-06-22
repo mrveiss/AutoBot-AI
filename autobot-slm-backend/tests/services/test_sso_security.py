@@ -33,6 +33,14 @@ _SSO_SECRETS = "user_management.services.sso_secrets"
 if _SSO_SECRETS not in sys.modules:
     sys.modules[_SSO_SECRETS] = MagicMock()
 
+# sso_service.py imports Role from user_management.models.role; stub it.
+if "user_management.models.role" not in sys.modules:
+    sys.modules["user_management.models.role"] = MagicMock()
+
+# sso_service.py lazy-imports UserService; pre-populate stub.
+if "user_management.services.user_service" not in sys.modules:
+    sys.modules["user_management.services.user_service"] = MagicMock()
+
 _base_mod = types.ModuleType("user_management.services.base_service")
 
 

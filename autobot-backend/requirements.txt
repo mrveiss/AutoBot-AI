@@ -1,15 +1,15 @@
 -e ../autobot_shared
 
 # Core
-apscheduler>=3.10.4             # Issue #6590: hourly LLM key rotation job
-croniter>=2.0.0                 # GH#9027: required by LLC RoutineScheduler and routines API
+apscheduler>=3.11.2             # Issue #6590: hourly LLM key rotation job
+croniter>=6.2.2                 # GH#9027: required by LLC RoutineScheduler and routines API
 fastapi>=0.138.0                # SECURITY UPDATE - requires starlette >=0.52.1
 uvicorn>=0.49.0
 websockets>=16.0           # Issue #3098: required for WebSocket protocol support (desktop_streaming_manager, slm_client)
 python-dotenv>=1.2.2
 aiofiles>=25.1.0
 pydantic>=2.13.4
-email-validator>=2.2.0  # Issue #2953: required by pydantic for EmailStr validation
+email-validator>=2.3.0  # Issue #2953: required by pydantic for EmailStr validation
 cachetools>=7.1.4
 celery>=5.6.3  # Issue #892: Background task processing
 vulture>=2.16  # MVA-1065: dead code scanner for audit_dead_code task
@@ -23,23 +23,23 @@ asyncpg>=0.31.0  # Async PostgreSQL driver — required for RBAC user modes (sin
 
 # Document Generation (MVA-2174)
 python-docx>=1.1.0  # DOCX export for transcripts
-reportlab>=4.0.0    # PDF export for transcripts
+reportlab>=5.0.0    # PDF export for transcripts
 PyPDF2>=3.0.1       # PDF testing for transcript export
 openpyxl>=3.1.0     # Excel file parsing for OneDrive connector (GH#9004)
 python-pptx>=0.6.23 # PowerPoint file parsing for OneDrive connector (GH#9004)
 
 # AI/ML
-openai>=2.41.0
+openai>=2.43.0
 anthropic>=0.111.0
-boto3>=1.43.25                       # GH#9010: AWS Bedrock provider
+boto3>=1.43.34                       # GH#9010: AWS Bedrock provider
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
-protobuf>=5.29.6,<8.0.0           # required floor for chromadb 1.5.5+ opentelemetry exporter; resolves googleapis-common-protos conflict (#4061)
-sentence-transformers>=5.4.1
+protobuf>=6.33.6,<7.0.0           # capped <7.0: opentelemetry-proto (otel 1.42) requires protobuf<7.0; Dependabot's 7.35.1 is unsatisfiable. 6.33.6 = latest installable (#4061)
+sentence-transformers>=5.6.0
 torch==2.12.1  # embeddings/transcriber/multimodal; installed CPU-only in the default image (#10251). GPU build via requirements-gpu.txt
 torchvision==0.27.1  # paired with torch 2.12.1; CPU-only by default (#10251)
 # torchaudio removed (#10251): not imported anywhere in the backend, and its 2.11.0 pin mismatched torch 2.12.0
 torchmetrics>=1.9.0  # Issue #904: Training metrics
-opencv-python-headless>=4.10.0,<4.11  # MVA-3684: <4.11 avoids numpy>=2 requirement (compatible with vllm's numpy 1.x)
+opencv-python-headless>=4.10.0,<4.11  # MVA-3684: 4.11+ needs numpy>=2 which conflicts with graspologic 3.4.4 (numpy<2.0); 4.10.x = latest numpy<2-compatible
 vanna>=2.0.2  # Issue #723: Natural language to SQL via Vanna.ai
                # SECURITY: CVE unpatched in all published releases (Dependabot alert #298,
                # dismissed tolerable_risk 2026-04-04, Issue #3445). Monitor
@@ -50,7 +50,7 @@ vanna>=2.0.2  # Issue #723: Natural language to SQL via Vanna.ai
 networkx>=3.6.1
 graspologic>=3.4.4
 tree-sitter>=0.25.2
-tree-sitter-python>=0.23.0
+tree-sitter-python>=0.25.0
 tree-sitter-javascript>=0.25.0
 
 # Include existing requirements
@@ -58,35 +58,35 @@ tree-sitter-javascript>=0.25.0
 
 # Issue #858: Additional runtime dependencies for Python 3.13
 xxhash>=3.7.0          # Hash functions for LLM caching
-structlog>=25.5.0      # Structured logging for service auth
+structlog>=26.1.0      # Structured logging for service auth
 llama-index>=0.14.22,<0.15.0          # Migrated from 0.13.x; floor aligned to 0.14.19 (#2642)
 llama-index-core>=0.14.22,<0.15.0     # Explicit core pin matching ecosystem (#2642)
 llama-index-llms-ollama>=0.10.1,<1.0.0       # Ollama LLM integration
 llama-index-embeddings-ollama>=0.9.0,<1.0.0  # Ollama embeddings
 llama-index-vector-stores-chroma>=0.5.5,<1.0.0  # ChromaDB vector store
 # LangChain 1.x ecosystem — migrated from 0.3.x to fix SSRF CVE (#1572)
-langchain>=1.3.1,<2.0.0                # Issue #1572: Migrated to 1.x; MVA-1330: floor corrected to 1.3.0 — 1.2.24 does not exist on PyPI; PVE-2026-88512 SQL injection fix
-langchain-core>=1.3.3,<2.0.0         # Issue #1572: SSRF CVE fix requires >=1.2.11
-langchain-community>=0.4.1,<0.5.0     # Issue #1572: Compatible with langchain 1.x
+langchain>=1.3.1,<2.0.0                # Issue #1572 + #10386: langchain ecosystem held — 1.3.10/core 1.4.8/langgraph 1.2.6 pull langgraph-sdk 0.4.2 (websockets<16) which conflicts with required websockets>=16.0
+langchain-core>=1.3.3,<2.0.0         # Issue #1572: SSRF CVE fix requires >=1.2.11 (held with ecosystem, #10386)
+langchain-community>=0.4.1,<0.5.0     # Issue #1572: Compatible with langchain 1.x (held, #10386)
 langchain-ollama>=1.1.0,<2.0.0        # Issue #1572: ChatOllama for QA chain
-langgraph>=1.2.0,<2.0.0               # Issue #1043: StateGraph for chat orchestration
+langgraph>=1.2.0,<2.0.0               # Issue #1043: StateGraph (held <1.2.6 — 1.2.6 forces langgraph-sdk 0.4.2 websockets<16 vs websockets>=16.0, #10386)
 langgraph-checkpoint-redis>=0.4.1,<1.0.0  # Issue #1043: Redis checkpointer for thread persistence
 markdownify>=1.2.2  # HTML to Markdown conversion
 mcp>=1.28.0            # MCP protocol for skill subprocesses (Issue #731)
 PyYAML>=6.0.3            # SKILL.md frontmatter parsing (Phase 3 sync engine)
 
 # Community growth skill (Issue #1161)
-praw>=7.8.1             # Reddit OAuth API for CommunityGrowthSkill
+praw>=8.0.1             # Reddit OAuth API for CommunityGrowthSkill
 
 # Web push notifications (GH#4459)
-pywebpush>=2.0.0        # VAPID/RFC8291 browser push delivery
+pywebpush>=2.3.0        # VAPID/RFC8291 browser push delivery
 
 # NLP / Neural Mesh RAG (Issue #1994)
-spacy>=3.8.13                  # Issue #2025: NLP entity extraction
-scikit-learn>=1.8.0           # Issue #2027: RAPTOR clustering
+spacy>=3.8.14                  # Issue #2025: NLP entity extraction
+scikit-learn>=1.9.0           # Issue #2027: RAPTOR clustering
 
 # Live Canvas export (MVA-359)
-bleach>=6.0.0           # HTML sanitization for canvas HTML/PDF export (XSS prevention — security-critical)
+bleach>=6.4.0           # HTML sanitization for canvas HTML/PDF export (XSS prevention — security-critical)
 weasyprint>=69.0        # HTML→PDF rendering for canvas PDF export
 
 # Filesystem watching (#9000 KB watch-folders, docs watcher, hot reload) — #10009:
@@ -97,7 +97,7 @@ watchdog>=6.0.0
 # Media processing pipelines (Issue #932)
 aiohttp>=3.14.1         # Async HTTP client - SECURITY UPDATE
 httpx>=0.28.1           # Issue #4412: hub registry fetches (async HTTP)
-pywebpush>=2.0.0        # VAPID/RFC8291 browser push delivery (GH#4459)
+pywebpush>=2.3.0        # VAPID/RFC8291 browser push delivery (GH#4459)
 beautifulsoup4>=4.15.0  # HTML parsing for link pipeline
 Pillow>=12.2.0          # Image processing - SECURITY UPDATE (OOB write fix)
 jsonschema>=4.26.0      # Issue #7405: JSON Schema validation for /knowledge/extract

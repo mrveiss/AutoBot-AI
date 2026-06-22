@@ -3,18 +3,20 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Admin API: Data Retention Policy CRUD Endpoints (MVA-3145, GH#8995)
+Admin API: Data Retention Policy CRUD + Settings/Stats Endpoints (MVA-3145, GH#8995)
 
 Endpoints:
-    GET    /api/admin/retention-policies       - List all policies
-    POST   /api/admin/retention-policies       - Create/update policy
-    GET    /api/admin/retention-policies/{type} - Get policy by type
-    DELETE /api/admin/retention-policies/{type} - Delete policy by type
+    GET    /api/admin/retention-policies             - List all policies
+    POST   /api/admin/retention-policies             - Create/update policy
+    GET    /api/admin/retention-policies/{type}      - Get policy by type
+    DELETE /api/admin/retention-policies/{type}      - Delete policy by type
+    GET    /api/admin/retention-settings             - Active config + per-type storage counts
 
-Access: admin role required (RBAC enforced).
+Access: admin role required (RBAC enforced via _require_admin dependency).
 """
 
 import uuid
+from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
@@ -22,6 +24,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_auth_middleware
+from autobot_shared.error_boundaries import with_error_handling
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config as ssot_config
 from user_management.models.retention_policy import RetentionPolicy
 from user_management.schemas.retention_policy import (
     PolicyType,
@@ -30,6 +35,8 @@ from user_management.schemas.retention_policy import (
     RetentionPolicyResponse,
 )
 from utils.catalog_http_exceptions import raise_auth_error
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/admin")
 
@@ -190,3 +197,116 @@ async def delete_retention_policy(
 
     await session.delete(policy)
     await session.commit()
+
+
+# ---------------------------------------------------------------------------
+# GET /admin/retention-settings — active config + per-type storage counts
+# ---------------------------------------------------------------------------
+
+
+async def _count_redis_keys(pattern: str) -> int:
+    """Return count of Redis keys matching pattern (best-effort, 0 on error)."""
+    try:
+        from autobot_shared.redis_client import get_async_redis_client
+
+        redis = await get_async_redis_client(database="main")
+        if redis is None:
+            return 0
+        count = 0
+        cursor: int = 0
+        while True:
+            cursor, keys = await redis.scan(cursor, match=pattern, count=500)
+            count += len(keys)
+            if cursor == 0:
+                break
+        return count
+    except Exception as exc:
+        logger.debug("_count_redis_keys(%s) failed: %s", pattern, exc)
+        return 0
+
+
+async def _count_audit_entries() -> int:
+    """Return total entries across all audit: sorted sets."""
+    try:
+        from autobot_shared.redis_client import get_async_redis_client
+
+        redis = await get_async_redis_client(database="main")
+        if redis is None:
+            return 0
+        total = 0
+        cursor: int = 0
+        while True:
+            cursor, keys = await redis.scan(cursor, match="audit:*", count=500)
+            for key in keys:
+                key_type = await redis.type(key)
+                if key_type == "zset":
+                    total += await redis.zcard(key)
+            if cursor == 0:
+                break
+        return total
+    except Exception as exc:
+        logger.debug("_count_audit_entries failed: %s", exc)
+        return 0
+
+
+async def _count_kb_facts() -> int:
+    """Return count of bare fact:<id> Redis hashes."""
+    try:
+        from autobot_shared.redis_client import get_async_redis_client
+
+        redis = await get_async_redis_client(database="main")
+        if redis is None:
+            return 0
+        count = 0
+        cursor: int = 0
+        while True:
+            cursor, keys = await redis.scan(cursor, match="fact:*", count=500)
+            for key in keys:
+                key_str = key.decode() if isinstance(key, bytes) else key
+                if len(key_str.split(":")) == 2:
+                    count += 1
+            if cursor == 0:
+                break
+        return count
+    except Exception as exc:
+        logger.debug("_count_kb_facts failed: %s", exc)
+        return 0
+
+
+@with_error_handling
+@router.get("/retention-settings", response_model=Dict[str, Any])
+async def get_retention_settings(
+    request: Request,
+    _admin: dict = Depends(_require_admin),
+) -> Dict[str, Any]:
+    """Return active retention configuration and per-type storage counts (GH#8995).
+
+    Config values come from ssot_config (env-var-driven).
+    Counts are approximate (best-effort Redis scan); 0 = unavailable.
+    """
+    import asyncio
+
+    chat_count, audit_count, kb_count = await asyncio.gather(
+        _count_redis_keys("chat:session:*"),
+        _count_audit_entries(),
+        _count_kb_facts(),
+    )
+
+    return {
+        "config": {
+            "chat_retention_days": ssot_config.chat_retention_days,
+            "file_retention_days": ssot_config.file_retention_days,
+            "audit_retention_days": ssot_config.audit_retention_days,
+            "kb_retention_days": ssot_config.kb_retention_days,
+        },
+        "storage_counts": {
+            "chat_sessions": chat_count,
+            "audit_log_entries": audit_count,
+            "kb_entries": kb_count,
+        },
+        "notes": {
+            "zero_means_disabled": "retention_days=0 means retention is OFF (safe default).",
+            "keep_forever": "Chat sessions with keep_forever=true are exempt from chat purge.",
+            "file_count": "File attachment count not shown (filesystem scan is expensive).",
+        },
+    }

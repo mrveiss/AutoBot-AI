@@ -195,6 +195,11 @@ async def login(request: Request, login_data: LoginRequest):
             }
             jwt_token = get_auth_middleware().create_jwt_token(
                 {
+                    # Include user_id + sub so user endpoints (e.g. /users/me/preferences)
+                    # can resolve the identity; without them they 401'd and the frontend
+                    # logged out → login redirect loop in single_user bypass mode.
+                    "sub": "admin",
+                    "user_id": "admin",
                     "username": "admin",
                     "role": "admin",
                     "email": f"admin@{ssot_config.auth.domain}",
