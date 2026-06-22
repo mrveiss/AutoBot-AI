@@ -223,9 +223,7 @@ class ModelOptimizer:
                         family = details.get("family", "Unknown")
 
                         # Classify model performance level
-                        performance_level = self._classifier.classify_model_performance(
-                            name, parameter_size
-                        )
+                        performance_level = self._classifier.classify_model_performance(name, parameter_size)
 
                         model_info = ModelInfo(
                             name=name,
