@@ -129,10 +129,12 @@ class TestGetDefaultConfig:
 # Issue #9018 Phase 2 — KAG ingestion pipeline profile
 # ---------------------------------------------------------------------------
 
-from knowledge.pipeline.config import (  # noqa: E402
+from knowledge.pipeline.config import (
     KAG_KNOWLEDGE_PIPELINE,
     get_kag_pipeline_config,
-    load_pipeline_config as _load_pipeline_config,
+)
+from knowledge.pipeline.config import load_pipeline_config as _load_pipeline_config  # noqa: E402
+from knowledge.pipeline.config import (
     select_pipeline_config,
 )
 
