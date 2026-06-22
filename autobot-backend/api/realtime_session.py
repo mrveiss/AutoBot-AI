@@ -3,33 +3,38 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Backend SDP proxy for OpenAI Realtime WebRTC (GH#7342).
+Backend SDP proxy for realtime voice (GH#7342, multi-provider via #9025).
 Cost + duration telemetry wired in (GH#7421).
 
-Accepts a WebRTC SDP offer from the browser, forwards it as multipart to
-OpenAI's Realtime API with the OPENAI_API_KEY injected server-side, and
-returns the SDP answer.  The key never reaches the browser.
+Accepts a WebRTC SDP offer (or websocket handshake blob) from the browser and
+dispatches it to the *selected* realtime voice provider via the provider
+registry (#9025). The default provider is OpenAI Realtime, so behaviour is
+unchanged unless AUTOBOT_VOICE_REALTIME_PROVIDER (or a per-conversation
+override) selects another provider. Upstream credentials never reach the
+browser.
 """
 
 from __future__ import annotations
 
-import os
 import uuid
-from typing import Any
+from typing import Any, Optional
 
-import aiohttp
 from fastapi import APIRouter, Form, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_config
+from voice_processing.realtime.base import RealtimeProviderError
+from voice_processing.realtime.registry import (
+    get_active_realtime_provider,
+    get_active_provider_id,
+    list_realtime_providers,
+    set_active_provider,
+)
 
 logger = get_logger(__name__)
 router = APIRouter()
-
-_OPENAI_REALTIME_URL = "https://api.openai.com/v1/realtime/sessions"
-_OPENAI_BETA_HEADER = "realtime=v1"
 
 
 # ── Telemetry endpoint models (Issue #7421) ───────────────────────────────────
@@ -70,11 +75,26 @@ class SessionSummary(BaseModel):
     disconnect_reason: str
 
 
-def _get_api_key() -> str:
-    """Return the OpenAI API key from SSOT config with env-var fallback."""
-    cfg = get_config()
-    key = cfg.llm.openai_api_key or os.environ.get("OPENAI_API_KEY", "")
-    return key
+# ── Provider selection models (Issue #9025) ───────────────────────────────────
+
+
+class RealtimeProviderInfo(BaseModel):
+    id: str
+    name: str
+    configured: bool
+    transport: str
+    supports_tools: bool
+    supports_audio_output: bool
+    supports_cost_tracking: bool
+
+
+class RealtimeProvidersResponse(BaseModel):
+    selected: str
+    providers: list[RealtimeProviderInfo]
+
+
+class SetRealtimeProviderRequest(BaseModel):
+    provider: Optional[str] = None
 
 
 def _get_model() -> str:
@@ -83,105 +103,77 @@ def _get_model() -> str:
 
 
 @router.post("/session")
-async def create_realtime_session(  # noqa: PLR0912
+async def create_realtime_session(
     sdp: str = Form(..., media_type="text/plain"),
     session: str = Form(..., media_type="application/json"),
 ) -> Response:
     """
-    SDP offer proxy for OpenAI Realtime WebRTC.
+    SDP offer proxy for realtime voice, dispatched to the selected provider.
 
     Accepts multipart form fields:
       - sdp (text/plain): WebRTC SDP offer from the browser
       - session (application/json): session configuration JSON
 
-    Returns the SDP answer from OpenAI with Content-Type: application/sdp.
-    Maps upstream 401 → 502 and 5xx → 502; missing key → 503.
+    Returns the provider's negotiation answer. For WebRTC providers this is the
+    SDP answer with Content-Type: application/sdp. Provider errors map to 503
+    (not configured) or 502 (upstream failure).
     """
-    # Issue #7421: generate a session_id for telemetry tracking
     session_id = str(uuid.uuid4())
-
-    api_key = _get_api_key()
-    if not api_key:
-        logger.error("OPENAI_API_KEY not configured — cannot proxy SDP offer")
-        raise HTTPException(
-            status_code=503,
-            detail={"success": False, "message": "Voice service not available: API key not configured"},
-        )
-
-    model = _get_model()
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "OpenAI-Beta": _OPENAI_BETA_HEADER,
-    }
-
-    form = aiohttp.FormData()
-    form.add_field("model", model)
-    form.add_field("sdp", sdp, content_type="text/plain")
-    form.add_field("session", session, content_type="application/json")
+    provider = get_active_realtime_provider()
 
     try:
-        timeout = aiohttp.ClientTimeout(connect=30, total=60)
-        async with aiohttp.ClientSession(timeout=timeout) as http:
-            async with http.post(_OPENAI_REALTIME_URL, data=form, headers=headers) as upstream:
-                body = await upstream.read()
-
-                if upstream.status == 401:
-                    logger.warning("OpenAI Realtime API returned 401 Unauthorized")
-                    raise HTTPException(
-                        status_code=502,
-                        detail={"success": False, "message": "Upstream authentication failed"},
-                    )
-
-                if upstream.status >= 500:
-                    logger.error(
-                        "OpenAI Realtime API returned %s: %s",
-                        upstream.status,
-                        body[:256],
-                    )
-                    raise HTTPException(
-                        status_code=502,
-                        detail={"success": False, "message": f"Upstream error: {upstream.status}"},
-                    )
-
-                if upstream.status != 201 and upstream.status != 200:
-                    logger.warning(
-                        "OpenAI Realtime API returned unexpected status %s",
-                        upstream.status,
-                    )
-                    raise HTTPException(
-                        status_code=502,
-                        detail={"success": False, "message": f"Unexpected upstream status: {upstream.status}"},
-                    )
-
-                # Issue #7421: start telemetry for this session
-                try:
-                    from services.voice_realtime_telemetry import get_voice_realtime_telemetry
-
-                    await get_voice_realtime_telemetry().session_start(session_id=session_id, model=_get_model())
-                except Exception as exc:  # telemetry must never break the session
-                    logger.warning("voice_realtime telemetry start failed: %s", exc)
-
-                # Return SDP answer with session_id header so frontend can close telemetry
-                return Response(
-                    content=body,
-                    media_type="application/sdp",
-                    headers={"X-Realtime-Session-Id": session_id},
-                )
-
-    except HTTPException:
-        raise
-    except aiohttp.ClientError as exc:
-        logger.error("Network error proxying SDP offer: %s", exc)
+        negotiation = await provider.negotiate(
+            offer=sdp,
+            session_config=session,
+            session_id=session_id,
+        )
+    except RealtimeProviderError as exc:
+        logger.warning("Realtime provider %r negotiation failed: %s", provider.provider_id, exc)
         raise HTTPException(
-            status_code=502,
-            detail={"success": False, "message": "Network error contacting voice service"},
+            status_code=exc.status,
+            detail={"success": False, "message": str(exc)},
         )
     except Exception as exc:
-        logger.error("Unexpected error in SDP proxy: %s", exc)
+        logger.error("Unexpected error negotiating realtime session: %s", exc)
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": "Internal error in voice service"},
         )
+
+    # Issue #7421: start telemetry for this session (must never break the session)
+    try:
+        from services.voice_realtime_telemetry import get_voice_realtime_telemetry
+
+        await get_voice_realtime_telemetry().session_start(session_id=session_id, model=_get_model())
+    except Exception as exc:
+        logger.warning("voice_realtime telemetry start failed: %s", exc)
+
+    headers = {"X-Realtime-Session-Id": session_id, "X-Realtime-Provider": provider.provider_id}
+    headers.update(negotiation.headers)
+    return Response(content=negotiation.answer, media_type=negotiation.media_type, headers=headers)
+
+
+# ── Provider selection endpoints (Issue #9025) ────────────────────────────────
+
+
+@router.get("/providers", response_model=RealtimeProvidersResponse)
+async def list_providers() -> dict:
+    """List realtime voice providers + the active selection (never returns keys)."""
+    return {"selected": get_active_provider_id(), "providers": list_realtime_providers()}
+
+
+@router.patch("/providers", response_model=RealtimeProvidersResponse)
+async def set_provider(body: SetRealtimeProviderRequest) -> dict:
+    """Set the active realtime provider (in-process; doc'd restart limitation).
+
+    Pass {"provider": null} to clear the override and fall back to the
+    AUTOBOT_VOICE_REALTIME_PROVIDER config / default.
+    """
+    try:
+        set_active_provider(body.provider)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return {"selected": get_active_provider_id(), "providers": list_realtime_providers()}
 
 
 # ── Telemetry endpoints (Issue #7421) ─────────────────────────────────────────
