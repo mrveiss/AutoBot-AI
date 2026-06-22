@@ -19,7 +19,7 @@ from typing import Any
 
 from sqlalchemy import or_, select
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from user_management.models.role import Role
 from user_management.models.sso import SSOProvider, SSOProviderType, UserSSOLink
 from user_management.models.user import User
@@ -227,7 +227,7 @@ class SSOService(BaseService):
         """Generate OAuth2 state + PKCE verifier; store both in Redis with TTL."""
         state = secrets.token_urlsafe(32)
         code_verifier = secrets.token_urlsafe(64)
-        redis = get_redis_client()
+        redis = await get_async_redis_client()
         if redis:
             payload = json.dumps({"provider_id": str(provider_id), "code_verifier": code_verifier})
             await redis.set(f"sso:state:{state}", payload, ex=OAUTH_STATE_TTL_SECONDS)
@@ -235,7 +235,7 @@ class SSOService(BaseService):
 
     async def _validate_oauth_state(self, state: str) -> tuple[uuid.UUID, str | None]:
         """Validate state via atomic GETDEL (single-use). Returns (provider_id, code_verifier)."""
-        redis = get_redis_client()
+        redis = await get_async_redis_client()
         if not redis:
             raise SSOAuthenticationError("Redis unavailable for state validation")
         raw = await redis.getdel(f"sso:state:{state}")
@@ -444,7 +444,7 @@ class SSOService(BaseService):
         """Generate SAML AuthnRequest; relay state stored in Redis with 10-min TTL."""
         client = self._build_saml_client(provider)
         relay_state = secrets.token_urlsafe(32)
-        redis = get_redis_client()
+        redis = await get_async_redis_client()
         if redis:
             await redis.set(f"sso:state:{relay_state}", str(provider.id), ex=600)
         request_id, info = client.prepare_for_authenticate()
