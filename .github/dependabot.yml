@@ -40,6 +40,14 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "torch"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "protobuf"
+        # #10474: cap <7.0 — opentelemetry-proto (otel 1.42) requires protobuf<7.0.
+        # Dependabot's 7.x bump is unsatisfiable; unblock when otel supports it.
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "websockets"
+        # #10474: cap <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16.
+        # The 16.x bump is unsatisfiable; unblock when langgraph-sdk supports it.
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"
     directory: "/autobot_shared"
@@ -440,4 +448,10 @@ updates:
       - dependency-name: "sqlalchemy"
         update-types: ["version-update:semver-major"]
       - dependency-name: "starlette"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "protobuf"
+        # #10474: cap <7.0 — opentelemetry-proto (otel 1.42) requires protobuf<7.0.
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "websockets"
+        # #10474: cap <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16.
         update-types: ["version-update:semver-major"]
