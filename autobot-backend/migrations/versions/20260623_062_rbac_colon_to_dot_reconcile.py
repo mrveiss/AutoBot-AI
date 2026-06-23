@@ -329,8 +329,9 @@ def _seed_permissions(bind: sa.engine.Connection) -> None:
         bind.execute(
             sa.text("""
                 INSERT INTO permissions (id, name, resource, action, description, created_at, updated_at)
-                SELECT :id, :name, :resource, :action, :description, now(), now()
-                WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE name = :name)
+                SELECT CAST(:id AS uuid), CAST(:name AS varchar), CAST(:resource AS varchar),
+                       CAST(:action AS varchar), CAST(:description AS text), now(), now()
+                WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE name = CAST(:name AS varchar))
                 """),
             {
                 "id": _new_id(),
@@ -351,9 +352,10 @@ def _seed_roles(bind: sa.engine.Connection) -> None:
         bind.execute(
             sa.text("""
                 INSERT INTO roles (id, org_id, name, description, is_system, priority, created_at, updated_at)
-                SELECT :id, NULL, :name, :description, true, :priority, now(), now()
+                SELECT CAST(:id AS uuid), NULL, CAST(:name AS varchar), CAST(:description AS text),
+                       true, CAST(:priority AS integer), now(), now()
                 WHERE NOT EXISTS (
-                    SELECT 1 FROM roles WHERE name = :name AND org_id IS NULL
+                    SELECT 1 FROM roles WHERE name = CAST(:name AS varchar) AND org_id IS NULL
                 )
                 """),
             {
@@ -386,11 +388,11 @@ def _rebuild_system_role_grants(bind: sa.engine.Connection) -> None:
             bind.execute(
                 sa.text("""
                     INSERT INTO role_permissions (role_id, permission_id)
-                    SELECT :role_id, p.id FROM permissions p
-                    WHERE p.name = :perm_name
+                    SELECT CAST(:role_id AS uuid), p.id FROM permissions p
+                    WHERE p.name = CAST(:perm_name AS varchar)
                       AND NOT EXISTS (
                           SELECT 1 FROM role_permissions rp
-                          WHERE rp.role_id = :role_id AND rp.permission_id = p.id
+                          WHERE rp.role_id = CAST(:role_id AS uuid) AND rp.permission_id = p.id
                       )
                     """),
                 {"role_id": role_id, "perm_name": perm_name},
@@ -549,8 +551,9 @@ def downgrade() -> None:
         bind.execute(
             sa.text("""
                 INSERT INTO permissions (id, name, resource, action, description, created_at, updated_at)
-                SELECT :id, :name, :resource, :action, :description, now(), now()
-                WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE name = :name)
+                SELECT CAST(:id AS uuid), CAST(:name AS varchar), CAST(:resource AS varchar),
+                       CAST(:action AS varchar), CAST(:description AS text), now(), now()
+                WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE name = CAST(:name AS varchar))
                 """),
             {
                 "id": _new_id(),
@@ -577,11 +580,11 @@ def downgrade() -> None:
             bind.execute(
                 sa.text("""
                     INSERT INTO role_permissions (role_id, permission_id)
-                    SELECT :role_id, p.id FROM permissions p
-                    WHERE p.name = :perm_name
+                    SELECT CAST(:role_id AS uuid), p.id FROM permissions p
+                    WHERE p.name = CAST(:perm_name AS varchar)
                       AND NOT EXISTS (
                           SELECT 1 FROM role_permissions rp
-                          WHERE rp.role_id = :role_id AND rp.permission_id = p.id
+                          WHERE rp.role_id = CAST(:role_id AS uuid) AND rp.permission_id = p.id
                       )
                     """),
                 {"role_id": role_id, "perm_name": perm_name},
