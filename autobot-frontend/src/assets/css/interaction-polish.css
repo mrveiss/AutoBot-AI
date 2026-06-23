@@ -1,0 +1,46 @@
+/* Copyright 2025-2026 mrveiss */
+/* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * Interaction polish — design-engineering craft for the global shell (#10488 B2).
+ *
+ * Pressable elements should feel responsive: a subtle scale-down on press confirms
+ * the UI heard the user. Transform-only (GPU; no layout/paint). A stronger ease-out
+ * curve gives motion intentional punch versus the standard token. Honours
+ * prefers-reduced-motion. Scoped to the app header so it can't surprise dense views.
+ */
+
+:root {
+  /* Stronger than --ease-out (cubic-bezier(0,0,0.2,1)): more intentional. */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.app-header a,
+.app-header button,
+.press-feedback {
+  transition: transform 160ms var(--ease-out-strong);
+}
+
+/* :active = a genuine press (mouse or touch) — give feedback on both. */
+.app-header a:active,
+.app-header button:active,
+.press-feedback:active {
+  transform: scale(0.97);
+}
+
+/* Disabled controls should not appear pressable. */
+.app-header button:disabled:active,
+.press-feedback:disabled:active {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-header a,
+  .app-header button,
+  .press-feedback,
+  .app-header a:active,
+  .app-header button:active,
+  .press-feedback:active {
+    transition: none;
+    transform: none;
+  }
+}
