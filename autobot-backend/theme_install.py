@@ -1,6 +1,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """Install/list/uninstall uploaded theme packages (#10472)."""
+
 from __future__ import annotations
 
 import json
@@ -10,7 +11,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from fastapi import HTTPException, UploadFile, status
+from fastapi import HTTPException, UploadFile
 from pydantic import BaseModel
 
 import archive_safety as _arch

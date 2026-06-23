@@ -9,6 +9,7 @@ decorator, so the safety net is equivalent to FastAPI's own exception handling.
 We therefore rely on FastAPI's built-in exception handling here and skip the
 wrapper decorator — matching the simpler pattern used by other lean endpoints.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, UploadFile

@@ -91,6 +91,7 @@ from api.settings import router as settings_router
 from api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from api.system import router as system_router
 from api.telegram_bot import router as telegram_bot_router  # MVA-2074
+from api.themes import router as themes_router  # #10472 — pluggable theme packages
 from api.transcriber import router as transcriber_router  # Issue #9044, MVA-2186
 from api.transcripts import router as transcripts_router  # Issue #9863, MVA-2176
 from api.usage import router as usage_router  # Issue #1807
@@ -107,7 +108,6 @@ from api.voice_bundle_user import router as voice_bundle_user_router
 from api.voice_stream import router as voice_stream_router
 from api.wake_word import router as wake_word_router
 from api.websockets import router as websockets_router  # Issue #6229
-from api.themes import router as themes_router  # #10472 — pluggable theme packages
 from plugin_manager import router as plugin_manager_router
 from services.knowledge_sync_service import router as knowledge_sync_router
 

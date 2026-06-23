@@ -5,6 +5,7 @@
 Untrusted CSS may only style its own variant and must not fetch anything
 external. Rejects on the first violation with an HTTPException(400).
 """
+
 from __future__ import annotations
 
 import re

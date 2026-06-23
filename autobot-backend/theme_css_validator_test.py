@@ -47,7 +47,7 @@ def test_rejects_expression_and_oversize():
 def test_rejects_escape_aliased_at_import():
     # "@\\69 mport" decodes to "@import" in the browser — must not slip past.
     with pytest.raises(HTTPException):
-        validate_theme_css('@\\69 mport url(http://evil/x.css);', "x")
+        validate_theme_css("@\\69 mport url(http://evil/x.css);", "x")
 
 
 def test_rejects_escape_aliased_expression():

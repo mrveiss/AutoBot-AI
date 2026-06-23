@@ -5,6 +5,7 @@
 Extracted from plugin_install.py (#10472) so every installer reuses the same
 zip-slip / symlink / zip-bomb / upload-size guards — one place to audit and fix.
 """
+
 from __future__ import annotations
 
 import shutil
@@ -84,9 +85,7 @@ def safe_extract(zf: zipfile.ZipFile, extract_root: Path) -> None:
 def find_package_root(extract_dir: Path, manifest_filename: str) -> Path:
     if (extract_dir / manifest_filename).is_file():
         return extract_dir
-    children = [
-        c for c in extract_dir.iterdir() if c.is_dir() and c.name != "__MACOSX" and not c.name.startswith(".")
-    ]
+    children = [c for c in extract_dir.iterdir() if c.is_dir() and c.name != "__MACOSX" and not c.name.startswith(".")]
     if len(children) == 1 and (children[0] / manifest_filename).is_file():
         return children[0]
     raise HTTPException(

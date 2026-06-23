@@ -9,6 +9,7 @@ Tests are deliberately lightweight:
   (b) zip-slip rejection via archive_safety (which plugin_install delegates to),
       called directly to avoid the heavy _community_plugins_dir / config chain.
 """
+
 import io
 import zipfile
 from pathlib import Path
