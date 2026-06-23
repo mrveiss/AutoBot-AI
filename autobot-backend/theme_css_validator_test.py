@@ -42,3 +42,25 @@ def test_rejects_expression_and_oversize():
         validate_theme_css('[data-theme-variant="x"] { width: expression(alert(1)); }', "x")
     with pytest.raises(HTTPException):
         validate_theme_css('[data-theme-variant="x"] { /* a */ }' + "a" * (512 * 1024), "x")
+
+
+def test_rejects_escape_aliased_at_import():
+    # "@\\69 mport" decodes to "@import" in the browser — must not slip past.
+    with pytest.raises(HTTPException):
+        validate_theme_css('@\\69 mport url(http://evil/x.css);', "x")
+
+
+def test_rejects_escape_aliased_expression():
+    with pytest.raises(HTTPException):
+        validate_theme_css('[data-theme-variant="x"] { width: expr\\65 ssion(alert(1)); }', "x")
+
+
+def test_rejects_escape_aliased_external_url():
+    # "url(\\68 ttp://evil)" decodes to an external fetch.
+    with pytest.raises(HTTPException):
+        validate_theme_css('[data-theme-variant="x"] { background: url(\\68 ttp://evil/p.png); }', "x")
+
+
+def test_rejects_backslash_in_url_path():
+    with pytest.raises(HTTPException):
+        validate_theme_css('[data-theme-variant="x"] { src: url(.\\fonts\\a.woff2); }', "x")
