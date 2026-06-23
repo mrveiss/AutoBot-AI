@@ -24,6 +24,12 @@ class WhatsAppAdapter(BaseAdapter):
         metadata = await self.extract_metadata(raw_message)
         metadata["message_id"] = raw_message.get("id")
         metadata["is_group"] = raw_message.get("is_group", False)
+        # Carry the message type (and media reference) so downstream routing can
+        # label/handle attachments — flatten_messages records these but the base
+        # extract_metadata does not propagate them (GH#10481).
+        metadata["message_type"] = raw_message.get("message_type", "text")
+        if raw_message.get("media_id"):
+            metadata["media_id"] = raw_message["media_id"]
 
         return UnifiedMessage(
             user_id=raw_message["from"],
