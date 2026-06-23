@@ -295,7 +295,7 @@ async def service_read_system_secret(
     coordinator: SecretsCoordinator = Depends(get_coordinator),
 ) -> SecretValue:
     """Read a system-vault secret value via service identity."""
-    logger.info("service CRUD: read system secret", extra={"service_id": service_id, "secret_id": str(secret_id)})
+    logger.info("service CRUD: read system secret", extra={"service_id": service_id, "entry_id": str(secret_id)})
     try:
         value = await coordinator.service_read(session, secret_id=secret_id, vault=_SYSTEM_VAULT)
     except (SecretAccessError, SecretNotFoundError) as exc:
@@ -312,7 +312,7 @@ async def service_rotate_system_secret(
     coordinator: SecretsCoordinator = Depends(get_coordinator),
 ) -> SecretMetadata:
     """Rotate a system-vault secret value (re-seal with new DEK) via service identity."""
-    logger.info("service CRUD: rotate system secret", extra={"service_id": service_id, "secret_id": str(secret_id)})
+    logger.info("service CRUD: rotate system secret", extra={"service_id": service_id, "entry_id": str(secret_id)})
     try:
         secret = await coordinator.service_rotate(
             session, secret_id=secret_id, new_plaintext=body.value.encode("utf-8"), vault=_SYSTEM_VAULT
@@ -331,7 +331,7 @@ async def service_delete_system_secret(
     coordinator: SecretsCoordinator = Depends(get_coordinator),
 ) -> None:
     """Delete a system-vault secret via service identity."""
-    logger.info("service CRUD: delete system secret", extra={"service_id": service_id, "secret_id": str(secret_id)})
+    logger.info("service CRUD: delete system secret", extra={"service_id": service_id, "entry_id": str(secret_id)})
     try:
         await coordinator.service_delete(session, secret_id=secret_id, vault=_SYSTEM_VAULT)
         await session.commit()
