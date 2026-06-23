@@ -1,0 +1,77 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+---
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# Reusable fail-closed pre-migration PostgreSQL backup (#10045)
+#
+# Runs immediately before the schema-mutating Alembic upgrade in both
+# setup-user-backend.yml and playbooks/update-all-nodes.yml. Two paths:
+#
+#   1. Local Postgres (data dir at /var/lib/postgresql): fast path — a full
+#      cluster dump via `su - postgres -c "pg_dumpall --clean --if-exists"`.
+#   2. Remote Postgres (colocated on the SLM server via
+#      AUTOBOT_USERS_DATABASE_URL / AUTOBOT_DATABASE_URL): derive a libpq URL
+#      from the backend .env — strip the `+asyncpg` SQLAlchemy driver suffix,
+#      or build one from AUTOBOT_POSTGRES_* — and `pg_dump --format=custom`
+#      over the network. Requires postgresql-client on the backend node
+#      (added to the backend role package list, #10045).
+#
+# FAIL-CLOSED (#10045): there is NO warn-and-skip branch. When neither path
+# can produce a backup the task errors and aborts the deploy — the one fleet
+# state that most needs the backup (remote shared DB) used to be the one that
+# silently skipped it (the original #10026 gap).
+#
+# Caller must set:
+#   pre_migration_env_file  — absolute path to the backend .env to read the
+#                             database URL / Postgres connection vars from.
+
+- name: "Pre-migration backup | Check for local PostgreSQL data directory (#10026, #10045)"
+  ansible.builtin.stat:
+    path: /var/lib/postgresql
+  register: pre_migration_pg_dir
+
+- name: "Pre-migration backup | Ensure backup directory exists (#10045)"
+  ansible.builtin.file:
+    path: /opt/autobot/backups/pre-migration
+    state: directory
+    mode: "0750"
+
+# Local fast path — full cluster dump from the on-node Postgres.
+- name: "Pre-migration backup | Local pg_dumpall (#10026, #10045)"
+  ansible.builtin.shell: |
+    set -o pipefail
+    su - postgres -c "pg_dumpall --clean --if-exists" \
+      | gzip > /opt/autobot/backups/pre-migration/backend-$(date +%s).sql.gz
+  args:
+    executable: /bin/bash
+  when: pre_migration_pg_dir.stat.exists
+
+# Remote path — Postgres lives on another node (colocated on the SLM server).
+# Derive a libpq URL from the backend .env and pg_dump over the network.
+# FAIL-CLOSED: no failed_when override — a missing URL or unreachable DB aborts.
+- name: "Pre-migration backup | Remote pg_dump over network (#10045)"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    set -a
+    [ -f "{{ pre_migration_env_file }}" ] && . "{{ pre_migration_env_file }}"
+    set +a
+    # Prefer the users DB URL, then the generic backend URL.
+    RAW_URL="${AUTOBOT_USERS_DATABASE_URL:-${AUTOBOT_DATABASE_URL:-}}"
+    if [ -n "${RAW_URL}" ]; then
+      # Strip the SQLAlchemy "+asyncpg"/"+psycopg" driver suffix so libpq
+      # accepts the URL: postgresql+asyncpg://... -> postgresql://...
+      DUMP_URL="$(printf '%s' "${RAW_URL}" | sed -E 's#^(postgres(ql)?)\+[a-z0-9_]+://#\1://#')"
+    elif [ -n "${AUTOBOT_POSTGRES_HOST:-}" ]; then
+      # Build a libpq URL from discrete AUTOBOT_POSTGRES_* vars.
+      DUMP_URL="postgresql://${AUTOBOT_POSTGRES_USER:-autobot_app}:${AUTOBOT_POSTGRES_PASSWORD:-}@${AUTOBOT_POSTGRES_HOST}:${AUTOBOT_POSTGRES_PORT:-5432}/${AUTOBOT_POSTGRES_DB:-autobot_users}"
+    else
+      echo "FATAL: no local PostgreSQL and no AUTOBOT_USERS_DATABASE_URL / AUTOBOT_DATABASE_URL / AUTOBOT_POSTGRES_* in {{ pre_migration_env_file }} — cannot back up before migrating (#10045)" >&2
+      exit 1
+    fi
+    pg_dump --dbname="${DUMP_URL}" --format=custom \
+      --file="/opt/autobot/backups/pre-migration/backend-$(date +%s).dump"
+  args:
+    executable: /bin/bash
+  when: not pre_migration_pg_dir.stat.exists
