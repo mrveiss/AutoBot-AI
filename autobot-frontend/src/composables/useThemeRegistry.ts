@@ -7,7 +7,7 @@
  * user frontend can offer them as selectable variants at runtime. Degrades
  * gracefully to built-in variants only when the registry is unavailable.
  */
-import { apiClient } from '@/utils/ApiClient'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
 const log = createLogger('ThemeRegistry')

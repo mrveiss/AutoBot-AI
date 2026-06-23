@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@/utils/ApiClient', () => ({ apiClient: { get: vi.fn() } }))
-import { apiClient } from '@/utils/ApiClient'
+vi.mock('@/utils/ApiClient', () => ({ default: { get: vi.fn() } }))
+import apiClient from '@/utils/ApiClient'
 import { fetchInstalledThemes } from '../useThemeRegistry'
 
 describe('fetchInstalledThemes', () => {
