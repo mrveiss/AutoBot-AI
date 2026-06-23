@@ -145,3 +145,52 @@ async def test_delete_cascades_grants(svc, session):
 async def test_read_missing_secret(svc, session):
     with pytest.raises(SecretNotFoundError):
         await svc.read(session, secret_id=uuid.uuid4(), accessible_vaults={_USER})
+
+
+# ---------------------------------------------------------------------------
+# rotate_kek (#10437) — rewrap DEKs under new root key, payload unchanged
+# ---------------------------------------------------------------------------
+
+_ROOT2 = bytes(reversed(bytes(range(32))))  # a distinct second root key for KEK rotation tests
+
+
+async def test_rotate_kek_same_plaintext_decrypts(svc, session):
+    """After KEK rotation the sealed value decrypts identically under the new root key."""
+    secret = await _new(svc, session, plaintext=b"kek_test")
+    await svc.rotate_kek(session, secret_id=secret.id, new_root_key=_ROOT2, actor_vaults={_USER})
+    await session.commit()
+    # Decrypt with new root key
+    svc2 = UnifiedSecretsService(root_key=_ROOT2)
+    plaintext = await svc2.read(session, secret_id=secret.id, accessible_vaults={_USER})
+    assert plaintext == b"kek_test"
+
+
+async def test_rotate_kek_old_key_no_longer_decrypts(svc, session):
+    """After KEK rotation, the OLD root key's KEK can no longer unwrap the DEK."""
+    from autobot_shared.secrets_envelope import DecryptionError
+
+    secret = await _new(svc, session, plaintext=b"will_rotate")
+    await svc.rotate_kek(session, secret_id=secret.id, new_root_key=_ROOT2, actor_vaults={_USER})
+    await session.commit()
+    # Old svc (root=_ROOT) must now fail to decrypt
+    with pytest.raises(DecryptionError):
+        await svc.read(session, secret_id=secret.id, accessible_vaults={_USER})
+
+
+async def test_rotate_kek_rewraps_all_grantees(svc, session):
+    """All grantees can decrypt after KEK rotation via the new root key."""
+    secret = await _new(svc, session, plaintext=b"shared")
+    await svc.share(session, secret_id=secret.id, actor_vaults={_USER}, grantee=_COMPANY, created_by=uuid.uuid4())
+    await session.commit()
+    await svc.rotate_kek(session, secret_id=secret.id, new_root_key=_ROOT2, actor_vaults={_USER})
+    await session.commit()
+    svc2 = UnifiedSecretsService(root_key=_ROOT2)
+    assert await svc2.read(session, secret_id=secret.id, accessible_vaults={_USER}) == b"shared"
+    assert await svc2.read(session, secret_id=secret.id, accessible_vaults={_COMPANY}) == b"shared"
+
+
+async def test_rotate_kek_requires_access(svc, session):
+    """rotate_kek raises SecretAccessError when actor holds no grant."""
+    secret = await _new(svc, session, plaintext=b"private")
+    with pytest.raises(SecretAccessError):
+        await svc.rotate_kek(session, secret_id=secret.id, new_root_key=_ROOT2, actor_vaults={_OTHER})

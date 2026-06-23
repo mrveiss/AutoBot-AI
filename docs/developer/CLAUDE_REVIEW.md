@@ -53,22 +53,22 @@ anyway (the #9968 / PR #9955 timeline — issue filed 3h before the PR merged).
 1. File (or reuse) an issue describing the problem; reference the PR in its body
    (`#<pr-number>`).
 2. Add the **`blocks-merge`** label to that issue.
-3. The required check **`PR Blocking Findings`** (`.github/workflows/pr-blocking-findings.yml`)
-   goes red while any open `blocks-merge` issue references the PR.
+3. The required check **`No open blocks-merge issues reference this PR`** (the job
+   in `.github/workflows/pr-blocking-findings.yml`, whose workflow display name is
+   *PR Blocking Findings*) goes red while any open `blocks-merge` issue references
+   the PR.
 
 **To unblock:** close/resolve the issue, or remove the `blocks-merge` label, then
 re-run the check (or push/sync the PR to re-trigger it).
 
-Setup (owner, one-time):
-- Create the label: `gh label create blocks-merge --color B60205 --description "Open issue blocks merging the PR it references"`.
-- Add `PR Blocking Findings` as a **required** status check on `Dev_new_gui` and `main` so the merge button actually blocks (the workflow only reports status; branch protection enforces it).
+Setup (owner) — **configured on `Dev_new_gui` and `main`** (2026-06-23):
+- The `blocks-merge` label exists (`gh label create blocks-merge --color B60205 --description "Open issue blocks merging the PR it references"`).
+- The required status-check **context is the job name** `No open blocks-merge issues reference this PR` — *not* the workflow name. GitHub matches required checks by the reported check-run name (the Actions job's `name:`), so requiring `PR Blocking Findings` would never match and would block every PR. Both branches now require the job-name context so the merge button actually blocks (the workflow only reports status; branch protection enforces it).
 
-**`required_conversation_resolution` decision — RECOMMEND ENABLE.** It is a
-zero-code branch-protection toggle that blocks merge until every review
-conversation is resolved. It covers the *review-comment* half of the race; the
-`blocks-merge` gate above covers the *filed-issue* half that actually occurred.
-Enable both (owner toggle: Settings → Branches → Dev_new_gui → "Require
-conversation resolution before merging").
+**`required_conversation_resolution` — ENABLED** on `Dev_new_gui` and `main`
+(2026-06-23). This zero-code branch-protection toggle blocks merge until every
+review conversation is resolved. It covers the *review-comment* half of the race;
+the `blocks-merge` gate above covers the *filed-issue* half that actually occurred.
 
 ---
 

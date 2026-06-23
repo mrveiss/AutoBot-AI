@@ -250,6 +250,9 @@
       - libtesseract-dev
       # Matplotlib GUI backend
       - python3-tk
+      # PostgreSQL client — pg_dump for the fail-closed pre-migration backup
+      # of a REMOTE (colocated SLM) Postgres before Alembic upgrades (#10045)
+      - postgresql-client
     state: present
   tags: ['backend', 'packages']
 
@@ -586,6 +589,41 @@
     PIP_USE_DEPRECATED: "legacy-resolver"  # Issue #858: Handle complex OpenTelemetry+ChromaDB dependency graph
   timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   register: pip_install_result
+
+# GPU / vLLM extras (#10288): vllm was moved to an opt-in requirements-gpu.txt
+# (#10251/#10287) to keep the default CPU image lean. Install it ONLY on a
+# GPU-enabled backend that opts into vLLM, so CPU deploys stay slim.
+- name: "Backend | Detect NVIDIA GPU for vLLM extras (#10288)"
+  ansible.builtin.command:
+    cmd: nvidia-smi --query-gpu=name --format=csv,noheader
+  register: backend_nvidia_smi_result
+  changed_when: false
+  # nvidia-smi exits rc != 0 when no GPU is present; the result only gates the
+  # optional GPU-reqs install below, so a non-zero rc is expected on CPU nodes.
+  failed_when: false
+  when:
+    - backend_vllm_enabled | bool
+    - backend_has_gpu == "auto"
+
+- name: "Backend | Resolve GPU availability for vLLM extras (#10288)"
+  ansible.builtin.set_fact:
+    backend_gpu_available: "{{ (backend_nvidia_smi_result.rc | default(1)) == 0 and (backend_nvidia_smi_result.stdout | default('') | trim | length > 0) if backend_has_gpu == 'auto' else (backend_has_gpu | bool) }}"
+  when: backend_vllm_enabled | bool
+
+# Install GPU/vLLM requirements only when vLLM is enabled AND a GPU is present.
+# Uses the repo-root requirements-gpu.txt from code_source (sibling of the
+# autobot-backend subtree; not part of the backend code rsync).
+- name: "Backend | Install GPU/vLLM requirements (requirements-gpu.txt) (#10288)"
+  ansible.builtin.pip:
+    requirements: "{{ code_source_dir | default('/opt/autobot/code_source') }}/requirements-gpu.txt"
+    virtualenv: "{{ backend_code_dir }}/venv"
+  become_user: "{{ backend_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 1800  # CUDA-built torch + vllm wheels are large
+  when:
+    - backend_vllm_enabled | bool
+    - backend_gpu_available | default(false) | bool
 
 - name: Deploy aioredis compatibility shim for Python 3.12
   ansible.builtin.template:

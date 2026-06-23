@@ -186,9 +186,18 @@ async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> No
     session_id = _get_chat_session_id(unified_message.channel_id)
     request_id = generate_request_id()
 
+    # ChatMessage.content requires >=1 char. Caption-less media (photo/voice/
+    # document/video/audio with no text) normalizes to an empty message, which
+    # would raise ValidationError and drop the update. Synthesize a placeholder
+    # naming the attachment so the turn is valid and the model knows media was
+    # sent (GH#10483, mirrors the WhatsApp fix GH#10481).
+    content = unified_message.message
+    if not content and unified_message.metadata.get("has_file"):
+        content = f"[{unified_message.metadata.get('file_type', 'media')} attachment]"
+
     # Build ChatMessage from normalized Telegram message
     chat_message = ChatMessage(
-        content=unified_message.message,
+        content=content,
         role="user",
         session_id=session_id,
         metadata={
