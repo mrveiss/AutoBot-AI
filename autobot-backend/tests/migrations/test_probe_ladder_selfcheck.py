@@ -94,10 +94,14 @@ def test_known_anchor_revisions():
 def test_observability_coverage():
     """Nearly every revision must be observable (artifacts or type markers).
 
-    Unobservable revisions widen adoption brackets (they re-run on adoption,
-    so they must stay no-op/idempotent). If this list grows, either add a
-    TIMESTAMPTZ/structural marker for the new revision or verify it is safe
-    to re-run and extend the allowlist consciously.
+    Unobservable revisions widen adoption brackets. An unobservable
+    *intermediate* revision re-runs on adoption (it must stay
+    no-op/idempotent); an unobservable revision forming the contiguous tail up
+    to the script head is instead absorbed by the bracket and stamped as head
+    (``baseline._advance_through_data_only_tail``), so it does not re-run. If
+    this list grows, either add a TIMESTAMPTZ/structural marker for the new
+    revision or verify it is safe to re-run and extend the allowlist
+    consciously.
     """
     script = _script_directory()
     artifacts = extract_artifacts(script)
@@ -108,6 +112,8 @@ def test_observability_coverage():
         "20260525_043",  # guarded enum-value add — idempotent re-run
         "20260526_045",  # agent_runtime_state data migration — idempotent UPDATE
         "20260608_052",  # merge revision — no-op
+        "20260623_062",  # RBAC colon->dot reconcile (#10458) — data-only head;
+        # absorbed by the data-only tail advance, idempotent if re-run
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "

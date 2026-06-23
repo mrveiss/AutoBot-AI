@@ -23,7 +23,10 @@ schemas, stamps the revision the schema already corresponds to:
                          structural artifacts (created tables, added columns,
                          TIMESTAMPTZ conversions) → stamp the bracketed
                          revision; the subsequent ``upgrade head`` applies
-                         the remainder;
+                         the remainder. When the only revisions between the
+                         bracket and the script head are data-only (no schema
+                         artifacts to verify), the bracket advances through
+                         them to the head — there is nothing left to apply;
                       c. bracketing ambiguous → exit 3 and REFUSE. A refused
                          adoption is recoverable; a wrong stamp silently
                          corrupts every future migration.
@@ -199,6 +202,36 @@ def _ancestors(script, rev: str) -> set[str]:
     return {sc.revision for sc in script.iterate_revisions(rev, "base")}
 
 
+def _advance_through_data_only_tail(script, candidate: str, statuses: dict[str, object]) -> str:
+    """Advance a bracketed candidate to the script head across a data-only tail.
+
+    A revision with no schema artifacts (status None — data-only: it INSERTs/
+    UPDATEs rows but changes no structure) contributes nothing to verify, so it
+    is vacuously satisfied once its ancestor is applied. When the *only*
+    revisions between ``candidate`` and the single script head are such data-only
+    revisions (and none of them looks absent), the schema already corresponds to
+    the head: there is no remaining DDL for ``upgrade head`` to apply. Stamp the
+    head so ``script_head()`` matches.
+
+    Intermediate data-only revisions (those followed by an artifact-bearing
+    revision the schema lacks) are deliberately NOT skipped — the tail check is
+    confined to the contiguous run that terminates AT the head, so adoption of a
+    genuinely older schema still re-runs idempotent intermediate data migrations
+    via the subsequent ``upgrade head``.
+    """
+    heads = script.get_heads()
+    if len(heads) != 1 or candidate == heads[0]:
+        return candidate
+    head = heads[0]
+    # Revisions strictly after the candidate, up to and including the head.
+    tail = _ancestors(script, head) - _ancestors(script, candidate)
+    if not tail:
+        return candidate
+    if all(statuses.get(rev) is None for rev in tail):
+        return head
+    return candidate
+
+
 def find_candidate(script, statuses: dict[str, object]) -> str | None:
     """Bracket the schema between applied-looking and absent revisions.
 
@@ -208,6 +241,11 @@ def find_candidate(script, statuses: dict[str, object]) -> str | None:
     bracket bounds re-run rather than being skipped. Any partial revision or
     incomparable candidate set means the schema matches no point in the
     chain: refuse (#10001 rule 3d).
+
+    Exception: when the contiguous tail from the bracket to the single script
+    head consists ENTIRELY of data-only (unobservable) revisions, the bracket
+    advances to the head — those revisions add no DDL to apply and the schema
+    already corresponds to the head (see ``_advance_through_data_only_tail``).
     """
     if any(s == PARTIAL for s in statuses.values()):
         return None
@@ -224,7 +262,7 @@ def find_candidate(script, statuses: dict[str, object]) -> str | None:
     minimal = [c for c in candidates if all(c in ancestors[o] for o in candidates)]
     if len(minimal) != 1:
         return None
-    return minimal[0]
+    return _advance_through_data_only_tail(script, minimal[0], statuses)
 
 
 def autogenerate_diff_empty(url: str) -> bool:
