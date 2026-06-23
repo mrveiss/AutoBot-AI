@@ -107,6 +107,7 @@ from api.voice_bundle_user import router as voice_bundle_user_router
 from api.voice_stream import router as voice_stream_router
 from api.wake_word import router as wake_word_router
 from api.websockets import router as websockets_router  # Issue #6229
+from api.themes import router as themes_router  # #10472 — pluggable theme packages
 from plugin_manager import router as plugin_manager_router
 from services.knowledge_sync_service import router as knowledge_sync_router
 
@@ -500,9 +501,11 @@ def _get_plugin_routers() -> list:
 
     plugin_manager.py routes already include /plugins in their paths,
     so registration prefix must be empty to avoid double-prefix (#1105).
+    themes_router carries /api/themes prefix — mount with empty prefix (#10472).
     """
     return [
         (plugin_manager_router, "", ["plugins"], "plugin_manager"),
+        (themes_router, "", ["themes"], "themes"),  # #10472
     ]
 
 
