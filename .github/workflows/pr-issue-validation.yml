@@ -1,0 +1,88 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# Validates that a PR whose branch encodes an issue number (issue-NNNN /
+# issue-MVA-NNNN / MVA-NNNN / hotfix-NNNN) links back to that issue in its
+# body. The body must (a) carry a Resolves/Closes/Fixes keyword and (b) name
+# the branch's issue as a #N / MVA-N token — so batch PRs that close several
+# issues with one keyword ("Closes #A, #B, #C") still pass. Manual, promotion
+# (Dev_new_gui) and dependabot branches carry no issue token and are skipped,
+# so this never blocks the promotion or dependency-update flows. Not required.
+# Issue: #9464  ·  Umbrella: #9927
+name: Validate PR Issue Link
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  validate:
+    name: Check PR links to its issue
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate PR issue linkage
+        id: validate
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::PR information"
+          echo "Branch: $PR_BRANCH"
+          echo "Title:  $PR_TITLE"
+          echo "Number: $PR_NUMBER"
+          echo "::endgroup::"
+
+          # Derive the expected issue from the branch name. Match the MVA
+          # work-item form before the bare numeric form so issue-MVA-3244 is
+          # not mis-read as issue 3244.
+          EXPECTED_ISSUE=""
+          if [[ "$PR_BRANCH" =~ (issue-)?MVA-([0-9]+) ]]; then
+            EXPECTED_ISSUE="MVA-${BASH_REMATCH[2]}"
+          elif [[ "$PR_BRANCH" =~ (issue|hotfix)-([0-9]+) ]]; then
+            EXPECTED_ISSUE="${BASH_REMATCH[2]}"
+          fi
+
+          if [ -z "$EXPECTED_ISSUE" ]; then
+            echo "Branch carries no issue token (manual / promotion / dependabot) — skipping."
+            echo "status=skipped" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Expected issue from branch: $EXPECTED_ISSUE"
+
+          BODY="${PR_BODY:-}"
+
+          # (a) The body must contain at least one closing keyword, so a PR that
+          # merely mentions an issue in prose is not treated as linking it.
+          if ! printf '%s' "$BODY" | grep -iqE "(resolves|closes|fixes)[[:space:]]+(#?[0-9]+|MVA-[0-9]+)"; then
+            echo "::error::PR body has no 'Resolves/Closes/Fixes #N' linkage."
+            echo "::error::Add 'Closes #${EXPECTED_ISSUE}' to the PR body."
+            echo "status=failure" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          # (b) The branch's issue must appear as a standalone token. The
+          # surrounding non-digit / boundary guards stop 9464 from matching a
+          # superstring like #19464 or 94640.
+          if [ "${EXPECTED_ISSUE:0:4}" = "MVA-" ]; then
+            token_re="MVA-${EXPECTED_ISSUE#MVA-}([^0-9]|$)"
+          else
+            token_re="(^|[^0-9])#?${EXPECTED_ISSUE}([^0-9]|$)"
+          fi
+
+          if printf '%s' "$BODY" | grep -qE "$token_re"; then
+            echo "PR correctly links to issue ${EXPECTED_ISSUE}"
+            echo "status=success" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "::error::PR closes some issue(s) but not ${EXPECTED_ISSUE} (implied by branch ${PR_BRANCH})."
+          echo "::error::Add 'Closes #${EXPECTED_ISSUE}' (or 'Closes MVA-${EXPECTED_ISSUE}') to the PR body."
+          echo "status=failure" >> "$GITHUB_OUTPUT"
+          exit 1
