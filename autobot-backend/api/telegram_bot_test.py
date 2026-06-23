@@ -14,6 +14,8 @@ These verify the inbound path is actually reachable and dispatched:
 - command handling produces the expected replies.
 """
 
+from types import SimpleNamespace
+
 import pytest
 
 from initialization.router_registry.integration_routers import INTEGRATION_ROUTER_CONFIGS
@@ -129,3 +131,50 @@ class TestCommandHandling:
 
         reply = await _handle_command("nope", [], chat_id="4242", message_id=1)
         assert reply is None
+
+
+class TestCaptionlessMediaRouting:
+    """Caption-less media must not crash ChatMessage construction (GH#10483)."""
+
+    @pytest.mark.asyncio
+    async def test_captionless_attachment_gets_placeholder_content(self, monkeypatch):
+        from api import telegram_bot as tg
+        from services.gateway.gateway_manager import GatewayManager
+
+        captured: dict = {}
+
+        async def fake_process(message, **kwargs):
+            captured["message"] = message
+            return SimpleNamespace(content="ack")
+
+        async def fake_send(*args, **kwargs):
+            captured["sent"] = True
+
+        # Lazily-imported deps are patched at their source modules.
+        monkeypatch.setattr("api.chat.process_chat_message", fake_process)
+        monkeypatch.setattr(tg, "send_telegram_response", fake_send)
+        monkeypatch.setattr("utils.chat_utils.get_chat_history_manager", lambda req: object())
+        monkeypatch.setattr("utils.lazy_singleton.lazy_init_singleton", lambda state, name, cls: object())
+
+        # A document with no caption normalizes to an empty message + has_file.
+        unified = await GatewayManager().normalize_message(
+            {
+                "platform": "telegram",
+                "message": {
+                    "message_id": 21,
+                    "date": 1700000003,
+                    "chat": {"id": 4242, "type": "private"},
+                    "from": {"id": 99},
+                    "document": {"file_id": "doc-9", "file_name": "x.pdf", "mime_type": "application/pdf"},
+                },
+            }
+        )
+        assert unified.message == ""
+        assert unified.metadata.get("has_file") is True
+
+        request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+        # Without the fix this raises pydantic ValidationError (content min_length=1).
+        await tg._route_to_chat_and_reply(request, unified)
+
+        assert captured["message"].content == "[document attachment]"
+        assert captured.get("sent") is True
