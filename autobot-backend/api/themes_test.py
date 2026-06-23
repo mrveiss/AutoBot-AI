@@ -17,7 +17,9 @@ from auth_middleware import check_admin_permission
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(theme_install, "themes_dir", lambda: tmp_path)
     app = FastAPI()
-    app.include_router(themes_api.router)
+    # Mirror the core-router registry, which mounts every router under "/api".
+    # This guards against the /api/api/themes double-prefix regression (#10472).
+    app.include_router(themes_api.router, prefix="/api")
     app.dependency_overrides[check_admin_permission] = lambda: True
     return TestClient(app)
 

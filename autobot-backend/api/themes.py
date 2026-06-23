@@ -17,7 +17,10 @@ from fastapi.responses import FileResponse, JSONResponse
 import theme_install
 from auth_middleware import check_admin_permission
 
-router = APIRouter(prefix="/api/themes", tags=["themes"])
+# The core-router registry loop mounts every router under "/api" (see
+# core_routers.py — e.g. users_router prefix="/users" yields /api/users). So this
+# router carries only "/themes" to resolve to /api/themes (NOT /api/api/themes). #10472
+router = APIRouter(prefix="/themes", tags=["themes"])
 
 
 @router.post("")

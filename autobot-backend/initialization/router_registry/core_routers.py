@@ -501,7 +501,8 @@ def _get_plugin_routers() -> list:
 
     plugin_manager.py routes already include /plugins in their paths,
     so registration prefix must be empty to avoid double-prefix (#1105).
-    themes_router carries /api/themes prefix — mount with empty prefix (#10472).
+    themes_router carries a /themes prefix; the loop adds /api → /api/themes
+    (a /api/themes prefix here would wrongly yield /api/api/themes) (#10472).
     """
     return [
         (plugin_manager_router, "", ["plugins"], "plugin_manager"),
