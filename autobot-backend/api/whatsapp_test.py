@@ -152,12 +152,24 @@ class TestMediaRoutingMetadata:
         monkeypatch.setattr("utils.chat_utils.get_chat_history_manager", lambda req: object())
         monkeypatch.setattr("utils.lazy_singleton.lazy_init_singleton", lambda state, name, cls: object())
 
-        unified = SimpleNamespace(
-            message="",
-            user_id="15551234567",
-            channel_id="15551234567",
-            metadata={"message_type": "image"},
+        # Drive through the REAL adapter so file_type/placeholder are validated against
+        # actual normalized metadata, not a hand-built namespace (GH#10481).
+        from services.gateway.gateway_manager import GatewayManager
+
+        unified = await GatewayManager().normalize_message(
+            {
+                "platform": "whatsapp",
+                "from": "15551234567",
+                "chat_id": "15551234567",
+                "body": "",
+                "id": "wamid.X",
+                "timestamp": "1700000000",
+                "message_type": "image",
+                "media_id": "media-123",
+            }
         )
+        # Adapter must carry the message type through (regression guard).
+        assert unified.metadata.get("message_type") == "image"
         request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
 
         await wa._route_to_chat_and_reply(
