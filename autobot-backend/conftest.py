@@ -422,6 +422,14 @@ if "auth_middleware" not in sys.modules:
     _auth_stub.__path__ = []  # type: ignore[attr-defined]
     _auth_stub.__package__ = "auth_middleware"
     _auth_stub.get_current_user = MagicMock()  # type: ignore[attr-defined]
+
+    # check_admin_permission must be a proper no-arg callable so FastAPI can
+    # inspect its signature at route-registration time without producing spurious
+    # (*args, **kwargs) query parameters (#10472).
+    def _check_admin_permission_stub():  # noqa: E301
+        return True
+
+    _auth_stub.check_admin_permission = _check_admin_permission_stub  # type: ignore[attr-defined]
     _auth_stub.__getattr__ = lambda attr: MagicMock()  # type: ignore[attr-defined]
     sys.modules["auth_middleware"] = _auth_stub
 

@@ -25,6 +25,7 @@ from urllib.parse import urlparse
 
 from fastapi import HTTPException, UploadFile, status
 
+import archive_safety as _arch
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from plugin_sdk.base import PluginManifest
@@ -35,10 +36,7 @@ _NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
 _GIT_URL_SCHEMES = {"http", "https"}
 # Disallow leading '-' (so '-foo' can't be mistaken for an option) and '..' segments.
 _GIT_REF_PATTERN = re.compile(r"^(?!-)(?!.*\.\.)[A-Za-z0-9._/\-]{1,128}$")
-_MAX_ZIP_UNCOMPRESSED_BYTES = 256 * 1024 * 1024  # 256 MB
-_MAX_ZIP_ENTRIES = 5000
-_MAX_UPLOAD_BYTES = 512 * 1024 * 1024  # 512 MB hard cap on the raw upload
-_MAX_COMPRESSION_RATIO = 100  # zip-bomb sentinel
+_MAX_UPLOAD_BYTES = _arch.MAX_UPLOAD_BYTES  # 512 MB hard cap on the raw upload
 _GIT_CLONE_TIMEOUT_SECONDS = 120
 
 # Per-plugin install lock prevents two concurrent installs of the same name
@@ -121,106 +119,17 @@ def _claim_install_target(name: str) -> Path:
     return target
 
 
-def _is_zip_symlink(info: zipfile.ZipInfo) -> bool:
-    # External attr stores Unix mode in the high 16 bits; 0xA000 = symlink.
-    return ((info.external_attr >> 16) & 0xF000) == 0xA000
-
-
-def _validate_zip_metadata(zf: zipfile.ZipFile, extract_root: Path) -> None:
-    """Pre-flight checks on archive metadata. Cheap, runs before extraction."""
-    names = zf.namelist()
-    if len(names) > _MAX_ZIP_ENTRIES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Archive has too many entries (>{_MAX_ZIP_ENTRIES})",
-        )
-    extract_root_resolved = extract_root.resolve()
-    for info in zf.infolist():
-        if info.is_dir():
-            continue
-        target = (extract_root / info.filename).resolve()
-        try:
-            target.relative_to(extract_root_resolved)
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Archive entry escapes root: {info.filename}",
-            ) from exc
-        if _is_zip_symlink(info):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Archive contains symlink: {info.filename}",
-            )
-        # Sentinel against ZIP bombs whose header file_size is honest.
-        if info.compress_size > 0 and info.file_size // info.compress_size > _MAX_COMPRESSION_RATIO:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Archive entry has suspicious compression ratio: {info.filename}",
-            )
-
-
-def _safe_extract(zf: zipfile.ZipFile, extract_root: Path) -> None:
-    """Stream-extract with byte cap. Tracks ACTUAL bytes written, so a
-    forged file_size in the central directory can't bypass the size cap."""
-    extract_root_resolved = extract_root.resolve()
-    bytes_written = 0
-    for info in zf.infolist():
-        if info.is_dir():
-            continue
-        # Skip macOS resource-fork dotfiles and __MACOSX/ noise.
-        if "__MACOSX/" in info.filename or Path(info.filename).name.startswith("._"):
-            continue
-        # Re-validate at extraction time (defense in depth).
-        target = (extract_root / info.filename).resolve()
-        target.relative_to(extract_root_resolved)
-        if _is_zip_symlink(info):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Archive contains symlink: {info.filename}",
-            )
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with zf.open(info) as src, target.open("wb") as out:
-            while chunk := src.read(1024 * 1024):
-                bytes_written += len(chunk)
-                if bytes_written > _MAX_ZIP_UNCOMPRESSED_BYTES:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Archive uncompressed size exceeds 256MB",
-                    )
-                out.write(chunk)
+# Delegate zip-safety primitives to the shared archive_safety module (#10472).
+# Private wrappers preserved so call sites inside this file need no changes.
+_is_zip_symlink = _arch.is_zip_symlink
+_validate_zip_metadata = _arch.validate_zip_metadata
+_safe_extract = _arch.safe_extract
+_move_into_target = _arch.move_into_target
+_stream_upload_to = _arch.stream_upload_to
 
 
 def _find_plugin_root(extract_dir: Path) -> Path:
-    if (extract_dir / "plugin.json").is_file():
-        return extract_dir
-    children = [c for c in extract_dir.iterdir() if c.is_dir() and c.name != "__MACOSX" and not c.name.startswith(".")]
-    if len(children) == 1 and (children[0] / "plugin.json").is_file():
-        return children[0]
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="plugin.json not found at archive root or single top-level folder",
-    )
-
-
-def _move_into_target(source: Path, target: Path) -> None:
-    """Move source contents into a placeholder target dir, then remove the
-    now-empty source. Target must exist (created by _claim_install_target)."""
-    for child in source.iterdir():
-        shutil.move(str(child), str(target / child.name))
-    source.rmdir()
-
-
-async def _stream_upload_to(upload: UploadFile, dest: Path) -> None:
-    bytes_written = 0
-    with dest.open("wb") as out:
-        while chunk := await upload.read(1024 * 1024):
-            bytes_written += len(chunk)
-            if bytes_written > _MAX_UPLOAD_BYTES:
-                raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    detail=f"Upload exceeds {_MAX_UPLOAD_BYTES // (1024 * 1024)}MB",
-                )
-            out.write(chunk)
+    return _arch.find_package_root(extract_dir, "plugin.json")
 
 
 async def install_from_zip(upload: UploadFile) -> InstallResult:

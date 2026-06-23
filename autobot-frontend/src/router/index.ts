@@ -916,6 +916,19 @@ export const routes: RouteRecordRaw[] = [
       hideFooter: true,
     },
   },
+  // Issue #10472: Admin theme-package management under the /slm route group.
+  // Upload/list/uninstall theme zips; install is admin-gated server-side.
+  {
+    path: '/slm/themes',
+    name: 'slm-themes',
+    component: () => import('@/views/slm/ThemeManagerView.vue'),
+    meta: {
+      title: 'Theme Manager',
+      requiresAuth: true,
+      // Admin-only operator view, reached via /slm — not in the primary nav rail.
+      hideInNav: true,
+    },
+  },
   // Issue #3502: Custom Dashboard renamed to /home (see home route above)
 
   // Issue #729: Infrastructure routes redirected to slm-admin
