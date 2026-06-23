@@ -10,6 +10,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { nextTick } from 'vue'
 
+// Installed-theme registry is exercised by useThemeVariantRuntime.test.ts; here we
+// stub it so the fire-and-forget loadInstalledThemes() in initVariant() is inert and
+// the built-in availableVariants stay deterministic.
+vi.mock('../useThemeRegistry', () => ({
+  fetchInstalledThemes: vi.fn().mockResolvedValue([]),
+}))
+
 const KEY = 'autobot-theme-variant'
 
 async function freshComposable() {
@@ -60,7 +67,7 @@ describe('useThemeVariant — default resolution', () => {
 
   it('exposes both known variants', async () => {
     const { availableVariants } = await freshComposable()
-    expect(availableVariants).toEqual(['default', 'ember'])
+    expect(availableVariants.value).toEqual(['default', 'ember'])
   })
 })
 
@@ -72,7 +79,7 @@ describe('useThemeVariant — DOM application + persistence', () => {
 
   it('removes the attribute when switching to default, and persists the choice', async () => {
     const { setThemeVariant } = await freshComposable()
-    setThemeVariant('default')
+    await setThemeVariant('default')
     await nextTick()
     expect(document.documentElement.getAttribute('data-theme-variant')).toBeNull()
     expect(localStorage.getItem(KEY)).toBe('default')
@@ -81,7 +88,7 @@ describe('useThemeVariant — DOM application + persistence', () => {
   it('sets the attribute and persists when switching back to ember', async () => {
     localStorage.setItem(KEY, 'default')
     const { setThemeVariant } = await freshComposable()
-    setThemeVariant('ember')
+    await setThemeVariant('ember')
     await nextTick()
     expect(document.documentElement.getAttribute('data-theme-variant')).toBe('ember')
     expect(localStorage.getItem(KEY)).toBe('ember')
