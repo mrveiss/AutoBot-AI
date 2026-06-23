@@ -70,6 +70,7 @@ async def _route_to_chat_and_reply(
     unified_message: Any,
     media_bytes: Optional[bytes] = None,
     media_mime_type: Optional[str] = None,
+    media_id: Optional[str] = None,
 ) -> None:
     """Route a normalized WhatsApp message to chat and send the AI reply.
 
@@ -78,7 +79,10 @@ async def _route_to_chat_and_reply(
         unified_message: Gateway-normalized message.
         media_bytes:     Raw media bytes downloaded from the Graph API, if the
                          inbound message carried a media attachment (GH#10267).
+                         Used only to derive ``file_size``/``mime_type``; the
+                         bytes themselves are never persisted (GH#10481).
         media_mime_type: MIME type of the downloaded media, or None.
+        media_id:        Graph API media id for lazy re-fetch, or None.
     """
     from api.chat import process_chat_message
     from services.llm_service import LLMService
@@ -90,15 +94,29 @@ async def _route_to_chat_and_reply(
 
     extra_metadata: Dict[str, Any] = {}
     if media_bytes is not None:
-        # Attach media to the chat message metadata mirroring telegram_adapter's has_file pattern
+        # Attach lightweight media *references* (not raw bytes) so the chat
+        # message serializes/persists cleanly. A multimodal consumer re-fetches
+        # via media_id with download_whatsapp_media. Mirrors telegram_adapter's
+        # has_file reference pattern — file_id/file_type/file_size/mime_type,
+        # never raw bytes (GH#10267, GH#10481).
         extra_metadata["has_file"] = True
-        extra_metadata["file_bytes"] = media_bytes
         extra_metadata["file_type"] = unified_message.metadata.get("message_type", "media")
+        extra_metadata["file_size"] = len(media_bytes)
+        if media_id:
+            extra_metadata["media_id"] = media_id
         if media_mime_type:
             extra_metadata["mime_type"] = media_mime_type
 
+    # ChatMessage.content requires >=1 char and an empty turn is meaningless to the
+    # model. Media messages often have no caption, so synthesize a placeholder naming
+    # the attachment — otherwise caption-less media raises ValidationError and the
+    # whole inbound batch is dropped (GH#10481).
+    content = unified_message.message
+    if not content and media_bytes is not None:
+        content = f"[{extra_metadata.get('file_type', 'media')} attachment]"
+
     chat_message = ChatMessage(
-        content=unified_message.message,
+        content=content,
         role="user",
         session_id=session_id,
         metadata={
@@ -193,10 +211,11 @@ async def whatsapp_webhook(request: Request) -> JSONResponse:
     for raw_message in flatten_messages(webhook_body):
         media_bytes: Optional[bytes] = None
         media_mime_type: Optional[str] = None
+        media_id: Optional[str] = None
 
         if not raw_message.get("body"):
             # Non-text inbound message — attempt to download and route media (GH#10267)
-            media_id: Optional[str] = raw_message.get("media_id")
+            media_id = raw_message.get("media_id")
             if not media_id:
                 logger.info(
                     "Received non-text WhatsApp message type=%s (no downloadable media_id)",
@@ -219,7 +238,7 @@ async def whatsapp_webhook(request: Request) -> JSONResponse:
             )
 
         unified_message = await gateway_manager.normalize_message(raw_message)
-        await _route_to_chat_and_reply(request, unified_message, media_bytes, media_mime_type)
+        await _route_to_chat_and_reply(request, unified_message, media_bytes, media_mime_type, media_id)
 
     return JSONResponse({"status": "ok"})
 
