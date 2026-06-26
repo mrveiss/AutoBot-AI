@@ -165,13 +165,6 @@ async def voice_listen_api(request: Request, user_role: str = Form("user")):
 async def voice_speak_api(request: Request, text: str = Form(...), user_role: str = Form("user")):
     """Converts text to speech and plays it."""
     security_layer = request.app.state.security_layer
-    voice_interface = getattr(request.app.state, "voice_interface", None)
-    if voice_interface is None:
-        logger.warning("voice_speak called but voice_interface is not initialized")
-        return JSONResponse(
-            status_code=503,
-            content={"message": "Voice interface is not available on this server."},
-        )
     if not security_layer.check_permission(user_role, "allow_voice_speak"):
         security_layer.audit_log(
             "voice_speak",
@@ -182,6 +175,20 @@ async def voice_speak_api(request: Request, text: str = Form(...), user_role: st
         return JSONResponse(
             status_code=403,
             content={"message": "Permission denied to speak via voice."},
+        )
+
+    # Canonical TTS is the pocket-tts worker (always available). The optional
+    # local pyttsx3 voice_interface only does *server-side* playback; when it is
+    # absent, synthesize via the worker and return WAV for the client to play —
+    # instead of a misleading 503 that implies TTS is uninstalled.
+    voice_interface = getattr(request.app.state, "voice_interface", None)
+    if voice_interface is None:
+        wav_bytes = await get_tts_client().synthesize(text)
+        security_layer.audit_log("voice_speak", user_role, "success", {"via": "tts_worker", "text_preview": text[:50]})
+        return Response(
+            content=wav_bytes,
+            media_type="audio/wav",
+            headers={"Content-Disposition": "attachment; filename=speech.wav"},
         )
 
     result = await voice_interface.speak_text(text)
