@@ -82,4 +82,5 @@ jobs:
 
       - name: Build
         if: needs.changes.outputs.slm_frontend == 'true'
-        run: npm run build
+        # build:slm sets VITE_API_URL=/slm (the co-located base the vite config requires).
+        run: npm run build:slm

@@ -20,7 +20,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "@shared/*": ["../autobot_shared/*"],
-      "vue": ["./node_modules/vue/dist/vue.d.ts"]
+      "vue": ["./node_modules/vue/dist/vue.d.ts"],
+      "@autobot/terminal": ["./src/types/autobot-terminal.d.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"],
