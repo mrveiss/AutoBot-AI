@@ -2135,6 +2135,40 @@ class DevSpeedupExamplesResultResponse(BaseModel):
     performance_tips: List[str]
 
 
+class DevSpeedupCodeTemplate(BaseModel):
+    """A reusable code template (#10502, #902)."""
+
+    id: str
+    name: str
+    description: str
+    language: str
+    template: str
+    variables: List[str] = Field(default_factory=list)
+    category: str
+
+
+class DevSpeedupTemplatesResponse(BaseModel):
+    """Response for GET /templates (#10502)."""
+
+    templates: List[DevSpeedupCodeTemplate] = Field(default_factory=list)
+
+
+class DevSpeedupAction(BaseModel):
+    """A recorded developer-speedup action for history (#10502)."""
+
+    id: str
+    action: str
+    timestamp: str
+    input: str = ""
+    output: str = ""
+
+
+class DevSpeedupHistoryResponse(BaseModel):
+    """Response for GET /history (#10502)."""
+
+    actions: List[DevSpeedupAction] = Field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
 # code_search.py route response schemas (GH #6509 Batch A)
 # ---------------------------------------------------------------------------

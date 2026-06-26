@@ -49,6 +49,16 @@ _ROLE_DEFAULTS: Dict[str, Dict[str, Any]] = {
 }
 
 
+# Map org roles onto the frontend activity-monitor agent "type" vocabulary
+# (orchestrator | worker | monitor | analyzer | executor). (#10502)
+_ROLE_TO_ACTIVITY_TYPE: Dict[str, str] = {
+    OrgRole.MANAGER.value: "orchestrator",
+    OrgRole.COORDINATOR.value: "orchestrator",
+    OrgRole.SPECIALIST.value: "analyzer",
+    OrgRole.WORKER.value: "worker",
+}
+
+
 class AgentOrgService:
     """Service for agent organizational hierarchy operations (#1405)."""
 
@@ -93,6 +103,38 @@ class AgentOrgService:
         """
         nodes = await self.get_all_nodes()
         return self._build_tree(nodes, parent_id=None)
+
+    @staticmethod
+    def _status_for_node(node: AgentOrgNode) -> str:
+        """Derive a runtime status string for the activity monitor (#10502)."""
+        if node.pre_pause_status is not None:
+            return "paused"
+        return "idle"
+
+    async def get_agent_statuses(self) -> List[Dict[str, Any]]:
+        """Return all registered agents with runtime status (#10502).
+
+        Backs ``GET /api/agents/status`` for the Home dashboard "Agent
+        Activity Monitor", which previously 404'd and showed only a subset
+        of agents. Sourced from the org registry so every registered agent
+        is returned.
+        """
+        nodes = await self.get_all_nodes()
+        return [
+            {
+                "id": node.agent_id,
+                "name": node.name,
+                "type": _ROLE_TO_ACTIVITY_TYPE.get(node.org_role, "worker"),
+                "status": self._status_for_node(node),
+                "currentTask": None,
+                "tasksCompleted": 0,
+                "uptime": 0,
+                "successRate": 0,
+                "recentTasks": [],
+                "activityTimeline": [],
+            }
+            for node in nodes
+        ]
 
     async def get_chain_of_command(self, agent_id: str) -> List[Dict[str, Any]]:
         """
