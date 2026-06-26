@@ -159,6 +159,7 @@ _build_end_session_url = _router_ns["_build_end_session_url"]
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_service(session=None) -> SSOService:  # type: ignore[valid-type]
     return SSOService(session=session or MagicMock())
 
@@ -369,9 +370,7 @@ class TestHandleSamlSloCallback:
             patch.object(svc, "_build_saml_client", return_value=mock_client),
         ):
             with pytest.raises(SSOAuthenticationError, match="Invalid SAML LogoutRequest"):
-                svc.handle_saml_slo_callback(
-                    provider, "<bad/>", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
-                )
+                svc.handle_saml_slo_callback(provider, "<bad/>", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST")
 
     def test_validates_issuer_and_raises_on_mismatch(self):
         provider = _mock_saml_provider(idp_entity_id="https://trusted.idp.com")
@@ -386,9 +385,7 @@ class TestHandleSamlSloCallback:
             patch.object(svc, "_build_saml_client", return_value=mock_client),
         ):
             with pytest.raises(SSOAuthenticationError, match="issuer mismatch"):
-                svc.handle_saml_slo_callback(
-                    provider, "<xml/>", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
-                )
+                svc.handle_saml_slo_callback(provider, "<xml/>", "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST")
 
     def test_success_returns_redirect_url(self):
         """Valid LogoutRequest → success=True + redirect URL from handle_logout_request."""

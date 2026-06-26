@@ -14,7 +14,8 @@ import uuid
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, Response, status
-from fastapi.responses import RedirectResponse, Response as RawResponse
+from fastapi.responses import RedirectResponse
+from fastapi.responses import Response as RawResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.security import create_audit_log

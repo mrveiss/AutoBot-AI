@@ -99,7 +99,9 @@ def _validate_saml_issuer(parsed_request: Any, provider: SSOProvider) -> None:
     if idp_entity_id and issuer and issuer != idp_entity_id:
         logger.error(
             "SAML SLO issuer mismatch: expected %s, got %s (provider=%s)",
-            idp_entity_id, issuer, provider.id,
+            idp_entity_id,
+            issuer,
+            provider.id,
         )
         raise SSOAuthenticationError("SAML SLO issuer mismatch")
 
@@ -586,7 +588,12 @@ class SSOService(BaseService):
         return _extract_redirect_url(result)
 
     def handle_saml_slo_callback(
-        self, provider: SSOProvider, xml_body: str, binding: str, sigalg: str | None = None, signature: str | None = None
+        self,
+        provider: SSOProvider,
+        xml_body: str,
+        binding: str,
+        sigalg: str | None = None,
+        signature: str | None = None,
     ) -> tuple[bool, str | None]:
         """Parse and validate a SAML LogoutRequest or LogoutResponse from the IdP.
 
