@@ -138,6 +138,27 @@ export interface VoiceSpeakResponse {
   error?: string
 }
 
+// GH#8998 / #10488: LLM fallback monitoring (moved from main frontend to SLM admin)
+export interface LLMFallbackChain {
+  primary_model: string
+  fallback_chain: string
+  provider: string
+}
+
+export interface LLMActiveFallback {
+  conversation_id: string
+  primary_model: string
+  fallback_model: string
+  primary_provider: string
+  fallback_provider: string
+  timestamp: number
+}
+
+export interface LLMFallbackStatus {
+  configured_chains: LLMFallbackChain[]
+  active_fallbacks: LLMActiveFallback[]
+}
+
 export function useAutobotApi() {
   const authStore = useAuthStore()
 
@@ -638,6 +659,20 @@ export function useAutobotApi() {
     return response.data.models
   }
 
+  /**
+   * Get LLM fallback monitoring status (GH#8998 / #10488).
+   * Backend returns a flat payload (no create_success_response envelope):
+   * { configured_chains: [...], active_fallbacks: [...] }.
+   * The /autobot-api proxy strips its prefix -> backend /api/llm-providers/fallback-status.
+   */
+  async function getLLMFallbackStatus(): Promise<LLMFallbackStatus> {
+    const response = await client.get<LLMFallbackStatus>('/llm-providers/fallback-status')
+    return {
+      configured_chains: response.data.configured_chains || [],
+      active_fallbacks: response.data.active_fallbacks || [],
+    }
+  }
+
   // =============================================================================
   // Logs API (for viewing, not forwarding)
   // =============================================================================
@@ -1025,6 +1060,7 @@ export function useAutobotApi() {
     getLLMConfig,
     updateLLMConfig,
     getLLMModels,
+    getLLMFallbackStatus,
     // Logs
     getLogs,
     // System
