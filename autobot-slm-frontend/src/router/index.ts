@@ -267,6 +267,13 @@ const router = createRouter({
           meta: { title: 'LLM Configuration', parent: 'settings', admin: true }
         },
         {
+          // GH#8998 / #10488: LLM fallback monitoring moved from user frontend to SLM admin
+          path: 'admin/llm-fallbacks',
+          name: 'settings-admin-llm-fallbacks',
+          component: () => import('@/views/settings/admin/LLMFallbacksView.vue'),
+          meta: { title: 'LLM Fallbacks', parent: 'settings', admin: true }
+        },
+        {
           // MVA-1735: SSO/OIDC provider configuration
           path: 'admin/sso',
           name: 'settings-admin-sso',

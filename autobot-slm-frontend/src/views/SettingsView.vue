@@ -42,15 +42,21 @@ const tabs = [
   { id: 'log-forwarding', name: 'Log Forwarding', path: '/settings/admin/log-forwarding', icon: 'M12 19l9 2-9-18-9 18 9-2zm0 0v-8' },
   // Issue #2371: LLM config moved from main frontend to SLM admin
   { id: 'llm', name: 'LLM', path: '/settings/admin/llm', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
+  // GH#8998 / #10488: LLM fallback monitoring moved from user frontend to SLM admin
+  { id: 'llm-fallbacks', name: 'LLM Fallbacks', path: '/settings/admin/llm-fallbacks', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
   // MVA-1735: SSO/OIDC provider configuration
   { id: 'sso', name: 'SSO / OIDC', path: '/settings/admin/sso', icon: 'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z' },
   // Issue: NPU Workers consolidated to Fleet Overview /fleet/npu (Worker Registry sub-tab)
 ]
 
-// Get active tab based on current route
+// Get active tab based on current route. Match the most-specific (longest) path
+// prefix so nested paths like /settings/admin/llm-fallbacks do not resolve to the
+// shorter /settings/admin/llm tab (GH#8998 / #10488).
 const activeTab = computed(() => {
   const path = route.path
-  const tab = tabs.find(t => path.startsWith(t.path))
+  const tab = tabs
+    .filter(t => path.startsWith(t.path))
+    .sort((a, b) => b.path.length - a.path.length)[0]
   return tab?.id ?? 'general'
 })
 

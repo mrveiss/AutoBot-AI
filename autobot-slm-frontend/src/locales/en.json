@@ -567,6 +567,25 @@
     "twoFactorAuthentication": "Two-Factor Authentication",
     "username": "Username"
   },
+  "llmFallbacks": {
+    "title": "LLM Fallback Monitoring",
+    "subtitle": "Configured fallback chains and currently active model fallbacks across the fleet.",
+    "refresh": "Refresh",
+    "configuredChains": "Configured Fallback Chains",
+    "activeFallbacks": "Active Fallbacks",
+    "autoRefresh": "Auto-refreshes every 10s",
+    "primaryModel": "Primary Model",
+    "fallbackChain": "Fallback Chain",
+    "fallbackModel": "Fallback Model",
+    "provider": "Provider",
+    "primaryProvider": "Primary Provider",
+    "fallbackProvider": "Fallback Provider",
+    "conversationId": "Conversation ID",
+    "time": "Time",
+    "loading": "Loading...",
+    "noChains": "No fallback chains configured",
+    "noActiveFallbacks": "No active fallbacks (all models operating normally)"
+  },
   "maintenanceView": {
     "actions": "Actions",
     "active": "Active",
