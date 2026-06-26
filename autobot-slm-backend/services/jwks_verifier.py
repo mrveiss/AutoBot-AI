@@ -190,6 +190,18 @@ async def verify_authority_token(token: str) -> Optional[Dict[str, Any]]:
 
     cached = await get_cached_claims(token)
     if cached is not None:
+        # Security (#10278): a cache hit must STILL honour revocation — otherwise a
+        # revoked-but-cached token would bypass the denylist until the cache TTL expires.
+        cached_jti = cached.get("jti")
+        if cached_jti:
+            from services.rs256_denylist import is_rs256_jti_revoked  # noqa: PLC0415
+
+            try:
+                if await is_rs256_jti_revoked(str(cached_jti)):
+                    logger.warning("verify_authority_token: cached jti=%r is revoked — rejecting", cached_jti)
+                    return None
+            except Exception:  # fail-open on Redis down (matches the full-verify path)
+                logger.warning("rs256 denylist check failed on cache hit; failing open", exc_info=True)
         logger.debug("verify_authority_token: cache hit (sub=%r)", cached.get("sub"))
         return cached
 

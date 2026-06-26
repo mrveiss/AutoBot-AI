@@ -296,7 +296,7 @@ class _RS256RevokeRequest(BaseModel):
 )
 async def revoke_rs256_token(
     body: _RS256RevokeRequest,
-    _: Dict = Depends(get_current_user),
+    current_user: Dict = Depends(get_current_user),
 ) -> Dict[str, object]:
     """Revoke an RS256 authority token by adding its jti to the cross-service denylist.
 
@@ -316,6 +316,23 @@ async def revoke_rs256_token(
     """
     from autobot_shared.auth.jwt_core import JWTDecodeError as _JWTDecodeError
     from autobot_shared.auth.jwt_core import decode_jwt_no_verify_exp as _decode_no_exp
+
+    # Security (#10278): ownership gate — a caller may revoke ONLY their own token,
+    # unless they hold admin rights (administrative revocation of others' tokens).
+    # The decoded sub is sufficient even unverified: presenting another user's real
+    # token fails the match, and a forged token can only carry the caller's own sub.
+    try:
+        _token_claims = _decode_no_exp(body.token)
+    except _JWTDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid token") from exc
+    _token_sub = _token_claims.get("sub") or _token_claims.get("username")
+    _token_uid = _token_claims.get("user_id")
+    _caller_sub = current_user.get("sub") or current_user.get("username")
+    _caller_uid = current_user.get("user_id")
+    _is_admin = bool(current_user.get("admin")) or current_user.get("role") == "admin"
+    _owns = (_token_sub and _token_sub == _caller_sub) or (_token_uid and _token_uid == _caller_uid)
+    if not _owns and not _is_admin:
+        raise HTTPException(status_code=403, detail="Can only revoke your own tokens")
 
     # #10278: shared RS256 denylist lives in autobot-slm-backend package but
     # uses only autobot_shared Redis — import the sibling module at call time
