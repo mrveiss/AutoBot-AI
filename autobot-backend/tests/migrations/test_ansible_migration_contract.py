@@ -212,9 +212,9 @@ def test_shared_migration_sequence_is_ordered():
     assert backup_idx is not None, "migrate_backend_db.yml: no pg_dump backup step"
     assert baseline_idx is not None, "migrate_backend_db.yml: no baseline-adoption step"
     assert upgrade_idx is not None, "migrate_backend_db.yml: no alembic upgrade step"
-    assert backup_idx < baseline_idx < upgrade_idx, (
-        "migrate_backend_db.yml: must run backup -> baseline -> upgrade head in order"
-    )
+    assert (
+        backup_idx < baseline_idx < upgrade_idx
+    ), "migrate_backend_db.yml: must run backup -> baseline -> upgrade head in order"
 
 
 # --- #10045: fail-closed backup contract --------------------------------------
