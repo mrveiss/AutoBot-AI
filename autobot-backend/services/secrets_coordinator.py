@@ -268,6 +268,19 @@ class SecretsCoordinator:
             session, secret_id=secret_id, new_plaintext=new_plaintext, actor_vaults={vault}
         )
 
+    async def service_rotate_kek(
+        self, session: AsyncSession, *, secret_id: uuid.UUID, new_root_key: bytes, vault: VaultRef
+    ) -> Secret:
+        """Rewrap a system-vault secret's DEKs under a new root key on behalf of a service identity.
+
+        The sealed plaintext is unchanged (KEK-only rotation). Scope is strictly
+        the system vault — the service-auth API layer already enforced this.
+        """
+        self._assert_system_vault(vault)
+        return await self._service.rotate_kek(
+            session, secret_id=secret_id, new_root_key=new_root_key, actor_vaults={vault}
+        )
+
     async def service_delete(self, session: AsyncSession, *, secret_id: uuid.UUID, vault: VaultRef) -> None:
         """Delete a system-vault secret on behalf of a service identity."""
         self._assert_system_vault(vault)

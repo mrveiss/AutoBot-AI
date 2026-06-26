@@ -244,6 +244,22 @@ async def test_service_rotate_system_vault(service_client):
     assert rr.json()["value"] == "rotated"
 
 
+async def test_service_rewrap_system_vault(service_client):
+    """Service-auth KEK rewrap on /system/{id}/rewrap: 200, payload unchanged (#10154)."""
+    sid = (await _svc_create(service_client)).json()["id"]
+    r = await service_client.post(f"{_P}/system/{sid}/rewrap", json={"new_root_key": _ROOT2_B64})
+    assert r.status_code == 200, r.text
+    assert r.json()["version"] == 1  # KEK-only rotation — sealed value untouched
+    rr = await service_client.get(f"{_P}/system/{sid}")
+    assert rr.status_code == 200 and rr.json()["value"] == "fleet-secret"
+
+
+async def test_service_rewrap_bad_key_400(service_client):
+    sid = (await _svc_create(service_client)).json()["id"]
+    r = await service_client.post(f"{_P}/system/{sid}/rewrap", json={"new_root_key": "not-base64!!!"})
+    assert r.status_code == 400
+
+
 async def test_service_delete_system_vault(service_client):
     sid = (await _svc_create(service_client)).json()["id"]
     dr = await service_client.delete(f"{_P}/system/{sid}")

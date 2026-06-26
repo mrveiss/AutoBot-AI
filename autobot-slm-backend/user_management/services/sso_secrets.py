@@ -211,8 +211,13 @@ class SSOSecretsManager:
             if vault_id is not None:
                 try:
                     return await vault_read(vault_id)
-                except UnifiedVaultClientError:
-                    pass
+                except UnifiedVaultClientError as exc:
+                    logger.warning(
+                        "unified-vault: read-by-name failed field=%s provider=%s: %s; falling back to legacy",
+                        field,
+                        provider_id,
+                        type(exc).__name__,
+                    )
 
         # Legacy fallback (migration window only).
         return await _legacy_retrieve(self._session, provider_id, field)
@@ -298,6 +303,22 @@ class SSOSecretsManager:
                     field,
                     provider_id,
                     type(exc).__name__,
+                )
+                continue
+
+            # Idempotency vs the vault itself (not just config): if a prior run
+            # created the entry but died before persisting {field}_vault_id, adopt
+            # the existing vault secret instead of creating an orphan duplicate.
+            existing_vault_id = await self._find_vault_id_by_name(provider_id, field)
+            if existing_vault_id is not None:
+                updated[vault_id_key] = str(existing_vault_id)
+                updated[f"{field}_ref"] = key
+                updated.pop(field, None)
+                logger.info(
+                    "migrate_to_vault: adopted existing vault entry field=%s provider=%s vault_id=%s",
+                    field,
+                    provider_id,
+                    existing_vault_id,
                 )
                 continue
 

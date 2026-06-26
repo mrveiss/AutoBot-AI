@@ -140,6 +140,20 @@ class RewrapBody(BaseModel):
     new_root_key: str
 
 
+def _decode_root_key(raw: str) -> bytes:
+    """Decode a url-safe base64 root key and enforce the 32-byte length (HTTP 400 on failure)."""
+    import base64
+    import binascii
+
+    try:
+        decoded = base64.urlsafe_b64decode(raw + "==")
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "new_root_key must be url-safe base64") from exc
+    if len(decoded) != 32:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "new_root_key must decode to exactly 32 bytes")
+    return decoded
+
+
 class SecretMetadata(BaseModel):
     id: uuid.UUID
     name: str
@@ -339,6 +353,32 @@ async def service_delete_system_secret(
         raise _mapped(exc)
 
 
+@router.post("/system/{secret_id}/rewrap", response_model=SecretMetadata)
+async def service_rewrap_system_secret(
+    secret_id: uuid.UUID,
+    body: RewrapBody,
+    service_id: str = Depends(service_principal),
+    session: AsyncSession = Depends(get_session),
+    coordinator: SecretsCoordinator = Depends(get_coordinator),
+) -> SecretMetadata:
+    """Rotate the wrapping KEK for a system-vault secret via service identity (rewrap DEKs).
+
+    Service-auth counterpart of ``POST /{secret_id}/rewrap`` so non-user callers
+    (e.g. the SLM rotating SSO client-secret KEKs) can perform KEK rotation
+    scoped strictly to the system vault. The sealed value is unchanged.
+    """
+    logger.info("service CRUD: rewrap system secret", extra={"service_id": service_id})
+    new_root = _decode_root_key(body.new_root_key)
+    try:
+        secret = await coordinator.service_rotate_kek(
+            session, secret_id=secret_id, new_root_key=new_root, vault=_SYSTEM_VAULT
+        )
+        await session.commit()
+    except (SecretAccessError, SecretNotFoundError) as exc:
+        raise _mapped(exc)
+    return SecretMetadata.of(secret)
+
+
 # ---------------------------------------------------------------------------
 # User-principal parameterised routes — registered AFTER literal /system paths
 # ---------------------------------------------------------------------------
@@ -484,15 +524,7 @@ async def rewrap_secret_kek(
     The sealed value is untouched — only the wrapped DEKs change. Use this after
     rotating ``AUTOBOT_SECRETS_ROOT_KEY`` to migrate grants to the new KEK.
     """
-    import base64
-    import binascii
-
-    try:
-        new_root = base64.urlsafe_b64decode(body.new_root_key + "==")
-    except (binascii.Error, ValueError) as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "new_root_key must be url-safe base64") from exc
-    if len(new_root) != 32:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "new_root_key must decode to exactly 32 bytes")
+    new_root = _decode_root_key(body.new_root_key)
     user_id, perms = who
     try:
         secret = await coordinator.rotate_kek(
