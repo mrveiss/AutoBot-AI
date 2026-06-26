@@ -36,6 +36,24 @@ def _build_project_config() -> Dict[str, Any]:
     }
 
 
+def _company_os_enabled() -> bool:
+    """
+    Whether the Company OS (LLC) module is available in this deployment.
+
+    The LLC company endpoints require a PostgreSQL-backed company/multi-company
+    deployment; in single_user mode (the default) they return 503. The frontend
+    consumes this flag to hide the Company OS nav item and render an
+    informational empty-state instead of surfacing a raw 503 (#10502).
+    """
+    try:
+        from user_management.config import get_deployment_config
+
+        return bool(get_deployment_config().postgres_enabled)
+    except Exception:  # pragma: no cover - config import/availability is best-effort
+        logger.warning("Could not resolve deployment config for company_os flag", exc_info=True)
+        return False
+
+
 def _build_features_config(source: Dict[str, Any]) -> Dict[str, Any]:
     """
     Build features configuration section from any config source.
@@ -51,6 +69,9 @@ def _build_features_config(source: Dict[str, Any]) -> Dict[str, Any]:
         "terminal_enabled": source.get("terminal_enabled", True),
         "desktop_enabled": source.get("desktop_enabled", True),
         "system_monitoring_enabled": source.get("system_monitoring_enabled", True),
+        # #10502: Company OS (LLC) requires a PostgreSQL company/multi-company
+        # deployment. Surfaced so the frontend can gate the nav item + view.
+        "company_os_enabled": _company_os_enabled(),
     }
 
 
