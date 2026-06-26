@@ -1108,6 +1108,32 @@ class ChainOfCommandResponse(BaseModel):
     chain: List[AgentSummary]
 
 
+class AgentStatusItem(BaseModel):
+    """Runtime status for one registered agent (#10502).
+
+    Shape consumed by the Home dashboard "Agent Activity Monitor"
+    (frontend ``useAgentActivityData`` ``Agent`` interface).
+    """
+
+    id: str
+    name: str
+    type: str = "worker"
+    status: str = "idle"
+    currentTask: str | None = None
+    tasksCompleted: int = 0
+    uptime: int = 0
+    successRate: int = 0
+    recentTasks: List[Dict[str, Any]] = Field(default_factory=list)
+    activityTimeline: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class AgentStatusListResponse(BaseModel):
+    """All registered agents with runtime status (#10502)."""
+
+    agents: List[AgentStatusItem] = Field(default_factory=list)
+    total: int = 0
+
+
 class UpdateOrgRequest(BaseModel):
     """Request body for PATCH /agents/{agent_id}/org (#1405)."""
 
