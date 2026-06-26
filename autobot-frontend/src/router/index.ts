@@ -823,20 +823,6 @@ export const routes: RouteRecordRaw[] = [
       hideInNav: true,
     },
   },
-  // MVA-2999: LLM Providers & Fallback Status admin view
-  {
-    path: '/admin/llm-providers',
-    name: 'llm-providers',
-    component: () => import('@/views/LLMProvidersView.vue'),
-    meta: {
-      title: 'LLM Providers',
-      description: 'View LLM provider fallback chains and active fallback status',
-      requiresAuth: true,
-      admin: true,
-      // hideInNav (GH#9627 drive-by): admin views live in adminMenuItems, not main nav
-      hideInNav: true,
-    },
-  },
   // Issue #1801: Admin User Management
   {
     path: '/admin/users',
