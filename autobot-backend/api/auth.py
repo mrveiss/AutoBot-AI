@@ -8,7 +8,6 @@ Provides login, logout, and session management functionality
 """
 
 import datetime
-import time as _time_module
 from collections import defaultdict
 from time import time
 from typing import Dict, List

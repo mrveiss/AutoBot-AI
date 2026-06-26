@@ -25,13 +25,12 @@ Design
 - Never logs the token value; only the jti (opaque random UUID) is logged.
 """
 
-import logging
 import time
 
+from auth_middleware import get_auth_middleware
 from autobot_shared.auth.jwt_core import JWTDecodeError, _peek_alg, decode_jwt_no_verify_exp
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from auth_middleware import get_auth_middleware
 
 logger = get_logger(__name__)
 

@@ -186,7 +186,7 @@ async def verify_authority_token(token: str) -> Optional[Dict[str, Any]]:
         Normalized claims dict, or ``None`` on verification failure.
     """
     # D1 (#10158): check OIDC token claim cache before expensive JWKS verify
-    from services.oidc_token_cache import get_cached_claims, cache_claims  # noqa: PLC0415
+    from services.oidc_token_cache import cache_claims, get_cached_claims  # noqa: PLC0415
 
     cached = await get_cached_claims(token)
     if cached is not None:

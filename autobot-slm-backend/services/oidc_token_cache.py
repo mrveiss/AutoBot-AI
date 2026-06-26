@@ -52,9 +52,7 @@ def _resolve_cache_ttl() -> int:
     try:
         val = int(raw)
     except ValueError:
-        logger.warning(
-            "%s=%r is not an integer; using default %d s", _ENV_CACHE_TTL, raw, _CACHE_TTL_DEFAULT
-        )
+        logger.warning("%s=%r is not an integer; using default %d s", _ENV_CACHE_TTL, raw, _CACHE_TTL_DEFAULT)
         return _CACHE_TTL_DEFAULT
     if val < 0:
         logger.warning("%s=%d is negative; treating as 0 (cache disabled)", _ENV_CACHE_TTL, val)

@@ -61,9 +61,7 @@ def _resolve_step_up_max_age() -> int:
     try:
         val = int(raw)
     except ValueError:
-        logger.warning(
-            "%s=%r is not an integer; using default %d s", _ENV_MAX_AGE, raw, _STEP_UP_DEFAULT
-        )
+        logger.warning("%s=%r is not an integer; using default %d s", _ENV_MAX_AGE, raw, _STEP_UP_DEFAULT)
         return _STEP_UP_DEFAULT
     if val < 0:
         logger.warning("%s=%d is negative; treating as 0 (step-up disabled)", _ENV_MAX_AGE, val)

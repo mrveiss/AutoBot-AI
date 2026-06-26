@@ -85,9 +85,7 @@ async def is_rs256_jti_revoked(jti: str) -> bool:
     """
     redis = await get_async_redis_client()
     if redis is None:
-        logger.warning(
-            "rs256_denylist: Redis unavailable; treating jti=%r as NOT revoked (fail-open)", jti
-        )
+        logger.warning("rs256_denylist: Redis unavailable; treating jti=%r as NOT revoked (fail-open)", jti)
         return False
     exists = await redis.exists(_rs256_denylist_key(jti))
     return bool(exists)
