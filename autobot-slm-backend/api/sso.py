@@ -28,6 +28,9 @@ from user_management.schemas.sso import (
     SSOProviderListResponse,
     SSOProviderResponse,
     SSOProviderUpdate,
+    SSORotateKEKRequest,
+    SSORotateValueRequest,
+    SSORotationResponse,
     SSOTestResponse,
 )
 from user_management.services.base_service import TenantContext
@@ -152,6 +155,8 @@ async def get_providers_health(
     )
     rows = {row.resource_id: row for row in agg_result.all()}
 
+    from user_management.services.sso_rotation import check_staleness
+
     results: list[SSOProviderHealthResponse] = []
     for provider in providers:
         pid_str = str(provider.id)
@@ -160,6 +165,7 @@ async def get_providers_health(
         failure_count = int(row.failure_count) if row else 0
         last_success_at = row.last_success_at if row else None
         health_status = _derive_health_status(success_count, failure_count, last_success_at, window_start)
+        staleness = check_staleness(provider.id, provider.config)
         results.append(
             SSOProviderHealthResponse(
                 provider_id=provider.id,
@@ -168,6 +174,7 @@ async def get_providers_health(
                 failure_count=failure_count,
                 last_success_at=last_success_at,
                 health_status=health_status,
+                secret_staleness=staleness,
             )
         )
 
@@ -277,3 +284,84 @@ async def get_provider_template(
 ) -> dict:
     """Get pre-filled endpoint template for a known SSO provider type."""
     return SSOService.get_provider_endpoint_template(provider_type, domain)
+
+
+# ---------------------------------------------------------------------------
+# Secret rotation endpoints (#10154)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{provider_id}/rotate-kek", response_model=SSORotationResponse)
+async def rotate_secret_kek(
+    provider_id: uuid.UUID,
+    body: SSORotateKEKRequest,
+    current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
+    db: AsyncSession = Depends(get_slm_db),
+) -> SSORotationResponse:
+    """Rotate the wrapping KEK for a provider secret (rewrap DEKs, plaintext unchanged).
+
+    Use this for periodic key-hygiene cycles after rotating AUTOBOT_SECRETS_ROOT_KEY.
+    """
+    from user_management.services.sso_rotation import SSORotationError, rotate_kek
+
+    logger.info("KEK rotation requested: provider=%s field=%s", provider_id, body.field)
+    actor_id = current_user.get("user_id") or current_user.get("username")
+    try:
+        result = await rotate_kek(
+            db,
+            provider_id=provider_id,
+            field=body.field,
+            new_root_key_b64=body.new_root_key,
+            actor_id=str(actor_id) if actor_id else None,
+        )
+        await db.commit()
+    except SSORotationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("KEK rotation failed: provider=%s field=%s: %s", provider_id, body.field, type(exc).__name__)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="rotation failed") from exc
+    return SSORotationResponse(
+        provider_id=provider_id,
+        field=body.field,
+        action=result["action"],
+        vault_id=result["vault_id"],
+        rotated_at=result["rotated_at"],
+    )
+
+
+@router.post("/{provider_id}/rotate-value", response_model=SSORotationResponse)
+async def rotate_secret_value(
+    provider_id: uuid.UUID,
+    body: SSORotateValueRequest,
+    current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
+    db: AsyncSession = Depends(get_slm_db),
+) -> SSORotationResponse:
+    """Re-seal a provider secret with a new plaintext value (operator-initiated rotation).
+
+    Use this when the client secret has been rotated at the IdP.
+    """
+    from user_management.services.sso_rotation import SSORotationError, rotate_value
+
+    logger.info("Value rotation requested: provider=%s field=%s", provider_id, body.field)
+    actor_id = current_user.get("user_id") or current_user.get("username")
+    try:
+        result = await rotate_value(
+            db,
+            provider_id=provider_id,
+            field=body.field,
+            new_value=body.new_value,
+            actor_id=str(actor_id) if actor_id else None,
+        )
+        await db.commit()
+    except SSORotationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Value rotation failed: provider=%s field=%s: %s", provider_id, body.field, type(exc).__name__)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="rotation failed") from exc
+    return SSORotationResponse(
+        provider_id=provider_id,
+        field=body.field,
+        action=result["action"],
+        vault_id=result["vault_id"],
+        rotated_at=result["rotated_at"],
+    )
