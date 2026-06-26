@@ -69,28 +69,18 @@ export function filterByFeatureFlag(
 export const navItems: NavItem[] = [
   { to: '/home', labelKey: 'nav.home', icon: 'M10.707 2.293a1 1 0 00-1.414 0l-7 7v11a1 1 0 001 1h2a1 1 0 001-1v-5a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 001 1h2a1 1 0 001-1v-7l7-7a1 1 0 000-1.414z', iconRule: 'evenodd' },
   { to: '/chat', labelKey: 'nav.chat', icon: 'M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z', iconRule: 'evenodd' },
-  // GH#8757: AI Documents — saved chat outputs, now reachable from main nav
-  { to: '/documents', labelKey: 'nav.documents', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', iconStroke: true },
+  // GH#8757: AI Documents and the Transcriber moved into the Knowledge sidebar
+  // (BROWSE group) — see KnowledgeView.vue. Routes live under /knowledge/* now;
+  // legacy /documents and /transcriber paths redirect there (router/index.ts).
   { to: '/knowledge', labelKey: 'nav.knowledge', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
   { to: '/automation', labelKey: 'nav.automation', icon: 'M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z', iconRule: 'evenodd' },
   { to: '/analytics', labelKey: 'nav.analytics', iconPaths: ['M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z', 'M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z'] },
-  // Issue #4703 / #6634: single Agents nav entry — Activity and Heartbeat are reached as tabs
-  { to: '/agents/registry', labelKey: 'nav.agentRegistry', icon: 'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18', iconStroke: true },
+  // Agents nav entry removed (TASK 1c): /agents/registry duplicates SLM Admin's
+  // /slm/agents/local-agents. Route is kept in router/index.ts for deep links.
   // GH#8748: LLC views consolidated to one "Company OS" entry (was 5 separate items)
   // GH#9627: entry point is the company selector; LLC sub-views are reached
   // via the contextual LLC sidebar once a company is selected.
   { to: '/llc/select-company', labelKey: 'nav.companyOs', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', iconStroke: true },
-  // Issue #9044: Transcriber — audio/video transcription module.
-  // Shipped feature: fails OPEN (stays visible if VITE_FEATURE_TRANSCRIBER is
-  // unset); set the env var to 'false' to hide it.
-  {
-    to: '/transcriber',
-    labelKey: 'nav.transcriber',
-    icon: 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z',
-    iconStroke: true,
-    featureFlag: 'transcriber',
-    featureDefaultVisible: true,
-  },
   // Issue #9890: Vision Automation is reachable via Workflow Builder sidebar + direct route.
   // It is NOT in the primary nav rail. To gate a future entry, add a `featureFlag`
   // (and `featureDefaultVisible: true` only if it should ship visible by default).

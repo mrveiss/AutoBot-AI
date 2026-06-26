@@ -26,7 +26,9 @@ class ApiEndpointMapper {
    * @returns {Promise<Response>} Response object with fallback flag
    */
   async fetchWithFallback(endpoint, options = {}) {
-    const { timeout = 5000, ...fetchOptions } = options
+    // BUG7: 5s was too aggressive and aborted slow in-flight polls. 10s matches
+    // the initialization timeout used elsewhere.
+    const { timeout = 10000, ...fetchOptions } = options
     const url = `${this.baseUrl}${endpoint}`
 
     // Check cache first
@@ -68,7 +70,14 @@ class ApiEndpointMapper {
 
       return response
     } catch (error) {
-      logger.warn(`[ApiEndpointMapper] Fetch failed for ${endpoint}, using fallback:`, error.message)
+      // BUG7: AbortError means the request was intentionally cancelled (our
+      // timeout firing, or the component unmounting mid-poll). That is expected
+      // for a polled endpoint — fall back quietly instead of a WARN every cycle.
+      if (error.name === 'AbortError') {
+        logger.debug(`[ApiEndpointMapper] Fetch aborted for ${endpoint} (timeout/unmount), using fallback`)
+      } else {
+        logger.warn(`[ApiEndpointMapper] Fetch failed for ${endpoint}, using fallback:`, error.message)
+      }
 
       // Use fallback data if available
       const fallback = this.fallbackData.get(endpoint) || this._getDefaultFallback(endpoint)

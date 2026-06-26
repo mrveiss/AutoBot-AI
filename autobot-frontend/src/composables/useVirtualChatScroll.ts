@@ -22,6 +22,7 @@ import {
 } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import type { ChatMessage } from '@/stores/useChatStore'
+import { useDisplaySettings } from '@/composables/useDisplaySettings'
 
 interface UseVirtualChatScrollOptions {
   messagesContainerRef: Ref<HTMLElement | undefined>
@@ -42,6 +43,8 @@ export function useVirtualChatScroll(opts: UseVirtualChatScrollOptions) {
 
   const scrollContainerRef = ref<HTMLElement | null>(null)
   const isStuckToBottom = ref(true)
+  // Respect the user's "Auto-scroll" toggle (shared singleton setting).
+  const { displaySettings } = useDisplaySettings()
 
   // --- Tiered height estimate by message properties ---
   const estimateSize = (index: number): number => {
@@ -91,6 +94,8 @@ export function useVirtualChatScroll(opts: UseVirtualChatScrollOptions) {
 
   const scrollToBottom = () => {
     if (!isStuckToBottom.value) return
+    // Bug fix: honor the "Auto-scroll" setting — when off, never force-scroll.
+    if (!displaySettings.value.autoScroll) return
     const count = filteredMessages.value.length
     if (count > 0) {
       virtualizer.value.scrollToIndex(count - 1, {

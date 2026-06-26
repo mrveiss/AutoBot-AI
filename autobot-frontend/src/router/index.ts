@@ -161,6 +161,61 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // TASK 1a (#3245): AI Documents migrated under Knowledge sidebar.
+        // Legacy /documents + /documents/:docId redirect here (see below).
+        path: 'documents',
+        name: 'knowledge-documents',
+        component: () => import('@/views/DocumentsView.vue'),
+        meta: {
+          title: 'AI Documents',
+          parent: 'knowledge'
+        },
+        children: [
+          {
+            path: ':docId',
+            name: 'document-detail',
+            component: () => import('@/views/DocumentsView.vue'),
+            props: true,
+            meta: {
+              title: 'AI Document',
+              parent: 'knowledge'
+            }
+          }
+        ]
+      },
+      {
+        // TASK 1b (#9044): Transcriber migrated under Knowledge sidebar.
+        // Legacy /transcriber/* redirects here (see below). Child route names
+        // are preserved so name-based navigation keeps working.
+        path: 'transcriber',
+        name: 'knowledge-transcriber',
+        component: () => import('@/views/transcriber/TranscriberLayout.vue'),
+        meta: {
+          title: 'Transcriber',
+          parent: 'knowledge'
+        },
+        children: [
+          {
+            path: '',
+            name: 'transcriber-projects',
+            component: () => import('@/views/transcriber/ProjectsView.vue'),
+            meta: { title: 'Projects', parent: 'knowledge' }
+          },
+          {
+            path: 'projects/:projectId',
+            name: 'transcriber-project-detail',
+            component: () => import('@/views/transcriber/ProjectDetailView.vue'),
+            meta: { title: 'Project', parent: 'knowledge' }
+          },
+          {
+            path: 'projects/:projectId/recordings/:recordingId',
+            name: 'transcriber-transcript',
+            component: () => import('@/views/transcriber/TranscriptView.vue'),
+            meta: { title: 'Transcript', parent: 'knowledge' }
+          }
+        ]
+      },
+      {
         path: 'categories',
         name: 'knowledge-categories',
         component: () => import('@/components/knowledge/KnowledgeBrowser.vue'),
@@ -761,29 +816,15 @@ export const routes: RouteRecordRaw[] = [
     redirect: '/analytics/codebase'
   },
   // Issue #902: Dev Tools moved into /analytics/dev-tools tab
-  // Issue #3245: AI Document editor — persistent editable AI output documents
+  // TASK 1a: AI Documents moved under /knowledge/documents. Keep legacy paths
+  // as redirects so existing bookmarks and deep links keep working.
   {
     path: '/documents',
-    name: 'documents',
-    component: () => import('@/views/DocumentsView.vue'),
-    meta: {
-      title: 'AI Documents',
-      icon: 'fas fa-file-alt',
-      description: 'View and edit AI-generated documents saved from chat',
-      requiresAuth: true,
-    },
-    children: [
-      {
-        path: ':docId',
-        name: 'document-detail',
-        component: () => import('@/views/DocumentsView.vue'),
-        props: true,
-        meta: {
-          title: 'AI Document',
-          parent: 'documents',
-        },
-      },
-    ],
+    redirect: '/knowledge/documents',
+  },
+  {
+    path: '/documents/:docId',
+    redirect: (to) => ({ path: `/knowledge/documents/${to.params.docId}` }),
   },
   // MVA-360: Live Canvas — route always registered (preserves bookmarks/direct nav);
   // nav item gated by VITE_FEATURE_CANVAS via navItems.ts (GH#8758)
@@ -1158,29 +1199,20 @@ export const routes: RouteRecordRaw[] = [
   },
   // Issue #9044: Transcriber — audio/video transcription module
   {
+    // TASK 1b: Transcriber moved under /knowledge/transcriber. The real route
+    // tree now lives as a child of /knowledge; these redirects preserve legacy
+    // /transcriber bookmarks and deep links.
     path: '/transcriber',
-    component: () => import('@/views/transcriber/TranscriberLayout.vue'),
-    meta: { requiresAuth: true, title: 'Transcriber' },
-    children: [
-      {
-        path: '',
-        name: 'transcriber-projects',
-        component: () => import('@/views/transcriber/ProjectsView.vue'),
-        meta: { title: 'Projects' },
-      },
-      {
-        path: 'projects/:projectId',
-        name: 'transcriber-project-detail',
-        component: () => import('@/views/transcriber/ProjectDetailView.vue'),
-        meta: { title: 'Project' },
-      },
-      {
-        path: 'projects/:projectId/recordings/:recordingId',
-        name: 'transcriber-transcript',
-        component: () => import('@/views/transcriber/TranscriptView.vue'),
-        meta: { title: 'Transcript' },
-      },
-    ],
+    redirect: '/knowledge/transcriber',
+  },
+  {
+    path: '/transcriber/:pathMatch(.*)*',
+    redirect: (to) => {
+      const rest = Array.isArray(to.params.pathMatch)
+        ? to.params.pathMatch.join('/')
+        : to.params.pathMatch || ''
+      return { path: rest ? `/knowledge/transcriber/${rest}` : '/knowledge/transcriber' }
+    },
   },
   {
     path: '/:pathMatch(.*)*',

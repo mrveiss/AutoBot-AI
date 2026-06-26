@@ -84,7 +84,11 @@ class ModelOptimizer:
         self._redis_client = None
         self._models_cache: Dict[str, ModelInfo] = {}
         self._performance_history: Dict[str, Any] = {}
-        self._ollama_base_url = ssot_config.ollama_url
+        # Bug fix: 0.0.0.0 is a server bind address, not a valid outbound connect
+        # target. If Ollama is configured that way, /api/tags would fail and every
+        # model would report available:false. Normalize to loopback.
+        _ollama_url = ssot_config.ollama_url or ""
+        self._ollama_base_url = _ollama_url.replace("//0.0.0.0:", "//127.0.0.1:").replace("//0.0.0.0/", "//127.0.0.1/")
 
         # Issue #378: Lock for Redis client initialization
         self._redis_init_lock = asyncio.Lock()
