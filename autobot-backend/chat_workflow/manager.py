@@ -2742,13 +2742,8 @@ before summarizing.
             existing = await chat_mgr.load_session(session_id)
             if existing:
                 last = existing[-1]
-                if (
-                    last.get("sender") == "user"
-                    and (last.get("text") or "").strip() == (message or "").strip()
-                ):
-                    logger.debug(
-                        "Skipping duplicate user message (retry) for session=%s", session_id
-                    )
+                if last.get("sender") == "user" and (last.get("text") or "").strip() == (message or "").strip():
+                    logger.debug("Skipping duplicate user message (retry) for session=%s", session_id)
                     return
 
             await chat_mgr.add_message(

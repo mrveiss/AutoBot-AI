@@ -961,9 +961,7 @@ async def _persist_error_turn(manager, state: ChatState) -> None:
     try:
         await manager._persist_workflow_messages(session_id, wf_messages, "")
     except Exception as exc:  # noqa: BLE001
-        logger.error(
-            "Failed to persist error turn for session %s: %s", session_id, exc, exc_info=True
-        )
+        logger.error("Failed to persist error turn for session %s: %s", session_id, exc, exc_info=True)
 
 
 async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict:
