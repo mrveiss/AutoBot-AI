@@ -64,8 +64,20 @@ describe('useLlcCompanyStore (GH#9627)', () => {
     const store = useLlcCompanyStore()
     await store.fetchCompanies()
     expect(store.error).toBe('boom')
+    expect(store.unavailable).toBe(false)
     expect(store.isLoading).toBe(false)
     expect(store.companies).toEqual([])
+  })
+
+  it('fetchCompanies flags unavailable (not error) on HTTP 503', async () => {
+    getMock.mockRejectedValue(
+      new Error('HTTP 503: This feature requires PostgreSQL (single_company or multi_company mode).'),
+    )
+    const store = useLlcCompanyStore()
+    await store.fetchCompanies()
+    expect(store.unavailable).toBe(true)
+    expect(store.error).toBeNull() // raw backend detail is never surfaced as an error
+    expect(store.isLoading).toBe(false)
   })
 
   it('selectCompany sets the active id and selectedCompany resolves it', async () => {
