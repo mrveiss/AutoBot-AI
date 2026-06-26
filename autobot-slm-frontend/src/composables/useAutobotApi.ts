@@ -105,6 +105,24 @@ export interface Agent {
   config: Record<string, unknown>
 }
 
+// GH#8996: admin cross-user view of all active shared chat links
+export interface SharedLinkAdminItem {
+  id: string
+  token: string
+  session_id: string
+  owner: string
+  has_password: boolean
+  expires_at: string | null
+  created_at: string
+}
+
+// Envelope from create_success_response: { success, data: { links, count }, message, timestamp }
+export interface SharedLinksAdminResponse {
+  success: boolean
+  data: { links: SharedLinkAdminItem[]; count: number }
+  message: string
+}
+
 export interface RUMMetrics {
   page_views: number
   unique_users: number
@@ -739,6 +757,15 @@ export function useAutobotApi() {
   }
 
   // =============================================================================
+  // Shared Chat Links (GH#8996 - admin cross-user view)
+  // =============================================================================
+
+  async function getSharedLinksAdmin(): Promise<SharedLinksAdminResponse> {
+    const response = await client.get<SharedLinksAdminResponse>('/chat/shared-links/admin')
+    return response.data
+  }
+
+  // =============================================================================
   // Browser MCP API (Issue #835 - browser automation via MCP protocol)
   // =============================================================================
 
@@ -987,6 +1014,8 @@ export function useAutobotApi() {
     executeAgentGoal,
     // RUM
     getRUMMetrics,
+    // Shared Chat Links (GH#8996)
+    getSharedLinksAdmin,
     // Voice (Issue #835)
     getVoiceConfig,
     updateVoiceConfig,

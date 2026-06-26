@@ -106,9 +106,17 @@ class ConfigService:
         default_api_endpoint = _ssot.backend_url if _ssot else f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}"
         default_port = _ssot.port.backend if _ssot else BACKEND_PORT
 
+        # #10502: report the reachable backend host, not the bind-all sentinel.
+        # "0.0.0.0" is the listen address; the audit/security dashboard needs
+        # the address clients actually connect to. Default to the SSOT host and
+        # rewrite an explicitly-configured bind-all value to the reachable host.
+        configured_host = get("backend.server_host", BACKEND_HOST_IP)
+        if configured_host == NetworkConstants.BIND_ALL_INTERFACES:
+            configured_host = BACKEND_HOST_IP
+
         return {
             "api_endpoint": get("backend.api_endpoint", default_api_endpoint),
-            "server_host": get("backend.server_host", NetworkConstants.BIND_ALL_INTERFACES),
+            "server_host": configured_host,
             "server_port": get("backend.server_port", default_port),
             "chat_data_dir": get("backend.chat_data_dir", "data/chats"),
             "chat_history_file": get("backend.chat_history_file", "data/chat_history.json"),

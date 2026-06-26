@@ -27,6 +27,12 @@ also asserts:
 7. NO skip-path exists — no warn-and-skip branch, and the backup never carries
    ``failed_when: false``.
 
+#10046 consolidates the whole strict sequence (backup -> baseline -> upgrade)
+into a single shared include (``_shared/tasks/migrate_backend_db.yml``) that
+both playbooks call. The backup itself is now reached two include levels deep
+(playbook -> migrate_backend_db.yml -> pre_migration_backup.yml), so the
+include resolver below recurses through nested includes.
+
 Pure YAML inspection — no Ansible runtime needed.
 """
 
@@ -38,7 +44,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 ANSIBLE_ROOT = REPO_ROOT / "autobot-slm-backend" / "ansible"
 SETUP_PLAYBOOK = ANSIBLE_ROOT / "setup-user-backend.yml"
 UPDATE_PLAYBOOK = ANSIBLE_ROOT / "playbooks" / "update-all-nodes.yml"
-# Reusable fail-closed backup task file included by both playbooks (#10045).
+# Shared strict migration sequence included by both playbooks (#10046).
+MIGRATE_TASKS = ANSIBLE_ROOT / "_shared" / "tasks" / "migrate_backend_db.yml"
+# Reusable fail-closed backup task file included by the sequence (#10045).
 BACKUP_TASKS = ANSIBLE_ROOT / "_shared" / "tasks" / "pre_migration_backup.yml"
 
 
@@ -66,24 +74,35 @@ def _include_target(task, base_dir: Path):
     return None
 
 
+def _expand_with_includes(items, base_dir: Path):
+    """Yield tasks descending into blocks AND included task files (recursively).
+
+    Included paths resolve relative to the including FILE's directory, so each
+    nested include carries its own base_dir down. (#10046: the backup now lives
+    two include levels below the playbook.)
+    """
+    for task in _flatten_tasks(items):
+        target = _include_target(task, base_dir)
+        if target is not None and target.exists():
+            included = yaml.safe_load(target.read_text(encoding="utf-8"))
+            yield from _expand_with_includes(included, target.parent)
+        else:
+            yield task
+
+
 def _expanded_tasks(path: Path):
     """Yield (play, task) for every task, descending into included task files.
 
     Included files have no play context of their own, so the including play is
-    propagated to the included tasks. (#10045: the pre-migration backup now
-    lives in a shared include.)
+    propagated to the included tasks. (#10045/#10046: the strict migration
+    sequence — including the pre-migration backup — now lives in shared
+    includes.)
     """
     plays = yaml.safe_load(path.read_text(encoding="utf-8"))
     for play in plays if isinstance(plays, list) else [plays]:
         for section in ("pre_tasks", "tasks", "post_tasks"):
-            for task in _flatten_tasks(play.get(section)):
-                target = _include_target(task, path.parent)
-                if target is not None and target.exists():
-                    included = yaml.safe_load(target.read_text(encoding="utf-8"))
-                    for sub in _flatten_tasks(included):
-                        yield play, sub
-                else:
-                    yield play, task
+            for task in _expand_with_includes(play.get(section), path.parent):
+                yield play, task
 
 
 # Backwards-compatible alias used by the existing tests.
@@ -174,6 +193,28 @@ def test_update_playbook_migrate_play_is_fatal():
             )
             return
     raise AssertionError("update-all-nodes.yml: no upgrade head task found")
+
+
+# --- #10046: shared migration sequence ----------------------------------------
+
+
+def test_shared_migration_task_file_exists():
+    assert MIGRATE_TASKS.exists(), f"missing shared migration sequence task file: {MIGRATE_TASKS}"
+
+
+def test_shared_migration_sequence_is_ordered():
+    """The shared include keeps backup -> baseline -> upgrade ordering (#10046)."""
+    tasks = list(_expand_with_includes(yaml.safe_load(MIGRATE_TASKS.read_text(encoding="utf-8")), MIGRATE_TASKS.parent))
+    texts = [_task_text(t) for t in tasks]
+    backup_idx = next((i for i, x in enumerate(texts) if "pg_dump" in x), None)
+    baseline_idx = next((i for i, x in enumerate(texts) if "migrations.baseline" in x), None)
+    upgrade_idx = next((i for i, x in enumerate(texts) if "upgrade head" in x), None)
+    assert backup_idx is not None, "migrate_backend_db.yml: no pg_dump backup step"
+    assert baseline_idx is not None, "migrate_backend_db.yml: no baseline-adoption step"
+    assert upgrade_idx is not None, "migrate_backend_db.yml: no alembic upgrade step"
+    assert (
+        backup_idx < baseline_idx < upgrade_idx
+    ), "migrate_backend_db.yml: must run backup -> baseline -> upgrade head in order"
 
 
 # --- #10045: fail-closed backup contract --------------------------------------

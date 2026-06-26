@@ -566,6 +566,7 @@ import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
 import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
+import { useRuntimeFeaturesStore } from '@/stores/useRuntimeFeaturesStore'
 import { useSystemStatus } from '@/composables/useSystemStatus'
 import { useHostSelection } from '@/composables/useHostSelection';
 import { useNavOverflow } from '@/composables/useNavOverflow'
@@ -621,6 +622,9 @@ export default {
     const userStore = useUserStore();
     const chatStore = useChatStore();
     const knowledgeStore = useKnowledgeStore();
+    // #10502: runtime (deployment) feature flags from /api/frontend-config,
+    // used to gate the Company OS nav item in single_user deployments.
+    const runtimeFeaturesStore = useRuntimeFeaturesStore();
     const router = useRouter();
     const route = useRoute();
 
@@ -916,6 +920,10 @@ export default {
     onMounted(async () => {
       logger.debug('Initializing optimized AutoBot application...');
 
+      // #10502: load deployment feature flags (e.g. company_os_enabled) so the
+      // nav rail can hide modules unavailable in this deployment mode.
+      void runtimeFeaturesStore.load();
+
       // Add global click and keyboard listeners for mobile nav
       document.addEventListener('click', closeNavbarOnClickOutside);
       document.addEventListener('keydown', closeNavbarOnEscape);
@@ -1001,7 +1009,15 @@ export default {
     // Nav overflow: ref for container, filtered/visible/overflow computed slices
     const navContainerRef = ref<HTMLElement | null>(null)
 
-    const filteredNavItems = computed(() => filterByFeatureFlag(navItems))
+    // #10502: hide the Company OS entry when the deployment has no PostgreSQL
+    // company mode (single_user) — its endpoints return 503 there. The runtime
+    // flag defaults fail-closed until /frontend-config resolves.
+    const filteredNavItems = computed(() =>
+      filterByFeatureFlag(navItems).filter(
+        (item) =>
+          item.to !== '/llc/select-company' || runtimeFeaturesStore.companyOsEnabled,
+      ),
+    )
 
     const filteredProfileMenuItems = computed(() =>
       filterByFeatureFlag(profileMenuItems)

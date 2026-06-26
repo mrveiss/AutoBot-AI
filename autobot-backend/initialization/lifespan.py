@@ -1435,10 +1435,13 @@ async def _wire_npu_task_queue() -> None:
 
 
 async def _init_voice_interface(app: FastAPI) -> None:
-    """Initialize VoiceInterface and attach it to app.state (#3848).
+    """Initialize the optional local VoiceInterface and attach it to app.state (#3848).
 
-    NON-CRITICAL: voice endpoints return 503 when this is unavailable.
-    Runs in Phase 2 because voice hardware is not required for core operation.
+    NON-CRITICAL and OPTIONAL: this is the legacy local (pyttsx3) interface for
+    *server-side* speak + speech-to-text (/voice/listen). Text-to-speech for
+    clients is served by the pocket-tts worker (tts_client) regardless, so its
+    absence does NOT disable TTS — /voice/synthesize, /voice/speak and
+    /voice/stream all work via the worker. Only local /voice/listen (STT) needs it.
     """
     logger.info("[ 99%%] Voice Interface: Initializing...")
     try:
@@ -1448,8 +1451,9 @@ async def _init_voice_interface(app: FastAPI) -> None:
         app.state.voice_interface = voice_interface
         logger.info("[ 99%%] Voice Interface: Initialized and attached to app.state")
     except Exception as e:
-        logger.warning(
-            "Voice interface initialization failed (non-critical): %s — " "voice endpoints will return 503",
+        logger.info(
+            "Local voice_interface unavailable (optional): %s — TTS still works via "
+            "the pocket-tts worker; only local speech-to-text (/voice/listen) is disabled.",
             e,
         )
         app.state.voice_interface = None

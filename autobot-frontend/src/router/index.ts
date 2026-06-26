@@ -917,19 +917,6 @@ export const routes: RouteRecordRaw[] = [
       hideInNav: true,
     },
   },
-  // GH#8996: Admin cross-user view of all active shared chat links (AC4)
-  {
-    path: '/admin/shared-links',
-    name: 'admin-shared-links',
-    component: () => import('@/views/Admin/SharedLinksAdminView.vue'),
-    meta: {
-      title: 'Shared Chat Links',
-      description: 'View all active shared chat links across users',
-      requiresAuth: true,
-      admin: true,
-      hideInNav: true,
-    },
-  },
   // GH#6470: Budget policy management (admin-only)
   {
     path: '/admin/budget-policies',

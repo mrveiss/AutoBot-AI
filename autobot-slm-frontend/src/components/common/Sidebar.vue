@@ -45,7 +45,15 @@ const badgeColor = computed(() =>
   systemUpdates.updateCount.value > 0 ? '#f97316' : '#f59e0b',
 )
 
-const navItems = [
+interface NavItem {
+  name: string
+  path: string
+  icon: string
+  showBadge?: boolean
+  adminOnly?: boolean
+}
+
+const navItems: NavItem[] = [
   { name: 'Fleet Overview', path: '/fleet', icon: 'grid' },
   // Issue #850: Consolidated Services and Roles into Orchestration
   { name: 'Orchestration', path: '/orchestration', icon: 'orchestration' },
@@ -67,9 +75,17 @@ const navItems = [
   { name: 'Monitoring', path: '/monitoring', icon: 'chart' },
   { name: 'Security', path: '/security', icon: 'shield' },
   { name: 'Tools', path: '/tools', icon: 'tools' },
+  // GH#8996 / #10488: Shared chat links — admin-only operator view
+  { name: 'Shared Links', path: '/shared-links', icon: 'link', adminOnly: true },
 ]
 
 const currentPath = computed(() => route.path)
+
+// Admin-only nav items (e.g. Shared Links) are hidden from non-admins;
+// the router guard also redirects them away from admin routes.
+const visibleNavItems = computed(() =>
+  navItems.filter((item) => !item.adminOnly || authStore.isAdmin),
+)
 
 /**
  * Check if a nav item is active, supporting :tab? subroutes.
@@ -105,7 +121,7 @@ function navigate(path: string): void {
  * Helper for Sidebar keyboard navigation (Issue #754).
  */
 function handleNavKeydown(event: KeyboardEvent, index: number): void {
-  const items = navItems
+  const items = visibleNavItems.value
   let targetIndex = -1
 
   switch (event.key) {
@@ -223,7 +239,7 @@ onUnmounted(() => {
     <!-- Navigation -->
     <nav class="flex-1 p-4" aria-label="Main navigation">
       <ul class="space-y-1" role="menubar" aria-orientation="vertical">
-        <li v-for="(item, index) in navItems" :key="item.path" role="none">
+        <li v-for="(item, index) in visibleNavItems" :key="item.path" role="none">
           <button
             @click="navigate(item.path)"
             @keydown="handleNavKeydown($event, index)"
@@ -307,6 +323,10 @@ onUnmounted(() => {
               </svg>
               <svg v-else-if="item.icon === 'tools'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
+              </svg>
+              <!-- GH#8996: Shared Links icon (link/chain) -->
+              <svg v-else-if="item.icon === 'link'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m6.328-1.328a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5" />
               </svg>
               <!-- Issue #731: Skills icon (lightning bolt / sparkle) -->
               <svg v-else-if="item.icon === 'skills'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

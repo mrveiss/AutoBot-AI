@@ -164,10 +164,13 @@ class Settings(BaseSettings):
     port: int = 8000
     debug: bool = False
 
-    # SLM self-identity (#9956)
-    # The SLM manager's own DB node_id. Deployments may rename the node, so this
-    # is read from the environment instead of being hardcoded. The default
-    # matches the inventory default (slm_server host in slm-nodes.yml).
+    # SLM self-identity (#9956, #10110)
+    # The SLM manager's own DB node_id — the one well-known, stable identity
+    # in the registry-driven model (#10110: the DB node registry is the source
+    # of truth; every other node self-registers with a uuid4()[:8] node_id).
+    # Deployments may rename the manager, so this is read from the environment
+    # instead of being hardcoded; the default matches the legacy slm_server
+    # fallback host in slm-nodes.yml.
     slm_node_id: str = os.getenv("SLM_NODE_ID", "00-SLM-Manager")
 
     # Authentication
