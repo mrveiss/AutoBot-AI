@@ -2727,11 +2727,30 @@ before summarizing.
             )
 
     async def _persist_user_message(self, session_id: str, message: str) -> None:
-        """Persist user message immediately to prevent data loss on restart."""
+        """Persist user message immediately to prevent data loss on restart.
+
+        Bug fix: de-duplicate retries. When a previous turn failed, the user
+        often re-sends the same text. If the last persisted message is an
+        identical, still-unanswered user message, skip writing a duplicate so
+        the session does not accumulate repeated user turns with no reply.
+        """
         from chat_history import ChatHistoryManager
 
         try:
             chat_mgr = ChatHistoryManager()
+
+            existing = await chat_mgr.load_session(session_id)
+            if existing:
+                last = existing[-1]
+                if (
+                    last.get("sender") == "user"
+                    and (last.get("text") or "").strip() == (message or "").strip()
+                ):
+                    logger.debug(
+                        "Skipping duplicate user message (retry) for session=%s", session_id
+                    )
+                    return
+
             await chat_mgr.add_message(
                 sender="user",
                 text=message,
