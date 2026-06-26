@@ -5,9 +5,18 @@
 #
 # Seed Fleet Nodes into SLM Database
 #
-# Registers all inventory nodes via the SLM REST API so that
-# heartbeats from agents are accepted and the fleet dashboard
-# shows all machines.
+# Registers the SLM manager and any DISTINCT-IP fleet machines via the SLM
+# REST API so heartbeats are accepted and the fleet dashboard shows all hosts.
+#
+# #10110: the legacy NN-Name inventory template (`00-SLM-Manager`,
+# `01-Backend`, ...) is NO LONGER the source of node identity. On a co-located
+# install every NN-Name host collapses to the SLM manager's own address, so
+# seeding them all would mint phantom duplicate records pointing at one machine.
+# The DB node registry is the single source of truth: the SLM manager is seeded
+# here (the one well-known identity), and every other co-located component is
+# owned by runtime self-registration (`_ensure_local_node` + agent enroll),
+# which mints real `uuid4()[:8]` node_ids. On a genuine multi-host fleet each
+# template host has a distinct real IP and is still seeded normally.
 #
 # Prerequisites:
 #   - SLM backend must be running on the SLM Manager node
@@ -46,6 +55,15 @@
       - autobot-slm-agent
       - autobot-slm-database
       - autobot-monitoring
+
+    # #10110: the SLM manager's own inventory address. Any other NN-Name host
+    # that resolves to this same address is a co-located collapse, not a real
+    # distinct machine, and is left to runtime self-registration.
+    slm_manager_ip: "{{ hostvars[slm_manager_inventory_host]['ansible_host'] | default('127.0.0.1') }}"
+    _loopback_ips:
+      - "127.0.0.1"
+      - "localhost"
+      - "::1"
 
 
   tasks:
@@ -90,6 +108,15 @@
         # 201 = created, 400 = already exists (idempotent)
         status_code: [201, 400]
         validate_certs: false
+      # #10110: seed the SLM manager always; skip any other NN-Name host that
+      # collapses to a loopback or to the SLM manager's own address — that is a
+      # co-located component owned by runtime self-registration, not a distinct
+      # machine. Genuine multi-host fleet members have a distinct real IP and
+      # are still seeded.
+      when: >-
+        item in (groups.get('slm_server', []) | default([]))
+        or (hostvars[item].ansible_host not in _loopback_ips
+            and hostvars[item].ansible_host != slm_manager_ip)
       loop: "{{ groups['slm_nodes'] }}"
       loop_control:
         label: "{{ item }} ({{ hostvars[item].ansible_host }})"
@@ -99,7 +126,9 @@
       ansible.builtin.debug:
         msg: >-
           {{ item.item }} ({{ hostvars[item.item].ansible_host }}):
-          {{ 'REGISTERED' if item.status == 201 else 'ALREADY EXISTS' }}
+          {{ 'SKIPPED (co-located — runtime-registered)'
+             if (item.skipped | default(false))
+             else ('REGISTERED' if item.status == 201 else 'ALREADY EXISTS') }}
       loop: "{{ register_results.results }}"
       loop_control:
         label: "{{ item.item }}"
