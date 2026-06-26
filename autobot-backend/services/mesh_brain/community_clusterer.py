@@ -2,14 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Leiden community clustering for anchor seeding in NeuralMeshRetriever (#4819).
+"""Community clustering for anchor seeding in NeuralMeshRetriever (#4819).
 
-Builds a NetworkX graph from MeshDB edges, runs Leiden community detection,
+Builds a NetworkX graph from MeshDB edges, runs Louvain community detection,
 selects the highest-degree node in each community as centroid, and promotes
 those centroids to anchor nodes via MeshDB.promote_to_anchor().
 
-graspologic is lazy-imported to avoid numba JIT startup overhead on every
-process start. The import only occurs when cluster_graph() is called.
+Uses NetworkX's built-in Louvain (weight-aware, deterministic via seed). This
+replaces graspologic Leiden, which pinned numpy<2.0 and could not install on
+Python 3.13+ (#10524). NetworkX is lazy-imported in the helpers below so module
+import stays cheap when clustering is unused.
 """
 
 from typing import Any
@@ -20,6 +22,20 @@ logger = get_logger(__name__)
 
 _MAX_COMMUNITY_FRACTION = 0.25
 _MIN_SPLIT_SIZE = 10
+# Fixed seed → deterministic community detection across runs (Louvain is randomized).
+_LOUVAIN_SEED = 42
+
+
+def _detect_communities(graph: Any) -> dict[Any, int]:
+    """Partition graph into communities, returning {node: community_id}.
+
+    Weight-aware Louvain via NetworkX — numpy-2 / py3.13 compatible. Replaces the
+    graspologic Leiden call (same return contract) without adding a dependency.
+    """
+    from networkx.algorithms.community import louvain_communities
+
+    communities = louvain_communities(graph, weight="weight", seed=_LOUVAIN_SEED)
+    return {node: comm_id for comm_id, nodes in enumerate(communities) for node in nodes}
 
 
 def cluster_graph(edges: list[dict]) -> list[str]:
@@ -36,11 +52,6 @@ def cluster_graph(edges: list[dict]) -> list[str]:
 
     import networkx as nx  # lazy import — avoids startup cost when clustering unused
 
-    try:
-        from graspologic.partition import leiden
-    except ImportError:
-        raise  # let caller handle missing dependency distinctly from empty-graph result
-
     G = nx.Graph()
     for e in edges:
         G.add_edge(e["from_node"], e["to_node"], weight=float(e["weight"]))
@@ -49,9 +60,9 @@ def cluster_graph(edges: list[dict]) -> list[str]:
         return []
 
     try:
-        partition: dict[Any, int] = leiden(G, trials=3)
+        partition: dict[Any, int] = _detect_communities(G)
     except Exception:
-        logger.exception("Leiden failed — falling back to empty partition")
+        logger.exception("Community detection failed — falling back to empty partition")
         return []
 
     communities: dict[int, list[str]] = {}
@@ -88,11 +99,9 @@ def _split_community(subgraph) -> list[str]:
         return list(subgraph.nodes)[:1]
 
     try:
-        from graspologic.partition import leiden
-
-        sub_partition = leiden(subgraph, trials=2)
+        sub_partition = _detect_communities(subgraph)
     except Exception:
-        logger.warning("_split_community Leiden failed; using single centroid")
+        logger.warning("_split_community detection failed; using single centroid")
         nodes = list(subgraph.nodes)
         return [_pick_centroid(subgraph, nodes)]
 
