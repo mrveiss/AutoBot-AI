@@ -36,6 +36,11 @@ SERVICES = [
         "description": "Main backend API server",
     },
     {
+        "id": "slm-backend",
+        "host": "10.0.0.1",
+        "description": "SLM control-plane backend (unified-secrets System-vault client, #10153)",
+    },
+    {
         "id": "frontend",
         "host": "10.0.0.2",
         "description": "Vue.js frontend web interface",
