@@ -31,6 +31,10 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
   const selectedCompanyId = ref<string>('')
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  // True when the backend reports LLC is not enabled for this deployment
+  // (single_user mode → HTTP 503). This is an expected state, NOT an error to
+  // surface to end users.
+  const unavailable = ref(false)
 
   const selectedCompany = computed(
     () => companies.value.find((c) => c.id === selectedCompanyId.value) ?? null,
@@ -43,6 +47,7 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
     const api = useApiClient()
     isLoading.value = true
     error.value = null
+    unavailable.value = false
     try {
       const resp = await api.get<LlcCompany[]>(COMPANIES_ENDPOINT)
       companies.value = Array.isArray(resp) ? resp : []
@@ -54,7 +59,14 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
         selectedCompanyId.value = ''
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to load companies'
+      const message = err instanceof Error ? err.message : ''
+      // HTTP 503 = LLC data layer disabled in this deployment mode (single_user).
+      // Treat as "unavailable", not a user-facing error.
+      if (message.startsWith('HTTP 503')) {
+        unavailable.value = true
+      } else {
+        error.value = message || 'Failed to load companies'
+      }
       logger.error('fetchCompanies failed:', err)
     } finally {
       isLoading.value = false
@@ -75,6 +87,7 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
     selectedCompanyId,
     isLoading,
     error,
+    unavailable,
     selectedCompany,
     hasCompanies,
     fetchCompanies,

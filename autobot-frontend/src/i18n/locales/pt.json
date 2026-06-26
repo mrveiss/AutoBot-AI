@@ -7571,6 +7571,7 @@
     "llcSelectCompany": "Switch Company",
     "llcSelectCompanyPrompt": "Select a company to open its dashboard, backlog, and tools.",
     "llcNoCompanies": "No companies yet.",
+    "llcUnavailable": "O Company OS não está disponível neste espaço de trabalho.",
     "llcCreateCompany": "Create a company"
   },
   "reasoningTrace": {

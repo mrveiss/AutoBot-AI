@@ -39,8 +39,12 @@ onMounted(() => {
       <p class="selector-subtitle">{{ $t('nav.llcSelectCompanyPrompt') }}</p>
     </header>
 
-    <div v-if="companyStore.error" class="selector-error">
-      {{ companyStore.error }}
+    <div v-if="companyStore.unavailable" class="selector-empty">
+      <p>{{ $t('nav.llcUnavailable') }}</p>
+    </div>
+
+    <div v-else-if="companyStore.error" class="selector-error">
+      {{ $t('common.errorBoundary.fetchError') }}
       <button class="selector-retry" @click="companyStore.fetchCompanies()">
         {{ $t('common.retry') }}
       </button>

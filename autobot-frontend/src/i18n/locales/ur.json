@@ -173,6 +173,7 @@
     "llcSelectCompany": "Switch Company",
     "llcSelectCompanyPrompt": "Select a company to open its dashboard, backlog, and tools.",
     "llcNoCompanies": "No companies yet.",
+    "llcUnavailable": "Company OS اس ورک اسپیس میں دستیاب نہیں ہے۔",
     "llcCreateCompany": "Create a company"
   },
   "agent": {

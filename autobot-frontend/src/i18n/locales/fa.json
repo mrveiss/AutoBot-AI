@@ -173,6 +173,7 @@
     "llcSelectCompany": "Switch Company",
     "llcSelectCompanyPrompt": "Select a company to open its dashboard, backlog, and tools.",
     "llcNoCompanies": "No companies yet.",
+    "llcUnavailable": "Company OS در این فضای کاری در دسترس نیست.",
     "llcCreateCompany": "Create a company"
   },
   "agent": {

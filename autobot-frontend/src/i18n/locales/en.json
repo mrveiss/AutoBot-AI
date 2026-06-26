@@ -7617,6 +7617,7 @@
     "llcSelectCompany": "Switch Company",
     "llcSelectCompanyPrompt": "Select a company to open its dashboard, backlog, and tools.",
     "llcNoCompanies": "No companies yet.",
+    "llcUnavailable": "Company OS isn't available in this workspace.",
     "llcCreateCompany": "Create a company",
     "settingsAndTools": "Settings & Tools",
     "adminPanel": "Admin Panel",
