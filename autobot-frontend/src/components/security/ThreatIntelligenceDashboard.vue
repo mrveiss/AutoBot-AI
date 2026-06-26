@@ -14,6 +14,27 @@
       </div>
     </div>
 
+    <!-- #10502/#10: graceful setup guide when no provider is configured.
+         Replaces the broken-looking ✗ cards / "No Services" dashboard. -->
+    <div v-if="showSetupGuide" class="setup-guide">
+      <div class="setup-guide-icon" aria-hidden="true">🛡️</div>
+      <h3 class="setup-guide-title">{{ t('security.threatDashboard.setupTitle') }}</h3>
+      <p class="setup-guide-desc">{{ t('security.threatDashboard.setupDesc') }}</p>
+
+      <h4 class="setup-steps-heading">{{ t('security.threatDashboard.setupStepsHeading') }}</h4>
+      <ol class="setup-steps">
+        <li>{{ t('security.threatDashboard.setupStepVirusTotal') }}</li>
+        <li>{{ t('security.threatDashboard.setupStepUrlVoid') }}</li>
+        <li>{{ t('security.threatDashboard.setupStepRestart') }}</li>
+      </ol>
+
+      <router-link :to="{ name: 'analytics-security-settings' }" class="setup-guide-btn">
+        {{ t('security.threatDashboard.openSettings') }}
+      </router-link>
+    </div>
+
+    <!-- Full dashboard — only when at least one provider is configured -->
+    <template v-else>
     <!-- Service Status Cards -->
     <div class="status-cards">
       <div class="status-card" :class="{ active: status.virustotal?.configured }">
@@ -140,16 +161,6 @@
         </div>
       </div>
 
-      <!-- No Services Warning -->
-      <div v-if="!status.any_service_configured" class="no-services-warning">
-        <span class="warning-icon">⚠️</span>
-        <span class="warning-text">
-          {{ t('security.threatDashboard.noServicesWarning') }}
-        </span>
-        <router-link to="/settings/security" class="btn-settings">
-          {{ t('security.threatDashboard.configureSettings') }}
-        </router-link>
-      </div>
     </div>
 
     <!-- Domain Security Stats -->
@@ -202,11 +213,12 @@
         </div>
       </div>
     </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
@@ -218,8 +230,15 @@ const { fetchThreatIntelStatus, fetchDomainSecurityStats, checkUrl: checkUrlApi 
 
 // State
 const loading = ref(false)
+const hasLoadedOnce = ref(false)
 const checkLoading = ref(false)
 const urlToCheck = ref('')
+
+// #10502/#10: show the setup guide once we know no provider is configured.
+// Gated on hasLoadedOnce so we don't flash the guide during the first fetch.
+const showSetupGuide = computed(
+  () => hasLoadedOnce.value && !status.any_service_configured,
+)
 
 const status = reactive({
   any_service_configured: false,
@@ -262,6 +281,7 @@ async function refreshStatus() {
     logger.error('Failed to fetch threat intel status', error)
   } finally {
     loading.value = false
+    hasLoadedOnce.value = true
   }
 }
 
@@ -350,6 +370,71 @@ onMounted(() => {
   font-weight: var(--font-semibold);
   color: var(--text-primary);
   margin: var(--spacing-0);
+}
+
+/* #10502/#10: setup guide empty-state */
+.setup-guide {
+  max-width: 36rem;
+  margin: 0 auto;
+  text-align: center;
+  padding: var(--spacing-8) var(--spacing-6);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+}
+
+.setup-guide-icon {
+  font-size: var(--text-4xl, 2.25rem);
+  line-height: 1;
+  margin-bottom: var(--spacing-3);
+}
+
+.setup-guide-title {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: var(--spacing-0);
+}
+
+.setup-guide-desc {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin: var(--spacing-2) 0 var(--spacing-6);
+}
+
+.setup-steps-heading {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  text-align: left;
+  margin: var(--spacing-0) 0 var(--spacing-2);
+}
+
+.setup-steps {
+  text-align: left;
+  margin: var(--spacing-0) 0 var(--spacing-6);
+  padding-left: var(--spacing-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.setup-guide-btn {
+  display: inline-block;
+  padding: var(--spacing-3) var(--spacing-6);
+  background: var(--color-info);
+  color: var(--text-on-primary);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  transition: var(--transition-all);
+}
+
+.setup-guide-btn:hover {
+  background: var(--color-info-hover);
 }
 
 .dashboard-subtitle {
@@ -643,51 +728,6 @@ onMounted(() => {
 
 .source-score.cached {
   color: var(--color-primary);
-}
-
-/* No Services Warning */
-.no-services-warning {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-4);
-  padding: var(--spacing-4);
-  background: var(--color-warning-bg);
-  border: 1px solid var(--color-warning-border);
-  border-radius: var(--radius-lg);
-}
-
-.warning-icon {
-  font-size: var(--text-2xl);
-}
-
-.warning-text {
-  flex: 1;
-  font-size: var(--text-sm);
-  color: var(--color-warning-dark);
-}
-
-.warning-text code {
-  background: var(--color-warning-bg-hover);
-  padding: var(--spacing-0-5) var(--spacing-1-5);
-  border-radius: var(--radius-default);
-  font-size: var(--text-xs);
-  font-family: var(--font-mono);
-}
-
-.btn-settings {
-  padding: var(--spacing-2) var(--spacing-4);
-  background: var(--color-warning);
-  color: var(--text-on-warning);
-  text-decoration: none;
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  white-space: nowrap;
-  transition: var(--transition-all);
-}
-
-.btn-settings:hover {
-  background: var(--color-warning-hover);
 }
 
 /* Domain Stats */
