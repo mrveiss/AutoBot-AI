@@ -8,6 +8,8 @@ Development Speedup API
 Advanced code analysis endpoints for development acceleration using NPU and Redis.
 """
 
+import asyncio
+import json
 from typing import Any, Awaitable, Callable, Dict
 
 from fastapi import APIRouter, HTTPException, Query
@@ -18,26 +20,35 @@ from agents.development_speedup_agent import (
     find_duplicates,
     get_development_speedup_agent,
 )
+from api.dev_speedup_templates import CODE_TEMPLATES
 from api.schemas_code import (
     DevelopmentSpeedupAnalysisRequest,
     DevSpeedupAnalysisResultResponse,
     DevSpeedupDeadCodeResultResponse,
     DevSpeedupDuplicatesResultResponse,
     DevSpeedupExamplesResultResponse,
+    DevSpeedupHistoryResponse,
     DevSpeedupImportsResultResponse,
     DevSpeedupPatternsResultResponse,
     DevSpeedupQualityResultResponse,
     DevSpeedupRecommendationsResultResponse,
     DevSpeedupRefactoringResultResponse,
     DevSpeedupStatusResultResponse,
+    DevSpeedupTemplatesResponse,
 )
 from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+# Redis list of recent developer-speedup actions, newest first (#10502).
+# Bounded so the history view stays cheap to read.
+DEV_SPEEDUP_HISTORY_KEY = "autobot:dev-speedup:history"
+DEV_SPEEDUP_HISTORY_LIMIT = 50
 
 # Issue #380: Module-level frozenset for valid severity levels
 _VALID_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
@@ -609,3 +620,49 @@ async def get_analysis_examples():
             ],
         },
     )
+
+
+@router.get("/templates", response_model=DevSpeedupTemplatesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dev_speedup_templates",
+    error_code_prefix="DEVELOPMENT_SPEEDUP",
+)
+async def get_templates(category: str | None = Query(None, description="Filter by template category")):
+    """Return reusable code templates for the Developer Speedup view (#902, #10502).
+
+    Optional ``category`` filters the catalog (e.g. ``backend``, ``frontend``,
+    ``testing``).
+    """
+    templates = CODE_TEMPLATES
+    if category:
+        templates = [t for t in templates if t.get("category") == category]
+    return JSONResponse(status_code=200, content={"templates": templates})
+
+
+@router.get("/history", response_model=DevSpeedupHistoryResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dev_speedup_history",
+    error_code_prefix="DEVELOPMENT_SPEEDUP",
+)
+async def get_history():
+    """Return recent developer-speedup actions, newest first (#902, #10502).
+
+    Reads the bounded Redis history list. A fresh system with no recorded
+    actions returns an empty list.
+    """
+    redis_client = get_redis_client(async_client=False)
+    raw = await asyncio.to_thread(
+        redis_client.lrange,
+        DEV_SPEEDUP_HISTORY_KEY,
+        0,
+        DEV_SPEEDUP_HISTORY_LIMIT - 1,
+    )
+    actions = []
+    for entry in raw or []:
+        try:
+            actions.append(json.loads(entry))
+        except (json.JSONDecodeError, TypeError):
+            logger.warning("Skipping malformed dev-speedup history entry")
+    return JSONResponse(status_code=200, content={"actions": actions})

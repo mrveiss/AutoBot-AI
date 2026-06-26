@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_agent import (
     AgentDelegateRequest,
+    AgentStatusListResponse,
     AgentSummary,
     ChainOfCommandResponse,
     DelegationResponse,
@@ -57,6 +58,31 @@ async def get_org_tree(
     """
     svc = AgentOrgService(session)
     return await svc.get_org_tree()
+
+
+@router.get(
+    "/status",
+    response_model=AgentStatusListResponse,
+    tags=["agent-org"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agents_status",
+    error_code_prefix="AGENT_ORG",
+)
+async def get_agents_status(
+    session: AsyncSession = Depends(get_db_session),
+) -> AgentStatusListResponse:
+    """Return all registered agents with runtime status (#10502).
+
+    Backs the Home dashboard "Agent Activity Monitor". Previously the
+    frontend ``GET /api/agents/status`` 404'd because no route existed at
+    the ``/agents`` prefix, so the monitor fell back to sample data and
+    showed only a subset of agents.
+    """
+    svc = AgentOrgService(session)
+    agents = await svc.get_agent_statuses()
+    return AgentStatusListResponse(agents=agents, total=len(agents))
 
 
 @router.get(
