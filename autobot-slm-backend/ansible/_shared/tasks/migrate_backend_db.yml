@@ -1,0 +1,66 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+---
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# Reusable strict backend migration sequence (#10046).
+#
+# The strict Alembic upgrade steps (#10001/#10026) previously existed twice,
+# near-identically, in setup-user-backend.yml (post_tasks) and
+# playbooks/update-all-nodes.yml (Play 2). The only differences were
+# parameterization (code dir / run-as user) and task-name prefixes, so the two
+# copies would drift the first time one was touched (#10045 was the first such
+# change). This consolidates the sequence into one include; future migration
+# changes happen here once.
+#
+# The sequence is: fail-closed pre-migration backup (delegated to the shared
+# pre_migration_backup.yml, #10045) -> baseline adoption -> strict
+# `alembic -c migrations/alembic.ini upgrade head`. Any failure aborts the
+# deploy. The caller gates this whole include on a Postgres-backed user mode.
+#
+# Caller must set:
+#   migration_code_dir  — absolute path to the backend checkout (chdir/PYTHONPATH).
+#   migration_user      — the user that owns the checkout / runs alembic.
+# Caller may set:
+#   migration_name_prefix — task-name prefix for log readability (default "").
+#   migration_become      — whether to `become` for the run-as user (default true).
+
+- name: "{{ migration_name_prefix }}Back up PostgreSQL before migrations (local or remote) (#10026, #10045)"
+  ansible.builtin.include_tasks: pre_migration_backup.yml
+  vars:
+    pre_migration_env_file: "{{ migration_code_dir }}/.env"
+
+- name: "{{ migration_name_prefix }}Run database baseline adoption (#10001)"
+  ansible.builtin.shell: |
+    set -a
+    [ -f .env ] && . ./.env
+    set +a
+    exec venv/bin/python -m migrations.baseline
+  args:
+    chdir: "{{ migration_code_dir }}"
+    executable: /bin/bash
+  become: "{{ migration_become | default(true) }}"
+  become_user: "{{ migration_user }}"
+  environment:
+    PYTHONPATH: "{{ migration_code_dir }}"
+  register: baseline_result
+
+- name: "{{ migration_name_prefix }}Run Alembic migrations (#10001)"
+  ansible.builtin.shell: |
+    set -a
+    [ -f .env ] && . ./.env
+    set +a
+    exec venv/bin/python -m alembic -c migrations/alembic.ini upgrade head
+  args:
+    chdir: "{{ migration_code_dir }}"
+    executable: /bin/bash
+  become: "{{ migration_become | default(true) }}"
+  become_user: "{{ migration_user }}"
+  environment:
+    PYTHONPATH: "{{ migration_code_dir }}"
+  register: migration_result
+
+- name: "{{ migration_name_prefix }}Display migration result (#10001)"
+  ansible.builtin.debug:
+    msg: "Migrations applied: {{ migration_result.stdout_lines | default([]) | last | default('up to date') }}"

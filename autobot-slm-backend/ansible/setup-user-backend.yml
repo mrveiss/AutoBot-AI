@@ -93,45 +93,16 @@
       when: backend_user_mode_probe.stdout | default('') | trim not in ['', 'single_user']
       tags: [migrations]
       block:
-        # Fail-closed pre-migration backup (#10045): local pg_dumpall OR
-        # remote pg_dump derived from .env URL; aborts if neither is possible.
-        - name: Back up PostgreSQL before migrations (local or remote) (#10026, #10045)
-          ansible.builtin.include_tasks: _shared/tasks/pre_migration_backup.yml
+        # Strict migration sequence consolidated into one shared include
+        # (#10046): fail-closed backup -> baseline adoption -> strict
+        # `alembic upgrade head`. Changes happen in one place for both
+        # setup-user-backend.yml and playbooks/update-all-nodes.yml.
+        - name: Run strict backend migration sequence (#10001, #10026, #10046)
+          ansible.builtin.include_tasks: _shared/tasks/migrate_backend_db.yml
           vars:
-            pre_migration_env_file: "{{ backend_code_dir }}/.env"
-
-
-        - name: Run database baseline adoption (#10001)
-          ansible.builtin.shell: |
-            set -a
-            [ -f .env ] && . ./.env
-            set +a
-            exec venv/bin/python -m migrations.baseline
-          args:
-            chdir: "{{ backend_code_dir }}"
-            executable: /bin/bash
-          become_user: "{{ backend_user }}"
-          environment:
-            PYTHONPATH: "{{ backend_code_dir }}"
-          register: baseline_result
-
-        - name: Run Alembic migrations (#10001)
-          ansible.builtin.shell: |
-            set -a
-            [ -f .env ] && . ./.env
-            set +a
-            exec venv/bin/python -m alembic -c migrations/alembic.ini upgrade head
-          args:
-            chdir: "{{ backend_code_dir }}"
-            executable: /bin/bash
-          become_user: "{{ backend_user }}"
-          environment:
-            PYTHONPATH: "{{ backend_code_dir }}"
-          register: migration_result
-
-        - name: Display migration result (#10001)
-          ansible.builtin.debug:
-            msg: "Migrations applied: {{ migration_result.stdout_lines | default([]) | last | default('up to date') }}"
+            migration_code_dir: "{{ backend_code_dir }}"
+            migration_user: "{{ backend_user }}"
+            migration_become: false
 
     - name: Verify backend service
       systemd:
