@@ -45,7 +45,10 @@ class DatabaseService:
             max_overflow=settings.db_pool_max_overflow,
             pool_recycle=settings.db_pool_recycle,
             pool_pre_ping=True,  # Verify connections before use
-            connect_args={"timeout": 10},  # Prevent indefinite hang on DB unavailable (#7689)
+            # #10491: command_timeout bounds the pre_ping SELECT 1 so a silently
+            # dropped (WSL idle) connection fails fast instead of hanging ~30s on
+            # the dead socket. timeout=10 only covers new connects, not queries.
+            connect_args={"timeout": 10, "command_timeout": 10},
         )
 
         self.session_factory = async_sessionmaker(
