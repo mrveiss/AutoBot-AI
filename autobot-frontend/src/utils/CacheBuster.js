@@ -254,10 +254,17 @@ class CacheBuster {
 
                     // Only log once every cooldown period
                     if (now - this.lastConnectionErrorLog >= this.connectionErrorCooldown) {
+                        // BUG6: lastConnectionErrorLog starts at 0, so the first log
+                        // computed elapsed from the epoch (e.g. 1782476315s). Guard
+                        // against the unset reference and cap large values.
+                        const elapsedSec = this.lastConnectionErrorLog > 0
+                            ? Math.round((now - this.lastConnectionErrorLog) / 1000)
+                            : 0;
+                        const elapsedLabel = elapsedSec > 3600 ? '> 1 hour' : `${elapsedSec}s`;
                         logger.warn(
-                            `[CacheBuster] Backend connection/timeout error (${this.connectionErrorCount} failed requests in last ${
-                                Math.round((now - this.lastConnectionErrorLog) / 1000)
-                            }s) - Backend may be busy or restarting`
+                            `[CacheBuster] Backend connection/timeout error ` +
+                            `(${this.connectionErrorCount} failed requests in last ${elapsedLabel}) ` +
+                            `- Backend may be busy or restarting`
                         );
                         this.lastConnectionErrorLog = now;
                     }

@@ -37,8 +37,14 @@
       </div>
     </div>
 
+    <!-- BUG1: visible empty/error state instead of fabricated sample data -->
+    <div v-if="loaded && agents.length === 0" class="agents-empty-state">
+      <Icon :name="error ? 'exclamation-triangle' : 'pause-circle'" class="empty-icon" />
+      <p>{{ error ? 'Unable to load agent activity right now.' : 'No active agents.' }}</p>
+    </div>
+
     <!-- Grid View -->
-    <div v-if="viewMode === 'grid'" class="agents-grid">
+    <div v-else-if="viewMode === 'grid'" class="agents-grid">
       <div
         v-for="agent in agents"
         :key="agent.id"
@@ -223,7 +229,7 @@ const emit = defineEmits<{
 // State
 const viewMode = ref<'grid' | 'timeline'>('grid')
 const { isExpanded: isAgentExpanded, expand: expandAgent, collapseAll: collapseAllAgents } = useExpansion<string>()
-const { agents, recentEvents, fetchAgents, fetchEvents } = useAgentActivityData()
+const { agents, recentEvents, error, loaded, fetchAgents, fetchEvents } = useAgentActivityData()
 
 // Computed
 const activeAgentCount = computed(() => {
@@ -369,6 +375,24 @@ defineExpose({
  * Issue #704: Migrated to design tokens
  * All hardcoded colors replaced with CSS custom properties from design-tokens.css
  */
+
+/* BUG1: empty/error state for the agent activity widget */
+.agents-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-8) var(--spacing-4);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.agents-empty-state .empty-icon {
+  width: 32px;
+  height: 32px;
+  opacity: 0.7;
+}
 
 .agent-activity-viz {
   background: var(--bg-secondary-alpha);

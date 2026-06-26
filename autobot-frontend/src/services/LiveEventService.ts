@@ -195,13 +195,27 @@ class LiveEventService {
 
   private _handleError(error: unknown): void {
     this.connectionState.value = 'error'
-    logger.error('LiveEventService error:', error)
+    // BUG2: a raw WebSocket `Event` has no `.message`, so logging it printed
+    // "LiveEventService error: Event". Extract a meaningful string instead, and
+    // keep per-attempt failures at debug level — the give-up is logged once in
+    // _scheduleReconnect so reconnect cycles don't flood the console.
+    const message = error instanceof Error
+      ? error.message
+      : error instanceof Event
+        ? (error.type || 'connection error')
+        : String(error)
+    logger.debug('LiveEventService connection error:', message)
   }
 
   private _scheduleReconnect(event: CloseEvent): void {
     if (event.code === 1000 || event.code === 4001) return
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      logger.debug('LiveEventService: max reconnect attempts reached')
+      // BUG2: log ONCE on final give-up; connectionState ('error') is the single
+      // source of truth the UI reads to show degraded realtime status.
+      this.connectionState.value = 'error'
+      logger.warn(
+        `LiveEventService: giving up after ${this.maxReconnectAttempts} attempts — realtime events disabled`
+      )
       return
     }
     this.reconnectAttempts++
@@ -215,7 +229,10 @@ class LiveEventService {
     setTimeout(() => {
       if (this.connectionState.value !== 'connected') {
         this.connect().catch((err: unknown) =>
-          logger.error('LiveEventService reconnect failed:', err)
+          // Per-attempt reconnect failures are debug noise; the final give-up
+          // is logged once above when maxReconnectAttempts is reached.
+          logger.debug('LiveEventService reconnect attempt failed:',
+            err instanceof Error ? err.message : err instanceof Event ? err.type : String(err))
         )
       }
     }, delay)

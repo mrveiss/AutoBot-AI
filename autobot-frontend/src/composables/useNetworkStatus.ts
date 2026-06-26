@@ -51,6 +51,22 @@ const _lastOnlineAt = ref<number | null>(null)
 let _probeTimer: ReturnType<typeof setInterval> | null = null
 let _refCount = 0
 
+// BUG8: a single slow/transient probe used to flip the whole app to "offline".
+// Require N consecutive failures before declaring offline so one timeout while
+// the backend is briefly busy doesn't mislabel a clearly-connected app.
+const OFFLINE_FAILURE_THRESHOLD = 2
+let _consecutiveFailures = 0
+
+/** Mark a failed probe; only transition to offline after the threshold is hit. */
+function _registerProbeFailure(): void {
+  _consecutiveFailures++
+  if (_consecutiveFailures >= OFFLINE_FAILURE_THRESHOLD && _isOnline.value) {
+    // Log only on the actual online → offline transition (not every cycle).
+    logger.info(`Network probe failed ${_consecutiveFailures}x — marking offline`)
+    _isOnline.value = false
+  }
+}
+
 /** Probe the backend health endpoint — avoids trusting captive-portal "connected" state */
 async function _probe(): Promise<void> {
   const url = `${getApiBase()}/health`
@@ -61,18 +77,18 @@ async function _probe(): Promise<void> {
       signal: AbortSignal.timeout(4500), // must resolve within 5 s window
     })
     const online = res.ok || res.status < 500
-    if (online !== _isOnline.value) {
-      logger.info(`Network status changed: ${online ? 'online' : 'offline'}`)
-    }
-    _isOnline.value = online
     if (online) {
+      _consecutiveFailures = 0
+      if (!_isOnline.value) {
+        logger.info('Network status changed: online')
+      }
+      _isOnline.value = true
       _lastOnlineAt.value = Date.now()
+    } else {
+      _registerProbeFailure()
     }
   } catch {
-    if (_isOnline.value) {
-      logger.info('Network probe failed — marking offline')
-    }
-    _isOnline.value = false
+    _registerProbeFailure()
   } finally {
     _isChecking.value = false
   }

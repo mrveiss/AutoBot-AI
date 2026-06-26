@@ -179,14 +179,17 @@ export class BatchApiService {
         : { error: (settingsResult as PromiseRejectedResult).reason?.message || 'Failed to load' }
     };
 
+    // BUG4/BUG5: these are returned as `error` fields above and surfaced by the
+    // caller (ChatInterface) — keep them at debug so the same failure isn't
+    // double-logged at WARN from multiple layers.
     if (chatSessionsResult.status === 'rejected') {
-      logger.warn('Failed to load chat sessions:', (chatSessionsResult as PromiseRejectedResult).reason?.message);
+      logger.debug('Chat sessions unavailable:', (chatSessionsResult as PromiseRejectedResult).reason?.message);
     }
     if (systemHealthResult.status === 'rejected') {
-      logger.warn('Failed to load system health:', (systemHealthResult as PromiseRejectedResult).reason?.message);
+      logger.debug('System health unavailable:', (systemHealthResult as PromiseRejectedResult).reason?.message);
     }
     if (settingsResult.status === 'rejected') {
-      logger.warn('Failed to load settings:', (settingsResult as PromiseRejectedResult).reason?.message);
+      logger.debug('Settings unavailable:', (settingsResult as PromiseRejectedResult).reason?.message);
     }
 
     logger.info('Parallel chat initialization completed');
