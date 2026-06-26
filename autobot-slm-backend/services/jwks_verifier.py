@@ -159,12 +159,24 @@ def _normalize_claims(payload: Dict[str, Any]) -> Dict[str, Any]:
 async def verify_authority_token(token: str) -> Optional[Dict[str, Any]]:
     """Verify an RS256 authority token via cached JWKS and return normalized claims.
 
-    On any failure (JWKS unreachable, bad signature, expired, algorithm mismatch)
-    returns ``None`` — never raises.
+    On any failure (JWKS unreachable, bad signature, expired, algorithm mismatch,
+    or revoked jti) returns ``None`` — never raises.
+
+    Caching (D1 #10158)
+    -------------------
+    Verified claims are cached in Redis (``slm:oidc:token_cache:*``) for
+    ``OIDC_TOKEN_CACHE_TTL`` seconds so the JWKS verifier is not called on every
+    request.  Cache misses fall through to the full verification path.
+
+    Cross-service revocation (#10278)
+    ----------------------------------
+    After signature verification, the token's ``jti`` is checked against the
+    shared RS256 denylist (``auth:rs256:jti:denylist:*``).  Revoked tokens are
+    rejected even if the signature is otherwise valid.
 
     Key-rotation refresh
     --------------------
-    If the token's ``kid`` is not in the cache, the cache is refreshed once.
+    If the token's ``kid`` is not in the JWKS cache, the cache is refreshed once.
     If the kid is still absent after refresh the token is rejected (unknown key).
 
     Args:
@@ -173,6 +185,14 @@ async def verify_authority_token(token: str) -> Optional[Dict[str, Any]]:
     Returns:
         Normalized claims dict, or ``None`` on verification failure.
     """
+    # D1 (#10158): check OIDC token claim cache before expensive JWKS verify
+    from services.oidc_token_cache import get_cached_claims, cache_claims  # noqa: PLC0415
+
+    cached = await get_cached_claims(token)
+    if cached is not None:
+        logger.debug("verify_authority_token: cache hit (sub=%r)", cached.get("sub"))
+        return cached
+
     from config import settings  # deferred: avoids circular import at module load
 
     authority_url = settings.authority_base_url.rstrip("/") + settings.authority_jwks_path
@@ -222,4 +242,21 @@ async def verify_authority_token(token: str) -> Optional[Dict[str, Any]]:
         logger.warning("Authority RS256 token invalid (kid=%r): %s", token_kid, exc)
         return None
 
-    return _normalize_claims(payload)
+    # #10278: check cross-service RS256 jti denylist (fail-open on Redis down)
+    jti = payload.get("jti")
+    if jti:
+        from services.rs256_denylist import is_rs256_jti_revoked  # noqa: PLC0415
+
+        try:
+            if await is_rs256_jti_revoked(str(jti)):
+                logger.warning("Authority RS256 token rejected: jti=%r is revoked", jti)
+                return None
+        except Exception:
+            logger.warning("rs256 denylist check failed; failing open", exc_info=True)
+
+    claims = _normalize_claims(payload)
+
+    # D1 (#10158): populate OIDC token claim cache for subsequent requests
+    await cache_claims(token, claims)
+
+    return claims

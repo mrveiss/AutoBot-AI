@@ -8,11 +8,13 @@ Provides login, logout, and session management functionality
 """
 
 import datetime
+import time as _time_module
 from collections import defaultdict
 from time import time
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 
 from api.schemas_agent import (
     AuthCheckResponse,
@@ -278,6 +280,56 @@ async def logout(request: Request, logout_data: LogoutRequest):
         logger.error("Logout error: %s", e)
         # Don't fail logout on errors - return success
         return {"success": True, "message": "Logged out successfully"}
+
+
+class _RS256RevokeRequest(BaseModel):
+    """Request body for RS256 authority token revocation (#10278)."""
+
+    token: str
+
+
+@router.post("/revoke-rs256-token")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="revoke_rs256_token",
+    error_code_prefix="AUTH",
+)
+async def revoke_rs256_token(
+    body: _RS256RevokeRequest,
+    _: Dict = Depends(get_current_user),
+) -> Dict[str, object]:
+    """Revoke an RS256 authority token by adding its jti to the cross-service denylist.
+
+    Writes ``auth:rs256:jti:denylist:<jti>`` to the shared Redis instance so
+    that autobot-slm-backend's JWKS verifier rejects the token on its next
+    presentation, even before the token's ``exp`` claim elapses.
+
+    TTL of the denylist entry equals the remaining token lifetime so it
+    auto-expires and never accumulates indefinitely.
+
+    The caller must be authenticated (any valid user may revoke their own
+    token; a separate admin endpoint is not needed — the token is bound to
+    the presenter by signature and is unusable without the private key).
+
+    Returns a 200 with ``revoked=True`` on success or when the token is
+    already expired (nothing to revoke, but not an error).
+    """
+    from autobot_shared.auth.jwt_core import JWTDecodeError as _JWTDecodeError
+    from autobot_shared.auth.jwt_core import decode_jwt_no_verify_exp as _decode_no_exp
+
+    # #10278: shared RS256 denylist lives in autobot-slm-backend package but
+    # uses only autobot_shared Redis — import the sibling module at call time
+    # so this endpoint works even when the SLM package is not on sys.path
+    # (the denylist logic is duplicated-by-reference; the Redis KEY is shared).
+    from services.rs256_revocation import revoke_authority_token_jti  # noqa: PLC0415
+
+    try:
+        result = await revoke_authority_token_jti(body.token)
+    except Exception as exc:
+        logger.warning("revoke_rs256_token: revocation failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Token revocation failed") from exc
+
+    return {"revoked": result, "message": "Token revoked" if result else "Token already expired"}
 
 
 @router.get("/me", response_model=AuthUserInfoResponse)
