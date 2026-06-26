@@ -142,8 +142,8 @@
 
   --text-primary: #e2e8f0;
   --text-secondary: #94a3b8;
-  --text-tertiary: #64748b;
-  --text-muted: #475569;
+  --text-tertiary: #8a98ad;
+  --text-muted: #8593a8;
   --text-inverse: #0f172a;
   --text-link: #3b82f6;
   --text-link-hover: #60a5fa;
@@ -689,11 +689,12 @@
     --border-primary: oklch(32.1% 0 0);
     --border-secondary: oklch(37.3% 0.031 259.7);
 
-    /* Text Colors */
+    /* Text Colors — TASK 15: tertiary/muted lightened to meet WCAG AA (4.5:1)
+       for small metadata labels on dark backgrounds */
     --text-primary: oklch(92.9% 0.013 255.5);
     --text-secondary: oklch(71.1% 0.035 256.8);
-    --text-tertiary: oklch(55.4% 0.041 257.4);
-    --text-muted: oklch(44.6% 0.037 257.3);
+    --text-tertiary: oklch(67.5% 0.035 257.0);
+    --text-muted: oklch(65.0% 0.034 257.0);
     --text-inverse: oklch(20.8% 0.040 265.8);
     --text-link: oklch(62.3% 0.188 259.8);
     --text-link-hover: oklch(71.4% 0.143 254.6);

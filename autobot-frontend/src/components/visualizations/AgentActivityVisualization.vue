@@ -37,8 +37,14 @@
       </div>
     </div>
 
+    <!-- BUG1: visible empty/error state instead of fabricated sample data -->
+    <div v-if="loaded && agents.length === 0" class="agents-empty-state">
+      <Icon :name="error ? 'exclamation-triangle' : 'pause-circle'" class="empty-icon" />
+      <p>{{ error ? 'Unable to load agent activity right now.' : 'No active agents.' }}</p>
+    </div>
+
     <!-- Grid View -->
-    <div v-if="viewMode === 'grid'" class="agents-grid">
+    <div v-else-if="viewMode === 'grid'" class="agents-grid">
       <div
         v-for="agent in agents"
         :key="agent.id"
@@ -73,8 +79,14 @@
             <span>{{ t('visualizations.agentActivity.abstained') }}</span>
           </div>
           <div v-else-if="agent.status === 'error'" class="activity-error">
-            <Icon name="exclamation-triangle" />
-            <span>{{ t('visualizations.agentActivity.error') }}</span>
+            <div class="error-badge">
+              <Icon name="exclamation-triangle" />
+              <span>{{ t('visualizations.agentActivity.error') }}</span>
+            </div>
+            <!-- TASK 8: actionable CTA on error cards -->
+            <button class="view-logs-btn" @click.stop="viewLogs(agent)">
+              <Icon name="eye" /> View Logs
+            </button>
           </div>
         </div>
 
@@ -89,7 +101,8 @@
             <span class="metric-label">{{ t('visualizations.agentActivity.uptime') }}</span>
           </div>
           <div class="metric">
-            <span class="metric-value">{{ agent.successRate }}%</span>
+            <!-- TASK 5: success rate is meaningless with zero tasks — show N/A -->
+            <span class="metric-value">{{ agent.tasksCompleted === 0 ? 'N/A' : agent.successRate + '%' }}</span>
             <span class="metric-label">{{ t('visualizations.agentActivity.success') }}</span>
           </div>
         </div>
@@ -160,7 +173,8 @@
     <!-- Live Activity Feed -->
     <div class="activity-feed">
       <h4>
-        <Icon name="signal" />
+        <!-- TASK 6: was name="signal" which renders as a music note -->
+        <Icon name="activity" />
         {{ t('visualizations.agentActivity.liveActivityFeed') }}
       </h4>
       <div class="feed-items">
@@ -186,12 +200,14 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { getCssVar } from '@/composables/useCssVars'
 import { useExpansion } from '@/composables/useExpansion'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useAgentActivityData, type Agent } from '@/composables/visualizations/useAgentActivityData'
 
 const { t } = useI18n()
+const router = useRouter()
 
 // Props
 interface Props {
@@ -215,7 +231,7 @@ const emit = defineEmits<{
 // State
 const viewMode = ref<'grid' | 'timeline'>('grid')
 const { isExpanded: isAgentExpanded, expand: expandAgent, collapseAll: collapseAllAgents } = useExpansion<string>()
-const { agents, recentEvents, fetchAgents, fetchEvents } = useAgentActivityData()
+const { agents, recentEvents, error, loaded, fetchAgents, fetchEvents } = useAgentActivityData()
 
 // Computed
 const activeAgentCount = computed(() => {
@@ -293,6 +309,11 @@ function viewDetails(agent: Agent) {
   emit('agent-click', agent)
 }
 
+// TASK 8: open the per-agent activity diary (logs) for a failed agent
+function viewLogs(agent: Agent) {
+  router.push({ path: '/agents/activity', query: { agent: agent.id } })
+}
+
 function pauseAgent(agent: Agent) {
   emit('pause-agent', agent)
 }
@@ -331,6 +352,24 @@ defineExpose({
  * Issue #704: Migrated to design tokens
  * All hardcoded colors replaced with CSS custom properties from design-tokens.css
  */
+
+/* BUG1: empty/error state for the agent activity widget */
+.agents-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-8) var(--spacing-4);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.agents-empty-state .empty-icon {
+  width: 32px;
+  height: 32px;
+  opacity: 0.7;
+}
 
 .agent-activity-viz {
   background: var(--bg-secondary-alpha);
@@ -440,8 +479,47 @@ defineExpose({
   border-left: 3px solid var(--text-tertiary);
 }
 
+/* TASK 8: make the error state more visually prominent */
 .agent-card.error {
-  border-left: 3px solid var(--color-error);
+  border: 2px solid var(--color-error);
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.activity-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-2);
+}
+
+.activity-error .error-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+.view-logs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  padding: var(--spacing-1) var(--spacing-2);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-error);
+  background: transparent;
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md, 6px);
+  cursor: pointer;
+  transition: background var(--duration-150) var(--ease-in-out);
+}
+
+.view-logs-btn:hover {
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.view-logs-btn .icon {
+  width: 12px;
+  height: 12px;
 }
 
 .agent-card.paused {

@@ -49,15 +49,36 @@
             <option value="high">{{ $t('chat.settings.reasoningEffortHigh') }}</option>
           </select>
         </div>
+
+        <!-- TASK 10: Message Display toggles (moved here from the chat sidebar) -->
+        <div class="setting-group">
+          <label class="setting-label">{{ $t('chat.sidebar.messageDisplay') }}</label>
+          <div class="display-toggles">
+            <label
+              v-for="setting in displaySettingsConfig"
+              :key="setting.key"
+              class="display-toggle"
+            >
+              <input
+                type="checkbox"
+                :checked="getSetting(setting.key)"
+                @change="setSetting(setting.key, ($event.target as HTMLInputElement).checked)"
+              />
+              <span>{{ setting.label }}</span>
+            </label>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
 import { usePreferences } from '@/composables/usePreferences'
+import { useDisplaySettings, type DisplaySettings } from '@/composables/useDisplaySettings'
 
 interface Props {
   show: boolean
@@ -70,7 +91,21 @@ interface Emits {
 const props = defineProps<Props>()
 defineEmits<Emits>()
 
+const { t } = useI18n()
 const { contextOverflowMode, setContextOverflowMode, reasoningEffort, setReasoningEffort } = usePreferences()
+
+// TASK 10: Message Display settings, relocated from the chat sidebar. Uses the
+// shared useDisplaySettings singleton, so toggles stay in sync with rendering.
+const { getSetting, setSetting } = useDisplaySettings()
+const displaySettingsConfig = computed<{ key: keyof DisplaySettings; label: string }[]>(() => [
+  { key: 'showThoughts', label: t('chat.sidebar.showThoughts') },
+  { key: 'showJson', label: t('chat.sidebar.showMetadata') },
+  { key: 'showUtility', label: t('chat.sidebar.showUtility') },
+  { key: 'showPlanning', label: t('chat.sidebar.showPlanning') },
+  { key: 'showDebug', label: t('chat.sidebar.showDebug') },
+  { key: 'showSources', label: t('chat.sidebar.showSources') },
+  { key: 'autoScroll', label: t('chat.sidebar.autoScroll') },
+])
 const localMode = ref(contextOverflowMode.value)
 const localEffort = ref(reasoningEffort.value)
 
@@ -189,5 +224,25 @@ function updateEffort() {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* TASK 10: Message Display toggle list */
+.display-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.display-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.display-toggle input {
+  cursor: pointer;
 }
 </style>

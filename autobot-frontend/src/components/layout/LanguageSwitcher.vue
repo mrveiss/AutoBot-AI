@@ -125,6 +125,8 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
   position: relative;
 }
 
+/* Theme-aware: the hardcoded white icon was invisible on the light-mode
+   navbar (light-on-light). Use text/bg tokens so it works in both themes. */
 .lang-trigger {
   display: flex;
   align-items: center;
@@ -132,20 +134,21 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
   width: 40px;
   height: 40px;
   border-radius: var(--radius-md);
-  background-color: rgba(255, 255, 255, 0.1);
-  color: white;
+  background-color: transparent;
+  color: var(--text-secondary);
   font-size: var(--text-lg);
   transition: all var(--duration-200) var(--ease-out);
   cursor: pointer;
 }
 
 .lang-trigger:hover {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
   transform: scale(1.05);
 }
 
 .lang-trigger:focus-visible {
-  outline: 2px solid white;
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 

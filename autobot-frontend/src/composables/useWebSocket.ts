@@ -204,7 +204,9 @@ export function useWebSocket(
       if (opts.connectionTimeout > 0) {
         connectionTimeoutTimer = setTimeout(() => {
           if (isConnecting.value) {
-            logger.warn('Connection timeout')
+            // Per-attempt timeout is debug; the close handler schedules backoff
+            // and surfaces a single "max attempts" message if it never connects.
+            logger.debug('WebSocket connection timeout')
             errors.value = [...errors.value, new Error('Connection timeout')]
             ws.value?.close()
           }
@@ -240,7 +242,9 @@ export function useWebSocket(
       }
 
       ws.value.onerror = (event) => {
-        logger.error('Error:', event)
+        // BUG3: a raw WebSocket `Event` has no message — don't log it as an
+        // Error object. The reconnect/close handler drives user-facing state.
+        logger.debug('WebSocket error:', event instanceof Event ? event.type : String(event))
         errors.value = [...errors.value, new Error('WebSocket error')]
         isConnecting.value = false
         // Clear heartbeat timer - dead socket should not keep sending pings (#820)

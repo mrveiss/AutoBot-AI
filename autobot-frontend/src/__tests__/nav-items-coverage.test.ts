@@ -40,7 +40,7 @@ import { navItems, profileMenuItems, filterByFeatureFlag } from '@/config/navIte
  * (footer link, accessed from another view, etc.) without an explicit flag.
  */
 const INTENTIONALLY_HIDDEN: Record<string, string> = {
-  '/about': 'Reachable via footer "About" link, not main nav',
+  '/about': 'Reachable via the profile dropdown "About" item (TASK 16), not main nav',
   '/agents': 'Parent shell — redirects to /agents/registry; nav uses the deep-link entry (#6634)',
   '/agents/activity': 'Reached as a tab inside /agents shell (#6634); standalone URL kept for bookmarks',
   '/agents/heartbeat': 'Reached as a tab inside /agents shell (#6634); standalone URL kept for bookmarks',
@@ -148,23 +148,11 @@ describe('navItems coverage (#6499)', () => {
     expect(canvasItem?.featureFlag).toBe('canvas')
   })
 
-  // #9984: filterByFeatureFlag must gate the PRIMARY nav too (was a no-op before —
-  // App.vue used `computed(() => navItems)` so flagged primary items always showed).
-  it('transcriber primary navItem is flagged and fails OPEN (shipped feature)', () => {
-    const transcriber = navItems.find((i) => i.to === '/transcriber')
-    expect(transcriber?.featureFlag).toBe('transcriber')
-    expect(transcriber?.featureDefaultVisible).toBe(true)
-  })
-
-  it('transcriber stays VISIBLE when VITE_FEATURE_TRANSCRIBER is unset (fail-open)', () => {
-    const result = filterByFeatureFlag(navItems, {})
-    expect(result.map((i) => i.to)).toContain('/transcriber')
-  })
-
-  it('transcriber is hidden only when VITE_FEATURE_TRANSCRIBER is explicitly "false"', () => {
-    const result = filterByFeatureFlag(navItems, { VITE_FEATURE_TRANSCRIBER: 'false' })
-    expect(result.map((i) => i.to)).not.toContain('/transcriber')
-  })
+  // TASK 1b: Transcriber moved out of the primary nav into the Knowledge sidebar
+  // (KnowledgeView.vue); its standalone /transcriber path now redirects to
+  // /knowledge/transcriber. The former transcriber-navItem feature-flag tests
+  // were removed with the navItem. #9984 retains PRIMARY-nav flag gating, which
+  // the canvas + unflagged-item cases below still cover.
 
   it('canvas fails CLOSED — hidden when its flag is unset, shown only on "true"', () => {
     const hidden = filterByFeatureFlag(profileMenuItems, {})

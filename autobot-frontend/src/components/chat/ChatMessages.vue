@@ -716,6 +716,9 @@ const filteredMessages = computed(() => {
     // Show Sources - controls source reference messages
     if (displayType === 'sources' && !displaySettings.value.showSources) return false
 
+    // Show Metadata - controls json/metadata responses (mapMessageType → 'json')
+    if (displayType === 'json' && !displaySettings.value.showJson) return false
+
     // Always show regular messages and responses
     return true
   })

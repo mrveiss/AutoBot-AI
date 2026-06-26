@@ -928,9 +928,48 @@ async def perform_knowledge_search(state: ChatState, config: RunnableConfig) -> 
         return {"agentic_context": "", "agentic_search_queries": []}
 
 
+async def _persist_error_turn(manager, state: ChatState) -> None:
+    """Persist the assistant-side error message when the LLM iteration failed.
+
+    Bug fix: previously persist_conversation returned immediately when
+    ``state["error"]`` was set, so a failed turn left the session file with
+    only the user's message (no paired assistant reply). We now always write
+    an assistant turn — either the error message produced by generate_response
+    or a synthesized fallback — so the round-trip is visible to the user and
+    the frontend does not silently re-submit the same message.
+    """
+    from async_chat_workflow import WorkflowMessage
+
+    session_id = state.get("session_id", "")
+    wf_messages = [
+        WorkflowMessage(
+            type=m.get("type", "response"),
+            content=m.get("content", ""),
+            metadata=m.get("metadata", {}),
+        )
+        for m in state.get("workflow_messages", [])
+        if m.get("content")  # skip empty stream-control markers
+    ]
+    if not wf_messages:
+        wf_messages = [
+            WorkflowMessage(
+                type="error",
+                content="The assistant could not generate a response. Please try again.",
+                metadata={},
+            )
+        ]
+    try:
+        await manager._persist_workflow_messages(session_id, wf_messages, "")
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to persist error turn for session %s: %s", session_id, exc, exc_info=True)
+
+
 async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict:
     """Persist conversation to Redis and file storage."""
     if state.get("error"):
+        # Bug fix: persist the assistant-side error turn instead of dropping it,
+        # so the session is never left with only the user's message.
+        await _persist_error_turn(config["configurable"]["manager"], state)
         return {}
 
     from chat_workflow.llm_handler import _emit_loop_complete

@@ -22,6 +22,12 @@ export interface RequestOptions {
   onUploadProgress?: (progressEvent: UploadProgressEvent) => void;
   responseType?: string;
   signal?: AbortSignal;
+  /**
+   * When true, the client does not emit a WARN log on final failure. Use for
+   * endpoints whose absence/timeout is handled gracefully by the caller
+   * (optional widgets, health probes) so they don't generate console noise.
+   */
+  suppressErrorLog?: boolean;
 }
 
 export interface ChatMessageOptions {
@@ -81,6 +87,9 @@ export class ApiClient {
   private baseUrlPromise: Promise<string> | null;
   private defaultTimeout: number;
   private settings: Record<string, unknown>;
+  // BUG5: cache the /api/settings/ response for the session so it isn't
+  // re-fetched (and re-timed-out) on every route navigation.
+  private _apiSettingsCache: Record<string, unknown> | null = null;
 
   constructor() {
     this.baseUrl = '';
@@ -362,8 +371,10 @@ export class ApiClient {
   async get<T = unknown>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     let lastError: Error | undefined;
     const maxRetries = options.maxRetries !== undefined ? options.maxRetries : 3;
+    let attemptsMade = 0;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      attemptsMade = attempt;
       try {
         const response = await this.rawRequest(endpoint, {
           method: 'GET', ...options,
@@ -379,12 +390,13 @@ export class ApiClient {
         return await response.json();
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        logger.warn(
-          `GET attempt ${attempt} failed for ${endpoint}:`,
-          lastError.message
+        // Per-attempt failures are debug-level only — a single summary line is
+        // logged once below so retries don't flood the console (BUG4/BUG5).
+        logger.debug(
+          `GET attempt ${attempt} failed for ${endpoint}: ${lastError.message}`
         );
 
-        // Don't retry 4xx client errors
+        // Don't retry 4xx client errors — they won't succeed on retry.
         if (lastError.message.includes('HTTP 4')) {
           break;
         }
@@ -396,7 +408,13 @@ export class ApiClient {
       }
     }
 
-    logger.error(`GET failed after ${maxRetries} attempts: ${endpoint}`, lastError);
+    // Single final log with the ACTUAL attempt count (was always "maxRetries").
+    // Callers that handle the failure gracefully pass suppressErrorLog.
+    if (!options.suppressErrorLog) {
+      logger.warn(
+        `GET failed for ${endpoint} after ${attemptsMade} attempt(s): ${lastError?.message}`
+      );
+    }
     throw lastError;
   }
 
@@ -620,12 +638,32 @@ export class ApiClient {
   // ==================================================================================
 
   async getSettings(options: RequestOptions = {}): Promise<Record<string, unknown>> {
+    // BUG5: serve from the per-session cache so navigating between routes does
+    // not re-fetch /api/settings/ (which was timing out and spamming WARNs).
+    if (this._apiSettingsCache) return this._apiSettingsCache;
+
     const timeout = options.timeout || appConfig.getTimeout('short');
-    return await this.get(`${getApiBase()}/settings/`, { ...options, timeout });
+    try {
+      const data = await this.get<Record<string, unknown>>(
+        `${getApiBase()}/settings/`,
+        // One attempt only, and don't emit console noise — failure falls back
+        // to built-in defaults that are cached for the rest of the session.
+        { ...options, timeout, maxRetries: 1, suppressErrorLog: true },
+      );
+      this._apiSettingsCache = data;
+      return data;
+    } catch {
+      logger.debug('Settings unavailable on startup — using defaults for this session');
+      this._apiSettingsCache = {};
+      return this._apiSettingsCache;
+    }
   }
 
   async saveSettings(settings: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return await this.post(`${getApiBase()}/settings/`, settings);
+    const saved = await this.post<Record<string, unknown>>(`${getApiBase()}/settings/`, settings);
+    // Keep the session cache in sync with what we just persisted.
+    this._apiSettingsCache = saved ?? settings;
+    return saved;
   }
 
   async getSystemHealth(): Promise<Record<string, unknown>> {

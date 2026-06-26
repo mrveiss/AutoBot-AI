@@ -25,6 +25,9 @@ import { useLoadingState } from '@/composables/useLoadingState';
 
 const logger = createLogger('useWorkflowBuilder');
 
+// BUG3: user-facing message shown when the workflow WebSocket can't connect.
+const WORKFLOW_WS_ERROR = 'Unable to connect to workflow service';
+
 // ==================================================================================
 // TYPE DEFINITIONS
 // ==================================================================================
@@ -629,9 +632,20 @@ export function useWorkflowBuilder() {
         logger.error('Failed to parse WebSocket message:', e);
       }
     },
-    onOpen: () => logger.info('WebSocket connected'),
+    onOpen: () => {
+      logger.info('WebSocket connected');
+      // Clear any prior connection error once we reconnect.
+      errors.value = errors.value.filter((e) => e !== WORKFLOW_WS_ERROR);
+    },
     onClose: () => logger.info('WebSocket disconnected'),
-    onError: (event) => logger.error('WebSocket error:', event),
+    // BUG3: don't log the raw `Event`. Surface a single user-facing message
+    // instead of silently failing, and keep the technical detail at debug.
+    onError: () => {
+      logger.debug('Workflow WebSocket connection error');
+      if (!errors.value.includes(WORKFLOW_WS_ERROR)) {
+        errors.value = [...errors.value, WORKFLOW_WS_ERROR];
+      }
+    },
   });
 
   // ==================================================================================

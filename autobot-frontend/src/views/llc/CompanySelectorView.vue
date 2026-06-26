@@ -52,9 +52,9 @@ onMounted(async () => {
       <p class="selector-subtitle">{{ $t('nav.llcSelectCompanyPrompt') }}</p>
     </header>
 
-    <!-- #10502: deployment without company mode (single_user) — informational
-         empty-state instead of a raw 503 error + Retry. -->
-    <div v-if="!companyOsEnabled" class="selector-unavailable">
+    <!-- #10502: company mode off (single_user) OR a 503 from the company
+         endpoint — informational empty-state, never a raw error. -->
+    <div v-if="!companyOsEnabled || companyStore.unavailable" class="selector-unavailable">
       <span class="selector-unavailable-icon" aria-hidden="true">🏢</span>
       <h2 class="selector-unavailable-title">
         {{ $t('nav.companyOsUnavailableTitle') }}
@@ -65,7 +65,7 @@ onMounted(async () => {
     </div>
 
     <div v-else-if="companyStore.error" class="selector-error">
-      {{ companyStore.error }}
+      {{ $t('common.errorBoundary.fetchError') }}
       <button class="selector-retry" @click="companyStore.fetchCompanies()">
         {{ $t('common.retry') }}
       </button>
