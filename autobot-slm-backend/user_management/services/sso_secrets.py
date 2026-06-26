@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 SENSITIVE_FIELDS: list[str] = ["client_secret", "bind_password"]
 
 # Vault secret type label stored with each secret entry.
-_SECRET_TYPE = "sso-credential"
+_SECRET_TYPE = "sso-credential"  # nosec B105 - secret-TYPE label, not a hardcoded password
 
 
 def _vault_name(provider_id: uuid.UUID, field: str) -> str:
