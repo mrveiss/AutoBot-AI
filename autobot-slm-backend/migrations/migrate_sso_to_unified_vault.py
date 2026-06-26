@@ -32,7 +32,6 @@ or with an explicit DB URL:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import sys
@@ -55,9 +54,9 @@ def _require_env() -> None:
 
 async def _run(db_url: str) -> None:
     """Async migration body."""
+    from sqlalchemy import select
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
     from sqlalchemy.orm import sessionmaker
-    from sqlalchemy import select
 
     engine = create_async_engine(db_url, echo=False)
     async_session_maker = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -102,9 +101,7 @@ async def _run(db_url: str) -> None:
         await session.commit()
 
     await engine.dispose()
-    logger.info(
-        "Migration complete: migrated=%d skipped=%d failed=%d", migrated, skipped, failed
-    )
+    logger.info("Migration complete: migrated=%d skipped=%d failed=%d", migrated, skipped, failed)
     if failed:
         logger.warning("%d providers failed; re-run after fixing the above errors", failed)
 
@@ -124,9 +121,11 @@ if __name__ == "__main__":
     else:
         try:
             from migrations.runner import get_db_url
+
             _db_url = get_db_url()
         except ImportError:
             from config import settings
+
             _db_url = settings.autobot_users_database_url
 
     logger.info("Starting SSO → unified-vault migration (db=%s)", _db_url.split("@")[-1])

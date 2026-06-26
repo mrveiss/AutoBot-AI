@@ -128,9 +128,7 @@ async def _write_audit(
         logger.warning("SSO rotation audit write failed: %s", type(exc).__name__)
 
 
-async def _update_provider_config(
-    session: AsyncSession, provider_id: uuid.UUID, updates: dict[str, Any]
-) -> None:
+async def _update_provider_config(session: AsyncSession, provider_id: uuid.UUID, updates: dict[str, Any]) -> None:
     """Merge *updates* into the provider's config JSONB and flush."""
     from user_management.models.sso import SSOProvider
 
@@ -142,9 +140,7 @@ async def _update_provider_config(
     await session.flush()
 
 
-def check_staleness(
-    provider_id: uuid.UUID, config: dict[str, Any], fields: list[str] | None = None
-) -> dict[str, Any]:
+def check_staleness(provider_id: uuid.UUID, config: dict[str, Any], fields: list[str] | None = None) -> dict[str, Any]:
     """Return a staleness report for a provider's secrets.
 
     Returns a dict mapping each field to whether it is stale, plus its
@@ -195,8 +191,7 @@ async def rotate_kek(
     vault_id_str = provider.config.get(_vault_id_key(field))
     if not vault_id_str:
         raise SSORotationError(
-            f"field {field!r} has no vault_id in config for provider {provider_id}; "
-            "run migrate_to_vault first"
+            f"field {field!r} has no vault_id in config for provider {provider_id}; " "run migrate_to_vault first"
         )
     vault_id = uuid.UUID(vault_id_str)
 
@@ -214,9 +209,7 @@ async def rotate_kek(
         actor_id=actor_id,
         details={"field": field, "vault_id": str(vault_id), "rotated_at": now_iso},
     )
-    logger.info(
-        "SSO KEK rotation complete: provider=%s field=%s vault_id=%s", provider_id, field, vault_id
-    )
+    logger.info("SSO KEK rotation complete: provider=%s field=%s vault_id=%s", provider_id, field, vault_id)
     return {"vault_id": str(vault_id), "rotated_at": now_iso, "action": "rotate_kek", **meta}
 
 
@@ -244,8 +237,7 @@ async def rotate_value(
     vault_id_str = provider.config.get(_vault_id_key(field))
     if not vault_id_str:
         raise SSORotationError(
-            f"field {field!r} has no vault_id in config for provider {provider_id}; "
-            "run migrate_to_vault first"
+            f"field {field!r} has no vault_id in config for provider {provider_id}; " "run migrate_to_vault first"
         )
     vault_id = uuid.UUID(vault_id_str)
 
@@ -263,7 +255,5 @@ async def rotate_value(
         actor_id=actor_id,
         details={"field": field, "vault_id": str(vault_id), "rotated_at": now_iso},
     )
-    logger.info(
-        "SSO value rotation complete: provider=%s field=%s vault_id=%s", provider_id, field, vault_id
-    )
+    logger.info("SSO value rotation complete: provider=%s field=%s vault_id=%s", provider_id, field, vault_id)
     return {"vault_id": str(vault_id), "rotated_at": now_iso, "action": "rotate_value", **meta}

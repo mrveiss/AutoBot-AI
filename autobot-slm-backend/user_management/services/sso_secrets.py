@@ -161,9 +161,7 @@ class SSOSecretsManager:
                     logger.info("unified-vault: created SSO secret field=%s provider=%s", field, provider_id)
             except UnifiedVaultClientError as exc:
                 # Vault unavailable — keep plaintext out of config, propagate.
-                logger.error(
-                    "unified-vault: failed to store SSO secret field=%s: %s", field, type(exc).__name__
-                )
+                logger.error("unified-vault: failed to store SSO secret field=%s: %s", field, type(exc).__name__)
                 raise
 
             sanitized[_vault_id_config_key(field)] = existing_vault_id_str
@@ -245,9 +243,7 @@ class SSOSecretsManager:
             except UnifiedVaultSecretNotFound:
                 pass  # already gone — idempotent
             except UnifiedVaultClientError as exc:
-                logger.warning(
-                    "unified-vault: delete failed field=%s: %s", field, type(exc).__name__
-                )
+                logger.warning("unified-vault: delete failed field=%s: %s", field, type(exc).__name__)
 
         # Also clean up legacy SystemSecret rows if present.
         await self._delete_legacy(provider_id)
@@ -284,9 +280,7 @@ class SSOSecretsManager:
         for field in SENSITIVE_FIELDS:
             vault_id_key = _vault_id_config_key(field)
             if updated.get(vault_id_key):
-                logger.info(
-                    "migrate_to_vault: skip field=%s provider=%s (already migrated)", field, provider_id
-                )
+                logger.info("migrate_to_vault: skip field=%s provider=%s (already migrated)", field, provider_id)
                 continue
 
             # Read from legacy store.
@@ -301,7 +295,9 @@ class SSOSecretsManager:
             except Exception as exc:
                 logger.error(
                     "migrate_to_vault: decrypt failed field=%s provider=%s: %s",
-                    field, provider_id, type(exc).__name__,
+                    field,
+                    provider_id,
+                    type(exc).__name__,
                 )
                 continue
 
@@ -310,7 +306,9 @@ class SSOSecretsManager:
             except UnifiedVaultClientError as exc:
                 logger.error(
                     "migrate_to_vault: vault_create failed field=%s provider=%s: %s",
-                    field, provider_id, type(exc).__name__,
+                    field,
+                    provider_id,
+                    type(exc).__name__,
                 )
                 raise
 
@@ -319,7 +317,9 @@ class SSOSecretsManager:
             updated.pop(field, None)
             logger.info(
                 "migrate_to_vault: migrated field=%s provider=%s vault_id=%s",
-                field, provider_id, meta["id"],
+                field,
+                provider_id,
+                meta["id"],
             )
 
         return updated
@@ -331,8 +331,9 @@ class SSOSecretsManager:
     async def _resolve_vault_id(self, provider_id: uuid.UUID, field: str) -> uuid.UUID | None:
         """Look up the vault UUID from the provider's persisted config (fast path)."""
         try:
-            from user_management.models.sso import SSOProvider
             from sqlalchemy import select as sa_select
+
+            from user_management.models.sso import SSOProvider
 
             row = await self._session.execute(sa_select(SSOProvider).where(SSOProvider.id == provider_id))
             provider = row.scalar_one_or_none()
@@ -344,7 +345,9 @@ class SSOSecretsManager:
         except Exception as exc:
             logger.warning(
                 "unified-vault: vault_id lookup failed field=%s provider=%s: %s",
-                field, provider_id, type(exc).__name__,
+                field,
+                provider_id,
+                type(exc).__name__,
             )
         return None
 

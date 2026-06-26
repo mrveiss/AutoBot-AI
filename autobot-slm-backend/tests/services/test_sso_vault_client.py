@@ -90,6 +90,7 @@ _sso_rotation_mod = _load_module(
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _mock_session():
     session = AsyncMock()
     result_mock = MagicMock()
@@ -108,6 +109,7 @@ def _mock_provider(provider_id: uuid.UUID, config: dict) -> MagicMock:
 # ---------------------------------------------------------------------------
 # unified_vault_client tests
 # ---------------------------------------------------------------------------
+
 
 class TestUnifiedVaultClientConfig:
     def test_check_configured_raises_when_key_missing(self, monkeypatch):
@@ -184,6 +186,7 @@ class TestUnifiedVaultClientConfig:
 # sso_rotation tests — staleness
 # ---------------------------------------------------------------------------
 
+
 class TestSSORotationStaleness:
     def test_none_timestamp_is_stale(self):
         assert _sso_rotation_mod._is_stale(None) is True
@@ -227,6 +230,7 @@ class TestSSORotationStaleness:
 # sso_rotation — rotate_kek
 # ---------------------------------------------------------------------------
 
+
 def _make_session_with_provider(provider):
     """Return an AsyncMock session whose execute().scalar_one_or_none() yields *provider*."""
     session = _mock_session()
@@ -250,8 +254,10 @@ class TestRotateKEK:
         rewrap_ret = {"id": str(vault_id), "version": 2, "name": "test"}
         _uvc_stub.vault_rewrap_kek = AsyncMock(return_value=rewrap_ret)
 
-        with patch.object(_sso_rotation_mod, "_update_provider_config", new=AsyncMock()), \
-             patch.object(_sso_rotation_mod, "_write_audit", new=AsyncMock()):
+        with (
+            patch.object(_sso_rotation_mod, "_update_provider_config", new=AsyncMock()),
+            patch.object(_sso_rotation_mod, "_write_audit", new=AsyncMock()),
+        ):
             result = await _sso_rotation_mod.rotate_kek(
                 session,
                 provider_id=pid,
@@ -291,6 +297,7 @@ class TestRotateKEK:
 # sso_rotation — rotate_value
 # ---------------------------------------------------------------------------
 
+
 class TestRotateValue:
     @pytest.mark.asyncio
     async def test_rotate_value_calls_vault_rotate_and_returns_result(self):
@@ -304,8 +311,10 @@ class TestRotateValue:
         rotate_ret = {"id": str(vault_id), "version": 3, "name": "test"}
         _uvc_stub.vault_rotate = AsyncMock(return_value=rotate_ret)
 
-        with patch.object(_sso_rotation_mod, "_update_provider_config", new=AsyncMock()), \
-             patch.object(_sso_rotation_mod, "_write_audit", new=AsyncMock()):
+        with (
+            patch.object(_sso_rotation_mod, "_update_provider_config", new=AsyncMock()),
+            patch.object(_sso_rotation_mod, "_write_audit", new=AsyncMock()),
+        ):
             result = await _sso_rotation_mod.rotate_value(
                 session,
                 provider_id=pid,
@@ -326,9 +335,7 @@ class TestRotateValue:
         session = _make_session_with_provider(provider)
 
         with pytest.raises(_sso_rotation_mod.SSORotationError, match="vault_id"):
-            await _sso_rotation_mod.rotate_value(
-                session, provider_id=pid, field="client_secret", new_value="something"
-            )
+            await _sso_rotation_mod.rotate_value(session, provider_id=pid, field="client_secret", new_value="something")
 
     @pytest.mark.asyncio
     async def test_rotate_value_raises_when_provider_not_found(self):
@@ -344,6 +351,7 @@ class TestRotateValue:
 # ---------------------------------------------------------------------------
 # Module-level constant env override (SSO_SECRET_MAX_AGE_DAYS)
 # ---------------------------------------------------------------------------
+
 
 class TestMaxAgeDaysConstant:
     def test_default_is_90(self):

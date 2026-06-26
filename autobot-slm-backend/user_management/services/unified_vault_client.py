@@ -94,9 +94,7 @@ async def _request(method: str, path: str, **kwargs: Any) -> Any:
                 return None
             if not resp.ok:
                 body = await resp.text()
-                raise UnifiedVaultClientError(
-                    f"vault API {method} {path} returned {resp.status}: {body[:200]}"
-                )
+                raise UnifiedVaultClientError(f"vault API {method} {path} returned {resp.status}: {body[:200]}")
             return await resp.json()
 
 

@@ -119,9 +119,7 @@ class SSORotateKEKRequest(BaseModel):
     """Request body for KEK rotation (rewrap DEKs, plaintext unchanged)."""
 
     field: str = Field(..., description="Secret field name, e.g. 'client_secret' or 'bind_password'")
-    new_root_key: str = Field(
-        ..., description="URL-safe base64-encoded new root key (32 bytes decoded)"
-    )
+    new_root_key: str = Field(..., description="URL-safe base64-encoded new root key (32 bytes decoded)")
 
 
 class SSORotateValueRequest(BaseModel):
