@@ -1900,5 +1900,23 @@
   "updatesView": {
     "manageSystemUpdatesAnd": "Manage system updates and code deployments across the fleet",
     "updates": "Updates"
+  },
+  "sharedLinksView": {
+    "title": "Shared Links Audit",
+    "subtitle": "Read-only audit of who has shared what — every active public chat link, by user. Users manage their own shares in the app.",
+    "refresh": "Refresh",
+    "dismiss": "Dismiss",
+    "loading": "Loading shared links…",
+    "empty": "No active shared links.",
+    "tableCaption": "Audit of active shared chat links across all users",
+    "colOwner": "Owner",
+    "colSession": "Session",
+    "colCreated": "Created",
+    "colExpires": "Expires",
+    "colPassword": "Password",
+    "never": "Never",
+    "protected": "Protected",
+    "open": "Open",
+    "countHint": "{count} active link(s)."
   }
 }
