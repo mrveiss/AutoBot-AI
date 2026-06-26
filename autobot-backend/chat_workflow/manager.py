@@ -2739,7 +2739,12 @@ before summarizing.
         try:
             chat_mgr = ChatHistoryManager()
 
-            existing = await chat_mgr.load_session(session_id)
+            # Read the tail for de-dup in its OWN guard: a read failure
+            # (permission/corruption) must never block persisting the write.
+            try:
+                existing = await chat_mgr.load_session(session_id)
+            except Exception:  # noqa: BLE001
+                existing = []
             if existing:
                 last = existing[-1]
                 if last.get("sender") == "user" and (last.get("text") or "").strip() == (message or "").strip():
