@@ -8,14 +8,14 @@
 
     <!-- Header - Issue #901: Professional solid color (no gradients) -->
     <!-- Hide navigation bar on login page -->
-    <header v-if="showAuthChrome" class="bg-autobot-bg-secondary border-b border-autobot-border relative z-30" style="min-height: 56px; height: auto;">
+    <header v-if="showAuthChrome" class="app-header bg-autobot-bg-secondary border-b border-autobot-border relative z-30" style="min-height: 56px; height: auto;">
       <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between" style="min-height: 56px; height: auto;">
           <!-- Logo/Brand with System Status -->
           <div class="shrink-0 flex items-center">
             <button
               @click="toggleSystemStatus"
-              class="flex items-center gap-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+              class="flex items-center gap-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
               :title="getSystemStatusTooltip()"
               :aria-label="getSystemStatusAriaLabel()"
             >
@@ -208,7 +208,7 @@
         enter-active-class="transition duration-300 ease-out"
         enter-from-class="transform -translate-y-full opacity-0"
         enter-to-class="transform translate-y-0 opacity-100"
-        leave-active-class="transition duration-200 ease-in"
+        leave-active-class="transition duration-200 ease-out"
         leave-from-class="transform translate-y-0 opacity-100"
         leave-to-class="transform -translate-y-full opacity-0"
       >
@@ -542,6 +542,7 @@ import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
 import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
+import { useRuntimeFeaturesStore } from '@/stores/useRuntimeFeaturesStore'
 import { useSystemStatus } from '@/composables/useSystemStatus'
 import { useHostSelection } from '@/composables/useHostSelection';
 import { useNavOverflow } from '@/composables/useNavOverflow'
@@ -597,6 +598,9 @@ export default {
     const userStore = useUserStore();
     const chatStore = useChatStore();
     const knowledgeStore = useKnowledgeStore();
+    // #10502: runtime (deployment) feature flags from /api/frontend-config,
+    // used to gate the Company OS nav item in single_user deployments.
+    const runtimeFeaturesStore = useRuntimeFeaturesStore();
     const router = useRouter();
     const route = useRoute();
 
@@ -893,6 +897,10 @@ export default {
     onMounted(async () => {
       logger.debug('Initializing optimized AutoBot application...');
 
+      // #10502: load deployment feature flags (e.g. company_os_enabled) so the
+      // nav rail can hide modules unavailable in this deployment mode.
+      void runtimeFeaturesStore.load();
+
       // Add global click and keyboard listeners for mobile nav
       document.addEventListener('click', closeNavbarOnClickOutside);
       document.addEventListener('keydown', closeNavbarOnEscape);
@@ -978,7 +986,15 @@ export default {
     // Nav overflow: ref for container, filtered/visible/overflow computed slices
     const navContainerRef = ref<HTMLElement | null>(null)
 
-    const filteredNavItems = computed(() => filterByFeatureFlag(navItems))
+    // #10502: hide the Company OS entry when the deployment has no PostgreSQL
+    // company mode (single_user) — its endpoints return 503 there. The runtime
+    // flag defaults fail-closed until /frontend-config resolves.
+    const filteredNavItems = computed(() =>
+      filterByFeatureFlag(navItems).filter(
+        (item) =>
+          item.to !== '/llc/select-company' || runtimeFeaturesStore.companyOsEnabled,
+      ),
+    )
 
     const filteredProfileMenuItems = computed(() =>
       filterByFeatureFlag(profileMenuItems)

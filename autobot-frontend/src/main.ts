@@ -26,6 +26,9 @@ import './assets/styles/view.css'
 // Import CSS Design System (Issue #704/#901) - SSOT - must come AFTER legacy to override
 import './assets/css/index.css'
 
+// Interaction polish — shell press feedback + stronger easing (#10488 B2)
+import './assets/css/interaction-polish.css'
+
 // Global reset (* { margin:0; padding:0; box-sizing:border-box }, body { margin:0;
 // min-height:100vh }) — must load AFTER vue-notus and component packages so their
 // leaked unscoped body{padding...} rules can't push the layout off-viewport.

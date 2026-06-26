@@ -49,6 +49,27 @@ logger = logging.getLogger(__name__)
 OAUTH_STATE_TTL_SECONDS = 600
 
 
+def _extract_redirect_url(saml_result: Any) -> str | None:
+    """Pull the Location URL out of a pysaml2 binding result tuple/dict.
+
+    pysaml2 returns heterogeneous shapes depending on binding; this helper
+    normalises them to a string redirect URL or None.
+    """
+    if saml_result is None:
+        return None
+    # HTTP-Redirect binding: (status, reason, headers, body) tuple
+    if isinstance(saml_result, tuple) and len(saml_result) >= 3:
+        headers = saml_result[2]
+        if isinstance(headers, list):
+            for key, val in headers:
+                if key.lower() == "location":
+                    return val
+    # Dict-style response (SOAP / HTTP-POST binding)
+    if isinstance(saml_result, dict):
+        return saml_result.get("url") or saml_result.get("Location")
+    return None
+
+
 def _pkce_challenge_s256(verifier: str) -> str:
     """Derive the RFC 7636 S256 code_challenge from a code_verifier."""
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
@@ -65,6 +86,24 @@ class SSOProviderNotFoundError(SSOServiceError):
 
 class SSOAuthenticationError(SSOServiceError):
     """SSO authentication failed."""
+
+
+def _validate_saml_issuer(parsed_request: Any, provider: SSOProvider) -> None:
+    """Raise SSOAuthenticationError if the issuer does not match the IdP entity ID."""
+    issuer = None
+    try:
+        issuer = parsed_request.message.issuer.text
+    except AttributeError:
+        pass
+    idp_entity_id = (provider.config or {}).get("idp_entity_id")
+    if idp_entity_id and issuer and issuer != idp_entity_id:
+        logger.error(
+            "SAML SLO issuer mismatch: expected %s, got %s (provider=%s)",
+            idp_entity_id,
+            issuer,
+            provider.id,
+        )
+        raise SSOAuthenticationError("SAML SLO issuer mismatch")
 
 
 class SSOService(BaseService):
@@ -415,16 +454,20 @@ class SSOService(BaseService):
         return await self._find_or_provision_user(provider, username, user_data)
 
     def _get_saml_config(self, provider: SSOProvider) -> dict[str, Any]:
-        """Build pysaml2 config from provider settings.
-
-        SAML SLO is not yet implemented — tracked in #10281.
-        """
+        """Build pysaml2 config from provider settings, including SLO endpoint (#10281)."""
         _http_post = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+        _http_redirect = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
         endpoints: dict[str, Any] = {
             "assertion_consumer_service": [
                 (provider.config.get("acs_url"), _http_post),
             ],
         }
+        slo_url = provider.config.get("slo_url")
+        if slo_url:
+            endpoints["single_logout_service"] = [
+                (slo_url, _http_redirect),
+                (slo_url, _http_post),
+            ]
         return {
             "entityid": provider.config.get("sp_entity_id"),
             "service": {"sp": {"endpoints": endpoints}},
@@ -467,16 +510,115 @@ class SSOService(BaseService):
         }
 
     async def complete_saml_login(self, provider_id: uuid.UUID, saml_response: str) -> tuple[User, uuid.UUID]:
-        """Complete SAML login flow and return (user, provider_id)."""
+        """Complete SAML login flow; persist NameID in sso_metadata for SLO (#10281)."""
         provider = await self.get_provider(provider_id)
         if not provider.is_active:
             raise SSOAuthenticationError(f"SSO provider {provider.name} is disabled")
         client = self._build_saml_client(provider)
         authn_response = client.parse_authn_request_response(saml_response, "POST")
-        external_id = authn_response.name_id
+        name_id = authn_response.name_id
+        external_id = name_id
         user_data = self._extract_saml_user_data(authn_response, provider)
+        # Persist NameID text + format so SLO can reconstruct it without re-parsing (#10281).
+        try:
+            name_id_obj = authn_response.assertion.subject.name_id
+            user_data["saml_name_id"] = name_id_obj.text if name_id_obj else str(name_id or "")
+            user_data["saml_name_id_format"] = getattr(name_id_obj, "format", "") or ""
+        except AttributeError:
+            # Fallback: use the top-level name_id string when assertion structure is unavailable.
+            user_data["saml_name_id"] = str(name_id or "")
+            user_data["saml_name_id_format"] = ""
         user = await self._find_or_provision_user(provider, external_id, user_data)
         return user, provider_id
+
+    async def get_saml_name_id_for_user(self, username: str) -> tuple[Any | None, SSOProvider | None]:
+        """Return (NameID object, provider) for the first active SAML link of *username*.
+
+        Returns (None, None) when the user has no active SAML SSO link.
+        """
+        from user_management.models.user import User as _User  # noqa: PLC0415
+
+        if Saml2Client is None:
+            return None, None
+
+        from saml2.saml import NameID  # noqa: PLC0415
+
+        result = await self.session.execute(
+            select(UserSSOLink)
+            .join(SSOProvider, UserSSOLink.provider_id == SSOProvider.id)
+            .join(_User, UserSSOLink.user_id == _User.id)
+            .where(
+                _User.username == username,
+                SSOProvider.provider_type == "saml",
+                SSOProvider.is_active.is_(True),
+            )
+            .limit(1)
+        )
+        link = result.scalar_one_or_none()
+        if not link:
+            return None, None
+
+        meta = link.sso_metadata or {}
+        name_id_text = meta.get("saml_name_id") or link.external_id
+        name_id_format = meta.get("saml_name_id_format", "")
+        name_id = NameID(text=name_id_text, format=name_id_format or None)
+        provider = await self.get_provider(link.provider_id)
+        return name_id, provider
+
+    def initiate_saml_logout(self, provider: SSOProvider, name_id: Any) -> str | None:
+        """Build a SAML SP-initiated LogoutRequest and return the redirect URL.
+
+        Returns None when the provider has no SLO endpoint configured.
+        Delegates to pysaml2 Saml2Client.global_logout which builds a signed
+        LogoutRequest and returns HTTP-Redirect binding info.
+        """
+        if Saml2Client is None:
+            logger.warning("pysaml2 not available — cannot initiate SAML SLO")
+            return None
+        slo_url = provider.config.get("slo_url")
+        if not slo_url:
+            logger.info("Provider %s has no slo_url — skipping SAML SLO", provider.id)
+            return None
+        client = self._build_saml_client(provider)
+        try:
+            result = client.global_logout(name_id)
+        except Exception:
+            logger.warning("pysaml2 global_logout failed for provider %s", provider.id, exc_info=True)
+            return None
+        return _extract_redirect_url(result)
+
+    def handle_saml_slo_callback(
+        self,
+        provider: SSOProvider,
+        xml_body: str,
+        binding: str,
+        sigalg: str | None = None,
+        signature: str | None = None,
+    ) -> tuple[bool, str | None]:
+        """Parse and validate a SAML LogoutRequest or LogoutResponse from the IdP.
+
+        Returns (success, redirect_url).
+        - success=True  → local session was terminated, redirect_url may carry a SAMLResponse.
+        - success=False → validation failed.
+        """
+        if Saml2Client is None:
+            raise SSOServiceError("pysaml2 library not installed")
+        client = self._build_saml_client(provider)
+        try:
+            parsed = client.parse_logout_request(xmlstr=xml_body, binding=binding, sigalg=sigalg, signature=signature)
+        except Exception as exc:
+            logger.warning("SAML SLO: failed to parse LogoutRequest from provider %s: %s", provider.id, exc)
+            raise SSOAuthenticationError("Invalid SAML LogoutRequest") from exc
+        _validate_saml_issuer(parsed, provider)
+        name_id = parsed.message.name_id
+        logger.info("SAML SLO callback: terminating local session for NameID %s", getattr(name_id, "text", name_id))
+        try:
+            resp_info = client.handle_logout_request(xml_body, name_id, binding, sigalg=sigalg, signature=signature)
+        except Exception as exc:
+            logger.warning("SAML SLO: handle_logout_request failed for provider %s: %s", provider.id, exc)
+            return True, None
+        redirect_url = _extract_redirect_url(resp_info)
+        return True, redirect_url
 
     async def _find_existing_sso_link(self, provider_id: uuid.UUID, external_id: str) -> UserSSOLink | None:
         """Find existing SSO link."""

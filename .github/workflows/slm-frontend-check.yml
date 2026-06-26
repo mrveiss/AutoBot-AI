@@ -1,0 +1,86 @@
+# SLM Frontend Check — type-check + build + lint for autobot-slm-frontend (#10493)
+#
+# The /slm operator console (autobot-slm-frontend) had NO CI gate, so broken
+# TypeScript/build changes could merge undetected and cross-app migrations
+# (#10488 Workstream A) had no way to be verified. This adds that gate.
+#
+# Mirrors frontend-test.yml's "changes filter + self-skip" pattern so the check
+# always reports a conclusion (a path-filtered required check that never fires
+# would deadlock the PR on "Expected — Waiting for status").
+
+name: SLM Frontend Check
+
+on:
+  push:
+    branches: [main, develop, 'Dev_*']
+    paths:
+      - 'autobot-slm-frontend/**'
+      - '.github/workflows/slm-frontend-check.yml'
+  pull_request:
+    branches: [main, develop, 'Dev_*']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # Always runs so the check reports a conclusion even when nothing matched.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      slm_frontend: ${{ steps.filter.outputs.slm_frontend }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590  # v3
+        id: filter
+        with:
+          filters: |
+            slm_frontend:
+              - 'autobot-slm-frontend/**'
+              - '.github/workflows/slm-frontend-check.yml'
+
+  slm-frontend-check:
+    name: SLM Frontend Check
+    needs: changes
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: autobot-slm-frontend
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Self-skip when no SLM frontend changes
+        if: needs.changes.outputs.slm_frontend != 'true'
+        run: echo "No autobot-slm-frontend changes — skipping (reporting success)."
+
+      - name: Set up Node
+        if: needs.changes.outputs.slm_frontend == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: autobot-slm-frontend/package-lock.json
+
+      - name: Install dependencies
+        if: needs.changes.outputs.slm_frontend == 'true'
+        run: npm ci
+
+      - name: Type-check (vue-tsc)
+        if: needs.changes.outputs.slm_frontend == 'true'
+        run: npm run type-check
+
+      - name: Lint
+        if: needs.changes.outputs.slm_frontend == 'true'
+        run: npx eslint .
+
+      - name: Build
+        if: needs.changes.outputs.slm_frontend == 'true'
+        # build:slm sets VITE_API_URL=/slm (the co-located base the vite config requires).
+        run: npm run build:slm

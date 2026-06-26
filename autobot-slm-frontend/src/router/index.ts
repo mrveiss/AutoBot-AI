@@ -63,6 +63,14 @@ const router = createRouter({
       meta: { title: 'Services' }
     },
     {
+      // GH#8996 / #10488 Workstream A: Shared chat links — migrated from the
+      // user frontend. Operator cross-user view of all active shared links.
+      path: '/shared-links',
+      name: 'shared-links',
+      component: () => import('@/views/SharedLinksView.vue'),
+      meta: { title: 'Shared Chat Links', admin: true }
+    },
+    {
       path: '/deployments/:tab?',
       name: 'deployments',
       component: () => import('@/views/DeploymentsView.vue'),
