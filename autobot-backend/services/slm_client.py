@@ -215,6 +215,54 @@ from autobot_shared.tls import _is_loopback_target
 from autobot_shared.tls import get_internal_tls_context as _create_permissive_ssl_context
 
 
+_LOOPBACK_HOSTS: frozenset = frozenset({"127.0.0.1", "localhost", "::1", "ip6-localhost"})
+_NGINX_HTTP_PORTS: frozenset = frozenset({80, 443})
+
+
+def _is_direct_uvicorn_url(url: str) -> bool:
+    """Return True when the SLM URL points directly to uvicorn (no nginx in between).
+
+    nginx always serves on HTTPS (port 443) or standard HTTP (port 80).  Any
+    plain-HTTP URL with a non-standard port (e.g. ``:8000``) or a loopback
+    hostname connects directly to uvicorn, so the WebSocket path must NOT
+    include the ``/slm/`` nginx prefix.
+
+    This fixes the Docker Compose case where ``AUTOBOT_SLM_HOST=autobot-slm``
+    (a Docker internal DNS name, not a loopback address) is set to port 8000 —
+    the old ``_is_loopback_target`` check returned False, which caused
+    ``ws_path="/slm/api/ws/events"`` to be used against direct uvicorn.
+    Uvicorn has no ``/slm/`` route → starlette sends WebSocketClose before
+    accept → uvicorn converts that to HTTP 403 (GH#10459).
+
+    Args:
+        url: The SLM base URL (e.g. ``http://autobot-slm:8000``).
+
+    Returns:
+        True if the URL targets uvicorn directly (use ``/api/ws/events``).
+        False if the URL targets an nginx reverse proxy (use ``/slm/api/ws/events``).
+    """
+    try:
+        from urllib.parse import urlparse
+
+        p = urlparse(url)
+        host = (p.hostname or "").lower()
+        scheme = p.scheme.lower()
+        port = p.port  # None means the scheme's default port (80 for http, 443 for https)
+
+        # Loopback address always means direct uvicorn
+        if host in _LOOPBACK_HOSTS:
+            return True
+
+        # Plain HTTP on a non-standard port means direct uvicorn;
+        # nginx terminates TLS on 443 or serves plain HTTP on 80.
+        if scheme == "http" and port is not None and port not in _NGINX_HTTP_PORTS:
+            return True
+
+        return False
+    except Exception:
+        return False
+
+
 class ServiceNotConfiguredError(Exception):
     """Raised when a service is not configured in SLM or environment."""
 
@@ -579,16 +627,29 @@ class SLMClient:
         bare-metal deployments where ``SLM_SECRET_KEY`` is not aligned with
         ``AUTOBOT_JWT_SECRET``.
 
-        Path selection (GH#9967):
-          - Direct-port (loopback): ``/api/ws/events`` — nginx is not involved.
-          - Through nginx (non-loopback): ``/slm/api/ws/events`` — nginx routes
-            ``/slm/api/ws/`` to the SLM in both co-located and standalone modes
-            (#3268); ``/api/ws/events`` on co-located nginx lands on the user
-            backend instead.
+        Path selection (GH#9967, GH#10459):
+          - Direct uvicorn (loopback OR plain HTTP on non-standard port such as
+            ``:8000``): ``/api/ws/events`` — nginx is not involved.  Covers
+            co-located bare-metal (``http://127.0.0.1:8000``) AND Docker Compose
+            (``http://autobot-slm:8000``) where the hostname is a Docker DNS
+            name, not a loopback address.  Using ``/slm/api/ws/events`` against
+            direct uvicorn was the root-cause 403: starlette finds no ``/slm/``
+            route → sends WebSocketClose before accept → uvicorn maps that to
+            HTTP 403 (GH#10459).
+          - Through nginx (HTTPS or HTTP on standard port 80): ``/slm/api/ws/events``
+            — nginx routes ``/slm/api/ws/`` to uvicorn in both co-located and
+            standalone modes (#3268); ``/api/ws/events`` on co-located nginx
+            lands on the user backend instead.
         """
         ws_url = self.slm_url.replace("http://", "ws://").replace("https://", "wss://")
-        ws_path = "/api/ws/events" if _is_loopback_target(self.slm_url) else "/slm/api/ws/events"
+        ws_path = "/api/ws/events" if _is_direct_uvicorn_url(self.slm_url) else "/slm/api/ws/events"
         ws_url = f"{ws_url}{ws_path}"
+        logger.debug(
+            "SLM WS path selected: %s (slm_url=%s, direct_uvicorn=%s)",
+            ws_path,
+            self.slm_url,
+            _is_direct_uvicorn_url(self.slm_url),
+        )
 
         # Resolve the auth token for this connection attempt.
         # Operator-provided static token takes precedence; when absent, mint a
