@@ -1902,13 +1902,13 @@
     "updates": "Updates"
   },
   "sharedLinksView": {
-    "title": "Shared Chat Links",
-    "subtitle": "All active public chat links across every user",
+    "title": "Shared Links Audit",
+    "subtitle": "Read-only audit of who has shared what — every active public chat link, by user. Users manage their own shares in the app.",
     "refresh": "Refresh",
     "dismiss": "Dismiss",
     "loading": "Loading shared links…",
     "empty": "No active shared links.",
-    "tableCaption": "Active shared chat links across all users",
+    "tableCaption": "Audit of active shared chat links across all users",
     "colOwner": "Owner",
     "colSession": "Session",
     "colCreated": "Created",
