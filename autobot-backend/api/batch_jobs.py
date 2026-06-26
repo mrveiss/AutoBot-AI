@@ -39,12 +39,12 @@ from api.schemas_workflows import (
     BatchTemplate,
     BatchTemplateDeleteResponse,
 )
-from api.system_health import register_redis_probe
+from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["batch-jobs", "management"])
@@ -574,13 +574,39 @@ async def delete_batch_schedule(
 # =============================================================================
 
 
-# Issue #6914: re-migrated from hand-written probe to one-liner now that
-# register_redis_probe accepts data_callback for module-specific fields.
-register_redis_probe(
-    "batch_jobs",
-    database="main",
-    data_callback=lambda ok: {"redis_connected": ok, "service": "batch_jobs_manager"},
-)
+# Issue #6914 / #10476: hand-written async probe so that tests can monkeypatch
+# get_async_redis_client at module scope on this module (api.batch_jobs) rather
+# than on autobot_shared.redis_client, which makes per-test isolation trivial.
+@register_health_probe(KnownProbes.BATCH_JOBS)
+async def probe_batch_jobs(request) -> ComponentHealth:
+    """Async health probe: ping Redis and return the batch-jobs data contract.
+
+    Returns ``data`` with ``redis_connected`` (bool) and ``service`` (str) so
+    the frontend can read ``probes[name=batch_jobs].data`` from /api/system/health.
+    Degrades gracefully when the client is unavailable or ping fails (#10476).
+    """
+    try:
+        client = await get_async_redis_client(database="main")
+        if client is None:
+            return ComponentHealth(
+                name="batch_jobs",
+                status="down",
+                detail="redis client unavailable",
+                data={"redis_connected": False, "service": "batch_jobs_manager"},
+            )
+        await client.ping()
+        return ComponentHealth(
+            name="batch_jobs",
+            status="ok",
+            data={"redis_connected": True, "service": "batch_jobs_manager"},
+        )
+    except Exception as exc:
+        return ComponentHealth(
+            name="batch_jobs",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}",
+            data={"redis_connected": False, "service": "batch_jobs_manager"},
+        )
 
 
 # =============================================================================

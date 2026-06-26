@@ -3,8 +3,18 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 #
-# SLM Managed Nodes Inventory
-# Nodes registered in SLM admin dashboard
+# SLM Managed Nodes Inventory — LEGACY STATIC FALLBACK ONLY (#10110)
+#
+# This NN-Name template is NO LONGER the source of node identity. The
+# authoritative inventory is generated at runtime from the DB node registry
+# (services/inventory_builder.py, wired in playbook_executor._build_dynamic_inventory):
+# host name == node_id, ansible_host == registered ip_address, groups from
+# assigned roles. Real machines self-register with uuid4()[:8] node_ids.
+#
+# This file is used ONLY as the emergency fallback when the registry query
+# fails, and as the seed source for genuine multi-host fleets
+# (seed-fleet-nodes.yml skips co-located collapses). Do not add new nodes
+# here — register them via the SLM dashboard / API instead.
 ---
 all:
   vars:

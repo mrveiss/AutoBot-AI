@@ -11,7 +11,7 @@ Covers:
 - get_provider_endpoint_template has no end_session_endpoint for Google
   (Google uses /o/oauth2/revoke which is token-revocation, not RP-initiated OIDC logout)
 
-SAML SLO is not yet implemented — tracked in #10281.
+SAML SLO implemented in #10281 — see test_saml_slo.py for SLO-specific tests.
 """
 
 import importlib.util

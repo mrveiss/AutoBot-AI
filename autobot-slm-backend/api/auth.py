@@ -36,7 +36,7 @@ from models.schemas import (
 from services.auth import auth_service, get_current_user, get_slm_db, require_permission
 from services.database import get_db
 from services.token_denylist import revoke_jti
-from user_management.models.sso import UserSSOLink
+from user_management.models.sso import SSOProviderType, UserSSOLink
 from user_management.models.user import User
 from user_management.services import TenantContext, UserService
 
@@ -207,6 +207,37 @@ async def _get_user_sso_link(db: AsyncSession, username: str) -> "UserSSOLink | 
     return result.scalar_one_or_none()
 
 
+async def _build_sso_logout_url(link: "UserSSOLink | None", db: AsyncSession, username: str) -> str | None:
+    """Return IdP logout URL for the user's SSO link, branching on provider type.
+
+    - SAML providers: call initiate_saml_logout() to build a signed LogoutRequest redirect.
+    - OIDC providers: return the end_session_endpoint URL (OIDC RP-initiated logout).
+    - No link or unknown type: return None.
+    """
+    if not link:
+        return None
+    provider_type = getattr(link.provider, "provider_type", None) if link.provider else None
+    if provider_type == SSOProviderType.SAML.value:
+        return await _initiate_saml_slo(db, username)
+    return _build_end_session_url(link)
+
+
+async def _initiate_saml_slo(db: AsyncSession, username: str) -> str | None:
+    """Look up the user's SAML NameID and build an SP-initiated SLO redirect URL."""
+    from user_management.services.sso_service import SSOService  # noqa: PLC0415
+
+    context = TenantContext(is_platform_admin=False)
+    sso_service = SSOService(db, context)
+    try:
+        name_id, provider = await sso_service.get_saml_name_id_for_user(username)
+        if name_id is None or provider is None:
+            return None
+        return sso_service.initiate_saml_logout(provider, name_id)
+    except Exception:
+        logger.warning("SAML SLO initiation failed for user=%s", username, exc_info=True)
+        return None
+
+
 @router.post("/logout")
 async def logout(
     http_request: Request,
@@ -254,9 +285,9 @@ async def logout(
 
     logger.info("User logged out: %s", username)
 
-    # SSO RP-initiated logout
+    # SSO RP-initiated logout: branch on provider type
     link = await _get_user_sso_link(slm_db, username)
-    logout_url = _build_end_session_url(link) if link else None
+    logout_url = await _build_sso_logout_url(link, slm_db, username)
     return {"logout_url": logout_url}
 
 

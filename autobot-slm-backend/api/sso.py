@@ -21,6 +21,7 @@ from autobot_shared.auth.permissions import Permission
 from models.database import AuditLog
 from services.auth import require_permission
 from services.database import get_db
+from services.step_up_auth import require_step_up
 from user_management.database import get_slm_session
 from user_management.schemas.sso import (
     SSOProviderCreate,
@@ -100,6 +101,7 @@ async def list_providers(
 @router.post("", response_model=SSOProviderResponse, status_code=status.HTTP_201_CREATED)
 async def create_provider(
     provider_data: SSOProviderCreate,
+    _step_up: dict = Depends(require_step_up),
     current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
     db: AsyncSession = Depends(get_slm_db),
 ) -> SSOProviderResponse:
@@ -205,6 +207,7 @@ async def get_provider(
 async def update_provider(
     provider_id: uuid.UUID,
     updates: SSOProviderUpdate,
+    _step_up: dict = Depends(require_step_up),
     current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
     db: AsyncSession = Depends(get_slm_db),
 ) -> SSOProviderResponse:
@@ -232,6 +235,7 @@ async def update_provider(
 @router.delete("/{provider_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_provider(
     provider_id: uuid.UUID,
+    _step_up: dict = Depends(require_step_up),
     current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
     db: AsyncSession = Depends(get_slm_db),
 ) -> None:
@@ -295,6 +299,7 @@ async def get_provider_template(
 async def rotate_secret_kek(
     provider_id: uuid.UUID,
     body: SSORotateKEKRequest,
+    _step_up: dict = Depends(require_step_up),
     current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
     db: AsyncSession = Depends(get_slm_db),
 ) -> SSORotationResponse:
@@ -333,6 +338,7 @@ async def rotate_secret_kek(
 async def rotate_secret_value(
     provider_id: uuid.UUID,
     body: SSORotateValueRequest,
+    _step_up: dict = Depends(require_step_up),
     current_user: dict = Depends(require_permission(Permission.SECURITY_MANAGE)),
     db: AsyncSession = Depends(get_slm_db),
 ) -> SSORotationResponse:

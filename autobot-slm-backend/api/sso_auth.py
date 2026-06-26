@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
+from fastapi.responses import Response as RawResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.security import create_audit_log
@@ -24,6 +25,7 @@ from config import settings
 from services.auth import auth_service
 from services.database import get_db
 from user_management.database import get_slm_session
+from user_management.models.sso import SSOProviderType
 from user_management.schemas.sso import LDAPLoginRequest, SSOLoginInitResponse
 from user_management.services.base_service import TenantContext
 from user_management.services.sso_service import (
@@ -387,6 +389,96 @@ async def ldap_login(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Internal server error",
         ) from e
+
+
+@router.get("/saml/slo")
+@router.post("/saml/slo")
+async def saml_slo_callback(
+    request: Request,
+    db: AsyncSession = Depends(get_slm_db),
+    audit_db: AsyncSession = Depends(get_audit_db),
+    SAMLRequest: str | None = Form(None),
+    SAMLResponse: str | None = Form(None),
+    RelayState: str | None = Form(None),
+    SigAlg: str | None = Query(None),
+    Signature: str | None = Query(None),
+) -> RawResponse:
+    """Handle SAML Single Logout (SLO) callback from the IdP (#10281).
+
+    Accepts both HTTP-POST (form body) and HTTP-Redirect (query string) bindings.
+    The IdP sends a LogoutRequest to initiate SLO or a LogoutResponse to complete
+    an SP-initiated SLO.  We validate, terminate the local session, and return
+    the appropriate SAML LogoutResponse or redirect.
+    """
+    from saml2 import BINDING_HTTP_POST, BINDING_HTTP_REDIRECT  # noqa: PLC0415
+
+    client_ip = get_client_ip(request, trusted_proxies=settings.trusted_proxies) or "unknown"
+    context = TenantContext(is_platform_admin=False)
+    sso_service = SSOService(db, context)
+
+    # Determine binding and payload
+    if SAMLRequest or SAMLResponse:
+        binding = BINDING_HTTP_POST
+        xml_body = SAMLRequest or SAMLResponse
+    else:
+        # HTTP-Redirect: SAMLRequest/SAMLResponse arrive as query parameters
+        binding = BINDING_HTTP_REDIRECT
+        xml_body = request.query_params.get("SAMLRequest") or request.query_params.get("SAMLResponse")
+        SigAlg = SigAlg or request.query_params.get("SigAlg")
+        Signature = Signature or request.query_params.get("Signature")
+
+    if not xml_body:
+        logger.warning("SAML SLO callback received with no SAMLRequest or SAMLResponse (ip=%s)", client_ip)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing SAMLRequest or SAMLResponse")
+
+    # Resolve the SAML provider — SLO does not carry a provider ID, look up by type
+    providers, _ = await sso_service.list_providers(active_only=True)
+    saml_providers = [p for p in providers if p.provider_type == SSOProviderType.SAML.value]
+    if not saml_providers:
+        logger.error("SAML SLO callback: no active SAML provider configured (ip=%s)", client_ip)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No active SAML provider")
+
+    provider = saml_providers[0]
+
+    try:
+        success, redirect_url = sso_service.handle_saml_slo_callback(
+            provider, xml_body, binding, sigalg=SigAlg, signature=Signature
+        )
+    except SSOAuthenticationError as exc:
+        logger.warning("SAML SLO validation failed (ip=%s): %s", client_ip, exc)
+        try:
+            await create_audit_log(
+                audit_db,
+                category="sso",
+                action="slo_callback_failed",
+                ip_address=client_ip,
+                resource_type="sso_provider",
+                resource_id=str(provider.id),
+                success=False,
+                error_message=str(exc),
+            )
+            await audit_db.commit()
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="SAML SLO validation failed") from exc
+
+    try:
+        await create_audit_log(
+            audit_db,
+            category="sso",
+            action="slo_callback",
+            ip_address=client_ip,
+            resource_type="sso_provider",
+            resource_id=str(provider.id),
+            success=success,
+        )
+        await audit_db.commit()
+    except Exception as audit_err:
+        logger.warning("SAML SLO audit write failed: %s", audit_err)
+
+    if redirect_url:
+        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+    return RawResponse(content="<p>Logged out</p>", status_code=status.HTTP_200_OK, media_type="text/html")
 
 
 @router.post("/saml/callback")
