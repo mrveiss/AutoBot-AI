@@ -87,7 +87,9 @@ def get_slm_engine() -> AsyncEngine:
                     pool_recycle=pool["pool_recycle"],
                     pool_timeout=pool["pool_timeout"],
                     pool_pre_ping=True,
-                    connect_args={"timeout": 10},
+                    # #10491: command_timeout bounds pre_ping so a WSL-dropped
+                    # idle connection fails fast instead of hanging ~30s.
+                    connect_args={"timeout": 10, "command_timeout": 10},
                 )
                 logger.info("Created SLM database engine")
     return _slm_engine
@@ -112,7 +114,9 @@ def get_autobot_engine() -> AsyncEngine:
                     pool_recycle=pool["pool_recycle"],
                     pool_timeout=pool["pool_timeout"],
                     pool_pre_ping=True,
-                    connect_args={"timeout": 10},
+                    # #10491: command_timeout bounds pre_ping so a WSL-dropped
+                    # idle connection fails fast instead of hanging ~30s.
+                    connect_args={"timeout": 10, "command_timeout": 10},
                 )
                 logger.info("Created AutoBot database engine")
     return _autobot_engine

@@ -82,6 +82,9 @@ def get_async_engine() -> AsyncEngine:
         pool_recycle=pool["pool_recycle"],
         pool_timeout=pool["pool_timeout"],
         pool_pre_ping=True,
+        # #10491: command_timeout bounds pre_ping so a WSL-dropped idle
+        # connection fails fast instead of hanging ~30s on the dead socket.
+        connect_args={"timeout": 10, "command_timeout": 10},
         echo=False,
         future=True,
     )
