@@ -73,8 +73,14 @@
             <span>{{ t('visualizations.agentActivity.abstained') }}</span>
           </div>
           <div v-else-if="agent.status === 'error'" class="activity-error">
-            <Icon name="exclamation-triangle" />
-            <span>{{ t('visualizations.agentActivity.error') }}</span>
+            <div class="error-badge">
+              <Icon name="exclamation-triangle" />
+              <span>{{ t('visualizations.agentActivity.error') }}</span>
+            </div>
+            <!-- TASK 8: actionable CTA on error cards -->
+            <button class="view-logs-btn" @click.stop="viewLogs(agent)">
+              <Icon name="eye" /> View Logs
+            </button>
           </div>
         </div>
 
@@ -89,7 +95,8 @@
             <span class="metric-label">{{ t('visualizations.agentActivity.uptime') }}</span>
           </div>
           <div class="metric">
-            <span class="metric-value">{{ agent.successRate }}%</span>
+            <!-- TASK 5: success rate is meaningless with zero tasks — show N/A -->
+            <span class="metric-value">{{ agent.tasksCompleted === 0 ? 'N/A' : agent.successRate + '%' }}</span>
             <span class="metric-label">{{ t('visualizations.agentActivity.success') }}</span>
           </div>
         </div>
@@ -160,7 +167,8 @@
     <!-- Live Activity Feed -->
     <div class="activity-feed">
       <h4>
-        <Icon name="signal" />
+        <!-- TASK 6: was name="signal" which renders as a music note -->
+        <Icon name="activity" />
         {{ t('visualizations.agentActivity.liveActivityFeed') }}
       </h4>
       <div class="feed-items">
@@ -186,12 +194,14 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { getCssVar } from '@/composables/useCssVars'
 import { useExpansion } from '@/composables/useExpansion'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useAgentActivityData, type Agent, type ActivityEvent } from '@/composables/visualizations/useAgentActivityData'
 
 const { t } = useI18n()
+const router = useRouter()
 
 // Props
 interface Props {
@@ -289,6 +299,11 @@ function toggleExpand(agentId: string) {
 
 function viewDetails(agent: Agent) {
   emit('agent-click', agent)
+}
+
+// TASK 8: open the per-agent activity diary (logs) for a failed agent
+function viewLogs(agent: Agent) {
+  router.push({ path: '/agents/activity', query: { agent: agent.id } })
 }
 
 function pauseAgent(agent: Agent) {
@@ -463,8 +478,47 @@ defineExpose({
   border-left: 3px solid var(--text-tertiary);
 }
 
+/* TASK 8: make the error state more visually prominent */
 .agent-card.error {
-  border-left: 3px solid var(--color-error);
+  border: 2px solid var(--color-error);
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.activity-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-2);
+}
+
+.activity-error .error-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+.view-logs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  padding: var(--spacing-1) var(--spacing-2);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-error);
+  background: transparent;
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md, 6px);
+  cursor: pointer;
+  transition: background var(--duration-150) var(--ease-in-out);
+}
+
+.view-logs-btn:hover {
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.view-logs-btn .icon {
+  width: 12px;
+  height: 12px;
 }
 
 .agent-card.paused {

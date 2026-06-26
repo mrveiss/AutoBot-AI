@@ -173,6 +173,20 @@
                       <span>{{ $t(item.labelKey) }}</span>
                     </router-link>
                   </template>
+
+                  <!-- TASK 16: About relocated here from the page footer -->
+                  <hr class="my-1 border-autobot-border" />
+                  <router-link
+                    to="/about"
+                    role="menuitem"
+                    class="flex items-center gap-2 px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary text-autobot-text-primary"
+                    @click="showProfileDropdown = false"
+                  >
+                    <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                      <path fill-rule="evenodd" clip-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" />
+                    </svg>
+                    <span>{{ $t('nav.about') }}</span>
+                  </router-link>
                 </div>
               </Teleport>
             </div>
@@ -325,6 +339,20 @@
                 <span>{{ $t('nav.profileSettings') }}</span>
               </div>
             </button>
+
+            <!-- TASK 16: About relocated here from the page footer -->
+            <div class="border-t border-autobot-border pt-2 mt-1">
+              <router-link
+                to="/about"
+                @click="closeMobileNav"
+                class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 text-autobot-text-primary hover:bg-autobot-bg-tertiary"
+              >
+                <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                  <path fill-rule="evenodd" clip-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" />
+                </svg>
+                <span>{{ $t('nav.about') }}</span>
+              </router-link>
+            </div>
           </div>
         </div>
       </Transition>
@@ -516,12 +544,8 @@
       </LoadingBoundary>
     </main>
 
-    <!-- Footer: About link (hidden on public routes and routes with hideFooter meta) -->
-    <footer v-if="showAuthChrome && !hideFooter" class="flex-shrink-0 flex justify-center py-1 border-t border-autobot-border/30">
-      <router-link to="/about" class="text-xs text-autobot-text-muted hover:text-autobot-text-secondary transition-colors">
-        {{ $t('nav.about') }}
-      </router-link>
-    </footer>
+    <!-- TASK 16: About link relocated into the profile dropdown (desktop) and
+         the mobile nav panel. The page-bottom footer link was removed. -->
   </div>
 
   <!-- Issue #729: RUM Dashboard moved to slm-admin -->
@@ -715,7 +739,6 @@ export default {
     const hasErrors = computed(() => false); // No errors property in store
     const isPublicRoute = computed(() => !!route.meta.isPublic);
     const showAuthChrome = computed(() => userStore.isAuthenticated && !isPublicRoute.value);
-    const hideFooter = computed(() => !!route.meta.hideFooter);
 
     // Methods
     const toggleMobileNav = () => {
@@ -1024,7 +1047,6 @@ export default {
       hasErrors,
       isPublicRoute,
       showAuthChrome,
-      hideFooter,
       navItems,
       filteredNavItems,
       profileMenuItems,

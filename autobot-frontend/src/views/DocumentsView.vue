@@ -85,8 +85,20 @@
 
     <div class="documents-main">
       <div v-if="!selectedDocId" class="no-selection">
-        <Icon name="file-alt" class="no-selection-icon" aria-hidden="true" />
-        <p>Select a document from the list to view and edit it.</p>
+        <!-- TASK 12: richer empty state when there are no documents at all -->
+        <template v-if="!composable.hasDocuments.value">
+          <Icon name="file-alt" class="no-selection-icon" aria-hidden="true" />
+          <h3 class="no-selection-title">No documents yet</h3>
+          <p class="no-selection-sub">Save AI responses from Chat to build your document library</p>
+          <RouterLink to="/chat" class="go-to-chat-btn">
+            <Icon name="comments" aria-hidden="true" />
+            <span>Go to Chat</span>
+          </RouterLink>
+        </template>
+        <template v-else>
+          <Icon name="file-alt" class="no-selection-icon" aria-hidden="true" />
+          <p>Select a document from the list to view and edit it.</p>
+        </template>
       </div>
 
       <AIDocumentEditor
@@ -463,6 +475,40 @@ function showError(msg: string) {
 .no-selection-icon {
   font-size: var(--text-5xl);
   color: var(--color-text-muted, #444);
+}
+
+/* TASK 12: rich empty state */
+.no-selection-title {
+  font-size: var(--text-xl, 1.25rem);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.no-selection-sub {
+  max-width: 22rem;
+  text-align: center;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.go-to-chat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-4);
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: var(--radius-md, 6px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background var(--duration-150) var(--ease-in-out);
+}
+
+.go-to-chat-btn:hover {
+  background: var(--color-primary-hover, var(--color-primary));
 }
 
 .editor-panel {

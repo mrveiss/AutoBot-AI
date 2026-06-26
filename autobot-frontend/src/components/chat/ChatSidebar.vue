@@ -315,21 +315,8 @@
         </div>
       </section>
 
-      <!-- Display Settings Section - FIXED: More compact -->
-      <section class="border-t border-autobot-border p-4 pb-3 shrink-0">
-        <h3 class="text-base font-semibold text-autobot-text-primary mb-2">{{ $t('chat.sidebar.messageDisplay') }}</h3>
-        <div class="space-y-2">
-          <label v-for="setting in displaySettingsConfig" :key="setting.key" class="flex items-center">
-            <input
-              type="checkbox"
-              :checked="getSetting(setting.key as keyof DisplaySettings)"
-              @change="toggleSetting(setting.key as keyof DisplaySettings, ($event.target as HTMLInputElement)?.checked)"
-              class="me-2 rounded border-autobot-border text-electric-600 focus:ring-electric-500"
-            />
-            <span class="text-xs text-autobot-text-secondary">{{ setting.label }}</span>
-          </label>
-        </div>
-      </section>
+      <!-- TASK 10: "Message Display" settings moved to the chat header's
+           settings panel (gear icon → ChatSettingsModal). -->
 
       <!-- System Control Section - FIXED: More compact -->
       <section class="border-t border-autobot-border p-4 pb-4 shrink-0">
@@ -419,7 +406,6 @@ import { useI18n } from 'vue-i18n'
 const emit = defineEmits<{ 'close-mobile': [] }>()
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
-import { useDisplaySettings, type DisplaySettings } from '@/composables/useDisplaySettings'
 import ChatFolderTree from './ChatFolderTree.vue'
 import FolderNode from './ChatFolderNode.vue'
 import { useFolderStore } from '@/stores/useFolderStore'
@@ -443,7 +429,6 @@ const logger = createLogger('ChatSidebar')
 const { t } = useI18n()
 const store = useChatStore()
 const controller = useChatController()
-const { getSetting, setSetting } = useDisplaySettings()
 const folderStore = useFolderStore()
 
 // GH#8987: state for folder section
@@ -568,17 +553,6 @@ const shareTargetSessionId = ref<string | null>(null)
 
 // Toast for notifications (Issue #547)
 const { showToast } = useNotificationBus()
-
-// Display settings configuration (UI labels)
-const displaySettingsConfig = computed(() => [
-  { key: 'showThoughts', label: t('chat.sidebar.showThoughts') },
-  { key: 'showJson', label: t('chat.sidebar.showMetadata') },
-  { key: 'showUtility', label: t('chat.sidebar.showUtility') },
-  { key: 'showPlanning', label: t('chat.sidebar.showPlanning') },
-  { key: 'showDebug', label: t('chat.sidebar.showDebug') },
-  { key: 'showSources', label: t('chat.sidebar.showSources') },
-  { key: 'autoScroll', label: t('chat.sidebar.autoScroll') },
-])
 
 // Methods
 const getSessionPreview = (session: ChatSession): string => {
@@ -731,11 +705,6 @@ const handleShareComplete = (result: Record<string, unknown>) => {
   shareTargetSessionId.value = null
   const sharedWith = (result?.shared_with as string[]) || []
   showToast(t('chat.sidebar.sharedSuccess', { count: sharedWith.length }), 'success')
-}
-
-// Toggle setting handler
-const toggleSetting = (key: string, value: boolean) => {
-  setSetting(key as any, value)
 }
 
 const reloadSystem = async () => {

@@ -171,6 +171,7 @@
               @click="attachFile"
               class="action-btn"
               :disabled="isDisabled"
+              :title="$t('chat.input.attachFile')"
               :aria-label="$t('chat.input.attachFile')"
             >
               <Icon name="paperclip" />
@@ -183,6 +184,7 @@
               @click="showVisionModal = true"
               class="action-btn"
               :disabled="isDisabled"
+              :title="$t('chat.input.analyzeImage')"
               :aria-label="$t('chat.input.analyzeImage')"
             >
               <Icon name="eye" />
@@ -195,6 +197,7 @@
               @click="showPresetsModal = true"
               class="action-btn"
               :disabled="isDisabled"
+              :title="$t('chat.input.managePresets')"
               :aria-label="$t('chat.input.managePresets')"
             >
               <Icon name="bookmark" />
@@ -214,6 +217,7 @@
               class="action-btn"
               :class="{ 'active': isVoiceRecording }"
               :disabled="isDisabled"
+              :title="$t('chat.input.voiceInput')"
               :aria-label="$t('chat.input.voiceInput')"
             >
               <Icon :name="isVoiceRecording ? 'stop' : 'microphone'" />
@@ -239,39 +243,51 @@
               @click="toggleEmojiPicker"
               class="action-btn"
               :disabled="isDisabled"
+              :title="$t('chat.input.addEmoji')"
               :aria-label="$t('chat.input.addEmoji')"
             >
               <Icon name="user" />
             </BaseButton>
 
-            <!-- Vertical Divider + Quick Actions Toggle (#1569) -->
+            <!-- Vertical Divider + Quick Actions overflow menu (#1569 / TASK 9) -->
             <div class="action-divider"></div>
-            <BaseButton
-              variant="ghost"
-              size="sm"
-              class="action-btn"
-              :aria-label="showQuickActions ? 'Hide quick actions' : 'Show quick actions'"
-              @click="showQuickActions = !showQuickActions"
-            >
-              <Icon name="ellipsis-h" />
-            </BaseButton>
-
-            <!-- Quick Actions (#1569: togglable) -->
-            <template v-if="showQuickActions">
+            <div class="more-actions-wrapper">
               <BaseButton
-                v-for="action in quickActions"
-                :key="action.id"
                 variant="ghost"
                 size="sm"
-                @click="useQuickAction(action)"
-                class="action-btn quick-action-btn"
-                :disabled="isDisabled"
-                :aria-label="action.description"
+                class="action-btn"
+                title="More actions"
+                aria-label="More actions"
+                aria-haspopup="menu"
+                :aria-expanded="showQuickActions"
+                @click="showQuickActions = !showQuickActions"
               >
-                <Icon :name="action.icon" />
-                <span class="action-label">{{ action.label }}</span>
+                <Icon name="ellipsis-h" />
               </BaseButton>
-            </template>
+
+              <!-- TASK 9: Translate / Explain / Summarize live in this overflow menu,
+                   no longer inline default toolbar items. -->
+              <div
+                v-if="showQuickActions"
+                class="more-actions-backdrop"
+                @click="showQuickActions = false"
+              ></div>
+              <div v-if="showQuickActions" class="more-actions-menu" role="menu">
+                <button
+                  v-for="action in quickActions"
+                  :key="action.id"
+                  type="button"
+                  role="menuitem"
+                  class="more-actions-item"
+                  :disabled="isDisabled"
+                  :title="action.description"
+                  @click="useQuickAction(action); showQuickActions = false"
+                >
+                  <Icon :name="action.icon" />
+                  <span>{{ action.label }}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -427,7 +443,7 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, nextTick, onMounted, onUnmounted, inject, watch, type Ref } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, inject, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
@@ -565,8 +581,9 @@ const submitImageGeneration = async () => {
 }
 
 // Issue #1569: Quick actions visibility toggle with localStorage persistence
-const showQuickActions = ref(localStorage.getItem('autobot_showQuickActions') !== 'false')
-watch(showQuickActions, (val) => localStorage.setItem('autobot_showQuickActions', String(val)))
+// TASK 9: the quick actions (Translate/Explain/Summarize/Help) are now an
+// overflow menu opened from the "…" button — closed by default, not persisted.
+const showQuickActions = ref(false)
 
 // Quick actions
 const quickActions = computed(() => [
@@ -1401,6 +1418,27 @@ onUnmounted(() => {
 /* Quick Actions */
 .quick-actions {
   @apply flex flex-wrap gap-2 pt-3 border-t border-autobot-border;
+}
+
+/* TASK 9: "…" overflow menu for Translate / Explain / Summarize / Help */
+.more-actions-wrapper {
+  @apply relative inline-flex;
+}
+
+.more-actions-backdrop {
+  @apply fixed inset-0 z-40;
+}
+
+.more-actions-menu {
+  @apply absolute bottom-full right-0 mb-2 z-50 min-w-44 py-1 bg-autobot-bg-card border border-autobot-border rounded-lg shadow-lg;
+}
+
+.more-actions-item {
+  @apply flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-autobot-text-primary hover:bg-autobot-bg-tertiary transition-colors duration-150;
+}
+
+.more-actions-item:disabled {
+  @apply opacity-50 cursor-not-allowed;
 }
 
 /* Emoji Picker */

@@ -53,6 +53,32 @@
           <span>{{ $t('knowledge.views.search') }}</span>
         </router-link>
 
+        <!-- TASK 1a: AI Documents — migrated from top nav into the Knowledge sidebar -->
+        <router-link
+          to="/knowledge/documents"
+          class="category-item"
+          :class="{ active: $route.path.startsWith('/knowledge/documents') }"
+          aria-label="View and edit AI documents"
+        >
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+          <span>AI Documents</span>
+        </router-link>
+
+        <!-- TASK 1b: Transcriber — migrated from top nav into the Knowledge sidebar -->
+        <router-link
+          to="/knowledge/transcriber"
+          class="category-item"
+          :class="{ active: $route.path.startsWith('/knowledge/transcriber') }"
+          aria-label="Audio and video transcription"
+        >
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+          </svg>
+          <span>Transcriber</span>
+        </router-link>
+
         <!-- Issue #1256: Observable Research Panel -->
         <router-link
           to="/knowledge/research"
