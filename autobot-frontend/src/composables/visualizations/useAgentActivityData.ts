@@ -195,18 +195,22 @@ export function useAgentActivityData() {
       if (data.tasks || data.data?.tasks) {
         type RawTask = { id?: string; task_id?: string; status?: string; agent_id?: string; completed_at?: string; started_at?: string; details?: string; description?: string }
         const tasks = (data.tasks || data.data?.tasks) as RawTask[]
-        recentEvents.value = tasks.map((task: RawTask) => ({
-          id: task.id || task.task_id || crypto.randomUUID(),
-          type: (task.status === 'completed' ? 'task_completed' : 'task_started') as ActivityEvent['type'],
-          agentId: task.agent_id ?? '',
-          agentName: task.agent_id ?? '',
-          message: task.details || task.description || '',
-          timestamp: task.completed_at
-            ? new Date(task.completed_at).getTime()
-            : task.started_at
-              ? new Date(task.started_at).getTime()
-              : Date.now()
-        }))
+        recentEvents.value = tasks
+          .map((task: RawTask) => ({
+            id: task.id || task.task_id || crypto.randomUUID(),
+            type: (task.status === 'completed' ? 'task_completed' : 'task_started') as ActivityEvent['type'],
+            agentId: task.agent_id ?? '',
+            agentName: task.agent_id ?? '',
+            message: task.details || task.description || '',
+            timestamp: task.completed_at
+              ? new Date(task.completed_at).getTime()
+              : task.started_at
+                ? new Date(task.started_at).getTime()
+                : Date.now()
+          }))
+          // #10502/#7: render newest-first so a stale entry can never lead the
+          // feed (backend order is not guaranteed chronological).
+          .sort((a, b) => b.timestamp - a.timestamp)
         return
       }
     } catch {

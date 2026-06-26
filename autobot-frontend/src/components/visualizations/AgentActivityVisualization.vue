@@ -189,7 +189,7 @@ import { useI18n } from 'vue-i18n'
 import { getCssVar } from '@/composables/useCssVars'
 import { useExpansion } from '@/composables/useExpansion'
 import { usePollingJob } from '@/composables/usePollingJob'
-import { useAgentActivityData, type Agent, type ActivityEvent } from '@/composables/visualizations/useAgentActivityData'
+import { useAgentActivityData, type Agent } from '@/composables/visualizations/useAgentActivityData'
 
 const { t } = useI18n()
 
@@ -201,7 +201,9 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   title: undefined,
-  refreshInterval: 5000
+  // #10502/#7: poll the live feed every 20s (was 5s) — frequent enough to stay
+  // current without hammering the analytics endpoint.
+  refreshInterval: 20000
 })
 
 // Emit
@@ -295,38 +297,13 @@ function pauseAgent(agent: Agent) {
   emit('pause-agent', agent)
 }
 
-// Simulate real-time updates
-function simulateActivity() {
-  // Add random events
-  if (Math.random() > 0.7) {
-    const agent = agents.value[Math.floor(Math.random() * agents.value.length)]
-    const eventTypes: ActivityEvent['type'][] = ['task_started', 'task_completed', 'task_failed']
-    const type = eventTypes[Math.floor(Math.random() * eventTypes.length)]
-
-    const event: ActivityEvent = {
-      id: `e${Date.now()}`,
-      agentId: agent.id,
-      agentName: agent.name,
-      type,
-      message: type === 'task_completed' ? 'Completed task successfully' :
-               type === 'task_started' ? 'Started new task' : 'Task failed',
-      timestamp: Date.now()
-    }
-
-    recentEvents.value = [event, ...recentEvents.value.slice(0, 9)]
-  }
-
-  // Update working agents' task counts
-  agents.value.forEach(agent => {
-    if (agent.status === 'working' && Math.random() > 0.9) {
-      agent.tasksCompleted++
-    }
-  })
-}
-
 // Lifecycle
+// #10502/#7: the live feed must poll the real backend so it never shows a
+// stale entry. Previously this ran simulateActivity() (synthetic mutations) and
+// never re-fetched — the feed froze on the first load. Now each tick re-fetches
+// recent tasks + agent status; the composable handles sort + sample fallback.
 const { start: _startRefresh, stop: _stopRefresh } = usePollingJob(
-  async () => { simulateActivity(); return null },
+  async () => { await Promise.all([fetchAgents(), fetchEvents()]); return null },
   { intervalMs: props.refreshInterval || 0, maxAttempts: Number.MAX_SAFE_INTEGER }
 )
 
