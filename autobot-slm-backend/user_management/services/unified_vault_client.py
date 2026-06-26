@@ -109,6 +109,8 @@ async def vault_read(secret_id: uuid.UUID) -> str:
     """Read and return the plaintext value of a system-vault secret."""
     path = f"{_SYSTEM_VAULT_PATH}/{secret_id}"
     data = await _request("GET", path)
+    if not isinstance(data, dict) or "value" not in data:
+        raise UnifiedVaultClientError(f"vault read for {secret_id} returned no 'value' field")
     return data["value"]
 
 
@@ -135,8 +137,11 @@ async def vault_rewrap_kek(secret_id: uuid.UUID, new_root_key_b64: str) -> dict[
     """Rewrap DEKs under a new root key (KEK rotation, plaintext unchanged).
 
     ``new_root_key_b64`` must be URL-safe base64 encoding of 32 bytes — the
-    same format the ``/api/v2/secrets/{id}/rewrap`` endpoint expects.
+    same format the ``/api/v2/secrets/system/{id}/rewrap`` endpoint expects.
+
+    Uses the **service-auth** system-vault rewrap route (not the user-auth
+    ``/{id}/rewrap``) so the SLM service identity can perform KEK rotation.
     """
-    path = f"/api/v2/secrets/{secret_id}/rewrap"
+    path = f"{_SYSTEM_VAULT_PATH}/{secret_id}/rewrap"
     logger.info("unified-vault: rewrapping KEK for secret id=%s", secret_id)
     return await _request("POST", path, json={"new_root_key": new_root_key_b64})

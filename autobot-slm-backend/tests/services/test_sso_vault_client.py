@@ -181,6 +181,23 @@ class TestUnifiedVaultClientConfig:
             with pytest.raises(_vault_client_mod.UnifiedVaultClientError):
                 await _vault_client_mod._request("GET", "/api/v2/secrets/system/some-id")
 
+    @pytest.mark.asyncio
+    async def test_rewrap_targets_service_system_path(self, monkeypatch):
+        """vault_rewrap_kek must hit the service-auth /system/{id}/rewrap route,
+        not the user-auth /{id}/rewrap route (which would 401 under service HMAC)."""
+        captured = {}
+
+        async def _fake_request(method, path, **kwargs):
+            captured["method"] = method
+            captured["path"] = path
+            return {"id": "x", "version": 1}
+
+        monkeypatch.setattr(_vault_client_mod, "_request", _fake_request)
+        sid = uuid.uuid4()
+        await _vault_client_mod.vault_rewrap_kek(sid, "Zm9vYmFy")
+        assert captured["method"] == "POST"
+        assert captured["path"] == f"/api/v2/secrets/system/{sid}/rewrap"
+
 
 # ---------------------------------------------------------------------------
 # sso_rotation tests — staleness
