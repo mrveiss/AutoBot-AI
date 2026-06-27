@@ -292,7 +292,8 @@
       "thinkingOff": "Thinking off",
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
-      "thinkingOnLabel": "thinking On"
+      "thinkingOnLabel": "thinking On",
+      "moreActions": "More actions"
     },
     "translate": {
       "title": "Traduire le texte",
@@ -2497,7 +2498,16 @@
       "webResearch": "Web Research",
       "webResearchAriaLabel": "4-tab web research panel",
       "openSidebar": "Open navigation menu",
-      "closeSidebar": "Close navigation menu"
+      "closeSidebar": "Close navigation menu",
+      "documentsAriaLabel": "View and edit AI documents",
+      "transcriberAriaLabel": "Audio and video transcription",
+      "mcpResources": "MCP Resources",
+      "mcpResourcesAriaLabel": "Browse MCP Resources",
+      "vectorStore": "Vector Store",
+      "vectorStoreAriaLabel": "Browse the vector store",
+      "automationGroup": "Automation",
+      "watchFolders": "Watch Folders",
+      "watchFoldersAriaLabel": "Watch Folders"
     },
     "backup": {
       "title": "Sauvegarde et restauration",
@@ -4143,7 +4153,8 @@
       "vision": "VISION",
       "historyAriaLabel": "Workflow execution history",
       "visualizerAriaLabel": "Orchestration visualizer",
-      "agentsAriaLabel": "Agent capabilities"
+      "agentsAriaLabel": "Agent capabilities",
+      "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable."
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -6823,7 +6834,10 @@
       "detailsBtn": "Details",
       "pauseBtn": "Pause",
       "liveActivityFeed": "Live Activity Feed",
-      "abstained": "Abstained"
+      "abstained": "Abstained",
+      "viewLogs": "View Logs",
+      "loadError": "Unable to load agent activity right now.",
+      "noAgents": "No active agents."
     },
     "resourceHeatmap": {
       "defaultTitle": "Resource Utilization Heatmap",
@@ -7866,5 +7880,28 @@
     "avgQuality": "Avg quality",
     "totalCost": "Total cost",
     "delete": "Delete"
+  },
+  "documents": {
+    "refreshList": "Refresh document list",
+    "loading": "Loading documents…",
+    "noDocsYet": "No AI documents yet.",
+    "chatViewLink": "chat view",
+    "listAriaLabel": "Your AI documents",
+    "deleteDocument": "Delete document",
+    "deleteAria": "Delete {title}",
+    "emptyTitle": "No documents yet",
+    "emptySubtitle": "Save AI responses from Chat to build your document library",
+    "goToChat": "Go to Chat",
+    "selectPrompt": "Select a document from the list to view and edit it.",
+    "confirmDeleteAria": "Confirm deletion of {title}",
+    "deleteHeading": "Delete document?",
+    "deleteBody": "{title} will be permanently deleted.",
+    "prev": "Prev",
+    "next": "Next",
+    "pageRange": "{start}–{end} of {total}",
+    "transcriberProjects": "Transcriber Projects",
+    "viewAll": "View all",
+    "saveHintPrefix": "Save an AI response from the",
+    "saveHintSuffix": "to create a document."
   }
 }
