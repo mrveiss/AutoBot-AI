@@ -40,7 +40,7 @@
     <!-- BUG1: visible empty/error state instead of fabricated sample data -->
     <div v-if="loaded && agents.length === 0" class="agents-empty-state">
       <Icon :name="error ? 'exclamation-triangle' : 'pause-circle'" class="empty-icon" />
-      <p>{{ error ? 'Unable to load agent activity right now.' : 'No active agents.' }}</p>
+      <p>{{ error ? t('visualizations.agentActivity.loadError') : t('visualizations.agentActivity.noAgents') }}</p>
     </div>
 
     <!-- Grid View -->
@@ -85,7 +85,7 @@
             </div>
             <!-- TASK 8: actionable CTA on error cards -->
             <button class="view-logs-btn" @click.stop="viewLogs(agent)">
-              <Icon name="eye" /> View Logs
+              <Icon name="eye" /> {{ t('visualizations.agentActivity.viewLogs') }}
             </button>
           </div>
         </div>

@@ -256,8 +256,8 @@
                 variant="ghost"
                 size="sm"
                 class="action-btn"
-                title="More actions"
-                aria-label="More actions"
+                :title="$t('chat.input.moreActions')"
+                :aria-label="$t('chat.input.moreActions')"
                 aria-haspopup="menu"
                 :aria-expanded="showQuickActions"
                 @click="showQuickActions = !showQuickActions"
@@ -393,7 +393,7 @@
         @click.self="showImageGenModal = false"
         role="dialog"
         aria-modal="true"
-        aria-label="Generate image"
+        :aria-label="$t('chat.input.generateImage', 'Generate image')"
       >
         <div class="image-gen-dialog">
           <h3 class="image-gen-title">
