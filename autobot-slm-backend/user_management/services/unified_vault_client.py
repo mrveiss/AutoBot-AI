@@ -101,7 +101,9 @@ async def _request(method: str, path: str, **kwargs: Any) -> Any:
 async def vault_create(name: str, secret_type: str, value: str) -> dict[str, Any]:
     """Create a secret in the system vault; returns the metadata dict."""
     payload = {"owner_vault": "system", "name": name, "secret_type": secret_type, "value": value}
-    logger.info("unified-vault: creating system secret name=%s type=%s", name, secret_type)
+    # Log only the (non-sensitive) type label — CodeQL taints `name` because this
+    # function also receives the secret `value`; the name is an identifier, not a value.
+    logger.info("unified-vault: creating system secret type=%s", secret_type)
     return await _request("POST", _SYSTEM_VAULT_PATH, json=payload)
 
 
