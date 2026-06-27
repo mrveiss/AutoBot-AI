@@ -1,4 +1,5 @@
 -e ../autobot_shared
+-c ../constraints/shared.txt  # single source of truth for shared versions (#10524); pins transitive numpy
 
 # Core
 apscheduler>=3.11.2             # Issue #6590: hourly LLM key rotation job

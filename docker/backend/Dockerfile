@@ -25,19 +25,25 @@ RUN python3 -m pip install --no-cache-dir /app/autobot_shared
 # Copy root requirements (referenced by backend via -r ../requirements.txt)
 COPY requirements.txt /app/requirements-root.txt
 
+# Single source of truth for shared dep versions (#10524). The backend references it via
+# `-c ../constraints/shared.txt`, whose relative path is invalid in the flattened image
+# layout — so (like `-r ../requirements.txt`) it is stripped below and re-applied by
+# absolute path with pip's -c flag, constraining the backend's transitive numpy.
+COPY constraints/shared.txt /app/constraints/shared.txt
+
 # Install backend dependencies (filter out local refs, install root deps separately).
 # torch/torchvision are excluded from the filtered list and installed explicitly from
 # the CPU index, so the default-PyPI CUDA build (libtorch_cuda.so) is never pulled into
 # this CPU image (#10251). vLLM + its CUDA stack are no longer default deps; GPU
 # deployments add them via requirements-gpu.txt.
 COPY autobot-backend/requirements.txt /tmp/requirements.txt
-RUN grep -v -E "(autobot.shared|^-r |^torch==|^torchvision==)" /tmp/requirements.txt \
+RUN grep -v -E "(autobot.shared|^-r |^-c |^torch==|^torchvision==)" /tmp/requirements.txt \
         > /app/requirements-filtered.txt \
-    && python3 -m pip install --no-cache-dir -r /app/requirements-root.txt \
+    && python3 -m pip install --no-cache-dir -c /app/constraints/shared.txt -r /app/requirements-root.txt \
     && python3 -m pip install --no-cache-dir \
         torch==2.12.1 torchvision==0.27.1 \
         --index-url https://download.pytorch.org/whl/cpu \
-    && python3 -m pip install --no-cache-dir -r /app/requirements-filtered.txt
+    && python3 -m pip install --no-cache-dir -c /app/constraints/shared.txt -r /app/requirements-filtered.txt
 
 
 # ---- Production stage ----
