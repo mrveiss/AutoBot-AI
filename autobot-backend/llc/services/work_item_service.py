@@ -309,6 +309,14 @@ class WorkItemService(LLCServiceBase):
             "scheduled_start",
             "scheduled_end",
         }
+        # Single-assignee invariant (#10532, FR-HYBRID-01): assigning to one
+        # party clears the other and fixes assignee_type.
+        if fields.get("assignee_user_id"):
+            item.assignee_agent_id = None
+            fields.setdefault("assignee_type", "user")
+        elif fields.get("assignee_agent_id"):
+            item.assignee_user_id = None
+            fields.setdefault("assignee_type", "agent")
         for key, val in fields.items():
             if key not in allowed:
                 raise ValueError(f"Field '{key}' is not updatable via WorkItemService.update()")
