@@ -269,10 +269,10 @@
         class="vision-offline-banner"
         role="alert"
       >
-        <span>⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.</span>
+        <span>{{ $t('workflow.views.visionOfflineBanner') }}</span>
         <button
           class="banner-dismiss"
-          aria-label="Dismiss"
+          :aria-label="$t('common.dismiss')"
           @click="visionBannerDismissed = true"
         >
           <Icon name="times" />
