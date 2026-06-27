@@ -1147,6 +1147,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: 'Boards', requiresAuth: true, hideInNav: true },
       },
       {
+        path: 'reviews',
+        name: 'llc-reviews',
+        component: () => import('@/views/llc/ReviewInboxView.vue'),
+        meta: { title: 'My Reviews', requiresAuth: true, hideInNav: true },
+      },
+      {
         path: 'portfolios',
         name: 'llc-portfolios',
         component: () => import('@/views/llc/PortfolioBrowserView.vue'),
