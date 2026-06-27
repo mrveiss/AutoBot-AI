@@ -42,6 +42,7 @@ from .settings import router as settings_router
 from .setup_wizard import router as setup_wizard_router
 from .slm_users import router as slm_users_router
 from .sso import router as sso_router
+from .scim import router as scim_router
 from .sso_auth import router as sso_auth_router
 from .stateful import router as stateful_router
 from .tls import node_tls_router, tls_router
@@ -90,6 +91,7 @@ __all__ = [
     "autobot_users_router",
     "autobot_teams_router",
     "sso_router",
+    "scim_router",
     "secrets_router",
     "setup_wizard_router",
     "sso_auth_router",
