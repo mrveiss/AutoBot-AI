@@ -70,19 +70,37 @@ async def principal(request: Request) -> tuple[uuid.UUID, set[str]]:
 
 
 async def service_principal(request: Request) -> str:
-    """Validate HMAC service auth (X-Service-* headers) and return the service_id.
+    """Resolve service identity for System-vault access; 401 on failure.
 
-    A service identity is scoped STRICTLY to the system vault — any attempt to
-    access a user/company/team/role vault via this path is rejected (403) at the
-    endpoint level, not here, so the audit log always sees the attempt.
+    Two accepted auth schemes (Option A — #10492):
+    1. Shared ``X-Internal-API-Key`` header (``AUTOBOT_INTERNAL_API_KEY``) → maps to
+       the synthetic service_id ``"slm-backend"``.  This is the credential the SLM
+       already sends to other autobot-backend endpoints, so no new key provisioning is
+       required.
+    2. HMAC ``X-Service-*`` headers (per-service key in Redis ``service:key:{id}``) —
+       the pre-existing path; left intact for forward-compatibility.
+
+    Either path is scoped STRICTLY to the system vault.  Non-system vault access is
+    rejected at the endpoint level so the audit log always sees the attempt.
     """
+    from autobot_shared.ssot_config import config as _ssot
+
+    _internal_key = _ssot.misc.internal_api_key
+    if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
+        service_id = "slm-backend"
+        logger.info(
+            "service principal authenticated via X-Internal-API-Key",
+            extra={"service_id": service_id, "path": request.url.path, "method": request.method},
+        )
+        return service_id
+
     try:
         info = await validate_service_auth(request)
     except HTTPException:
         raise
-    service_id: str = info["service_id"]
+    service_id = info["service_id"]
     logger.info(
-        "service principal authenticated for secrets API",
+        "service principal authenticated via HMAC for secrets API",
         extra={"service_id": service_id, "path": request.url.path, "method": request.method},
     )
     return service_id

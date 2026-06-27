@@ -72,6 +72,7 @@ _uvc_stub.vault_list = AsyncMock()  # type: ignore[attr-defined]
 _uvc_stub.vault_create = AsyncMock()  # type: ignore[attr-defined]
 _uvc_stub.UnifiedVaultClientError = Exception  # type: ignore[attr-defined]
 _uvc_stub.UnifiedVaultSecretNotFound = Exception  # type: ignore[attr-defined]
+_uvc_stub.is_configured = lambda: False  # type: ignore[attr-defined]
 sys.modules["user_management.services.unified_vault_client"] = _uvc_stub
 
 # Load unified_vault_client directly (reads real module code)
@@ -112,30 +113,63 @@ def _mock_provider(provider_id: uuid.UUID, config: dict) -> MagicMock:
 
 
 class TestUnifiedVaultClientConfig:
-    def test_check_configured_raises_when_key_missing(self, monkeypatch):
+    # --- legacy HMAC path ---
+
+    def test_check_configured_raises_when_both_keys_missing(self, monkeypatch):
         monkeypatch.setattr(_vault_client_mod, "_SERVICE_KEY", "")
-        with pytest.raises(_vault_client_mod.UnifiedVaultClientError, match="SLM_SERVICE_KEY"):
+        monkeypatch.setattr(_vault_client_mod, "_INTERNAL_API_KEY", "")
+        with pytest.raises(_vault_client_mod.UnifiedVaultClientError, match="AUTOBOT_INTERNAL_API_KEY"):
             _vault_client_mod._check_configured()
 
-    def test_check_configured_passes_with_key(self, monkeypatch):
+    def test_check_configured_passes_with_service_key(self, monkeypatch):
         monkeypatch.setattr(_vault_client_mod, "_SERVICE_KEY", "aabbcc" * 10)
-        # Should not raise
-        _vault_client_mod._check_configured()
+        monkeypatch.setattr(_vault_client_mod, "_INTERNAL_API_KEY", "")
+        _vault_client_mod._check_configured()  # must not raise
 
-    def test_is_configured_false_without_key(self, monkeypatch):
+    def test_is_configured_false_without_either_key(self, monkeypatch):
         monkeypatch.setattr(_vault_client_mod, "_SERVICE_KEY", "")
+        monkeypatch.setattr(_vault_client_mod, "_INTERNAL_API_KEY", "")
         assert _vault_client_mod.is_configured() is False
 
-    def test_is_configured_true_with_key(self, monkeypatch):
+    def test_is_configured_true_with_service_key(self, monkeypatch):
         monkeypatch.setattr(_vault_client_mod, "_SERVICE_KEY", "aabbcc" * 10)
+        monkeypatch.setattr(_vault_client_mod, "_INTERNAL_API_KEY", "")
         assert _vault_client_mod.is_configured() is True
 
-    def test_auth_headers_returns_three_keys(self, monkeypatch):
+    def test_auth_headers_returns_hmac_three_keys_when_no_internal_key(self, monkeypatch):
+        monkeypatch.setattr(_vault_client_mod, "_INTERNAL_API_KEY", "")
         monkeypatch.setattr(_vault_client_mod, "_SERVICE_KEY", "aabbcc" * 10)
         monkeypatch.setattr(_vault_client_mod, "_SERVICE_ID", "test-slm")
         headers = _vault_client_mod._auth_headers("POST", "/api/v2/secrets/system")
         assert set(headers.keys()) == {"X-Service-ID", "X-Service-Signature", "X-Service-Timestamp"}
         assert headers["X-Service-ID"] == "test-slm"
+
+    # --- Option A: X-Internal-API-Key path (#10492) ---
+
+    def test_is_configured_true_with_internal_api_key(self, monkeypatch):
+        monkeypatch.setattr(_vault_client_mod, "_SERVICE_KEY", "")
+        monkeypatch.setattr(_vault_client_mod, "_INTERNAL_API_KEY", "shared-secret-key")
+        assert _vault_client_mod.is_configured() is True
+
+    def test_check_configured_passes_with_internal_api_key(self, monkeypatch):
+        monkeypatch.setattr(_vault_client_mod, "_SERVICE_KEY", "")
+        monkeypatch.setattr(_vault_client_mod, "_INTERNAL_API_KEY", "shared-secret-key")
+        _vault_client_mod._check_configured()  # must not raise
+
+    def test_auth_headers_prefers_internal_api_key_over_hmac(self, monkeypatch):
+        """When AUTOBOT_INTERNAL_API_KEY is set it wins over SLM_SERVICE_KEY (Option A)."""
+        monkeypatch.setattr(_vault_client_mod, "_INTERNAL_API_KEY", "my-shared-key")
+        monkeypatch.setattr(_vault_client_mod, "_SERVICE_KEY", "aabbcc" * 10)
+        headers = _vault_client_mod._auth_headers("GET", "/api/v2/secrets/system")
+        assert set(headers.keys()) == {"X-Internal-API-Key"}
+        assert headers["X-Internal-API-Key"] == "my-shared-key"
+
+    def test_auth_headers_only_internal_key_no_hmac_fields(self, monkeypatch):
+        monkeypatch.setattr(_vault_client_mod, "_INTERNAL_API_KEY", "only-this-key")
+        monkeypatch.setattr(_vault_client_mod, "_SERVICE_KEY", "")
+        headers = _vault_client_mod._auth_headers("POST", "/api/v2/secrets/system")
+        assert "X-Service-Signature" not in headers
+        assert headers.get("X-Internal-API-Key") == "only-this-key"
 
     @pytest.mark.asyncio
     async def test_request_raises_secret_not_found_on_404(self, monkeypatch):

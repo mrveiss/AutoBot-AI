@@ -25,6 +25,11 @@ from services.auth import require_permission
 from services.database import get_db
 from services.encryption import decrypt_data, encrypt_data
 from services.playbook_executor import get_playbook_executor
+from user_management.services.llm_secrets import (
+    delete_provider_api_key,
+    retrieve_provider_api_key,
+    store_provider_api_key,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings/admin/llm", tags=["llm-config"])
@@ -110,7 +115,7 @@ def _mask_api_key(key: str) -> str:
 
 
 def _decrypt_provider_key(encrypted_key: str) -> str:
-    """Decrypt a provider API key. Helper for _load_llm_config (#2371)."""
+    """Decrypt a legacy inline-encrypted provider API key. Helper for _load_llm_config (#2371)."""
     if not encrypted_key:
         return ""
     try:
@@ -122,6 +127,8 @@ def _decrypt_provider_key(encrypted_key: str) -> str:
 async def _load_llm_config(db: AsyncSession) -> LLMConfig:
     """Load LLM config from Setting table.
 
+    API keys are resolved via the unified-secrets vault when configured (#10503);
+    inline-encrypted values are used as a backward-compatible fallback.
     Helper for get/put endpoints (Issue #2371).
     """
     result = await db.execute(select(Setting).where(Setting.key.startswith(_PREFIX)))
@@ -131,7 +138,7 @@ async def _load_llm_config(db: AsyncSession) -> LLMConfig:
     if providers_raw:
         parsed = json.loads(providers_raw)
         for p in parsed:
-            p["api_key"] = _decrypt_provider_key(p.get("api_key", ""))
+            p["api_key"] = await retrieve_provider_api_key(p.get("name", ""), p)
         providers = [LLMProviderConfig(**p) for p in parsed]
     else:
         providers = []
@@ -198,12 +205,13 @@ async def save_llm_config(
 
     API keys are encrypted before storage via services.encryption.
     """
-    # Encrypt API keys before persisting to Setting table
+    # Store API keys via unified-secrets vault (#10503); fall back to inline
+    # encryption when vault is not yet configured (rollout window).
     providers_data = []
     for p in config.providers:
         d = p.model_dump()
-        if d.get("api_key") and not d["api_key"].startswith("gAAA"):
-            d["api_key"] = encrypt_data(d["api_key"])
+        if d.get("api_key"):
+            d = await store_provider_api_key(p.name, d)
         providers_data.append(d)
 
     settings_map = {
