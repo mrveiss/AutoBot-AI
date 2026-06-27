@@ -159,6 +159,29 @@ export interface LLMFallbackStatus {
   active_fallbacks: LLMActiveFallback[]
 }
 
+// Budget audit (#10488 Workstream A): read-only operator oversight of
+// agent/project/task/tenant budget policies + hard-stop auto-pause config.
+// Mirrors the backend BudgetPolicyResponse model (api/budget_policies.py).
+export interface BudgetPolicy {
+  id: string
+  scope: string
+  scope_id: string
+  period: string
+  threshold_usd: number
+  warning_pct: number
+  action: string
+  enabled: boolean
+  name: string
+  description: string
+  created_at: string
+  updated_at: string
+}
+
+export interface BudgetPoliciesList {
+  policies: BudgetPolicy[]
+  count: number
+}
+
 export function useAutobotApi() {
   const authStore = useAuthStore()
 
@@ -673,6 +696,23 @@ export function useAutobotApi() {
     }
   }
 
+  /**
+   * Budget audit (#10488 Workstream A): read-only list of all budget policies
+   * across the system for operator oversight. The user app keeps create/edit/
+   * delete; the SLM console is audit-only and issues no mutation calls.
+   *
+   * Backend returns a flat payload (response_model=BudgetPoliciesListResponse,
+   * NOT the create_success_response envelope): { policies: [...], count: N }.
+   * The /autobot-api proxy strips its prefix -> backend /api/budget-policies.
+   */
+  async function getBudgetPolicies(): Promise<BudgetPoliciesList> {
+    const response = await client.get<BudgetPoliciesList>('/budget-policies')
+    return {
+      policies: response.data.policies || [],
+      count: response.data.count ?? 0,
+    }
+  }
+
   // =============================================================================
   // Logs API (for viewing, not forwarding)
   // =============================================================================
@@ -1061,6 +1101,8 @@ export function useAutobotApi() {
     updateLLMConfig,
     getLLMModels,
     getLLMFallbackStatus,
+    // Budget audit (#10488)
+    getBudgetPolicies,
     // Logs
     getLogs,
     // System

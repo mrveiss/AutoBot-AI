@@ -2,23 +2,26 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""HTTP client for the autobot-backend unified-secrets System vault (#10153).
+"""HTTP client for the autobot-backend unified-secrets System vault (#10153, #10492).
 
-The SLM Manager is a *client* of the unified-secrets API.  It uses its
-registered service identity (``SLM_SERVICE_ID`` / ``SLM_SERVICE_KEY``) and the
-HMAC ``sign_request`` helper from ``autobot_shared.http_client`` to reach the
-System-vault endpoints at ``/api/v2/secrets/system`` on autobot-backend.
+The SLM Manager is a *client* of the unified-secrets API.  Auth priority:
 
-Integration shape: option (a) — HTTP client with X-Service-* HMAC auth.
-The SLM and autobot-backend may run on separate machines (distributed topology),
-so sharing the DB session directly is not guaranteed; the HTTP boundary is the
-safe canonical choice.
+1. ``AUTOBOT_INTERNAL_API_KEY`` (Option A — #10492): the shared internal-API key
+   that the SLM already uses for voice/personality proxying.  Sent as
+   ``X-Internal-API-Key`` header; the backend maps it to synthetic service_id
+   ``"slm-backend"``.  This is the default and requires no extra provisioning.
+2. HMAC ``X-Service-*`` (legacy / per-service key): used when ``SLM_SERVICE_KEY``
+   is set but ``AUTOBOT_INTERNAL_API_KEY`` is absent.  Present for
+   forward-compatibility with future per-service key deployments.
+
+``is_configured()`` returns True when *either* credential is available, so the
+unified-vault path activates on any standard deployment that sets
+``AUTOBOT_INTERNAL_API_KEY`` (no ``SLM_SERVICE_KEY`` provisioning needed).
 
 Configuration (read from env at module import):
-    SLM_SERVICE_ID      — service identifier registered in the backend's Redis
-                          key registry (default: "slm-backend").
-    SLM_SERVICE_KEY     — 256-bit hex-encoded HMAC secret (must match the key
-                          the backend stored under service:key:{service_id}).
+    AUTOBOT_INTERNAL_API_KEY — shared internal API key (primary; set on both services).
+    SLM_SERVICE_ID      — service identifier for HMAC path (default: "slm-backend").
+    SLM_SERVICE_KEY     — 256-bit hex-encoded HMAC secret (HMAC path fallback).
     SLM_AUTHORITY_BASE_URL — base URL of autobot-backend (e.g. http://127.0.0.1:8001).
 
 Never log the service key or any secret value.
@@ -41,8 +44,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Module-level configuration — read once from env, never hard-coded.
 # ---------------------------------------------------------------------------
+_INTERNAL_API_KEY: str = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")  # primary auth (#10492 Option A)
 _SERVICE_ID: str = os.getenv("SLM_SERVICE_ID", "slm-backend")
-_SERVICE_KEY: str = os.getenv("SLM_SERVICE_KEY", "")
+_SERVICE_KEY: str = os.getenv("SLM_SERVICE_KEY", "")  # HMAC fallback
 _BACKEND_BASE_URL: str = os.getenv("SLM_AUTHORITY_BASE_URL", "http://127.0.0.1:8001").rstrip("/")
 _SYSTEM_VAULT_PATH = "/api/v2/secrets/system"
 _REQUEST_TIMEOUT_SECONDS: float = float(os.getenv("SLM_VAULT_CLIENT_TIMEOUT", "10"))
@@ -57,26 +61,32 @@ class UnifiedVaultSecretNotFound(UnifiedVaultClientError):
 
 
 def is_configured() -> bool:
-    """Return True when a service key is present so the client can authenticate.
+    """Return True when either auth credential is available.
 
-    Callers use this to decide whether the unified vault is the active store
-    (configured) or whether to fall back to the legacy SLM-local store during
-    the rollout window (not yet configured).
+    Option A (#10492): ``AUTOBOT_INTERNAL_API_KEY`` (primary, no extra provisioning).
+    HMAC fallback: ``SLM_SERVICE_KEY`` (per-service key stored in Redis).
+    Callers use this to gate the unified-vault path vs the legacy local store.
     """
-    return bool(_SERVICE_KEY)
+    return bool(_INTERNAL_API_KEY or _SERVICE_KEY)
 
 
 def _check_configured() -> None:
-    """Raise early with a clear message when the service key is absent."""
-    if not _SERVICE_KEY:
+    """Raise early with a clear message when no auth credential is configured."""
+    if not (_INTERNAL_API_KEY or _SERVICE_KEY):
         raise UnifiedVaultClientError(
-            "SLM_SERVICE_KEY is not set; unified-vault client cannot authenticate. "
-            "Set SLM_SERVICE_KEY (hex-encoded 256-bit) and SLM_SERVICE_ID in slm-secrets.env."
+            "No vault auth credential configured; set AUTOBOT_INTERNAL_API_KEY (shared internal key) "
+            "or SLM_SERVICE_KEY (hex-encoded 256-bit HMAC key) in slm-secrets.env."
         )
 
 
 def _auth_headers(method: str, path: str) -> dict[str, str]:
-    """Build HMAC auth headers for a single request."""
+    """Build auth headers for a single request.
+
+    Preference order: X-Internal-API-Key (Option A, #10492) when available; fall
+    back to HMAC X-Service-* headers when only SLM_SERVICE_KEY is set.
+    """
+    if _INTERNAL_API_KEY:
+        return {"X-Internal-API-Key": _INTERNAL_API_KEY}
     return sign_request(_SERVICE_ID, _SERVICE_KEY, method, path, int(time.time()))
 
 

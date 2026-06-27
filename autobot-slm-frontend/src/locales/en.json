@@ -1937,5 +1937,27 @@
     "protected": "Protected",
     "open": "Open",
     "countHint": "{count} active link(s)."
+  },
+  "budgetAudit": {
+    "title": "Budget Policy Audit",
+    "subtitle": "Read-only oversight of all agent, project, task, and tenant budget policies and their hard-stop auto-pause configuration.",
+    "readOnlyNotice": "Audit view only. Budget policies are created and managed by users in the user app; this console does not modify them.",
+    "refresh": "Refresh",
+    "totalPolicies": "Total Policies",
+    "autoPausePolicies": "Auto-Pause Policies",
+    "name": "Name",
+    "scope": "Scope",
+    "scopeId": "Scope ID",
+    "period": "Period",
+    "threshold": "Threshold",
+    "warning": "Warning At",
+    "action": "Breach Action",
+    "status": "Status",
+    "unnamed": "(unnamed)",
+    "active": "Active",
+    "disabled": "Disabled",
+    "canPause": "Can Pause",
+    "loading": "Loading...",
+    "noPolicies": "No budget policies configured"
   }
 }

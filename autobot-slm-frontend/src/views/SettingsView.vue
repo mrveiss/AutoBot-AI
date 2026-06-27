@@ -44,6 +44,8 @@ const tabs = [
   { id: 'llm', name: 'LLM', path: '/settings/admin/llm', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
   // GH#8998 / #10488: LLM fallback monitoring moved from user frontend to SLM admin
   { id: 'llm-fallbacks', name: 'LLM Fallbacks', path: '/settings/admin/llm-fallbacks', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
+  // #10488 Workstream A: read-only budget policy audit
+  { id: 'budget-audit', name: 'Budget Audit', path: '/settings/admin/budget-audit', icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z' },
   // MVA-1735: SSO/OIDC provider configuration
   { id: 'sso', name: 'SSO / OIDC', path: '/settings/admin/sso', icon: 'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z' },
   // Issue: NPU Workers consolidated to Fleet Overview /fleet/npu (Worker Registry sub-tab)
