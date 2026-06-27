@@ -23,10 +23,9 @@ from autobot_shared.auth.permissions import Permission
 from models.database import Node, Setting
 from services.auth import require_permission
 from services.database import get_db
-from services.encryption import decrypt_data, encrypt_data
+from services.encryption import decrypt_data
 from services.playbook_executor import get_playbook_executor
 from user_management.services.llm_secrets import (
-    delete_provider_api_key,
     retrieve_provider_api_key,
     store_provider_api_key,
 )

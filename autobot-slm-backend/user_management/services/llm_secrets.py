@@ -138,9 +138,7 @@ async def retrieve_provider_api_key(provider_name: str, provider_dict: dict[str,
         except UnifiedVaultSecretNotFound:
             logger.warning("unified-vault: LLM api_key not found provider=%s, falling back", provider_name)
         except UnifiedVaultClientError as exc:
-            logger.error(
-                "unified-vault: read failed provider=%s: %s; falling back", provider_name, type(exc).__name__
-            )
+            logger.error("unified-vault: read failed provider=%s: %s; falling back", provider_name, type(exc).__name__)
     else:
         # Scan vault by name (slow path for entries that predate vault_id caching).
         target = _vault_name(provider_name)
