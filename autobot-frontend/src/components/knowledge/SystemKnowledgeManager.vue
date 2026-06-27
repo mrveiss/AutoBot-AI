@@ -194,7 +194,7 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore';  // NEW: Use sha
 import { useLoadingState } from '@/composables/useLoadingState'
 import { usePollingJob } from '@/composables/usePollingJob';
 import { formatCategoryName as formatKey } from '@/utils/formatHelpers';
-import appConfig from '@/config/AppConfig.js';
+import { useHostSelection } from '@/composables/useHostSelection';
 import BaseButton from '@/components/base/BaseButton.vue';
 import BasePanel from '@/components/base/BasePanel.vue';
 import { createLogger } from '@/utils/debugUtils';
@@ -233,12 +233,30 @@ export default {
     // NEW: Use shared Pinia store instead of local state
     const knowledgeStore = useKnowledgeStore();
 
+    // Host dropdown source: REAL node registry (/api/infrastructure/hosts)
+    // via useHostSelection — NOT the legacy hardcoded VM0-5 AppConfig template
+    // (#10505). In co-located deploys this returns no hosts, so the dropdown
+    // falls back to the single "All Hosts" option below.
+    const { hosts: infraHosts, loadHosts: loadInfraHosts } = useHostSelection();
+
     // Use computed properties from store instead of local refs
     const stats = computed(() => knowledgeStore.stats);
     const commandsIndexed = ref(0);
     const docsIndexed = ref(0);
     const selectedHost = ref('all');
-    const machines = ref([]);  // Will be loaded from appConfig
+    // Map real infrastructure hosts to the dropdown shape ({ id, name, ip }),
+    // deduped by IP so a co-located fleet collapses to a single entry (#10505).
+    const machines = computed(() => {
+      const seenIps = new Set();
+      const out = [];
+      for (const h of infraHosts.value) {
+        const ip = h.host;
+        if (!ip || seenIps.has(ip)) continue;
+        seenIps.add(ip);
+        out.push({ id: h.id, name: h.name, ip });
+      }
+      return out;
+    });
     const progressMessage = ref('');
     const progressPercent = ref(0);
     const lastResult = ref(null);
@@ -702,11 +720,13 @@ export default {
     };
 
     onMounted(async () => {
-      // Load infrastructure machines from appConfig
+      // Load real infrastructure hosts from the node registry. When empty
+      // (co-located deploy with no infrastructure_host secrets) the dropdown
+      // shows only the "All Hosts" option — no legacy VM0-5 template (#10505).
       try {
-        machines.value = appConfig.getMachinesArray();
+        await loadInfraHosts();
       } catch (error) {
-        logger.warn('Failed to load machines from appConfig:', error);
+        logger.warn('Failed to load infrastructure hosts:', error);
         // No fallback - component will just show "All Hosts" option
       }
 
