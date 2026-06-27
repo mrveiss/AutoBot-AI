@@ -29,6 +29,7 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.realtime_mcp_bridge import get_realtime_bridge
+from services.personality_service import resolve_voice_id
 from services.tts_client import get_tts_client
 
 router = APIRouter(
@@ -162,7 +163,13 @@ async def voice_listen_api(request: Request, user_role: str = Form("user")):
     operation="voice_speak_api",
     error_code_prefix="VOICE",
 )
-async def voice_speak_api(request: Request, text: str = Form(...), user_role: str = Form("user")):
+async def voice_speak_api(
+    request: Request,
+    text: str = Form(...),
+    voice_id: str = Form(""),
+    language: str = Form(""),
+    user_role: str = Form("user"),
+):
     """Converts text to speech and plays it."""
     security_layer = request.app.state.security_layer
     if not security_layer.check_permission(user_role, "allow_voice_speak"):
@@ -183,7 +190,8 @@ async def voice_speak_api(request: Request, text: str = Form(...), user_role: st
     # instead of a misleading 503 that implies TTS is uninstalled.
     voice_interface = getattr(request.app.state, "voice_interface", None)
     if voice_interface is None:
-        wav_bytes = await get_tts_client().synthesize(text)
+        resolved_voice = resolve_voice_id(voice_id, language)
+        wav_bytes = await get_tts_client().synthesize(text, voice_id=resolved_voice, language=language)
         security_layer.audit_log("voice_speak", user_role, "success", {"via": "tts_worker", "text_preview": text[:50]})
         return Response(
             content=wav_bytes,
@@ -231,7 +239,8 @@ async def voice_synthesize_api(
         )
 
     tts = get_tts_client()
-    wav_bytes = await tts.synthesize(text, voice_id=voice_id, language=language)
+    resolved_voice = resolve_voice_id(voice_id, language)
+    wav_bytes = await tts.synthesize(text, voice_id=resolved_voice, language=language)
     security_layer.audit_log("voice_synthesize", user_role, "success", {"text_preview": text[:50]})
     return Response(
         content=wav_bytes,

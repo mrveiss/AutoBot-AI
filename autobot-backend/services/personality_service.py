@@ -365,3 +365,23 @@ def get_personality_manager() -> PersonalityManager:
     if _manager is None:
         _manager = PersonalityManager()
     return _manager
+
+
+def resolve_voice_id(request_voice_id: str = "", language: str = "") -> str:
+    """Resolve the TTS voice id from request, active personality, or default.
+
+    Priority: explicit request voice_id > active profile per-language
+    voice_ids[language] > active profile voice_id > "" (worker DEFAULT_VOICE).
+    The voice id is a library/builtin name or an uploaded ``.safetensors``
+    profile id; never the user's STT input audio (#10561, #1135, #1333).
+    """
+    if request_voice_id:
+        return request_voice_id
+    try:
+        profile = get_personality_manager().get_active_profile()
+        if profile:
+            per_lang = profile.voice_ids.get(language) if language else None
+            return per_lang or profile.voice_id or ""
+    except Exception:
+        pass
+    return ""
