@@ -4,8 +4,6 @@
 # Author: mrveiss
 """Tests for MeshDBAdapter — concrete MeshGraph/MeshDB adapter (#2548)."""
 
-import sys
-from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -305,27 +303,6 @@ class TestCreateMeshDbAdapter:
 # =============================================================================
 
 
-def _ensure_graspologic_stub() -> None:
-    """Install a minimal graspologic stub if not present so tests run without the package."""
-    if "graspologic" not in sys.modules:
-
-        def _leiden(G, trials=3):
-            import networkx as nx  # networkx is a declared dep
-
-            partition = {}
-            for comm_id, component in enumerate(nx.connected_components(G)):
-                for node in component:
-                    partition[node] = comm_id
-            return partition
-
-        graspologic_mod = ModuleType("graspologic")
-        partition_mod = ModuleType("graspologic.partition")
-        partition_mod.leiden = _leiden
-        graspologic_mod.partition = partition_mod
-        sys.modules["graspologic"] = graspologic_mod
-        sys.modules["graspologic.partition"] = partition_mod
-
-
 class TestCommunityClustererWithAdapter:
     """CommunityClusterer.run() works end-to-end through a real MeshDBAdapter (#4864).
 
@@ -337,7 +314,6 @@ class TestCommunityClustererWithAdapter:
     @pytest.mark.asyncio
     async def test_run_completes_without_attribute_error(self) -> None:
         """run() on a MeshDBAdapter-backed clusterer promotes centroids without error."""
-        _ensure_graspologic_stub()
         edge_rows = [
             {"id": "e1", "from_node": _NODE_A, "to_node": _NODE_B, "weight": 0.9},
         ]
@@ -356,7 +332,6 @@ class TestCommunityClustererWithAdapter:
     @pytest.mark.asyncio
     async def test_run_empty_edges_promotes_nothing(self) -> None:
         """run() with no edges above min_weight returns [] and never calls promote_to_anchor."""
-        _ensure_graspologic_stub()
         adapter, mock_db = _make_adapter(
             fetch_edges=[],
             promote_to_anchor=None,
@@ -371,7 +346,6 @@ class TestCommunityClustererWithAdapter:
     @pytest.mark.asyncio
     async def test_fetch_edges_called_with_min_weight(self) -> None:
         """run() forwards min_weight to adapter.fetch_edges."""
-        _ensure_graspologic_stub()
         adapter, mock_db = _make_adapter(
             fetch_edges=[],
             promote_to_anchor=None,
