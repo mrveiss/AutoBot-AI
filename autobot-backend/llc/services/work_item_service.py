@@ -325,6 +325,7 @@ class WorkItemService(LLCServiceBase):
         type: Optional[WorkItemType] = None,
         status: Optional[WorkItemStatus] = None,
         assignee_agent_id: Optional[str] = None,
+        reviewer_user_id: Optional[str] = None,
         sprint_id: Optional[str] = None,
         parent_id: Optional[str] = None,
         top_level_only: bool = False,
@@ -343,6 +344,9 @@ class WorkItemService(LLCServiceBase):
             q = q.where(LLCWorkItem.status == status)
         if assignee_agent_id:
             q = q.where(LLCWorkItem.assignee_agent_id == uuid.UUID(assignee_agent_id))
+        if reviewer_user_id:
+            # Review inbox (#10533): items routed to a specific human reviewer.
+            q = q.where(LLCWorkItem.reviewer_user_id == uuid.UUID(reviewer_user_id))
         if sprint_id:
             q = q.where(LLCWorkItem.sprint_id == uuid.UUID(sprint_id))
         if top_level_only:
