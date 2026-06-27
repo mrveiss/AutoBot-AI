@@ -274,6 +274,13 @@ const router = createRouter({
           meta: { title: 'LLM Fallbacks', parent: 'settings', admin: true }
         },
         {
+          // #10488 Workstream A: read-only budget policy audit (operator oversight)
+          path: 'admin/budget-audit',
+          name: 'settings-admin-budget-audit',
+          component: () => import('@/views/settings/admin/BudgetAuditView.vue'),
+          meta: { title: 'Budget Audit', parent: 'settings', admin: true }
+        },
+        {
           // MVA-1735: SSO/OIDC provider configuration
           path: 'admin/sso',
           name: 'settings-admin-sso',
