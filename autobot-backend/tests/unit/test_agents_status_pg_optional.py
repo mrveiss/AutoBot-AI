@@ -20,7 +20,6 @@ import types
 from typing import Any
 from unittest.mock import MagicMock
 
-
 # ---------------------------------------------------------------------------
 # Minimal stub helpers (avoid importing the full FastAPI app graph)
 # ---------------------------------------------------------------------------
@@ -81,8 +80,18 @@ class TestFallbackAgentsFromRegistry:
         }
 
         registry = AgentRegistry(initialize_defaults=True)
-        required_keys = {"id", "name", "type", "status", "currentTask", "tasksCompleted",
-                         "uptime", "successRate", "recentTasks", "activityTimeline"}
+        required_keys = {
+            "id",
+            "name",
+            "type",
+            "status",
+            "currentTask",
+            "tasksCompleted",
+            "uptime",
+            "successRate",
+            "recentTasks",
+            "activityTimeline",
+        }
 
         for profile in registry.get_all().values():
             item = {
@@ -139,7 +148,7 @@ class TestAdapterRegistryContract:
     def _make_registry(self):
         """Build a minimal AdapterRegistry-compatible object for structural tests."""
         from dataclasses import dataclass, field
-        from typing import Any, Dict, List, Optional
+        from typing import Any, Dict, List
 
         @dataclass
         class FakeConfig:
