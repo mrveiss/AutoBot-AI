@@ -1583,7 +1583,7 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
     _CLUSTER_INTERVAL_SECONDS = 6 * 3600  # 6 hours
 
     async def _loop() -> None:
-        # Allow startup to complete before first expensive Leiden pass
+        # Allow startup to complete before first expensive clustering pass
         await asyncio.sleep(300)  # 5 minutes
         while True:
             try:
@@ -1592,14 +1592,6 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
                     "CommunityClusterer periodic run: %d anchors promoted",
                     len(promoted),
                 )
-            except ImportError as exc:
-                logger.warning(
-                    "graspologic not installed — community clustering paused. "
-                    "Install with: pip install graspologic. Retrying in 24h. Error: %s",
-                    exc,
-                )
-                await asyncio.sleep(86400)  # 24 hours — re-check after potential install
-                continue
             except Exception as exc:
                 logger.warning("CommunityClusterer periodic run failed (non-fatal): %s", exc)
             await asyncio.sleep(_CLUSTER_INTERVAL_SECONDS)
