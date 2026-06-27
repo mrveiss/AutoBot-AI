@@ -25,6 +25,7 @@
           {{ $t('nav.secrets') }}
         </router-link>
         <router-link
+          v-if="userStore.isAdmin"
           :to="{ name: 'secrets-llm-keys' }"
           class="secrets-tab"
           active-class="secrets-tab--active"
@@ -44,6 +45,12 @@
 // Issue #753: Design token usage instead of Tailwind utilities
 // Issue #10488: Sub-navigation hosts Secrets Manager + LLM API Keys
 import Icon from '@/components/ui/Icon.vue'
+import { useUserStore } from '@/stores/useUserStore'
+
+// LLM API keys are admin-managed (the /secrets/llm-keys route + backend are
+// admin-gated) — only show that tab to admins so non-admins don't see a tab
+// that redirects. (#10488)
+const userStore = useUserStore()
 </script>
 
 <style scoped>
