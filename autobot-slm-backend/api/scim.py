@@ -22,21 +22,18 @@ import logging
 import secrets
 import uuid
 from datetime import datetime, timezone
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, or_, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import SystemSecret
 from services.database import db_service
-from services.encryption import decrypt_data, encrypt_data
+from services.encryption import decrypt_data
 from user_management.database import get_slm_session
 from user_management.models import Role, User, UserRole
 from user_management.services.base_service import TenantContext
-from user_management.services.sso_service import SSOService
 from user_management.services.user_service import DuplicateUserError, UserNotFoundError, UserService
 
 logger = logging.getLogger(__name__)
@@ -91,7 +88,7 @@ async def _require_scim_bearer(request: Request) -> None:
             detail=_scim_error("Bearer token required", "invalidCredentials"),
             headers={"WWW-Authenticate": "Bearer"},
         )
-    provided = auth_header[len("bearer "):].strip()
+    provided = auth_header[len("bearer ") :].strip()
     expected = await _load_scim_token()
     if not expected or not secrets.compare_digest(provided, expected):
         raise HTTPException(
@@ -268,9 +265,7 @@ def _list_response(resources: list, total: int, start: int, count: int) -> dict:
 
 
 @router.put("/Users/{user_id}", dependencies=[Depends(_require_scim_bearer)])
-async def scim_replace_user(
-    user_id: str, request: Request, db: AsyncSession = Depends(_get_slm_db)
-) -> JSONResponse:
+async def scim_replace_user(user_id: str, request: Request, db: AsyncSession = Depends(_get_slm_db)) -> JSONResponse:
     """PUT /scim/v2/Users/{id} — full replace (update profile + active flag)."""
     body: dict = await request.json()
     user = await _get_user_or_404(user_id, db)
@@ -285,9 +280,7 @@ async def scim_replace_user(
 
 
 @router.patch("/Users/{user_id}", dependencies=[Depends(_require_scim_bearer)])
-async def scim_patch_user(
-    user_id: str, request: Request, db: AsyncSession = Depends(_get_slm_db)
-) -> JSONResponse:
+async def scim_patch_user(user_id: str, request: Request, db: AsyncSession = Depends(_get_slm_db)) -> JSONResponse:
     """PATCH /scim/v2/Users/{id} — partial update; active:false = deprovisioning."""
     body: dict = await request.json()
     user = await _get_user_or_404(user_id, db)
@@ -425,9 +418,7 @@ async def scim_list_groups(
 
 
 @router.put("/Groups/{group_id}", dependencies=[Depends(_require_scim_bearer)])
-async def scim_replace_group(
-    group_id: str, request: Request, db: AsyncSession = Depends(_get_slm_db)
-) -> JSONResponse:
+async def scim_replace_group(group_id: str, request: Request, db: AsyncSession = Depends(_get_slm_db)) -> JSONResponse:
     """PUT /scim/v2/Groups/{id} — replace group membership (assign/revoke role)."""
     body: dict = await request.json()
     role = await _get_group_or_404(group_id, db)
@@ -438,9 +429,7 @@ async def scim_replace_group(
 
 
 @router.patch("/Groups/{group_id}", dependencies=[Depends(_require_scim_bearer)])
-async def scim_patch_group(
-    group_id: str, request: Request, db: AsyncSession = Depends(_get_slm_db)
-) -> JSONResponse:
+async def scim_patch_group(group_id: str, request: Request, db: AsyncSession = Depends(_get_slm_db)) -> JSONResponse:
     """PATCH /scim/v2/Groups/{id} — partial membership update."""
     body: dict = await request.json()
     role = await _get_group_or_404(group_id, db)

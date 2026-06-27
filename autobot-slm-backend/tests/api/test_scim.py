@@ -272,8 +272,10 @@ class TestScimCreateUser:
         }
 
         # Simulate the core of scim_create_user without the router decorator
-        with patch.object(_scim, "DuplicateUserError", _ScimDuplicateError), \
-             patch.object(_scim, "UserService", return_value=mock_svc):
+        with (
+            patch.object(_scim, "DuplicateUserError", _ScimDuplicateError),
+            patch.object(_scim, "UserService", return_value=mock_svc),
+        ):
             created = await mock_svc.create_user(
                 email=fields["email"],
                 username=fields["username"],
@@ -302,8 +304,10 @@ class TestScimCreateUser:
         assert fields["active"] is False
 
         # Simulate the active-flag branch
-        with patch.object(_scim, "DuplicateUserError", _ScimDuplicateError), \
-             patch.object(_scim, "UserService", return_value=mock_svc):
+        with (
+            patch.object(_scim, "DuplicateUserError", _ScimDuplicateError),
+            patch.object(_scim, "UserService", return_value=mock_svc),
+        ):
             created = await mock_svc.create_user(email=fields["email"], username=fields["username"])
             if not fields["active"]:
                 await mock_svc.deactivate_user(created.id)
