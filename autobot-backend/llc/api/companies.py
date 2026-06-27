@@ -309,6 +309,7 @@ async def list_members(
     svc: MembershipService = Depends(_get_membership_service),
 ) -> List[Dict[str, Any]]:
     from sqlalchemy import select  # noqa: PLC0415
+
     from user_management.models.user import User  # noqa: PLC0415
 
     members = await svc.list_members(session, str(company_id))
