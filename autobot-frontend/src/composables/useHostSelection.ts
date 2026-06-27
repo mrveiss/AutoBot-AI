@@ -19,7 +19,8 @@
  *
  * - useHostInventory: Ansible-managed fleet nodes
  *   → Data source: SLM backend /api/nodes (Ansible inventory, provisioning)
- *   → Used by: admin dashboard (HostsView.vue) for fleet management
+ *   → Fleet management moved to the /slm operator console (#10488); this
+ *     composable is currently unused in the user app (kept pending #10488 follow-up).
  *
  * These serve DIFFERENT purposes and MUST remain separate composables.
  *
