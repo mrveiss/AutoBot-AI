@@ -1,0 +1,15 @@
+# Single source of truth for shared Python dependency versions (#10524).
+#
+# Every component requirements file references this via:
+#     -c <relative-path>/constraints/shared.txt
+# Change a version HERE, once. NEVER re-declare a constrained library's version in a
+# component requirements file — a CI guard (constraint-drift workflow) fails any PR
+# that does, and pip would otherwise resolve different versions per component.
+#
+# Why a single version is mandatory (not just hygiene): Ansible can co-locate or
+# relocate roles (backend, tts-worker, npu-worker, ai-stack) onto one host. Two roles
+# with conflicting pins in the same environment make pip unsatisfiable, and numpy ABI
+# skew corrupts .npy / pickled embeddings written by one role and read by another.
+
+# numpy unified at 2.x across all roles after graspologic (numpy<2) was removed (#10524).
+numpy>=2.5.0,<3.0.0

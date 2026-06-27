@@ -3,4 +3,5 @@
 # NPU/AI
 openvino>=2026.2.1
 torch>=2.12.1
-numpy>=2.5.0,<3.0.0
+-c ../constraints/shared.txt  # single source of truth for shared versions (#10524)
+numpy  # version from constraints/shared.txt
