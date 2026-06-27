@@ -890,19 +890,6 @@ export const routes: RouteRecordRaw[] = [
       hideInNav: true,
     },
   },
-  // Issue #7513: Host inventory admin view
-  {
-    path: '/admin/hosts',
-    name: 'admin-hosts',
-    component: () => import('@/views/Admin/HostsView.vue'),
-    meta: {
-      title: 'Host Inventory',
-      description: 'Manage multi-host role deployment',
-      requiresAuth: true,
-      admin: true,
-      hideInNav: true,
-    },
-  },
   // GH#6470: Budget policy management (admin-only)
   {
     path: '/admin/budget-policies',
