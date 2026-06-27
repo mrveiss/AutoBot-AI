@@ -46,12 +46,17 @@ def constrained_packages() -> set[str]:
 
 def requirement_files() -> list[pathlib.Path]:
     files = []
-    for p in pathlib.Path(".").rglob("requirements*.txt"):
-        if any(part in _EXCLUDE_DIRS for part in p.parts):
-            continue
-        if p == CONSTRAINTS:
-            continue
-        files.append(p)
+    seen = set()
+    # `requirements*.txt` anywhere, plus every *.txt inside a `requirements*` directory
+    # (e.g. requirements-ci/ai-ml.txt, which is a requirements file not named requirements*).
+    for pattern in ("requirements*.txt", "requirements*/*.txt"):
+        for p in pathlib.Path(".").rglob(pattern):
+            if any(part in _EXCLUDE_DIRS for part in p.parts):
+                continue
+            if p == CONSTRAINTS or p in seen:
+                continue
+            seen.add(p)
+            files.append(p)
     return sorted(files)
 
 
