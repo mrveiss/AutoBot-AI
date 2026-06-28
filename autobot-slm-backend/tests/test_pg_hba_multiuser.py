@@ -6,19 +6,14 @@ Guards the single-box collapse case: provisioning one app user must never
 drop the others from pg_hba (which previously would break the SLM database
 when autobot_app was provisioned onto the shared instance).
 """
+
 from pathlib import Path
 
 import pytest
 
 jinja2 = pytest.importorskip("jinja2")
 
-_TEMPLATE_DIR = (
-    Path(__file__).resolve().parents[1]
-    / "ansible"
-    / "roles"
-    / "postgresql"
-    / "templates"
-)
+_TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "ansible" / "roles" / "postgresql" / "templates"
 
 
 def _render(**ctx) -> str:
@@ -53,8 +48,6 @@ def test_remote_access_entries_preserved():
     out = _render(
         db_user="autobot_app",
         postgresql_app_users=["slm_app", "autobot_app"],
-        pg_hba_remote_access=[
-            {"database": "autobot_users", "user": "autobot_app", "address": "10.0.0.5/32"}
-        ],
+        pg_hba_remote_access=[{"database": "autobot_users", "user": "autobot_app", "address": "10.0.0.5/32"}],
     )
     assert "host    autobot_users    autobot_app    10.0.0.5/32" in out
