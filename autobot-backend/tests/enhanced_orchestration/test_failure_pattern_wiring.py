@@ -77,3 +77,43 @@ async def test_detector_error_never_breaks_failure_handling(monkeypatch):
     # Must swallow and return None rather than propagate.
     info = await WorkflowRunner._record_failure_pattern(object(), _plan("sequential"), ValueError("e"))
     assert info is None
+
+
+class _FakeRunner:
+    """Stand-in exposing only what _handle_workflow_execution_failure touches."""
+
+    def __init__(self, recovery_result):
+        self.record_calls = 0
+        self._recovery_result = recovery_result
+
+    async def _record_failure_pattern(self, plan, error):
+        self.record_calls += 1
+        return {"pattern_id": "p", "occurrences": 2, "resolution_success_rate": 0.0}
+
+    async def _attempt_failure_recovery(self, plan, error, results, _depth):
+        return self._recovery_result
+
+
+@pytest.mark.asyncio
+async def test_handle_records_once_at_top_level_and_annotates_failure():
+    fake = _FakeRunner({"plan_id": "x", "success": False, "error": "e", "results": {}})
+    result = await WorkflowRunner._handle_workflow_execution_failure(fake, _plan("sequential"), ValueError("e"), {}, 0)
+    assert fake.record_calls == 1  # recorded once
+    assert result["known_failure_pattern"]["occurrences"] == 2  # annotation rides final dict
+
+
+@pytest.mark.asyncio
+async def test_handle_does_not_record_or_annotate_on_recursion():
+    fake = _FakeRunner({"plan_id": "x", "success": False, "error": "e", "results": {}})
+    result = await WorkflowRunner._handle_workflow_execution_failure(
+        fake, _plan("sequential"), ValueError("e"), {}, 1  # _depth > 0 → nested fallback
+    )
+    assert fake.record_calls == 0  # no double-count on fallback recursion
+    assert "known_failure_pattern" not in result
+
+
+@pytest.mark.asyncio
+async def test_handle_does_not_annotate_successful_recovery():
+    fake = _FakeRunner({"success": True, "results": {}})
+    result = await WorkflowRunner._handle_workflow_execution_failure(fake, _plan("sequential"), ValueError("e"), {}, 0)
+    assert "known_failure_pattern" not in result  # recovery succeeded → no failure annotation

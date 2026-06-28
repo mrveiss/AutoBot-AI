@@ -317,9 +317,11 @@ class WorkflowRunner:
 
         Wires the previously-unused FailurePatternDetector into the failure path:
         records the failure (write) and surfaces prior-occurrence metadata (read).
-        Fire-and-forget — any detector/Redis error is swallowed so failure
-        handling is never disrupted.  Returns annotation metadata when the
-        pattern has been seen before, else None.
+        Awaited inline but fully guarded — any detector/Redis error is swallowed
+        so failure handling is never disrupted.  (The detector currently uses a
+        sync Redis client; making it async-native is tracked separately.)
+        Returns annotation metadata when the pattern has been seen before,
+        else None.
         """
         try:
             from services.failure_pattern_detector import get_pattern_detector
@@ -343,13 +345,22 @@ class WorkflowRunner:
         self, plan: WorkflowPlan, error: Exception, results: Dict[str, Any], _depth: int = 0
     ) -> Dict[str, Any]:
         logger.error("Workflow execution failed: %s", error)
-        pattern_info = await self._record_failure_pattern(plan, error)
+        # #10628: record the originating failure once, at the top level only, so
+        # the learned occurrence count isn't inflated by each fallback retry
+        # (this method recurses via execute_workflow on fallbacks).
+        pattern_info = await self._record_failure_pattern(plan, error) if _depth == 0 else None
+        result = await self._attempt_failure_recovery(plan, error, results, _depth)
+        if pattern_info and not result.get("success", False):
+            result["known_failure_pattern"] = pattern_info
+        return result
+
+    async def _attempt_failure_recovery(
+        self, plan: WorkflowPlan, error: Exception, results: Dict[str, Any], _depth: int
+    ) -> Dict[str, Any]:
+        """GOAP-replan / fallback-chain recovery for a failed workflow (#10628 extracted)."""
         if _depth >= 5:
             logger.error("Max fallback depth (5) reached, aborting fallback chain")
-            result = {"plan_id": plan.plan_id, "success": False, "error": str(error), "results": results}
-            if pattern_info:
-                result["known_failure_pattern"] = pattern_info
-            return result
+            return {"plan_id": plan.plan_id, "success": False, "error": str(error), "results": results}
 
         # GH#7354: GOAP adaptive replanning.  When the plan was produced by
         # GOAPPlanner, derive the current world-state from completed tasks and
@@ -365,10 +376,7 @@ class WorkflowRunner:
                 return await self.execute_workflow(fallback, _depth + 1)
             except Exception as fe:
                 logger.error("Fallback plan failed: %s", fe)
-        result = {"plan_id": plan.plan_id, "success": False, "error": str(error), "results": results}
-        if pattern_info:
-            result["known_failure_pattern"] = pattern_info
-        return result
+        return {"plan_id": plan.plan_id, "success": False, "error": str(error), "results": results}
 
     async def _try_goap_replan(self, plan: WorkflowPlan, results: Dict[str, Any], _depth: int) -> Dict[str, Any] | None:
         """Attempt GOAP adaptive replanning after a step failure (GH#7354).
