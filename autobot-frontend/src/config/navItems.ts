@@ -73,14 +73,16 @@ export const navItems: NavItem[] = [
   // (BROWSE group) — see KnowledgeView.vue. Routes live under /knowledge/* now;
   // legacy /documents and /transcriber paths redirect there (router/index.ts).
   { to: '/knowledge', labelKey: 'nav.knowledge', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
+  // Company OS (LLC) — kept high in the order so it stays in the primary nav rail,
+  // not pushed into the overflow menu (a major feature must be directly reachable).
+  { to: '/llc/select-company', labelKey: 'nav.companyOs', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', iconStroke: true },
   { to: '/automation', labelKey: 'nav.automation', icon: 'M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z', iconRule: 'evenodd' },
   { to: '/analytics', labelKey: 'nav.analytics', iconPaths: ['M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z', 'M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z'] },
   // Agents nav entry removed (TASK 1c): /agents/registry duplicates SLM Admin's
   // /slm/agents/local-agents. Route is kept in router/index.ts for deep links.
   // GH#8748: LLC views consolidated to one "Company OS" entry (was 5 separate items)
-  // GH#9627: entry point is the company selector; LLC sub-views are reached
-  // via the contextual LLC sidebar once a company is selected.
-  { to: '/llc/select-company', labelKey: 'nav.companyOs', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', iconStroke: true },
+  // GH#9627: entry point is the company selector; LLC sub-views are reached via the
+  // contextual LLC sidebar once a company is selected. (Entry moved up — see above.)
   // Issue #9890: Vision Automation is reachable via Workflow Builder sidebar + direct route.
   // It is NOT in the primary nav rail. To gate a future entry, add a `featureFlag`
   // (and `featureDefaultVisible: true` only if it should ship visible by default).

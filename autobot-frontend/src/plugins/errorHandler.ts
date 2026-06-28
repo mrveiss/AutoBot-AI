@@ -55,6 +55,16 @@ class GlobalErrorHandler {
 
     // Catch JavaScript errors
     window.addEventListener('error', (event) => {
+      // ResizeObserver loop notices are benign browser warnings — both the old
+      // "loop limit exceeded" and the newer Chromium "loop completed with
+      // undelivered notifications" variants. Never surface them as an Application
+      // Error notification (they fire during normal responsive layout).
+      const rawMessage = event.message || event.error?.message || ''
+      if (typeof rawMessage === 'string' && rawMessage.includes('ResizeObserver loop')) {
+        event.preventDefault()
+        return
+      }
+
       logger.error('Global JavaScript error:', event.error)
 
       this.addNotification({
