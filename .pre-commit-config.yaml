@@ -635,7 +635,7 @@ repos:
 
       - id: canonical-check-py
         name: Canonical check — Python (#7458)
-        entry: python tools/lint/canonical_check.py --files
+        entry: python3 tools/lint/canonical_check.py --files
         language: python
         files: \.py$
         exclude: ^(\.worktrees/|repo_tests/lint/canonical/fixtures/)
@@ -653,7 +653,7 @@ repos:
 
       - id: canonical-check-infra
         name: Canonical check — Infrastructure (#7458)
-        entry: python tools/lint/canonical_check_infra.py --files
+        entry: python3 tools/lint/canonical_check_infra.py --files
         language: python
         files: \.(sh|yml|yaml)$
         exclude: ^(\.worktrees/|node_modules/|repo_tests/lint/canonical/fixtures/)
