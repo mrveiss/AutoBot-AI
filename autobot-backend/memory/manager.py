@@ -852,5 +852,46 @@ class UnifiedMemoryManager:
             )
         )
 
+    def get_task_statistics_sync(self, days_back: int | None = None) -> Dict[str, Any]:
+        """Return task execution statistics synchronously (sync wrapper).
+
+        Do NOT call from async code — use await get_task_statistics() instead.
+        """
+        return self._run_sync(self.get_task_statistics(days_back))
+
+    def store_embedding(
+        self,
+        content: str,
+        content_type: str,
+        embedding_model: str,
+        embedding_vector: List[float],
+    ) -> bool:
+        """Persist an embedding vector as a general memory entry (sync wrapper).
+
+        The vector is JSON-serialised and stored in the GENERAL_MEMORY category
+        so it survives across restarts without a dedicated vector table.
+        Do NOT call from async code — use await store_memory() directly instead.
+        """
+        import json as _json
+
+        from .enums import MemoryCategory
+
+        metadata = {
+            "content_type": content_type,
+            "embedding_model": embedding_model,
+            "vector_length": len(embedding_vector),
+        }
+        embedding_bytes = _json.dumps(embedding_vector).encode("utf-8")
+        self._run_sync(
+            self.store_memory(
+                MemoryCategory.FACT,
+                content,
+                metadata=metadata,
+                embedding=embedding_bytes,
+            )
+        )
+        logger.debug("Stored embedding for content_type=%s model=%s", content_type, embedding_model)
+        return True
+
 
 __all__ = ["UnifiedMemoryManager"]
