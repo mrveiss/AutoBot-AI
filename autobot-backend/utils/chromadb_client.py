@@ -24,7 +24,7 @@ import json
 import pickle  # nosec B403 — reading ChromaDB internal pickle files only
 import sqlite3
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
@@ -46,6 +46,10 @@ logger = get_logger(__name__)
 # Host remains os.getenv-based: empty string = use local PersistentClient (dev mode).
 _CHROMADB_HOST = _ssot_config.vm.chromadb
 _CHROMADB_PORT = _ssot_config.port.chromadb
+
+# Module-level client cache (singleton per key) — mirrors _async_client_cache so
+# the sync client isn't rebuilt, and legacy migrations re-run, on every call (#10601).
+_sync_client_cache: Dict[str, Any] = {}
 
 # Module exports
 __all__ = [
@@ -333,6 +337,13 @@ def get_chromadb_client(
     import chromadb  # noqa: F811
     from chromadb.config import Settings as ChromaSettings
 
+    # #10601: return the cached client instead of rebuilding it (and re-running
+    # the legacy migrations below) on every call. Mirrors _async_client_cache.
+    cache_key = f"http://{_CHROMADB_HOST}:{_CHROMADB_PORT}" if _CHROMADB_HOST else (db_path or "data/chromadb")
+    cached = _sync_client_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         if _CHROMADB_HOST:
             client = chromadb.HttpClient(
@@ -347,6 +358,7 @@ def get_chromadb_client(
                 _CHROMADB_HOST,
                 _CHROMADB_PORT,
             )
+            _sync_client_cache[cache_key] = client
             return client
 
         # Fallback: local PersistentClient
@@ -364,6 +376,7 @@ def get_chromadb_client(
             ),
         )
         logger.info("ChromaDB persistent client at: %s", chroma_path)
+        _sync_client_cache[cache_key] = client
         return client
 
     except Exception as e:
