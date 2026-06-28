@@ -41,13 +41,27 @@ from autobot_shared.http_client import sign_request
 
 logger = logging.getLogger(__name__)
 
+
+def _ssot_backend_url() -> str:
+    """Derive the autobot-backend base URL from SSOT config (#10573).
+
+    Falls back to localhost:8001 if autobot_shared is unavailable.
+    """
+    try:
+        from autobot_shared.ssot_config import get_config
+
+        return get_config().backend_url
+    except Exception:
+        return "http://127.0.0.1:8001"
+
+
 # ---------------------------------------------------------------------------
 # Module-level configuration — read once from env, never hard-coded.
 # ---------------------------------------------------------------------------
 _INTERNAL_API_KEY: str = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")  # primary auth (#10492 Option A)
 _SERVICE_ID: str = os.getenv("SLM_SERVICE_ID", "slm-backend")
 _SERVICE_KEY: str = os.getenv("SLM_SERVICE_KEY", "")  # HMAC fallback
-_BACKEND_BASE_URL: str = os.getenv("SLM_AUTHORITY_BASE_URL", "http://127.0.0.1:8001").rstrip("/")
+_BACKEND_BASE_URL: str = os.getenv("SLM_AUTHORITY_BASE_URL", _ssot_backend_url()).rstrip("/")
 _SYSTEM_VAULT_PATH = "/api/v2/secrets/system"
 _REQUEST_TIMEOUT_SECONDS: float = float(os.getenv("SLM_VAULT_CLIENT_TIMEOUT", "10"))
 
