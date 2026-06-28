@@ -19,7 +19,7 @@ import psutil
 import pytest
 
 from knowledge import KnowledgeBase
-from memory.compat import EnhancedMemoryManager
+from memory import UnifiedMemoryManager
 
 # Import components to benchmark
 from orchestrator import Orchestrator
@@ -366,9 +366,7 @@ class TestMemorySystemPerformance:
         """Set up test environment"""
         self.benchmark = PerformanceBenchmark()
 
-        # EnhancedMemoryManager now delegates to UnifiedMemoryManager (memory.compat)
-        # which does not use global_config_manager — construct directly.
-        self.memory_manager = EnhancedMemoryManager()
+        self.memory_manager = UnifiedMemoryManager()
 
     async def test_memory_storage_performance(self):
         """Benchmark memory storage operations"""
@@ -460,7 +458,7 @@ class TestSystemIntegrationPerformance:
         with (
             patch("orchestrator.Orchestrator") as mock_orchestrator_class,
             patch("knowledge_base.KnowledgeBase") as mock_kb_class,
-            patch("memory.compat.EnhancedMemoryManager") as mock_memory_class,
+            patch("memory.manager.UnifiedMemoryManager") as mock_memory_class,
         ):
             # Set up mocks
             mock_orchestrator = MagicMock()
