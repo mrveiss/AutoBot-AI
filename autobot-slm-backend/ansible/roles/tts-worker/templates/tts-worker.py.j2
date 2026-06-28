@@ -57,12 +57,14 @@ _voice_cache: dict = {}  # voice_id -> voice_state
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load Pocket TTS model on startup."""
+    """Load Pocket TTS model and pre-warm DEFAULT_VOICE on startup."""
     global _model_loaded, _model_error
     loop = asyncio.get_event_loop()
     success, err = await loop.run_in_executor(None, _load_model)
     _model_loaded = success
     _model_error = err
+    if success:
+        await loop.run_in_executor(None, _prewarm_default_voice)
     yield
 
 
@@ -193,6 +195,19 @@ def _get_voice_state(voice_id: str):
 
     _voice_cache[voice_id] = state
     return state
+
+
+def _prewarm_default_voice() -> None:
+    """Pre-compute DEFAULT_VOICE state so the first synthesis is hot (#10561).
+
+    Non-fatal: a failure here only forgoes the latency win, it must not
+    block worker startup or mark the model unhealthy.
+    """
+    try:
+        _get_voice_state(DEFAULT_VOICE)
+        logger.info("Pre-warmed default voice state: %s", DEFAULT_VOICE)
+    except Exception as e:
+        logger.warning("Failed to pre-warm default voice %s: %s", DEFAULT_VOICE, e)
 
 
 def _get_metadata_path() -> Path:
