@@ -34,6 +34,7 @@ from .nodes_execution import router as nodes_execution_router
 from .npu import router as npu_router
 from .orchestration import router as orchestration_router
 from .rdp import node_rdp_router, rdp_router
+from .scim import router as scim_router
 from .secrets import router as secrets_router
 from .security import router as security_router
 from .services import fleet_router as fleet_services_router
@@ -90,6 +91,7 @@ __all__ = [
     "autobot_users_router",
     "autobot_teams_router",
     "sso_router",
+    "scim_router",
     "secrets_router",
     "setup_wizard_router",
     "sso_auth_router",

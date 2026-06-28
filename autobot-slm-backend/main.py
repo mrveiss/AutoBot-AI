@@ -48,6 +48,7 @@ from api import (
     npu_router,
     orchestration_router,
     rdp_router,
+    scim_router,
     secrets_router,
     security_router,
     services_router,
@@ -214,6 +215,12 @@ async def lifespan(app: FastAPI):
         await _ensure_internal_api_key()
     except Exception:
         logger.exception("Internal API key seeding failed (non-fatal) (#10263)")
+
+    # SCIM bearer token — non-fatal; SCIM simply returns 401 until seeded.
+    try:
+        await _ensure_scim_bearer_token()
+    except Exception:
+        logger.exception("SCIM bearer token seeding failed (non-fatal) (#10157)")
 
     # Compose fleet-node surfacing is best-effort cosmetic — a seeding failure here
     # must never abort SLM startup (it previously rode the re-raising block above).
@@ -464,6 +471,43 @@ async def _ensure_internal_api_key() -> None:
         logger.info("Generated shared internal API key — personality/voice proxies enabled (#10263)")
 
 
+async def _ensure_scim_bearer_token() -> None:
+    """Seed the SCIM bearer token into SystemSecret on first startup (#10157).
+
+    The token is generated once; admins retrieve it from the SLM secrets UI
+    to configure their IdP (Okta, Entra, Google Workspace) SCIM provisioning.
+    Idempotent — never overwrites an existing value.
+    """
+    import secrets as _secrets
+
+    from sqlalchemy.exc import IntegrityError
+
+    from models.database import SystemSecret
+    from services.encryption import encrypt_data
+
+    key_name = "scim_bearer_token"  # nosec B105 - secret-store key name, not a credential
+    async with db_service.session() as db:
+        from sqlalchemy import select
+
+        result = await db.execute(select(SystemSecret).where(SystemSecret.key == key_name))
+        if result.scalar_one_or_none() is not None:
+            return
+        db.add(
+            SystemSecret(
+                key=key_name,
+                encrypted_value=encrypt_data(_secrets.token_hex(32)),
+                description="SCIM 2.0 bearer token — configure in IdP SCIM provisioning settings (#10157)",
+            )
+        )
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            logger.info("SCIM bearer token already seeded concurrently — keeping existing (#10157)")
+            return
+        logger.info("Generated SCIM 2.0 bearer token — retrieve from SLM secrets UI (#10157)")
+
+
 async def _seed_default_roles():
     """Seed default roles if they don't exist (Issue #779)."""
     from services.role_registry import seed_default_roles
@@ -526,6 +570,9 @@ app.include_router(websocket_router, prefix="/api")
 # SSO Integration (Issue #576 Phase 4) — open: auth entry points
 app.include_router(sso_router, prefix="/api")
 app.include_router(sso_auth_router, prefix="/api")
+# SCIM 2.0 inbound provisioning (#10157) — bearer-token auth handled inside the router;
+# mounted without /api prefix so IdP SCIM client URLs resolve as /scim/v2/Users etc.
+app.include_router(scim_router)
 
 # --- Service-management–gated routers ---
 app.include_router(browser_router, prefix="/api", dependencies=_SM)
