@@ -1,0 +1,12 @@
+# Optional NLP extra — enables the spaCy fast-path for entity extraction (#2025).
+#
+# NOT installed in the default backend image: spaCy's build deps (thinc/blis)
+# have no py3.14 wheels yet (#9825). Without this extra, entity extraction uses
+# the LLM path automatically (see knowledge/pipeline/cognifiers/entity_extractor.py).
+#
+# To enable on a py3.12/3.13 host:
+#   pip install -r requirements-nlp.txt
+#   python -m spacy download en_core_web_sm
+#
+# Re-fold into requirements.txt once spaCy/blis publish cp314 wheels.
+spacy>=3.8.14                  # Issue #2025: NLP entity extraction
