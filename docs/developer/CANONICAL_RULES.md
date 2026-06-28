@@ -32,12 +32,13 @@ Added in PR for issue #10577 (umbrella #10569). All rules are Python AST rules r
 | `py-adhoc-db-engine` | #10570 | Python | warn | `create_engine`/`sessionmaker` outside the canonical async factory | 39 (includes tests; migrate via #10570) |
 | `py-hardcoded-url` | #10573 | Python | warn | `http://localhost\|127.0.0.1:PORT` literal — resolve via `ssot_config` | 87 (migrate via #10573) |
 | `py-banned-suffix-filename` | #10575 | Python | block | Source file named `_fix`/`_v2`/`_old`/`_copy` — edit canonical module | 0 (clean after sibling PRs; BLOCK safe) |
-| `py-sync-requests-in-async` | #10576 | Python | warn | Blocking `requests.*` inside `async def` — use async HTTP client | 14 (migrate separately) |
+| `py-sync-requests-in-async` | #10576 | Python | block | Blocking `requests.*` inside `async def` — use async HTTP client | 0 (promoted to BLOCK after #10627 cohort 1 cleared all 14 sites) |
 | `py-duplicate-concept` | #10577 | Python | warn | `Enhanced*`/`Unified*` class shadows a base-name class in the same file | 5 (merge into canonical class) |
 
 **Severity rationale:**
 
 - `py-banned-suffix-filename` → **block**: repo-wide scan on 2026-06-28 found 0 violations after sibling PR #10575 cleaned all `_fix`-named scripts. Safe to fail-fast on new introductions.
+- `py-sync-requests-in-async` → **block**: all 14 violations cleared by PR for #10627 cohort 1 (2026-06-28). Four files converted to `aiohttp.ClientSession`. Safe to fail-fast on new introductions.
 - All others → **warn**: pre-existing violations exist across the codebase. Each rule's tracking issue owns the migration. Promote to BLOCK once the issue is closed and a follow-up repo-wide scan is clean.
 
 ## Waivers

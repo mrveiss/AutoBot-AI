@@ -18,7 +18,7 @@ from tools.lint.canonical.diagnostic import Diagnostic
 
 RULE_ID = "py-sync-requests-in-async"
 ISSUE = "#10576"
-SEVERITY = "warn"
+SEVERITY = "block"
 TARGETS = ["autobot-backend", "autobot-slm-backend"]
 DESCRIPTION = "Blocking requests.* inside async def — use an async HTTP client"
 FIX_HINT = "Replace requests.* with aiohttp/httpx.AsyncClient and await the call."

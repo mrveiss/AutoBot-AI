@@ -125,17 +125,19 @@ async def test_sessions_api():
     print("\n🧪 Testing Simple Sessions API")  # noqa: print
     print("=" * 40)  # noqa: print
 
-    import requests
+    import aiohttp
 
     try:
-        response = requests.get(get_test_backend_url() + "/api/terminal/sessions", timeout=5)
-        if response.status_code == 200:
-            sessions = response.json()
-            print(f"✅ Simple sessions API working: {json.dumps(sessions, indent=2)}")  # noqa: print  # noqa: print
-            return True
-        else:
-            print(f"❌ Sessions API failed: {response.status_code}")  # noqa: print
-            return False
+        timeout = aiohttp.ClientTimeout(total=5)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(get_test_backend_url() + "/api/terminal/sessions") as response:
+                if response.status == 200:
+                    sessions = await response.json()
+                    print(f"✅ Simple sessions API working: {json.dumps(sessions, indent=2)}")  # noqa: print
+                    return True
+                else:
+                    print(f"❌ Sessions API failed: {response.status}")  # noqa: print
+                    return False
     except Exception as e:
         print(f"❌ Sessions API error: {e}")  # noqa: print
         return False
