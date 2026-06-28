@@ -61,6 +61,7 @@ except ImportError:
 
 logger = get_logger(__name__)
 
+
 # Issue #380: literal value AST helpers.
 # The legacy Str/Num node types were removed in Python 3.12; both are now
 # ast.Constant. These helpers recover the str-vs-num distinction those checks
@@ -76,9 +77,12 @@ def _is_num_constant(node: ast.AST) -> bool:
     bool is a subclass of int but a True/False literal was never a numeric
     literal, so exclude it.
     """
-    return isinstance(node, ast.Constant) and isinstance(node.value, (int, float, complex)) and not isinstance(
-        node.value, bool
+    return (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, (int, float, complex))
+        and not isinstance(node.value, bool)
     )
+
 
 # Issue #380: Module-level tuple for config file extensions
 _CONFIG_FILE_EXTENSIONS = (
