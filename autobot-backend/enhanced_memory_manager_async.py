@@ -21,7 +21,6 @@ import aiosqlite
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.status_enums import Priority as TaskPriority  # canonical export (#10626)
 from autobot_shared.status_enums import TaskStatus
 
 logger = get_logger(__name__)
