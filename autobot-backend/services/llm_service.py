@@ -171,6 +171,7 @@ class LLMService:
         temperature: float | None = None,
         max_tokens: int | None = None,
         timeout: int = 60,
+        use_cache: bool = True,
         **kwargs: Any,
     ) -> LLMResponse:
         """
@@ -191,6 +192,8 @@ class LLMService:
             temperature: Override temperature for this call.
             max_tokens: Override max_tokens for this call.
             timeout: Request timeout in seconds.
+            use_cache: When True (default) a near-deterministic request may be
+                served from / stored in the response cache (#10597).
             **kwargs: Additional fields forwarded to LLMRequest.
 
         Returns:
@@ -216,9 +219,11 @@ class LLMService:
         )
 
         # #10597: serve identical requests from the L1/L2 response cache before
-        # hitting any provider.  Streaming has its own path and is not cached.
+        # hitting any provider — but only when the request is safely reusable:
+        # caching off, streaming, tool/structured/thinking calls, or
+        # higher-temperature (non-deterministic) requests are never cached.
         cache_key: str | None = None
-        if self._response_cache is not None:
+        if self._is_cacheable(request, temp, use_cache):
             cached, cache_key = await self._optimized_check_cache(
                 messages,
                 selected_model or "",
@@ -226,6 +231,7 @@ class LLMService:
                 request.request_id,
                 start_time,
                 temperature=temp,
+                max_tokens=tokens,
             )
             if cached is not None:
                 self._calculate_cache_hit_rate(cached)
@@ -982,6 +988,24 @@ class LLMService:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _is_cacheable(self, request: LLMRequest, temperature: float, use_cache: bool) -> bool:
+        """Whether a chat request may be served from / stored in the cache (#10597).
+
+        Only near-deterministic, safely-reusable requests qualify: caching must
+        be enabled, the response cache present, and the request must not stream,
+        use tools, force structured output, request extended thinking, or run at
+        a temperature above the configured determinism threshold.
+        """
+        if not (use_cache and config.llm_response_cache and self._response_cache is not None):
+            return False
+        if request.stream or request.structured_output:
+            return False
+        if getattr(request, "tools", None) or getattr(request, "tool_choice", None):
+            return False
+        if request.metadata.get("api_kwargs"):  # extended-thinking / provider-specific knobs
+            return False
+        return temperature is not None and temperature <= config.llm_cache_max_temperature
+
     def _select_chat_model(self, messages: List[Dict[str, str]], resolved_type: LLMType) -> str | None:
         """Pick a model when the caller didn't pin one (#10597).
 
@@ -1028,13 +1052,14 @@ class LLMService:
         request_id: str,
         start_time: float,
         temperature: float = 0.7,
+        max_tokens: int | None = None,
     ) -> tuple:
         """Look up L1/L2 cache for a chat request.
 
         Mirrors the cache-check block in ``LLMInterface._check_cache``
         (interface.py line 765).  Shared by ``chat()`` (#10597) and the
-        optimized vLLM path; ``temperature`` is part of the cache key so calls
-        with different sampling temperatures don't collide.
+        optimized vLLM path; ``temperature`` and ``max_tokens`` are part of the
+        cache key so calls differing only in those don't collide.
 
         Returns:
             ``(LLMResponse, cache_key)`` on hit; ``(None, cache_key)`` on miss.
@@ -1043,6 +1068,7 @@ class LLMService:
             messages=messages,
             model=model_name,
             temperature=temperature,
+            max_tokens=max_tokens,
         )
         cached = await self._response_cache.get(cache_key)
         if cached is not None:

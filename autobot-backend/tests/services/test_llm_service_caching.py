@@ -97,9 +97,9 @@ class _FakeCache:
         self.gets = 0
         self.sets = 0
 
-    def generate_cache_key(self, messages, model, temperature, top_k=40, top_p=0.9) -> str:
+    def generate_cache_key(self, messages, model, temperature, top_k=40, top_p=0.9, max_tokens=None) -> str:
         last = messages[-1]["content"] if messages else ""
-        return f"{model}|{temperature}|{last}"
+        return f"{model}|{temperature}|{max_tokens}|{last}"
 
     async def get(self, key):
         self.gets += 1
@@ -123,14 +123,58 @@ async def test_chat_cache_hit_short_circuits_provider():
     svc, provider, cache = _make_service()
     messages: List[Dict[str, str]] = [{"role": "user", "content": "hi there"}]
 
-    r1 = await svc.chat(messages)
+    # temperature=0 → deterministic → cacheable.
+    r1 = await svc.chat(messages, temperature=0.0)
     assert r1.content == "hello world"
     assert provider.calls == 1
     assert cache.sets == 1  # stored on success
 
-    r2 = await svc.chat(messages)
+    r2 = await svc.chat(messages, temperature=0.0)
     assert provider.calls == 1  # served from cache, provider untouched
     assert r2.cached is True
+
+
+@pytest.mark.asyncio
+async def test_chat_different_max_tokens_do_not_collide():
+    svc, provider, _ = _make_service()
+    messages = [{"role": "user", "content": "same prompt"}]
+
+    await svc.chat(messages, temperature=0.0, max_tokens=100)
+    await svc.chat(messages, temperature=0.0, max_tokens=2000)
+    # Different max_tokens → different cache key → no stale collision.
+    assert provider.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_chat_high_temperature_not_cached():
+    svc, provider, _ = _make_service()
+    messages = [{"role": "user", "content": "be creative"}]
+
+    await svc.chat(messages, temperature=0.9)
+    await svc.chat(messages, temperature=0.9)
+    # Above the determinism threshold → never cached, responses may vary.
+    assert provider.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_chat_use_cache_false_bypasses():
+    svc, provider, _ = _make_service()
+    messages = [{"role": "user", "content": "x"}]
+
+    await svc.chat(messages, temperature=0.0, use_cache=False)
+    await svc.chat(messages, temperature=0.0, use_cache=False)
+    assert provider.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_chat_structured_output_not_cached():
+    svc, provider, _ = _make_service()
+    messages = [{"role": "user", "content": "give json"}]
+
+    await svc.chat(messages, temperature=0.0, structured_output=True)
+    await svc.chat(messages, temperature=0.0, structured_output=True)
+    # Structured-output responses are not safely reusable → not cached.
+    assert provider.calls == 2
 
 
 @pytest.mark.asyncio
