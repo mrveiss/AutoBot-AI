@@ -154,7 +154,7 @@ class ProgressTracker:
 
     Backed by Redis (main DB).  Canonical callers: task_execution_tracker.py.
     Legacy: utils/long_running_operations/progress_tracker.py (in-memory only)
-    and enhanced_memory_manager_async.py ExecutionRecord (Redis + DB).
+    and memory.TaskExecutionRecord (Redis + DB) via TaskExecutionTracker.
     """
 
     def __init__(self) -> None:
