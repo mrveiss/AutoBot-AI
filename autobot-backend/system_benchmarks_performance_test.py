@@ -11,9 +11,10 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import psutil
 import pytest
+from memory import UnifiedMemoryManager
+from memory import UnifiedMemoryManager
 
 from config.manager import ConfigManager as ConfigManager
-from memory import EnhancedMemoryManager
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
@@ -175,7 +176,7 @@ class TestSystemPerformanceBenchmarks:
 
     def test_memory_manager_performance(self):
         """Test memory manager performance"""
-        memory_manager = EnhancedMemoryManager()
+        memory_manager = UnifiedMemoryManager()
 
         # Test memory usage during task storage
         def store_multiple_tasks():
@@ -260,7 +261,7 @@ class TestSystemPerformanceBenchmarks:
 
         # Test memory manager startup
         start_time = time.time()
-        EnhancedMemoryManager()
+        UnifiedMemoryManager()
         memory_startup_time = (time.time() - start_time) * 1000
 
         assert memory_startup_time < 200.0, f"Memory manager startup too slow: {memory_startup_time}ms"
