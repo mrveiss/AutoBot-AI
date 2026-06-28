@@ -19,11 +19,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.status_enums import Priority, TaskPriority, TaskStatus  # canonical enums (#10626)
-from enhanced_memory_manager_async import (
-    AsyncEnhancedMemoryManager,
-    ExecutionRecord,
-    get_async_enhanced_memory_manager,
-)
+from memory import TaskExecutionRecord, UnifiedMemoryManager, get_enhanced_memory_manager
 
 logger = get_logger(__name__)
 
@@ -51,9 +47,9 @@ class TaskExecutionTracker:
     to provide automatic task logging, performance monitoring, and execution analytics
     """
 
-    def __init__(self, memory_manager: AsyncEnhancedMemoryManager | None = None):
+    def __init__(self, memory_manager: UnifiedMemoryManager | None = None):
         """Initialize task tracker with memory manager and callback registry."""
-        self.memory_manager = memory_manager or get_async_enhanced_memory_manager()
+        self.memory_manager = memory_manager or get_enhanced_memory_manager()
         self.active_tasks: Dict[str, Dict[str, Any]] = {}
         self.task_callbacks: Dict[str, List[Callable]] = {}
 
@@ -326,15 +322,15 @@ class TaskExecutionTracker:
         status: TaskStatus | None = None,
         limit: int = 100,
         days_back: int = 30,
-    ) -> List[ExecutionRecord]:
+    ) -> List[TaskExecutionRecord]:
         """Get task execution history"""
-        return self.memory_manager.get_task_history(
+        return self.memory_manager.get_task_history_sync(
             agent_type=agent_type, status=status, limit=limit, days_back=days_back
         )
 
     def get_performance_metrics(self, days_back: int = 30) -> Dict[str, Any]:
         """Get comprehensive performance metrics"""
-        stats = self.memory_manager.get_task_statistics(days_back)
+        stats = self.memory_manager.get_task_statistics_sync(days_back)
 
         # Add active task information
         stats["active_tasks"] = {
@@ -371,7 +367,7 @@ class TaskExecutionTracker:
             embedding_vector=embedding_vector,
         )
 
-    def _aggregate_task_stats(self, history: List[ExecutionRecord]) -> Dict[str, Dict[str, Any]]:
+    def _aggregate_task_stats(self, history: List[TaskExecutionRecord]) -> Dict[str, Dict[str, Any]]:
         """
         Aggregate task statistics by agent type in single pass.
 
