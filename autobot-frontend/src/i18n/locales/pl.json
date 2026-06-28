@@ -5672,7 +5672,8 @@
     },
     "secrets": {
       "noticeTitle": "Security Notice",
-      "noticeText": "Secrets are encrypted at rest and in transit. Only authorized users can view or modify secrets. All access is logged for audit purposes."
+      "noticeText": "Secrets are encrypted at rest and in transit. Only authorized users can view or modify secrets. All access is logged for audit purposes.",
+      "tabsLabel": "Sekcje sekretów"
     },
     "vision": {
       "title": "Vision & Multimodal AI",

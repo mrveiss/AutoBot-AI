@@ -851,19 +851,6 @@ export const routes: RouteRecordRaw[] = [
       hideInNav: true,
     },
   },
-  // Issue #6590: Virtual LLM API Keys admin view
-  {
-    path: '/admin/llm-keys',
-    name: 'llm-api-keys',
-    component: () => import('@/views/LLMApiKeysView.vue'),
-    meta: {
-      title: 'LLM API Keys',
-      description: 'Manage virtual LLM API keys with per-key budgets',
-      requiresAuth: true,
-      admin: true,
-      hideInNav: true,
-    },
-  },
   // Issue #1801: Admin User Management
   {
     path: '/admin/users',
@@ -1048,6 +1035,19 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/components/security/SecretsManager.vue'),
         meta: {
           title: 'Secrets Manager',
+          hideInNav: true
+        }
+      },
+      // Issue #6590/#10488: Virtual LLM API Keys — relocated under Secrets section
+      {
+        path: 'llm-keys',
+        name: 'secrets-llm-keys',
+        component: () => import('@/views/secrets/LlmApiKeysView.vue'),
+        meta: {
+          title: 'LLM API Keys',
+          description: 'Manage virtual LLM API keys with per-key budgets',
+          requiresAuth: true,
+          admin: true,
           hideInNav: true
         }
       }
