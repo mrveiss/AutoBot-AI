@@ -28,17 +28,17 @@ odfpy>=1.4.1              # OpenDocument formats (.odt, .ods, .odp, .odg)
 
 # OpenTelemetry - Distributed Tracing (Issue #57, #697)
 # Provides request tracing across the 5-VM AutoBot infrastructure
-opentelemetry-api==1.42.1
-opentelemetry-sdk==1.42.1
-opentelemetry-exporter-otlp==1.42.1
-opentelemetry-exporter-otlp-proto-grpc==1.42.1
-opentelemetry-exporter-otlp-proto-http==1.42.1
-opentelemetry-proto==1.42.1
-opentelemetry-instrumentation-fastapi>=0.63b1
-opentelemetry-propagator-b3==1.42.1
+opentelemetry-api==1.43.0
+opentelemetry-sdk==1.43.0
+opentelemetry-exporter-otlp==1.43.0
+opentelemetry-exporter-otlp-proto-grpc==1.43.0
+opentelemetry-exporter-otlp-proto-http==1.43.0
+opentelemetry-proto==1.43.0
+opentelemetry-instrumentation-fastapi>=0.64b0
+opentelemetry-propagator-b3==1.43.0
 # Issue #697: Additional instrumentation for comprehensive tracing
-opentelemetry-instrumentation-redis>=0.63b1
-opentelemetry-instrumentation-aiohttp-client>=0.63b1
+opentelemetry-instrumentation-redis>=0.64b0
+opentelemetry-instrumentation-aiohttp-client>=0.64b0
 
 # FAISS - Vector Similarity Search (Issue #387, #856)
 # Provides efficient vector similarity search operations
