@@ -303,7 +303,7 @@ DEFAULT_AGENT_CONFIGS = {
             "sequential_thinking_mcp",
         ],
         "invoked_by": "Orchestrator for security-sensitive system operations",
-        "source_file": "src/agents/enhanced_system_commands_agent.py",
+        "source_file": "src/agents/system_command_agent.py",
     },
     "security_scanner": {
         "name": "Security Scanner Agent",
