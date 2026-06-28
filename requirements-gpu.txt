@@ -19,5 +19,5 @@ vllm>=0.21.0
 
 # vLLM pins these exact torch builds (CUDA). They intentionally override the
 # CPU torch installed in the default image when this GPU extra is used.
-torch==2.12.0
+torch==2.12.1
 torchvision==0.27.0
