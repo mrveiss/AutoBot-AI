@@ -1,12 +1,12 @@
 # AutoBot Backend - FastAPI Application (#1809, #1836)
-# python:3.12-slim-bookworm base — eliminates deadsnakes PPA cold build overhead (#6213)
+# python:3.14-slim-bookworm base — eliminates deadsnakes PPA cold build overhead (#6213)
 #
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
 # ---- Dependencies stage ----
-FROM python:3.12-slim-bookworm AS deps
+FROM python:3.14-slim-bookworm AS deps
 
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
@@ -47,7 +47,7 @@ RUN grep -v -E "(autobot.shared|^-r |^-c |^torch==|^torchvision==)" /tmp/require
 
 
 # ---- Production stage ----
-FROM python:3.12-slim-bookworm AS production
+FROM python:3.14-slim-bookworm AS production
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -104,7 +104,7 @@ RUN groupadd -r --gid 999 autobot && useradd -r --uid 999 -g autobot -d /app aut
 WORKDIR /app
 
 # Copy Python packages from deps stage
-COPY --from=deps /usr/local/lib/python3.12/ /usr/local/lib/python3.12/
+COPY --from=deps /usr/local/lib/python3.14/ /usr/local/lib/python3.14/
 COPY --from=deps /usr/local/bin/ /usr/local/bin/
 
 # Copy shared module
