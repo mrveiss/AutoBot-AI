@@ -129,3 +129,7 @@ temp/
 
 # === DEVELOPMENT SERVER FILES ===
 .vite-inspect/
+
+# Visual-regression baselines are generated on-demand in CI (workflow_dispatch),
+# not committed — dev-machine PNGs do not match ubuntu CI rendering (#10316/#10320, #9825 cleanup).
+/tests/visual/__screenshots__/

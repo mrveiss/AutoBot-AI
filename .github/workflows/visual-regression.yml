@@ -25,20 +25,12 @@
 name: Visual Regression
 
 on:
-  push:
-    branches: [main, develop, 'Dev_*']
-    paths:
-      - 'autobot-frontend/**'
-      - '.github/workflows/visual-regression.yml'
-  pull_request:
-    branches: [main, develop, 'Dev_*']
-    paths:
-      - 'autobot-frontend/**'
-      - '.github/workflows/visual-regression.yml'
-  # Allows manually triggering baseline regeneration on the CI runner.
-  # Baselines committed from developer machines (including WSL2) differ from
-  # ubuntu-latest font rendering and will cause false failures. Use this to
-  # generate authoritative CI baselines. See tests/visual/README.md.
+  # Visual baselines are NO LONGER committed (#9825 cleanup). Dev-machine PNGs
+  # (incl. WSL2) never matched ubuntu-latest CI font rendering, so committed
+  # baselines produced constant false failures on every PR (#10316/#10320) for a
+  # non-required gate. Visual regression now runs ON DEMAND only: dispatch with
+  # regenerate_baselines=true to produce an authoritative CI baseline artifact.
+  # See tests/visual/README.md.
   workflow_dispatch:
     inputs:
       regenerate_baselines:
