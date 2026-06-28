@@ -380,8 +380,8 @@ class SecurityASTVisitor(ast.NodeVisitor):
     def _is_truthy(self, node: ast.expr) -> bool:
         """Check if AST node represents a truthy value."""
         if isinstance(node, ast.Constant):
-            return bool(node.value)
-        elif isinstance(node, ast.NameConstant):
+            # True/False/None literals (the legacy NameConstant node) were merged
+            # into ast.Constant in 3.8 and removed in 3.12; this branch covers them.
             return bool(node.value)
         elif isinstance(node, ast.Name):
             return node.id.lower() == "true"

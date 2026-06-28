@@ -3,45 +3,45 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 #
-# Shared dependency role: Python 3.12 (deadsnakes PPA)
-# Installs Python 3.12 interpreter and venv support.
+# Shared dependency role: Python 3.14 (deadsnakes PPA)
+# Installs Python 3.14 interpreter and venv support.
 # Venv creation and pip installs stay in service roles.
 ---
 
-- name: "python312 | Check if Python 3.12 is available"
+- name: "python314 | Check if Python 3.14 is available"
   ansible.builtin.command:
-    cmd: python3.12 --version
+    cmd: python3.14 --version
   register: _py312_check
   changed_when: false
-  # (#2872) Intentional: python3.12 may not be installed yet;
+  # (#2872) Intentional: python3.14 may not be installed yet;
   # rc != 0 triggers the deadsnakes PPA installation below.
   failed_when: false
-  tags: ['deps', 'python312']
+  tags: ['deps', 'python314']
 
-- name: "python312 | Install software-properties-common"
+- name: "python314 | Install software-properties-common"
   ansible.builtin.apt:
     name: software-properties-common
     state: present
   become: true
   when: _py312_check.rc != 0
-  tags: ['deps', 'python312']
+  tags: ['deps', 'python314']
 
 # #7218: idempotent repo-add — preserve device-shipped PPA if present
-- name: "python312 | Add deadsnakes PPA (idempotent, #7218)"
+- name: "python314 | Add deadsnakes PPA (idempotent, #7218)"
   ansible.builtin.include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
   vars:
     apt_repo_match: "deadsnakes/ppa"
     apt_repo_spec: "ppa:deadsnakes/ppa"
     apt_repo_filename: "deadsnakes"
-    apt_repo_label: "deadsnakes (Python 3.12)"
+    apt_repo_label: "deadsnakes (Python 3.14)"
   when: _py312_check.rc != 0
-  tags: ['deps', 'python312']
+  tags: ['deps', 'python314']
 
 # #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
-# Only fires when Python 3.12 is missing, but when it does it must tolerate
+# Only fires when Python 3.14 is missing, but when it does it must tolerate
 # flaky PPAs (the deadsnakes PPA was just added; if it's unreachable, the
-# next deploy retry will still need to install Python 3.12).
-- name: "python312 | Refresh apt cache (best-effort, bounded; #6719)"
+# next deploy retry will still need to install Python 3.14).
+- name: "python314 | Refresh apt cache (best-effort, bounded; #6719)"
   ansible.builtin.command:
     cmd: >-
       timeout 60 apt-get update -qq
@@ -51,18 +51,18 @@
   changed_when: false
   failed_when: false
   when: _py312_check.rc != 0
-  tags: ['deps', 'python312']
+  tags: ['deps', 'python314']
 
-- name: "python312 | Install Python 3.12"
+- name: "python314 | Install Python 3.14"
   ansible.builtin.apt:
-    name: "{{ python312_packages }}"
+    name: "{{ python314_packages }}"
     state: present
   become: true
   when: _py312_check.rc != 0
-  tags: ['deps', 'python312']
+  tags: ['deps', 'python314']
 
-- name: "python312 | Verify Python 3.12 is available"
+- name: "python314 | Verify Python 3.14 is available"
   ansible.builtin.command:
-    cmd: python3.12 --version
+    cmd: python3.14 --version
   changed_when: false
-  tags: ['deps', 'python312']
+  tags: ['deps', 'python314']

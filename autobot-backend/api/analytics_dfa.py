@@ -61,7 +61,7 @@ router = APIRouter(prefix="/dfa", tags=["data-flow-analysis", "analytics"])
 _TAINTED_LEVELS = (TaintLevel.TAINTED, TaintLevel.PARTIALLY_TAINTED)
 
 # Module-level tuple for constant AST types
-_CONSTANT_TYPES = (ast.Constant, ast.Num, ast.Str)
+_CONSTANT_TYPES = (ast.Constant,)
 
 
 @dataclass

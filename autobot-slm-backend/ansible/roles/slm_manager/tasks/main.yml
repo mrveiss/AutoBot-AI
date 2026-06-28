@@ -217,7 +217,7 @@
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
 
-- name: "SLM | Remove stale venv if not Python 3.12"
+- name: "SLM | Remove stale venv if not Python 3.14"
   ansible.builtin.file:
     path: "{{ slm_backend_dir }}/venv"
     state: absent
@@ -249,9 +249,9 @@
     - (_slm_venv_health.rc | default(0)) != 0
   tags: ['slm', 'backend']
 
-- name: "SLM | Create Python 3.12 virtual environment"
+- name: "SLM | Create Python 3.14 virtual environment"
   ansible.builtin.command:
-    cmd: python3.12 -m venv {{ slm_backend_dir }}/venv
+    cmd: python3.14 -m venv {{ slm_backend_dir }}/venv
     creates: "{{ slm_backend_dir }}/venv/bin/python"
   become_user: "{{ slm_user }}"
   when: slm_requirements_stat.stat.exists

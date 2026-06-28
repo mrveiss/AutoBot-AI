@@ -276,9 +276,14 @@ class UnifiedMemoryManager:
         }
         return await self._task_storage.get_task_history(filters)
 
-    async def get_task_statistics(self) -> Dict[str, Any]:
+    async def get_task_statistics(self, days_back: int | None = None) -> Dict[str, Any]:
         """
         Get task execution statistics
+
+        Args:
+            days_back: Unused filter parameter (kept for API compatibility). The
+                       underlying storage returns stats for all time; callers may
+                       pass days_back to satisfy call-site contracts.
 
         Returns:
             Dictionary with task statistics:
@@ -756,6 +761,63 @@ class UnifiedMemoryManager:
             logger.error("Failed task: %s - %s", task_id, error_message)
         else:
             logger.warning("Task not found for failure: %s", task_id)
+        return result
+
+    def add_markdown_reference(
+        self,
+        task_id: str,
+        markdown_file_path: str,
+        reference_type: str = "documentation",
+    ) -> bool:
+        """Store a markdown-file reference against a task (sync wrapper).
+
+        Persists the reference as a general memory entry so it survives across
+        sessions without requiring a separate table.  Returns True on success.
+        Do NOT call from async code — use await store_memory() directly instead.
+        """
+        from .enums import MemoryCategory
+
+        content = f"task:{task_id} file:{markdown_file_path} type:{reference_type}"
+        metadata = {
+            "task_id": task_id,
+            "markdown_file_path": markdown_file_path,
+            "reference_type": reference_type,
+        }
+        self._run_sync(
+            self.store_memory(
+                MemoryCategory.FACT,
+                content,
+                metadata=metadata,
+                reference_path=markdown_file_path,
+            )
+        )
+        logger.info("Added markdown reference for task %s: %s", task_id, markdown_file_path)
+        return True
+
+    def _get_embedding_cache_size(self) -> int:
+        """Return the current number of entries in the LRU cache.
+
+        Used by the API layer to expose cache occupancy without accessing
+        the cache object directly.  Returns 0 when caching is disabled.
+        """
+        stats = self.cache_stats()
+        return int(stats.get("size", 0))
+
+    def cleanup_old_data(self, days_to_keep: int = 90) -> Dict[str, Any]:
+        """Remove records older than days_to_keep and return a summary dict (sync wrapper).
+
+        Return shape matches the original EnhancedMemoryManager.cleanup_old_data()
+        API so existing callers need no changes:
+            {"tasks_deleted": N, "embeddings_deleted": 0}
+
+        Do NOT call from async code — use await cleanup_old_memories() directly.
+        """
+        deleted = self._run_sync(self.cleanup_old_memories(days_to_keep))
+        result: Dict[str, Any] = {
+            "tasks_deleted": deleted,
+            "embeddings_deleted": 0,
+        }
+        logger.info("cleanup_old_data completed: %s", result)
         return result
 
 

@@ -85,7 +85,9 @@ praw>=8.0.1             # Reddit OAuth API for CommunityGrowthSkill
 pywebpush>=2.3.0        # VAPID/RFC8291 browser push delivery
 
 # NLP / Neural Mesh RAG (Issue #1994)
-spacy>=3.8.14                  # Issue #2025: NLP entity extraction
+# spaCy moved to the optional requirements-nlp.txt extra (#9825): its build deps
+# (thinc/blis) have no py3.14 wheels yet, so it is not in the default 3.14 image.
+# entity_extractor falls back to the LLM extraction path when spaCy is absent.
 scikit-learn>=1.9.0           # Issue #2027: RAPTOR clustering
 
 # Live Canvas export (MVA-359)

@@ -202,7 +202,7 @@
       tags: [always]
 
 # -------------------------------------------------------------------
-# Phase 0: Shared Dependencies (nginx, python312, nodejs)
+# Phase 0: Shared Dependencies (nginx, python314, nodejs)
 # Resolved from ROLE_DEPENDENCIES map via node_dependencies host var.
 # -------------------------------------------------------------------
 - name: "Provision Phase 0: Shared Dependencies"
@@ -225,13 +225,13 @@
       when: "'nginx' in (node_dependencies | default([]))"
       tags: ['deps', 'nginx']
 
-    - name: "Deps | Install Python 3.12"
+    - name: "Deps | Install Python 3.14"
       ansible.builtin.include_role:
-        name: python312
+        name: python314
         apply:
-          tags: ['deps', 'python312']
-      when: "'python312' in (node_dependencies | default([]))"
-      tags: ['deps', 'python312']
+          tags: ['deps', 'python314']
+      when: "'python314' in (node_dependencies | default([]))"
+      tags: ['deps', 'python314']
 
     - name: "Deps | Install Node.js"
       ansible.builtin.include_role:
@@ -250,15 +250,15 @@
       when: "'nginx' in (pending_dep_removals | default([]))"
       tags: ['deps', 'removal']
 
-    - name: "Deps | Remove Python 3.12 if marked for removal"
+    - name: "Deps | Remove Python 3.14 if marked for removal"
       ansible.builtin.apt:
         name:
-          - python3.12
-          - python3.12-venv
-          - python3.12-dev
+          - python3.14
+          - python3.14-venv
+          - python3.14-dev
         state: absent
         purge: true
-      when: "'python312' in (pending_dep_removals | default([]))"
+      when: "'python314' in (pending_dep_removals | default([]))"
       tags: ['deps', 'removal']
 
     - name: "Deps | Remove Node.js if marked for removal"
