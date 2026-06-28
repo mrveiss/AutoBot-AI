@@ -629,8 +629,22 @@ class SystemCommandAgent(StandardizedAgent):
         """Initialize allowed command set for LLM-generated command validation."""
         return (
             {"ls", "dir", "pwd", "cd", "cat", "head", "tail", "grep", "find"}
-            | {"ps", "top", "htop", "df", "du", "free", "lscpu", "lsblk", "uname", "whoami", "which", "whereis",
-               "file", "stat"}
+            | {
+                "ps",
+                "top",
+                "htop",
+                "df",
+                "du",
+                "free",
+                "lscpu",
+                "lsblk",
+                "uname",
+                "whoami",
+                "which",
+                "whereis",
+                "file",
+                "stat",
+            }
             | {"ifconfig", "ip", "netstat", "ss", "ping", "curl", "wget"}
             | {"systemctl", "service", "journalctl", "dmesg"}
             | {"chmod", "chown", "mkdir", "rmdir", "cp", "mv", "touch", "ln", "tar", "gzip", "gunzip", "zip", "unzip"}
@@ -640,10 +654,26 @@ class SystemCommandAgent(StandardizedAgent):
     def _init_dangerous_patterns(self) -> list:
         """Initialize dangerous command pattern list for LLM-generated command validation."""
         return [
-            r"rm\s+-rf\s+/", r"rm\s+-rf\s+\*", r":(){ :|:& };:", r"dd\s+.*of=/dev/",
-            r"mkfs", r"fdisk", r"cfdisk", r"iptables\s+-F", r"ufw\s+disable", r"firewall-cmd",
-            r"passwd", r"usermod", r"userdel", r"groupdel", r"chmod\s+777", r"chmod\s+-R\s+777",
-            r"curl.*\|\s*bash", r"wget.*\|\s*sh", r"sudo\s+su\s*-", r"su\s+-",
+            r"rm\s+-rf\s+/",
+            r"rm\s+-rf\s+\*",
+            r":(){ :|:& };:",
+            r"dd\s+.*of=/dev/",
+            r"mkfs",
+            r"fdisk",
+            r"cfdisk",
+            r"iptables\s+-F",
+            r"ufw\s+disable",
+            r"firewall-cmd",
+            r"passwd",
+            r"usermod",
+            r"userdel",
+            r"groupdel",
+            r"chmod\s+777",
+            r"chmod\s+-R\s+777",
+            r"curl.*\|\s*bash",
+            r"wget.*\|\s*sh",
+            r"sudo\s+su\s*-",
+            r"su\s+-",
         ]
 
     def _get_system_commands_prompt(self) -> str:
@@ -657,7 +687,7 @@ class SystemCommandAgent(StandardizedAgent):
             "4. Always explain what the command does\n"
             "5. If a request is dangerous, suggest a safer alternative\n\n"
             "RESPONSE FORMAT:\n"
-            'Generate responses in this exact JSON format:\n'
+            "Generate responses in this exact JSON format:\n"
             '{"command": "...", "explanation": "...", "safety_level": "safe/caution/dangerous", '
             '"alternative": "..."}'
         )
@@ -745,8 +775,13 @@ class SystemCommandAgent(StandardizedAgent):
             }
         except Exception as exc:
             logger.error("Error extracting command: %s", exc)
-            return {"command": "", "explanation": f"Failed to extract command: {exc}",
-                    "safety_level": "dangerous", "alternative": "", "is_structured": False}
+            return {
+                "command": "",
+                "explanation": f"Failed to extract command: {exc}",
+                "safety_level": "dangerous",
+                "alternative": "",
+                "is_structured": False,
+            }
 
     def _llm_security_validate_command(self, command: str) -> Dict[str, Any]:
         """Validate a LLM-generated command against known dangerous patterns and allowed list."""
@@ -754,24 +789,31 @@ class SystemCommandAgent(StandardizedAgent):
             return {"is_safe": False, "security_warning": "Empty command"}
         for pattern in self._dangerous_patterns:
             if re.search(pattern, command, re.IGNORECASE):
-                return {"is_safe": False, "security_warning": f"Dangerous pattern: {pattern}",
-                        "recommended_action": "reject"}
+                return {
+                    "is_safe": False,
+                    "security_warning": f"Dangerous pattern: {pattern}",
+                    "recommended_action": "reject",
+                }
         try:
             parts = shlex.split(command)
             if not parts:
                 return {"is_safe": False, "security_warning": "Unable to parse command"}
             main_cmd = parts[0].split("/")[-1]
             if main_cmd not in self._allowed_commands:
-                return {"is_safe": False,
-                        "security_warning": f"Command '{main_cmd}' not in allowed list",
-                        "recommended_action": "review_manually"}
+                return {
+                    "is_safe": False,
+                    "security_warning": f"Command '{main_cmd}' not in allowed list",
+                    "recommended_action": "review_manually",
+                }
             if main_cmd == "rm" and any(f in parts for f in _DANGEROUS_RM_FLAGS):
-                return {"is_safe": False, "security_warning": "rm with dangerous flags",
-                        "recommended_action": "reject"}
+                return {"is_safe": False, "security_warning": "rm with dangerous flags", "recommended_action": "reject"}
             return {"is_safe": True, "security_warning": None, "main_command": main_cmd}
         except Exception as exc:
-            return {"is_safe": False, "security_warning": f"Failed to parse command: {exc}",
-                    "recommended_action": "reject"}
+            return {
+                "is_safe": False,
+                "security_warning": f"Failed to parse command: {exc}",
+                "recommended_action": "reject",
+            }
 
     def _build_command_payload(self, command_info: Dict[str, Any]) -> Dict[str, Any]:
         """Build a typed CommandPayload dict from LLM command info."""
@@ -786,8 +828,11 @@ class SystemCommandAgent(StandardizedAgent):
             security_concerns=command_info.get("security_concerns", []),
             suggested_alternatives=command_info.get("suggested_alternatives", []),
             metadata={"agent": "SystemCommandAgent", "security_checked": True, "validation_level": "strict"},
-            **{k: v for k, v in command_info.items()
-               if k not in {"command", "explanation", "is_safe", "security_concerns", "suggested_alternatives"}},
+            **{
+                k: v
+                for k, v in command_info.items()
+                if k not in {"command", "explanation", "is_safe", "security_concerns", "suggested_alternatives"}
+            },
         ).model_dump()
 
     async def process_command_request(self, request: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
@@ -808,18 +853,44 @@ class SystemCommandAgent(StandardizedAgent):
         except Exception as exc:
             logger.error("SystemCommandAgent LLM generation error: %s", exc)
             return {
-                "status": "error", "command": "", "explanation": "Failed to process command request",
-                "is_safe": False, "error": str(exc), "agent_type": "system_commands",
+                "status": "error",
+                "command": "",
+                "explanation": "Failed to process command request",
+                "is_safe": False,
+                "error": str(exc),
+                "agent_type": "system_commands",
                 "model_used": self.model_name,
             }
 
     def is_system_command_request(self, message: str) -> bool:
         """Return True if the message looks like a system command request."""
         patterns = [
-            "run", "execute", "command", "shell", "bash", "terminal", "system",
-            "list files", "show processes", "check disk", "memory usage", "network",
-            "ifconfig", "ps", "ls", "df", "free", "top", "netstat", "ip addr",
-            "system info", "os info", "uptime", "users", "who", "w",
+            "run",
+            "execute",
+            "command",
+            "shell",
+            "bash",
+            "terminal",
+            "system",
+            "list files",
+            "show processes",
+            "check disk",
+            "memory usage",
+            "network",
+            "ifconfig",
+            "ps",
+            "ls",
+            "df",
+            "free",
+            "top",
+            "netstat",
+            "ip addr",
+            "system info",
+            "os info",
+            "uptime",
+            "users",
+            "who",
+            "w",
         ]
         msg_lower = message.lower()
         return any(p in msg_lower for p in patterns)

@@ -314,9 +314,7 @@ async def get_statistics():
             "by_language": dict(by_language_result.all()),
             "by_type": dict(by_type_result.all()),
             "by_category": dict(by_category_result.all()),
-            "top_patterns": [
-                {"signature": sig, "frequency": freq} for sig, freq in top_result.all()
-            ],
+            "top_patterns": [{"signature": sig, "frequency": freq} for sig, freq in top_result.all()],
         }
 
 

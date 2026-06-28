@@ -689,9 +689,7 @@ class UnifiedMemoryManager:
         from .enums import TaskPriority as _TP
         from .enums import TaskStatus
 
-        task_id = hashlib.sha256(
-            f"{task_name}_{datetime.now(tz=timezone.utc).isoformat()}".encode()
-        ).hexdigest()[:16]
+        task_id = hashlib.sha256(f"{task_name}_{datetime.now(tz=timezone.utc).isoformat()}".encode()).hexdigest()[:16]
         record = TaskExecutionRecord(
             task_id=task_id,
             task_name=task_name,
@@ -733,8 +731,9 @@ class UnifiedMemoryManager:
         completed_at = datetime.now(tz=timezone.utc)
         duration = (completed_at - task.started_at).total_seconds() if task.started_at else None
         result = self._run_sync(
-            self.update_task_status(task_id, final_status, completed_at=completed_at,
-                                    duration_seconds=duration, outputs=outputs)
+            self.update_task_status(
+                task_id, final_status, completed_at=completed_at, duration_seconds=duration, outputs=outputs
+            )
         )
         if result:
             logger.info("Completed task: %s (duration: %ss)", task_id, duration)
@@ -745,9 +744,13 @@ class UnifiedMemoryManager:
         from .enums import TaskStatus
 
         result = self._run_sync(
-            self.update_task_status(task_id, TaskStatus.FAILED,
-                                    completed_at=datetime.now(tz=timezone.utc),
-                                    error_message=error_message, retry_count=retry_count)
+            self.update_task_status(
+                task_id,
+                TaskStatus.FAILED,
+                completed_at=datetime.now(tz=timezone.utc),
+                error_message=error_message,
+                retry_count=retry_count,
+            )
         )
         if result:
             logger.error("Failed task: %s - %s", task_id, error_message)

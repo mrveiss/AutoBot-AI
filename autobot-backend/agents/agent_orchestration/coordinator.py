@@ -47,11 +47,12 @@ except ImportError:
 # Import specialized agents
 try:
     from agents.chat_agent import get_chat_agent
-    # get_enhanced_system_commands_agent alias lives in system_command_agent (#10571)
-    from agents.system_command_agent import get_enhanced_system_commands_agent
     from agents.kb_librarian_agent import get_kb_librarian
     from agents.librarian_assistant import get_librarian_assistant
     from agents.rag_agent import get_rag_agent
+
+    # get_enhanced_system_commands_agent alias lives in system_command_agent (#10571)
+    from agents.system_command_agent import get_enhanced_system_commands_agent
 
     LEGACY_AGENTS_AVAILABLE = True
 except ImportError:
