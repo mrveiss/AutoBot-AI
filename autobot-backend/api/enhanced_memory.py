@@ -203,9 +203,7 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
             if status_enum == TaskStatus.IN_PROGRESS:
                 success = await asyncio.to_thread(memory_manager.start_task, task_id)
             elif status_enum == TaskStatus.COMPLETED:
-                success = await asyncio.to_thread(
-                    memory_manager.complete_task, task_id, request.outputs
-                )
+                success = await asyncio.to_thread(memory_manager.complete_task, task_id, request.outputs)
             elif status_enum == TaskStatus.FAILED:
                 success = await asyncio.to_thread(
                     memory_manager.fail_task,
@@ -379,9 +377,7 @@ async def cleanup_old_data(days_to_keep: int = Query(90, ge=30, le=365)):
     """Clean up old task records and cached data."""
     try:
         memory_manager, _ = await _get_managers()
-        cleanup_result = await asyncio.to_thread(
-            lambda: memory_manager.cleanup_old_data(days_to_keep)
-        )
+        cleanup_result = await asyncio.to_thread(lambda: memory_manager.cleanup_old_data(days_to_keep))
 
         return {
             "status": "completed",
