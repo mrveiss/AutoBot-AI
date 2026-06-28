@@ -16,7 +16,19 @@ tts_voices_dir: /var/lib/autobot/voices
 tts_host: "0.0.0.0"
 tts_port: 8083  # Issue #3431: 8082 is WSL2/Hyper-V reserved (Windows NPU worker)
 
-# HuggingFace token (required for gated models like voice cloning)
+# Model (#10566): the Pocket TTS model that supplies BUILTIN_VOICES. This is a
+# gated HuggingFace model (liquid-ai/ namespace) — downloading it requires
+# tts_hf_token. Override to point at a mirror or an ungated alternative.
+tts_model_id: "liquid-ai/kani-tts-2"
+
+# Pre-download the model into tts_models_dir at provision time (#10566) so the
+# built-in voices are available immediately instead of failing on first start
+# ("no speech voices installed"). Non-fatal: when the box has no network or the
+# gated model token is missing, provisioning continues and the worker retries
+# the download on its own first start.
+tts_predownload_model: true
+
+# HuggingFace token (required for gated models — the default model IS gated)
 tts_hf_token: "{{ vault_hf_token | default('') }}"
 
 # Redis connection
