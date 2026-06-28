@@ -22,7 +22,7 @@
 
 - name: "ChromaDB | Create Python venv"
   ansible.builtin.command:
-    cmd: "python3.12 -m venv {{ chromadb_install_dir }}/venv --clear"
+    cmd: "python3.14 -m venv {{ chromadb_install_dir }}/venv --clear"
     creates: "{{ chromadb_install_dir }}/venv/bin/python"
   become: true
   become_user: "{{ redis_owner }}"

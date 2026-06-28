@@ -27,7 +27,7 @@
   pip:
     requirements: /opt/autobot/app/requirements.txt
     virtualenv: /opt/autobot/venv
-    virtualenv_python: python3.12
+    virtualenv_python: python3.14
   become_user: autobot
   environment:
     PIP_DEFAULT_TIMEOUT: "120"

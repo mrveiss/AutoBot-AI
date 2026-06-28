@@ -15,9 +15,8 @@ import requests
 # Add project root to Python path
 sys.path.append(str(Path(__file__).parent))
 
-from enhanced_memory_manager import TaskPriority
-
 from desktop_streaming_manager import VNCServerManager, desktop_streaming
+from memory import TaskPriority
 from takeover_manager import TakeoverTrigger, takeover_manager
 from tests.test_helpers import get_test_backend_url
 

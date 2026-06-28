@@ -403,25 +403,25 @@ ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
 
 # Static dependency map: role -> infrastructure packages required.
 # Used by setup_wizard.py to compute node_dependencies for provisioning Phase 0.
-# Dependencies are Ansible role names: nginx, python312, nodejs, postgresql.
+# Dependencies are Ansible role names: nginx, python314, nodejs, postgresql.
 ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     # SLM roles
-    "slm-backend": ["python312", "nginx"],
+    "slm-backend": ["python314", "nginx"],
     "slm-frontend": ["nodejs", "nginx"],
     "slm-database": ["postgresql"],
     "slm-monitoring": [],
     # Service roles
-    "backend": ["python312", "nginx"],
-    "celery": ["python312"],
-    "scheduler": ["python312"],
+    "backend": ["python314", "nginx"],
+    "celery": ["python314"],
+    "scheduler": ["python314"],
     "frontend": ["nodejs", "nginx"],
     "redis": [],
     "postgres": ["postgresql"],
-    "ai-stack": ["python312"],
-    "chromadb": ["python312"],
+    "ai-stack": ["python314"],
+    "chromadb": ["python314"],
     "browser-service": ["nodejs"],
-    "npu-worker": ["python312"],
-    "tts-worker": ["python312"],
+    "npu-worker": ["python314"],
+    "tts-worker": ["python314"],
     "autobot-llm-cpu": [],
     "autobot-llm-gpu": [],
     "vnc": [],

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 ---
 # Backend VM Configuration (VM2)
-# Services: FastAPI, Python 3.12+, Log aggregation
+# Services: FastAPI, Python 3.14+, Log aggregation
 
 # ==========================================
 # USER-MANAGEMENT MODE

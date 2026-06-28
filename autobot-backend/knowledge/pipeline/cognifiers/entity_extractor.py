@@ -9,6 +9,8 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 Issue #2025: Dual-mode entity extraction — LLM + NLP (Neural Mesh RAG Phase 2).
 """
 
+import importlib.util
+from functools import lru_cache
 from typing import Any, Dict, List
 from uuid import UUID
 
@@ -21,6 +23,17 @@ from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
 
 logger = get_logger(__name__)
+
+
+@lru_cache(maxsize=1)
+def _spacy_available() -> bool:
+    """True if spaCy is importable (optional NLP extra — see requirements-nlp.txt).
+
+    spaCy is not in the default image (its build deps lack py3.14 wheels, #9825);
+    when absent, entity extraction falls back to the LLM path automatically.
+    """
+    return importlib.util.find_spec("spacy") is not None
+
 
 # spaCy NER label → EntityType mapping (Issue #2025)
 _SPACY_LABEL_MAP: Dict[str, str] = {
@@ -210,6 +223,12 @@ class EntityExtractor(BaseCognifier):
         """
         chunks: List[ProcessedChunk] = context.chunks
         selected = self._select_mode(chunks)
+        if selected == "nlp" and not _spacy_available():
+            logger.warning(
+                "spaCy not installed (optional NLP extra) — using LLM entity extraction. "
+                "Install autobot-backend/requirements-nlp.txt to enable the spaCy fast-path."
+            )
+            selected = "llm"
         logger.info("Entity extraction mode: %s (%d chunks)", selected, len(chunks))
 
         if selected == "nlp":

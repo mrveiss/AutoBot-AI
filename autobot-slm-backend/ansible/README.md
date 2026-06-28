@@ -30,7 +30,7 @@ VM1 (Frontend)    - Ubuntu Server 22.04 LTS
 └── Frontend assets & builds
 
 VM2 (Backend)     - Ubuntu Server 22.04 LTS
-├── Python 3.12+ (FastAPI server)
+├── Python 3.14+ (FastAPI server)
 ├── Backend APIs & services
 ├── Log aggregation (rsyslog)
 └── Application state management
