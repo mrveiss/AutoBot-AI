@@ -35,6 +35,7 @@ from agent_loop.types import (
     LoopPhase,
     LoopState,
     MessageType,
+    SteeringEntry,
     TaskContext,
     ThinkCategory,
 )
@@ -51,7 +52,8 @@ from events.bus import publish_event as _bus_publish_event
 from events.event_types import AGENT_ABSTAINED as EVT_AGENT_ABSTAINED
 from events.event_types import APPROVAL_REQUIRED as EVT_APPROVAL_REQUIRED
 from events.event_types import BELIEF_CACHE_HIT as EVT_BELIEF_CACHE_HIT
-from events.types import create_approval_required_event, create_message_event
+from events.event_types import STEERING_RECEIVED as EVT_STEERING_RECEIVED
+from events.types import create_approval_required_event, create_message_event, create_steering_event
 from planner import PlannerModule
 from tools.parallel import ParallelToolExecutor
 
@@ -163,6 +165,8 @@ class AgentLoop:
         self._current_context: TaskContext | None = None
         self._iteration_count = 0
         self._consecutive_errors = 0
+        # Steering inbox: human guidance messages queued for the next iteration (#10543)
+        self._steering_inbox: asyncio.Queue[SteeringEntry] = asyncio.Queue()
         # Issue #3877: explicit flag set when repetition halt fires; checked by
         # _should_continue() so the main while-loop exits on the very next guard
         # check rather than relying solely on _should_iterate()'s error detection.
@@ -243,6 +247,8 @@ class AgentLoop:
         self._halt_outcome = None
         self._halt_reason = ""
         self._error_budget_exhausted = False
+        # Clear any leftover steering messages from a previous run.
+        self._steering_inbox = asyncio.Queue()
 
     async def _execute_main_loop(self) -> list[IterationResult]:
         """Execute the main iteration loop.
@@ -418,6 +424,30 @@ class AgentLoop:
         if self._state == LoopState.PAUSED:
             self._state = LoopState.RUNNING
             logger.info("AgentLoop: Task resumed")
+
+    async def steer(self, steering_id: str, guidance: str) -> bool:
+        """Queue a human steering message for the next ANALYZE_EVENTS phase (#10543).
+
+        Steering is distinct from cancel/pause: the loop continues without
+        interruption; the guidance is absorbed at the top of the next iteration
+        and used to amend the current plan.  Returns False when no task is
+        running (caller should surface a 409 / noop to the frontend).
+        """
+        if self._state != LoopState.RUNNING:
+            logger.warning(
+                "AgentLoop: steer() called while state=%s — message dropped (steering_id=%s)",
+                self._state.name,
+                steering_id,
+            )
+            return False
+        entry = SteeringEntry(
+            steering_id=steering_id,
+            guidance=guidance,
+            iteration=self._iteration_count,
+        )
+        await self._steering_inbox.put(entry)
+        logger.info("AgentLoop: steering message queued (steering_id=%s)", steering_id)
+        return True
 
     # =========================================================================
     # Iteration Logic
@@ -601,12 +631,56 @@ class AgentLoop:
     # Phase Implementations
     # =========================================================================
 
+    async def _drain_steering_inbox(self) -> list[SteeringEntry]:
+        """Drain all pending steering messages from the inbox without blocking.
+
+        Called at the top of ANALYZE_EVENTS each iteration (#10543).  Each
+        drained entry is recorded in the trajectory and published to the live
+        event bus so the frontend can surface an acknowledgement.
+        """
+        drained: list[SteeringEntry] = []
+        while not self._steering_inbox.empty():
+            try:
+                entry = self._steering_inbox.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            drained.append(entry)
+            if self._current_context is not None:
+                self._current_context.add_steering(entry)
+            task_id = self._current_context.task_id if self._current_context else None
+            await _bus_publish_event(
+                f"task:{task_id}" if task_id else "global",
+                EVT_STEERING_RECEIVED,
+                {
+                    "steering_id": entry.steering_id,
+                    "guidance": entry.guidance,
+                    "iteration": self._iteration_count,
+                    "task_id": task_id,
+                },
+                persist=PersistStrategy.MEMORY,
+            )
+            logger.info(
+                "AgentLoop: steering message absorbed (steering_id=%s, iteration=%d)",
+                entry.steering_id,
+                self._iteration_count,
+            )
+        return drained
+
     async def _analyze_events(self) -> dict[str, Any]:
         """
         Phase 1: Analyze recent events from the event stream.
 
+        Drains the steering inbox first so that human guidance is always the
+        highest-priority context for tool selection in this iteration (#10543).
+
         Returns context for tool selection.
         """
+        # (#10543) Drain steering inbox BEFORE reading the event stream so that
+        # any guidance queued since the last iteration is already in the context
+        # when _select_tools() runs.  This is non-blocking (get_nowait) so the
+        # loop never stalls waiting for a steering message that is not there.
+        steering_entries = await self._drain_steering_inbox()
+
         events = await self.event_stream.get_latest(
             count=self.config.events_to_analyze,
             task_id=self._current_context.task_id if self._current_context else None,
@@ -617,13 +691,24 @@ class AgentLoop:
             events = [e for e in events if e.event_type != EventType.SYSTEM]
 
         # Build context from events
-        context = {
+        context: dict[str, Any] = {
             "events": [e.to_dict() for e in events],
             "event_count": len(events),
             "event_types": list(set(e.event_type.name for e in events)),
             "recent_actions": [e.content for e in events if e.event_type == EventType.ACTION][-5:],
             "recent_observations": [e.content for e in events if e.event_type == EventType.OBSERVATION][-5:],
         }
+
+        # (#10543) Inject steering guidance as a high-priority context amendment.
+        # When present, _select_tools() must treat these as goal constraints that
+        # supersede the original plan without restarting the loop.
+        if steering_entries:
+            context["steering_guidance"] = [e.to_dict() for e in steering_entries]
+            context["has_steering"] = True
+            logger.debug(
+                "AgentLoop: %d steering message(s) injected into ANALYZE_EVENTS context",
+                len(steering_entries),
+            )
 
         # Issue #4481: inject a first-turn context hint so the LLM knows no
         # prior tool results exist yet.  Only added on iteration 1 (the very

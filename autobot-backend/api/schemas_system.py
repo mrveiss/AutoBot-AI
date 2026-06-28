@@ -2315,6 +2315,17 @@ class TerminalToolApprovalRequest(BaseModel):
     task_id: str | None = Field(None, description="Task ID from the APPROVAL_REQUIRED event")
 
 
+class TaskSteeringRequest(BaseModel):
+    """Request to send a steering message to a running agent task (#10543).
+
+    Steering amends the active plan without stopping the loop — the guidance
+    is absorbed at the top of the next ANALYZE_EVENTS phase.
+    """
+
+    guidance: str = Field(..., description="Human correction or direction text injected into the running loop")
+    task_id: str | None = Field(None, description="Task ID (also available from URL path)")
+
+
 class TerminalInterruptRequest(BaseModel):
     """Request to interrupt agent and take control"""
 
