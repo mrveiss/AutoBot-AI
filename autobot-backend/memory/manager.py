@@ -820,5 +820,37 @@ class UnifiedMemoryManager:
         logger.info("cleanup_old_data completed: %s", result)
         return result
 
+    def log_task_execution(self, record: "TaskExecutionRecord") -> str:
+        """Alias for log_task_sync for backward compatibility (sync wrapper).
+
+        Do NOT call from async code — use await log_task() instead.
+        """
+        return self.log_task_sync(record)
+
+    def get_task_history_sync(
+        self,
+        agent_type: str | None = None,
+        status: "TaskStatus | None" = None,
+        limit: int = 100,
+        days_back: int = 30,
+    ) -> List:
+        """Query task history synchronously (sync wrapper).
+
+        Do NOT call from async code — use await get_task_history() instead.
+        """
+        from datetime import timedelta
+
+        start_date = datetime.now(tz=timezone.utc) - timedelta(days=days_back)
+        return self._run_sync(
+            self.get_task_history(
+                agent_type=agent_type,
+                status=status,
+                priority=None,
+                start_date=start_date,
+                end_date=None,
+                limit=limit,
+            )
+        )
+
 
 __all__ = ["UnifiedMemoryManager"]
