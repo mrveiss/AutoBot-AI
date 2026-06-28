@@ -177,6 +177,11 @@ server {
     location /api/ {
         proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
         proxy_http_version 1.1;
+        # #10565: the server-level 10m cap (sized for SLM agent sync) rejected
+        # transcriber/knowledge media uploads (audio/video — .mp4/.m4a/.wav etc.)
+        # with 413. User-backend uploads need a generous cap; the app enforces its
+        # own per-file limit. Scoped here so SLM agent paths keep the 10m default.
+        client_max_body_size 1g;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
