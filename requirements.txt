@@ -4,12 +4,12 @@ paramiko>=5.0.0
 tenacity>=9.1.4
 
 # Async SSH for PKI certificate distribution (Issue #166)
-asyncssh>=2.23.1
+asyncssh>=2.24.0
 
 # opentelemetry-proto>=1.40.0 requires protobuf>=5.0,<7.0 — relaxed upper bound to <7.0.0 (#3971)
 # TensorFlow is not a project dependency; former <6.0.0 cap caused pip conflicts with protobuf 6.x
 # Bumped to 5.29.6+ for JSON recursion depth bypass fix (#3933)
-protobuf>=6.33.6,<7.0.0  # capped <7.0: opentelemetry-proto (otel 1.42) requires protobuf<7.0; the Dependabot 7.35.1 bump is unsatisfiable. 6.33.6 = latest installable.
+protobuf>=7.35.1,<8.0.0  # capped <7.0: opentelemetry-proto (otel 1.42) requires protobuf<7.0; the Dependabot 7.35.1 bump is unsatisfiable. 6.33.6 = latest installable.
 
 # vLLM (GPU inference) is an OPTIONAL extra — NOT a default dependency (#10251).
 # It pulls the full CUDA toolkit (cuda-toolkit, nvidia-*, flashinfer, CUDA torch),
@@ -20,7 +20,7 @@ protobuf>=6.33.6,<7.0.0  # capped <7.0: opentelemetry-proto (otel 1.42) requires
 
 # Document parsing libraries for knowledge base
 # Supports PDF, Word, Excel, PowerPoint, OpenDocument formats
-pypdf>=6.13.3             # PDF parsing - SECURITY UPDATE (improved permission checks)
+pypdf>=6.14.2             # PDF parsing - SECURITY UPDATE (improved permission checks)
 python-docx>=1.2.0        # Microsoft Word (.docx)
 openpyxl>=3.1.5           # Microsoft Excel (.xlsx)
 python-pptx>=1.0.2        # Microsoft PowerPoint (.pptx)
