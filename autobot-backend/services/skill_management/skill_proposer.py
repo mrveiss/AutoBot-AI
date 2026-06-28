@@ -163,7 +163,7 @@ class SkillProposer:
     async def _send_proposal_http(self, payload: Dict) -> Dict:
         """Send proposal via HTTP as fallback."""
         try:
-            slm_url = "http://127.0.0.1:8000"  # Default co-located SLM
+            slm_url = config.slm_url
 
             async with self.http_client.post(
                 f"{slm_url}/api/skills/propose",
