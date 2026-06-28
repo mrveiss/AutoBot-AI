@@ -12,7 +12,7 @@ name = "autobot_shared"
 version = "1.0.0"
 description = "Shared utilities for AutoBot platform"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 authors = [{ name = "mrveiss" }]
 license = { text = "Apache-2.0" }
 dependencies = [
