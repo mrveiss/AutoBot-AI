@@ -16,7 +16,7 @@ from typing import Any, Callable, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from memory import EnhancedMemoryManager, TaskPriority
+from memory import TaskPriority, UnifiedMemoryManager
 
 logger = get_logger(__name__)
 
@@ -82,9 +82,9 @@ class TakeoverManager:
     Manages human-in-the-loop takeover capabilities for autonomous operations
     """
 
-    def __init__(self, memory_manager: EnhancedMemoryManager | None = None):
+    def __init__(self, memory_manager: UnifiedMemoryManager | None = None):
         """Initialize takeover manager with memory and session tracking."""
-        self.memory_manager = memory_manager or EnhancedMemoryManager()
+        self.memory_manager = memory_manager or UnifiedMemoryManager()
 
         # Active state tracking
         self.pending_requests: Dict[str, TakeoverRequest] = {}

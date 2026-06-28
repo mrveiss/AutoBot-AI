@@ -186,9 +186,11 @@ async def _handle_network_discovery_step(ctx: WorkflowStepContext) -> None:
 
 async def _handle_system_commands_step(ctx: WorkflowStepContext) -> None:
     """Handle system commands agent step (Issue #336 - extracted handler, Issue #322 - context)."""
-    from agents.enhanced_system_commands_agent import EnhancedSystemCommandsAgent
+    # Canonical agent (#10571): SystemCommandAgent is the superset and now includes
+    # LLM command generation (merged from the retired EnhancedSystemCommandsAgent).
+    from agents.system_command_agent import SystemCommandAgent
 
-    cmd_agent = EnhancedSystemCommandsAgent()
+    cmd_agent = SystemCommandAgent()
     action_lower = ctx.action.lower()
 
     if "install tool" in action_lower:

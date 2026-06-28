@@ -9,13 +9,22 @@ terminal streaming
 """
 
 import asyncio
+import json
+import re
+import shlex
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, FrozenSet, List
 
 from agents.interactive_terminal_agent import InteractiveTerminalAgent
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
-from constants.threshold_constants import TimingConstants
+from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import (
+    config,
+    get_agent_endpoint_explicit,
+    get_agent_model_explicit,
+    get_agent_provider_explicit,
+)
+from constants.threshold_constants import LLMDefaults, TimingConstants
 from events.bus import PersistStrategy, publish_event
 from security.command_patterns import (
     SENSITIVE_REDIRECT_PATHS,
@@ -24,9 +33,14 @@ from security.command_patterns import (
     is_persistent_session_command,
 )
 from security_layer import SecurityLayer
+from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
+from .payloads import AgentStatus, CommandPayload
 from .standardized_agent import ActionHandler, StandardizedAgent
+
+# Issue #380: Module-level frozenset for dangerous rm flags
+_DANGEROUS_RM_FLAGS: FrozenSet[str] = frozenset({"-r", "-rf", "-f"})
 
 logger = get_logger(__name__)
 
@@ -92,12 +106,30 @@ class SystemCommandAgent(StandardizedAgent):
         },
     }
 
+    # Agent identifier used for SSOT LLM config lookup (mirrors EnhancedSystemCommandsAgent)
+    AGENT_ID = "system_commands"
+
     def __init__(self):
         """Initialize system command agent with security layer and session tracking."""
         super().__init__("system_command")
         self.security_layer = SecurityLayer()
         self.active_sessions: Dict[str, InteractiveTerminalAgent] = {}
         self.command_history: List[Dict[str, Any]] = []
+
+        # LLM interface for command generation (merged from EnhancedSystemCommandsAgent #10571)
+        self.llm_interface = get_llm_service()
+        try:
+            self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
+            self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
+            self.model_name = get_agent_model_explicit(self.AGENT_ID)
+        except Exception:
+            self.llm_provider = None
+            self.llm_endpoint = None
+            self.model_name = None
+
+        # Allowed-command set and dangerous patterns for LLM-generated command validation
+        self._allowed_commands = self._init_allowed_commands()
+        self._dangerous_patterns = self._init_dangerous_patterns()
 
         self.register_actions(
             {
@@ -588,3 +620,213 @@ class SystemCommandAgent(StandardizedAgent):
             await terminal.send_signal(signal_type)
         else:
             raise ValueError(f"No active terminal session for chat {chat_id}")
+
+    # =========================================================================
+    # LLM command-generation methods (merged from EnhancedSystemCommandsAgent #10571)
+    # =========================================================================
+
+    def _init_allowed_commands(self) -> set:
+        """Initialize allowed command set for LLM-generated command validation."""
+        return (
+            {"ls", "dir", "pwd", "cd", "cat", "head", "tail", "grep", "find"}
+            | {"ps", "top", "htop", "df", "du", "free", "lscpu", "lsblk", "uname", "whoami", "which", "whereis",
+               "file", "stat"}
+            | {"ifconfig", "ip", "netstat", "ss", "ping", "curl", "wget"}
+            | {"systemctl", "service", "journalctl", "dmesg"}
+            | {"chmod", "chown", "mkdir", "rmdir", "cp", "mv", "touch", "ln", "tar", "gzip", "gunzip", "zip", "unzip"}
+            | {"sort", "uniq", "wc", "awk", "sed", "cut"}
+        )
+
+    def _init_dangerous_patterns(self) -> list:
+        """Initialize dangerous command pattern list for LLM-generated command validation."""
+        return [
+            r"rm\s+-rf\s+/", r"rm\s+-rf\s+\*", r":(){ :|:& };:", r"dd\s+.*of=/dev/",
+            r"mkfs", r"fdisk", r"cfdisk", r"iptables\s+-F", r"ufw\s+disable", r"firewall-cmd",
+            r"passwd", r"usermod", r"userdel", r"groupdel", r"chmod\s+777", r"chmod\s+-R\s+777",
+            r"curl.*\|\s*bash", r"wget.*\|\s*sh", r"sudo\s+su\s*-", r"su\s+-",
+        ]
+
+    def _get_system_commands_prompt(self) -> str:
+        """Security-focused system prompt for LLM command generation."""
+        return (
+            "You are a system command generation assistant focused on security and safety.\n\n"
+            "CRITICAL SECURITY RULES:\n"
+            "1. NEVER generate commands that could harm the system\n"
+            "2. AVOID commands that modify system files, users, or permissions\n"
+            "3. PREFER read-only commands when possible\n"
+            "4. Always explain what the command does\n"
+            "5. If a request is dangerous, suggest a safer alternative\n\n"
+            "RESPONSE FORMAT:\n"
+            'Generate responses in this exact JSON format:\n'
+            '{"command": "...", "explanation": "...", "safety_level": "safe/caution/dangerous", '
+            '"alternative": "..."}'
+        )
+
+    def _build_command_messages(self, request: str, context: Dict[str, Any] | None) -> List[Dict[str, str]]:
+        """Build LLM messages for command generation."""
+        system_prompt = self._get_system_commands_prompt()
+        if context:
+            parts = []
+            if "os_info" in context:
+                oi = context["os_info"]
+                if "name" in oi:
+                    parts.append(f"OS: {oi['name']}")
+                if "version" in oi:
+                    parts.append(f"Version: {oi['version']}")
+            if "current_directory" in context:
+                parts.append(f"Current Directory: {context['current_directory']}")
+            if "user" in context:
+                parts.append(f"User: {context['user']}")
+            if parts:
+                system_prompt = f"{system_prompt}\n\nContext: {' | '.join(parts)}"
+        return [{"role": "system", "content": system_prompt}, {"role": "user", "content": request}]
+
+    def _extract_command_from_text(self, text: str) -> str:
+        """Extract a command from unstructured LLM text response."""
+        for pattern in [
+            r"```(?:bash|sh|shell)?\n(.*?)\n```",
+            r"`([^`]+)`",
+            r"^([\w\-]+(?:\s+[\w\-\.\/\=]+)*)",
+        ]:
+            match = re.search(pattern, text, re.MULTILINE | re.DOTALL)
+            if match:
+                cmd = match.group(1).strip()
+                if cmd and not cmd.startswith("#"):
+                    return cmd
+        return text.strip()
+
+    def _extract_response_content(self, response: Any) -> str:
+        """Extract text content from an LLM response object."""
+        try:
+            if hasattr(response, "content") and not isinstance(response, dict):
+                content = getattr(response, "content", None)
+                if content and isinstance(content, str):
+                    return content.strip()
+            if isinstance(response, dict):
+                if "message" in response and isinstance(response["message"], dict):
+                    c = response["message"].get("content")
+                    if c:
+                        return c.strip()
+                if "choices" in response and response["choices"]:
+                    c = response["choices"][0].get("message", {}).get("content")
+                    if c:
+                        return c.strip()
+                if "content" in response:
+                    return response["content"].strip()
+            if isinstance(response, str):
+                return response.strip()
+            return str(response)
+        except Exception as exc:
+            logger.error("Error extracting response content: %s", exc)
+            return "Error extracting command response"
+
+    def _extract_and_validate_command(self, response: Any) -> Dict[str, Any]:
+        """Parse LLM response into a structured command dict."""
+        try:
+            content = self._extract_response_content(response)
+            try:
+                parsed = json.loads(content)
+                if isinstance(parsed, dict) and "command" in parsed:
+                    return {
+                        "command": parsed.get("command", "").strip(),
+                        "explanation": parsed.get("explanation", "No explanation provided"),
+                        "safety_level": parsed.get("safety_level", "unknown"),
+                        "alternative": parsed.get("alternative", ""),
+                        "is_structured": True,
+                    }
+            except json.JSONDecodeError as exc:
+                logger.debug("JSON decode failed, using fallback extraction: %s", exc)
+            return {
+                "command": self._extract_command_from_text(content),
+                "explanation": content,
+                "safety_level": "unknown",
+                "alternative": "",
+                "is_structured": False,
+            }
+        except Exception as exc:
+            logger.error("Error extracting command: %s", exc)
+            return {"command": "", "explanation": f"Failed to extract command: {exc}",
+                    "safety_level": "dangerous", "alternative": "", "is_structured": False}
+
+    def _llm_security_validate_command(self, command: str) -> Dict[str, Any]:
+        """Validate a LLM-generated command against known dangerous patterns and allowed list."""
+        if not command:
+            return {"is_safe": False, "security_warning": "Empty command"}
+        for pattern in self._dangerous_patterns:
+            if re.search(pattern, command, re.IGNORECASE):
+                return {"is_safe": False, "security_warning": f"Dangerous pattern: {pattern}",
+                        "recommended_action": "reject"}
+        try:
+            parts = shlex.split(command)
+            if not parts:
+                return {"is_safe": False, "security_warning": "Unable to parse command"}
+            main_cmd = parts[0].split("/")[-1]
+            if main_cmd not in self._allowed_commands:
+                return {"is_safe": False,
+                        "security_warning": f"Command '{main_cmd}' not in allowed list",
+                        "recommended_action": "review_manually"}
+            if main_cmd == "rm" and any(f in parts for f in _DANGEROUS_RM_FLAGS):
+                return {"is_safe": False, "security_warning": "rm with dangerous flags",
+                        "recommended_action": "reject"}
+            return {"is_safe": True, "security_warning": None, "main_command": main_cmd}
+        except Exception as exc:
+            return {"is_safe": False, "security_warning": f"Failed to parse command: {exc}",
+                    "recommended_action": "reject"}
+
+    def _build_command_payload(self, command_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Build a typed CommandPayload dict from LLM command info."""
+        status = AgentStatus.SUCCESS if command_info.get("is_safe", False) else AgentStatus.WARNING
+        return CommandPayload(
+            status=status,
+            agent_type="system_commands",
+            model_used=self.model_name,
+            command=command_info.get("command", ""),
+            explanation=command_info.get("explanation", ""),
+            is_safe=command_info.get("is_safe", False),
+            security_concerns=command_info.get("security_concerns", []),
+            suggested_alternatives=command_info.get("suggested_alternatives", []),
+            metadata={"agent": "SystemCommandAgent", "security_checked": True, "validation_level": "strict"},
+            **{k: v for k, v in command_info.items()
+               if k not in {"command", "explanation", "is_safe", "security_concerns", "suggested_alternatives"}},
+        ).model_dump()
+
+    async def process_command_request(self, request: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        """Generate and validate a system command via LLM (merged from EnhancedSystemCommandsAgent #10571)."""
+        try:
+            logger.info("SystemCommandAgent LLM generation: %s...", request[:50])
+            messages = self._build_command_messages(request, context)
+            response = await self.llm_interface.chat(
+                messages=messages,
+                llm_type="system_commands",
+                temperature=0.3,
+                max_tokens=LLMDefaults.CONCISE_MAX_TOKENS,
+                top_p=0.8,
+            )
+            command_info = self._extract_and_validate_command(response)
+            command_info.update(self._llm_security_validate_command(command_info.get("command", "")))
+            return self._build_command_payload(command_info)
+        except Exception as exc:
+            logger.error("SystemCommandAgent LLM generation error: %s", exc)
+            return {
+                "status": "error", "command": "", "explanation": "Failed to process command request",
+                "is_safe": False, "error": str(exc), "agent_type": "system_commands",
+                "model_used": self.model_name,
+            }
+
+    def is_system_command_request(self, message: str) -> bool:
+        """Return True if the message looks like a system command request."""
+        patterns = [
+            "run", "execute", "command", "shell", "bash", "terminal", "system",
+            "list files", "show processes", "check disk", "memory usage", "network",
+            "ifconfig", "ps", "ls", "df", "free", "top", "netstat", "ip addr",
+            "system info", "os info", "uptime", "users", "who", "w",
+        ]
+        msg_lower = message.lower()
+        return any(p in msg_lower for p in patterns)
+
+
+# Singleton accessor — keep the name used by the MCP registry and other callers
+get_system_command_agent = lazy_singleton(SystemCommandAgent)
+
+# Alias for backward compatibility with any imports of get_enhanced_system_commands_agent
+get_enhanced_system_commands_agent = get_system_command_agent

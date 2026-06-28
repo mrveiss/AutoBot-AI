@@ -656,5 +656,104 @@ class UnifiedMemoryManager:
 
         return cleanup_counts
 
+    # ========================================================================
+    # SYNC CONVENIENCE API (migrated from EnhancedMemoryManager compat wrapper #10572)
+    # These are the only methods callers need from the old compat subclass.
+    # Sync callers that cannot await should use these wrappers; all other
+    # callers should use the async methods directly.
+    # ========================================================================
+
+    def _run_sync(self, coro):
+        """Run an async coroutine synchronously via the shared run_or_schedule helper."""
+        from autobot_shared.async_compat import run_or_schedule
+
+        return run_or_schedule(coro)
+
+    def create_task_record(
+        self,
+        task_name: str,
+        description: str,
+        priority: "TaskPriority | None" = None,
+        agent_type: str | None = None,
+        inputs: Dict | None = None,
+        parent_task_id: str | None = None,
+        metadata: Dict | None = None,
+    ) -> str:
+        """Create a task record and return its task_id (sync wrapper).
+
+        Generates a deterministic task_id from task_name + current UTC timestamp.
+        Do NOT call from async code — use await log_task() instead.
+        """
+        import hashlib
+
+        from .enums import TaskPriority as _TP
+        from .enums import TaskStatus
+
+        task_id = hashlib.sha256(
+            f"{task_name}_{datetime.now(tz=timezone.utc).isoformat()}".encode()
+        ).hexdigest()[:16]
+        record = TaskExecutionRecord(
+            task_id=task_id,
+            task_name=task_name,
+            description=description,
+            status=TaskStatus.PENDING,
+            priority=priority or _TP.MEDIUM,
+            created_at=datetime.now(tz=timezone.utc),
+            agent_type=agent_type,
+            inputs=inputs,
+            parent_task_id=parent_task_id,
+            metadata=metadata,
+        )
+        self.log_task_sync(record)
+        logger.info("Created task record: %s - %s", task_id, task_name)
+        return task_id
+
+    def start_task(self, task_id: str) -> bool:
+        """Mark task as started (sync wrapper). Do NOT call from async code."""
+        from .enums import TaskStatus
+
+        result = self._run_sync(
+            self.update_task_status(task_id, TaskStatus.IN_PROGRESS, started_at=datetime.now(tz=timezone.utc))
+        )
+        if result:
+            logger.info("Started task: %s", task_id)
+        else:
+            logger.warning("Task not found for start: %s", task_id)
+        return result
+
+    def complete_task(self, task_id: str, outputs: Dict | None = None, status=None) -> bool:
+        """Mark task as completed (sync wrapper). Do NOT call from async code."""
+        from .enums import TaskStatus
+
+        final_status = status or TaskStatus.COMPLETED
+        task = self._run_sync(self.get_task(task_id))
+        if not task:
+            logger.warning("Task not found for completion: %s", task_id)
+            return False
+        completed_at = datetime.now(tz=timezone.utc)
+        duration = (completed_at - task.started_at).total_seconds() if task.started_at else None
+        result = self._run_sync(
+            self.update_task_status(task_id, final_status, completed_at=completed_at,
+                                    duration_seconds=duration, outputs=outputs)
+        )
+        if result:
+            logger.info("Completed task: %s (duration: %ss)", task_id, duration)
+        return result
+
+    def fail_task(self, task_id: str, error_message: str, retry_count: int = 0) -> bool:
+        """Mark task as failed (sync wrapper). Do NOT call from async code."""
+        from .enums import TaskStatus
+
+        result = self._run_sync(
+            self.update_task_status(task_id, TaskStatus.FAILED,
+                                    completed_at=datetime.now(tz=timezone.utc),
+                                    error_message=error_message, retry_count=retry_count)
+        )
+        if result:
+            logger.error("Failed task: %s - %s", task_id, error_message)
+        else:
+            logger.warning("Task not found for failure: %s", task_id)
+        return result
+
 
 __all__ = ["UnifiedMemoryManager"]
