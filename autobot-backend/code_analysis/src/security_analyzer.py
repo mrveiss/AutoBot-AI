@@ -485,9 +485,9 @@ class SecurityAnalyzer:
     ) -> SecurityVulnerability | None:
         """Analyze assignments for security issues"""
 
-        # Check for hardcoded secrets in assignments
-        if isinstance(node.value, ast.Str):
-            value = node.value.s
+        # Check for hardcoded secrets in assignments (string-valued constant)
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            value = node.value.value
             line_content = lines[node.lineno - 1] if node.lineno <= len(lines) else ""
 
             # Look for secret-like patterns
