@@ -127,6 +127,7 @@ class LLMResponseCache:
         temperature: float,
         top_k: int = 40,
         top_p: float = 0.9,
+        max_tokens: int | None = None,
     ) -> str:
         """
         Generate cache key with high-performance xxhash (3-5x faster than MD5).
@@ -140,6 +141,9 @@ class LLMResponseCache:
             temperature: LLM temperature setting
             top_k: Top-k sampling parameter
             top_p: Top-p (nucleus) sampling parameter
+            max_tokens: Output token ceiling — part of the key so calls that
+                differ only by max_tokens (e.g. a 1024-token extraction vs a
+                full-length chat) don't collide (#10597).
 
         Returns:
             Cache key string in format "llm_cache:{hash}"
@@ -151,6 +155,7 @@ class LLMResponseCache:
             temperature,
             top_k,
             top_p,
+            max_tokens,
         )
 
         # xxhash is 3-5x faster than MD5 for cache key generation
