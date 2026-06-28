@@ -1,5 +1,5 @@
 # LlamaIndex ecosystem — unified at 0.14.x (#2669, #2642, #2822)
-llama-index-core>=0.14.19,<0.15.0
+llama-index-core>=0.14.23,<0.15.0
 llama-index-llms-ollama>=0.10.1,<1.0.0
 llama-index-embeddings-ollama>=0.9.0,<1.0.0
 llama-index-vector-stores-chroma>=0.5.5,<1.0.0

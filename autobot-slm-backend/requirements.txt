@@ -10,7 +10,7 @@
 prometheus-client>=0.25.0
 
 # Web framework
-fastapi>=0.138.0                # SECURITY UPDATE - requires starlette >=1.3.1
+fastapi>=0.138.1                # SECURITY UPDATE - requires starlette >=1.3.1
 starlette>=1.3.1              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
 uvicorn[standard]>=0.49.0
 
@@ -30,7 +30,7 @@ bcrypt>=5.0.0  # Direct bcrypt API — passlib removed (#2669)
 python-multipart>=0.0.32          # SECURITY UPDATE - arbitrary file write fix
 
 # Cache (GH #6511: Redis-backed permission cache replaces in-process dict)
-redis[asyncio]>=8.0.0
+redis[asyncio]>=8.0.1
 
 # Async utilities
 aiofiles>=25.1.0
