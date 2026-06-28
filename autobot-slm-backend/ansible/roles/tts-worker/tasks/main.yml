@@ -175,6 +175,56 @@
   tags: ['tts', 'packages']
 
 # ============================================================
+# Pre-download model so BUILTIN_VOICES are available (#10566)
+# ============================================================
+# Without the model cached, the worker's first start fails to load it and the
+# UI shows "no speech voices installed". Pull the weights at provision time as
+# the service user (correct cache ownership) using the same HF env the worker
+# uses. Best-effort: a gated model without a token, or no network, leaves the
+# download to the worker's own first-start retry rather than failing the play.
+- name: "TTS Worker | Deploy model pre-download helper"
+  ansible.builtin.template:
+    src: predownload-model.py.j2
+    dest: "{{ tts_install_dir }}/predownload-model.py"
+    mode: "0755"
+    owner: "{{ tts_user }}"
+    group: "{{ tts_group }}"
+  when: tts_predownload_model | default(true) | bool
+  tags: ['tts', 'model']
+
+- name: "TTS Worker | Pre-download Pocket TTS model into cache (best-effort)"
+  ansible.builtin.command:
+    cmd: "{{ tts_install_dir }}/venv/bin/python {{ tts_install_dir }}/predownload-model.py"
+  become_user: "{{ tts_user }}"
+  environment:
+    TTS_MODEL_ID: "{{ tts_model_id }}"
+    TTS_MODELS_DIR: "{{ tts_models_dir }}"
+    HF_HOME: "{{ tts_models_dir }}"
+    XDG_CACHE_HOME: "{{ tts_models_dir }}"
+    HF_TOKEN: "{{ tts_hf_token | default('') }}"
+    HUGGING_FACE_HUB_TOKEN: "{{ tts_hf_token | default('') }}"
+  register: _tts_predownload
+  # Exit 2 = could not download (gated/no-token or offline); the worker retries
+  # on first start, so do not fail provisioning. Only a crash (rc 1) is fatal.
+  failed_when: _tts_predownload.rc not in [0, 2]
+  changed_when: _tts_predownload.rc == 0
+  timeout: 900  # Model shards are large; cap the download like the torch step.
+  when: tts_predownload_model | default(true) | bool
+  tags: ['tts', 'model']
+
+- name: "TTS Worker | Warn when the model could not be pre-downloaded"
+  ansible.builtin.debug:
+    msg: >-
+      Pocket TTS model '{{ tts_model_id }}' was not pre-downloaded
+      (built-in voices will be unavailable until the worker downloads it on
+      first start). Most common cause: the model is gated and tts_hf_token
+      (vault_hf_token) is not set, or the host has no network access.
+  when:
+    - tts_predownload_model | default(true) | bool
+    - _tts_predownload.rc | default(0) == 2
+  tags: ['tts', 'model']
+
+# ============================================================
 # Deploy service files
 # ============================================================
 - name: "TTS Worker | Deploy tts-worker.py"

@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""Pre-download the Pocket TTS model so BUILTIN_VOICES work out of the box (#10566).
+
+Runs at provision time as the tts service user with the same HF cache env the
+worker uses, so the model shards land in TTS_MODELS_DIR with correct ownership.
+Loading the model is what pulls the weights; we do exactly what the worker does
+on startup. Exit 0 on success, 2 when the download could not complete (gated
+model without a token, or no network) — the caller treats a non-zero exit as a
+non-fatal warning because the worker will retry the download on first start.
+"""
+
+import os
+import sys
+
+MODEL_ID = os.environ.get("TTS_MODEL_ID", "{{ tts_model_id }}")
+HF_TOKEN = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+GATED_PREFIXES = ("meta-llama/", "mistralai/", "liquid-ai/", "stabilityai/")
+
+
+def main() -> int:
+    if MODEL_ID.startswith(GATED_PREFIXES) and not HF_TOKEN:
+        print(
+            f"[tts-predownload] '{MODEL_ID}' is gated and HF_TOKEN is not set; "
+            "skipping pre-download. Set vault_hf_token to provision built-in voices.",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        if HF_TOKEN:
+            import huggingface_hub
+
+            huggingface_hub.login(token=HF_TOKEN, add_to_git_credential=False)
+        from pocket_tts import TTSModel
+
+        model = TTSModel.load_model()
+        print(
+            f"[tts-predownload] cached '{MODEL_ID}' (sample_rate={model.sample_rate})"
+        )
+        return 0
+    except Exception as exc:  # noqa: BLE001 - provisioning best-effort
+        print(f"[tts-predownload] could not pre-download '{MODEL_ID}': {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
