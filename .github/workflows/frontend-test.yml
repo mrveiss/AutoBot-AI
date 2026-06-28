@@ -18,8 +18,10 @@ on:
     # its required-check context ("Unit & Integration Tests") always reports a
     # conclusion. A path-filtered required check that never triggers leaves the
     # PR deadlocked on "Expected — Waiting for status". The real work is gated on
-    # the `changes` job below and self-skips (reporting success) when no frontend
-    # paths are touched. Branch-protection promotion to required is the separate
+    # the `changes` job below; when no frontend paths are touched, the
+    # `unit-tests-skip` shim job (same `name:`, ubuntu-latest) reports the
+    # required context green so the PR is never blocked on an unreported check
+    # (#10527). Branch-protection promotion to required is the separate
     # owner-confirmed follow-up (#10022).
     branches: [main, develop, 'Dev_*']
 
@@ -146,6 +148,35 @@ jobs:
         if: always()
         run: |
           rm -rf autobot-frontend/node_modules || true
+
+  # Job 1b: Skip-success shim for the required "Unit & Integration Tests"
+  # context (#10527).
+  #
+  # `Unit & Integration Tests` is a REQUIRED status check on Dev_new_gui. The
+  # real `unit-tests` job above runs on the self-hosted runner and only when
+  # frontend paths change. Relying on GitHub's implicit "skipped required job =
+  # pass" was fragile in practice: on non-frontend PRs the context could be left
+  # CANCELLED (concurrency cancel-in-progress) or stuck QUEUED on the singleton
+  # self-hosted runner, neither of which counts as success — permanently
+  # BLOCKING the PR and forcing `--admin` merges.
+  #
+  # This shim carries the IDENTICAL job `name:` so it reports the same required
+  # context, runs on ubuntu-latest (never contends for / is cancelled by the
+  # self-hosted runner), and fires ONLY when frontend paths did NOT change —
+  # mutually exclusive with the real job's `if:` above. Result: every PR gets
+  # exactly one terminal "Unit & Integration Tests" conclusion — the real gating
+  # tests when frontend changed, an explicit green here when it did not.
+  unit-tests-skip:
+    name: Unit & Integration Tests
+    needs: changes
+    if: needs.changes.outputs.frontend != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: No frontend changes — reporting required context as success
+        run: |
+          echo "No frontend paths changed in this PR."
+          echo "Skipping the frontend Unit & Integration test suite and reporting"
+          echo "the required 'Unit & Integration Tests' context as success (#10527)."
 
   # Job 2: Security Scanning
   security-scan:
