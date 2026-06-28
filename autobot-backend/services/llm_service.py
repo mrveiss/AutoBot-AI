@@ -43,6 +43,7 @@ from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config
 from autobot_shared.tracing import get_tracer
 from llm_shared import ProviderRegistry, get_provider_registry
 from llm_shared.cache import CachedResponse, get_llm_cache
@@ -196,24 +197,45 @@ class LLMService:
             LLMResponse.  ``response.error`` is set (non-empty) on failure.
         """
         self._request_count += 1
+        start_time = time.time()
         resolved_type = _normalize_llm_type(llm_type)
         temp, tokens = _apply_task_defaults(resolved_type, temperature, max_tokens)
+
+        # #10597: when the caller doesn't pin a model, optionally select one via
+        # task-type/complexity routing (gated off by default; precision-sensitive).
+        selected_model = model_name or self._select_chat_model(messages, resolved_type)
 
         request = LLMRequest(
             messages=messages,
             llm_type=resolved_type,
-            model_name=model_name,
+            model_name=selected_model,
             temperature=temp,
             max_tokens=tokens,
             timeout=timeout,
             **kwargs,
         )
 
+        # #10597: serve identical requests from the L1/L2 response cache before
+        # hitting any provider.  Streaming has its own path and is not cached.
+        cache_key: str | None = None
+        if self._response_cache is not None:
+            cached, cache_key = await self._optimized_check_cache(
+                messages,
+                selected_model or "",
+                provider_name or "auto",
+                request.request_id,
+                start_time,
+                temperature=temp,
+            )
+            if cached is not None:
+                self._calculate_cache_hit_rate(cached)
+                return cached
+
         # GH#8998: Track attempted models to avoid infinite loops
         attempted_models = []
         fallback_manager = get_fallback_chain_manager()
         current_provider_name = provider_name
-        current_model = model_name
+        current_model = selected_model
         max_fallback_attempts = 10  # Safety limit
 
         while len(attempted_models) < max_fallback_attempts:
@@ -269,6 +291,9 @@ class LLMService:
                         primary_provider=primary_provider_name,
                         fallback_provider=provider.provider_name,
                     )
+                # #10597: cache successful responses for identical future requests.
+                if cache_key and response.content:
+                    await self._optimized_store_cache(cache_key, response, request.request_id)
                 self._track_usage(response, conversation_id)
                 return response
 
@@ -957,6 +982,31 @@ class LLMService:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _select_chat_model(self, messages: List[Dict[str, str]], resolved_type: LLMType) -> str | None:
+        """Pick a model when the caller didn't pin one (#10597).
+
+        Gated behind ``config.chat_tiered_routing`` (default off) because model
+        downgrade is precision-sensitive — enable only after rag_benchmarks
+        validation.  Returns None to fall through to the registry default.
+        """
+        if not config.chat_tiered_routing:
+            return None
+        # Task-type pin: classification/extraction are reliably cheap tasks.
+        cheap = {
+            LLMType.CLASSIFICATION: config.classification_model,
+            LLMType.EXTRACTION: config.light_processing_model,
+        }.get(resolved_type)
+        if cheap:
+            return cheap
+        # Otherwise defer to complexity-based tier routing.
+        if self._tier_router is not None:
+            try:
+                selected, _ = self._tier_router.route(messages)
+                return selected or None
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.debug("Tier routing failed, using registry default: %s", exc)
+        return None
+
     def _calculate_cache_hit_rate(self, response: LLMResponse) -> None:
         """Attach vLLM prefix-cache hit rate to response metadata.
 
@@ -977,11 +1027,14 @@ class LLMService:
         provider: str,
         request_id: str,
         start_time: float,
+        temperature: float = 0.7,
     ) -> tuple:
-        """Look up L1/L2 cache for an optimized chat request.
+        """Look up L1/L2 cache for a chat request.
 
         Mirrors the cache-check block in ``LLMInterface._check_cache``
-        (interface.py line 765) but scoped to the optimized-chat path.
+        (interface.py line 765).  Shared by ``chat()`` (#10597) and the
+        optimized vLLM path; ``temperature`` is part of the cache key so calls
+        with different sampling temperatures don't collide.
 
         Returns:
             ``(LLMResponse, cache_key)`` on hit; ``(None, cache_key)`` on miss.
@@ -989,7 +1042,7 @@ class LLMService:
         cache_key = self._response_cache.generate_cache_key(
             messages=messages,
             model=model_name,
-            temperature=0.7,
+            temperature=temperature,
         )
         cached = await self._response_cache.get(cache_key)
         if cached is not None:
