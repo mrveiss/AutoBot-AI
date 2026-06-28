@@ -42,7 +42,7 @@
       fail:
         msg: >-
           Python venv not found at {{ backend_code_dir }}/venv.
-          Run backend role deployment first (Issue #1898: deadsnakes PPA + python3.12 -m venv).
+          Run backend role deployment first (Issue #1898: deadsnakes PPA + python3.14 -m venv).
       when: not venv_python.stat.exists or not uvicorn_binary.stat.exists
 
     # ============================================================
@@ -182,7 +182,7 @@
           Changes applied:
           - .env path: {{ backend_install_dir }}/.env
           - PYTHONPATH: {{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot_shared
-          - Python venv: {{ backend_code_dir }}/venv (deadsnakes python3.12)
+          - Python venv: {{ backend_code_dir }}/venv (deadsnakes python3.14)
 
           Next steps:
           1. Monitor: journalctl -u autobot-backend -f

@@ -260,8 +260,12 @@ class APIConsistencyAnalyzer:
 
                 if method_name in ["get", "post", "put", "delete", "patch"]:
                     # Extract path from first argument
-                    if decorator.args and isinstance(decorator.args[0], ast.Str):
-                        path = decorator.args[0].s
+                    if (
+                        decorator.args
+                        and isinstance(decorator.args[0], ast.Constant)
+                        and isinstance(decorator.args[0].value, str)
+                    ):
+                        path = decorator.args[0].value
 
                         return APIEndpoint(
                             file_path=file_path,

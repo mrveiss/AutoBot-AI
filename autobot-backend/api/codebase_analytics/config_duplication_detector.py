@@ -121,27 +121,12 @@ def _extract_constant_value(node: ast.AST) -> any:
     return node.value
 
 
-def _extract_num_value(node: ast.AST) -> any:
-    """Extract value from ast.Num node - Python 3.7 compat (Issue #315: extracted)."""
-    return node.n
-
-
-def _extract_str_value(node: ast.AST) -> any:
-    """Extract value from ast.Str node - Python 3.7 compat (Issue #315: extracted)."""
-    return node.s
-
-
-def _extract_name_constant_value(node: ast.AST) -> any:
-    """Extract value from ast.NameConstant node - Python 3.7 compat (Issue #315)."""
-    return node.value
-
-
-# AST node type to value extractor mapping (Issue #315: dictionary dispatch)
+# AST node type to value extractor mapping (Issue #315: dictionary dispatch).
+# The legacy Num/Str/NameConstant node types were removed in Python 3.12;
+# ast.Constant covers all literal kinds (numbers, strings, bool/None) with a
+# unified ``.value`` attribute.
 _AST_VALUE_EXTRACTORS = {
     ast.Constant: _extract_constant_value,
-    ast.Num: _extract_num_value,
-    ast.Str: _extract_str_value,
-    ast.NameConstant: _extract_name_constant_value,
 }
 
 

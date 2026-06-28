@@ -63,14 +63,6 @@ class SafeExpressionEvaluator:
         """Evaluate constant node (Issue #315 - extracted method)."""
         return node.value
 
-    def _eval_num(self, node: ast.Num, context: Dict[str, Any]) -> Any:
-        """Evaluate legacy Num node (Issue #315 - extracted method)."""
-        return node.n
-
-    def _eval_str(self, node: ast.Str, context: Dict[str, Any]) -> Any:
-        """Evaluate legacy Str node (Issue #315 - extracted method)."""
-        return node.s
-
     def _eval_node(self, node: ast.AST, context: Dict[str, Any]) -> Any:
         """Recursively evaluate an AST node (Issue #315 - dispatch table)."""
         # O(1) dispatch table lookup
@@ -82,9 +74,6 @@ class SafeExpressionEvaluator:
             ast.UnaryOp: self._eval_unaryop,
             ast.BoolOp: self._eval_boolop,
             ast.Subscript: self._eval_subscript,
-            # Backwards compatibility with older Python AST
-            ast.Num: self._eval_num,
-            ast.Str: self._eval_str,
         }
 
         handler = dispatch.get(type(node))

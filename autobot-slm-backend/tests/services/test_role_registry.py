@@ -159,7 +159,7 @@ def test_scheduler_in_backend_ansible_group():
 
 
 def test_scheduler_dependencies():
-    assert ROLE_DEPENDENCIES["scheduler"] == ["python312"]
+    assert ROLE_DEPENDENCIES["scheduler"] == ["python314"]
 
 
 # ---------------------------------------------------------------------------
