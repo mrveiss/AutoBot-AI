@@ -173,7 +173,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
-const logger = createLogger('LLMApiKeysView')
+const logger = createLogger('LlmApiKeysView')
 
 interface KeyRow {
   key_id: string

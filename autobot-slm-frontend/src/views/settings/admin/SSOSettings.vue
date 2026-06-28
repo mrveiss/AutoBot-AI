@@ -16,7 +16,9 @@ import {
   type SSOProviderResponse,
   type SSOProviderCreate,
   type SSOProviderUpdate,
+  type SSOProviderHealthResponse,
 } from '@/composables/useSsoApi'
+import { getStatusBadgeClass, getStatusLabel } from '@/utils/node-status'
 
 const api = useSsoApi()
 
@@ -30,6 +32,13 @@ const testResult = ref<{ success: boolean; message: string } | null>(null)
 const providers = ref<SSOProviderResponse[]>([])
 const showCreateForm = ref(false)
 const editingProvider = ref<SSOProviderResponse | null>(null)
+
+// Health dashboard state
+const healthMap = ref<Record<string, SSOProviderHealthResponse>>({})
+
+function providerHealth(providerId: string): SSOProviderHealthResponse | null {
+  return healthMap.value[providerId] ?? null
+}
 
 // Provider types with their endpoint templates
 const PROVIDER_TYPES = [
@@ -133,8 +142,12 @@ async function fetchProviders(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    const response = await api.listProviders()
-    providers.value = response.providers
+    const [listResponse, healthItems] = await Promise.all([
+      api.listProviders(),
+      api.getProvidersHealth().catch(() => [] as SSOProviderHealthResponse[]),
+    ])
+    providers.value = listResponse.providers
+    healthMap.value = Object.fromEntries(healthItems.map((h) => [h.provider_id, h]))
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string } } }
     error.value = err.response?.data?.detail || 'Failed to load SSO providers'
@@ -465,6 +478,14 @@ onMounted(fetchProviders)
               >
                 {{ provider.is_active ? 'Enabled' : 'Disabled' }}
               </span>
+              <!-- Health badge (sourced from /sso-providers/health) -->
+              <span
+                v-if="providerHealth(provider.id)"
+                class="px-2 py-1 text-xs font-medium rounded-full"
+                :class="getStatusBadgeClass(providerHealth(provider.id)!.health_status)"
+              >
+                {{ getStatusLabel(providerHealth(provider.id)!.health_status) }}
+              </span>
               <span class="text-xs text-gray-500 uppercase tracking-wide">
                 {{ PROVIDER_TYPES.find(t => t.value === provider.provider_type)?.label || provider.provider_type }}
               </span>
@@ -472,6 +493,15 @@ onMounted(fetchProviders)
             <div class="mt-2 text-sm text-gray-600 space-y-1">
               <p>Default role: <span class="font-medium">{{ provider.default_role || 'user' }}</span></p>
               <p>Allow user creation: <span class="font-medium">{{ provider.allow_user_creation ? 'Yes' : 'No' }}</span></p>
+              <template v-if="providerHealth(provider.id)">
+                <p class="text-xs text-gray-500">
+                  Recent logins: {{ providerHealth(provider.id)!.success_count }} success /
+                  {{ providerHealth(provider.id)!.failure_count }} failed
+                </p>
+                <p v-if="providerHealth(provider.id)!.last_success_at" class="text-xs text-gray-500">
+                  Last success: {{ new Date(providerHealth(provider.id)!.last_success_at!).toLocaleString() }}
+                </p>
+              </template>
               <p v-if="provider.last_sync_at" class="text-xs text-gray-500">
                 Last sync: {{ new Date(provider.last_sync_at).toLocaleString() }}
               </p>

@@ -203,7 +203,7 @@ async def test_publisher_survives_live_event_manager_failure():
         pub_mod.get_live_event_manager = orig_lem  # type: ignore[assignment]
         pub_mod.get_event_manager = orig_em  # type: ignore[assignment]
 
-    mock_em.publish_event.assert_awaited_once()
+    mock_em.publish.assert_awaited_once()
 
 
 @pytest.mark.asyncio

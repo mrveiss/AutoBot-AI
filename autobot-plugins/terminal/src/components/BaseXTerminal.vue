@@ -157,7 +157,7 @@ const initTerminal = async () => {
     await nextTick()
     fitAddon.value.fit()
     terminal.value.onData(handleTerminalData)
-    terminal.value.onResize(({ cols, rows }) => emit('resize', cols, rows))
+    terminal.value.onResize(({ cols, rows }: { cols: number; rows: number }) => emit('resize', cols, rows))
     emit('ready', terminal.value)
     logger.debug('Terminal initialized', { sessionId: props.sessionId })
   } catch (error) {

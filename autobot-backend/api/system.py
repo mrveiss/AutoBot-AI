@@ -260,8 +260,12 @@ async def get_frontend_config(admin_check: bool = Depends(check_admin_permission
     }
 
 
-@router.get("/health", response_model=SystemHealthResponse)
-@router.get("/system/health", response_model=SystemHealthResponse)  # Frontend compatibility alias
+# #10502: include HEAD so the frontend ServiceDiscovery liveness probe
+# (HEAD /api/system/health) resolves instead of 405 → false "backend offline".
+@router.api_route("/health", methods=["GET", "HEAD"], response_model=SystemHealthResponse)
+@router.api_route(
+    "/system/health", methods=["GET", "HEAD"], response_model=SystemHealthResponse
+)  # Frontend compatibility alias
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_health",
@@ -558,7 +562,10 @@ async def get_detailed_health(request: Request, admin_check: bool = Depends(chec
     Issue #744: Requires admin authentication.
     """
     try:
-        basic_health = await get_system_health()
+        # Issue #10460: propagate the request so registry probes can reach
+        # app.state (memory/knowledge/graph_rag/chat_knowledge). Without it
+        # every app-state probe falsely reports "request not provided".
+        basic_health = await get_system_health(request)
         detailed_components = {}
 
         # Check components

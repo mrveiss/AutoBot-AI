@@ -6,43 +6,122 @@
  *
  * useThemeVariant.ts - Theme Variant Management Composable
  * Issue #9274 / MVA-3096: Ember Theme Integration
+ * Issue #10472: Runtime installed-theme delivery
  *
- * Provides reactive theme variant switching for Ember theme:
- * - Default/Ember variant modes
+ * Provides reactive theme variant switching:
+ * - Built-in Default/Ember variant modes (build-time)
+ * - Admin-installed theme packages, delivered at runtime via fetch +
+ *   adoptedStyleSheets (CSP-safe: no inline <style>, no cross-origin <link>)
  * - LocalStorage persistence
  * - Works alongside existing useTheme composable
  *
  * Usage:
  *   const { themeVariant, setThemeVariant, variantLabels } = useThemeVariant()
- *   setThemeVariant('ember')  // or 'default'
+ *   setThemeVariant('ember')  // or 'default', or an installed theme id
  */
 
-import { ref, readonly, watch, onMounted, getCurrentInstance } from 'vue'
+import { ref, readonly, computed, watch, onMounted, getCurrentInstance } from 'vue'
+import { getBackendUrl } from '@/config/ssot-config'
+import { createLogger } from '@/utils/debugUtils'
+import { fetchInstalledThemes, type InstalledTheme } from './useThemeRegistry'
 
-/** Available theme variant options */
-export type ThemeVariant = 'default' | 'ember'
+const log = createLogger('ThemeVariant')
+
+/** Built-in theme variant options */
+export type BuiltinThemeVariant = 'default' | 'ember'
+
+/** A theme variant id — a built-in or an installed theme's id. */
+export type ThemeVariant = string
 
 /** Storage key for persisting variant preference */
 const THEME_VARIANT_STORAGE_KEY = 'autobot-theme-variant'
 
+/** All built-in variants — single source of truth for validation. */
+const VALID_VARIANTS: readonly BuiltinThemeVariant[] = ['default', 'ember']
+
+/**
+ * Default variant when the user has no saved preference.
+ *
+ * The user GUI ships the warm "ember" palette by default (Issue #10461 / #9274).
+ * Build-time overridable via `VITE_DEFAULT_THEME_VARIANT` so a deployment that
+ * shares this build with the /slm control plane can pin `default` and keep the
+ * current look. An unset or unrecognised value falls back to `ember`.
+ */
+function resolveDefaultVariant(): BuiltinThemeVariant {
+  const fromEnv = import.meta.env?.VITE_DEFAULT_THEME_VARIANT as string | undefined
+  if (fromEnv && (VALID_VARIANTS as readonly string[]).includes(fromEnv)) {
+    return fromEnv as BuiltinThemeVariant
+  }
+  return 'ember'
+}
+
 /** Default variant when no preference is set */
-const DEFAULT_VARIANT: ThemeVariant = 'default'
+const DEFAULT_VARIANT: BuiltinThemeVariant = resolveDefaultVariant()
 
 /** Global reactive state (singleton pattern) */
 const currentVariant = ref<ThemeVariant>(DEFAULT_VARIANT)
 
+/** Installed theme descriptors fetched from the backend registry (#10472) */
+const installedThemes = ref<InstalledTheme[]>([])
+
+/** Installed theme ids, merged into availableVariants at runtime (#10472) */
+const runtimeVariantIds = ref<string[]>([])
+
+/** Constructed stylesheets already adopted, keyed by theme id (idempotent). */
+const adopted = new Set<string>()
+
 /** Track if initialized */
 let isInitialized = false
 
+function isBuiltin(variant: ThemeVariant): boolean {
+  return (VALID_VARIANTS as readonly string[]).includes(variant)
+}
+
 /**
- * Applies the theme variant to the document root element
+ * Fetch an installed theme's CSS and adopt it as a constructed stylesheet.
+ *
+ * CSP-safe: the CSS text is fetched same-credentials from the backend and
+ * adopted via `document.adoptedStyleSheets` — never injected as an inline
+ * `<style>` or a cross-origin `<link>`. `apiClient.get` always parses JSON, so
+ * a raw `fetch` is used here to retrieve the CSS as text.
  */
-function applyThemeVariant(variant: ThemeVariant): void {
+async function ensureThemeStylesheet(id: string): Promise<void> {
+  if (adopted.has(id)) return
+  const response = await fetch(`${getBackendUrl()}/api/themes/${id}/theme.css`, {
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to fetch theme CSS for '${id}': HTTP ${response.status}`)
+  }
+  const css = await response.text()
+  const sheet = new CSSStyleSheet()
+  await sheet.replace(css)
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
+  adopted.add(id)
+}
+
+/**
+ * Applies the theme variant to the document root element.
+ *
+ * Built-in variants apply synchronously (no-flash parity preserved). Installed
+ * variants first fetch + adopt their stylesheet; on failure the previous
+ * variant is restored and the error surfaced to the caller.
+ */
+async function applyThemeVariant(variant: ThemeVariant, previous: ThemeVariant): Promise<void> {
   if (variant === 'default') {
     document.documentElement.removeAttribute('data-theme-variant')
-  } else {
-    document.documentElement.setAttribute('data-theme-variant', variant)
+    return
   }
+  if (!isBuiltin(variant)) {
+    try {
+      await ensureThemeStylesheet(variant)
+    } catch (err) {
+      log.error(`Failed to apply installed theme '${variant}'; reverting`, err)
+      currentVariant.value = previous
+      throw err
+    }
+  }
+  document.documentElement.setAttribute('data-theme-variant', variant)
 }
 
 /**
@@ -57,19 +136,35 @@ function saveThemeVariant(variant: ThemeVariant): void {
 }
 
 /**
- * Loads theme variant preference from localStorage
+ * Loads theme variant preference from localStorage. Accepts built-in variants
+ * and any currently-known installed theme id.
  */
 function loadThemeVariant(): ThemeVariant {
   try {
-    const stored = localStorage.getItem(THEME_VARIANT_STORAGE_KEY) as ThemeVariant | null
-    const validVariants: ThemeVariant[] = ['default', 'ember']
-    if (stored && validVariants.includes(stored)) {
+    const stored = localStorage.getItem(THEME_VARIANT_STORAGE_KEY)
+    if (stored && (isBuiltin(stored) || runtimeVariantIds.value.includes(stored))) {
       return stored
     }
   } catch {
     // localStorage may be unavailable
   }
   return DEFAULT_VARIANT
+}
+
+/**
+ * Fetch installed themes and merge their ids into the available variants.
+ * Safe to call repeatedly; degrades to built-ins only on failure.
+ */
+async function loadInstalledThemes(): Promise<void> {
+  try {
+    const themes = await fetchInstalledThemes()
+    installedThemes.value = Array.isArray(themes) ? themes : []
+    runtimeVariantIds.value = installedThemes.value.map((t) => t.id)
+  } catch (err) {
+    log.warn('Failed to load installed themes; using built-ins only', err)
+    installedThemes.value = []
+    runtimeVariantIds.value = []
+  }
 }
 
 /**
@@ -106,45 +201,63 @@ export function useThemeVariant() {
 
     const savedVariant = loadThemeVariant()
     currentVariant.value = savedVariant
-    applyThemeVariant(savedVariant)
+    void applyThemeVariant(savedVariant, savedVariant)
 
     // Watch for changes and persist
     watch(currentVariant, (variant) => {
-      applyThemeVariant(variant)
       saveThemeVariant(variant)
     })
 
     isInitialized = true
+
+    // Fire-and-forget: installed themes appear once the registry loads.
+    void loadInstalledThemes()
   }
 
   /**
-   * Set the theme variant
-   * @param variant - Theme variant to apply ('default' or 'ember')
+   * Set the theme variant.
+   * @param variant - Theme variant to apply ('default', 'ember', or an installed id)
+   * @returns a Promise that resolves once the variant (incl. any installed
+   *   stylesheet) has been applied. Rejects — and reverts — on apply failure.
    */
-  function setThemeVariant(variant: ThemeVariant): void {
+  async function setThemeVariant(variant: ThemeVariant): Promise<void> {
+    const previous = currentVariant.value
     currentVariant.value = variant
+    await applyThemeVariant(variant, previous)
   }
 
   /**
-   * Available theme variant options
+   * Available theme variant options — built-ins plus installed theme ids.
    */
-  const availableVariants: ThemeVariant[] = ['default', 'ember']
+  const availableVariants = computed<ThemeVariant[]>(() => [...VALID_VARIANTS, ...runtimeVariantIds.value])
 
   /**
-   * Theme variant labels for UI display
+   * Theme variant labels for UI display (built-ins + installed theme names).
    */
-  const variantLabels: Record<ThemeVariant, string> = {
-    default: 'Default',
-    ember: 'Ember',
-  }
+  const variantLabels = computed<Record<string, string>>(() => {
+    const labels: Record<string, string> = {
+      default: 'Default',
+      ember: 'Ember',
+    }
+    for (const theme of installedThemes.value) {
+      labels[theme.id] = theme.name
+    }
+    return labels
+  })
 
   /**
-   * Theme variant descriptions
+   * Theme variant descriptions (built-ins + installed author/version).
    */
-  const variantDescriptions: Record<ThemeVariant, string> = {
-    default: 'Standard AutoBot theme with cool neutrals',
-    ember: 'Warm palette with marigold accents and apricot-plum tones',
-  }
+  const variantDescriptions = computed<Record<string, string>>(() => {
+    const descriptions: Record<string, string> = {
+      default: 'Standard AutoBot theme with cool neutrals',
+      ember: 'Warm palette with marigold accents and apricot-plum tones',
+    }
+    for (const theme of installedThemes.value) {
+      descriptions[theme.id] = `v${theme.version} — ${theme.author}`
+    }
+    return descriptions
+  })
 
   // Initialize on mount if in browser context
   if (getCurrentInstance()) {
@@ -162,11 +275,17 @@ export function useThemeVariant() {
     /** Current theme variant setting (reactive) */
     themeVariant: readonly(currentVariant),
 
-    /** Set the theme variant */
+    /** Set the theme variant (async — awaits installed-theme stylesheet adopt) */
     setThemeVariant,
 
-    /** Available theme variant options */
+    /** Available theme variant options (built-ins + installed, reactive) */
     availableVariants,
+
+    /** Installed theme descriptors from the backend registry */
+    installedThemes: readonly(installedThemes),
+
+    /** Fetch + merge installed themes into availableVariants */
+    loadInstalledThemes,
 
     /** Theme variant display labels */
     variantLabels,
@@ -187,7 +306,7 @@ export function initializeThemeVariant(): void {
   if (typeof document === 'undefined') return
 
   const savedVariant = loadThemeVariant()
-  applyThemeVariant(savedVariant)
+  void applyThemeVariant(savedVariant, savedVariant)
   currentVariant.value = savedVariant
   isInitialized = true
 }

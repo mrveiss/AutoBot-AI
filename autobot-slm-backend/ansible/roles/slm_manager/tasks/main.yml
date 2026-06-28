@@ -456,16 +456,20 @@
   when: slm_frontend_build and slm_package_json.stat.exists
   tags: ['slm', 'frontend']
 
-- name: "SLM | Build frontend for production"
+# #10435: SLM UI is always served under /slm (nginx `location /slm/`) and
+# vite.config sets base /slm/. The API base must always be /slm; an unset/empty
+# VITE_API_URL trips the co-located build guard and bakes the wrong base. Use
+# build:slm which exports VITE_API_URL=/slm for every deploy (co-located + standalone).
+- name: "SLM | Build frontend for production (#10435)"
   ansible.builtin.command:
-    cmd: npm run build
+    cmd: npm run build:slm
     chdir: "{{ slm_frontend_dir }}"
   become_user: "{{ slm_user }}"
   when: slm_frontend_build and slm_package_json.stat.exists
   register: slm_frontend_build_result
   changed_when: slm_frontend_build_result.rc == 0
   environment:
-    VITE_API_URL: "{{ '/slm' if (slm_colocated_frontend | default(false) | bool) else '' }}"
+    VITE_API_URL: "/slm"
   tags: ['slm', 'frontend']
 
 # ==========================================================

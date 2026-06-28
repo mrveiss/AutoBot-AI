@@ -9,13 +9,15 @@ Endpoints for agent organizational hierarchy: org tree, chain of command,
 direct reports, and org metadata updates with cycle detection.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_agent import (
     AgentDelegateRequest,
+    AgentStatusItem,
+    AgentStatusListResponse,
     AgentSummary,
     ChainOfCommandResponse,
     DelegationResponse,
@@ -24,7 +26,7 @@ from api.schemas_agent import (
     UpdateOrgRequest,
     UpsertOrgRequest,
 )
-from api.user_management.dependencies import get_db_session
+from api.user_management.dependencies import get_db_session, get_optional_db_session
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.agent_org_service import AgentOrgService
@@ -32,6 +34,49 @@ from services.delegation_service import DelegationService
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+
+# -- Fallback: in-memory agents when PG is unavailable (#10511) ------------
+
+# Map from orchestration agent_type to the activity-monitor "type" vocabulary.
+_ORCH_TYPE_MAP: Dict[str, str] = {
+    "research": "analyzer",
+    "librarian": "analyzer",
+    "system_commands": "executor",
+    "orchestrator": "orchestrator",
+}
+
+
+def _fallback_agents_from_registry() -> List[Dict[str, Any]]:
+    """Build agent list from the in-memory AgentRegistry when PG is unavailable (#10511).
+
+    Returns the same shape as ``AgentOrgService.get_agent_statuses()`` so the
+    caller can treat both sources uniformly.
+    """
+    try:
+        from orchestration.agent_registry import AgentRegistry
+
+        registry = AgentRegistry(initialize_defaults=True)
+        agents = []
+        for profile in registry.get_all().values():
+            agents.append(
+                {
+                    "id": profile.agent_id,
+                    "name": profile.agent_id.replace("_", " ").title(),
+                    "type": _ORCH_TYPE_MAP.get(profile.agent_type, "worker"),
+                    "status": profile.availability_status,
+                    "currentTask": None,
+                    "tasksCompleted": 0,
+                    "uptime": 0,
+                    "successRate": int(profile.success_rate * 100),
+                    "recentTasks": [],
+                    "activityTimeline": [],
+                }
+            )
+        return agents
+    except Exception as exc:
+        logger.debug("Fallback agent registry unavailable: %s", exc)
+        return []
 
 
 # -- Endpoints -------------------------------------------------------------
@@ -57,6 +102,37 @@ async def get_org_tree(
     """
     svc = AgentOrgService(session)
     return await svc.get_org_tree()
+
+
+@router.get(
+    "/status",
+    response_model=AgentStatusListResponse,
+    tags=["agent-org"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agents_status",
+    error_code_prefix="AGENT_ORG",
+)
+async def get_agents_status(
+    session: Optional[AsyncSession] = Depends(get_optional_db_session),
+) -> AgentStatusListResponse:
+    """Return all registered agents with runtime status (#10502, #10511).
+
+    PG-optional: when PostgreSQL is disabled (single_user mode) the endpoint
+    falls back to the in-memory ``AgentRegistry`` populated from
+    ``DEFAULT_AGENT_CONFIGS`` so the Home dashboard "Agent Activity Monitor"
+    returns 200 instead of 503.
+    """
+    if session is not None:
+        svc = AgentOrgService(session)
+        agents = await svc.get_agent_statuses()
+    else:
+        logger.debug("PG unavailable — returning in-memory agents for /agents/status (#10511)")
+        agents = _fallback_agents_from_registry()
+
+    items = [AgentStatusItem(**a) for a in agents]
+    return AgentStatusListResponse(agents=items, total=len(items))
 
 
 @router.get(

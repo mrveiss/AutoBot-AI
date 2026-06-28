@@ -33,6 +33,7 @@ from api.schemas_system import (
     VisionAutomationOpportunitiesResponse,
     VisionDetectElementsResponse,
     VisionElementTypesResponse,
+    VisionHealthResponse,
     VisionInteractionTypesResponse,
     VisionLayoutResponse,
     VisionOCRResponse,
@@ -339,6 +340,36 @@ async def get_layout_analysis(
     except Exception as e:
         logger.error("Layout analysis failed: %s", e)
         raise HTTPException(status_code=500, detail="Layout analysis failed")
+
+
+@router.get("/health", response_model=VisionHealthResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_vision_health",
+    error_code_prefix="VISION",
+)
+async def get_vision_health(
+    current_user: dict = Depends(get_current_user),
+):
+    """Vision service health check (#10429).
+
+    The frontend (VisionMultimodalApiClient / SLM AdminMonitoring) polls
+    GET /api/vision/health expecting a VisionHealthResponse; it previously 404'd
+    because only /vision/status existed.
+    """
+    analyzer = get_screen_analyzer()
+    return {
+        "status": "healthy",
+        "analyzer_ready": analyzer is not None,
+        "capabilities": [
+            "screen_analysis",
+            "element_detection",
+            "ocr_extraction",
+            "template_matching",
+        ],
+        "element_types_supported": [e.value for e in ElementType],
+        "interaction_types_supported": [i.value for i in InteractionType],
+    }
 
 
 @router.get("/status", response_model=VisionStatusResponse)

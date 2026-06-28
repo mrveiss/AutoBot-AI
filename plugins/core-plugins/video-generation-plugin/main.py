@@ -63,3 +63,6 @@ class VideoGenerationPlugin(BasePlugin):
                 registry.unregister(GenerateVideoTool.metadata.name)
             except Exception:
                 pass
+
+# Loader entry-point alias (#10294)
+Plugin = VideoGenerationPlugin

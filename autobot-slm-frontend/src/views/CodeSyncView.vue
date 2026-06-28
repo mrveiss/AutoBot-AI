@@ -91,23 +91,6 @@ let updateAllPollTimer: ReturnType<typeof setTimeout> | null = null
 const showAdvanced = ref(false)
 const expandedStageLogs = ref<Set<string>>(new Set())
 
-function stageLabel(name: string): string {
-  // F2: use i18n keys for stage names
-  const keyMap: Record<string, string> = {
-    github_fetch: 'codeSyncView.githubFetchStage',
-    code_source_pull: 'codeSyncView.codeSourcePullStage',
-    slm_self_update: 'codeSyncView.slmSelfUpdateStage',
-    fleet_nodes: 'codeSyncView.fleetNodesStage',
-  }
-  const key = keyMap[name]
-  if (key) {
-    // $t is not available in script setup without useI18n, so return the key
-    // and let the template call $t(stageI18nKey(name)) directly.
-    return key
-  }
-  return name
-}
-
 // Returns the i18n key for a stage name (used in template with $t).
 function stageI18nKey(name: string): string {
   const keyMap: Record<string, string> = {
@@ -173,11 +156,6 @@ const updateAllButtonLabel = computed(() => {
 const updateAllIsRunning = computed(() => {
   const s = updateAllJob.value?.status
   return s === 'pending' || s === 'running'
-})
-
-const updateAllIsDone = computed(() => {
-  const s = updateAllJob.value?.status
-  return s === 'completed' || s === 'already_current' || s === 'failed'
 })
 
 function toggleStageLog(name: string): void {

@@ -48,8 +48,30 @@
         </div>
         <div class="meta-field">
           <span class="meta-label">Assignee</span>
-          <span v-if="localItem.assignee_name" class="assignee-chip">{{ localItem.assignee_name }}</span>
-          <span v-else class="meta-empty">Unassigned</span>
+          <div class="assignee-row">
+            <span v-if="localItem.assignee_name" class="assignee-chip">{{ localItem.assignee_name }}</span>
+            <span v-else class="meta-empty">{{ $t('nav.llcUnassigned') }}</span>
+            <button class="assignee-edit" :title="$t('nav.llcAssign')" @click="openAssign">✎</button>
+          </div>
+          <!-- #10532: assign to a human member or an agent. -->
+          <div v-if="showAssign" class="assignee-picker">
+            <select
+              class="assignee-select"
+              :disabled="isAssigning"
+              @change="onAssignSelect(($event.target as HTMLSelectElement).value)"
+            >
+              <option value="">{{ $t('nav.llcAssign') }}…</option>
+              <optgroup :label="$t('nav.llcHumans')">
+                <option v-for="h in people.humans.value" :key="h.user_id" :value="`user:${h.user_id}`">
+                  {{ h.name }}
+                </option>
+              </optgroup>
+              <optgroup :label="$t('nav.llcAgents')">
+                <option v-for="a in people.agents.value" :key="a.id" :value="`agent:${a.id}`">{{ a.name }}</option>
+              </optgroup>
+            </select>
+            <button class="assignee-cancel" @click="showAssign = false">{{ $t('common.cancel') }}</button>
+          </div>
         </div>
         <div class="meta-field">
           <span class="meta-label">Points</span>
@@ -198,6 +220,16 @@
         </template>
       </div>
     </div>
+
+    <HandoffModal
+      v-if="handoffDirection"
+      :work-item-id="props.item.id"
+      :company-id="props.companyId"
+      :direction="handoffDirection"
+      :agent-assignee-id="localItem.assignee_agent_id"
+      @close="handoffDirection = null"
+      @done="onHandoffDone"
+    />
   </div>
 </template>
 
@@ -205,6 +237,8 @@
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import HandoffModal from '@/components/llc/HandoffModal.vue'
+import { useCompanyPeople } from '@/composables/llc/useCompanyPeople'
 
 const logger = createLogger('WorkItemDetail')
 const api = useApiClient()
@@ -279,6 +313,33 @@ const isLoadingComments = ref(false)
 const isLoadingArtifacts = ref(false)
 const isLoadingActivity = ref(false)
 const isLoadingHandoff = ref(false)
+
+// #10531 handoff dialog + #10532 assignee picker.
+const handoffDirection = ref<'to_agent' | 'to_human' | null>(null)
+const people = useCompanyPeople(props.companyId)
+const showAssign = ref(false)
+const isAssigning = ref(false)
+
+function openAssign() {
+  showAssign.value = true
+  if (people.agents.value.length === 0 && people.humans.value.length === 0) void people.load()
+}
+
+async function onAssignSelect(value: string) {
+  if (!value) return
+  const [kind, id] = value.split(':')
+  isAssigning.value = true
+  try {
+    const patch =
+      kind === 'agent'
+        ? { assignee_agent_id: id, assignee_user_id: null }
+        : { assignee_user_id: id, assignee_agent_id: null }
+    await patchItem(patch as Partial<WorkItem>)
+    showAssign.value = false
+  } finally {
+    isAssigning.value = false
+  }
+}
 
 const STATUS_TRANSITIONS: Record<string, { key: string; label: string }[]> = {
   backlog: [{ key: 'ready', label: 'Mark Ready' }],
@@ -380,15 +441,24 @@ async function performAction(action: { key: string; type: string; label: string 
     } else if (action.key === 'claim') {
       await api.post<unknown>(`/api/llc/work-items/${props.item.id}/claim`, {})
     } else if (action.key === 'handoff_human' || action.key === 'handoff_agent') {
-      await api.post<unknown>(`/api/llc/work-items/${props.item.id}/release`, {
-        target_type: action.key === 'handoff_human' ? 'human' : 'agent',
-      })
+      // #10531: open the handoff dialog (real /handoff/to-* endpoints with a
+      // target picker + notes) rather than blindly POSTing to /release.
+      handoffDirection.value = action.key === 'handoff_human' ? 'to_human' : 'to_agent'
+      isActioning.value = false
+      return
     }
   } catch (err) {
     logger.error(`Action ${action.key} failed`, err)
   } finally {
     isActioning.value = false
   }
+}
+
+function onHandoffDone() {
+  handoffDirection.value = null
+  // Re-fetch the item so status/assignee/reviewer reflect the handoff.
+  emit('updated', localItem.value)
+  emit('close')
 }
 
 async function postComment() {
@@ -638,6 +708,37 @@ onMounted(() => {
   padding: 0.1rem 0.5rem;
   background: var(--color-surface-elevated, #f3f4f6);
   border-radius: 9999px;
+}
+
+.assignee-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.assignee-edit {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, #6b7280);
+  cursor: pointer;
+}
+
+.assignee-picker {
+  margin-top: 0.375rem;
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+.assignee-select {
+  font-size: 0.8rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border-default, #e5e7eb);
+  border-radius: var(--radius-md, 6px);
+}
+
+.assignee-cancel {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, #6b7280);
 }
 
 .meta-empty {

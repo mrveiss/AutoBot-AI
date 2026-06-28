@@ -529,13 +529,11 @@ if __name__ == "__main__":
         logger.info("WSL: {os_info.is_wsl}")
         logger.info("Package Manager: {os_info.package_manager}")
         logger.info("Shell: {os_info.shell}")
-        print()  # noqa: print
 
         # Test installation capability
         can_install, reason = await detector.validate_installation_capability()
         logger.info("Can Install Tools: {can_install}")
         logger.info("Reason: {reason}")
-        print()  # noqa: print
 
         # Show capabilities summary
         capabilities_info = await detector.get_capabilities_info()
@@ -545,7 +543,6 @@ if __name__ == "__main__":
         logger.info("System Tools: {capabilities_info['system_tools']}")
         logger.info("File Tools: {capabilities_info['file_tools']}")
         logger.info("Development Tools: {capabilities_info['development_tools']}")
-        print()  # noqa: print
 
         # Show some examples
         logger.info("=== Available Tools (Examples) ===")

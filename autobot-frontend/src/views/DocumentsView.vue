@@ -5,12 +5,12 @@
   <div class="documents-view">
     <div class="documents-sidebar">
       <div class="sidebar-header">
-        <h2 class="sidebar-title">AI Documents</h2>
+        <h2 class="sidebar-title">{{ $t('nav.documents') }}</h2>
         <BaseButton
           variant="primary"
           size="sm"
           :disabled="composable.isLoading.value"
-          title="Refresh document list"
+          :title="$t('documents.refreshList')"
           @click="composable.fetchDocuments()"
         >
           <Icon name="sync-alt" aria-hidden="true" />
@@ -19,20 +19,20 @@
 
       <div v-if="composable.isLoading.value && !composable.hasDocuments.value" class="loading-state">
         <Icon name="sync-alt" :spin="true" aria-hidden="true" />
-        <span>Loading documents…</span>
+        <span>{{ $t('documents.loading') }}</span>
       </div>
 
       <div v-else-if="!composable.hasDocuments.value" class="empty-state">
         <Icon name="file-alt" class="empty-icon" aria-hidden="true" />
-        <p>No AI documents yet.</p>
+        <p>{{ $t('documents.noDocsYet') }}</p>
         <p class="empty-hint">
-          Save an AI response from the
-          <RouterLink to="/chat" class="chat-link">chat view</RouterLink>
-          to create a document.
+          {{ $t('documents.saveHintPrefix') }}
+          <RouterLink to="/chat" class="chat-link">{{ $t('documents.chatViewLink') }}</RouterLink>
+          {{ $t('documents.saveHintSuffix') }}
         </p>
       </div>
 
-      <ul v-else class="document-list" role="listbox" aria-label="Your AI documents">
+      <ul v-else class="document-list" role="listbox" :aria-label="$t('documents.listAriaLabel')">
         <li
           v-for="doc in composable.documents.value"
           :key="doc.id"
@@ -50,8 +50,8 @@
             variant="ghost"
             size="xs"
             class="delete-btn"
-            title="Delete document"
-            :aria-label="`Delete ${doc.title}`"
+            :title="$t('documents.deleteDocument')"
+            :aria-label="$t('documents.deleteAria', { title: doc.title })"
             @click.stop="confirmDelete(doc.id, doc.title)"
           >
             <Icon name="trash" aria-hidden="true" />
@@ -66,11 +66,14 @@
           :disabled="currentOffset === 0"
           @click="prevPage"
         >
-          Prev
+          {{ $t('documents.prev') }}
         </BaseButton>
         <span class="page-info">
-          {{ currentOffset + 1 }}–{{ Math.min(currentOffset + PAGE_SIZE, composable.total.value) }}
-          of {{ composable.total.value }}
+          {{ $t('documents.pageRange', {
+            start: currentOffset + 1,
+            end: Math.min(currentOffset + PAGE_SIZE, composable.total.value),
+            total: composable.total.value,
+          }) }}
         </span>
         <BaseButton
           variant="ghost"
@@ -78,15 +81,27 @@
           :disabled="currentOffset + PAGE_SIZE >= composable.total.value"
           @click="nextPage"
         >
-          Next
+          {{ $t('documents.next') }}
         </BaseButton>
       </div>
     </div>
 
     <div class="documents-main">
       <div v-if="!selectedDocId" class="no-selection">
-        <Icon name="file-alt" class="no-selection-icon" aria-hidden="true" />
-        <p>Select a document from the list to view and edit it.</p>
+        <!-- TASK 12: richer empty state when there are no documents at all -->
+        <template v-if="!composable.hasDocuments.value">
+          <Icon name="file-alt" class="no-selection-icon" aria-hidden="true" />
+          <h3 class="no-selection-title">{{ $t('documents.emptyTitle') }}</h3>
+          <p class="no-selection-sub">{{ $t('documents.emptySubtitle') }}</p>
+          <RouterLink to="/chat" class="go-to-chat-btn">
+            <Icon name="comments" aria-hidden="true" />
+            <span>{{ $t('documents.goToChat') }}</span>
+          </RouterLink>
+        </template>
+        <template v-else>
+          <Icon name="file-alt" class="no-selection-icon" aria-hidden="true" />
+          <p>{{ $t('documents.selectPrompt') }}</p>
+        </template>
       </div>
 
       <AIDocumentEditor
@@ -106,19 +121,19 @@
       class="modal-overlay"
       role="dialog"
       aria-modal="true"
-      :aria-label="`Confirm deletion of ${deleteTarget.title}`"
+      :aria-label="$t('documents.confirmDeleteAria', { title: deleteTarget.title })"
       tabindex="-1"
       @keydown="onDeleteDialogKeydown"
       @keydown.escape="deleteTarget = null"
     >
       <div class="modal-card">
-        <h3 class="modal-title">Delete document?</h3>
+        <h3 class="modal-title">{{ $t('documents.deleteHeading') }}</h3>
         <p class="modal-body">
-          "<strong>{{ deleteTarget.title }}</strong>" will be permanently deleted.
+          {{ $t('documents.deleteBody', { title: deleteTarget.title }) }}
         </p>
         <div class="modal-actions">
           <BaseButton variant="ghost" size="sm" @click="deleteTarget = null">
-            Cancel
+            {{ $t('common.cancel') }}
           </BaseButton>
           <BaseButton
             variant="error"
@@ -126,7 +141,7 @@
             :disabled="composable.isLoading.value"
             @click="executeDelete"
           >
-            Delete
+            {{ $t('common.delete') }}
           </BaseButton>
         </div>
       </div>
@@ -140,8 +155,8 @@
     <!-- Transcriber Projects Section -->
     <section v-if="transcriberProjects.length" class="transcriber-section">
       <div class="section-header">
-        <h3>Transcriber Projects</h3>
-        <RouterLink :to="{ name: 'transcriber-projects' }" class="btn-link">View all</RouterLink>
+        <h3>{{ $t('documents.transcriberProjects') }}</h3>
+        <RouterLink :to="{ name: 'transcriber-projects' }" class="btn-link">{{ $t('documents.viewAll') }}</RouterLink>
       </div>
       <div class="projects-mini-grid">
         <RouterLink
@@ -463,6 +478,40 @@ function showError(msg: string) {
 .no-selection-icon {
   font-size: var(--text-5xl);
   color: var(--color-text-muted, #444);
+}
+
+/* TASK 12: rich empty state */
+.no-selection-title {
+  font-size: var(--text-xl, 1.25rem);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.no-selection-sub {
+  max-width: 22rem;
+  text-align: center;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.go-to-chat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-4);
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: var(--radius-md, 6px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background var(--duration-150) var(--ease-in-out);
+}
+
+.go-to-chat-btn:hover {
+  background: var(--color-primary-hover, var(--color-primary));
 }
 
 .editor-panel {

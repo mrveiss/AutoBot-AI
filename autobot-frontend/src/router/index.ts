@@ -161,6 +161,61 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // TASK 1a (#3245): AI Documents migrated under Knowledge sidebar.
+        // Legacy /documents + /documents/:docId redirect here (see below).
+        path: 'documents',
+        name: 'knowledge-documents',
+        component: () => import('@/views/DocumentsView.vue'),
+        meta: {
+          title: 'AI Documents',
+          parent: 'knowledge'
+        },
+        children: [
+          {
+            path: ':docId',
+            name: 'document-detail',
+            component: () => import('@/views/DocumentsView.vue'),
+            props: true,
+            meta: {
+              title: 'AI Document',
+              parent: 'knowledge'
+            }
+          }
+        ]
+      },
+      {
+        // TASK 1b (#9044): Transcriber migrated under Knowledge sidebar.
+        // Legacy /transcriber/* redirects here (see below). Child route names
+        // are preserved so name-based navigation keeps working.
+        path: 'transcriber',
+        name: 'knowledge-transcriber',
+        component: () => import('@/views/transcriber/TranscriberLayout.vue'),
+        meta: {
+          title: 'Transcriber',
+          parent: 'knowledge'
+        },
+        children: [
+          {
+            path: '',
+            name: 'transcriber-projects',
+            component: () => import('@/views/transcriber/ProjectsView.vue'),
+            meta: { title: 'Projects', parent: 'knowledge' }
+          },
+          {
+            path: 'projects/:projectId',
+            name: 'transcriber-project-detail',
+            component: () => import('@/views/transcriber/ProjectDetailView.vue'),
+            meta: { title: 'Project', parent: 'knowledge' }
+          },
+          {
+            path: 'projects/:projectId/recordings/:recordingId',
+            name: 'transcriber-transcript',
+            component: () => import('@/views/transcriber/TranscriptView.vue'),
+            meta: { title: 'Transcript', parent: 'knowledge' }
+          }
+        ]
+      },
+      {
         path: 'categories',
         name: 'knowledge-categories',
         component: () => import('@/components/knowledge/KnowledgeBrowser.vue'),
@@ -557,6 +612,16 @@ export const routes: RouteRecordRaw[] = [
           parent: 'analytics'
         }
       },
+      // Issue #9024: LLM model-comparison / benchmark dashboard
+      {
+        path: 'benchmark',
+        name: 'analytics-benchmark',
+        component: () => import('@/views/BenchmarkView.vue'),
+        meta: {
+          title: 'Model Benchmark',
+          parent: 'analytics'
+        }
+      },
       {
         path: 'log-patterns',
         name: 'analytics-log-patterns',
@@ -751,29 +816,15 @@ export const routes: RouteRecordRaw[] = [
     redirect: '/analytics/codebase'
   },
   // Issue #902: Dev Tools moved into /analytics/dev-tools tab
-  // Issue #3245: AI Document editor — persistent editable AI output documents
+  // TASK 1a: AI Documents moved under /knowledge/documents. Keep legacy paths
+  // as redirects so existing bookmarks and deep links keep working.
   {
     path: '/documents',
-    name: 'documents',
-    component: () => import('@/views/DocumentsView.vue'),
-    meta: {
-      title: 'AI Documents',
-      icon: 'fas fa-file-alt',
-      description: 'View and edit AI-generated documents saved from chat',
-      requiresAuth: true,
-    },
-    children: [
-      {
-        path: ':docId',
-        name: 'document-detail',
-        component: () => import('@/views/DocumentsView.vue'),
-        props: true,
-        meta: {
-          title: 'AI Document',
-          parent: 'documents',
-        },
-      },
-    ],
+    redirect: '/knowledge/documents',
+  },
+  {
+    path: '/documents/:docId',
+    redirect: (to) => ({ path: `/knowledge/documents/${to.params.docId}` }),
   },
   // MVA-360: Live Canvas — route always registered (preserves bookmarks/direct nav);
   // nav item gated by VITE_FEATURE_CANVAS via navItems.ts (GH#8758)
@@ -800,33 +851,6 @@ export const routes: RouteRecordRaw[] = [
       hideInNav: true,
     },
   },
-  // Issue #6590: Virtual LLM API Keys admin view
-  {
-    path: '/admin/llm-keys',
-    name: 'llm-api-keys',
-    component: () => import('@/views/LLMApiKeysView.vue'),
-    meta: {
-      title: 'LLM API Keys',
-      description: 'Manage virtual LLM API keys with per-key budgets',
-      requiresAuth: true,
-      admin: true,
-      hideInNav: true,
-    },
-  },
-  // MVA-2999: LLM Providers & Fallback Status admin view
-  {
-    path: '/admin/llm-providers',
-    name: 'llm-providers',
-    component: () => import('@/views/LLMProvidersView.vue'),
-    meta: {
-      title: 'LLM Providers',
-      description: 'View LLM provider fallback chains and active fallback status',
-      requiresAuth: true,
-      admin: true,
-      // hideInNav (GH#9627 drive-by): admin views live in adminMenuItems, not main nav
-      hideInNav: true,
-    },
-  },
   // Issue #1801: Admin User Management
   {
     path: '/admin/users',
@@ -848,32 +872,6 @@ export const routes: RouteRecordRaw[] = [
     meta: {
       title: 'Sandbox Inspector',
       description: 'Browse code-execution sandbox files',
-      requiresAuth: true,
-      admin: true,
-      hideInNav: true,
-    },
-  },
-  // Issue #7513: Host inventory admin view
-  {
-    path: '/admin/hosts',
-    name: 'admin-hosts',
-    component: () => import('@/views/Admin/HostsView.vue'),
-    meta: {
-      title: 'Host Inventory',
-      description: 'Manage multi-host role deployment',
-      requiresAuth: true,
-      admin: true,
-      hideInNav: true,
-    },
-  },
-  // GH#8996: Admin cross-user view of all active shared chat links (AC4)
-  {
-    path: '/admin/shared-links',
-    name: 'admin-shared-links',
-    component: () => import('@/views/Admin/SharedLinksAdminView.vue'),
-    meta: {
-      title: 'Shared Chat Links',
-      description: 'View all active shared chat links across users',
       requiresAuth: true,
       admin: true,
       hideInNav: true,
@@ -904,6 +902,19 @@ export const routes: RouteRecordRaw[] = [
       title: 'Remote Desktop',
       requiresAuth: true,
       hideFooter: true,
+    },
+  },
+  // Issue #10472: Admin theme-package management under the /slm route group.
+  // Upload/list/uninstall theme zips; install is admin-gated server-side.
+  {
+    path: '/slm/themes',
+    name: 'slm-themes',
+    component: () => import('@/views/slm/ThemeManagerView.vue'),
+    meta: {
+      title: 'Theme Manager',
+      requiresAuth: true,
+      // Admin-only operator view, reached via /slm — not in the primary nav rail.
+      hideInNav: true,
     },
   },
   // Issue #3502: Custom Dashboard renamed to /home (see home route above)
@@ -1026,6 +1037,19 @@ export const routes: RouteRecordRaw[] = [
           title: 'Secrets Manager',
           hideInNav: true
         }
+      },
+      // Issue #6590/#10488: Virtual LLM API Keys — relocated under Secrets section
+      {
+        path: 'llm-keys',
+        name: 'secrets-llm-keys',
+        component: () => import('@/views/secrets/LlmApiKeysView.vue'),
+        meta: {
+          title: 'LLM API Keys',
+          description: 'Manage virtual LLM API keys with per-key budgets',
+          requiresAuth: true,
+          admin: true,
+          hideInNav: true
+        }
       }
     ]
   },
@@ -1123,6 +1147,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: 'Boards', requiresAuth: true, hideInNav: true },
       },
       {
+        path: 'reviews',
+        name: 'llc-reviews',
+        component: () => import('@/views/llc/ReviewInboxView.vue'),
+        meta: { title: 'My Reviews', requiresAuth: true, hideInNav: true },
+      },
+      {
         path: 'portfolios',
         name: 'llc-portfolios',
         component: () => import('@/views/llc/PortfolioBrowserView.vue'),
@@ -1148,29 +1178,20 @@ export const routes: RouteRecordRaw[] = [
   },
   // Issue #9044: Transcriber — audio/video transcription module
   {
+    // TASK 1b: Transcriber moved under /knowledge/transcriber. The real route
+    // tree now lives as a child of /knowledge; these redirects preserve legacy
+    // /transcriber bookmarks and deep links.
     path: '/transcriber',
-    component: () => import('@/views/transcriber/TranscriberLayout.vue'),
-    meta: { requiresAuth: true, title: 'Transcriber' },
-    children: [
-      {
-        path: '',
-        name: 'transcriber-projects',
-        component: () => import('@/views/transcriber/ProjectsView.vue'),
-        meta: { title: 'Projects' },
-      },
-      {
-        path: 'projects/:projectId',
-        name: 'transcriber-project-detail',
-        component: () => import('@/views/transcriber/ProjectDetailView.vue'),
-        meta: { title: 'Project' },
-      },
-      {
-        path: 'projects/:projectId/recordings/:recordingId',
-        name: 'transcriber-transcript',
-        component: () => import('@/views/transcriber/TranscriptView.vue'),
-        meta: { title: 'Transcript' },
-      },
-    ],
+    redirect: '/knowledge/transcriber',
+  },
+  {
+    path: '/transcriber/:pathMatch(.*)*',
+    redirect: (to) => {
+      const rest = Array.isArray(to.params.pathMatch)
+        ? to.params.pathMatch.join('/')
+        : to.params.pathMatch || ''
+      return { path: rest ? `/knowledge/transcriber/${rest}` : '/knowledge/transcriber' }
+    },
   },
   {
     path: '/:pathMatch(.*)*',

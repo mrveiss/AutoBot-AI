@@ -8,14 +8,14 @@
 
     <!-- Header - Issue #901: Professional solid color (no gradients) -->
     <!-- Hide navigation bar on login page -->
-    <header v-if="showAuthChrome" class="bg-autobot-bg-secondary border-b border-autobot-border relative z-30" style="min-height: 56px; height: auto;">
+    <header v-if="showAuthChrome" class="app-header bg-autobot-bg-secondary border-b border-autobot-border relative z-30" style="min-height: 56px; height: auto;">
       <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between" style="min-height: 56px; height: auto;">
           <!-- Logo/Brand with System Status -->
           <div class="shrink-0 flex items-center">
             <button
               @click="toggleSystemStatus"
-              class="flex items-center gap-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+              class="flex items-center gap-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
               :title="getSystemStatusTooltip()"
               :aria-label="getSystemStatusAriaLabel()"
             >
@@ -173,6 +173,20 @@
                       <span>{{ $t(item.labelKey) }}</span>
                     </router-link>
                   </template>
+
+                  <!-- TASK 16: About relocated here from the page footer -->
+                  <hr class="my-1 border-autobot-border" />
+                  <router-link
+                    to="/about"
+                    role="menuitem"
+                    class="flex items-center gap-2 px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary text-autobot-text-primary"
+                    @click="showProfileDropdown = false"
+                  >
+                    <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                      <path fill-rule="evenodd" clip-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" />
+                    </svg>
+                    <span>{{ $t('nav.about') }}</span>
+                  </router-link>
                 </div>
               </Teleport>
             </div>
@@ -208,7 +222,7 @@
         enter-active-class="transition duration-300 ease-out"
         enter-from-class="transform -translate-y-full opacity-0"
         enter-to-class="transform translate-y-0 opacity-100"
-        leave-active-class="transition duration-200 ease-in"
+        leave-active-class="transition duration-200 ease-out"
         leave-from-class="transform translate-y-0 opacity-100"
         leave-to-class="transform -translate-y-full opacity-0"
       >
@@ -325,6 +339,20 @@
                 <span>{{ $t('nav.profileSettings') }}</span>
               </div>
             </button>
+
+            <!-- TASK 16: About relocated here from the page footer -->
+            <div class="border-t border-autobot-border pt-2 mt-1">
+              <router-link
+                to="/about"
+                @click="closeMobileNav"
+                class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 text-autobot-text-primary hover:bg-autobot-bg-tertiary"
+              >
+                <svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                  <path fill-rule="evenodd" clip-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" />
+                </svg>
+                <span>{{ $t('nav.about') }}</span>
+              </router-link>
+            </div>
           </div>
         </div>
       </Transition>
@@ -516,12 +544,8 @@
       </LoadingBoundary>
     </main>
 
-    <!-- Footer: About link (hidden on public routes and routes with hideFooter meta) -->
-    <footer v-if="showAuthChrome && !hideFooter" class="flex-shrink-0 flex justify-center py-1 border-t border-autobot-border/30">
-      <router-link to="/about" class="text-xs text-autobot-text-muted hover:text-autobot-text-secondary transition-colors">
-        {{ $t('nav.about') }}
-      </router-link>
-    </footer>
+    <!-- TASK 16: About link relocated into the profile dropdown (desktop) and
+         the mobile nav panel. The page-bottom footer link was removed. -->
   </div>
 
   <!-- Issue #729: RUM Dashboard moved to slm-admin -->
@@ -542,6 +566,7 @@ import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
 import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
+import { useRuntimeFeaturesStore } from '@/stores/useRuntimeFeaturesStore'
 import { useSystemStatus } from '@/composables/useSystemStatus'
 import { useHostSelection } from '@/composables/useHostSelection';
 import { useNavOverflow } from '@/composables/useNavOverflow'
@@ -597,6 +622,9 @@ export default {
     const userStore = useUserStore();
     const chatStore = useChatStore();
     const knowledgeStore = useKnowledgeStore();
+    // #10502: runtime (deployment) feature flags from /api/frontend-config,
+    // used to gate the Company OS nav item in single_user deployments.
+    const runtimeFeaturesStore = useRuntimeFeaturesStore();
     const router = useRouter();
     const route = useRoute();
 
@@ -715,7 +743,6 @@ export default {
     const hasErrors = computed(() => false); // No errors property in store
     const isPublicRoute = computed(() => !!route.meta.isPublic);
     const showAuthChrome = computed(() => userStore.isAuthenticated && !isPublicRoute.value);
-    const hideFooter = computed(() => !!route.meta.hideFooter);
 
     // Methods
     const toggleMobileNav = () => {
@@ -893,6 +920,10 @@ export default {
     onMounted(async () => {
       logger.debug('Initializing optimized AutoBot application...');
 
+      // #10502: load deployment feature flags (e.g. company_os_enabled) so the
+      // nav rail can hide modules unavailable in this deployment mode.
+      void runtimeFeaturesStore.load();
+
       // Add global click and keyboard listeners for mobile nav
       document.addEventListener('click', closeNavbarOnClickOutside);
       document.addEventListener('keydown', closeNavbarOnEscape);
@@ -978,7 +1009,15 @@ export default {
     // Nav overflow: ref for container, filtered/visible/overflow computed slices
     const navContainerRef = ref<HTMLElement | null>(null)
 
-    const filteredNavItems = computed(() => filterByFeatureFlag(navItems))
+    // #10502: hide the Company OS entry when the deployment has no PostgreSQL
+    // company mode (single_user) — its endpoints return 503 there. The runtime
+    // flag defaults fail-closed until /frontend-config resolves.
+    const filteredNavItems = computed(() =>
+      filterByFeatureFlag(navItems).filter(
+        (item) =>
+          item.to !== '/llc/select-company' || runtimeFeaturesStore.companyOsEnabled,
+      ),
+    )
 
     const filteredProfileMenuItems = computed(() =>
       filterByFeatureFlag(profileMenuItems)
@@ -1024,7 +1063,6 @@ export default {
       hasErrors,
       isPublicRoute,
       showAuthChrome,
-      hideFooter,
       navItems,
       filteredNavItems,
       profileMenuItems,

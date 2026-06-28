@@ -84,7 +84,11 @@ class ModelOptimizer:
         self._redis_client = None
         self._models_cache: Dict[str, ModelInfo] = {}
         self._performance_history: Dict[str, Any] = {}
-        self._ollama_base_url = ssot_config.ollama_url
+        # Bug fix: 0.0.0.0 is a server bind address, not a valid outbound connect
+        # target. If Ollama is configured that way, /api/tags would fail and every
+        # model would report available:false. Normalize to loopback.
+        _ollama_url = ssot_config.ollama_url or ""
+        self._ollama_base_url = _ollama_url.replace("//0.0.0.0:", "//127.0.0.1:").replace("//0.0.0.0/", "//127.0.0.1/")
 
         # Issue #378: Lock for Redis client initialization
         self._redis_init_lock = asyncio.Lock()
@@ -94,9 +98,11 @@ class ModelOptimizer:
         self._cache_ttl = config.get("llm.optimization.cache_ttl", 3600)  # 1 hour
         self._min_samples = config.get("llm.optimization.min_samples", 5)
 
-        # Model classification rules - loaded from config (zero hardcode policy)
-        self._classifier = ModelClassifier()
-        self.model_classifications = self._classifier.load_model_classifications()
+        # Model classification rules - default set used when no config override is present.
+        # ModelClassifier.__init__ requires the classifications mapping; build the canonical
+        # default (keyed by ModelPerformanceLevel) before constructing the classifier.
+        self.model_classifications = self._build_default_model_classifications()
+        self._classifier = ModelClassifier(self.model_classifications)
 
         # Task complexity mapping - Issue #620: Extracted to helper method
         self.complexity_keywords = self._build_default_complexity_keywords()
@@ -105,6 +111,25 @@ class ModelOptimizer:
         self._resource_analyzer = SystemResourceAnalyzer(self.logger)
         self._model_selector = ModelSelector(self._min_samples)
         self._performance_tracker: ModelPerformanceTracker | None = None
+
+    def _build_default_model_classifications(self) -> Dict[ModelPerformanceLevel, List[str]]:
+        """Build default model-name-to-performance-level classification map.
+
+        Returns a mapping from ModelPerformanceLevel to lists of sub-strings that
+        indicate a model belongs to that tier when found in its name.
+        """
+        return {
+            ModelPerformanceLevel.LIGHTWEIGHT: ["phi", "gemma:2b", "tinyllama", "orca-mini", "falcon:7b"],
+            ModelPerformanceLevel.STANDARD: ["llama3:8b", "mistral:7b", "gemma:7b", "solar:10.7b"],
+            ModelPerformanceLevel.ADVANCED: [
+                "llama3:70b",
+                "llama3:405b",
+                "mixtral",
+                "command-r-plus",
+                "qwen:72b",
+            ],
+            ModelPerformanceLevel.SPECIALIZED: ["codestral", "deepseek-coder", "starcoder", "codegemma"],
+        }
 
     def _build_default_complexity_keywords(self) -> Dict[ModelCapabilityTier, List[str]]:
         """Build default task complexity keyword mappings. Issue #620.
@@ -202,9 +227,7 @@ class ModelOptimizer:
                         family = details.get("family", "Unknown")
 
                         # Classify model performance level
-                        performance_level = self._classifier.classify_model_performance(
-                            name, parameter_size, self.model_classifications
-                        )
+                        performance_level = self._classifier.classify_model_performance(name, parameter_size)
 
                         model_info = ModelInfo(
                             name=name,

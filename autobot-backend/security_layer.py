@@ -294,17 +294,18 @@ class SecurityLayer:
 if __name__ == "__main__":
     # Ensure config.yaml exists for testing
     if not os.path.exists("config/config.yaml"):
-        print("config/config.yaml not found. Copying from template for testing.")  # noqa: print  # noqa: print
+        logger.info("config/config.yaml not found. Copying from template for testing.")
         os.makedirs("config", exist_ok=True)
         with open("config/config.yaml.template", "r", encoding="utf-8") as f_template:
             with open("config/config.yaml", "w", encoding="utf-8") as f_config:
                 f_config.write(f_template.read())
 
     # Test with authentication disabled (default)
-    print("\n--- Testing with Authentication DISABLED ---")  # noqa: print
+    logger.info("\n--- Testing with Authentication DISABLED ---")
     security = SecurityLayer()
-    print(  # noqa: print
-        "Can 'user' execute shell command? " f"{security.check_permission('user', 'allow_shell_execute')}"
+    logger.info(
+        "Can 'user' execute shell command? %s",
+        security.check_permission("user", "allow_shell_execute"),
     )
     security.audit_log("test_action", "test_user", "success", {"info": "demo disabled auth"})
 
@@ -323,24 +324,25 @@ if __name__ == "__main__":
     with open("config/config.yaml", "w", encoding="utf-8") as f:
         yaml.safe_dump(cfg, f, indent=2)
 
-    print("\n--- Testing with Authentication ENABLED ---")  # noqa: print
+    logger.info("\n--- Testing with Authentication ENABLED ---")
     security_enabled = SecurityLayer()
 
     # Test authentication
-    print("Authenticate 'testuser': " f"{security_enabled.authenticate_user('testuser', 'password123')}")  # noqa: print
-    print("Authenticate 'baduser': " f"{security_enabled.authenticate_user('baduser', 'wrongpass')}")  # noqa: print
+    logger.info("Authenticate 'testuser': %s", security_enabled.authenticate_user("testuser", "password123"))
+    logger.info("Authenticate 'baduser': %s", security_enabled.authenticate_user("baduser", "wrongpass"))
 
     # Test permissions
-    print(  # noqa: print
-        "Can 'admin' execute shell command? " f"{security_enabled.check_permission('admin', 'allow_shell_execute')}"
+    logger.info(
+        "Can 'admin' execute shell command? %s",
+        security_enabled.check_permission("admin", "allow_shell_execute"),
     )
-    print(  # noqa: print
-        "Can 'testuser_role' execute shell command? "
-        f"{security_enabled.check_permission('testuser_role', 'allow_shell_execute')}"
+    logger.info(
+        "Can 'testuser_role' execute shell command? %s",
+        security_enabled.check_permission("testuser_role", "allow_shell_execute"),
     )
-    print(  # noqa: print
-        "Can 'testuser_role' submit goal? "
-        f"{security_enabled.check_permission('testuser_role', 'allow_goal_submission')}"
+    logger.info(
+        "Can 'testuser_role' submit goal? %s",
+        security_enabled.check_permission("testuser_role", "allow_goal_submission"),
     )
 
     # Test audit logging

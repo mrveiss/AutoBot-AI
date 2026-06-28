@@ -15,42 +15,43 @@ from typing import Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.db_session import session_scope
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
 from models.ml_model import MLModel
+from user_management.database import db_session_context
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["ml-models"])
 
-# Database setup — deferred to avoid crash when config.database is unavailable
-_engine = None
-_SessionLocal = None
-_db_init_lock = threading.Lock()
+# _sync_session_lock guards the one-time creation of the sync session factory
+# used only by _train_background, which runs in a thread (not the event loop).
+# All async endpoints use db_session_context() directly (#10570).
+_sync_session_factory = None
+_sync_session_lock = threading.Lock()
 
 
-def _get_session():
-    """Return canonical session context manager, creating the engine on first call (GH#7441).
+def _get_sync_session():
+    """Return a sync session context manager for use in background threads (#10570).
 
-    Deferred from module level to avoid DB connection at import time (Issue #940).
-    Thread-safe: uses _db_init_lock to prevent double-initialization (#2846).
+    Background training runs in a thread via BackgroundTasks.add_task, so
+    awaiting an async session is not possible there.  We derive a sync
+    sessionmaker from the canonical async engine's .sync_engine so that
+    both sync and async paths share the same underlying connection pool
+    and configuration — no second engine is created.
     """
-    global _engine, _SessionLocal
-    if _SessionLocal is None:
-        with _db_init_lock:
-            if _SessionLocal is None:
-                db_url = (
-                    f"postgresql://{config.database.user}:{config.database.password}"
-                    f"@{config.database.host}:{config.database.port}/{config.database.name}"
-                )
-                _engine = create_engine(db_url)
-                _SessionLocal = sessionmaker(bind=_engine)
-    return session_scope(_SessionLocal)
+    global _sync_session_factory
+    if _sync_session_factory is None:
+        with _sync_session_lock:
+            if _sync_session_factory is None:
+                from sqlalchemy.orm import sessionmaker
+
+                from user_management.database import get_async_engine
+
+                _sync_session_factory = sessionmaker(bind=get_async_engine().sync_engine)
+    return session_scope(_sync_session_factory)
 
 
 def _get_trainer_class():
@@ -139,7 +140,7 @@ def _register_trained_model(trainer, request, final_metrics, duration):
     Looks up the most recently modified checkpoint file in trainer.model_dir and
     writes all training metrics into the record.
     """
-    with _get_session() as db:
+    with _get_sync_session() as db:
         model_files = list(Path(trainer.model_dir).glob("completion_model_v*.pt"))
         if model_files:
             latest_checkpoint = max(model_files, key=lambda p: p.stat().st_mtime)
@@ -215,15 +216,19 @@ async def list_models(
     - **language**: Filter by training language
     - **is_active**: Filter by active status
     """
-    with _get_session() as db:
-        query = db.query(MLModel)
+    from sqlalchemy import select
+
+    async with db_session_context() as db:
+        stmt = select(MLModel)
 
         if language:
-            query = query.filter(MLModel.language == language)
+            stmt = stmt.where(MLModel.language == language)
         if is_active is not None:
-            query = query.filter(MLModel.is_active == is_active)
+            stmt = stmt.where(MLModel.is_active == is_active)
 
-        models = query.order_by(MLModel.created_at.desc()).all()
+        stmt = stmt.order_by(MLModel.created_at.desc())
+        result = await db.execute(stmt)
+        models = result.scalars().all()
 
         return ModelListResponse(
             models=[
@@ -253,8 +258,11 @@ async def list_models(
 @router.get("/models/{version}", response_model=Dict)
 async def get_model(version: str):
     """Get detailed model metadata by version."""
-    with _get_session() as db:
-        model = db.query(MLModel).filter(MLModel.version == version).first()
+    from sqlalchemy import select
+
+    async with db_session_context() as db:
+        result = await db.execute(select(MLModel).where(MLModel.version == version))
+        model = result.scalars().first()
 
         if not model:
             raise HTTPException(status_code=404, detail="Model not found")
@@ -269,20 +277,22 @@ async def activate_model(version: str):
 
     Deactivates any currently active model.
     """
-    with _get_session() as db:
-        # Find model
-        model = db.query(MLModel).filter(MLModel.version == version).first()
+    from sqlalchemy import select, update
+
+    async with db_session_context() as db:
+        result = await db.execute(select(MLModel).where(MLModel.version == version))
+        model = result.scalars().first()
 
         if not model:
             raise HTTPException(status_code=404, detail="Model not found")
 
         # Deactivate all other models
-        db.query(MLModel).update({"is_active": False, "deployed_at": None})
+        await db.execute(update(MLModel).values(is_active=False, deployed_at=None))
 
         # Activate this model
         model.is_active = True
         model.deployed_at = now_utc()
-        db.commit()
+        # commit handled by db_session_context()
 
     # Load model into memory then atomically publish both globals (#2846).
     # Loading outside the session avoids holding the DB connection during a
@@ -317,8 +327,11 @@ async def get_evaluation_metrics():
     if active_model_snapshot is None:
         raise HTTPException(status_code=400, detail="No active model")
 
-    with _get_session() as db:
-        model = db.query(MLModel).filter(MLModel.version == active_version_snapshot).first()
+    from sqlalchemy import select
+
+    async with db_session_context() as db:
+        result = await db.execute(select(MLModel).where(MLModel.version == active_version_snapshot))
+        model = result.scalars().first()
 
         if not model:
             raise HTTPException(status_code=404, detail="Active model not found in DB")

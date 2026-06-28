@@ -161,7 +161,11 @@
           to="/automation/screen-analysis"
           active-class="active"
           class="category-item"
+          :class="{ 'vision-disabled': isVisionOffline }"
+          :aria-disabled="isVisionOffline ? 'true' : undefined"
+          :tabindex="isVisionOffline ? -1 : undefined"
           :aria-label="$t('workflow.views.screenAnalysisAriaLabel')"
+          @click="onVisionNavClick"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -174,7 +178,11 @@
           to="/automation/video-processing"
           active-class="active"
           class="category-item"
+          :class="{ 'vision-disabled': isVisionOffline }"
+          :aria-disabled="isVisionOffline ? 'true' : undefined"
+          :tabindex="isVisionOffline ? -1 : undefined"
           :aria-label="$t('workflow.views.videoProcessingAriaLabel')"
+          @click="onVisionNavClick"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -187,7 +195,11 @@
           to="/automation/media-gallery"
           active-class="active"
           class="category-item"
+          :class="{ 'vision-disabled': isVisionOffline }"
+          :aria-disabled="isVisionOffline ? 'true' : undefined"
+          :tabindex="isVisionOffline ? -1 : undefined"
           :aria-label="$t('workflow.views.mediaGalleryAriaLabel')"
+          @click="onVisionNavClick"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -251,6 +263,22 @@
 
     <!-- Main Content -->
     <main class="workflow-content">
+      <!-- TASK 13: dismissible banner when Vision services are offline -->
+      <div
+        v-if="isVisionOffline && !visionBannerDismissed"
+        class="vision-offline-banner"
+        role="alert"
+      >
+        <span>{{ $t('workflow.views.visionOfflineBanner') }}</span>
+        <button
+          class="banner-dismiss"
+          :aria-label="$t('common.dismiss')"
+          @click="visionBannerDismissed = true"
+        >
+          <Icon name="times" />
+        </button>
+      </div>
+
       <!-- Child route content (#2368) -->
       <router-view v-if="isChildRoute" />
 
@@ -789,6 +817,17 @@ const galleryItems = ref([]);
 // Vision service health (#2373)
 const visionHealthStatus = ref<'healthy' | 'degraded' | 'offline'>('offline');
 
+// TASK 13: surface offline Vision services with a banner + disabled sidebar items
+const isVisionOffline = computed(() => visionHealthStatus.value === 'offline');
+const visionBannerDismissed = ref(false);
+// Re-show the banner if Vision goes offline again after a previous dismiss
+watch(visionHealthStatus, (status) => {
+  if (status !== 'offline') visionBannerDismissed.value = false;
+});
+function onVisionNavClick(event: MouseEvent): void {
+  if (isVisionOffline.value) event.preventDefault();
+}
+
 async function checkVisionHealth(): Promise<void> {
   try {
     const res = await visionMultimodalApiClient.getVisionHealth();
@@ -1305,6 +1344,48 @@ watch(hasActiveWorkflows, (hasActive) => {
   background: var(--color-info-bg);
   color: var(--color-info);
   border-left-color: var(--color-info);
+}
+
+/* TASK 13: disabled VISION items while services are offline */
+.category-item.vision-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.category-item.vision-disabled:hover {
+  background: transparent;
+  color: inherit;
+}
+
+/* TASK 13: offline Vision banner */
+.vision-offline-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+  margin: var(--spacing-3);
+  padding: var(--spacing-3) var(--spacing-4);
+  background: var(--color-warning-bg, rgba(234, 179, 8, 0.12));
+  border: 1px solid var(--color-warning, #eab308);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.vision-offline-banner .banner-dismiss {
+  display: inline-flex;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: var(--spacing-1);
+  border-radius: var(--radius-sm, 4px);
+  flex-shrink: 0;
+}
+
+.vision-offline-banner .banner-dismiss:hover {
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.1);
 }
 
 .item-icon {

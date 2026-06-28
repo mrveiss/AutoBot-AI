@@ -105,6 +105,24 @@ export interface Agent {
   config: Record<string, unknown>
 }
 
+// GH#8996: admin cross-user view of all active shared chat links
+export interface SharedLinkAdminItem {
+  id: string
+  token: string
+  session_id: string
+  owner: string
+  has_password: boolean
+  expires_at: string | null
+  created_at: string
+}
+
+// Envelope from create_success_response: { success, data: { links, count }, message, timestamp }
+export interface SharedLinksAdminResponse {
+  success: boolean
+  data: { links: SharedLinkAdminItem[]; count: number }
+  message: string
+}
+
 export interface RUMMetrics {
   page_views: number
   unique_users: number
@@ -118,6 +136,50 @@ export interface VoiceSpeakResponse {
   text?: string
   status?: string
   error?: string
+}
+
+// GH#8998 / #10488: LLM fallback monitoring (moved from main frontend to SLM admin)
+export interface LLMFallbackChain {
+  primary_model: string
+  fallback_chain: string
+  provider: string
+}
+
+export interface LLMActiveFallback {
+  conversation_id: string
+  primary_model: string
+  fallback_model: string
+  primary_provider: string
+  fallback_provider: string
+  timestamp: number
+}
+
+export interface LLMFallbackStatus {
+  configured_chains: LLMFallbackChain[]
+  active_fallbacks: LLMActiveFallback[]
+}
+
+// Budget audit (#10488 Workstream A): read-only operator oversight of
+// agent/project/task/tenant budget policies + hard-stop auto-pause config.
+// Mirrors the backend BudgetPolicyResponse model (api/budget_policies.py).
+export interface BudgetPolicy {
+  id: string
+  scope: string
+  scope_id: string
+  period: string
+  threshold_usd: number
+  warning_pct: number
+  action: string
+  enabled: boolean
+  name: string
+  description: string
+  created_at: string
+  updated_at: string
+}
+
+export interface BudgetPoliciesList {
+  policies: BudgetPolicy[]
+  count: number
 }
 
 export function useAutobotApi() {
@@ -620,6 +682,37 @@ export function useAutobotApi() {
     return response.data.models
   }
 
+  /**
+   * Get LLM fallback monitoring status (GH#8998 / #10488).
+   * Backend returns a flat payload (no create_success_response envelope):
+   * { configured_chains: [...], active_fallbacks: [...] }.
+   * The /autobot-api proxy strips its prefix -> backend /api/llm-providers/fallback-status.
+   */
+  async function getLLMFallbackStatus(): Promise<LLMFallbackStatus> {
+    const response = await client.get<LLMFallbackStatus>('/llm-providers/fallback-status')
+    return {
+      configured_chains: response.data.configured_chains || [],
+      active_fallbacks: response.data.active_fallbacks || [],
+    }
+  }
+
+  /**
+   * Budget audit (#10488 Workstream A): read-only list of all budget policies
+   * across the system for operator oversight. The user app keeps create/edit/
+   * delete; the SLM console is audit-only and issues no mutation calls.
+   *
+   * Backend returns a flat payload (response_model=BudgetPoliciesListResponse,
+   * NOT the create_success_response envelope): { policies: [...], count: N }.
+   * The /autobot-api proxy strips its prefix -> backend /api/budget-policies.
+   */
+  async function getBudgetPolicies(): Promise<BudgetPoliciesList> {
+    const response = await client.get<BudgetPoliciesList>('/budget-policies')
+    return {
+      policies: response.data.policies || [],
+      count: response.data.count ?? 0,
+    }
+  }
+
   // =============================================================================
   // Logs API (for viewing, not forwarding)
   // =============================================================================
@@ -665,7 +758,7 @@ export function useAutobotApi() {
     uptime_seconds?: number
     services?: { name: string; status: string }[]
   }> {
-    const response = await client.get('/health/detailed')
+    const response = await client.get('/system/health/detailed')
     const data = response.data
     // Issue #997: Backend returns metrics nested in components as "12.5%" strings.
     // Transform to flat numeric fields expected by AdminMonitoringView.
@@ -716,7 +809,34 @@ export function useAutobotApi() {
       trend?: 'up' | 'down' | 'stable'
     }>
   }> {
-    const response = await client.get('/metrics/summary')
+    // #10379: no backend /metrics/summary exists; derive CPU/Memory/Disk metric
+    // cards from the detailed system-health endpoint (same data, correct path).
+    const response = await client.get('/system/health/detailed')
+    const components: Record<string, string> = response.data?.components || {}
+    const pct = (s?: string): number => {
+      const n = parseFloat(s ?? '')
+      return isNaN(n) ? 0 : n
+    }
+    const card = (name: string, v: number) => ({
+      name,
+      value: `${v}%`,
+      status: (v > 90 ? 'critical' : v > 75 ? 'warning' : 'good') as 'good' | 'warning' | 'critical',
+    })
+    return {
+      metrics: [
+        card('CPU', pct(components.cpu_usage)),
+        card('Memory', pct(components.memory_usage)),
+        card('Disk', pct(components.disk_usage)),
+      ],
+    }
+  }
+
+  // =============================================================================
+  // Shared Chat Links (GH#8996 - admin cross-user view)
+  // =============================================================================
+
+  async function getSharedLinksAdmin(): Promise<SharedLinksAdminResponse> {
+    const response = await client.get<SharedLinksAdminResponse>('/chat/shared-links/admin')
     return response.data
   }
 
@@ -834,7 +954,9 @@ export function useAutobotApi() {
   }
 
   async function getBatchJobHealth(): Promise<Record<string, unknown>> {
-    const response = await client.get('/batch-jobs/health')
+    // #10429: backend exposes /batch-jobs/status (returns status: "healthy"),
+    // never /batch-jobs/health (404). Repointed to the real route.
+    const response = await client.get('/batch-jobs/status')
     return response.data
   }
 
@@ -967,6 +1089,8 @@ export function useAutobotApi() {
     executeAgentGoal,
     // RUM
     getRUMMetrics,
+    // Shared Chat Links (GH#8996)
+    getSharedLinksAdmin,
     // Voice (Issue #835)
     getVoiceConfig,
     updateVoiceConfig,
@@ -976,6 +1100,9 @@ export function useAutobotApi() {
     getLLMConfig,
     updateLLMConfig,
     getLLMModels,
+    getLLMFallbackStatus,
+    // Budget audit (#10488)
+    getBudgetPolicies,
     // Logs
     getLogs,
     // System

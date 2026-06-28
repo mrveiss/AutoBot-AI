@@ -819,14 +819,15 @@ if __name__ == "__main__":
             sync = IncrementalKnowledgeSync()
             await sync.initialize()
             status = sync.get_sync_status()
-            print(json.dumps(status, indent=2))  # noqa: print
+            print(json.dumps(status, indent=2))  # noqa: print  # canonical: ignore py-print-smoke
         elif args.daemon:
             await start_background_sync_daemon(check_interval_minutes=args.interval)
         else:
             metrics = await run_incremental_sync()
-            print(  # noqa: print
-                f"Sync completed - processed {metrics.total_chunks_processed} chunks "
-                f"in {metrics.total_processing_time:.3f}s"
+            logger.info(
+                "Sync completed - processed %d chunks in %.3fs",
+                metrics.total_chunks_processed,
+                metrics.total_processing_time,
             )
 
     run_or_schedule(main())

@@ -127,11 +127,14 @@ async def _run_probe(name: str, fn: ProbeFn, request: Request | None) -> Compone
             latency_ms=round((time.perf_counter() - started) * 1000, 2),
         )
     except Exception as exc:
-        logger.warning("Health probe %r raised %s", name, type(exc).__name__)
+        logger.warning("Health probe %r raised %s: %s", name, type(exc).__name__, exc)
+        # Issue #10460: surface the message, not just the type, so a "down"
+        # status is actionable (this endpoint is admin-only — no info leak).
+        reason = str(exc).strip() or "no detail"
         return ComponentHealth(
             name=name,
             status="down",
-            detail=f"probe error: {type(exc).__name__}",
+            detail=f"probe error: {type(exc).__name__}: {reason[:160]}",
             latency_ms=round((time.perf_counter() - started) * 1000, 2),
         )
     if result.latency_ms is None:
@@ -232,10 +235,13 @@ def probe_singleton(
                 data=data_callback(instance) if data_callback else None,
             )
         except Exception as exc:
+            # Issue #10460: include the message so the cause is visible
+            # (e.g. which import/arg failed), not just the exception type.
+            reason = str(exc).strip() or "no detail"
             return ComponentHealth(
                 name=probe_name,
                 status="down",
-                detail=f"probe error: {type(exc).__name__}",
+                detail=f"probe error: {type(exc).__name__}: {reason[:160]}",
                 data=data_callback(None) if data_callback else None,
             )
 
@@ -332,10 +338,13 @@ def probe_app_state(
                 data=data_callback(value) if data_callback else None,
             )
         except Exception as exc:
+            # Issue #10460: include the message so the cause is visible
+            # (e.g. which import/arg failed), not just the exception type.
+            reason = str(exc).strip() or "no detail"
             return ComponentHealth(
                 name=probe_name,
                 status="down",
-                detail=f"probe error: {type(exc).__name__}",
+                detail=f"probe error: {type(exc).__name__}: {reason[:160]}",
                 data=data_callback(None) if data_callback else None,
             )
 

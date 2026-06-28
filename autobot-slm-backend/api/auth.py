@@ -11,13 +11,18 @@ Consolidated from legacy auth.py and slm_auth.py in Issue #1922.
 """
 
 import logging
+import time
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api.security import create_audit_log
+from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_no_verify_exp
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.proxy_utils import get_client_ip
 from config import settings
@@ -30,11 +35,22 @@ from models.schemas import (
 )
 from services.auth import auth_service, get_current_user, get_slm_db, require_permission
 from services.database import get_db
+from services.token_denylist import revoke_jti
+from user_management.models.sso import SSOProviderType, UserSSOLink
 from user_management.models.user import User
 from user_management.services import TenantContext, UserService
 
+_bearer = HTTPBearer()
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+async def _get_raw_token(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
+) -> str:
+    """Extract the raw bearer token string (for logout jti revocation)."""
+    return credentials.credentials
 
 
 def _create_mfa_challenge(user: User) -> MfaChallengeResponse:
@@ -163,6 +179,116 @@ async def get_current_user_info(
         "is_admin": current_user.get("admin", False),
         "user_type": "slm_admin",
     }
+
+
+def _build_end_session_url(link: "UserSSOLink") -> str | None:
+    """Return the IdP end-session URL for *link*, or None if not configured."""
+    endpoint = link.provider.config.get("end_session_endpoint") if link and link.provider else None
+    if not endpoint:
+        return None
+    params: dict[str, str] = {}
+    post_logout = link.provider.config.get("post_logout_redirect_uri")
+    if post_logout:
+        params["post_logout_redirect_uri"] = post_logout
+    id_token = (link.sso_metadata or {}).get("id_token")
+    if id_token:
+        params["id_token_hint"] = id_token
+    if not params:
+        return endpoint
+    separator = "&" if "?" in endpoint else "?"
+    return f"{endpoint}{separator}{urlencode(params)}"
+
+
+async def _get_user_sso_link(db: AsyncSession, username: str) -> "UserSSOLink | None":
+    """Return the first active SSO link for *username*, or None."""
+    result = await db.execute(
+        select(UserSSOLink).join(User, UserSSOLink.user_id == User.id).where(User.username == username).limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _build_sso_logout_url(link: "UserSSOLink | None", db: AsyncSession, username: str) -> str | None:
+    """Return IdP logout URL for the user's SSO link, branching on provider type.
+
+    - SAML providers: call initiate_saml_logout() to build a signed LogoutRequest redirect.
+    - OIDC providers: return the end_session_endpoint URL (OIDC RP-initiated logout).
+    - No link or unknown type: return None.
+    """
+    if not link:
+        return None
+    provider_type = getattr(link.provider, "provider_type", None) if link.provider else None
+    if provider_type == SSOProviderType.SAML.value:
+        return await _initiate_saml_slo(db, username)
+    return _build_end_session_url(link)
+
+
+async def _initiate_saml_slo(db: AsyncSession, username: str) -> str | None:
+    """Look up the user's SAML NameID and build an SP-initiated SLO redirect URL."""
+    from user_management.services.sso_service import SSOService  # noqa: PLC0415
+
+    context = TenantContext(is_platform_admin=False)
+    sso_service = SSOService(db, context)
+    try:
+        name_id, provider = await sso_service.get_saml_name_id_for_user(username)
+        if name_id is None or provider is None:
+            return None
+        return sso_service.initiate_saml_logout(provider, name_id)
+    except Exception:
+        logger.warning("SAML SLO initiation failed for user=%s", username, exc_info=True)
+        return None
+
+
+@router.post("/logout")
+async def logout(
+    http_request: Request,
+    current_user: Annotated[dict, Depends(get_current_user)],
+    token: Annotated[str, Depends(_get_raw_token)],
+    slm_db: Annotated[AsyncSession, Depends(get_slm_db)],
+    audit_db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Revoke the presented token and return IdP logout URL if applicable.
+
+    - Denylists the token's ``jti`` in Redis (HS256 tokens only).
+    - Queries the user's SSO link for an ``end_session_endpoint``.
+    - Returns ``{"logout_url": "<url>"}`` (url may be null when not SSO-linked).
+    """
+    client_ip = get_client_ip(http_request, trusted_proxies=settings.trusted_proxies)
+    username = current_user.get("sub", "unknown")
+
+    # Revoke the jti if this is an HS256 token with a jti claim
+    if _peek_alg(token) == "HS256":
+        try:
+            claims = decode_jwt_no_verify_exp(token, secret=settings.secret_key)
+            jti = claims.get("jti")
+            exp = claims.get("exp")
+            if jti and exp:
+                ttl = max(1, int(exp) - int(time.time()))
+                await revoke_jti(jti, ttl_seconds=ttl)
+        except Exception:
+            logger.warning("logout: could not decode token for jti revocation (user=%s)", username)
+
+    # Audit the logout event
+    await create_audit_log(
+        audit_db,
+        category="authentication",
+        action="logout",
+        username=username,
+        ip_address=client_ip,
+        resource_type="session",
+        description=f"User '{username}' logged out",
+        request_method="POST",
+        request_path="/api/auth/logout",
+        response_status=200,
+        success=True,
+    )
+    await audit_db.commit()
+
+    logger.info("User logged out: %s", username)
+
+    # SSO RP-initiated logout: branch on provider type
+    link = await _get_user_sso_link(slm_db, username)
+    logout_url = await _build_sso_logout_url(link, slm_db, username)
+    return {"logout_url": logout_url}
 
 
 @router.post("/refresh", response_model=TokenResponse)

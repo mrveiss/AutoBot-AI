@@ -61,13 +61,25 @@ and (c) reconcile with the unified-secrets umbrella #10088.
   locks out SSO is worse than a stale secret). Admin-initiated rotation always available.
 - **Audit**: every rotation (who, which provider/secret, KEK-vs-value, when) is logged.
 
-### 4.1 Cross-backend boundary (design risk)
+### 4.1 Cross-backend boundary — **RESOLVED: Option A (X-Internal-API-Key) (#10492)**
+
 The unified store and `UnifiedSecretsService` live in **autobot-backend**
-(`services/unified_secrets_service.py`, `autobot_shared/secrets_envelope.py`), while SSO lives in
-**autobot-slm-backend** (the control plane). Phase C therefore crosses a backend boundary. The SLM must
-not embed a second copy of the store; it consumes the unified store as a client (service API or the
-shared envelope primitives in `autobot_shared`). The exact integration surface is a **Phase C
-prerequisite** to settle with the #10088 owner before C1.
+(`services/unified_secrets_service.py`, `autobot_shared/secrets_envelope.py`), while SSO (and LLM
+config) live in **autobot-slm-backend** (the control plane). Phase C crosses a backend boundary via
+HTTP; the SLM is a client of the unified-secrets API.
+
+**Decision: Option A — shared `X-Internal-API-Key` → synthetic `service_id = "slm-backend"`.**
+
+- `autobot-backend/api/unified_secrets.py` `service_principal` dependency now accepts the existing
+  `X-Internal-API-Key` header (validated against `ssot_config.misc.internal_api_key`) in addition to
+  the pre-existing HMAC `X-Service-*` path. Either path yields a `service_id` string; the
+  `_require_system_vault` double-fence continues to enforce System-vault-only scoping.
+- `autobot-slm-backend/user_management/services/unified_vault_client.py` `_auth_headers()` now prefers
+  `X-Internal-API-Key` when `AUTOBOT_INTERNAL_API_KEY` is set. `is_configured()` gates on either
+  credential. No `SLM_SERVICE_KEY` provisioning is required on standard deployments.
+- **Trade-off**: coarser identity than per-service HMAC — all callers with the shared key appear as
+  `"slm-backend"`. Acceptable for v1: the key is already a privileged secret; System-vault scoping
+  provides the authorization fence. Per-service HMAC keys remain available as an upgrade path.
 
 ## 5. Phased task tree (sub-umbrella under #9930)
 

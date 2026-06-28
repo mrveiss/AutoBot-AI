@@ -138,8 +138,8 @@ const initTerminal = () => {
 
   nextTick(() => { fitAddon?.fit() })
 
-  terminal.onData((data) => { sendToServer({ type: 'input', text: data }) })
-  terminal.onResize(({ cols, rows }) => { sendToServer({ type: 'resize', cols, rows }) })
+  terminal.onData((data: string) => { sendToServer({ type: 'input', text: data }) })
+  terminal.onResize(({ cols, rows }: { cols: number; rows: number }) => { sendToServer({ type: 'resize', cols, rows }) })
 
   logger.info('Terminal initialized')
 }

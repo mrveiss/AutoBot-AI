@@ -54,15 +54,21 @@ class TestVoice503Guard:
         assert "message" in body
         assert "not available" in body["message"].lower()
 
-    def test_speak_returns_503_when_interface_absent(self):
-        """POST /api/voice/speak must return 503 (not 500/AttributeError)."""
+    def test_speak_synthesizes_via_worker_when_interface_absent(self):
+        """POST /api/voice/speak now synthesizes via the TTS worker (200 audio/wav)
+        when the optional local pyttsx3 voice_interface is absent — the canonical
+        TTS is the pocket-tts worker, so a 503 here would be misleading (#10561)."""
+        import unittest.mock as mock
+
         app = _make_app(with_voice_interface=False)
         client = TestClient(app, raise_server_exceptions=False)
-        response = client.post("/api/voice/speak", data={"text": "hello", "user_role": "user"})
-        assert response.status_code == 503
-        body = response.json()
-        assert "message" in body
-        assert "not available" in body["message"].lower()
+        fake = mock.MagicMock()
+        fake.synthesize = mock.AsyncMock(return_value=b"RIFFfakewavdata")
+        with mock.patch("api.voice.get_tts_client", return_value=fake):
+            response = client.post("/api/voice/speak", data={"text": "hello", "user_role": "user"})
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "audio/wav"
+        assert response.content == b"RIFFfakewavdata"
 
     def test_listen_does_not_raise_attribute_error_when_interface_absent(self):
         """The old behaviour raised AttributeError (500). Confirm it no longer does."""
@@ -76,8 +82,14 @@ class TestVoice503Guard:
         assert response.status_code == 503
 
     def test_speak_does_not_raise_attribute_error_when_interface_absent(self):
-        """Confirm AttributeError is not raised for /speak either."""
+        """Confirm AttributeError is not raised for /speak when interface absent
+        (it falls through to worker synthesis, not the AttributeError site)."""
+        import unittest.mock as mock
+
         app = _make_app(with_voice_interface=False)
         client = TestClient(app, raise_server_exceptions=True)
-        response = client.post("/api/voice/speak", data={"text": "hello", "user_role": "user"})
-        assert response.status_code == 503
+        fake = mock.MagicMock()
+        fake.synthesize = mock.AsyncMock(return_value=b"RIFFfakewavdata")
+        with mock.patch("api.voice.get_tts_client", return_value=fake):
+            response = client.post("/api/voice/speak", data={"text": "hello", "user_role": "user"})
+        assert response.status_code == 200

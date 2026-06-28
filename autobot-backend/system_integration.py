@@ -446,28 +446,28 @@ class SystemIntegration:
 if __name__ == "__main__":
     si = SystemIntegration()
 
-    print("--- System Info ---")  # noqa: print
-    print(si.query_system_info())  # noqa: print
+    logger.info("--- System Info ---")
+    logger.info(si.query_system_info())
 
-    print("\n--- List Services ---")  # noqa: print
+    logger.info("\n--- List Services ---")
     # This might require elevated privileges on Windows or sudo on Linux for full list
-    print(si.list_services())  # noqa: print
+    logger.info(si.list_services())
 
-    print("\n--- Manage Service (Example: SSH on Linux, Spooler on Windows) ---")  # noqa: print  # noqa: print
-    # On Linux, try: print(si.manage_service("ssh", "restart"))  # noqa: print
-    # On Windows, try: print(si.manage_service("Spooler", "stop"))  # noqa: print
-    # print(si.manage_service("nonexistent_service", "start"))  # noqa: print
+    logger.info("\n--- Manage Service (Example: SSH on Linux, Spooler on Windows) ---")
+    # On Linux, try: si.manage_service("ssh", "restart")
+    # On Windows, try: si.manage_service("Spooler", "stop")
+    # si.manage_service("nonexistent_service", "start")
 
-    print("\n--- Execute System Command ---")  # noqa: print
-    print(si.execute_system_command("echo Hello from system integration!"))  # noqa: print  # noqa: print
-    print(si.execute_system_command("ls -l /tmp"))  # Linux example  # noqa: print
-    print(si.execute_system_command("dir C:\\"))  # Windows example  # noqa: print
+    logger.info("\n--- Execute System Command ---")
+    logger.info(si.execute_system_command("echo Hello from system integration!"))
+    logger.info(si.execute_system_command("ls -l /tmp"))  # Linux example
+    logger.info(si.execute_system_command("dir C:\\"))  # Windows example
 
-    print("\n--- Get Process Info ---")  # noqa: print
-    print(si.get_process_info(process_name="python"))  # noqa: print  # Find Python processes  # noqa: print
-    # print(si.get_process_info(pid=1234)) # Find a specific PID  # noqa: print
+    logger.info("\n--- Get Process Info ---")
+    logger.info(si.get_process_info(process_name="python"))  # Find Python processes
+    # si.get_process_info(pid=1234)  # Find a specific PID
 
-    print("\n--- Terminate Process (DANGEROUS - use with caution!) ---")  # noqa: print
+    logger.info("\n--- Terminate Process (DANGEROUS - use with caution!) ---")
     # Find a PID from get_process_info and try to terminate it.
     # For example, if you have a simple script running:
     # import time

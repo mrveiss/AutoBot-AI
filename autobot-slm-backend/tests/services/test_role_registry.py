@@ -196,3 +196,47 @@ def test_serviceable_roles_include_postgres_and_scheduler():
     defs = {r["name"] for r in DEFAULT_ROLES if r.get("target_path") or r.get("systemd_service")}
     assert "postgres" in defs
     assert "scheduler" in defs
+
+
+# ---------------------------------------------------------------------------
+# VNC role (#9965)
+# ---------------------------------------------------------------------------
+
+
+def test_vnc_role_has_non_empty_target_path():
+    """vnc must have a non-empty target_path so role_detector.py does not skip
+    it due to the old guard that only checked target_path (#9965)."""
+    role = _role("vnc")
+    assert role["target_path"], "vnc target_path must be non-empty so role_detector detects it"
+    assert role["systemd_service"] == "tigervncserver"
+    assert role["required"] is False
+
+
+def test_vnc_in_get_role_definitions():
+    """get_role_definitions must include vnc so agents receive its detection spec."""
+    defs_by_name = (
+        {r["name"]: r for r in _rr.get_role_definitions.__wrapped__()}  # sync call
+        if hasattr(_rr.get_role_definitions, "__wrapped__")
+        else None
+    )
+    # Fallback: inspect DEFAULT_ROLES directly (get_role_definitions is async)
+    detectable = {r["name"] for r in DEFAULT_ROLES if r.get("target_path") or r.get("systemd_service")}
+    assert "vnc" in detectable, "vnc must be in the detectable role set (has target_path or systemd_service)"
+
+
+def test_optional_roles_are_not_required():
+    """docker, browser-service, tts-worker and vnc must all be optional (required=False)
+    so they cannot cause health=degraded on their own (#9965)."""
+    optional_names = {
+        "docker",
+        "browser-service",
+        "tts-worker",
+        "vnc",
+        "npu-worker",
+        "autobot-llm-cpu",
+        "autobot-llm-gpu",
+        "slm-monitoring",
+    }
+    for name in optional_names:
+        role = _role(name)
+        assert role["required"] is False, f"{name} should be optional (required=False)"

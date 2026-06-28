@@ -61,8 +61,12 @@ export interface ActivityEvent {
 }
 
 // ── Sample-data helpers ───────────────────────────────────────────────────────
+// Exported for Storybook/tests/previews. NOTE (BUG1): these are no longer used
+// as a silent runtime fallback — when the API is unavailable the composable now
+// surfaces an error state so the UI shows an empty/error message instead of
+// presenting fabricated data as if it were real.
 
-function getSampleAgents(): Agent[] {
+export function getSampleAgents(): Agent[] {
   const now = Date.now()
   return [
     {
@@ -153,7 +157,7 @@ function getSampleAgents(): Agent[] {
   ]
 }
 
-function getSampleEvents(): ActivityEvent[] {
+export function getSampleEvents(): ActivityEvent[] {
   const now = Date.now()
   return [
     { id: 'e1', agentId: 'orch-1', agentName: 'Main Orchestrator', type: 'task_started', message: 'Started workflow #457', timestamp: now - 5000 },
@@ -169,19 +173,28 @@ function getSampleEvents(): ActivityEvent[] {
 export function useAgentActivityData() {
   const agents = ref<Agent[]>([])
   const recentEvents = ref<ActivityEvent[]>([])
+  // BUG1: surface load failures to the UI instead of silently showing samples.
+  const error = ref<string | null>(null)
+  const loaded = ref(false)
 
   async function fetchAgents(): Promise<void> {
     try {
-      const data = await apiClient.get<{ agents?: Agent[] }>(`${getApiBase()}/agents/status`)
-      if (data.agents) {
-        agents.value = data.agents
-        return
-      }
-    } catch {
-      logger.warn('Failed to fetch agents, using sample data')
+      const data = await apiClient.get<{ agents?: Agent[] }>(
+        `${getApiBase()}/agents/status`,
+        // Optional widget: a 404 (endpoint unmounted) or timeout is handled
+        // below, so don't emit console noise. 404s are not retried by the client.
+        { suppressErrorLog: true },
+      )
+      agents.value = data.agents ?? []
+      error.value = null
+    } catch (e) {
+      // Visible empty/error state — do NOT fall back to fabricated sample data.
+      agents.value = []
+      error.value = e instanceof Error ? e.message : 'Failed to load agents'
+      logger.debug('Agent status unavailable:', error.value)
+    } finally {
+      loaded.value = true
     }
-
-    agents.value = getSampleAgents()
   }
 
   async function fetchEvents(): Promise<void> {
@@ -189,31 +202,37 @@ export function useAgentActivityData() {
       // Issue #552: Fixed path - backend uses /api/analytics/agents/tasks/recent
       // (analytics_agents.py has prefix="/agents" and is included into analytics.py router)
       const data = await apiClient.get<{ tasks?: unknown[]; data?: { tasks?: unknown[] } }>(
-        `${getApiBase()}/analytics/agents/tasks/recent?limit=10`
+        `${getApiBase()}/analytics/agents/tasks/recent?limit=10`,
+        { suppressErrorLog: true }
       )
       // Backend returns tasks, not events - adapt response structure
       if (data.tasks || data.data?.tasks) {
         type RawTask = { id?: string; task_id?: string; status?: string; agent_id?: string; completed_at?: string; started_at?: string; details?: string; description?: string }
         const tasks = (data.tasks || data.data?.tasks) as RawTask[]
-        recentEvents.value = tasks.map((task: RawTask) => ({
-          id: task.id || task.task_id || crypto.randomUUID(),
-          type: (task.status === 'completed' ? 'task_completed' : 'task_started') as ActivityEvent['type'],
-          agentId: task.agent_id ?? '',
-          agentName: task.agent_id ?? '',
-          message: task.details || task.description || '',
-          timestamp: task.completed_at
-            ? new Date(task.completed_at).getTime()
-            : task.started_at
-              ? new Date(task.started_at).getTime()
-              : Date.now()
-        }))
+        recentEvents.value = tasks
+          .map((task: RawTask) => ({
+            id: task.id || task.task_id || crypto.randomUUID(),
+            type: (task.status === 'completed' ? 'task_completed' : 'task_started') as ActivityEvent['type'],
+            agentId: task.agent_id ?? '',
+            agentName: task.agent_id ?? '',
+            message: task.details || task.description || '',
+            timestamp: task.completed_at
+              ? new Date(task.completed_at).getTime()
+              : task.started_at
+                ? new Date(task.started_at).getTime()
+                : Date.now()
+          }))
+          // #10502/#7: render newest-first so a stale entry can never lead the
+          // feed (backend order is not guaranteed chronological).
+          .sort((a, b) => b.timestamp - a.timestamp)
         return
       }
-    } catch {
-      logger.warn('Failed to fetch events, using sample data')
+      recentEvents.value = []
+    } catch (e) {
+      // Empty feed on failure — no fabricated events.
+      recentEvents.value = []
+      logger.debug('Recent agent events unavailable:', e instanceof Error ? e.message : e)
     }
-
-    recentEvents.value = getSampleEvents()
   }
 
   async function refresh(): Promise<void> {
@@ -223,6 +242,8 @@ export function useAgentActivityData() {
   return {
     agents,
     recentEvents,
+    error,
+    loaded,
     fetchAgents,
     fetchEvents,
     refresh

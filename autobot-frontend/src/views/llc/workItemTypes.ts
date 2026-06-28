@@ -21,6 +21,11 @@ export interface WorkItem {
   story_points: number | null
   assignee_name: string | null
   assignee_type?: 'human' | 'agent' | null
+  // Assignment keyspace (#10032): agent = AgentOrgNode UUID PK, user = user UUID.
+  assignee_agent_id?: string | null
+  assignee_user_id?: string | null
+  reviewer_user_id?: string | null
+  reviewer_agent_id?: string | null
   sprint_id: string | null
   column_id?: string
   status: string

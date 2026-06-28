@@ -4,12 +4,12 @@ paramiko>=5.0.0
 tenacity>=9.1.4
 
 # Async SSH for PKI certificate distribution (Issue #166)
-asyncssh>=2.23.0
+asyncssh>=2.23.1
 
 # opentelemetry-proto>=1.40.0 requires protobuf>=5.0,<7.0 — relaxed upper bound to <7.0.0 (#3971)
 # TensorFlow is not a project dependency; former <6.0.0 cap caused pip conflicts with protobuf 6.x
 # Bumped to 5.29.6+ for JSON recursion depth bypass fix (#3933)
-protobuf>=5.29.6,<7.0.0
+protobuf>=6.33.6,<7.0.0  # capped <7.0: opentelemetry-proto (otel 1.42) requires protobuf<7.0; the Dependabot 7.35.1 bump is unsatisfiable. 6.33.6 = latest installable.
 
 # vLLM (GPU inference) is an OPTIONAL extra — NOT a default dependency (#10251).
 # It pulls the full CUDA toolkit (cuda-toolkit, nvidia-*, flashinfer, CUDA torch),
@@ -44,7 +44,7 @@ opentelemetry-instrumentation-aiohttp-client>=0.63b1
 # Provides efficient vector similarity search operations
 # Using CPU version for Python 3.12 compatibility (GPU version requires conda)
 # For GPU acceleration: conda install -c conda-forge faiss-gpu (Python 3.12)
-faiss-cpu>=1.14.2
+faiss-cpu>=1.14.3
 aiosqlite>=0.22.1
 
 # Security - XML parsing protection (Issue #67)

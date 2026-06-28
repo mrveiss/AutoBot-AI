@@ -65,3 +65,25 @@ branch_has_open_pr() {
     pr=$(gh pr list --head "$branch" --state open --json number -q '.[0].number' 2>/dev/null || true)
     [ -n "$pr" ]
 }
+
+# Print the number of a merged PR that ACTUALLY closes the given issue, or
+# nothing when none exists. Requires an authenticated `gh`.
+#
+# A bare `gh pr list --search "$issue_number"` over-matches (#10114): the search
+# index hits the number anywhere -- title, body, comments -- and even in a
+# superstring like `#19943` when searching for `9943`. A branch for an issue
+# whose number merely appears in some unrelated merged PR would then pass the
+# merge-confirmation gate. To avoid that, this filters the candidate PRs to
+# those whose `closingIssuesReferences` contains the EXACT issue number. On any
+# error it prints nothing so callers fall through to "no merged PR found"
+# (which keeps the branch -- the safe default).
+merged_pr_for_issue() {
+    local issue_number="$1"
+    [ -n "$issue_number" ] || return 0
+    gh pr list --search "$issue_number" --state merged \
+        --json number,closingIssuesReferences 2>/dev/null \
+        | jq -r --argjson n "$issue_number" \
+            'map(select(any(.closingIssuesReferences[]?; .number == $n)))
+             | .[0].number // empty' 2>/dev/null \
+        || true
+}

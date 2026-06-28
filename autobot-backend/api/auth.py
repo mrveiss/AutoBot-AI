@@ -13,6 +13,7 @@ from time import time
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 
 from api.schemas_agent import (
     AuthCheckResponse,
@@ -195,6 +196,11 @@ async def login(request: Request, login_data: LoginRequest):
             }
             jwt_token = get_auth_middleware().create_jwt_token(
                 {
+                    # Include user_id + sub so user endpoints (e.g. /users/me/preferences)
+                    # can resolve the identity; without them they 401'd and the frontend
+                    # logged out → login redirect loop in single_user bypass mode.
+                    "sub": "admin",
+                    "user_id": "admin",
                     "username": "admin",
                     "role": "admin",
                     "email": f"admin@{ssot_config.auth.domain}",
@@ -273,6 +279,73 @@ async def logout(request: Request, logout_data: LogoutRequest):
         logger.error("Logout error: %s", e)
         # Don't fail logout on errors - return success
         return {"success": True, "message": "Logged out successfully"}
+
+
+class _RS256RevokeRequest(BaseModel):
+    """Request body for RS256 authority token revocation (#10278)."""
+
+    token: str
+
+
+@router.post("/revoke-rs256-token")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="revoke_rs256_token",
+    error_code_prefix="AUTH",
+)
+async def revoke_rs256_token(
+    body: _RS256RevokeRequest,
+    current_user: Dict = Depends(get_current_user),
+) -> Dict[str, object]:
+    """Revoke an RS256 authority token by adding its jti to the cross-service denylist.
+
+    Writes ``auth:rs256:jti:denylist:<jti>`` to the shared Redis instance so
+    that autobot-slm-backend's JWKS verifier rejects the token on its next
+    presentation, even before the token's ``exp`` claim elapses.
+
+    TTL of the denylist entry equals the remaining token lifetime so it
+    auto-expires and never accumulates indefinitely.
+
+    The caller must be authenticated (any valid user may revoke their own
+    token; a separate admin endpoint is not needed — the token is bound to
+    the presenter by signature and is unusable without the private key).
+
+    Returns a 200 with ``revoked=True`` on success or when the token is
+    already expired (nothing to revoke, but not an error).
+    """
+    from autobot_shared.auth.jwt_core import JWTDecodeError as _JWTDecodeError
+    from autobot_shared.auth.jwt_core import decode_jwt_no_verify_exp as _decode_no_exp
+
+    # Security (#10278): ownership gate — a caller may revoke ONLY their own token,
+    # unless they hold admin rights (administrative revocation of others' tokens).
+    # The decoded sub is sufficient even unverified: presenting another user's real
+    # token fails the match, and a forged token can only carry the caller's own sub.
+    try:
+        _token_claims = _decode_no_exp(body.token)
+    except _JWTDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid token") from exc
+    _token_sub = _token_claims.get("sub") or _token_claims.get("username")
+    _token_uid = _token_claims.get("user_id")
+    _caller_sub = current_user.get("sub") or current_user.get("username")
+    _caller_uid = current_user.get("user_id")
+    _is_admin = bool(current_user.get("admin")) or current_user.get("role") == "admin"
+    _owns = (_token_sub and _token_sub == _caller_sub) or (_token_uid and _token_uid == _caller_uid)
+    if not _owns and not _is_admin:
+        raise HTTPException(status_code=403, detail="Can only revoke your own tokens")
+
+    # #10278: shared RS256 denylist lives in autobot-slm-backend package but
+    # uses only autobot_shared Redis — import the sibling module at call time
+    # so this endpoint works even when the SLM package is not on sys.path
+    # (the denylist logic is duplicated-by-reference; the Redis KEY is shared).
+    from services.rs256_revocation import revoke_authority_token_jti  # noqa: PLC0415
+
+    try:
+        result = await revoke_authority_token_jti(body.token)
+    except Exception as exc:
+        logger.warning("revoke_rs256_token: revocation failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Token revocation failed") from exc
+
+    return {"revoked": result, "message": "Token revoked" if result else "Token already expired"}
 
 
 @router.get("/me", response_model=AuthUserInfoResponse)

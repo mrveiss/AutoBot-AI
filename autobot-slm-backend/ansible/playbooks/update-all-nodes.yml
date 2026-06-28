@@ -557,6 +557,22 @@
       changed_when: false
       tags: [backend, env]
 
+    # #10400: align AUTOBOT_JWT_SECRET with SLM_SECRET_KEY so the backend→SLM
+    # WebSocket service-JWT verifies (SLM verifies with SLM_SECRET_KEY). The key
+    # is written by the slm_manager role into /etc/autobot/slm-secrets.env.
+    - name: "[PLAY 2] Backend | Read SLM_SECRET_KEY for backend_jwt_secret (#10400)"
+      ansible.builtin.shell:
+        cmd: >-
+          grep -oP '^SLM_SECRET_KEY=\K.*'
+          /etc/autobot/slm-secrets.env 2>/dev/null || true
+      register: existing_slm_secret_key
+      become: true
+      when: "'backend' in group_names"
+      failed_when: false
+      changed_when: false
+      no_log: true
+      tags: [backend, env]
+
     - name: "[PLAY 2] Backend | Load shared backend env vars (#2727)"
       ansible.builtin.include_vars:
         file: vars/backend-env.yml
@@ -576,6 +592,8 @@
       vars:
         # backend_secret_key uses a register var specific to this playbook
         backend_secret_key: "{{ existing_secret_key.stdout | default(lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true), true) }}"
+        # #10400: prefer SLM_SECRET_KEY when present, else keep the role default.
+        backend_jwt_secret: "{{ (existing_slm_secret_key.stdout | default('') | trim) if (existing_slm_secret_key.stdout | default('') | trim) | length > 0 else (existing_secret_key.stdout | default('') | trim) }}"
       tags: [backend, env]
 
     - name: "[PLAY 2] Backend | Read backend user mode (#10001)"
@@ -593,60 +611,17 @@
         - backend_user_mode_probe.stdout | default('') | trim not in ['', 'single_user']
       tags: [backend, migrate]
       block:
-        - name: "[PLAY 2] Backend | Check for local PostgreSQL data directory (#10026)"
-          ansible.builtin.stat:
-            path: /var/lib/postgresql
-          register: backend_pg_dir
-          become: true
-
-        - name: "[PLAY 2] Backend | Back up PostgreSQL before migrations (#10026)"
-          ansible.builtin.shell: |
-            set -o pipefail
-            install -d -m 0750 /opt/autobot/backups/pre-migration
-            su - postgres -c "pg_dumpall --clean --if-exists" \
-              | gzip > /opt/autobot/backups/pre-migration/backend-$(date +%s).sql.gz
-          args:
-            executable: /bin/bash
-          become: true
-          when: backend_pg_dir.stat.exists
-
-        - name: "[PLAY 2] Backend | Warn when no local PostgreSQL to back up (#10026)"
-          ansible.builtin.debug:
-            msg: >-
-              WARNING: no local PostgreSQL data directory — pre-migration
-              backup skipped. Back up the remote database before relying on
-              this deploy.
-          when: not backend_pg_dir.stat.exists
-
-        - name: "[PLAY 2] Backend | Run database baseline adoption (#10001)"
-          ansible.builtin.shell: |
-            set -a
-            [ -f .env ] && . ./.env
-            set +a
-            exec venv/bin/python -m migrations.baseline
-          args:
-            chdir: /opt/autobot/autobot-backend
-            executable: /bin/bash
-          become: true
-          become_user: autobot
-          environment:
-            PYTHONPATH: /opt/autobot/autobot-backend
-          register: baseline_result
-
-        - name: "[PLAY 2] Backend | Run Alembic migrations (#10001)"
-          ansible.builtin.shell: |
-            set -a
-            [ -f .env ] && . ./.env
-            set +a
-            exec venv/bin/python -m alembic -c migrations/alembic.ini upgrade head
-          args:
-            chdir: /opt/autobot/autobot-backend
-            executable: /bin/bash
-          become: true
-          become_user: autobot
-          environment:
-            PYTHONPATH: /opt/autobot/autobot-backend
-          register: backend_migration_result
+        # Strict migration sequence consolidated into one shared include
+        # (#10046): fail-closed backup -> baseline adoption -> strict
+        # `alembic upgrade head`. Single source for both this playbook and
+        # setup-user-backend.yml.
+        - name: "[PLAY 2] Backend | Run strict backend migration sequence (#10001, #10026, #10046)"
+          ansible.builtin.include_tasks: ../_shared/tasks/migrate_backend_db.yml
+          vars:
+            migration_code_dir: /opt/autobot/autobot-backend
+            migration_user: autobot
+            migration_become: true
+            migration_name_prefix: "[PLAY 2] Backend | "
 
     - name: "[PLAY 2] Backend | Restart service"
       systemd:

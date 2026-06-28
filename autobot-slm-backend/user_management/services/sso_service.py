@@ -17,9 +17,10 @@ import secrets
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
+from user_management.models.role import Role
 from user_management.models.sso import SSOProvider, SSOProviderType, UserSSOLink
 from user_management.models.user import User
 from user_management.schemas.sso import SSOProviderCreate, SSOProviderUpdate
@@ -48,6 +49,27 @@ logger = logging.getLogger(__name__)
 OAUTH_STATE_TTL_SECONDS = 600
 
 
+def _extract_redirect_url(saml_result: Any) -> str | None:
+    """Pull the Location URL out of a pysaml2 binding result tuple/dict.
+
+    pysaml2 returns heterogeneous shapes depending on binding; this helper
+    normalises them to a string redirect URL or None.
+    """
+    if saml_result is None:
+        return None
+    # HTTP-Redirect binding: (status, reason, headers, body) tuple
+    if isinstance(saml_result, tuple) and len(saml_result) >= 3:
+        headers = saml_result[2]
+        if isinstance(headers, list):
+            for key, val in headers:
+                if key.lower() == "location":
+                    return val
+    # Dict-style response (SOAP / HTTP-POST binding)
+    if isinstance(saml_result, dict):
+        return saml_result.get("url") or saml_result.get("Location")
+    return None
+
+
 def _pkce_challenge_s256(verifier: str) -> str:
     """Derive the RFC 7636 S256 code_challenge from a code_verifier."""
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
@@ -66,6 +88,24 @@ class SSOAuthenticationError(SSOServiceError):
     """SSO authentication failed."""
 
 
+def _validate_saml_issuer(parsed_request: Any, provider: SSOProvider) -> None:
+    """Raise SSOAuthenticationError if the issuer does not match the IdP entity ID."""
+    issuer = None
+    try:
+        issuer = parsed_request.message.issuer.text
+    except AttributeError:
+        pass
+    idp_entity_id = (provider.config or {}).get("idp_entity_id")
+    if idp_entity_id and issuer and issuer != idp_entity_id:
+        logger.error(
+            "SAML SLO issuer mismatch: expected %s, got %s (provider=%s)",
+            idp_entity_id,
+            issuer,
+            provider.id,
+        )
+        raise SSOAuthenticationError("SAML SLO issuer mismatch")
+
+
 class SSOService(BaseService):
     """SSO provider management and authentication service."""
 
@@ -78,24 +118,34 @@ class SSOService(BaseService):
                 "token_url": f"https://{domain}/oauth2/v1/token",
                 "userinfo_url": f"https://{domain}/oauth2/v1/userinfo",
                 "scope": "openid email profile groups",
+                # OIDC RP-initiated logout (RFC 9207 / Okta docs)
+                "end_session_endpoint": f"https://{domain}/oauth2/v1/logout",
             },
             SSOProviderType.MICROSOFT_ENTRA.value: {
                 "authorize_url": f"https://login.microsoftonline.com/{domain}/oauth2/v2.0/authorize",
                 "token_url": f"https://login.microsoftonline.com/{domain}/oauth2/v2.0/token",
                 "userinfo_url": "https://graph.microsoft.com/oidc/userinfo",
                 "scope": "openid email profile",
+                # OIDC RP-initiated logout (Microsoft Identity Platform docs)
+                "end_session_endpoint": f"https://login.microsoftonline.com/{domain}/oauth2/v2.0/logout",
             },
             SSOProviderType.GOOGLE_WORKSPACE.value: {
                 "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
                 "token_url": "https://oauth2.googleapis.com/token",  # nosec B105 - OAuth2 public token endpoint URL,
                 "userinfo_url": "https://openidconnect.googleapis.com/v1/userinfo",
                 "scope": "openid email profile",
+                # Google does NOT support RP-initiated OIDC end_session (no end_session_endpoint
+                # in their OIDC discovery doc).  The /o/oauth2/revoke endpoint revokes tokens
+                # server-side but is not an OIDC logout redirect.  Callers should handle None.
+                "end_session_endpoint": None,
             },
             SSOProviderType.GITHUB.value: {
                 "authorize_url": "https://github.com/login/oauth/authorize",
                 "token_url": "https://github.com/login/oauth/access_token",  # nosec B105 - OAuth2 public token endpoint
                 "userinfo_url": "https://api.github.com/user",
                 "scope": "user:email read:user",
+                # GitHub OAuth2 (not OIDC) — no standard end_session_endpoint
+                "end_session_endpoint": None,
             },
         }
         return templates.get(provider_type, {})
@@ -216,7 +266,7 @@ class SSOService(BaseService):
         """Generate OAuth2 state + PKCE verifier; store both in Redis with TTL."""
         state = secrets.token_urlsafe(32)
         code_verifier = secrets.token_urlsafe(64)
-        redis = get_redis_client()
+        redis = await get_async_redis_client()
         if redis:
             payload = json.dumps({"provider_id": str(provider_id), "code_verifier": code_verifier})
             await redis.set(f"sso:state:{state}", payload, ex=OAUTH_STATE_TTL_SECONDS)
@@ -224,7 +274,7 @@ class SSOService(BaseService):
 
     async def _validate_oauth_state(self, state: str) -> tuple[uuid.UUID, str | None]:
         """Validate state via atomic GETDEL (single-use). Returns (provider_id, code_verifier)."""
-        redis = get_redis_client()
+        redis = await get_async_redis_client()
         if not redis:
             raise SSOAuthenticationError("Redis unavailable for state validation")
         raw = await redis.getdel(f"sso:state:{state}")
@@ -304,8 +354,8 @@ class SSOService(BaseService):
 
     async def complete_oauth_login(
         self, code: str, state: str, callback_url: str, provider_id: uuid.UUID | None = None
-    ) -> User:
-        """Complete OAuth2 login flow and return authenticated user."""
+    ) -> tuple[User, uuid.UUID]:
+        """Complete OAuth2 login flow and return (user, resolved_provider_id)."""
         # Always validate state to prevent CSRF attacks
         state_provider_id, code_verifier = await self._validate_oauth_state(state)
         if provider_id is not None and provider_id != state_provider_id:
@@ -316,7 +366,22 @@ class SSOService(BaseService):
         userinfo = await self._get_oauth_userinfo(provider, token)
         external_id = userinfo.get("sub") or userinfo.get("id")
         user_data = self._extract_oauth_user_data(userinfo, provider)
-        return await self._find_or_provision_user(provider, external_id, user_data)
+        user = await self._find_or_provision_user(provider, external_id, user_data)
+        return user, provider_id
+
+    @staticmethod
+    def _normalize_groups(raw: Any) -> list[str] | None:
+        """Normalize an IdP groups claim to list[str] or None (absent).
+
+        Returns None when the claim is absent so callers can distinguish
+        "IdP did not assert groups" from "IdP asserted an empty group list".
+        """
+        if raw is None:
+            return None
+        if isinstance(raw, list):
+            return [str(g) for g in raw]
+        # Some IdPs return a single string when the user belongs to one group.
+        return [str(raw)]
 
     def _extract_oauth_user_data(self, userinfo: dict[str, Any], provider: SSOProvider) -> dict[str, Any]:
         """Extract user data from OAuth2 userinfo."""
@@ -328,6 +393,7 @@ class SSOService(BaseService):
             "display_name": name,
             "username": username,
             "avatar_url": userinfo.get("picture"),
+            "groups": self._normalize_groups(userinfo.get("groups")),
         }
 
     def _build_ldap_connection(self, provider: SSOProvider, username: str, password: str) -> Any:
@@ -363,10 +429,13 @@ class SSOService(BaseService):
         attr_map = provider.config.get("attribute_mapping", {})
         email = entry.get(attr_map.get("email", "mail"), [None])[0]
         display_name = entry.get(attr_map.get("display_name", "displayName"), [None])[0]
+        groups_attr = attr_map.get("groups", "memberOf")
+        raw_groups = entry.get(groups_attr)
         return {
             "email": email,
             "display_name": display_name,
             "username": entry.get(attr_map.get("username", "uid"), [None])[0],
+            "groups": self._normalize_groups(raw_groups),
         }
 
     async def authenticate_ldap(self, provider_id: uuid.UUID, username: str, password: str) -> User:
@@ -385,21 +454,23 @@ class SSOService(BaseService):
         return await self._find_or_provision_user(provider, username, user_data)
 
     def _get_saml_config(self, provider: SSOProvider) -> dict[str, Any]:
-        """Build pysaml2 config from provider settings."""
+        """Build pysaml2 config from provider settings, including SLO endpoint (#10281)."""
+        _http_post = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+        _http_redirect = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+        endpoints: dict[str, Any] = {
+            "assertion_consumer_service": [
+                (provider.config.get("acs_url"), _http_post),
+            ],
+        }
+        slo_url = provider.config.get("slo_url")
+        if slo_url:
+            endpoints["single_logout_service"] = [
+                (slo_url, _http_redirect),
+                (slo_url, _http_post),
+            ]
         return {
             "entityid": provider.config.get("sp_entity_id"),
-            "service": {
-                "sp": {
-                    "endpoints": {
-                        "assertion_consumer_service": [
-                            (
-                                provider.config.get("acs_url"),
-                                "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-                            ),
-                        ],
-                    },
-                },
-            },
+            "service": {"sp": {"endpoints": endpoints}},
             "metadata": {"remote": [{"url": provider.config.get("idp_metadata_url")}]},
         }
 
@@ -416,7 +487,7 @@ class SSOService(BaseService):
         """Generate SAML AuthnRequest; relay state stored in Redis with 10-min TTL."""
         client = self._build_saml_client(provider)
         relay_state = secrets.token_urlsafe(32)
-        redis = get_redis_client()
+        redis = await get_async_redis_client()
         if redis:
             await redis.set(f"sso:state:{relay_state}", str(provider.id), ex=600)
         request_id, info = client.prepare_for_authenticate()
@@ -430,18 +501,124 @@ class SSOService(BaseService):
         email = attrs.get(attr_map.get("email", "email"), [None])[0]
         display_name = attrs.get(attr_map.get("display_name", "displayName"), [None])[0]
         username = attrs.get(attr_map.get("username", "uid"), [None])[0]
-        return {"email": email, "display_name": display_name, "username": username}
+        raw_groups = attrs.get(attr_map.get("groups", "groups"))
+        return {
+            "email": email,
+            "display_name": display_name,
+            "username": username,
+            "groups": self._normalize_groups(raw_groups),
+        }
 
-    async def complete_saml_login(self, provider_id: uuid.UUID, saml_response: str) -> User:
-        """Complete SAML login flow."""
+    async def complete_saml_login(self, provider_id: uuid.UUID, saml_response: str) -> tuple[User, uuid.UUID]:
+        """Complete SAML login flow; persist NameID in sso_metadata for SLO (#10281)."""
         provider = await self.get_provider(provider_id)
         if not provider.is_active:
             raise SSOAuthenticationError(f"SSO provider {provider.name} is disabled")
         client = self._build_saml_client(provider)
         authn_response = client.parse_authn_request_response(saml_response, "POST")
-        external_id = authn_response.name_id
+        name_id = authn_response.name_id
+        external_id = name_id
         user_data = self._extract_saml_user_data(authn_response, provider)
-        return await self._find_or_provision_user(provider, external_id, user_data)
+        # Persist NameID text + format so SLO can reconstruct it without re-parsing (#10281).
+        try:
+            name_id_obj = authn_response.assertion.subject.name_id
+            user_data["saml_name_id"] = name_id_obj.text if name_id_obj else str(name_id or "")
+            user_data["saml_name_id_format"] = getattr(name_id_obj, "format", "") or ""
+        except AttributeError:
+            # Fallback: use the top-level name_id string when assertion structure is unavailable.
+            user_data["saml_name_id"] = str(name_id or "")
+            user_data["saml_name_id_format"] = ""
+        user = await self._find_or_provision_user(provider, external_id, user_data)
+        return user, provider_id
+
+    async def get_saml_name_id_for_user(self, username: str) -> tuple[Any | None, SSOProvider | None]:
+        """Return (NameID object, provider) for the first active SAML link of *username*.
+
+        Returns (None, None) when the user has no active SAML SSO link.
+        """
+        from user_management.models.user import User as _User  # noqa: PLC0415
+
+        if Saml2Client is None:
+            return None, None
+
+        from saml2.saml import NameID  # noqa: PLC0415
+
+        result = await self.session.execute(
+            select(UserSSOLink)
+            .join(SSOProvider, UserSSOLink.provider_id == SSOProvider.id)
+            .join(_User, UserSSOLink.user_id == _User.id)
+            .where(
+                _User.username == username,
+                SSOProvider.provider_type == "saml",
+                SSOProvider.is_active.is_(True),
+            )
+            .limit(1)
+        )
+        link = result.scalar_one_or_none()
+        if not link:
+            return None, None
+
+        meta = link.sso_metadata or {}
+        name_id_text = meta.get("saml_name_id") or link.external_id
+        name_id_format = meta.get("saml_name_id_format", "")
+        name_id = NameID(text=name_id_text, format=name_id_format or None)
+        provider = await self.get_provider(link.provider_id)
+        return name_id, provider
+
+    def initiate_saml_logout(self, provider: SSOProvider, name_id: Any) -> str | None:
+        """Build a SAML SP-initiated LogoutRequest and return the redirect URL.
+
+        Returns None when the provider has no SLO endpoint configured.
+        Delegates to pysaml2 Saml2Client.global_logout which builds a signed
+        LogoutRequest and returns HTTP-Redirect binding info.
+        """
+        if Saml2Client is None:
+            logger.warning("pysaml2 not available — cannot initiate SAML SLO")
+            return None
+        slo_url = provider.config.get("slo_url")
+        if not slo_url:
+            logger.info("Provider %s has no slo_url — skipping SAML SLO", provider.id)
+            return None
+        client = self._build_saml_client(provider)
+        try:
+            result = client.global_logout(name_id)
+        except Exception:
+            logger.warning("pysaml2 global_logout failed for provider %s", provider.id, exc_info=True)
+            return None
+        return _extract_redirect_url(result)
+
+    def handle_saml_slo_callback(
+        self,
+        provider: SSOProvider,
+        xml_body: str,
+        binding: str,
+        sigalg: str | None = None,
+        signature: str | None = None,
+    ) -> tuple[bool, str | None]:
+        """Parse and validate a SAML LogoutRequest or LogoutResponse from the IdP.
+
+        Returns (success, redirect_url).
+        - success=True  → local session was terminated, redirect_url may carry a SAMLResponse.
+        - success=False → validation failed.
+        """
+        if Saml2Client is None:
+            raise SSOServiceError("pysaml2 library not installed")
+        client = self._build_saml_client(provider)
+        try:
+            parsed = client.parse_logout_request(xmlstr=xml_body, binding=binding, sigalg=sigalg, signature=signature)
+        except Exception as exc:
+            logger.warning("SAML SLO: failed to parse LogoutRequest from provider %s: %s", provider.id, exc)
+            raise SSOAuthenticationError("Invalid SAML LogoutRequest") from exc
+        _validate_saml_issuer(parsed, provider)
+        name_id = parsed.message.name_id
+        logger.info("SAML SLO callback: terminating local session for NameID %s", getattr(name_id, "text", name_id))
+        try:
+            resp_info = client.handle_logout_request(xml_body, name_id, binding, sigalg=sigalg, signature=signature)
+        except Exception as exc:
+            logger.warning("SAML SLO: handle_logout_request failed for provider %s: %s", provider.id, exc)
+            return True, None
+        redirect_url = _extract_redirect_url(resp_info)
+        return True, redirect_url
 
     async def _find_existing_sso_link(self, provider_id: uuid.UUID, external_id: str) -> UserSSOLink | None:
         """Find existing SSO link."""
@@ -495,14 +672,86 @@ class SSOService(BaseService):
         logger.info("Created SSO link for user %s with provider %s", user.id, provider.id)
         return link
 
+    async def _resolve_managed_roles(self, provider: SSOProvider, managed_names: set[str]) -> dict[str, Role]:
+        """Return {role_name: Role} for names resolvable in provider.org_id scope or as system roles.
+
+        A single query fetches all candidates (org-scoped + system).  When both exist for the
+        same name the org-specific row is preferred over the system role (org_id IS NULL).
+        Names with no matching row are warned and omitted from the result.
+        """
+        if not managed_names:
+            return {}
+        result = await self.session.execute(
+            select(Role).where(
+                Role.name.in_(managed_names),
+                or_(Role.org_id == provider.org_id, Role.org_id.is_(None)),
+            )
+        )
+        rows = list(result.scalars().all())
+
+        # prefer org-specific row over a system role of the same name
+        by_name: dict[str, Role] = {}
+        for r in rows:
+            existing = by_name.get(r.name)
+            if existing is None or (existing.org_id is None and r.org_id is not None):
+                by_name[r.name] = r
+
+        for name in managed_names:
+            if name not in by_name:
+                logger.warning("group_mapping references unknown role %r (org_id=%s)", name, provider.org_id)
+
+        return by_name
+
+    async def _sync_idp_groups_to_roles(self, user: User, provider: SSOProvider, groups: list[str] | None) -> None:
+        """Reconcile IdP group membership to managed instance RBAC roles.
+
+        Only roles listed in provider.group_mapping.values() are ever touched;
+        all other roles (including manual grants) are left completely unchanged.
+        If groups is None the IdP did not assert the claim — skip silently to
+        avoid stripping roles when the scope/claim is temporarily missing.
+        """
+        if not provider.group_mapping:
+            return
+        if groups is None:
+            logger.debug("IdP did not assert groups for user %s — skipping role sync", user.id)
+            return
+
+        from user_management.services.user_service import UserService  # noqa: PLC0415
+
+        user_svc = UserService(self.session)
+        managed_names: set[str] = set(provider.group_mapping.values())
+        desired_names: set[str] = {provider.group_mapping[g] for g in groups if g in provider.group_mapping}
+        name_to_role = await self._resolve_managed_roles(provider, managed_names)
+        current_roles = await user_svc.get_user_roles(user.id)
+        current_managed = {r.name for r in current_roles if r.name in managed_names}
+
+        for name, role in name_to_role.items():
+            if name in desired_names and name not in current_managed:
+                await user_svc.assign_role(user.id, role.id)
+            elif name not in desired_names and name in current_managed:
+                await user_svc.revoke_role(user.id, role.id)
+
     async def _find_or_provision_user(self, provider: SSOProvider, external_id: str, user_data: dict[str, Any]) -> User:
-        """Find existing user or provision new one via JIT."""
+        """Find existing user or provision new one via JIT.
+
+        Group→role reconciliation runs in both paths so roles re-sync on every
+        login, not only at first JIT provisioning.
+        """
         link = await self._find_existing_sso_link(provider.id, external_id)
         if link:
             link.record_login()
             await self.session.flush()
             result = await self.session.execute(select(User).where(User.id == link.user_id))
-            return result.scalar_one()
+            user = result.scalar_one()
+            try:
+                await self._sync_idp_groups_to_roles(user, provider, user_data.get("groups"))
+            except Exception:
+                logger.warning(
+                    "IdP group->role sync failed for user %s; proceeding with login",
+                    user.id,
+                    exc_info=True,
+                )
+            return user
         if not provider.allow_user_creation:
             raise SSOAuthenticationError("User not found and auto-provisioning is disabled")
         email = user_data.get("email")
@@ -512,4 +761,12 @@ class SSOService(BaseService):
         if not user:
             user = await self._create_sso_user(provider, user_data)
         await self._create_sso_link(user, provider, external_id, user_data)
+        try:
+            await self._sync_idp_groups_to_roles(user, provider, user_data.get("groups"))
+        except Exception:
+            logger.warning(
+                "IdP group->role sync failed for user %s; proceeding with login",
+                user.id,
+                exc_info=True,
+            )
         return user

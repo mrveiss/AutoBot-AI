@@ -308,8 +308,20 @@ async def list_members(
     session: AsyncSession = Depends(get_async_session),
     svc: MembershipService = Depends(_get_membership_service),
 ) -> List[Dict[str, Any]]:
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from user_management.models.user import User  # noqa: PLC0415
+
     members = await svc.list_members(session, str(company_id))
-    return [_to_member_read(m) for m in members]
+    # Resolve display names so the assignee/reviewer pickers show people, not UUIDs.
+    user_ids = [m.user_id for m in members]
+    names: Dict[uuid.UUID, str] = {}
+    if user_ids:
+        rows = (
+            await session.execute(select(User.id, User.display_name, User.username).where(User.id.in_(user_ids)))
+        ).all()
+        names = {uid: (dn or un) for uid, dn, un in rows}
+    return [{**_to_member_read(m), "display_name": names.get(m.user_id)} for m in members]
 
 
 @router.post("/{company_id}/members", status_code=status.HTTP_201_CREATED)
@@ -543,7 +555,11 @@ class OrgChartNode(BaseModel):
     (liveness/status). No new persistence is introduced.
     """
 
-    id: str
+    id: str  # logical agent_id slug (keyspace for budgets/runs/controls)
+    # AgentOrgNode UUID PK — the assignment keyspace: work-item assignee_agent_id
+    # / handoff target_agent_id reference THIS, not the slug (#10032). Needed so
+    # the UI assignee/handoff pickers send the right id.
+    node_id: str
     name: str
     title: str
     status: str  # active | idle | error | paused
@@ -675,6 +691,7 @@ async def get_org_chart(
             b_total = float(budget.budget_limit) if budget else 0.0
         flat[row.agent_id] = OrgChartNode(
             id=row.agent_id,
+            node_id=str(row.id),  # AgentOrgNode UUID PK (assignment keyspace, #10032)
             name=row.name,
             title=row.title or row.org_role,
             status=_heartbeat_status_to_org_status(run.status if run else None),

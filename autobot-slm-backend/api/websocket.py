@@ -37,6 +37,29 @@ def _extract_ws_token(websocket: WebSocket) -> str | None:
     return websocket.query_params.get("token") or None
 
 
+def _log_ws_reject_context(websocket: WebSocket, reason: str) -> None:
+    """Log WebSocket rejection with origin/host/peer context for diagnosability.
+
+    Called before closing a connection so that the next live 403 occurrence
+    (e.g. from a proxy or environment-specific config) can be traced back to
+    the exact request properties (GH#10459).
+
+    Args:
+        websocket: The incoming (not yet accepted) WebSocket.
+        reason: Human-readable rejection reason for the log entry.
+    """
+    headers = websocket.headers
+    logger.warning(
+        "WebSocket rejected (%s) | path=%s origin=%r host=%r peer=%r proto=%r",
+        reason,
+        websocket.url.path,
+        headers.get("origin", "-"),
+        headers.get("host", "-"),
+        websocket.client,
+        headers.get("sec-websocket-protocol", "-")[:60],
+    )
+
+
 async def _authenticate_websocket_token(websocket: WebSocket) -> dict | None:
     """Authenticate a WebSocket connection.
 
@@ -44,6 +67,12 @@ async def _authenticate_websocket_token(websocket: WebSocket) -> dict | None:
     (fallback), validates it, accepts the socket on success, and returns
     the decoded payload.  On failure, accepts then closes with code 4001
     so the browser receives a proper WS frame rather than an HTTP 403.
+
+    NOTE: the close MUST be preceded by accept() so uvicorn sends a proper
+    WebSocket close frame (code 4001) rather than converting an unaccepted
+    close to HTTP 403 (GH#10459: uvicorn maps websocket.close-before-accept
+    to HTTP 403, which is what the backend's websockets library reports as
+    'server rejected WebSocket connection: HTTP 403').
 
     Args:
         websocket: The incoming WebSocket connection (not yet accepted).
@@ -53,16 +82,16 @@ async def _authenticate_websocket_token(websocket: WebSocket) -> dict | None:
     """
     token = _extract_ws_token(websocket)
     if not token:
+        _log_ws_reject_context(websocket, "missing token")
         await websocket.accept()
         await websocket.close(code=4001, reason="Authentication required")
-        logger.warning("WebSocket connection rejected: missing token")
         return None
 
-    payload = auth_service.decode_token(token)
+    payload = await auth_service.decode_token_async(token)
     if not payload:
+        _log_ws_reject_context(websocket, "invalid token")
         await websocket.accept()
         await websocket.close(code=4001, reason="Invalid or expired token")
-        logger.warning("WebSocket connection rejected: invalid token")
         return None
 
     return payload

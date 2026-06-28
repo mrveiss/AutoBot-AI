@@ -33,6 +33,21 @@ logger = get_logger(__name__)
 _VALID_URL_SCHEMES = ("http://", "https://")
 
 
+def _normalize_outbound_url(url: str) -> str:
+    """Rewrite a 0.0.0.0 bind-address host to 127.0.0.1 for outbound calls.
+
+    Bug fix: the Ollama endpoint is sometimes configured as
+    ``http://0.0.0.0:11434`` (a server *bind* address — "all interfaces").
+    0.0.0.0 is not a valid *connect* target, so an outbound client request to
+    it raises aiohttp.ClientError, the LLM call fails, and no assistant reply is
+    produced. Normalize it to loopback so the call reaches a locally-bound
+    Ollama. No-op for any other host.
+    """
+    if not url:
+        return url
+    return url.replace("//0.0.0.0:", "//127.0.0.1:").replace("//0.0.0.0/", "//127.0.0.1/")
+
+
 async def _emit_system_prompt_ready(system_prompt: str, session: Any) -> str:
     """Emit ON_SYSTEM_PROMPT_READY to registered extensions and return result.
 
@@ -504,7 +519,7 @@ class LLMHandlerMixin:
     def _get_ollama_endpoint_fallback(self) -> str:
         """Get Ollama endpoint from ssot_config as fallback (Issue #3829)."""
         # _ssot_config is already imported at module level
-        return f"{_ssot_config.ollama_url}{PATH_OLLAMA_GENERATE}"
+        return _normalize_outbound_url(f"{_ssot_config.ollama_url}{PATH_OLLAMA_GENERATE}")
 
     def _get_ollama_endpoint(self) -> str:
         """Get Ollama endpoint from config with fallbacks.
@@ -518,7 +533,7 @@ class LLMHandlerMixin:
                 # Ensure /api/generate path is included
                 if not endpoint.endswith(PATH_OLLAMA_GENERATE):
                     endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
-                return endpoint
+                return _normalize_outbound_url(endpoint)
             logger.error(
                 "Invalid endpoint URL: %s, using config-based default", endpoint
             )  # codeql[py/clear-text-logging-sensitive-data]
@@ -538,7 +553,7 @@ class LLMHandlerMixin:
             if base_url and base_url.startswith(_VALID_URL_SCHEMES):
                 if not base_url.endswith(PATH_OLLAMA_GENERATE):
                     base_url = base_url.rstrip("/") + PATH_OLLAMA_GENERATE
-                return base_url
+                return _normalize_outbound_url(base_url)
         except Exception as e:
             logger.warning("Model endpoint routing failed: %s", e)
         return self._get_ollama_endpoint()

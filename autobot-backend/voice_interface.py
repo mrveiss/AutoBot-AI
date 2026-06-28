@@ -884,7 +884,7 @@ if __name__ == "__main__":
         logger.info("\n--- Testing Text-to-Speech ---")
         # await vi.speak_text("Hello, I am AutoBot. How can I help you today?")
 
-        print("\n--- Testing continuous listening (requires manual stop " "or external trigger) ---")  # noqa: print
+        logger.info("\n--- Testing continuous listening (requires manual stop or external trigger) ---")
         # if vi.continuous_listening:
         #     logger.info("Continuous listening enabled. Say something...")
         #     while True:

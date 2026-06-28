@@ -9,10 +9,17 @@ HOOK="$(cd "$(dirname "$0")" && pwd)/block-dangerous-commands.sh"
 PASS=0
 FAIL=0
 
+# The branch-switch protections only apply on the MAIN working tree (the hook
+# skips them under .worktrees/). To keep the suite deterministic regardless of
+# where it is launched from (#10126), run every case from a temp dir that is
+# guaranteed not to be under .worktrees/ — i.e. always assert main-tree semantics.
+TEST_CWD=$(mktemp -d)
+trap 'rm -rf "$TEST_CWD"' EXIT
+
 hook_exit() {
   local input
   input=$(echo '{}' | /usr/bin/jq --arg c "$1" '.tool_input.command=$c')
-  bash "$HOOK" <<<"$input" >/dev/null 2>/dev/null
+  (cd "$TEST_CWD" && bash "$HOOK" <<<"$input") >/dev/null 2>/dev/null
   echo $?
 }
 
@@ -62,6 +69,14 @@ expect_block "git switch some-branch"                "git switch some-branch"
 expect_block "git checkout main"                     "git checkout main"
 expect_block "git checkout master"                   "git checkout master"
 expect_block "git checkout hotfix-something"         "git checkout hotfix-something"
+# Global options between `git` and the subcommand must not bypass the guard (#10434).
+expect_block "git -c foo=bar checkout some-branch"   "git -c core.foo=bar checkout some-branch"
+expect_block "git -c x=y checkout main"              "git -c http.sslVerify=false checkout main"
+expect_block "git -C /path switch some-branch"       "git -C /some/path switch some-branch"
+expect_block "git --git-dir=.git checkout feature"   "git --git-dir=.git checkout feature-branch"
+# Benign global-option commands (not a branch switch) must still pass.
+expect_allow "git -c x=y status (benign)"            "git -c core.pager=cat status"
+expect_allow "git -c x=y checkout -b (new branch)"   "git -c core.foo=bar checkout -b issue-9999 origin/Dev_new_gui"
 
 echo ""
 echo "--- Push protections ---"

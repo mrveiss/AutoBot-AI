@@ -568,4 +568,4 @@ if __name__ == "__main__":
     example = create_example_report_1()
     import json
 
-    print(json.dumps(example.to_dict(), indent=2))
+    print(json.dumps(example.to_dict(), indent=2))  # noqa: print  # canonical: ignore py-print-smoke

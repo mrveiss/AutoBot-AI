@@ -93,3 +93,47 @@ class SSOTestResponse(BaseModel):
     success: bool
     message: str
     details: dict[str, Any] | None = None
+
+
+class SSOProviderHealthResponse(BaseModel):
+    """Response model for a single provider's health summary."""
+
+    provider_id: uuid.UUID
+    name: str
+    success_count: int
+    failure_count: int
+    last_success_at: datetime | None
+    health_status: str  # healthy | warning | error | unknown
+    secret_staleness: dict[str, Any] | None = None  # from sso_rotation.check_staleness (#10154)
+
+    class Config:
+        from_attributes = True
+
+
+# ---------------------------------------------------------------------------
+# Rotation schemas (#10154)
+# ---------------------------------------------------------------------------
+
+
+class SSORotateKEKRequest(BaseModel):
+    """Request body for KEK rotation (rewrap DEKs, plaintext unchanged)."""
+
+    field: str = Field(..., description="Secret field name, e.g. 'client_secret' or 'bind_password'")
+    new_root_key: str = Field(..., description="URL-safe base64-encoded new root key (32 bytes decoded)")
+
+
+class SSORotateValueRequest(BaseModel):
+    """Request body for value rotation (new secret supplied by operator)."""
+
+    field: str = Field(..., description="Secret field name, e.g. 'client_secret' or 'bind_password'")
+    new_value: str = Field(..., min_length=1, description="New secret value from the IdP")
+
+
+class SSORotationResponse(BaseModel):
+    """Response from a rotation operation."""
+
+    provider_id: uuid.UUID
+    field: str
+    action: str  # rotate_kek | rotate_value
+    vault_id: str
+    rotated_at: str

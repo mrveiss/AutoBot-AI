@@ -60,10 +60,10 @@ jobs:
           --health-retries 10
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -73,13 +73,16 @@ jobs:
         # Deliberately minimal — exactly what migrations/env.py and the
         # baseline entrypoint import. Keeping this lean keeps the gate fast
         # and proves migrations don't silently grow heavyweight deps.
+        # structlog is required because test_unified_secrets_api.py mounts the
+        # full FastAPI router which transitively imports security.service_auth
+        # (structlog-based structured logging for HMAC service-auth).
         run: |
           python -m pip install --upgrade pip
           python -m pip install \
             "alembic>=1.13" "sqlalchemy[asyncio]>=2.0" asyncpg aiosqlite \
             pydantic pydantic-settings \
             bcrypt pyjwt redis httpx aiofiles python-dotenv pyyaml \
-            cryptography fastapi \
+            cryptography fastapi structlog \
             pytest pytest-asyncio
 
       - name: Run migration matrix

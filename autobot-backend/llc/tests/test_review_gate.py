@@ -22,7 +22,7 @@ import pytest
 
 from llc.models.enums import WorkItemStatus, WorkItemType
 from llc.models.review_gate import LLCReviewGatePolicy
-from llc.services.handoff import HandoffError, HandoffService
+from llc.services.handoff import HandoffNotAllowed, HandoffService
 from llc.services.review_gate import (
     ReviewGatePolicyConflictError,
     ReviewGatePolicyNotFoundError,
@@ -453,7 +453,9 @@ class TestHandoffService:
     @pytest.mark.asyncio
     async def test_review_gate_handoff_agent_to_human_transitions_to_in_review(self) -> None:
         """agent_to_human sets status to IN_REVIEW and clears checkout lock."""
+        agent_id = str(uuid.uuid4())
         wi = _make_work_item(status=WorkItemStatus.IN_PROGRESS)
+        wi.assignee_agent_id = uuid.UUID(agent_id)  # the agent holds the checkout
         session = AsyncMock()
         execute_result = MagicMock()
         execute_result.scalar_one_or_none.return_value = wi
@@ -465,10 +467,10 @@ class TestHandoffService:
             result = await svc.agent_to_human(
                 session,
                 str(wi.id),
-                str(uuid.uuid4()),
+                agent_id,
                 reviewer_user_id=str(uuid.uuid4()),
+                company_id=str(uuid.uuid4()),
                 agent_notes="Ready for review",
-                actor_agent_id=str(uuid.uuid4()),
             )
 
         assert result.status == WorkItemStatus.IN_REVIEW.value
@@ -483,20 +485,25 @@ class TestHandoffService:
         session.execute = AsyncMock(return_value=execute_result)
 
         svc = HandoffService()
-        with pytest.raises(HandoffError, match="not found"):
-            await svc.agent_to_human(session, str(uuid.uuid4()), str(uuid.uuid4()))
+        # Missing work item now raises ValueError (not HandoffError).
+        with pytest.raises(ValueError, match="not found"):
+            await svc.agent_to_human(
+                session, str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())
+            )
 
     @pytest.mark.asyncio
-    async def test_review_gate_handoff_wrong_state_raises(self) -> None:
-        wi = _make_work_item(status=WorkItemStatus.DONE)
+    async def test_review_gate_handoff_unauthorized_agent_raises(self) -> None:
+        """An agent that does not hold the checkout cannot hand off (#10388)."""
+        wi = _make_work_item(status=WorkItemStatus.IN_PROGRESS)
+        wi.assignee_agent_id = uuid.uuid4()  # held by a DIFFERENT agent
         session = AsyncMock()
         execute_result = MagicMock()
         execute_result.scalar_one_or_none.return_value = wi
         session.execute = AsyncMock(return_value=execute_result)
 
         svc = HandoffService()
-        with pytest.raises(HandoffError, match="Cannot hand off"):
-            await svc.agent_to_human(session, str(wi.id), str(uuid.uuid4()))
+        with pytest.raises(HandoffNotAllowed, match="does not hold checkout"):
+            await svc.agent_to_human(session, str(wi.id), str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4()))
 
 
 # ---------------------------------------------------------------------------

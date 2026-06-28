@@ -1,12 +1,13 @@
 # AutoBot Code Analysis Suite Requirements
 
 # Core Dependencies
-redis>=7.4.0
+redis>=8.0.0
 
 # Data Processing and ML
-numpy>=2.4.6,<3.0.0
-scikit-learn>=1.5.0
-pandas>=3.0.2
+-c ../../constraints/shared.txt  # single source of truth for shared versions (#10524)
+numpy  # version from constraints/shared.txt
+scikit-learn>=1.9.0
+pandas>=3.0.3
 
 # Vector Database for Embeddings
 chromadb>=1.5.9

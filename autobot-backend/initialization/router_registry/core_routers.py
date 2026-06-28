@@ -24,6 +24,7 @@ from api.agent_org import router as agent_org_router  # #1405
 from api.approval_gates import router as approval_gates_router  # #1402
 from api.audit import router as audit_router
 from api.auth import router as auth_router
+from api.benchmarks import router as benchmarks_router  # Issue #9024
 from api.browser_mcp import router as browser_mcp_router
 from api.canvas import router as canvas_router  # MVA-359
 from api.chat import router as chat_router
@@ -90,6 +91,7 @@ from api.settings import router as settings_router
 from api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from api.system import router as system_router
 from api.telegram_bot import router as telegram_bot_router  # MVA-2074
+from api.themes import router as themes_router  # #10472 — pluggable theme packages
 from api.transcriber import router as transcriber_router  # Issue #9044, MVA-2186
 from api.transcripts import router as transcripts_router  # Issue #9863, MVA-2176
 from api.usage import router as usage_router  # Issue #1807
@@ -142,6 +144,7 @@ def _get_system_routers() -> list:
         (chat_compare_router, "", ["chat", "compare"], "chat_compare"),  # Issue #4414
         (chat_embed_router, "", ["chat", "embed"], "chat_embed"),  # GH#9047
         (chat_presets_router, "", ["chat"], "chat_presets"),  # GH#8595
+        (benchmarks_router, "", ["benchmarks"], "benchmarks"),  # Issue #9024
         (collaboration_router, "", ["collaboration"], "collaboration"),
         (
             telegram_bot_router,
@@ -498,9 +501,12 @@ def _get_plugin_routers() -> list:
 
     plugin_manager.py routes already include /plugins in their paths,
     so registration prefix must be empty to avoid double-prefix (#1105).
+    themes_router carries a /themes prefix; the loop adds /api → /api/themes
+    (a /api/themes prefix here would wrongly yield /api/api/themes) (#10472).
     """
     return [
         (plugin_manager_router, "", ["plugins"], "plugin_manager"),
+        (themes_router, "", ["themes"], "themes"),  # #10472
     ]
 
 

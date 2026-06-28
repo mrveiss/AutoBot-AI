@@ -38,6 +38,7 @@ from starlette.websockets import WebSocketState
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from services.personality_service import resolve_voice_id
 from services.tts_client import get_tts_client
 
 logger = get_logger(__name__)
@@ -366,22 +367,23 @@ async def _handle_ws_message(
             await ctx["set_state"]("processing")
 
     elif msg_type == "speak":
+        language = msg.get("language", "")
         result = await _start_tts_stream(
             ws,
             msg.get("text", "").strip(),
             ctx["cancel_tts"],
             ctx["set_state"],
             ctx["get_state"],
-            voice_id=msg.get("voice_id", ""),
-            language=msg.get("language", ""),
+            voice_id=resolve_voice_id(msg.get("voice_id", ""), language),
+            language=language,
         )
         if result is not None:
             tts_task = result
 
     elif msg_type == "speak_sentence":
         text = msg.get("text", "").strip()
-        voice_id = msg.get("voice_id", "")
         language = msg.get("language", "")
+        voice_id = resolve_voice_id(msg.get("voice_id", ""), language)
         if text:
             await ctx["sentence_queue"].put((text, voice_id, language))
 

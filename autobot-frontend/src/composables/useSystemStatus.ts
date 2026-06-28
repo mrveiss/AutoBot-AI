@@ -10,10 +10,14 @@
  * TypeScript migration of useSystemStatus.js
  */
 
-import { ref, type Ref } from 'vue'
+import { ref, watch, onScopeDispose, type Ref } from 'vue'
 import apiEndpointMapper from '@/utils/ApiEndpointMapper.js'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+
+// #10347: poll cadence while the System Status panel is open, so a transient
+// backend restart self-recovers without a manual Refresh.
+const STATUS_POLL_INTERVAL_MS = 15000
 
 // ---------------------------------------------------------------------------
 // Types & Interfaces
@@ -33,6 +37,9 @@ export interface SystemStatus {
   lastChecked: Date
   apiErrors?: boolean
   criticalError?: boolean
+  // #10347: the backend API itself was unreachable, so downstream service
+  // health (read THROUGH the backend) is unknown — not "down".
+  backendUnreachable?: boolean
 }
 
 /**
@@ -369,6 +376,26 @@ export function useSystemStatus(): UseSystemStatusReturn {
       const [svcServices, svcError] = await fetchServiceStatus()
       const hasApiErrors = vmError || svcError
 
+      // #10347: NPU/Redis/Ollama/Browser are read THROUGH the backend's
+      // /api/service-monitor/*. If the backend API itself is unreachable
+      // (e.g. a ~20-30s restart), we don't know their state — show ONE
+      // amber "backend unreachable" row, not five false red "down"s.
+      if (hasApiErrors) {
+        systemServices.value = [
+          { name: 'Backend API', status: 'warning', statusText: 'Unreachable — service status unknown' },
+          { name: 'Frontend', status: 'healthy', statusText: 'Connected' },
+          { name: 'WebSocket', status: 'healthy', statusText: 'Connected' },
+        ]
+        systemStatus.value = {
+          isHealthy: false,
+          hasIssues: false,
+          lastChecked: new Date(),
+          apiErrors: true,
+          backendUnreachable: true,
+        }
+        return
+      }
+
       const combined: SystemService[] = [
         ...vmServices,
         ...svcServices,
@@ -396,6 +423,25 @@ export function useSystemStatus(): UseSystemStatusReturn {
       setCriticalFallbackState()
     }
   }
+
+  // #10347: auto-refresh while the panel is open so a transient backend
+  // restart self-recovers without a manual Refresh. Polls only while shown
+  // (no cost when closed); cleaned up on scope teardown.
+  let pollTimer: ReturnType<typeof setInterval> | null = null
+  const stopPolling = (): void => {
+    if (pollTimer !== null) {
+      clearInterval(pollTimer)
+      pollTimer = null
+    }
+  }
+  watch(showSystemStatus, (open) => {
+    stopPolling()
+    if (open) {
+      void refreshSystemStatus()
+      pollTimer = setInterval(() => void refreshSystemStatus(), STATUS_POLL_INTERVAL_MS)
+    }
+  })
+  onScopeDispose(stopPolling)
 
   /**
    * Manually recalculate system status from the current services list

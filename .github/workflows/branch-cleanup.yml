@@ -40,7 +40,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -180,8 +180,8 @@ jobs:
               issue_state=$(gh issue view "$issue_number" --json state --jq '.state' 2>/dev/null || echo "")
 
               if [ "$issue_state" = "CLOSED" ]; then
-                # Verify there's a merged PR for this issue
-                merged_pr=$(gh pr list --search "$issue_number" --state merged --json number -q '.[0].number' 2>/dev/null || true)
+                # Verify a merged PR actually closes this issue (#10114)
+                merged_pr=$(merged_pr_for_issue "$issue_number")
 
                 if [ -n "$merged_pr" ]; then
                   if [ "$DRY_RUN" = "true" ]; then

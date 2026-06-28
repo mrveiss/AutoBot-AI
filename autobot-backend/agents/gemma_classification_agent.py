@@ -500,7 +500,7 @@ if __name__ == "__main__":
 
     async def run_benchmark(agent):
         """Run benchmark mode (Issue #334 - extracted helper)."""
-        print("🚀 Running Gemma Classification Benchmark")  # noqa: print
+        logger.info("🚀 Running Gemma Classification Benchmark")
         test_cases = [
             "whats new on tvnet.lv",
             "what is docker",
@@ -512,23 +512,26 @@ if __name__ == "__main__":
 
         total_time = 0
         for i, test_case in enumerate(test_cases, 1):
-            print(f"\n{i}. Testing: '{test_case}'")  # noqa: print
+            logger.info("%s. Testing: '%s'", i, test_case)
             result = await agent.classify_request(test_case)
             response_time = result.context_analysis.get("response_time_ms", 0)
             model_used = result.context_analysis.get("model_used", "unknown")
             total_time += response_time
-            print(  # noqa: print
-                f"   Result: {result.complexity.value} ({result.confidence:.2f}) - {response_time:.1f}ms"
+            logger.info(
+                "   Result: %s (%.2f) - %.1fms",
+                result.complexity.value,
+                result.confidence,
+                response_time,
             )
-            print(f"   Model: {model_used}")  # noqa: print
+            logger.info("   Model: %s", model_used)
 
         avg_time = total_time / len(test_cases)
-        print(f"\n📊 Average response time: {avg_time:.1f}ms")  # noqa: print
+        logger.info("📊 Average response time: %.1fms", avg_time)
 
     async def run_interactive(agent):
         """Run interactive mode (Issue #334 - extracted helper)."""
-        print("🤖 Interactive Gemma Classification Agent")  # noqa: print
-        print("Enter messages to classify (Ctrl+C to exit)")  # noqa: print
+        logger.info("🤖 Interactive Gemma Classification Agent")
+        logger.info("Enter messages to classify (Ctrl+C to exit)")
 
         while True:
             try:
@@ -536,29 +539,29 @@ if __name__ == "__main__":
                 if not message:
                     continue
                 result = await agent.classify_request(message)
-                print(f"\nClassification: {result.complexity.value}")  # noqa: print
-                print(f"Confidence: {result.confidence:.2f}")  # noqa: print
+                logger.info("Classification: %s", result.complexity.value)
+                logger.info("Confidence: %.2f", result.confidence)
                 model_used = result.context_analysis.get("model_used", "unknown")
                 response_time = result.context_analysis.get("response_time_ms", 0)
-                print(f"Model: {model_used}")  # noqa: print
-                print(f"Response Time: {response_time:.1f}ms")  # noqa: print
-                print(f"Reasoning: {result.reasoning}")  # noqa: print
+                logger.info("Model: %s", model_used)
+                logger.info("Response Time: %.1fms", response_time)
+                logger.info("Reasoning: %s", result.reasoning)
             except KeyboardInterrupt:
-                print("\n👋 Goodbye!")  # noqa: print
+                logger.info("👋 Goodbye!")
                 break
 
     async def run_single_message(agent, message):
         """Run single message mode (Issue #334 - extracted helper)."""
         result = await agent.classify_request(message)
-        print(f"Message: {message}")  # noqa: print
-        print(f"Classification: {result.complexity.value}")  # noqa: print
-        print(f"Confidence: {result.confidence:.2f}")  # noqa: print
+        logger.info("Message: %s", message)
+        logger.info("Classification: %s", result.complexity.value)
+        logger.info("Confidence: %.2f", result.confidence)
         model_used = result.context_analysis.get("model_used", "unknown")
         response_time = result.context_analysis.get("response_time_ms", 0)
-        print(f"Model: {model_used}")  # noqa: print
-        print(f"Response Time: {response_time:.1f}ms")  # noqa: print
-        print(f"Reasoning: {result.reasoning}")  # noqa: print
-        print(f"Context: {json.dumps(result.context_analysis, indent=2)}")  # noqa: print  # noqa: print
+        logger.info("Model: %s", model_used)
+        logger.info("Response Time: %.1fms", response_time)
+        logger.info("Reasoning: %s", result.reasoning)
+        logger.info("Context: %s", json.dumps(result.context_analysis, indent=2))
 
     async def main():
         """Run Gemma classification agent in selected mode."""
@@ -571,8 +574,6 @@ if __name__ == "__main__":
         elif args.message:
             await run_single_message(agent, args.message)
         else:
-            print(  # noqa: print
-                "Usage: python gemma_classification_agent.py 'message' or --interactive or --benchmark"
-            )
+            logger.info("Usage: python gemma_classification_agent.py 'message' or --interactive or --benchmark")
 
     run_or_schedule(main())

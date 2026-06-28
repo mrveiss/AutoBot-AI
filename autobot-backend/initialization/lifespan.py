@@ -1263,6 +1263,55 @@ async def _init_background_llm_sync(app: FastAPI):
         logger.warning("Background LLM sync initialization failed: %s", sync_error)
 
 
+async def _init_llm_adapters() -> None:
+    """Populate AdapterRegistry with available LLM adapters (#10526).
+
+    Mirrors the provider-registration logic in ``ProviderRegistry._populate_default_providers``
+    so that ``GET /api/adapters`` returns a non-empty list.  Non-fatal — adapter
+    unavailability must never block startup.
+    """
+    logger.info("[ 97%%] LLM Adapters: registering adapters...")
+    try:
+        from autobot_shared.ssot_config import config as _cfg
+        from autobot_shared.ssot_config import get_ollama_url
+        from llm_shared.adapters import (
+            AnthropicAdapter,
+            GroqAdapter,
+            OllamaAdapter,
+            OpenAIAdapter,
+        )
+        from llm_shared.adapters.registry import get_adapter_registry
+
+        registry = get_adapter_registry()
+
+        # Ollama — always registered (local provider, no key required)
+        try:
+            ollama_url = get_ollama_url()
+            from llm_shared.adapters.base import AdapterConfig
+
+            ollama = OllamaAdapter(AdapterConfig(adapter_type="ollama", settings={"base_url": ollama_url}))
+            registry.register(ollama)
+        except Exception as exc:
+            logger.debug("Ollama adapter registration skipped: %s", exc)
+
+        # OpenAI — registered when API key is set
+        if getattr(_cfg, "openai_api_key", None):
+            registry.register(OpenAIAdapter())
+
+        # Anthropic — registered when API key is set
+        if getattr(_cfg, "anthropic_api_key", None):
+            registry.register(AnthropicAdapter())
+
+        # Groq — registered when API key is set
+        if getattr(_cfg, "groq_api_key", None):
+            registry.register(GroqAdapter())
+
+        count = len(registry.list_adapters())
+        logger.info("[ 97%%] LLM Adapters: %d adapter(s) registered", count)
+    except Exception as exc:
+        logger.warning("LLM adapter initialization failed (non-critical): %s", exc)
+
+
 @requires_postgres("Agent Registry")
 async def _seed_agent_registry() -> None:
     """Populate agents table from DEFAULT_AGENT_CONFIGS (#1754)."""
@@ -1435,10 +1484,13 @@ async def _wire_npu_task_queue() -> None:
 
 
 async def _init_voice_interface(app: FastAPI) -> None:
-    """Initialize VoiceInterface and attach it to app.state (#3848).
+    """Initialize the optional local VoiceInterface and attach it to app.state (#3848).
 
-    NON-CRITICAL: voice endpoints return 503 when this is unavailable.
-    Runs in Phase 2 because voice hardware is not required for core operation.
+    NON-CRITICAL and OPTIONAL: this is the legacy local (pyttsx3) interface for
+    *server-side* speak + speech-to-text (/voice/listen). Text-to-speech for
+    clients is served by the pocket-tts worker (tts_client) regardless, so its
+    absence does NOT disable TTS — /voice/synthesize, /voice/speak and
+    /voice/stream all work via the worker. Only local /voice/listen (STT) needs it.
     """
     logger.info("[ 99%%] Voice Interface: Initializing...")
     try:
@@ -1448,8 +1500,9 @@ async def _init_voice_interface(app: FastAPI) -> None:
         app.state.voice_interface = voice_interface
         logger.info("[ 99%%] Voice Interface: Initialized and attached to app.state")
     except Exception as e:
-        logger.warning(
-            "Voice interface initialization failed (non-critical): %s — " "voice endpoints will return 503",
+        logger.info(
+            "Local voice_interface unavailable (optional): %s — TTS still works via "
+            "the pocket-tts worker; only local speech-to-text (/voice/listen) is disabled.",
             e,
         )
         app.state.voice_interface = None
@@ -1579,7 +1632,7 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
     _CLUSTER_INTERVAL_SECONDS = 6 * 3600  # 6 hours
 
     async def _loop() -> None:
-        # Allow startup to complete before first expensive Leiden pass
+        # Allow startup to complete before first expensive clustering pass
         await asyncio.sleep(300)  # 5 minutes
         while True:
             try:
@@ -1588,14 +1641,6 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
                     "CommunityClusterer periodic run: %d anchors promoted",
                     len(promoted),
                 )
-            except ImportError as exc:
-                logger.warning(
-                    "graspologic not installed — community clustering paused. "
-                    "Install with: pip install graspologic. Retrying in 24h. Error: %s",
-                    exc,
-                )
-                await asyncio.sleep(86400)  # 24 hours — re-check after potential install
-                continue
             except Exception as exc:
                 logger.warning("CommunityClusterer periodic run failed (non-fatal): %s", exc)
             await asyncio.sleep(_CLUSTER_INTERVAL_SECONDS)
@@ -1801,6 +1846,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_process_adapter(app)
         await _init_orchestrator(app)
         await _seed_default_admin()
+        await _init_llm_adapters()
         await _seed_agent_registry()
         await _wire_npu_task_queue()
         await _wire_scheduler_executor()

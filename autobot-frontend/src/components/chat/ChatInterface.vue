@@ -1025,10 +1025,12 @@ const initializeChatInterface = async () => {
   try {
     logger.debug('🚀 Starting streamlined chat interface initialization')
 
-    // Issue #671: Reduced timeout from 8s to 5s for faster failure feedback
+    // BUG4: 5s was too aggressive — a slow backend timed out all three init
+    // calls. 10s matches the per-request init timeout; partial data still
+    // renders because BatchApiService uses Promise.allSettled.
     const loadPromise = batchApiService.initializeChatInterface()
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Initialization timeout')), 5000)
+      setTimeout(() => reject(new Error('Initialization timeout')), 10000)
     })
 
     try {
@@ -1051,8 +1053,8 @@ const initializeChatInterface = async () => {
         // Backend JSON boundary: raw session objects match ChatSession at runtime
         store.syncSessionsWithBackend(sessions as unknown as ChatSession[], intentionalEmpty)
       } else if (data.chat_sessions?.error) {
-        // Explicit error case - log and proceed with fallback
-        logger.warn('Failed to load chat sessions from backend:', data.chat_sessions.error)
+        // Handled below by the fallback loadChatSessions() retry — debug only.
+        logger.debug('Chat sessions unavailable from backend:', data.chat_sessions.error)
       }
 
       // Update connection status
@@ -1061,18 +1063,21 @@ const initializeChatInterface = async () => {
         isConnected.value = healthData.status === 'healthy'
         baseConnectionStatus.value = isConnected.value ? t('status.connected') : t('status.disconnected')
       } else if (data.system_health?.error) {
-        // Explicit error case for system health
-        logger.warn('Failed to load system health:', data.system_health.error)
+        // Non-fatal — connection status falls back to disconnected. Debug only.
+        logger.debug('System health unavailable:', data.system_health.error)
       }
 
       // Issue #671: Clear initialization state on success
       store.setInitializing(false)
     } catch (error) {
-      logger.warn('⏱️ Initialization failed or timed out, using fallback:', error)
+      // Expected when the backend is slow/unavailable — we retry sessions below.
+      logger.debug('⏱️ Initialization timed out, using fallback:',
+        error instanceof Error ? error.message : error)
 
-      // Fallback to individual loading
+      // Fallback to individual loading (this is the chat-history retry path).
       if (store.sessions.length === 0) {
-        await controller.loadChatSessions().catch((err) => logger.warn('Failed to load chat sessions:', err))
+        await controller.loadChatSessions().catch((err) =>
+          logger.debug('Fallback chat session load failed:', err instanceof Error ? err.message : err))
       }
 
       // Issue #671: Clear initialization state after fallback attempt

@@ -567,6 +567,25 @@
     "twoFactorAuthentication": "Two-Factor Authentication",
     "username": "Username"
   },
+  "llmFallbacks": {
+    "title": "LLM Fallback Monitoring",
+    "subtitle": "Configured fallback chains and currently active model fallbacks across the fleet.",
+    "refresh": "Refresh",
+    "configuredChains": "Configured Fallback Chains",
+    "activeFallbacks": "Active Fallbacks",
+    "autoRefresh": "Auto-refreshes every 10s",
+    "primaryModel": "Primary Model",
+    "fallbackChain": "Fallback Chain",
+    "fallbackModel": "Fallback Model",
+    "provider": "Provider",
+    "primaryProvider": "Primary Provider",
+    "fallbackProvider": "Fallback Provider",
+    "conversationId": "Conversation ID",
+    "time": "Time",
+    "loading": "Loading...",
+    "noChains": "No fallback chains configured",
+    "noActiveFallbacks": "No active fallbacks (all models operating normally)"
+  },
   "maintenanceView": {
     "actions": "Actions",
     "active": "Active",
@@ -1900,5 +1919,45 @@
   "updatesView": {
     "manageSystemUpdatesAnd": "Manage system updates and code deployments across the fleet",
     "updates": "Updates"
+  },
+  "sharedLinksView": {
+    "title": "Shared Links Audit",
+    "subtitle": "Read-only audit of who has shared what — every active public chat link, by user. Users manage their own shares in the app.",
+    "refresh": "Refresh",
+    "dismiss": "Dismiss",
+    "loading": "Loading shared links…",
+    "empty": "No active shared links.",
+    "tableCaption": "Audit of active shared chat links across all users",
+    "colOwner": "Owner",
+    "colSession": "Session",
+    "colCreated": "Created",
+    "colExpires": "Expires",
+    "colPassword": "Password",
+    "never": "Never",
+    "protected": "Protected",
+    "open": "Open",
+    "countHint": "{count} active link(s)."
+  },
+  "budgetAudit": {
+    "title": "Budget Policy Audit",
+    "subtitle": "Read-only oversight of all agent, project, task, and tenant budget policies and their hard-stop auto-pause configuration.",
+    "readOnlyNotice": "Audit view only. Budget policies are created and managed by users in the user app; this console does not modify them.",
+    "refresh": "Refresh",
+    "totalPolicies": "Total Policies",
+    "autoPausePolicies": "Auto-Pause Policies",
+    "name": "Name",
+    "scope": "Scope",
+    "scopeId": "Scope ID",
+    "period": "Period",
+    "threshold": "Threshold",
+    "warning": "Warning At",
+    "action": "Breach Action",
+    "status": "Status",
+    "unnamed": "(unnamed)",
+    "active": "Active",
+    "disabled": "Disabled",
+    "canPause": "Can Pause",
+    "loading": "Loading...",
+    "noPolicies": "No budget policies configured"
   }
 }

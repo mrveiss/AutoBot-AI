@@ -1387,6 +1387,14 @@ class MiscConfig(BaseSettings):
     voice_toolset_bundle: str = Field(default="voice_safe", alias="AUTOBOT_VOICE_TOOLSETS")
     voice_disabled_tools: str = Field(default="", alias="AUTOBOT_VOICE_DISABLED_TOOLS")
     voice_realtime_model: str = Field(default="gpt-realtime-2", alias="AUTOBOT_VOICE_REALTIME_MODEL")
+    voice_realtime_provider: str = Field(
+        default="openai",
+        alias="AUTOBOT_VOICE_REALTIME_PROVIDER",
+        description=(
+            "Active realtime voice provider (#9025): openai | gemini | elevenlabs | ultravox. "
+            "Default openai keeps current behaviour; unconfigured/unknown selections fall back to openai."
+        ),
+    )
     voice_realtime_max_seconds: int = Field(
         default=1800,
         alias="AUTOBOT_VOICE_REALTIME_MAX_SECONDS",
@@ -1708,14 +1716,41 @@ class AutoBotConfig(BaseSettings):
     debug: bool = Field(default=False, alias="AUTOBOT_DEBUG")
     log_level: str = Field(default="INFO", alias="AUTOBOT_LOG_LEVEL")
 
+    # GH#8995: Data-hygiene TTL settings (retention OFF by default — 0 means disabled)
+    # Safe defaults: nothing is deleted unless an admin explicitly sets a period.
+    chat_retention_days: int = Field(
+        default=0,
+        alias="AUTOBOT_CHAT_RETENTION_DAYS",
+        description=(
+            "Days to retain chat sessions/conversations (0 = retention disabled). "
+            "Chats flagged keep_forever=true are always exempt. "
+            "Applied nightly by tasks.cleanup_expired_chats."
+        ),
+    )
+    file_retention_days: int = Field(
+        default=0,
+        alias="AUTOBOT_FILE_RETENTION_DAYS",
+        description=(
+            "Days to retain uploaded file attachments (0 = retention disabled). "
+            "Applied nightly by tasks.cleanup_expired_files."
+        ),
+    )
+    kb_retention_days: int = Field(
+        default=0,
+        alias="AUTOBOT_KB_RETENTION_DAYS",
+        description=(
+            "Days to retain knowledge-base entries (0 = retention disabled). "
+            "Applied nightly by tasks.cleanup_expired_kb_entries."
+        ),
+    )
+
     # Audit logging — issue #3277
     audit_retention_days: int = Field(
-        default=90,
+        default=0,
         alias="AUTOBOT_AUDIT_RETENTION_DAYS",
         description=(
-            "Number of days to retain security audit logs in Redis. "
-            "Default 90 days satisfies most compliance requirements. "
-            "Range: 7–365."
+            "Days to retain audit logs in Redis (0 = retention disabled). "
+            "Applied nightly by tasks.cleanup_expired_audit_logs."
         ),
     )
 

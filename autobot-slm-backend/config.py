@@ -118,8 +118,22 @@ def _get_ssot_pool_defaults() -> tuple:
         return (10, 10, 3600)
 
 
+def _get_ssot_backend_url() -> str:
+    """Derive the autobot-backend URL from SSOT config (vm.main / port.backend).
+
+    Falls back to localhost:8001 if autobot_shared is unavailable (#10573).
+    """
+    try:
+        from autobot_shared.ssot_config import get_config
+
+        return get_config().backend_url
+    except Exception:
+        return "http://127.0.0.1:8001"
+
+
 # Load SSOT defaults at module level so Settings class can reference them.
 _SSOT_POOL_SIZE, _SSOT_MAX_OVERFLOW, _SSOT_POOL_RECYCLE = _get_ssot_pool_defaults()
+_SSOT_BACKEND_URL = _get_ssot_backend_url()
 
 
 class Settings(BaseSettings):
@@ -164,10 +178,13 @@ class Settings(BaseSettings):
     port: int = 8000
     debug: bool = False
 
-    # SLM self-identity (#9956)
-    # The SLM manager's own DB node_id. Deployments may rename the node, so this
-    # is read from the environment instead of being hardcoded. The default
-    # matches the inventory default (slm_server host in slm-nodes.yml).
+    # SLM self-identity (#9956, #10110)
+    # The SLM manager's own DB node_id — the one well-known, stable identity
+    # in the registry-driven model (#10110: the DB node registry is the source
+    # of truth; every other node self-registers with a uuid4()[:8] node_id).
+    # Deployments may rename the manager, so this is read from the environment
+    # instead of being hardcoded; the default matches the legacy slm_server
+    # fallback host in slm-nodes.yml.
     slm_node_id: str = os.getenv("SLM_NODE_ID", "00-SLM-Manager")
 
     # Authentication
@@ -180,7 +197,7 @@ class Settings(BaseSettings):
     # verifies RS256 tokens locally; the signing private key never leaves the
     # authority.  Override these in /etc/autobot/slm-secrets.env for
     # non-co-located deployments.
-    authority_base_url: str = os.getenv("SLM_AUTHORITY_BASE_URL", "http://127.0.0.1:8001")
+    authority_base_url: str = os.getenv("SLM_AUTHORITY_BASE_URL", _SSOT_BACKEND_URL)
     authority_jwks_path: str = os.getenv("SLM_AUTHORITY_JWKS_PATH", "/.well-known/jwks.json")
     # How long to trust a cached JWKS before re-fetching (seconds).
     jwks_cache_ttl_seconds: int = int(os.getenv("SLM_JWKS_CACHE_TTL", "3600"))
@@ -295,8 +312,14 @@ class Settings(BaseSettings):
     # Monitoring
     monitoring_mode: str = "local"  # local or remote
     monitoring_host: str | None = None
-    grafana_url: str = "http://127.0.0.1:3000"
-    prometheus_url: str = "http://127.0.0.1:9090"
+    grafana_url: str = os.getenv(
+        "SLM_GRAFANA_URL",
+        f"http://{os.getenv('AUTOBOT_BACKEND_HOST', '127.0.0.1')}:{os.getenv('AUTOBOT_GRAFANA_PORT', '3000')}",
+    )
+    prometheus_url: str = os.getenv(
+        "SLM_PROMETHEUS_URL",
+        f"http://{os.getenv('AUTOBOT_BACKEND_HOST', '127.0.0.1')}:{os.getenv('AUTOBOT_PROMETHEUS_PORT', '9090')}",
+    )
 
     # Health checks
     heartbeat_interval: int = 30  # seconds

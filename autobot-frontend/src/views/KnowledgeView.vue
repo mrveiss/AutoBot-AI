@@ -53,6 +53,32 @@
           <span>{{ $t('knowledge.views.search') }}</span>
         </router-link>
 
+        <!-- TASK 1a: AI Documents — migrated from top nav into the Knowledge sidebar -->
+        <router-link
+          to="/knowledge/documents"
+          class="category-item"
+          :class="{ active: $route.path.startsWith('/knowledge/documents') }"
+          :aria-label="$t('knowledge.views.documentsAriaLabel')"
+        >
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+          <span>{{ $t('nav.documents') }}</span>
+        </router-link>
+
+        <!-- TASK 1b: Transcriber — migrated from top nav into the Knowledge sidebar -->
+        <router-link
+          to="/knowledge/transcriber"
+          class="category-item"
+          :class="{ active: $route.path.startsWith('/knowledge/transcriber') }"
+          :aria-label="$t('knowledge.views.transcriberAriaLabel')"
+        >
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+          </svg>
+          <span>{{ $t('nav.transcriber') }}</span>
+        </router-link>
+
         <!-- Issue #1256: Observable Research Panel -->
         <router-link
           to="/knowledge/research"
@@ -76,14 +102,14 @@
           to="/knowledge/mcp-resources"
           class="category-item"
           :class="{ active: $route.name === 'knowledge-mcp-resources' }"
-          aria-label="Browse MCP Resources"
+          :aria-label="$t('knowledge.views.mcpResourcesAriaLabel')"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
             </path>
           </svg>
-          <span>MCP Resources</span>
+          <span>{{ $t('knowledge.views.mcpResources') }}</span>
         </router-link>
 
         <!-- #8999: ChromaDB / vector-store explorer -->
@@ -91,14 +117,14 @@
           to="/knowledge/vector-store"
           class="category-item"
           :class="{ active: $route.name === 'knowledge-vector-store' }"
-          aria-label="Browse the vector store"
+          :aria-label="$t('knowledge.views.vectorStoreAriaLabel')"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75">
             </path>
           </svg>
-          <span>Vector Store</span>
+          <span>{{ $t('knowledge.views.vectorStore') }}</span>
         </router-link>
 
         <router-link
@@ -191,20 +217,20 @@
         </router-link>
 
         <div class="category-divider">
-          <span>Automation</span>
+          <span>{{ $t('knowledge.views.automationGroup') }}</span>
         </div>
 
         <router-link
           to="/knowledge/watch-folders"
           class="category-item"
           :class="{ active: $route.name === 'knowledge-watch-folders' }"
-          aria-label="Watch Folders"
+          :aria-label="$t('knowledge.views.watchFoldersAriaLabel')"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
           </svg>
-          <span>Watch Folders</span>
+          <span>{{ $t('knowledge.views.watchFolders') }}</span>
         </router-link>
 
         <div class="category-divider">
@@ -223,7 +249,7 @@
         </router-link>
 
         <div class="category-divider">
-          <span>Research</span>
+          <span>{{ $t('knowledge.views.research') }}</span>
         </div>
 
         <!-- MVA-344: 4-tab web research panel -->

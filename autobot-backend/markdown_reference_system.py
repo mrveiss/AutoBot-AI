@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from memory import EnhancedMemoryManager
+from memory import UnifiedMemoryManager
 
 logger = get_logger(__name__)
 
@@ -38,12 +38,12 @@ class MarkdownReferenceSystem:
 
     def __init__(
         self,
-        memory_manager: EnhancedMemoryManager | None = None,
+        memory_manager: UnifiedMemoryManager | None = None,
         docs_root: str = "docs",
         knowledge_root: str = "data/system_knowledge",
     ):
         """Initialize markdown reference system with document tracking tables."""
-        self.memory_manager = memory_manager or EnhancedMemoryManager()
+        self.memory_manager = memory_manager or UnifiedMemoryManager()
         self.docs_root = Path(docs_root)
         self.knowledge_root = Path(knowledge_root)
 

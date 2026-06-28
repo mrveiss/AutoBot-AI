@@ -63,3 +63,6 @@ class ImageGenerationPlugin(BasePlugin):
                 registry.unregister(GenerateImageTool.metadata.name)
             except Exception:
                 pass
+
+# Loader entry-point alias (#10294)
+Plugin = ImageGenerationPlugin

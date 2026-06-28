@@ -9,114 +9,54 @@
         </div>
       </div>
 
-      <!-- Sub-navigation Tabs - Issue #901: Technical Precision Design -->
+      <!-- Sub-navigation Tabs - Issue #901 / TASK 14: overflow-aware tab bar -->
       <div class="analytics-nav">
-        <nav class="nav-tabs" role="tablist" :aria-label="$t('analytics.views.ariaLabel')">
+        <nav ref="tabsContainer" class="nav-tabs" role="tablist" :aria-label="$t('analytics.views.ariaLabel')">
           <router-link
-            to="/analytics/codebase"
+            v-for="tab in visibleTabs"
+            :key="tab.to"
+            :to="tab.to"
+            data-nav-item
             class="nav-tab"
-            :class="{ 'nav-tab-active': isCodebaseActive }"
+            :class="{ 'nav-tab-active': isActive(tab) }"
             role="tab"
-            :aria-selected="isCodebaseActive"
-            :aria-label="$t('analytics.views.tabs.codebaseAria')"
+            :aria-selected="isActive(tab)"
+            :aria-label="$t(tab.aria)"
           >
-            <Icon name="code" class="tab-icon" />
-            <span>{{ $t('analytics.views.tabs.codebase') }}</span>
+            <Icon :name="tab.icon" class="tab-icon" aria-hidden="true" />
+            <span>{{ $t(tab.label) }}</span>
           </router-link>
-          <!-- Issue #3436: code-quality, code-review, code-generation, evolution moved under codebase/:sourceId -->
-          <router-link
-            to="/analytics/bi"
-            class="nav-tab"
-            :class="{ 'nav-tab-active': isBIActive }"
-            role="tab"
-            :aria-selected="isBIActive"
-            :aria-label="$t('analytics.views.tabs.businessIntelligenceAria')"
-          >
-            <Icon name="chart-pie" class="tab-icon" />
-            <span>{{ $t('analytics.views.tabs.businessIntelligence') }}</span>
-          </router-link>
-          <router-link
-            to="/analytics/security"
-            class="nav-tab"
-            :class="{ 'nav-tab-active': isSecurityActive }"
-            role="tab"
-            :aria-selected="isSecurityActive"
-            :aria-label="$t('analytics.views.tabs.securityAria')"
-          >
-            <Icon name="shield-alt" class="tab-icon" />
-            <span>{{ $t('analytics.views.tabs.security') }}</span>
-          </router-link>
-          <router-link
-            to="/analytics/audit"
-            class="nav-tab"
-            :class="{ 'nav-tab-active': isAuditActive }"
-            role="tab"
-            :aria-selected="isAuditActive"
-            :aria-label="$t('analytics.views.tabs.auditAria')"
-          >
-            <Icon name="clipboard-check" class="tab-icon" />
-            <span>{{ $t('analytics.views.tabs.audit') }}</span>
-          </router-link>
-          <!-- Issue #902: Dev Tools moved from standalone /dev-speedup into analytics tab -->
-          <router-link
-            to="/analytics/dev-tools"
-            class="nav-tab"
-            :class="{ 'nav-tab-active': isDevToolsActive }"
-            role="tab"
-            :aria-selected="isDevToolsActive"
-            :aria-label="$t('analytics.views.tabs.devToolsAria')"
-          >
-            <Icon name="bolt" class="tab-icon" aria-hidden="true" />
-            <span>{{ $t('analytics.views.tabs.devTools') }}</span>
-          </router-link>
-          <!-- Issue #4465: Usage & Costs moved from standalone nav into analytics tab -->
-          <router-link
-            to="/analytics/usage"
-            class="nav-tab"
-            :class="{ 'nav-tab-active': isUsageActive }"
-            role="tab"
-            :aria-selected="isUsageActive"
-            :aria-label="$t('analytics.views.tabs.usageAria')"
-          >
-            <Icon name="chart-bar" class="tab-icon" aria-hidden="true" />
-            <span>{{ $t('analytics.views.tabs.usage') }}</span>
-          </router-link>
-          <!-- Issue #4270: Operations moved from standalone nav into analytics tab -->
-          <router-link
-            to="/analytics/operations"
-            class="nav-tab"
-            :class="{ 'nav-tab-active': isOperationsActive }"
-            role="tab"
-            :aria-selected="isOperationsActive"
-            :aria-label="$t('analytics.views.tabs.operationsAria')"
-          >
-            <Icon name="list-alt" class="tab-icon" aria-hidden="true" />
-            <span>{{ $t('analytics.views.tabs.operations') }}</span>
-          </router-link>
-          <!-- Issue #9891: Error monitoring dashboard -->
-          <router-link
-            to="/analytics/errors"
-            class="nav-tab"
-            :class="{ 'nav-tab-active': isErrorsActive }"
-            role="tab"
-            :aria-selected="isErrorsActive"
-            :aria-label="$t('analytics.views.tabs.errorsAria')"
-          >
-            <Icon name="exclamation-triangle" class="tab-icon" aria-hidden="true" />
-            <span>{{ $t('analytics.views.tabs.errors') }}</span>
-          </router-link>
-          <!-- Issue #9892: Failure Analysis / causal-inference engine -->
-          <router-link
-            to="/analytics/diagnostics"
-            class="nav-tab"
-            :class="{ 'nav-tab-active': isDiagnosticsActive }"
-            role="tab"
-            :aria-selected="isDiagnosticsActive"
-            :aria-label="$t('analytics.views.tabs.diagnosticsAria')"
-          >
-            <Icon name="exclamation-triangle" class="tab-icon" aria-hidden="true" />
-            <span>{{ $t('analytics.views.tabs.diagnostics') }}</span>
-          </router-link>
+
+          <!-- TASK 14: collapsed tabs live in this "More" dropdown; the active
+               tab is always kept in the visible row, never hidden here. -->
+          <div v-if="hasOverflow" class="more-tabs-wrapper">
+            <button
+              type="button"
+              class="nav-tab more-tab"
+              :aria-expanded="showMore"
+              aria-haspopup="menu"
+              :aria-label="$t('nav.moreItems')"
+              @click="showMore = !showMore"
+            >
+              <span>{{ $t('nav.more') }}</span>
+              <Icon name="chevron-down" class="tab-icon" aria-hidden="true" />
+            </button>
+            <div v-if="showMore" class="more-tabs-backdrop" @click="showMore = false"></div>
+            <div v-if="showMore" class="more-tabs-menu" role="menu">
+              <router-link
+                v-for="tab in overflowTabs"
+                :key="tab.to"
+                :to="tab.to"
+                role="menuitem"
+                class="more-tabs-item"
+                :class="{ active: isActive(tab) }"
+                @click="showMore = false"
+              >
+                <Icon :name="tab.icon" class="tab-icon" aria-hidden="true" />
+                <span>{{ $t(tab.label) }}</span>
+              </router-link>
+            </div>
+          </div>
         </nav>
       </div>
 
@@ -129,51 +69,64 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import Icon from '@/components/ui/Icon.vue'
+import Icon, { type IconName } from '@/components/ui/Icon.vue'
+import { useNavOverflow } from '@/composables/useNavOverflow'
 
 const route = useRoute()
 
-const isCodebaseActive = computed(() => {
-  return route.path === '/analytics' || route.path === '/analytics/codebase' || route.path.startsWith('/analytics/codebase/')
+interface AnalyticsTab {
+  to: string
+  icon: IconName
+  label: string
+  aria: string
+  /** Codebase also matches the bare /analytics root. */
+  root?: boolean
+}
+
+// Single source of truth for the analytics sub-tabs (TASK 14)
+const tabs: AnalyticsTab[] = [
+  { to: '/analytics/codebase', icon: 'code', label: 'analytics.views.tabs.codebase', aria: 'analytics.views.tabs.codebaseAria', root: true },
+  { to: '/analytics/bi', icon: 'chart-pie', label: 'analytics.views.tabs.businessIntelligence', aria: 'analytics.views.tabs.businessIntelligenceAria' },
+  { to: '/analytics/security', icon: 'shield-alt', label: 'analytics.views.tabs.security', aria: 'analytics.views.tabs.securityAria' },
+  { to: '/analytics/audit', icon: 'clipboard-check', label: 'analytics.views.tabs.audit', aria: 'analytics.views.tabs.auditAria' },
+  { to: '/analytics/dev-tools', icon: 'bolt', label: 'analytics.views.tabs.devTools', aria: 'analytics.views.tabs.devToolsAria' },
+  { to: '/analytics/usage', icon: 'chart-bar', label: 'analytics.views.tabs.usage', aria: 'analytics.views.tabs.usageAria' },
+  { to: '/analytics/operations', icon: 'list-alt', label: 'analytics.views.tabs.operations', aria: 'analytics.views.tabs.operationsAria' },
+  { to: '/analytics/errors', icon: 'exclamation-triangle', label: 'analytics.views.tabs.errors', aria: 'analytics.views.tabs.errorsAria' },
+  { to: '/analytics/benchmark', icon: 'chart-bar', label: 'analytics.views.tabs.benchmark', aria: 'analytics.views.tabs.benchmarkAria' },
+  { to: '/analytics/diagnostics', icon: 'exclamation-triangle', label: 'analytics.views.tabs.diagnostics', aria: 'analytics.views.tabs.diagnosticsAria' },
+]
+
+function isActive(tab: AnalyticsTab): boolean {
+  if (tab.root && route.path === '/analytics') return true
+  return route.path === tab.to || route.path.startsWith(tab.to + '/')
+}
+
+const activeIndex = computed(() => {
+  const i = tabs.findIndex(isActive)
+  return i < 0 ? 0 : i
 })
 
-// Issue #3436: isCodeQualityActive, isCodeReviewActive, isCodeGenerationActive, isEvolutionActive
-// removed — these dashboards now live under codebase/:sourceId as child routes.
+// Overflow measurement (shared with the main nav rail)
+const tabsContainer = ref<HTMLElement | null>(null)
+const { visibleCount } = useNavOverflow(tabsContainer, ref(tabs.length))
 
-const isBIActive = computed(() => {
-  return route.path === '/analytics/bi' || route.path.startsWith('/analytics/bi/')
+// Indices rendered in the row. If the active tab would overflow, swap it into
+// the last visible slot so it is never hidden inside the "More" menu.
+const visibleIndices = computed<number[]>(() => {
+  const vc = Math.max(1, Math.min(visibleCount.value, tabs.length))
+  const indices = Array.from({ length: vc }, (_, i) => i)
+  if (activeIndex.value >= vc) indices[vc - 1] = activeIndex.value
+  return indices
 })
 
-const isSecurityActive = computed(() => {
-  return route.path === '/analytics/security' || route.path.startsWith('/analytics/security/')
-})
+const visibleTabs = computed(() => visibleIndices.value.map((i) => tabs[i]))
+const overflowTabs = computed(() => tabs.filter((_, i) => !visibleIndices.value.includes(i)))
+const hasOverflow = computed(() => overflowTabs.value.length > 0)
 
-const isAuditActive = computed(() => {
-  return route.path === '/analytics/audit' || route.path.startsWith('/analytics/audit/')
-})
-
-const isDevToolsActive = computed(() => {
-  return route.path === '/analytics/dev-tools' || route.path.startsWith('/analytics/dev-tools/')
-})
-
-const isUsageActive = computed(() => {
-  return route.path === '/analytics/usage' || route.path.startsWith('/analytics/usage/')
-})
-
-const isOperationsActive = computed(() => {
-  return route.path === '/analytics/operations' || route.path.startsWith('/analytics/operations/')
-})
-
-const isErrorsActive = computed(() => {
-  return route.path === '/analytics/errors' || route.path.startsWith('/analytics/errors/')
-})
-
-// Issue #9892: Diagnostics / failure analysis tab
-const isDiagnosticsActive = computed(() => {
-  return route.path === '/analytics/diagnostics' || route.path.startsWith('/analytics/diagnostics/')
-})
+const showMore = ref(false)
 </script>
 
 <style scoped>
@@ -235,7 +188,64 @@ const isDiagnosticsActive = computed(() => {
   padding: var(--spacing-0) var(--spacing-8);
   max-width: 1400px;
   margin: 0 auto;
-  overflow-x: auto;
+  /* TASK 14: overflow is managed via the "More" dropdown, not a scrollbar */
+  overflow: visible;
+  flex-wrap: nowrap;
+}
+
+/* TASK 14: "More" overflow dropdown */
+.more-tabs-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.more-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.more-tabs-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.more-tabs-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 30;
+  min-width: 12rem;
+  padding: var(--spacing-1) 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.more-tabs-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.more-tabs-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.more-tabs-item.active {
+  color: var(--color-info);
+  background: var(--color-info-bg);
 }
 
 .nav-tab {

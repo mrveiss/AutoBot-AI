@@ -296,7 +296,9 @@ class GlobalWebSocketService {
   ): void {
     const timeoutId = setTimeout(() => {
       if (this.connectionState.value === 'connecting') {
-        logger.error('WebSocket connection timeout')
+        // BUG3: logged once via handleConnectionError/state.lastError; keep this
+        // at debug so the connecting-timeout doesn't ERROR on every page.
+        logger.debug('WebSocket connection timeout')
         this.handleConnectionError(new Error('Connection timeout'))
         this.ws?.close()
         reject(new Error('Connection timeout'))
@@ -373,12 +375,24 @@ class GlobalWebSocketService {
     }
   }
 
+  /** Extract a human-readable message from an Error, raw DOM Event, or value. */
+  private _errorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message
+    if (typeof Event !== 'undefined' && error instanceof Event) {
+      return error.type || 'WebSocket error'
+    }
+    return String(error)
+  }
+
   /** Handle WebSocket error event */
   private _handleError(
     event: Event,
     reject: (reason: unknown) => void
   ): void {
-    logger.error('WebSocket error:', event)
+    // BUG3: a raw WebSocket `Event` has no `.message`, so this logged
+    // "WebSocket error: Event". Keep per-event failures at debug — the single
+    // user-facing signal is `state.lastError` set in handleConnectionError.
+    logger.debug('WebSocket error:', this._errorMessage(event))
     this.handleConnectionError(event)
     reject(event)
   }
@@ -418,14 +432,16 @@ class GlobalWebSocketService {
   /** Handle connection errors */
   handleConnectionError(error: unknown): void {
     this.connectionState.value = 'error'
-    this.state.lastError = String(error)
+    // BUG3: was String(event) → "[object Event]". Use a real message.
+    const message = this._errorMessage(error)
+    this.state.lastError = message
 
     this.trackEvent('connection_error', {
-      error: String(error),
+      error: message,
       attempt: this.reconnectAttempts
     })
 
-    this.emit('error', error)
+    this.emit('error', message)
   }
 
   /** Schedule reconnection with exponential backoff */
@@ -462,7 +478,8 @@ class GlobalWebSocketService {
     setTimeout(() => {
       if (this.connectionState.value !== 'connected') {
         this.connect().catch((error: unknown) => {
-          logger.error('Reconnection failed:', error)
+          // Per-attempt reconnect failures are debug noise (backoff continues).
+          logger.debug('Reconnection attempt failed:', this._errorMessage(error))
         })
       }
     }, delay)
@@ -492,7 +509,7 @@ class GlobalWebSocketService {
             this.reconnectAttempts = 0
             this.state.reconnectCount = 0
             this.connect().catch((err: unknown) => {
-              logger.error('Post-wait reconnect failed:', err)
+              logger.debug('Post-wait reconnect failed:', this._errorMessage(err))
             })
           }
         })

@@ -142,6 +142,8 @@ async def test_execute_close_happy_path() -> None:
     session = AsyncMock()
     call_count = [0]
 
+    approved_approval = _make_approval(status=ApprovalStatus.APPROVED.value)
+
     async def _execute(stmt: object) -> MagicMock:
         call_count[0] += 1
         result = MagicMock()
@@ -149,9 +151,12 @@ async def test_execute_close_happy_path() -> None:
             # sprint lookup
             result.scalar_one_or_none.return_value = sprint
         elif call_count[0] == 2:
+            # approval validation lookup (GH#8473)
+            result.scalar_one_or_none.return_value = approved_approval
+        elif call_count[0] == 3:
             # actual_points aggregate
             result.scalar_one.return_value = 13
-        elif call_count[0] == 3:
+        elif call_count[0] == 4:
             # project auto_rollover lookup
             result.scalar_one_or_none.return_value = None  # use company default
         else:
@@ -246,9 +251,9 @@ async def test_rollover_items_auto_rollover_true() -> None:
     approval_id = sprint.pending_close_approval_id = uuid.uuid4()
     decided_by = uuid.uuid4()
 
-    update_kwargs: dict = {}
     session = AsyncMock()
     call_count = [0]
+    approved_approval = _make_approval(status=ApprovalStatus.APPROVED.value)
 
     async def _execute(stmt: object) -> MagicMock:
         call_count[0] += 1
@@ -256,10 +261,13 @@ async def test_rollover_items_auto_rollover_true() -> None:
         if call_count[0] == 1:
             result.scalar_one_or_none.return_value = sprint
         elif call_count[0] == 2:
-            result.scalar_one.return_value = 5  # actual_points
+            # approval validation lookup (GH#8473)
+            result.scalar_one_or_none.return_value = approved_approval
         elif call_count[0] == 3:
-            result.scalar_one_or_none.return_value = True  # auto_rollover
+            result.scalar_one.return_value = 5  # actual_points
         elif call_count[0] == 4:
+            result.scalar_one_or_none.return_value = True  # auto_rollover
+        elif call_count[0] == 5:
             result.scalar_one.return_value = 3  # incomplete count
         else:
             pass  # update stmts

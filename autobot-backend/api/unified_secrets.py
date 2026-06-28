@@ -21,6 +21,7 @@ Coordinator exceptions map to HTTP: ``SecretNotFoundError``→404,
 
 from __future__ import annotations
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -28,11 +29,17 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_middleware import get_auth_middleware
-from autobot_shared.secrets_vault import VaultRef
+from autobot_shared.secrets_vault import VaultKind, VaultRef
 from llc.deps import get_session
 from models.secret import Secret
+from security.service_auth import validate_service_auth
 from services.secrets_coordinator import SecretsCoordinator
 from services.unified_secrets_service import SecretAccessError, SecretNotFoundError
+
+logger = logging.getLogger(__name__)
+
+#: The singleton system vault reference — the only vault a service principal may touch.
+_SYSTEM_VAULT = VaultRef(VaultKind.SYSTEM)
 
 router = APIRouter()
 
@@ -60,6 +67,57 @@ async def principal(request: Request) -> tuple[uuid.UUID, set[str]]:
 
     permissions = await rbac_middleware.get_user_permissions(user_id)
     return user_id, set(permissions)
+
+
+async def service_principal(request: Request) -> str:
+    """Resolve service identity for System-vault access; 401 on failure.
+
+    Two accepted auth schemes (Option A — #10492):
+    1. Shared ``X-Internal-API-Key`` header (``AUTOBOT_INTERNAL_API_KEY``) → maps to
+       the synthetic service_id ``"slm-backend"``.  This is the credential the SLM
+       already sends to other autobot-backend endpoints, so no new key provisioning is
+       required.
+    2. HMAC ``X-Service-*`` headers (per-service key in Redis ``service:key:{id}``) —
+       the pre-existing path; left intact for forward-compatibility.
+
+    Either path is scoped STRICTLY to the system vault.  Non-system vault access is
+    rejected at the endpoint level so the audit log always sees the attempt.
+    """
+    from autobot_shared.ssot_config import config as _ssot
+
+    _internal_key = _ssot.misc.internal_api_key
+    if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
+        service_id = "slm-backend"
+        logger.info(
+            "service principal authenticated via X-Internal-API-Key",
+            extra={"service_id": service_id, "path": request.url.path, "method": request.method},
+        )
+        return service_id
+
+    try:
+        info = await validate_service_auth(request)
+    except HTTPException:
+        raise
+    service_id = info["service_id"]
+    logger.info(
+        "service principal authenticated via HMAC for secrets API",
+        extra={"service_id": service_id, "path": request.url.path, "method": request.method},
+    )
+    return service_id
+
+
+def _require_system_vault(vault: VaultRef, service_id: str) -> None:
+    """Enforce that a service principal only touches the system vault; 403 otherwise."""
+    if vault.kind is not VaultKind.SYSTEM:
+        logger.warning(
+            "service principal rejected: attempted non-system vault access",
+            extra={"service_id": service_id, "vault": vault.to_str()},
+        )
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"service identity '{service_id}' is restricted to the system vault; "
+            f"attempted vault: {vault.to_str()!r}",
+        )
 
 
 def _vault(value: str) -> VaultRef:
@@ -92,6 +150,26 @@ class ShareBody(BaseModel):
 
 class RotateBody(BaseModel):
     value: str
+
+
+class RewrapBody(BaseModel):
+    """New root key (url-safe base64, 32 bytes decoded) to derive fresh KEKs for rewrapping."""
+
+    new_root_key: str
+
+
+def _decode_root_key(raw: str) -> bytes:
+    """Decode a url-safe base64 root key and enforce the 32-byte length (HTTP 400 on failure)."""
+    import base64
+    import binascii
+
+    try:
+        decoded = base64.urlsafe_b64decode(raw + "==")
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "new_root_key must be url-safe base64") from exc
+    if len(decoded) != 32:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "new_root_key must decode to exactly 32 bytes")
+    return decoded
 
 
 class SecretMetadata(BaseModel):
@@ -193,6 +271,135 @@ async def list_secrets(
     user_id, perms = who
     secrets = await coordinator.list(session, user_id=user_id, permissions=perms)
     return [SecretMetadata.of(s) for s in secrets]
+
+
+# ---------------------------------------------------------------------------
+# Service-auth System vault access (#10436) — registered BEFORE /{secret_id}
+# so that literal "/system" and "/system/{id}" paths take priority over the
+# parameterised UUID routes. Service principals carry valid X-Service-* HMAC
+# headers and may ONLY access secrets whose owner_vault is "system".
+# ---------------------------------------------------------------------------
+
+
+@router.post("/system", response_model=SecretMetadata, status_code=status.HTTP_201_CREATED)
+async def service_create_system_secret(
+    body: CreateSecretBody,
+    service_id: str = Depends(service_principal),
+    session: AsyncSession = Depends(get_session),
+    coordinator: SecretsCoordinator = Depends(get_coordinator),
+) -> SecretMetadata:
+    """Create a secret in the system vault via service identity (HMAC-authenticated)."""
+    vault = _vault(body.owner_vault)
+    _require_system_vault(vault, service_id)
+    logger.info("service CRUD: create system secret", extra={"service_id": service_id, "name": body.name})
+    try:
+        secret = await coordinator.service_create(
+            session,
+            owner_vault=vault,
+            name=body.name,
+            secret_type=body.secret_type,
+            plaintext=body.value.encode("utf-8"),
+            service_id=service_id,
+        )
+        await session.commit()
+    except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
+        raise _mapped(exc)
+    return SecretMetadata.of(secret)
+
+
+@router.get("/system", response_model=list[SecretMetadata])
+async def service_list_system_secrets(
+    service_id: str = Depends(service_principal),
+    session: AsyncSession = Depends(get_session),
+    coordinator: SecretsCoordinator = Depends(get_coordinator),
+) -> list[SecretMetadata]:
+    """List system-vault secrets accessible to a service identity."""
+    logger.info("service CRUD: list system secrets", extra={"service_id": service_id})
+    secrets = await coordinator.service_list(session, vault=_SYSTEM_VAULT)
+    return [SecretMetadata.of(s) for s in secrets]
+
+
+@router.get("/system/{secret_id}", response_model=SecretValue)
+async def service_read_system_secret(
+    secret_id: uuid.UUID,
+    service_id: str = Depends(service_principal),
+    session: AsyncSession = Depends(get_session),
+    coordinator: SecretsCoordinator = Depends(get_coordinator),
+) -> SecretValue:
+    """Read a system-vault secret value via service identity."""
+    logger.info("service CRUD: read system secret", extra={"service_id": service_id})
+    try:
+        value = await coordinator.service_read(session, secret_id=secret_id, vault=_SYSTEM_VAULT)
+    except (SecretAccessError, SecretNotFoundError) as exc:
+        raise _mapped(exc)
+    return SecretValue(value=value.decode("utf-8"))
+
+
+@router.put("/system/{secret_id}", response_model=SecretMetadata)
+async def service_rotate_system_secret(
+    secret_id: uuid.UUID,
+    body: RotateBody,
+    service_id: str = Depends(service_principal),
+    session: AsyncSession = Depends(get_session),
+    coordinator: SecretsCoordinator = Depends(get_coordinator),
+) -> SecretMetadata:
+    """Rotate a system-vault secret value (re-seal with new DEK) via service identity."""
+    logger.info("service CRUD: rotate system secret", extra={"service_id": service_id})
+    try:
+        secret = await coordinator.service_rotate(
+            session, secret_id=secret_id, new_plaintext=body.value.encode("utf-8"), vault=_SYSTEM_VAULT
+        )
+        await session.commit()
+    except (SecretAccessError, SecretNotFoundError) as exc:
+        raise _mapped(exc)
+    return SecretMetadata.of(secret)
+
+
+@router.delete("/system/{secret_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def service_delete_system_secret(
+    secret_id: uuid.UUID,
+    service_id: str = Depends(service_principal),
+    session: AsyncSession = Depends(get_session),
+    coordinator: SecretsCoordinator = Depends(get_coordinator),
+) -> None:
+    """Delete a system-vault secret via service identity."""
+    logger.info("service CRUD: delete system secret", extra={"service_id": service_id})
+    try:
+        await coordinator.service_delete(session, secret_id=secret_id, vault=_SYSTEM_VAULT)
+        await session.commit()
+    except (SecretAccessError, SecretNotFoundError) as exc:
+        raise _mapped(exc)
+
+
+@router.post("/system/{secret_id}/rewrap", response_model=SecretMetadata)
+async def service_rewrap_system_secret(
+    secret_id: uuid.UUID,
+    body: RewrapBody,
+    service_id: str = Depends(service_principal),
+    session: AsyncSession = Depends(get_session),
+    coordinator: SecretsCoordinator = Depends(get_coordinator),
+) -> SecretMetadata:
+    """Rotate the wrapping KEK for a system-vault secret via service identity (rewrap DEKs).
+
+    Service-auth counterpart of ``POST /{secret_id}/rewrap`` so non-user callers
+    (e.g. the SLM rotating SSO client-secret KEKs) can perform KEK rotation
+    scoped strictly to the system vault. The sealed value is unchanged.
+    """
+    logger.info("service CRUD: rewrap system secret", extra={"service_id": service_id})
+    new_root = _decode_root_key(body.new_root_key)
+    try:
+        secret = await coordinator.service_rotate_kek(
+            session, secret_id=secret_id, new_root_key=new_root, vault=_SYSTEM_VAULT
+        )
+        await session.commit()
+    except (SecretAccessError, SecretNotFoundError) as exc:
+        raise _mapped(exc)
+    return SecretMetadata.of(secret)
+
+
+# ---------------------------------------------------------------------------
+# User-principal parameterised routes — registered AFTER literal /system paths
+# ---------------------------------------------------------------------------
 
 
 @router.get("/{secret_id}", response_model=SecretValue)
@@ -311,3 +518,37 @@ async def revoke_share(
         await session.commit()
     except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
         raise _mapped(exc)
+
+
+# ---------------------------------------------------------------------------
+# KEK rotation endpoint (#10437) — rewrap DEKs under a new root key without
+# changing the sealed payload. Requires user auth (admin rights gate this
+# operation through the coordinator). Route registered after /system/* but
+# before /{secret_id} so the literal paths take priority; /rewrap sub-path
+# is unambiguous since it cannot be a valid UUID.
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{secret_id}/rewrap", response_model=SecretMetadata)
+async def rewrap_secret_kek(
+    secret_id: uuid.UUID,
+    body: RewrapBody,
+    who: tuple[uuid.UUID, set[str]] = Depends(principal),
+    session: AsyncSession = Depends(get_session),
+    coordinator: SecretsCoordinator = Depends(get_coordinator),
+) -> SecretMetadata:
+    """Rotate the wrapping KEK for *secret_id* by rewrapping all grants under the new root key.
+
+    The sealed value is untouched — only the wrapped DEKs change. Use this after
+    rotating ``AUTOBOT_SECRETS_ROOT_KEY`` to migrate grants to the new KEK.
+    """
+    new_root = _decode_root_key(body.new_root_key)
+    user_id, perms = who
+    try:
+        secret = await coordinator.rotate_kek(
+            session, user_id=user_id, permissions=perms, secret_id=secret_id, new_root_key=new_root
+        )
+        await session.commit()
+    except (SecretAccessError, SecretNotFoundError) as exc:
+        raise _mapped(exc)
+    return SecretMetadata.of(secret)

@@ -309,6 +309,14 @@ class WorkItemService(LLCServiceBase):
             "scheduled_start",
             "scheduled_end",
         }
+        # Single-assignee invariant (#10532, FR-HYBRID-01): assigning to one
+        # party clears the other and fixes assignee_type.
+        if fields.get("assignee_user_id"):
+            item.assignee_agent_id = None
+            fields.setdefault("assignee_type", "user")
+        elif fields.get("assignee_agent_id"):
+            item.assignee_user_id = None
+            fields.setdefault("assignee_type", "agent")
         for key, val in fields.items():
             if key not in allowed:
                 raise ValueError(f"Field '{key}' is not updatable via WorkItemService.update()")
@@ -325,6 +333,7 @@ class WorkItemService(LLCServiceBase):
         type: Optional[WorkItemType] = None,
         status: Optional[WorkItemStatus] = None,
         assignee_agent_id: Optional[str] = None,
+        reviewer_user_id: Optional[str] = None,
         sprint_id: Optional[str] = None,
         parent_id: Optional[str] = None,
         top_level_only: bool = False,
@@ -343,6 +352,9 @@ class WorkItemService(LLCServiceBase):
             q = q.where(LLCWorkItem.status == status)
         if assignee_agent_id:
             q = q.where(LLCWorkItem.assignee_agent_id == uuid.UUID(assignee_agent_id))
+        if reviewer_user_id:
+            # Review inbox (#10533): items routed to a specific human reviewer.
+            q = q.where(LLCWorkItem.reviewer_user_id == uuid.UUID(reviewer_user_id))
         if sprint_id:
             q = q.where(LLCWorkItem.sprint_id == uuid.UUID(sprint_id))
         if top_level_only:

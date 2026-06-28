@@ -169,10 +169,14 @@
         and (cache_stat.results | selectattr('item', 'equalto', 'autobot-frontend') | map(attribute='stat.exists') | first | default(false))
       changed_when: frontend_build.rc == 0
 
-    - name: "Rebuild autobot-slm-frontend production dist"
+    # #10435: SLM UI is served under /slm; build:slm exports VITE_API_URL=/slm so
+    # the API base is baked correctly (plain build leaves it unset → guard fails).
+    - name: "Rebuild autobot-slm-frontend production dist (#10435)"
       ansible.builtin.command:
-        cmd: npm run build
+        cmd: npm run build:slm
         chdir: "{{ install_base }}/autobot-slm-frontend"
+      environment:
+        VITE_API_URL: "/slm"
       register: slm_frontend_build
       when: >
         'autobot-slm-frontend' in deploy_roles

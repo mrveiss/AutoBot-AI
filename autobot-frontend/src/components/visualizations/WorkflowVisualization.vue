@@ -621,19 +621,21 @@ defineExpose({
   align-items: center;
 }
 
+/* TASK 7: status badge (incl. "Pending") was too small — enlarge for prominence */
 .status-badge {
   display: flex;
   align-items: center;
-  gap: var(--spacing-1-5);
-  padding: var(--spacing-1-5) var(--spacing-3);
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-4);
   border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 500;
+  font-size: var(--text-base);
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .status-badge.pending {
   background: var(--color-secondary-bg, rgba(100, 116, 139, 0.2));
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 .status-badge.running {

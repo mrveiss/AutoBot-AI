@@ -48,7 +48,7 @@ class TestEnsureCollection:
         mock_kb = MagicMock()
         mock_kb._async_chroma_client = mock_chroma
 
-        with patch("llc.kb.collections.get_knowledge_base", AsyncMock(return_value=mock_kb)):
+        with patch("knowledge.get_knowledge_base", AsyncMock(return_value=mock_kb)):
             name = await manager.ensure_collection("company", entity_id)
 
         assert name == f"company:{entity_id}"
@@ -64,7 +64,7 @@ class TestEnsureCollection:
         mock_kb = MagicMock()
         mock_kb._async_chroma_client = mock_chroma
 
-        with patch("llc.kb.collections.get_knowledge_base", AsyncMock(return_value=mock_kb)):
+        with patch("knowledge.get_knowledge_base", AsyncMock(return_value=mock_kb)):
             with pytest.raises(RuntimeError, match="Failed to ensure KB collection"):
                 await manager.ensure_collection("project", entity_id)
 
@@ -85,7 +85,7 @@ class TestArchiveCollection:
         mock_kb = MagicMock()
         mock_kb._async_chroma_client = mock_chroma
 
-        with patch("llc.kb.collections.get_knowledge_base", AsyncMock(return_value=mock_kb)):
+        with patch("knowledge.get_knowledge_base", AsyncMock(return_value=mock_kb)):
             archived_name = await manager.archive_collection("sprint", entity_id)
 
         assert archived_name.startswith(f"sprint:{entity_id}:archived:")
@@ -102,7 +102,7 @@ class TestArchiveCollection:
         mock_kb = MagicMock()
         mock_kb._async_chroma_client = mock_chroma
 
-        with patch("llc.kb.collections.get_knowledge_base", AsyncMock(return_value=mock_kb)):
+        with patch("knowledge.get_knowledge_base", AsyncMock(return_value=mock_kb)):
             archived_name = await manager.archive_collection("sprint", entity_id)
 
         assert archived_name.startswith(f"sprint:{entity_id}:archived:")
@@ -126,7 +126,7 @@ class TestMergeCollection:
         mock_kb = MagicMock()
         mock_kb._async_chroma_client = mock_chroma
 
-        with patch("llc.kb.collections.get_knowledge_base", AsyncMock(return_value=mock_kb)):
+        with patch("knowledge.get_knowledge_base", AsyncMock(return_value=mock_kb)):
             await manager.merge_collection("sprint", entity_id, "project", project_id)
 
         dst.add.assert_called_once()
@@ -136,7 +136,7 @@ class TestMergeCollection:
         project_id = uuid.UUID("00000000-0000-0000-0000-000000000002")
         mock_kb = MagicMock()
 
-        with patch("llc.kb.collections.get_knowledge_base", AsyncMock(return_value=mock_kb)):
+        with patch("knowledge.get_knowledge_base", AsyncMock(return_value=mock_kb)):
             await manager.merge_collection("sprint", entity_id, "project", project_id, summarize=True)
 
         mock_kb._async_chroma_client.get_collection.assert_not_called()

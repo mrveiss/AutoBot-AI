@@ -2,109 +2,72 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""
-SLM WebSocket authenticated-handshake smoke tests (#6699).
+"""Focused unit tests for WebSocket auth (revocation-aware).
 
-Exercises the JWT auth gate on /ws/events (SLM backend) using starlette's
-TestClient — no real server or network needed.
+These test ``_authenticate_websocket_token`` directly with a fake WebSocket and
+a patched ``decode_token_async`` — no FastAPI app, TestClient, or router import.
+That keeps them isolation-safe (the previous TestClient-based smoke shared
+app/router module state and was order-dependent in the full suite).
 
-Happy path:
-  - Valid bearer → connection accepted, connected frame received
-  - Ping → pong round-trip
-
-Negative paths:
-  - No bearer → close code 4001
-  - Invalid / expired bearer → close code 4001
+Key behavior under test (issue #10151 / M1): WS auth must use the **async**
+``decode_token_async`` so the JWT denylist is enforced — a revoked token
+(``decode_token_async`` returns ``None``) is rejected with close code 4001.
 """
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import FastAPI
-from starlette.testclient import TestClient
-from starlette.websockets import WebSocketDisconnect
 
-_SLM = Path(__file__).resolve().parent.parent
-if str(_SLM) not in sys.path:
-    sys.path.insert(0, str(_SLM))
-
-_VALID_PAYLOAD = {"sub": "smoke", "username": "smoketest"}
-_SMOKE_BEARER = "smoke"
+from api.websocket import _authenticate_websocket_token
 
 
-def _make_client(*, decode_fn) -> TestClient:
-    """Create a TestClient with SLM websocket router + controlled auth."""
-    with patch("api.websocket.auth_service.decode_token", side_effect=decode_fn):
-        from api.websocket import router as ws_router
-
-        app = FastAPI()
-        app.include_router(ws_router)
-        return TestClient(app, raise_server_exceptions=False)
+def _fake_ws() -> AsyncMock:
+    ws = AsyncMock()
+    ws.accept = AsyncMock()
+    ws.close = AsyncMock()
+    return ws
 
 
-class TestWsEventsHappyPath:
-    """Valid bearer → accepted connection with connected frame."""
-
-    def test_connection_established_frame(self):
-        decode = lambda t: _VALID_PAYLOAD if t == _SMOKE_BEARER else None
-        client = _make_client(decode_fn=decode)
-
-        with client.websocket_connect(f"/ws/events?token={_SMOKE_BEARER}") as ws:
-            frame = ws.receive_json()
-            assert frame["type"] == "connected"
-
-    def test_ping_receives_pong(self):
-        decode = lambda t: _VALID_PAYLOAD if t == _SMOKE_BEARER else None
-        client = _make_client(decode_fn=decode)
-
-        with client.websocket_connect(f"/ws/events?token={_SMOKE_BEARER}") as ws:
-            ws.receive_json()  # connected
-            ws.send_text("ping")
-            pong = ws.receive_text()
-            assert pong == "pong"
-
-    def test_clean_close_code_1000(self):
-        decode = lambda t: _VALID_PAYLOAD if t == _SMOKE_BEARER else None
-        client = _make_client(decode_fn=decode)
-
-        with client.websocket_connect(f"/ws/events?token={_SMOKE_BEARER}") as ws:
-            ws.receive_json()  # connected
-            ws.close(1000)
+@pytest.mark.asyncio
+async def test_missing_token_rejected_4001():
+    ws = _fake_ws()
+    with patch("api.websocket._extract_ws_token", return_value=None):
+        result = await _authenticate_websocket_token(ws)
+    assert result is None
+    ws.close.assert_awaited_once()
+    assert ws.close.call_args.kwargs.get("code") == 4001
 
 
-class TestWsEventsNegativePaths:
-    """Missing or invalid bearer → close before accept (code 4001)."""
+@pytest.mark.asyncio
+async def test_valid_token_returns_payload_and_uses_async_decode():
+    ws = _fake_ws()
+    payload = {"sub": "alice", "jti": "abc"}
+    async_decode = AsyncMock(return_value=payload)
+    with (
+        patch("api.websocket._extract_ws_token", return_value="good-token"),
+        patch("api.websocket.auth_service.decode_token_async", async_decode),
+        # the sync path must NOT be used (it skips the denylist)
+        patch("api.websocket.auth_service.decode_token", side_effect=AssertionError("sync decode used")),
+    ):
+        result = await _authenticate_websocket_token(ws)
+    assert result == payload
+    async_decode.assert_awaited_once_with("good-token")
+    ws.close.assert_not_called()
 
-    def test_no_bearer_rejected(self):
-        decode = lambda t: None
-        client = _make_client(decode_fn=decode)
 
-        with pytest.raises(WebSocketDisconnect) as exc_info:
-            with client.websocket_connect("/ws/events") as ws:
-                ws.receive_json()
-
-        assert exc_info.value.code == 4001
-
-    def test_invalid_bearer_rejected(self):
-        decode = lambda t: None
-        client = _make_client(decode_fn=decode)
-
-        with pytest.raises(WebSocketDisconnect) as exc_info:
-            with client.websocket_connect("/ws/events?token=bad") as ws:
-                ws.receive_json()
-
-        assert exc_info.value.code == 4001
-
-    def test_expired_bearer_rejected(self):
-        decode = lambda t: None
-        client = _make_client(decode_fn=decode)
-
-        with pytest.raises(WebSocketDisconnect) as exc_info:
-            with client.websocket_connect("/ws/events?token=exp") as ws:
-                ws.receive_json()
-
-        assert exc_info.value.code == 4001
+@pytest.mark.asyncio
+async def test_revoked_or_invalid_token_rejected_4001():
+    """decode_token_async returning None (revoked jti / invalid) → close 4001."""
+    ws = _fake_ws()
+    async_decode = AsyncMock(return_value=None)
+    with (
+        patch("api.websocket._extract_ws_token", return_value="revoked-jti-token"),
+        patch("api.websocket.auth_service.decode_token_async", async_decode),
+    ):
+        result = await _authenticate_websocket_token(ws)
+    assert result is None
+    async_decode.assert_awaited_once_with("revoked-jti-token")
+    ws.close.assert_awaited_once()
+    assert ws.close.call_args.kwargs.get("code") == 4001

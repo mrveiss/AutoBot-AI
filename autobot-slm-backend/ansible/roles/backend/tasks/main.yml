@@ -119,6 +119,29 @@
     backend_slm_auth_tok: "{{ _backend_slm_auth_tok.stdout | default('') | trim }}"
   tags: ['backend', 'config']
 
+# #10400: Backend signs the service JWT with AUTOBOT_JWT_SECRET, but SLM verifies
+# it with SLM_SECRET_KEY. Provisioning never distributed the SLM key to the backend,
+# so the backend→SLM WebSocket handshake was rejected with 4001. Read SLM_SECRET_KEY
+# from /etc/autobot/slm-secrets.env (written by the slm_manager role) and surface it
+# as backend_jwt_secret so backend.env.j2 renders AUTOBOT_JWT_SECRET to the same value.
+- name: "Backend | Read SLM_SECRET_KEY from slm-secrets.env (#10400)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^SLM_SECRET_KEY=\K.*'
+      /etc/autobot/slm-secrets.env 2>/dev/null || true
+  register: _backend_slm_secret_key
+  changed_when: false
+  failed_when: false
+  no_log: true
+  tags: ['backend', 'config']
+
+- name: "Backend | Align backend_jwt_secret with SLM_SECRET_KEY when present (#10400)"
+  ansible.builtin.set_fact:
+    backend_jwt_secret: "{{ _backend_slm_secret_key.stdout | trim }}"
+  when: (_backend_slm_secret_key.stdout | default('') | trim) | length > 0
+  no_log: true
+  tags: ['backend', 'config']
+
 # #9914: Deploy the systemd unit BEFORE any stop/start so a fresh VM provisions
 # out-of-box. Previously the unit was deployed after the MVA-1633 start task, so
 # first-run on a clean node failed: "Could not find the requested service
@@ -227,6 +250,9 @@
       - libtesseract-dev
       # Matplotlib GUI backend
       - python3-tk
+      # PostgreSQL client — pg_dump for the fail-closed pre-migration backup
+      # of a REMOTE (colocated SLM) Postgres before Alembic upgrades (#10045)
+      - postgresql-client
     state: present
   tags: ['backend', 'packages']
 
@@ -305,6 +331,21 @@
   ansible.posix.synchronize:
     src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/config/"
     dest: "{{ backend_code_dir }}/config/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+  notify: restart backend
+  tags: ['backend', 'deploy']
+
+# Issue #10294: plugins ship at the repo root (code_source/plugins/), a SIBLING of
+# autobot-backend/, so the autobot-backend code sync never copied them. The backend
+# resolves plugins at {{ backend_code_dir }}/plugins (AUTOBOT_BASE_DIR/plugins), which
+# did not exist → discover_plugins() found nothing and every core plugin (image/video
+# generation, kb-event, etc.) silently failed to register. Sync them into place.
+- name: Sync plugins directory from code_source (#10294)
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/plugins/"
+    dest: "{{ backend_code_dir }}/plugins/"
     rsync_opts:
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
@@ -548,6 +589,41 @@
     PIP_USE_DEPRECATED: "legacy-resolver"  # Issue #858: Handle complex OpenTelemetry+ChromaDB dependency graph
   timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   register: pip_install_result
+
+# GPU / vLLM extras (#10288): vllm was moved to an opt-in requirements-gpu.txt
+# (#10251/#10287) to keep the default CPU image lean. Install it ONLY on a
+# GPU-enabled backend that opts into vLLM, so CPU deploys stay slim.
+- name: "Backend | Detect NVIDIA GPU for vLLM extras (#10288)"
+  ansible.builtin.command:
+    cmd: nvidia-smi --query-gpu=name --format=csv,noheader
+  register: backend_nvidia_smi_result
+  changed_when: false
+  # nvidia-smi exits rc != 0 when no GPU is present; the result only gates the
+  # optional GPU-reqs install below, so a non-zero rc is expected on CPU nodes.
+  failed_when: false
+  when:
+    - backend_vllm_enabled | bool
+    - backend_has_gpu == "auto"
+
+- name: "Backend | Resolve GPU availability for vLLM extras (#10288)"
+  ansible.builtin.set_fact:
+    backend_gpu_available: "{{ (backend_nvidia_smi_result.rc | default(1)) == 0 and (backend_nvidia_smi_result.stdout | default('') | trim | length > 0) if backend_has_gpu == 'auto' else (backend_has_gpu | bool) }}"
+  when: backend_vllm_enabled | bool
+
+# Install GPU/vLLM requirements only when vLLM is enabled AND a GPU is present.
+# Uses the repo-root requirements-gpu.txt from code_source (sibling of the
+# autobot-backend subtree; not part of the backend code rsync).
+- name: "Backend | Install GPU/vLLM requirements (requirements-gpu.txt) (#10288)"
+  ansible.builtin.pip:
+    requirements: "{{ code_source_dir | default('/opt/autobot/code_source') }}/requirements-gpu.txt"
+    virtualenv: "{{ backend_code_dir }}/venv"
+  become_user: "{{ backend_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 1800  # CUDA-built torch + vllm wheels are large
+  when:
+    - backend_vllm_enabled | bool
+    - backend_gpu_available | default(false) | bool
 
 - name: Deploy aioredis compatibility shim for Python 3.12
   ansible.builtin.template:

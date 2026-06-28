@@ -1,0 +1,45 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Constraint drift guard (#10524).
+#
+# Shared dependency versions (currently numpy) live in ONE place:
+# constraints/shared.txt. Components reference it via `-c <rel>/constraints/shared.txt`
+# and list the package bare. This guard fails any PR that re-declares a version for a
+# constrained package in a component requirements file — preventing the per-file
+# version skew that breaks pip when Ansible co-locates roles on one host and corrupts
+# the numpy ABI for shared .npy / pickled embeddings.
+#
+# Security: no untrusted event data is interpolated into run: commands.
+
+name: constraint-drift
+
+on:
+  pull_request:
+    paths:
+      - '**/requirements*.txt'
+      - 'constraints/shared.txt'
+      - 'scripts/check_constraint_drift.py'
+      - '.github/workflows/constraint-drift.yml'
+  push:
+    branches: [Dev_new_gui]
+    paths:
+      - '**/requirements*.txt'
+      - 'constraints/shared.txt'
+      - 'scripts/check_constraint_drift.py'
+
+permissions:
+  contents: read
+
+jobs:
+  constraint-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Check single-source constraint compliance
+        run: python3 scripts/check_constraint_drift.py

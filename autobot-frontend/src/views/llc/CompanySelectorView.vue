@@ -9,13 +9,21 @@
   the ?redirect= destination set by the llcCompanyParamGuard).
 -->
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useLlcCompanyStore, type LlcCompany } from '@/stores/useLlcCompanyStore'
+import { useRuntimeFeaturesStore } from '@/stores/useRuntimeFeaturesStore'
 
 const route = useRoute()
 const router = useRouter()
 const companyStore = useLlcCompanyStore()
+const runtimeFeaturesStore = useRuntimeFeaturesStore()
+
+// #10502: Company OS (LLC) requires a PostgreSQL company/multi-company
+// deployment; in single_user mode the company endpoints return 503. Gate the
+// view on the runtime flag and show an informational empty-state instead of
+// surfacing the raw 503 error + Retry button.
+const companyOsEnabled = computed(() => runtimeFeaturesStore.companyOsEnabled)
 
 async function selectCompany(company: LlcCompany): Promise<void> {
   companyStore.selectCompany(company.id)
@@ -27,8 +35,13 @@ async function selectCompany(company: LlcCompany): Promise<void> {
   await router.push({ path: '/llc/dashboard', query: { company: company.id } })
 }
 
-onMounted(() => {
-  void companyStore.fetchCompanies()
+onMounted(async () => {
+  await runtimeFeaturesStore.load()
+  // Only hit the company endpoint when the deployment supports company mode;
+  // otherwise the request returns 503 and we render the unavailable state.
+  if (companyOsEnabled.value) {
+    void companyStore.fetchCompanies()
+  }
 })
 </script>
 
@@ -39,8 +52,20 @@ onMounted(() => {
       <p class="selector-subtitle">{{ $t('nav.llcSelectCompanyPrompt') }}</p>
     </header>
 
-    <div v-if="companyStore.error" class="selector-error">
-      {{ companyStore.error }}
+    <!-- #10502: company mode off (single_user) OR a 503 from the company
+         endpoint — informational empty-state, never a raw error. -->
+    <div v-if="!companyOsEnabled || companyStore.unavailable" class="selector-unavailable">
+      <span class="selector-unavailable-icon" aria-hidden="true">🏢</span>
+      <h2 class="selector-unavailable-title">
+        {{ $t('nav.companyOsUnavailableTitle') }}
+      </h2>
+      <p class="selector-unavailable-desc">
+        {{ $t('nav.companyOsUnavailableDesc') }}
+      </p>
+    </div>
+
+    <div v-else-if="companyStore.error" class="selector-error">
+      {{ $t('common.errorBoundary.fetchError') }}
       <button class="selector-retry" @click="companyStore.fetchCompanies()">
         {{ $t('common.retry') }}
       </button>
@@ -110,6 +135,36 @@ onMounted(() => {
 
 .selector-subtitle {
   margin-top: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary, #6b7280);
+}
+
+/* #10502: unavailable (single_user deployment) empty-state */
+.selector-unavailable {
+  padding: 3rem 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--border-default, #e5e7eb);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--bg-secondary, #f9fafb);
+}
+
+.selector-unavailable-icon {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.selector-unavailable-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+}
+
+.selector-unavailable-desc {
+  max-width: 32rem;
   font-size: 0.875rem;
   color: var(--text-secondary, #6b7280);
 }

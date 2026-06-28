@@ -63,6 +63,14 @@ const router = createRouter({
       meta: { title: 'Services' }
     },
     {
+      // GH#8996 / #10488 Workstream A: Shared chat links — migrated from the
+      // user frontend. Operator cross-user view of all active shared links.
+      path: '/shared-links',
+      name: 'shared-links',
+      component: () => import('@/views/SharedLinksView.vue'),
+      meta: { title: 'Shared Chat Links', admin: true }
+    },
+    {
       path: '/deployments/:tab?',
       name: 'deployments',
       component: () => import('@/views/DeploymentsView.vue'),
@@ -257,6 +265,20 @@ const router = createRouter({
           name: 'settings-admin-llm',
           component: () => import('@/views/settings/admin/LLMSettings.vue'),
           meta: { title: 'LLM Configuration', parent: 'settings', admin: true }
+        },
+        {
+          // GH#8998 / #10488: LLM fallback monitoring moved from user frontend to SLM admin
+          path: 'admin/llm-fallbacks',
+          name: 'settings-admin-llm-fallbacks',
+          component: () => import('@/views/settings/admin/LLMFallbacksView.vue'),
+          meta: { title: 'LLM Fallbacks', parent: 'settings', admin: true }
+        },
+        {
+          // #10488 Workstream A: read-only budget policy audit (operator oversight)
+          path: 'admin/budget-audit',
+          name: 'settings-admin-budget-audit',
+          component: () => import('@/views/settings/admin/BudgetAuditView.vue'),
+          meta: { title: 'Budget Audit', parent: 'settings', admin: true }
         },
         {
           // MVA-1735: SSO/OIDC provider configuration

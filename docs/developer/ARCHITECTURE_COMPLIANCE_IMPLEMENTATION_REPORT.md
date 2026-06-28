@@ -13,7 +13,7 @@ Successfully replaced **manual architecture fix scripts** with **automated compl
 **Original Issue**: 3 manual architecture fix scripts:
 - `restart_backend_with_fixes.sh` - Manual backend restart with endpoint testing
 - `fix_critical_redis_timeouts.py` - Regex-based Redis timeout fixes with hardcoded IPs
-- `workflow_orchestration_fix.py` - Analysis document (not really a fix script)
+- `workflow_orchestration_analysis.py` - Analysis document (not really a fix script)
 
 **Problems**:
 1. ❌ **Hardcoded IP addresses** - `<database-ip>` hardcoded in scripts
@@ -117,7 +117,7 @@ Validates single frontend server architecture:
 Moved to `archive/scripts-architecture-fixes-2025-10-09/`:
 - `restart_backend_with_fixes.sh`
 - `fix_critical_redis_timeouts.py`
-- `workflow_orchestration_fix.py`
+- `workflow_orchestration_analysis.py`
 
 With comprehensive `README.md` documenting:
 - Why scripts were replaced
@@ -226,7 +226,7 @@ $ ls -l archive/scripts-architecture-fixes-2025-10-09/
 total 32
 -rwxr-xr-x 1 kali kali 21234 Sep 20 22:42 fix_critical_redis_timeouts.py
 -rwxr-xr-x 1 kali kali  3847 Sep 24 11:05 restart_backend_with_fixes.sh
--rwxr-xr-x 1 kali kali  2856 Aug 28 14:32 workflow_orchestration_fix.py
+-rwxr-xr-x 1 kali kali  2856 Aug 28 14:32 workflow_orchestration_analysis.py
 -rw-r--r-- 1 kali kali  9145 Oct  9 21:45 README.md
 ```
 
