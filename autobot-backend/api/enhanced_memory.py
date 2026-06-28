@@ -6,7 +6,9 @@
 Enhanced Memory API for AutoBot Phase 7
 Provides endpoints for task execution tracking, markdown management, and memory analytics
 
-Issue #357: Converted to use AsyncEnhancedMemoryManager to fix blocking I/O in async context.
+Migrated (#10572): uses UnifiedMemoryManager (memory/manager.py) exclusively.
+AsyncEnhancedMemoryManager and the standalone enhanced_memory_manager module
+are no longer referenced here.
 """
 
 import asyncio
@@ -35,102 +37,54 @@ from api.schemas_knowledge import (
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from enhanced_memory_manager_async import (
-    AsyncEnhancedMemoryManager,
-    TaskEntry,
-    TaskPriority,
-    TaskStatus,
-    get_async_enhanced_memory_manager,
-)
+from autobot_shared.singleton_factory import lazy_singleton
 from markdown_reference_system import MarkdownReferenceSystem
+from memory import TaskPriority, TaskStatus, UnifiedMemoryManager
 from task_execution_tracker import get_task_tracker
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["enhanced_memory"])
 
-# Thread-safe lock for lazy initialization of global state
+# Thread-safe lock for lazy initialisation of the markdown subsystem singleton
 _markdown_system_lock = asyncio.Lock()
+_markdown_system: MarkdownReferenceSystem | None = None
 
-# Performance optimization: O(1) lookup for terminal task statuses (Issue #326)
+# Performance optimisation: O(1) lookup for terminal task statuses
 TERMINAL_TASK_STATUSES = {TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.FAILED}
 
-# Use the async memory manager singleton (Issue #357: non-blocking)
-_markdown_system = None
+# Singleton memory manager (instantiated once per process)
+get_memory_manager_singleton = lazy_singleton(UnifiedMemoryManager)
 
 
-async def _apply_task_status_update(
-    memory_manager: AsyncEnhancedMemoryManager,
-    task_id: str,
-    status_enum: TaskStatus,
-    outputs: dict | None,
-    error_message: str | None,
-) -> bool:
-    """Apply task status update based on status type (Issue #315: extracted).
-
-    Issue #357: Converted to async to fix blocking I/O.
-
-    Returns:
-        True if update succeeded, False otherwise
-
-    Raises:
-        HTTPException: If required fields are missing
-    """
-    metadata = {}
-    if outputs:
-        metadata["outputs"] = outputs
-    if error_message:
-        metadata["error_message"] = error_message
-
-    return await memory_manager.update_task_status(task_id, status_enum, metadata)
-
-
-async def get_memory_manager() -> tuple[AsyncEnhancedMemoryManager, MarkdownReferenceSystem]:
-    """Lazy initialization of async memory manager to prevent startup blocking.
-
-    Issue #357: Now uses AsyncEnhancedMemoryManager for non-blocking operations.
-    Issue #395: Added asyncio.Lock for thread-safe lazy initialization.
-    """
+async def _get_managers() -> tuple[UnifiedMemoryManager, MarkdownReferenceSystem]:
+    """Return the singleton UnifiedMemoryManager and lazily-initialised MarkdownReferenceSystem."""
     global _markdown_system
-    memory_manager = get_async_enhanced_memory_manager()
+    memory_manager: UnifiedMemoryManager = get_memory_manager_singleton()
     if _markdown_system is None:
         async with _markdown_system_lock:
-            # Double-check after acquiring lock to prevent race condition
             if _markdown_system is None:
-                # Note: MarkdownReferenceSystem still uses sync manager internally
-                # This is a compatibility bridge until it's also converted
-                from enhanced_memory_manager import EnhancedMemoryManager
-
-                _sync_memory_manager = EnhancedMemoryManager()
-                _markdown_system = MarkdownReferenceSystem(_sync_memory_manager)
+                _markdown_system = MarkdownReferenceSystem(memory_manager)
     return memory_manager, _markdown_system
-
-
-# Health check moved to consolidated health service
-# See backend/services/consolidated_health_service.py
-# Use /api/system/health?detailed=true for comprehensive status
 
 
 @router.get("/statistics", response_model=MemoryStatisticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_memory_statistics",
-    error_code_prefix="ENHANCED_MEMORY",
+    error_code_prefix="MEMORY",
 )
 async def get_memory_statistics(days_back: int = Query(30, ge=1, le=365)):
-    """Get comprehensive memory and task execution statistics.
-
-    Issue #357: Now uses async memory manager for non-blocking database operations.
-    """
+    """Get comprehensive memory and task execution statistics."""
     try:
-        memory_manager, markdown_system = await get_memory_manager()
+        memory_manager, markdown_system = await _get_managers()
+        task_tracker = get_task_tracker()
 
-        # Issue #379: Run all statistics collection in parallel
         task_stats, markdown_stats, active_tasks, insights = await asyncio.gather(
-            memory_manager.get_task_statistics(),
-            asyncio.to_thread(markdown_system.get_markdown_statistics),
-            asyncio.to_thread(get_task_tracker().get_active_tasks),
-            get_task_tracker().analyze_task_patterns(days_back),
+            memory_manager.get_task_statistics(days_back),
+            asyncio.to_thread(lambda: markdown_system.get_markdown_statistics()),
+            asyncio.to_thread(lambda: task_tracker.get_active_tasks()),
+            task_tracker.analyze_task_patterns(days_back),
         )
 
         return {
@@ -150,7 +104,7 @@ async def get_memory_statistics(days_back: int = Query(30, ge=1, le=365)):
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_task_history",
-    error_code_prefix="ENHANCED_MEMORY",
+    error_code_prefix="MEMORY",
 )
 async def get_task_history(
     agent_type: str | None = Query(None),
@@ -158,9 +112,8 @@ async def get_task_history(
     limit: int = Query(100, ge=1, le=1000),
     days_back: int = Query(30, ge=1, le=365),
 ):
-    """Get task execution history with filtering options"""
+    """Get task execution history with filtering options."""
     try:
-        # Convert string status to enum if provided
         status_enum = None
         if status:
             try:
@@ -172,7 +125,6 @@ async def get_task_history(
             agent_type=agent_type, status=status_enum, limit=limit, days_back=days_back
         )
 
-        # Issue #372: Use model method to reduce feature envy
         history_data = [task.to_response_dict() for task in history]
 
         return {
@@ -194,42 +146,28 @@ async def get_task_history(
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_task",
-    error_code_prefix="ENHANCED_MEMORY",
+    error_code_prefix="MEMORY",
 )
 async def create_task(request: TaskCreateRequest):
-    """Create a new task record.
-
-    Issue #357: Now uses async memory manager for non-blocking database operations.
-    """
+    """Create a new task record."""
     try:
-        memory_manager, _ = await get_memory_manager()
+        memory_manager, _ = await _get_managers()
 
-        # Convert priority string to enum
-        # Map string priority to numeric Priority enum
-        priority_map = {
-            "low": TaskPriority.LOW,
-            "medium": TaskPriority.MEDIUM,
-            "high": TaskPriority.HIGH,
-            "critical": TaskPriority.CRITICAL,
-        }
-        priority_enum = priority_map.get(request.priority.lower())
-        if priority_enum is None:
+        try:
+            priority_enum = TaskPriority(request.priority)
+        except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid priority: {request.priority}")
 
-        # Create TaskEntry for async manager
-        task_entry = TaskEntry(
-            task_id="",  # Will be generated
-            description=f"{request.task_name}: {request.description}",
-            status=TaskStatus.PENDING,
+        task_id = await asyncio.to_thread(
+            memory_manager.create_task_record,
+            request.task_name,
+            request.description,
             priority=priority_enum,
-            created_at=datetime.now(tz=timezone.utc),
-            updated_at=datetime.now(tz=timezone.utc),
-            assigned_agent=request.agent_type,
+            agent_type=request.agent_type,
+            inputs=None,
             parent_task_id=request.parent_task_id,
             metadata=request.metadata or {},
         )
-
-        task_id = await memory_manager.create_task(task_entry)
 
         return {
             "task_id": task_id,
@@ -248,16 +186,12 @@ async def create_task(request: TaskCreateRequest):
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_task",
-    error_code_prefix="ENHANCED_MEMORY",
+    error_code_prefix="MEMORY",
 )
 async def update_task(task_id: str, request: TaskUpdateRequest):
-    """Update task status and information.
-
-    Issue #315: Refactored to use helper function for reduced nesting depth.
-    Issue #357: Now uses async memory manager for non-blocking database operations.
-    """
+    """Update task status and information."""
     try:
-        memory_manager, _ = await get_memory_manager()
+        memory_manager, _ = await _get_managers()
         success = False
 
         if request.status:
@@ -266,14 +200,20 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
             except ValueError:
                 raise HTTPException(status_code=400, detail=f"Invalid status: {request.status}")
 
-            # Use helper for status-specific logic (Issue #315, #357)
-            success = await _apply_task_status_update(
-                memory_manager,
-                task_id,
-                status_enum,
-                request.outputs,
-                request.error_message,
-            )
+            if status_enum == TaskStatus.IN_PROGRESS:
+                success = await asyncio.to_thread(memory_manager.start_task, task_id)
+            elif status_enum == TaskStatus.COMPLETED:
+                success = await asyncio.to_thread(
+                    memory_manager.complete_task, task_id, request.outputs
+                )
+            elif status_enum == TaskStatus.FAILED:
+                success = await asyncio.to_thread(
+                    memory_manager.fail_task,
+                    task_id,
+                    request.error_message or "Unknown error",
+                )
+            else:
+                success = await memory_manager.update_task_status(task_id, status_enum)
 
         if not success:
             raise HTTPException(status_code=404, detail="Task not found or update failed")
@@ -295,26 +235,18 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_markdown_reference",
-    error_code_prefix="ENHANCED_MEMORY",
+    error_code_prefix="MEMORY",
 )
 async def add_markdown_reference(task_id: str, request: MarkdownReferenceRequest):
-    """Add markdown file reference to a task.
-
-    Issue #357: Wrapped sync operation in asyncio.to_thread for non-blocking.
-    """
+    """Add markdown file reference to a task."""
     try:
-        _, _ = await get_memory_manager()  # Issue #382: markdown_system unused here
-
-        # Wrap sync operation in thread (MarkdownReferenceSystem uses sync memory manager)
-        from enhanced_memory_manager import EnhancedMemoryManager
-
-        sync_manager = EnhancedMemoryManager()
+        memory_manager, _ = await _get_managers()
 
         success = await asyncio.to_thread(
-            sync_manager.add_markdown_reference,
-            request.task_id,
-            request.markdown_file_path,
-            request.reference_type,
+            memory_manager.add_markdown_reference,
+            task_id=request.task_id,
+            markdown_file_path=request.markdown_file_path,
+            reference_type=request.reference_type,
         )
 
         if not success:
@@ -339,16 +271,13 @@ async def add_markdown_reference(task_id: str, request: MarkdownReferenceRequest
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="scan_markdown_system",
-    error_code_prefix="ENHANCED_MEMORY",
+    error_code_prefix="MEMORY",
 )
 async def scan_markdown_system():
-    """Initialize and scan markdown reference system.
-
-    Issue #357: Wrapped sync operation in asyncio.to_thread for non-blocking.
-    """
+    """Initialise and scan markdown reference system."""
     try:
-        _, markdown_system = await get_memory_manager()
-        result = await asyncio.to_thread(markdown_system.initialize_system_scan)
+        _, markdown_system = await _get_managers()
+        result = await asyncio.to_thread(lambda: markdown_system.initialize_system_scan())
         return {
             "status": "completed",
             "scan_results": result,
@@ -363,7 +292,7 @@ async def scan_markdown_system():
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_markdown",
-    error_code_prefix="ENHANCED_MEMORY",
+    error_code_prefix="MEMORY",
 )
 async def search_markdown(
     query: str = Query(..., min_length=2),
@@ -371,13 +300,16 @@ async def search_markdown(
     tags: List[str] | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
 ):
-    """Search markdown content and sections.
-
-    Issue #357: Wrapped sync operation in asyncio.to_thread for non-blocking.
-    """
+    """Search markdown content and sections."""
     try:
-        _, markdown_system = await get_memory_manager()
-        results = await asyncio.to_thread(markdown_system.search_markdown_content, query, document_type, tags, limit)
+        _, markdown_system = await _get_managers()
+        results = await asyncio.to_thread(
+            markdown_system.search_markdown_content,
+            query=query,
+            document_type=document_type,
+            tags=tags,
+            limit=limit,
+        )
 
         return {
             "query": query,
@@ -395,16 +327,13 @@ async def search_markdown(
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_document_references",
-    error_code_prefix="ENHANCED_MEMORY",
+    error_code_prefix="MEMORY",
 )
 async def get_document_references(file_path: str):
-    """Get all references for a specific markdown document.
-
-    Issue #357: Wrapped sync operation in asyncio.to_thread for non-blocking.
-    """
+    """Get all references for a specific markdown document."""
     try:
-        _, markdown_system = await get_memory_manager()
-        references = await asyncio.to_thread(markdown_system.get_document_references, file_path)
+        _, markdown_system = await _get_managers()
+        references = await asyncio.to_thread(lambda: markdown_system.get_document_references(file_path))
 
         return {
             "file_path": file_path,
@@ -421,19 +350,13 @@ async def get_document_references(file_path: str):
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_embedding_cache_stats",
-    error_code_prefix="ENHANCED_MEMORY",
+    error_code_prefix="MEMORY",
 )
 async def get_embedding_cache_stats():
-    """Get embedding cache statistics.
-
-    Issue #357: Wrapped sync operation in asyncio.to_thread for non-blocking.
-    """
+    """Get embedding cache statistics."""
     try:
-        # Use sync memory manager for embedding cache (async manager doesn't have this)
-        from enhanced_memory_manager import EnhancedMemoryManager
-
-        sync_manager = EnhancedMemoryManager()
-        cache_size = await asyncio.to_thread(sync_manager._get_embedding_cache_size)
+        memory_manager, _ = await _get_managers()
+        cache_size = await asyncio.to_thread(lambda: memory_manager._get_embedding_cache_size())
 
         return {
             "cache_size": cache_size,
@@ -450,20 +373,19 @@ async def get_embedding_cache_stats():
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_old_data",
-    error_code_prefix="ENHANCED_MEMORY",
+    error_code_prefix="MEMORY",
 )
 async def cleanup_old_data(days_to_keep: int = Query(90, ge=30, le=365)):
-    """Clean up old task records and cached data.
-
-    Issue #357: Now uses async memory manager for non-blocking database operations.
-    """
+    """Clean up old task records and cached data."""
     try:
-        memory_manager, _ = await get_memory_manager()
-        await memory_manager.cleanup_old_data(days_to_keep)
+        memory_manager, _ = await _get_managers()
+        cleanup_result = await asyncio.to_thread(
+            lambda: memory_manager.cleanup_old_data(days_to_keep)
+        )
 
         return {
             "status": "completed",
-            "cleanup_results": {"retention_days": days_to_keep},
+            "cleanup_results": cleanup_result,
             "days_kept": days_to_keep,
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
@@ -477,12 +399,13 @@ async def cleanup_old_data(days_to_keep: int = Query(90, ge=30, le=365)):
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_active_tasks",
-    error_code_prefix="ENHANCED_MEMORY",
+    error_code_prefix="MEMORY",
 )
 async def get_active_tasks():
-    """Get currently active tasks"""
+    """Get currently active tasks."""
     try:
-        active_tasks = get_task_tracker().get_active_tasks()
+        task_tracker = get_task_tracker()
+        active_tasks = task_tracker.get_active_tasks()
 
         return {
             "count": len(active_tasks),
