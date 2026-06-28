@@ -100,7 +100,9 @@ async def example_network_timeout():
     # Initialize reasoner
     reasoner = CounterfactualReasoner()
 
-    print("\nContext: Database sync automation failed with network timeout")  # noqa: print  # canonical: ignore py-print-smoke
+    print(
+        "\nContext: Database sync automation failed with network timeout"
+    )  # noqa: print  # canonical: ignore py-print-smoke
     print("Deadline: 5 minutes")  # noqa: print  # canonical: ignore py-print-smoke
     print("\nAvailable options:")  # noqa: print  # canonical: ignore py-print-smoke
     for action in context.available_actions:
@@ -117,8 +119,12 @@ async def example_network_timeout():
         outcomes[action["action"]] = outcome
 
         print(f"\nOption: {action['action'].upper()}")  # noqa: print  # canonical: ignore py-print-smoke
-        print(f"  Predicted Success: {outcome.predicted_success_rate:.0%}")  # noqa: print  # canonical: ignore py-print-smoke
-        print(f"  Confidence: {outcome.confidence:.0%} ({outcome.prediction_source})")  # noqa: print  # canonical: ignore py-print-smoke
+        print(
+            f"  Predicted Success: {outcome.predicted_success_rate:.0%}"
+        )  # noqa: print  # canonical: ignore py-print-smoke
+        print(
+            f"  Confidence: {outcome.confidence:.0%} ({outcome.prediction_source})"
+        )  # noqa: print  # canonical: ignore py-print-smoke
         print(f"  Estimated Time: {outcome.estimated_latency_ms}ms")  # noqa: print  # canonical: ignore py-print-smoke
         print(f"  Fallback Risk: {outcome.fallback_risk}")  # noqa: print  # canonical: ignore py-print-smoke
         print("  Side Effects:")  # noqa: print  # canonical: ignore py-print-smoke
@@ -137,7 +143,9 @@ async def example_network_timeout():
     best_option = max(outcomes.items(), key=lambda x: x[1].predicted_success_rate)
     print(f"\nRecommended: {best_option[0].upper()}")  # noqa: print  # canonical: ignore py-print-smoke
     print(f"  Why: {best_option[1].reasoning}")  # noqa: print  # canonical: ignore py-print-smoke
-    print(f"  Success likelihood: {best_option[1].predicted_success_rate:.0%}")  # noqa: print  # canonical: ignore py-print-smoke
+    print(
+        f"  Success likelihood: {best_option[1].predicted_success_rate:.0%}"
+    )  # noqa: print  # canonical: ignore py-print-smoke
 
 
 # =============================================================================
@@ -246,7 +254,9 @@ async def example_database_exhaustion():
         outcomes[action["action"]] = outcome
 
         print(f"\n{action['action'].upper()}:")  # noqa: print  # canonical: ignore py-print-smoke
-        print(f"  Success Rate: {outcome.predicted_success_rate:.0%}")  # noqa: print  # canonical: ignore py-print-smoke
+        print(
+            f"  Success Rate: {outcome.predicted_success_rate:.0%}"
+        )  # noqa: print  # canonical: ignore py-print-smoke
         print(f"  Confidence: {outcome.confidence:.0%}")  # noqa: print  # canonical: ignore py-print-smoke
         print(f"  Est. Time: {outcome.estimated_latency_ms}ms")  # noqa: print  # canonical: ignore py-print-smoke
         if outcome.fallback_risk:
@@ -254,7 +264,9 @@ async def example_database_exhaustion():
         if outcome.side_effects:
             print("  Side effects:")  # noqa: print  # canonical: ignore py-print-smoke
             for effect in outcome.side_effects:
-                print(f"    • {effect['type']}: {effect.get('description', '')}")  # noqa: print  # canonical: ignore py-print-smoke
+                print(
+                    f"    • {effect['type']}: {effect.get('description', '')}"
+                )  # noqa: print  # canonical: ignore py-print-smoke
 
     print("\n" + "-" * 70)  # noqa: print  # canonical: ignore py-print-smoke
     print("ANALYSIS:")  # noqa: print  # canonical: ignore py-print-smoke
@@ -264,25 +276,39 @@ async def example_database_exhaustion():
     escalate_outcome = outcomes["escalate"]
     retry_outcome = outcomes["retry"]
 
-    print(f"\nAutomate: {automate_outcome.predicted_success_rate:.0%} success")  # noqa: print  # canonical: ignore py-print-smoke
+    print(
+        f"\nAutomate: {automate_outcome.predicted_success_rate:.0%} success"
+    )  # noqa: print  # canonical: ignore py-print-smoke
     print(f"  ✓ Fast ({automate_outcome.estimated_latency_ms}ms)")  # noqa: print  # canonical: ignore py-print-smoke
     print("  ✗ High risk (irreversible state mutation)")  # noqa: print  # canonical: ignore py-print-smoke
     print(f"  ✗ Low confidence ({automate_outcome.confidence:.0%})")  # noqa: print  # canonical: ignore py-print-smoke
 
-    print(f"\nEscalate: {escalate_outcome.predicted_success_rate:.0%} success")  # noqa: print  # canonical: ignore py-print-smoke
+    print(
+        f"\nEscalate: {escalate_outcome.predicted_success_rate:.0%} success"
+    )  # noqa: print  # canonical: ignore py-print-smoke
     print("  ✓ Very safe (professional DBA)")  # noqa: print  # canonical: ignore py-print-smoke
     print(f"  ✓ High confidence ({escalate_outcome.confidence:.0%})")  # noqa: print  # canonical: ignore py-print-smoke
-    print(f"  ✗ Slow ({escalate_outcome.estimated_latency_ms}ms > 2min deadline)")  # noqa: print  # canonical: ignore py-print-smoke
+    print(
+        f"  ✗ Slow ({escalate_outcome.estimated_latency_ms}ms > 2min deadline)"
+    )  # noqa: print  # canonical: ignore py-print-smoke
 
-    print(f"\nRetry: {retry_outcome.predicted_success_rate:.0%} success")  # noqa: print  # canonical: ignore py-print-smoke
+    print(
+        f"\nRetry: {retry_outcome.predicted_success_rate:.0%} success"
+    )  # noqa: print  # canonical: ignore py-print-smoke
     print("  ✓ Fastest")  # noqa: print  # canonical: ignore py-print-smoke
-    print("  ✗ Only 40% likely to succeed (pool won't drain in time)")  # noqa: print  # canonical: ignore py-print-smoke
+    print(
+        "  ✗ Only 40% likely to succeed (pool won't drain in time)"
+    )  # noqa: print  # canonical: ignore py-print-smoke
     print(f"  ✗ Low confidence ({retry_outcome.confidence:.0%})")  # noqa: print  # canonical: ignore py-print-smoke
 
     print("\nRECOMMENDATION: Escalate to DBA")  # noqa: print  # canonical: ignore py-print-smoke
     print("  • High success rate (95%) beats speed here")  # noqa: print  # canonical: ignore py-print-smoke
-    print("  • 2-minute deadline is tight, but DBA can decide if automated expansion is safe")  # noqa: print  # canonical: ignore py-print-smoke
-    print("  • Avoid automation (irreversible state mutation in high-load condition)")  # noqa: print  # canonical: ignore py-print-smoke
+    print(
+        "  • 2-minute deadline is tight, but DBA can decide if automated expansion is safe"
+    )  # noqa: print  # canonical: ignore py-print-smoke
+    print(
+        "  • Avoid automation (irreversible state mutation in high-load condition)"
+    )  # noqa: print  # canonical: ignore py-print-smoke
 
 
 # =============================================================================
@@ -298,7 +324,9 @@ async def example_enhanced_decision():
     CounterfactualReasoner adds "what if" insights to all alternatives.
     """
     print("\n" + "=" * 70)  # noqa: print  # canonical: ignore py-print-smoke
-    print("Example 3: Enhanced Decisions with Counterfactual Insights")  # noqa: print  # canonical: ignore py-print-smoke
+    print(
+        "Example 3: Enhanced Decisions with Counterfactual Insights"
+    )  # noqa: print  # canonical: ignore py-print-smoke
     print("=" * 70)  # noqa: print  # canonical: ignore py-print-smoke
 
     # Create minimal context
@@ -334,7 +362,9 @@ async def example_enhanced_decision():
         outcome = await reasoner.what_if(action["action"], context, action)
         decision.intervention_effects.append(outcome)
 
-    print(f"Enhanced decision now includes {len(decision.intervention_effects)} predictions:")  # noqa: print  # canonical: ignore py-print-smoke
+    print(
+        f"Enhanced decision now includes {len(decision.intervention_effects)} predictions:"
+    )  # noqa: print  # canonical: ignore py-print-smoke
     for effect in decision.intervention_effects:
         print(  # noqa: print  # canonical: ignore py-print-smoke
             f"  • {effect.option}: {effect.predicted_success_rate:.0%} "
@@ -344,9 +374,13 @@ async def example_enhanced_decision():
     # Show serialization
     print("\nSerialized decision.to_dict():")  # noqa: print  # canonical: ignore py-print-smoke
     decision_dict = decision.to_dict()
-    print(f"  intervention_effects: {len(decision_dict['intervention_effects'])} entries")  # noqa: print  # canonical: ignore py-print-smoke
+    print(
+        f"  intervention_effects: {len(decision_dict['intervention_effects'])} entries"
+    )  # noqa: print  # canonical: ignore py-print-smoke
     for ie in decision_dict["intervention_effects"]:
-        print(f"    - {ie['option']}: {ie['predicted_success_rate']:.0%}")  # noqa: print  # canonical: ignore py-print-smoke
+        print(
+            f"    - {ie['option']}: {ie['predicted_success_rate']:.0%}"
+        )  # noqa: print  # canonical: ignore py-print-smoke
 
 
 # =============================================================================

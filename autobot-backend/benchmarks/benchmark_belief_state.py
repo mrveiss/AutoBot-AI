@@ -680,7 +680,9 @@ def main() -> None:
     print("=" * 70)  # noqa: print  # canonical: ignore py-print-smoke
     print("Belief-State A/B Benchmark (MVA-1408)")  # noqa: print  # canonical: ignore py-print-smoke
     print("=" * 70)  # noqa: print  # canonical: ignore py-print-smoke
-    print(f"Running {len(scenarios)} tasks × 2 variants = {len(scenarios) * 2} total runs")  # noqa: print  # canonical: ignore py-print-smoke
+    print(
+        f"Running {len(scenarios)} tasks × 2 variants = {len(scenarios) * 2} total runs"
+    )  # noqa: print  # canonical: ignore py-print-smoke
     print()  # noqa: print  # canonical: ignore py-print-smoke
 
     for scenario in scenarios:

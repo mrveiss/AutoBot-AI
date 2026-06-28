@@ -78,7 +78,9 @@ async def cmd_health(args):
             if health.status == ServiceStatus.HEALTHY:
                 print_status("success", f"{service:15} → {health.status.value}")
                 if hasattr(health, "response_time") and health.response_time > 0:
-                    print(f"{'':18}Response time: {health.response_time:.3f}s")  # noqa: print  # canonical: ignore py-print-smoke
+                    print(
+                        f"{'':18}Response time: {health.response_time:.3f}s"
+                    )  # noqa: print  # canonical: ignore py-print-smoke
                 healthy_count += 1
             elif health.status == ServiceStatus.CIRCUIT_OPEN:
                 print_status("error", f"{service:15} → Circuit breaker OPEN")
@@ -129,7 +131,9 @@ def cmd_config(args):
             print(f"   Scheme: {config.scheme}")  # noqa: print  # canonical: ignore py-print-smoke
             print(f"   Health Endpoint: {config.health_endpoint}")  # noqa: print  # canonical: ignore py-print-smoke
             print(f"   Timeout: {config.timeout}s")  # noqa: print  # canonical: ignore py-print-smoke
-            print(f"   Circuit Breaker Threshold: {config.circuit_breaker_threshold}")  # noqa: print  # canonical: ignore py-print-smoke
+            print(
+                f"   Circuit Breaker Threshold: {config.circuit_breaker_threshold}"
+            )  # noqa: print  # canonical: ignore py-print-smoke
         else:
             print_status("error", "Service not found")
             return 1
@@ -158,7 +162,9 @@ async def cmd_test_service(args):
         if health.status == ServiceStatus.HEALTHY:
             print_status("success", "Service is healthy")
             if hasattr(health, "response_time") and health.response_time > 0:
-                print(f"   Response time: {health.response_time:.3f}s")  # noqa: print  # canonical: ignore py-print-smoke
+                print(
+                    f"   Response time: {health.response_time:.3f}s"
+                )  # noqa: print  # canonical: ignore py-print-smoke
         else:
             print_status("error", f"Service is {health.status.value}")
 
@@ -219,7 +225,9 @@ def _display_test_results(results: dict) -> tuple:
         if result["status"] == "healthy":
             print_status("success", f"{service:15} → {result['url']}")
             if result.get("response_time", 0) > 0:
-                print(f"{'':18}Response: {result['response_time']:.3f}s")  # noqa: print  # canonical: ignore py-print-smoke
+                print(
+                    f"{'':18}Response: {result['response_time']:.3f}s"
+                )  # noqa: print  # canonical: ignore py-print-smoke
             healthy_services.append(service)
         else:
             print_status("error", f"{service:15} → {result['status']}")

@@ -25,7 +25,9 @@ import uuid
 def _get_company_id(args: argparse.Namespace) -> uuid.UUID:
     raw = getattr(args, "company_id", None) or os.environ.get("AUTOBOT_LLC_COMPANY_ID")
     if not raw:
-        print("ERROR: provide --company-id or set AUTOBOT_LLC_COMPANY_ID", file=sys.stderr)  # noqa: print  # canonical: ignore py-print-smoke
+        print(
+            "ERROR: provide --company-id or set AUTOBOT_LLC_COMPANY_ID", file=sys.stderr
+        )  # noqa: print  # canonical: ignore py-print-smoke
         sys.exit(1)
     return uuid.UUID(raw)
 
@@ -68,7 +70,9 @@ async def _create(args: argparse.Namespace) -> None:
             body=args.body,
         )
         await session.commit()
-    print(f"Created: {entry.id}  [{entry.namespace}/{entry.key}] {entry.title}")  # noqa: print  # canonical: ignore py-print-smoke
+    print(
+        f"Created: {entry.id}  [{entry.namespace}/{entry.key}] {entry.title}"
+    )  # noqa: print  # canonical: ignore py-print-smoke
 
 
 async def _delete(args: argparse.Namespace) -> None:
