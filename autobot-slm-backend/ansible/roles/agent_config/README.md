@@ -171,10 +171,10 @@ curl http://localhost:8090/health
 
 ### Python version mismatch
 
-If Python 3.12 is missing, install via deadsnakes PPA (Issue #1898):
+If Python 3.14 is missing, install via deadsnakes PPA (Issue #1898):
 ```bash
 sudo add-apt-repository ppa:deadsnakes/ppa
-sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
+sudo apt-get install -y python3.14 python3.14-venv python3.14-dev
 ```
 
 ### OpenVINO GPU access denied

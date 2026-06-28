@@ -10,7 +10,7 @@
   tags: ['pre-flight']
 
 # Deploy Backend Services to Main Machine (Remote from SLM)
-# Issue #856: Python 3.12 deployment with pyenv
+# Issue #856: Python 3.14 deployment with pyenv
 #
 # This playbook deploys from SLM server to backend server:
 # - AutoBot Backend API (FastAPI on port 8443)

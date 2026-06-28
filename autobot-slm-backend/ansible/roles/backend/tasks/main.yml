@@ -204,7 +204,7 @@
   tags: ['backend', 'config']
 
 # ============================================================
-# Backend-specific system dependencies (Python 3.12 now in shared Phase 0)
+# Backend-specific system dependencies (Python 3.14 now in shared Phase 0)
 # ============================================================
 # #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
 - name: "Backend | Refresh apt cache (best-effort, bounded; #6719)"
@@ -513,13 +513,13 @@
   when: venv_check.stat.exists and venv_check.stat.islnk
 
 # #7052: Detect partially-corrupted venv from a prior failed install.
-# A venv with a working python3.12 binary but stale .pth files (e.g. from
+# A venv with a working python3.14 binary but stale .pth files (e.g. from
 # an editable install whose finder module was removed during venv rebuild)
 # breaks pip on first import. The `Create venv` task below skips when
 # bin/activate exists, so without this check the corruption survives reinstall.
 - name: "Backend | Check venv health (pip importable, #7052)"
   ansible.builtin.command:
-    cmd: "{{ backend_code_dir }}/venv/bin/python3.12 -c 'import pip'"
+    cmd: "{{ backend_code_dir }}/venv/bin/python3.14 -c 'import pip'"
   register: _venv_health
   changed_when: false
   failed_when: false
@@ -533,9 +533,9 @@
     - venv_check.stat.exists and venv_check.stat.isdir
     - (_venv_health.rc | default(0)) != 0
 
-- name: Create Python 3.12 virtual environment via deadsnakes
+- name: Create Python 3.14 virtual environment via deadsnakes
   ansible.builtin.command:
-    cmd: "python3.12 -m venv {{ backend_code_dir }}/venv"
+    cmd: "python3.14 -m venv {{ backend_code_dir }}/venv"
     creates: "{{ backend_code_dir }}/venv/bin/activate"
   become_user: "{{ backend_user }}"
 
@@ -625,10 +625,10 @@
     - backend_vllm_enabled | bool
     - backend_gpu_available | default(false) | bool
 
-- name: Deploy aioredis compatibility shim for Python 3.12
+- name: Deploy aioredis compatibility shim for Python 3.14
   ansible.builtin.template:
     src: aioredis_shim.py.j2
-    dest: "{{ backend_code_dir }}/venv/lib/python3.12/site-packages/aioredis.py"
+    dest: "{{ backend_code_dir }}/venv/lib/python3.14/site-packages/aioredis.py"
     mode: '0644'
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
