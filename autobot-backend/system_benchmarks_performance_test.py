@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import psutil
 import pytest
-from enhanced_memory_manager import EnhancedMemoryManager
+from memory import EnhancedMemoryManager
 
 from config.manager import ConfigManager as ConfigManager
 from multimodal_processor import (

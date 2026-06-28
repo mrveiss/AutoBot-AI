@@ -366,14 +366,9 @@ class TestMemorySystemPerformance:
         """Set up test environment"""
         self.benchmark = PerformanceBenchmark()
 
-        with patch("enhanced_memory_manager.global_config_manager") as mock_config:
-            mock_config.get.return_value = {
-                "memory": {
-                    "database_path": ":memory:",  # Use in-memory database
-                    "embedding_cache_size": 1000,
-                }
-            }
-            self.memory_manager = EnhancedMemoryManager()
+        # EnhancedMemoryManager now delegates to UnifiedMemoryManager (memory.compat)
+        # which does not use global_config_manager — construct directly.
+        self.memory_manager = EnhancedMemoryManager()
 
     async def test_memory_storage_performance(self):
         """Benchmark memory storage operations"""
@@ -465,7 +460,7 @@ class TestSystemIntegrationPerformance:
         with (
             patch("orchestrator.Orchestrator") as mock_orchestrator_class,
             patch("knowledge_base.KnowledgeBase") as mock_kb_class,
-            patch("enhanced_memory_manager.EnhancedMemoryManager") as mock_memory_class,
+            patch("memory.compat.EnhancedMemoryManager") as mock_memory_class,
         ):
             # Set up mocks
             mock_orchestrator = MagicMock()
