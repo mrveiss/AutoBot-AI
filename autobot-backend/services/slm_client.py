@@ -109,10 +109,10 @@ def _mint_service_jwt(secret: str) -> str:
 # is not aligned with AUTOBOT_JWT_SECRET.
 _WS_AUTH_FAIL_THRESHOLD: int = 3
 
-# SLM server URL from environment.  On co-located deployments (backend and SLM
-# share the same host) the env var is often not set, so default to localhost.
-# An explicit env var always wins.
-_COLOCATED_DEFAULT = "http://127.0.0.1:8000"
+# SLM server URL — derived from SSOT config (vm.slm / port.slm) so env vars
+# AUTOBOT_SLM_HOST and AUTOBOT_SLM_PORT are honoured on co-located deployments.
+# An explicit SLM_URL env var always wins (via config.slm_url).
+_COLOCATED_DEFAULT = f"http://{config.vm.slm}:{config.port.slm}"
 DEFAULT_SLM_URL: str = config.slm_url or _COLOCATED_DEFAULT
 
 # Warn at most once per process — the module is imported by several packages

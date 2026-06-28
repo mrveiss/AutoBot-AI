@@ -321,25 +321,25 @@ if __name__ == "__main__":
 
     if args.action == "stats":
         stats = classifier.get_classification_stats()
-        print("Classification Statistics:")  # noqa: print
-        print(f"Total Categories: {stats['total_categories']}")  # noqa: print
-        print(f"Total Keywords: {stats['total_keywords']}")  # noqa: print
-        print(f"Total Rules: {stats['total_rules']}")  # noqa: print
-        print("\nCategories:")  # noqa: print
+        logger.info("Classification Statistics:")
+        logger.info("Total Categories: %s", stats["total_categories"])
+        logger.info("Total Keywords: %s", stats["total_keywords"])
+        logger.info("Total Rules: %s", stats["total_rules"])
+        logger.info("\nCategories:")
         for cat, count in stats["categories"].items():
-            print(f"  {cat}: {count} keywords")  # noqa: print
+            logger.info("  %s: %s keywords", cat, count)
 
     elif args.action == "add-keyword":
         if args.category and args.keyword:
             classifier.add_keywords(args.category, [args.keyword])
-            print(f"Added '{args.keyword}' to category '{args.category}'")  # noqa: print  # noqa: print
+            logger.info("Added '%s' to category '%s'", args.keyword, args.category)
         else:
-            print("Error: --category and --keyword required")  # noqa: print
+            logger.error("Error: --category and --keyword required")
 
     elif args.action == "test":
         if args.message:
             complexity = classifier.classify_request(args.message)
-            print(f"Message: '{args.message}'")  # noqa: print
-            print(f"Classification: {complexity.value}")  # noqa: print
+            logger.info("Message: '%s'", args.message)
+            logger.info("Classification: %s", complexity.value)
         else:
-            print("Error: --message required")  # noqa: print
+            logger.error("Error: --message required")

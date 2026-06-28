@@ -417,7 +417,7 @@ if __name__ == "__main__":
             return True
 
         result = await execute_user_permission_with_timeout(mock_user_permission, context={"task": "test_permission"})
-        print(f"User permission result: {result}")  # noqa: print
+        logger.info("User permission result: %s", result)
 
         # Test installation timeout (was 600s, now 120s with background)
         async def mock_installation():
@@ -430,7 +430,7 @@ if __name__ == "__main__":
             package_type="large_package",
             context={"package": "test-package"},
         )
-        print(f"Installation result: {result}")  # noqa: print
+        logger.info("Installation result: %s", result)
 
         # Log timeout metrics
         log_adaptive_timeout_metrics(600, 30, "user_permission")

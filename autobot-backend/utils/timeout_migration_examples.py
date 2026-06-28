@@ -998,10 +998,10 @@ if __name__ == "__main__":
             test_op = await migrator.migrate_comprehensive_test_suite()
             security_op = await migrator.migrate_security_scan_operation()
 
-            print("Migrated operations:")  # noqa: print
-            print(f"  - Indexing: {indexing_op}")  # noqa: print
-            print(f"  - Testing: {test_op}")  # noqa: print
-            print(f"  - Security: {security_op}")  # noqa: print
+            logger.info("Migrated operations:")
+            logger.info("  - Indexing: %s", indexing_op)
+            logger.info("  - Testing: %s", test_op)
+            logger.info("  - Security: %s", security_op)
 
             # Example of decorator-based migration
             @migrate_timeout_operation(OperationType.CODE_ANALYSIS, estimated_items=100)
@@ -1013,11 +1013,11 @@ if __name__ == "__main__":
 
             # Call the migrated function
             result = await analyze_codebase(f"{PATH.PROJECT_ROOT}/src", ["*.py"])
-            print(f"Analysis result: {result}")  # noqa: print
+            logger.info("Analysis result: %s", result)
 
             await operation_integration_manager.shutdown()
         else:
-            print("Operation integration manager not available")  # noqa: print
+            logger.info("Operation integration manager not available")
 
     # Run demonstration
     run_or_schedule(demonstration())

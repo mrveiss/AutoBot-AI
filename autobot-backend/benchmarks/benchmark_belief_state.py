@@ -654,7 +654,7 @@ def generate_report(results: list[RunResult], output_path: Path) -> None:
     )
 
     output_path.write_text("\n".join(lines))
-    print(f"Report written to: {output_path}")
+    print(f"Report written to: {output_path}")  # noqa: print  # canonical: ignore py-print-smoke
 
 
 def _task_focus(num: int) -> str:
@@ -677,18 +677,20 @@ def main() -> None:
     scenarios = build_scenarios()
     results: list[RunResult] = []
 
-    print("=" * 70)
-    print("Belief-State A/B Benchmark (MVA-1408)")
-    print("=" * 70)
-    print(f"Running {len(scenarios)} tasks × 2 variants = {len(scenarios) * 2} total runs")
-    print()
+    print("=" * 70)  # noqa: print  # canonical: ignore py-print-smoke
+    print("Belief-State A/B Benchmark (MVA-1408)")  # noqa: print  # canonical: ignore py-print-smoke
+    print("=" * 70)  # noqa: print  # canonical: ignore py-print-smoke
+    print(
+        f"Running {len(scenarios)} tasks × 2 variants = {len(scenarios) * 2} total runs"
+    )  # noqa: print  # canonical: ignore py-print-smoke
+    print()  # noqa: print  # canonical: ignore py-print-smoke
 
     for scenario in scenarios:
         for belief_state_enabled in [False, True]:
             variant = "belief_state" if belief_state_enabled else "baseline"
             result = run_task(scenario, belief_state_enabled=belief_state_enabled)
             results.append(result)
-            print(
+            print(  # noqa: print  # canonical: ignore py-print-smoke
                 f"  Task {scenario.number} [{variant:>12}]: "
                 f"tokens={result.input_tokens:5d}  "
                 f"halluc={result.hallucinated_requeries}  "
@@ -697,7 +699,7 @@ def main() -> None:
                 f"{result.wall_clock_ms:.2f}ms"
             )
 
-    print()
+    print()  # noqa: print  # canonical: ignore py-print-smoke
 
     # Write markdown report
     repo_root = Path(__file__).parent.parent.parent
@@ -705,8 +707,8 @@ def main() -> None:
     generate_report(results, output_path)
 
     # Print summary to stdout as well
-    print()
-    print("Summary:")
+    print()  # noqa: print  # canonical: ignore py-print-smoke
+    print("Summary:")  # noqa: print  # canonical: ignore py-print-smoke
     baseline = {r.task_number: r for r in results if r.variant == "baseline"}
     belief = {r.task_number: r for r in results if r.variant == "belief_state"}
     improved = 0
@@ -715,7 +717,7 @@ def main() -> None:
         s = belief[num]
         pct = (b.input_tokens - s.input_tokens) / b.input_tokens * 100 if b.input_tokens > 0 else 0
         marker = "✅" if pct >= 10 else "➡️"
-        print(
+        print(  # noqa: print  # canonical: ignore py-print-smoke
             f"  {marker} Task {num}: tokens {b.input_tokens} → {s.input_tokens} "
             f"({pct:+.1f}%), "
             f"re-queries {b.hallucinated_requeries} → {s.hallucinated_requeries}, "
@@ -723,9 +725,9 @@ def main() -> None:
         )
         if pct >= 10:
             improved += 1
-    print()
-    print(f"Tasks with ≥10% token reduction: {improved}/5")
-    print("Done.")
+    print()  # noqa: print  # canonical: ignore py-print-smoke
+    print(f"Tasks with ≥10% token reduction: {improved}/5")  # noqa: print  # canonical: ignore py-print-smoke
+    print("Done.")  # noqa: print  # canonical: ignore py-print-smoke
 
 
 if __name__ == "__main__":

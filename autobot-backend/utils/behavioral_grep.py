@@ -329,7 +329,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             encoding=args.encoding,
         )
     except ValueError as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
+        logger.error("%s", exc)
         return 2
 
     if not args.quiet:
@@ -341,9 +341,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = _format_summary(result, label)
 
         if output:
-            print(output)
+            print(output)  # noqa: print  # canonical: ignore py-print-smoke
     else:
-        print(_format_summary(result, label))
+        print(_format_summary(result, label))  # noqa: print  # canonical: ignore py-print-smoke
 
     if args.exit_nonzero and result.match_count > 0:
         return 1

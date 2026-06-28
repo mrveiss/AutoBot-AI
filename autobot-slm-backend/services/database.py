@@ -10,6 +10,7 @@ Uses PostgreSQL for all database operations (Issue #786).
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -17,6 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from config import settings
 from models.database import Base, Setting
+
+# SSOT-derived seed defaults — env vars match PortConfig/VMConfig aliases
+_BACKEND_HOST = os.getenv("AUTOBOT_BACKEND_HOST", "127.0.0.1")
+_PROMETHEUS_PORT = os.getenv("AUTOBOT_PROMETHEUS_PORT", "9090")
+_GRAFANA_PORT = os.getenv("AUTOBOT_GRAFANA_PORT", "3000")
+_SSOT_PROMETHEUS_URL = f"http://{_BACKEND_HOST}:{_PROMETHEUS_PORT}"
+_SSOT_GRAFANA_URL = f"http://{_BACKEND_HOST}:{_GRAFANA_PORT}"
 
 logger = logging.getLogger(__name__)
 
@@ -101,12 +109,12 @@ class DatabaseService:
                 "Monitoring services location (local/external)",
             ),
             "prometheus_url": (
-                "http://localhost:9090",
+                _SSOT_PROMETHEUS_URL,
                 "string",
                 "Prometheus server URL",
             ),
             "grafana_url": (
-                "http://localhost:3000",
+                _SSOT_GRAFANA_URL,
                 "string",
                 "Grafana server URL",
             ),
