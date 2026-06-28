@@ -11,10 +11,9 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import psutil
 import pytest
-from memory import UnifiedMemoryManager
-from memory import UnifiedMemoryManager
 
 from config.manager import ConfigManager as ConfigManager
+from memory import UnifiedMemoryManager
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,

@@ -13,10 +13,8 @@ from pathlib import Path
 # Add project root to Python path
 sys.path.append(str(Path(__file__).parent))
 
-from memory import TaskPriority, UnifiedMemoryManager
-from memory import TaskPriority, UnifiedMemoryManager
-
 from markdown_reference_system import MarkdownReferenceSystem
+from memory import TaskPriority, UnifiedMemoryManager
 from task_execution_tracker import TaskExecutionTracker
 
 

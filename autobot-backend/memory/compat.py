@@ -14,15 +14,14 @@ existing call-sites that import it by name continue to work unchanged;
 it now returns a plain UnifiedMemoryManager instance.
 """
 
-from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
-from .enums import MemoryCategory, TaskStatus
+from .enums import MemoryCategory
 from .manager import UnifiedMemoryManager
-from .models import MemoryEntry, TaskExecutionRecord
+from .models import MemoryEntry
 
 logger = get_logger(__name__)
 
