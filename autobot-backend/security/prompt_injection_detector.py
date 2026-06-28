@@ -634,11 +634,10 @@ if __name__ == "__main__":
             else "❌ FAIL"
         )
 
-        print(f"{status} | Risk: {result.risk_level.value:8s} | Blocked: {result.blocked}")  # noqa: print
+        logger.info("%s | Risk: %-8s | Blocked: %s", status, result.risk_level.value, result.blocked)
         logger.info("Input: {test_input}")
         if result.detected_patterns:
             logger.info("Patterns: {result.detected_patterns}")
-        print()  # noqa: print
 
     # Test context validation
     logger.info("=== Context Poisoning Detection Test ===\n")

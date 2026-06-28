@@ -1,5 +1,3 @@
-from src.constants import NetworkConstants, ServiceURLs
-
 // Frontend API Connection Fix Script
 // Run this in your browser console (F12 -> Console) to fix API timeouts
 
@@ -47,8 +45,8 @@ function resetDefaultSettings() {
         },
         backend: {
             use_phi2: false,
-            api_endpoint: ServiceURLs.BACKEND_LOCAL,
-            ollama_endpoint: ServiceURLs.OLLAMA_LOCAL,
+            api_endpoint: 'http://localhost:8001',
+            ollama_endpoint: 'http://localhost:11434',
             ollama_model: 'deepseek-r1:14b',
             streaming: false
         },
@@ -75,7 +73,7 @@ async function testApiConnectivity() {
         '/api/knowledge_base/stats'
     ];
 
-    const baseUrl = ServiceURLs.BACKEND_LOCAL;
+    const baseUrl = 'http://localhost:8001';
     const results = {};
 
     for (const endpoint of endpoints) {
@@ -119,13 +117,13 @@ function fixApiClientSettings() {
     // Reset any cached API instances if they exist
     if (window.apiClient) {
         window.apiClient.setTimeout(10000); // 10 second timeout
-        window.apiClient.setBaseUrl(ServiceURLs.BACKEND_LOCAL);
+        window.apiClient.setBaseUrl('http://localhost:8001');
         console.log('  ✅ Updated existing apiClient');
     }
 
     // Set environment overrides
     if (window.localStorage) {
-        localStorage.setItem('autobot_api_base_url', ServiceURLs.BACKEND_LOCAL);
+        localStorage.setItem('autobot_api_base_url', 'http://localhost:8001');
         localStorage.setItem('autobot_api_timeout', '10000');
         console.log('  ✅ Set API configuration overrides');
     }
@@ -159,7 +157,7 @@ async function networkDiagnostic() {
     try {
         // Test basic connectivity
         const start = performance.now();
-        const response = await fetch('ServiceURLs.BACKEND_LOCAL/api/system/health', {
+        const response = await fetch('http://localhost:8001/api/system/health', {
             method: 'GET',
             cache: 'no-cache'
         });

@@ -14,9 +14,13 @@ from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from autobot_shared.ssot_config import config as _ssot_config
 from autobot_shared.time_utils import now_utc
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import CategoryDefaults
+
+# SSOT-derived example URL used in json_schema_extra (docs only, not runtime)
+_NPU_EXAMPLE_URL = f"http://{_ssot_config.vm.npu}:{_ssot_config.port.npu}"
 
 # Issue #380: Module-level tuple for URL scheme validation
 _VALID_URL_SCHEMES = ("http://", "https://")
@@ -296,7 +300,7 @@ class WorkerHeartbeat(BaseModel):
                 "worker_id": "windows_npu_worker_abc123",
                 "status": "online",
                 "platform": "windows",
-                "url": "http://127.0.0.1:8082",
+                "url": _NPU_EXAMPLE_URL,
                 "current_load": 1,
                 "total_tasks_completed": 42,
                 "total_tasks_failed": 2,

@@ -913,6 +913,6 @@ if __name__ == "__main__":
 
         # Get insights
         insights = await get_optimization_insights()
-        print(json.dumps(insights, indent=2, default=str))  # noqa: print
+        logger.info(json.dumps(insights, indent=2, default=str))
 
     run_or_schedule(example())
