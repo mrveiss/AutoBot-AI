@@ -324,7 +324,7 @@ class SystemCommandAgent(StandardizedAgent):
             pm = await self.detect_package_manager()
             if not pm:
                 return None, {
-                    "status": "error",
+                    "status": AgentStatus.ERROR.value,
                     "message": "Could not detect package manager",
                 }
             pm_info = self.PACKAGE_MANAGERS[pm]
@@ -339,7 +339,7 @@ class SystemCommandAgent(StandardizedAgent):
         pm_info = self.PACKAGE_MANAGERS.get(install_method)
         if not pm_info:
             return None, {
-                "status": "error",
+                "status": AgentStatus.ERROR.value,
                 "message": f"Unknown install method: {install_method}",
             }
         return pm_info["install"].format(package=package_name), None
@@ -351,7 +351,7 @@ class SystemCommandAgent(StandardizedAgent):
         verify_result = await self.check_tool_installed(tool_name)
         if verify_result["installed"]:
             return {
-                "status": "success",
+                "status": AgentStatus.SUCCESS.value,
                 "message": f"{tool_name} installed successfully",
                 "exit_code": result.get("exit_code", 0),
             }
@@ -409,7 +409,7 @@ class SystemCommandAgent(StandardizedAgent):
         """Build execution result dict (Issue #398: extracted)."""
         exit_code = result["exit_code"]
         return {
-            "status": "success" if exit_code == 0 else "error",
+            "status": (AgentStatus.SUCCESS.value if exit_code == 0 else AgentStatus.ERROR.value),
             "exit_code": exit_code,
             "duration": result["duration"],
             "output_lines": result["line_count"],
@@ -454,7 +454,7 @@ class SystemCommandAgent(StandardizedAgent):
         except Exception as e:
             logger.error("Error executing command: %s", e)
             return {
-                "status": "error",
+                "status": AgentStatus.ERROR.value,
                 "error": "Command execution failed",
                 "message": "Command execution failed",
             }
@@ -853,7 +853,7 @@ class SystemCommandAgent(StandardizedAgent):
         except Exception as exc:
             logger.error("SystemCommandAgent LLM generation error: %s", exc)
             return {
-                "status": "error",
+                "status": AgentStatus.ERROR.value,
                 "command": "",
                 "explanation": "Failed to process command request",
                 "is_safe": False,
