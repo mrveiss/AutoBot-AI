@@ -17,6 +17,10 @@ import os
 import sys
 from pathlib import Path
 
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
+
 # Required vars are declared in a manifest written by Ansible alongside .env.
 # This keeps the validator in sync with the template without a parallel hardcoded list.
 # Fallback list is used when the manifest is absent (dev/bare checkout).
@@ -68,18 +72,15 @@ def main():
 
     readable, err = validate_env_file(env_path)
     if not readable:
-        print(f"FATAL: {err}", file=sys.stderr)
+        logger.error("FATAL: %s", err)
         sys.exit(2)
 
     valid, missing = validate_env_vars()
     if not valid:
-        print(
-            f"FATAL: Missing required environment variables: {', '.join(missing)}",
-            file=sys.stderr,
-        )
+        logger.error("FATAL: Missing required environment variables: %s", ", ".join(missing))
         sys.exit(1)
 
-    print(f"✓ Backend startup validation passed ({len(REQUIRED_ENV_VARS)} vars)", file=sys.stderr)
+    logger.info("✓ Backend startup validation passed (%d vars)", len(REQUIRED_ENV_VARS))
     sys.exit(0)
 
 

@@ -272,7 +272,7 @@ if (!localStorage.getItem('chat_settings')) {
 """
 
         # Save script to file
-        script_file = Path("scripts/utilities/browser_settings_fix.js")
+        script_file = Path("scripts/utilities/browser_settings_utility.js")
         script_file.write_text(script)
         logger.info(f"✅ Browser fix script saved to: {script_file}")
 
@@ -283,7 +283,7 @@ if (!localStorage.getItem('chat_settings')) {
         logger.info("1. Open AutoBot in your browser: http://localhost:5173")
         logger.info("2. Press F12 to open Developer Tools")
         logger.info("3. Go to the Console tab")
-        logger.info("4. Copy and paste the script from: scripts/utilities/browser_settings_fix.js")
+        logger.info("4. Copy and paste the script from: scripts/utilities/browser_settings_utility.js")
         logger.info("5. Press Enter to run the script")
         logger.info("6. Follow the on-screen instructions")
         logger.info("=" * 70)

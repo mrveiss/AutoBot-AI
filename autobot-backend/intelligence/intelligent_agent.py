@@ -14,18 +14,19 @@ import time
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Dict, FrozenSet, List
 
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
+
 # #7127: running this file directly cannot work — top-level project imports
 # below need sys.path entries that an inline `__main__` block cannot install
 # in time. Guard before the project imports so users get a useful pointer
 # instead of a cryptic ModuleNotFoundError.
 if __name__ == "__main__":
-    import sys as _sys
-
-    print(  # noqa: print
-        "intelligence.intelligent_agent has no runnable __main__ block.\n"
-        "Run the demo via:\n"
-        "  python3 autobot-backend/intelligence/demos/run_intelligent_agent.py",
-        file=_sys.stderr,
+    logger.error(
+        "intelligence.intelligent_agent has no runnable __main__ block. "
+        "Run the demo via: "
+        "python3 autobot-backend/intelligence/demos/run_intelligent_agent.py"
     )
     raise SystemExit(2)
 
@@ -34,7 +35,6 @@ from intelligence.goal_processor import GoalProcessor, ProcessedGoal
 # Issue #380: Module-level frozenset for package managers requiring sudo
 _SUDO_PACKAGE_MANAGERS: FrozenSet[str] = frozenset({"apt", "yum", "dn", "pacman", "zypper"})
 
-from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
 # Import our new intelligent agent components
@@ -51,8 +51,6 @@ from reasoning.causal_reasoning import CAUSAL_REASONING_SNIPPET
 # Import existing AutoBot components
 from utils.command_validator import CommandValidator
 from worker_node import WorkerNode
-
-logger = get_logger(__name__)
 
 
 @dataclass

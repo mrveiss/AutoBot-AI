@@ -705,7 +705,7 @@ if __name__ == "__main__":
 
             # Run migrated operation
             operation_id = await index_codebase()
-            print(f"Started operation: {operation_id}")  # noqa: print
+            logger.info("Started operation: %s", operation_id)
 
             # Monitor progress
             while True:
@@ -719,10 +719,10 @@ if __name__ == "__main__":
                 }:
                     break
 
-                print(f"Progress: {operation.progress.progress_percentage:.1f}%")  # noqa: print  # noqa: print
+                logger.info("Progress: %.1f%%", operation.progress.progress_percentage)
                 await asyncio.sleep(1)
 
-            print("Operation completed!")  # noqa: print
+            logger.info("Operation completed!")
 
         finally:
             await operation_integration_manager.shutdown()
