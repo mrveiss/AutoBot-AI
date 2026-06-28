@@ -12,39 +12,20 @@ from typing import Dict, List
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import create_engine, desc, func
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import desc, func, select
 
-from autobot_shared.db_session import session_scope
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.ssot_config import config
 from models.code_pattern import CodePattern
 from services.context_analyzer import ContextAnalyzer
 from services.pattern_extractor import PatternExtractor
+from user_management.database import db_session_context
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["code-completion"])
 
 get_context_analyzer = lazy_singleton(ContextAnalyzer)
-
-# Database setup — deferred to avoid crash when config.database is unavailable
-_engine = None
-_SessionLocal = None
-
-
-def _get_db_session():
-    """Return canonical session context manager, initializing engine on first call (GH#7441)."""
-    global _engine, _SessionLocal
-    if _SessionLocal is None:
-        db_url = (
-            f"postgresql://{config.database.user}:{config.database.password}"
-            f"@{config.database.host}:{config.database.port}/{config.database.name}"
-        )
-        _engine = create_engine(db_url)
-        _SessionLocal = sessionmaker(bind=_engine)
-    return session_scope(_SessionLocal)
 
 
 # =============================================================================
@@ -127,20 +108,19 @@ async def extract_patterns(request: ExtractionRequest):
         patterns_dict = extractor.extract_from_codebase(languages=request.languages)
 
         # Store patterns in database
-        with _get_db_session() as db:
+        async with db_session_context() as db:
             total_stored = 0
             for pattern_type, patterns in patterns_dict.items():
                 for pattern_data in patterns:
                     # Check if pattern already exists
-                    existing = (
-                        db.query(CodePattern)
-                        .filter_by(
-                            signature=pattern_data["signature"],
-                            file_path=pattern_data["file_path"],
-                            line_number=pattern_data["line_number"],
+                    result = await db.execute(
+                        select(CodePattern).where(
+                            CodePattern.signature == pattern_data["signature"],
+                            CodePattern.file_path == pattern_data["file_path"],
+                            CodePattern.line_number == pattern_data["line_number"],
                         )
-                        .first()
                     )
+                    existing = result.scalars().first()
 
                     if existing:
                         # Update frequency and last_seen
@@ -151,8 +131,7 @@ async def extract_patterns(request: ExtractionRequest):
                         pattern = CodePattern(**pattern_data)
                         db.add(pattern)
                         total_stored += 1
-
-            db.commit()
+            # commit handled by db_session_context()
 
         # Cache hot patterns to Redis
         if request.cache_hot_patterns:
@@ -191,27 +170,29 @@ async def list_patterns(
     - **page_size**: Results per page (1-100)
     - **sort_by**: Sort field (frequency, acceptance_rate, created_at)
     """
-    with _get_db_session() as db:
-        query = db.query(CodePattern)
+    from sqlalchemy import func as sa_func
+
+    async with db_session_context() as db:
+        stmt = select(CodePattern)
 
         # Apply filters
         if language:
-            query = query.filter(CodePattern.language == language)
+            stmt = stmt.where(CodePattern.language == language)
         if pattern_type:
-            query = query.filter(CodePattern.pattern_type == pattern_type)
+            stmt = stmt.where(CodePattern.pattern_type == pattern_type)
         if category:
-            query = query.filter(CodePattern.category == category)
+            stmt = stmt.where(CodePattern.category == category)
 
         # Get total count
-        total = query.count()
+        count_result = await db.execute(select(sa_func.count()).select_from(stmt.subquery()))
+        total = count_result.scalar_one()
 
-        # Apply sorting
+        # Apply sorting and pagination
         sort_column = getattr(CodePattern, sort_by)
-        query = query.order_by(desc(sort_column))
-
-        # Apply pagination
         offset = (page - 1) * page_size
-        patterns = query.offset(offset).limit(page_size).all()
+        paged_stmt = stmt.order_by(desc(sort_column)).offset(offset).limit(page_size)
+        patterns_result = await db.execute(paged_stmt)
+        patterns = patterns_result.scalars().all()
 
         return PatternListResponse(
             patterns=[
@@ -265,24 +246,29 @@ async def search_patterns(request: PatternSearchRequest):
     - Function names
     - Categories
     """
-    with _get_db_session() as db:
-        query = db.query(CodePattern)
+    from sqlalchemy import func as sa_func
+
+    async with db_session_context() as db:
+        stmt = select(CodePattern)
 
         # Apply filters
         if request.language:
-            query = query.filter(CodePattern.language == request.language)
+            stmt = stmt.where(CodePattern.language == request.language)
         if request.pattern_type:
-            query = query.filter(CodePattern.pattern_type == request.pattern_type)
+            stmt = stmt.where(CodePattern.pattern_type == request.pattern_type)
 
         # Search in signature
         search_term = f"%{request.query}%"
-        query = query.filter(CodePattern.signature.ilike(search_term))
+        stmt = stmt.where(CodePattern.signature.ilike(search_term))
 
-        # Order by relevance (frequency * acceptance_rate)
-        query = query.order_by(desc(CodePattern.frequency * CodePattern.acceptance_rate))
+        # Count before limiting
+        count_result = await db.execute(select(sa_func.count()).select_from(stmt.subquery()))
+        total = count_result.scalar_one()
 
-        total = query.count()
-        patterns = query.limit(request.limit).all()
+        # Order by relevance (frequency * acceptance_rate) and limit
+        stmt = stmt.order_by(desc(CodePattern.frequency * CodePattern.acceptance_rate)).limit(request.limit)
+        patterns_result = await db.execute(stmt)
+        patterns = patterns_result.scalars().all()
 
         return PatternListResponse(
             patterns=[
@@ -309,24 +295,27 @@ async def search_patterns(request: PatternSearchRequest):
 @router.get("/statistics")
 async def get_statistics():
     """Get pattern extraction statistics."""
-    with _get_db_session() as db:
-        stats = {
-            "total_patterns": db.query(CodePattern).count(),
-            "by_language": dict(
-                db.query(CodePattern.language, func.count(CodePattern.id)).group_by(CodePattern.language).all()
-            ),
-            "by_type": dict(
-                db.query(CodePattern.pattern_type, func.count(CodePattern.id)).group_by(CodePattern.pattern_type).all()
-            ),
-            "by_category": dict(
-                db.query(CodePattern.category, func.count(CodePattern.id)).group_by(CodePattern.category).all()
-            ),
-            "top_patterns": [
-                {"signature": p.signature, "frequency": p.frequency}
-                for p in db.query(CodePattern).order_by(desc(CodePattern.frequency)).limit(10).all()
-            ],
+    async with db_session_context() as db:
+        total_result = await db.execute(select(func.count(CodePattern.id)))
+        by_language_result = await db.execute(
+            select(CodePattern.language, func.count(CodePattern.id)).group_by(CodePattern.language)
+        )
+        by_type_result = await db.execute(
+            select(CodePattern.pattern_type, func.count(CodePattern.id)).group_by(CodePattern.pattern_type)
+        )
+        by_category_result = await db.execute(
+            select(CodePattern.category, func.count(CodePattern.id)).group_by(CodePattern.category)
+        )
+        top_result = await db.execute(
+            select(CodePattern.signature, CodePattern.frequency).order_by(desc(CodePattern.frequency)).limit(10)
+        )
+        return {
+            "total_patterns": total_result.scalar_one(),
+            "by_language": dict(by_language_result.all()),
+            "by_type": dict(by_type_result.all()),
+            "by_category": dict(by_category_result.all()),
+            "top_patterns": [{"signature": sig, "frequency": freq} for sig, freq in top_result.all()],
         }
-        return stats
 
 
 # =============================================================================

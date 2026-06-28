@@ -10,14 +10,13 @@ Lightweight model updates based on feedback without full retraining.
 
 from datetime import timedelta
 
-from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from models.completion_feedback import CompletionFeedback
 from training.completion_trainer import CompletionTrainer
+from user_management.database import get_async_engine
 
 logger = get_logger(__name__)
 
@@ -54,14 +53,10 @@ class IncrementalTrainer:
         self.trainer = CompletionTrainer()
         self.trainer.load_checkpoint(model_version)
 
-        # Database setup
-        DATABASE_URL = (
-            f"postgresql://{config.database.user}:{config.database.password}"
-            f"@{config.database.host}:{config.database.port}/"
-            f"{config.database.name}"
-        )
-        engine = create_engine(DATABASE_URL)
-        self.SessionLocal = sessionmaker(bind=engine)
+        # Derive a sync sessionmaker from the canonical async engine's sync_engine
+        # so we share the same connection pool instead of creating a second engine (#10570).
+        # IncrementalTrainer.update_from_feedback is called from sync background tasks.
+        self.SessionLocal = sessionmaker(bind=get_async_engine().sync_engine)
 
         # Incremental learning parameters
         self.learning_rate = 1e-5  # Lower LR for fine-tuning

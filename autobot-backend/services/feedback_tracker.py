@@ -12,15 +12,15 @@ import json
 from datetime import datetime, timedelta
 from typing import Dict, List
 
-from sqlalchemy import create_engine, func
+from sqlalchemy import func
 from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
-from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from models.code_pattern import CodePattern
 from models.completion_feedback import CompletionFeedback
+from user_management.database import get_async_engine
 
 logger = get_logger(__name__)
 
@@ -34,14 +34,11 @@ class FeedbackTracker:
     """
 
     def __init__(self) -> None:
-        # Database setup
-        DATABASE_URL = (
-            f"postgresql://{config.database.user}:{config.database.password}"
-            f"@{config.database.host}:{config.database.port}/"
-            f"{config.database.name}"
-        )
-        engine = create_engine(DATABASE_URL)
-        self.SessionLocal = sessionmaker(bind=engine)
+        # Derive a sync sessionmaker from the canonical async engine's sync_engine
+        # so we share the same connection pool instead of creating a second engine (#10570).
+        # FeedbackTracker is used from sync context (routers/feedback.py background
+        # tasks) so a sync session is genuinely required here.
+        self.SessionLocal = sessionmaker(bind=get_async_engine().sync_engine)
 
         # Redis for time-series caching
         self.redis_client = get_redis_client(async_client=False, database="main")
