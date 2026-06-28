@@ -13,6 +13,7 @@ Issue #207: NPU-Accelerated Semantic Code Search
 
 import asyncio
 import hashlib
+import os
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
@@ -27,6 +28,11 @@ logger = get_llm_logger("code_embedding_generator")
 
 # CodeBERT embedding dimension
 CODEBERT_EMBEDDING_DIM = 768
+
+# Persistent OpenVINO compiled-model cache (#10601): without CACHE_DIR the model
+# is re-converted + recompiled on every cold start (slow on NPU/GPU). Caching the
+# compiled blob lets subsequent starts skip recompilation.
+OPENVINO_CACHE_DIR = os.getenv("AUTOBOT_OPENVINO_CACHE_DIR", "data/openvino_cache")
 
 
 @dataclass
@@ -167,7 +173,9 @@ class CodeEmbeddingGenerator:
             else:
                 target_device = "CPU"
 
-            self.openvino_model = core.compile_model(ov_model, target_device)
+            # #10601: persist compiled blobs so cold starts skip recompilation.
+            os.makedirs(OPENVINO_CACHE_DIR, exist_ok=True)
+            self.openvino_model = core.compile_model(ov_model, target_device, {"CACHE_DIR": OPENVINO_CACHE_DIR})
             # Record the actual device so _compute_with_openvino reports correctly
             self._openvino_device = target_device.lower()
             logger.info(

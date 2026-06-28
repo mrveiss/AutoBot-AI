@@ -212,3 +212,76 @@ async def test_explicit_model_overrides_routing(monkeypatch):
 def test_prompt_cache_default_flag_on():
     """Anthropic prompt caching is driven by this default (pure cost win)."""
     assert config.llm_prompt_cache_default is True
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_honors_retry_after(monkeypatch):
+    """#10601: a same-provider fallback waits the parsed Retry-After before retrying."""
+
+    class _RateLimitedThenOk(_FakeProvider):
+        async def chat_completion(self, request: LLMRequest) -> LLMResponse:
+            self.calls += 1
+            self.last_request = request
+            if self.calls == 1:
+                return LLMResponse(
+                    content="",
+                    provider=self.provider_name,
+                    request_id=request.request_id,
+                    error="rate limit exceeded; retry after 5 seconds",
+                )
+            return LLMResponse(content="ok", model="m", provider=self.provider_name, request_id=request.request_id)
+
+    provider = _RateLimitedThenOk()
+    svc = LLMService(registry=_FakeRegistry(provider))
+    svc._response_cache = _FakeCache()
+
+    class _SameProviderFallback:
+        def get_next_fallback(self, *args, **kwargs):
+            return ("fallback-model", None)  # None → stay on same provider
+
+    monkeypatch.setattr(_llm_service_mod, "get_fallback_chain_manager", lambda: _SameProviderFallback())
+    slept: List[float] = []
+
+    async def _record_sleep(seconds):
+        slept.append(seconds)
+
+    monkeypatch.setattr(_llm_service_mod.asyncio, "sleep", _record_sleep)
+
+    result = await svc.chat([{"role": "user", "content": "hi"}], temperature=0.0)
+
+    assert provider.calls == 2  # rate-limited, then retried successfully
+    assert slept == [5.0]  # honored the parsed Retry-After (capped at 30)
+    assert result.content == "ok"
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_no_sleep_when_switching_provider(monkeypatch):
+    """A cross-provider fallback should NOT wait the primary's Retry-After."""
+
+    class _RateLimitedThenOk(_FakeProvider):
+        async def chat_completion(self, request: LLMRequest) -> LLMResponse:
+            self.calls += 1
+            self.last_request = request
+            if self.calls == 1:
+                return LLMResponse(
+                    content="",
+                    provider=self.provider_name,
+                    request_id=request.request_id,
+                    error="429 too many requests; retry after 9 seconds",
+                )
+            return LLMResponse(content="ok", model="m", provider=self.provider_name, request_id=request.request_id)
+
+    provider = _RateLimitedThenOk()
+    svc = LLMService(registry=_FakeRegistry(provider))
+    svc._response_cache = _FakeCache()
+
+    class _OtherProviderFallback:
+        def get_next_fallback(self, *args, **kwargs):
+            return ("other-model", "other-provider")  # different provider
+
+    monkeypatch.setattr(_llm_service_mod, "get_fallback_chain_manager", lambda: _OtherProviderFallback())
+    slept: List[float] = []
+    monkeypatch.setattr(_llm_service_mod.asyncio, "sleep", lambda s: slept.append(s))
+
+    await svc.chat([{"role": "user", "content": "hi"}], temperature=0.0)
+    assert slept == []  # no wait when moving to a healthy different provider

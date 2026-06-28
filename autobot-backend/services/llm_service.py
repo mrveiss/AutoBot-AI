@@ -36,7 +36,9 @@ from autobot_shared.logging_manager import get_logger
 
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 import time
 import uuid
 from typing import Any, AsyncIterator, Dict, List
@@ -66,6 +68,10 @@ except Exception:  # pragma: no cover
 _llm_tracer = get_tracer("autobot.llm")
 
 logger = get_logger(__name__)
+
+# Cap on honoring a provider-suggested Retry-After before a same-provider retry,
+# so a hostile/huge value can't stall the request indefinitely (#10601).
+_MAX_RETRY_AFTER_SECONDS = float(os.getenv("AUTOBOT_LLM_MAX_RETRY_AFTER_SECONDS", "30"))
 
 # Default parameters per task type.  These are applied when the caller does
 # not supply explicit temperature / max_tokens values.
@@ -304,7 +310,7 @@ class LLMService:
                 return response
 
             # GH#8998: Check if this is a rate limit error that should trigger fallback
-            is_rate_limited, _ = extract_rate_limit_info(response)
+            is_rate_limited, retry_after = extract_rate_limit_info(response)
 
             if is_rate_limited:
                 # Try to find a fallback model
@@ -322,8 +328,14 @@ class LLMService:
                         next_model,
                     )
                     current_model = next_model
+                    # #10601: when the fallback stays on the same (rate-limited)
+                    # provider, honor the server-suggested Retry-After (capped)
+                    # before retrying instead of hammering it immediately.
+                    same_provider = (not next_provider) or next_provider == current_provider_name
                     if next_provider:
                         current_provider_name = next_provider
+                    if retry_after and same_provider:
+                        await asyncio.sleep(min(retry_after, _MAX_RETRY_AFTER_SECONDS))
                     continue
                 else:
                     logger.warning(
