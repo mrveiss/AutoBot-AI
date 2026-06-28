@@ -12,13 +12,12 @@ import re
 from typing import Dict, List, Tuple
 
 import torch
-from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from torch.utils.data import Dataset
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
 from models.code_pattern import CodePattern
+from user_management.database import get_async_engine
 
 logger = get_logger(__name__)
 
@@ -100,15 +99,11 @@ class PatternDataset(Dataset):
         # Initialize tokenizer
         self.tokenizer = Tokenizer()
 
-        # Database setup — built once here so the connection pool is reused
-        # across repeated calls rather than re-created per _load_patterns call.
-        DATABASE_URL = (
-            f"postgresql://{config.database.user}:{config.database.password}"
-            f"@{config.database.host}:{config.database.port}"
-            f"/{config.database.name}"
-        )
-        engine = create_engine(DATABASE_URL)
-        self._SessionLocal = sessionmaker(bind=engine)
+        # Derive a sync sessionmaker from the canonical async engine's sync_engine
+        # so we share the same connection pool instead of creating a second engine (#10570).
+        # PatternDataset.__getitem__ is called from torch DataLoader worker threads
+        # (sync context), so a sync session is genuinely required here.
+        self._SessionLocal = sessionmaker(bind=get_async_engine().sync_engine)
 
         # Load patterns from database
         self.patterns = self._load_patterns()
