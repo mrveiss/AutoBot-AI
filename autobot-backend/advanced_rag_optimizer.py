@@ -1030,15 +1030,15 @@ if __name__ == "__main__":
         """Run CLI query against optimized RAG search."""
         if args.context:
             context = await get_optimized_knowledge_context(args.query)
-            print("=== Optimized Context ===")  # noqa: print
-            print(context)  # noqa: print
+            logger.info("=== Optimized Context ===")
+            logger.info(context)
         else:
             results = await advanced_knowledge_search(args.query, args.max_results)
-            print(f"=== Search Results for: {args.query} ===")  # noqa: print
+            logger.info("=== Search Results for: %s ===", args.query)
             for i, result in enumerate(results, 1):
-                print(f"\nResult {i}:")  # noqa: print
-                print(f"  Source: {result.source_path}")  # noqa: print
-                print(f"  Hybrid Score: {result.hybrid_score:.3f}")  # noqa: print
-                print(f"  Content: {result.content[:200]}...")  # noqa: print
+                logger.info("Result %s:", i)
+                logger.info("  Source: %s", result.source_path)
+                logger.info("  Hybrid Score: %.3f", result.hybrid_score)
+                logger.info("  Content: %s...", result.content[:200])
 
     run_or_schedule(main())

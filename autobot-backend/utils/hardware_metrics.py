@@ -1513,19 +1513,19 @@ if __name__ == "__main__":
 
     async def test_phase9_monitoring():
         """Test Phase 9 performance monitoring"""
-        print("Testing Phase 9 Performance Monitoring System...")  # noqa: print
+        logger.info("Testing Phase 9 Performance Monitoring System...")
 
         # Collect metrics
         metrics = await phase9_monitor.collect_all_metrics()
-        print(f"Collected metrics: {json.dumps(metrics, indent=2, default=str)}")  # noqa: print  # noqa: print
+        logger.info("Collected metrics: %s", json.dumps(metrics, indent=2, default=str))
 
         # Get dashboard
         dashboard = phase9_monitor.get_current_performance_dashboard()
-        print(f"Performance dashboard: {json.dumps(dashboard, indent=2, default=str)}")  # noqa: print  # noqa: print
+        logger.info("Performance dashboard: %s", json.dumps(dashboard, indent=2, default=str))
 
         # Get recommendations
         recommendations = phase9_monitor.get_performance_optimization_recommendations()
-        print(f"Optimization recommendations: {json.dumps(recommendations, indent=2)}")  # noqa: print  # noqa: print
+        logger.info("Optimization recommendations: %s", json.dumps(recommendations, indent=2))
 
     # Run test
     run_or_schedule(test_phase9_monitoring())

@@ -432,4 +432,4 @@ SSOT_VALUES_FOR_SHELL = {
 
 
 if __name__ == "__main__":
-    print(export_mappings_as_json())  # noqa: print
+    print(export_mappings_as_json())  # noqa: print  # canonical: ignore py-print-smoke

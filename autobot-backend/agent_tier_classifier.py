@@ -212,5 +212,4 @@ if __name__ == "__main__":
         logger.info("  Count: {data['count']}")
         logger.info("  Cache Hit Rate: {data['cache_hit_rate']}")
         logger.info("  Base Prompt: {data['base_prompt']}")
-        print(f"  Agents: {', '.join(data['agents'][:5])}" + ("..." if len(data["agents"]) > 5 else ""))  # noqa: print
-        print()  # noqa: print
+        logger.info("  Agents: %s%s", ", ".join(data["agents"][:5]), "..." if len(data["agents"]) > 5 else "")
