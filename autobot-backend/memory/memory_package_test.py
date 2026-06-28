@@ -21,7 +21,6 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from memory import (
-    EnhancedMemoryManager,
     LongTermMemoryManager,
     MemoryCategory,
     MemoryEntry,
@@ -39,7 +38,6 @@ def test_1_import_verification():
 
     # Verify classes
     assert UnifiedMemoryManager is not None
-    assert EnhancedMemoryManager is not None
     assert LongTermMemoryManager is not None
 
     # Verify enums
@@ -192,14 +190,14 @@ async def test_5_strategy_pattern():
 
 
 def test_6_backward_compatibility_enhanced():
-    """Test 6: EnhancedMemoryManager compatibility wrapper"""
-    print("\n[TEST 6] EnhancedMemoryManager backward compatibility...")  # noqa: print
+    """Test 6: UnifiedMemoryManager sync compatibility methods (log_task_execution, log_task_sync)"""
+    print("\n[TEST 6] UnifiedMemoryManager sync-wrapper backward compatibility...")  # noqa: print
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_enhanced.db"
 
-        # Use old API (should work without changes)
-        manager = EnhancedMemoryManager(str(db_path))
+        # UnifiedMemoryManager carries all sync wrappers formerly on EnhancedMemoryManager
+        manager = UnifiedMemoryManager(str(db_path))
         assert manager is not None
 
         # Create task record
@@ -228,7 +226,7 @@ def test_6_backward_compatibility_enhanced():
         task_id2 = manager.log_task_execution(record2)
         assert task_id2 == "bc-002"
 
-    print("✅ PASSED: EnhancedMemoryManager backward compatibility works")  # noqa: print
+    print("✅ PASSED: UnifiedMemoryManager sync-wrapper backward compatibility works")  # noqa: print
 
 
 async def test_7_backward_compatibility_longterm():
@@ -347,7 +345,6 @@ def test_10_all_features_preserved():
     assert hasattr(manager, "get_statistics")
 
     # Backward compatibility
-    assert EnhancedMemoryManager is not None
     assert LongTermMemoryManager is not None
 
     print("✅ PASSED: All features from 3 managers preserved")  # noqa: print
