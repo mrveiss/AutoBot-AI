@@ -18,8 +18,7 @@ from typing import Any, Callable, Dict, List
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.status_enums import Priority, TaskPriority  # canonical enums (#10626)
-from autobot_shared.status_enums import TaskStatus
+from autobot_shared.status_enums import Priority, TaskPriority, TaskStatus  # canonical enums (#10626)
 from enhanced_memory_manager_async import (
     AsyncEnhancedMemoryManager,
     ExecutionRecord,
