@@ -35,7 +35,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
-import requests
+import aiohttp
 
 from autobot_shared.ssot_config import config
 
@@ -208,23 +208,28 @@ class MonitoringAndAlertingTester:
         for service_name, endpoint in health_endpoints:
             start_time = time.time()
             try:
-                response = requests.get(endpoint, timeout=10)
-                response_time = time.time() - start_time
+                _timeout = aiohttp.ClientTimeout(total=10)
+                async with aiohttp.ClientSession(timeout=_timeout) as _session:
+                    async with _session.get(endpoint) as response:
+                        response_time = time.time() - start_time
 
-                if response.status_code == 200:
-                    try:
-                        data = response.json()
-                        status = "PASS"
-                        message = "Health endpoint accessible with valid JSON"
-                        details = {"response_keys": (list(data.keys()) if isinstance(data, dict) else "non-dict")}
-                    except json.JSONDecodeError:
-                        status = "WARNING"
-                        message = "Health endpoint accessible but returned non-JSON"
-                        details = {"content_length": len(response.text)}
-                else:
-                    status = "FAIL"
-                    message = f"Health endpoint returned HTTP {response.status_code}"
-                    details = {"status_code": response.status_code}
+                        if response.status == 200:
+                            try:
+                                data = await response.json()
+                                status = "PASS"
+                                message = "Health endpoint accessible with valid JSON"
+                                details = {
+                                    "response_keys": (list(data.keys()) if isinstance(data, dict) else "non-dict")
+                                }
+                            except Exception:
+                                status = "WARNING"
+                                message = "Health endpoint accessible but returned non-JSON"
+                                text = await response.text()
+                                details = {"content_length": len(text)}
+                        else:
+                            status = "FAIL"
+                            message = f"Health endpoint returned HTTP {response.status}"
+                            details = {"status_code": response.status}
 
             except Exception:
                 response_time = time.time() - start_time
@@ -257,57 +262,59 @@ class MonitoringAndAlertingTester:
             start_time = time.time()
             try:
                 url = f"http://{service_config['host']}:{service_config['port']}{service_config['metrics_endpoint']}"
-                response = requests.get(url, timeout=10)
-                response_time = time.time() - start_time
+                _timeout = aiohttp.ClientTimeout(total=10)
+                async with aiohttp.ClientSession(timeout=_timeout) as _session:
+                    async with _session.get(url) as response:
+                        response_time = time.time() - start_time
 
-                if response.status_code == 200:
-                    try:
-                        metrics_data = response.json()
-                        collected_metrics[service_name] = metrics_data
+                        if response.status == 200:
+                            try:
+                                metrics_data = await response.json()
+                                collected_metrics[service_name] = metrics_data
 
-                        # Validate expected metric fields
-                        expected_fields = ["cpu", "memory", "response_time", "status"]
-                        available_fields = []
+                                # Validate expected metric fields
+                                expected_fields = ["cpu", "memory", "response_time", "status"]
+                                available_fields = []
 
-                        def extract_fields(data, prefix=""):
-                            if isinstance(data, dict):
-                                for key, value in data.items():
-                                    field_name = f"{prefix}.{key}" if prefix else key
-                                    available_fields.append(field_name.lower())
-                                    if isinstance(value, dict):
-                                        extract_fields(value, field_name)
+                                def extract_fields(data, prefix=""):
+                                    if isinstance(data, dict):
+                                        for key, value in data.items():
+                                            field_name = f"{prefix}.{key}" if prefix else key
+                                            available_fields.append(field_name.lower())
+                                            if isinstance(value, dict):
+                                                extract_fields(value, field_name)
 
-                        extract_fields(metrics_data)
+                                extract_fields(metrics_data)
 
-                        found_fields = sum(
-                            1 for field in expected_fields if any(field in af for af in available_fields)
-                        )
+                                found_fields = sum(
+                                    1 for field in expected_fields if any(field in af for af in available_fields)
+                                )
 
-                        if found_fields >= 2:
-                            status = "PASS"
-                            message = f"Metrics collected successfully ({found_fields}/4 expected fields)"
-                        elif found_fields >= 1:
-                            status = "WARNING"
-                            message = f"Partial metrics collected ({found_fields}/4 expected fields)"
+                                if found_fields >= 2:
+                                    status = "PASS"
+                                    message = f"Metrics collected successfully ({found_fields}/4 expected fields)"
+                                elif found_fields >= 1:
+                                    status = "WARNING"
+                                    message = f"Partial metrics collected ({found_fields}/4 expected fields)"
+                                else:
+                                    status = "FAIL"
+                                    message = "No expected metric fields found"
+
+                                details = {
+                                    "available_fields": available_fields[:10],  # Limit output
+                                    "found_expected": found_fields,
+                                    "total_fields": len(available_fields),
+                                }
+
+                            except Exception:
+                                status = "WARNING"
+                                message = "Metrics endpoint returned non-JSON data"
+                                details = {"content_type": response.headers.get("content-type", "unknown")}
+
                         else:
                             status = "FAIL"
-                            message = "No expected metric fields found"
-
-                        details = {
-                            "available_fields": available_fields[:10],  # Limit output
-                            "found_expected": found_fields,
-                            "total_fields": len(available_fields),
-                        }
-
-                    except json.JSONDecodeError:
-                        status = "WARNING"
-                        message = "Metrics endpoint returned non-JSON data"
-                        details = {"content_type": response.headers.get("content-type", "unknown")}
-
-                else:
-                    status = "FAIL"
-                    message = f"Metrics endpoint returned HTTP {response.status_code}"
-                    details = {"status_code": response.status_code}
+                            message = f"Metrics endpoint returned HTTP {response.status}"
+                            details = {"status_code": response.status}
 
             except Exception:
                 response_time = time.time() - start_time
@@ -412,24 +419,24 @@ class MonitoringAndAlertingTester:
                 "/api/monitoring/simulate",
             ]
 
-            for endpoint in test_endpoints:
-                try:
-                    response = requests.post(
-                        f"{backend_url}{endpoint}",
-                        json={
-                            "metric": test_config["metric"],
-                            "value": test_config["simulated_value"],
-                            "test": True,
-                        },
-                        timeout=5,
-                    )
+            _timeout = aiohttp.ClientTimeout(total=5)
+            async with aiohttp.ClientSession(timeout=_timeout) as _session:
+                for endpoint in test_endpoints:
+                    try:
+                        async with _session.post(
+                            f"{backend_url}{endpoint}",
+                            json={
+                                "metric": test_config["metric"],
+                                "value": test_config["simulated_value"],
+                                "test": True,
+                            },
+                        ) as response:
+                            if response.status in [200, 201, 202]:
+                                # Check if alert was triggered (simplified simulation)
+                                return test_config["simulated_value"] > 80.0  # Basic threshold simulation
 
-                    if response.status_code in [200, 201, 202]:
-                        # Check if alert was triggered (simplified simulation)
-                        return test_config["simulated_value"] > 80.0  # Basic threshold simulation
-
-                except requests.RequestException:
-                    continue  # Try next endpoint
+                    except aiohttp.ClientError:
+                        continue  # Try next endpoint
 
             # If no test endpoint available, simulate based on thresholds
             metric_config = next(
@@ -456,19 +463,21 @@ class MonitoringAndAlertingTester:
         baseline_time = None
 
         # Collect baseline response times
-        for i in range(5):
-            start_time = time.time()
-            try:
-                response = requests.get(get_test_backend_url() + "/api/health", timeout=10)
-                response_time = time.time() - start_time
+        _timeout = aiohttp.ClientTimeout(total=10)
+        async with aiohttp.ClientSession(timeout=_timeout) as _session:
+            for i in range(5):
+                start_time = time.time()
+                try:
+                    async with _session.get(get_test_backend_url() + "/api/health") as response:
+                        response_time = time.time() - start_time
 
-                if response.status_code == 200:
-                    response_time_tests.append(response_time)
+                        if response.status == 200:
+                            response_time_tests.append(response_time)
 
-                await asyncio.sleep(0.5)  # Wait between requests
+                    await asyncio.sleep(0.5)  # Wait between requests
 
-            except Exception:
-                pass  # Skip failed requests
+                except Exception:
+                    pass  # Skip failed requests
 
         if response_time_tests:
             baseline_time = statistics.mean(response_time_tests)
@@ -529,67 +538,69 @@ class MonitoringAndAlertingTester:
         for dashboard_name, url in dashboard_urls:
             start_time = time.time()
             try:
-                response = requests.get(url, timeout=10)
-                response_time = time.time() - start_time
+                _timeout = aiohttp.ClientTimeout(total=10)
+                async with aiohttp.ClientSession(timeout=_timeout) as _session:
+                    async with _session.get(url) as response:
+                        response_time = time.time() - start_time
 
-                accessibility = response.status_code == 200
+                        accessibility = response.status == 200
 
-                # Check data accuracy (presence of expected fields)
-                data_accuracy = False
-                widget_count = 0
+                        # Check data accuracy (presence of expected fields)
+                        data_accuracy = False
+                        widget_count = 0
 
-                if accessibility:
-                    try:
-                        data = response.json()
-                        if isinstance(data, dict):
-                            # Count data fields as "widgets"
-                            widget_count = len(data)
+                        if accessibility:
+                            try:
+                                data = await response.json()
+                                if isinstance(data, dict):
+                                    # Count data fields as "widgets"
+                                    widget_count = len(data)
 
-                            # Check for expected dashboard data
-                            expected_keys = [
-                                "status",
-                                "health",
-                                "services",
-                                "metrics",
-                                "timestamp",
-                            ]
-                            found_keys = sum(
-                                1 for key in expected_keys if any(k for k in data.keys() if key in k.lower())
-                            )
+                                    # Check for expected dashboard data
+                                    expected_keys = [
+                                        "status",
+                                        "health",
+                                        "services",
+                                        "metrics",
+                                        "timestamp",
+                                    ]
+                                    found_keys = sum(
+                                        1 for key in expected_keys if any(k for k in data.keys() if key in k.lower())
+                                    )
 
-                            data_accuracy = found_keys >= 1
+                                    data_accuracy = found_keys >= 1
+                                else:
+                                    data_accuracy = True  # Non-dict response might be valid HTML dashboard
+                                    widget_count = 1
+
+                            except Exception:
+                                # Might be HTML dashboard
+                                content = await response.text()
+                                if "dashboard" in content.lower() or "chart" in content.lower():
+                                    data_accuracy = True
+                                    widget_count = content.count("chart") + content.count("widget")
+
+                        dashboard_result = DashboardValidation(
+                            dashboard_name=dashboard_name,
+                            url=url,
+                            accessibility=accessibility,
+                            data_accuracy=data_accuracy,
+                            response_time=response_time,
+                            widget_count=widget_count,
+                        )
+
+                        if accessibility and data_accuracy:
+                            status = "PASS"
+                            message = f"Dashboard accessible with valid data ({widget_count} elements)"
+                            severity = "info"
+                        elif accessibility:
+                            status = "WARNING"
+                            message = "Dashboard accessible but data validation failed"
+                            severity = "warning"
                         else:
-                            data_accuracy = True  # Non-dict response might be valid HTML dashboard
-                            widget_count = 1
-
-                    except json.JSONDecodeError:
-                        # Might be HTML dashboard
-                        content = response.text
-                        if "dashboard" in content.lower() or "chart" in content.lower():
-                            data_accuracy = True
-                            widget_count = content.count("chart") + content.count("widget")
-
-                dashboard_result = DashboardValidation(
-                    dashboard_name=dashboard_name,
-                    url=url,
-                    accessibility=accessibility,
-                    data_accuracy=data_accuracy,
-                    response_time=response_time,
-                    widget_count=widget_count,
-                )
-
-                if accessibility and data_accuracy:
-                    status = "PASS"
-                    message = f"Dashboard accessible with valid data ({widget_count} elements)"
-                    severity = "info"
-                elif accessibility:
-                    status = "WARNING"
-                    message = "Dashboard accessible but data validation failed"
-                    severity = "warning"
-                else:
-                    status = "FAIL"
-                    message = f"Dashboard not accessible (HTTP {response.status_code})"
-                    severity = "critical"
+                            status = "FAIL"
+                            message = f"Dashboard not accessible (HTTP {response.status})"
+                            severity = "critical"
 
             except Exception:
                 response_time = time.time() - start_time
@@ -849,23 +860,23 @@ class MonitoringAndAlertingTester:
                 "/api/incident/trigger",
             ]
 
-            for endpoint in incident_endpoints:
-                try:
-                    response = requests.post(
-                        f"{backend_url}{endpoint}",
-                        json={
-                            "type": scenario["trigger"],
-                            "severity": "warning",
-                            "test": True,
-                        },
-                        timeout=5,
-                    )
+            _timeout = aiohttp.ClientTimeout(total=5)
+            async with aiohttp.ClientSession(timeout=_timeout) as _session:
+                for endpoint in incident_endpoints:
+                    try:
+                        async with _session.post(
+                            f"{backend_url}{endpoint}",
+                            json={
+                                "type": scenario["trigger"],
+                                "severity": "warning",
+                                "test": True,
+                            },
+                        ) as response:
+                            if response.status in [200, 201, 202]:
+                                return True
 
-                    if response.status_code in [200, 201, 202]:
-                        return True
-
-                except requests.RequestException:
-                    continue
+                    except aiohttp.ClientError:
+                        continue
 
             # If no test endpoint, simulate success based on scenario type
             return scenario["trigger"] in [
@@ -889,32 +900,33 @@ class MonitoringAndAlertingTester:
                 "/api/monitoring/responses",
             ]
 
-            for endpoint in response_endpoints:
-                try:
-                    response = requests.get(f"{backend_url}{endpoint}", timeout=5)
+            _timeout = aiohttp.ClientTimeout(total=5)
+            async with aiohttp.ClientSession(timeout=_timeout) as _session:
+                for endpoint in response_endpoints:
+                    try:
+                        async with _session.get(f"{backend_url}{endpoint}") as response:
+                            if response.status == 200:
+                                data = await response.json()
 
-                    if response.status_code == 200:
-                        data = response.json()
+                                # Look for recent incident responses
+                                if isinstance(data, dict):
+                                    # Check if any incident response data exists
+                                    response_indicators = [
+                                        "incidents",
+                                        "responses",
+                                        "actions",
+                                        "triggered",
+                                    ]
 
-                        # Look for recent incident responses
-                        if isinstance(data, dict):
-                            # Check if any incident response data exists
-                            response_indicators = [
-                                "incidents",
-                                "responses",
-                                "actions",
-                                "triggered",
-                            ]
+                                    for indicator in response_indicators:
+                                        if indicator in str(data).lower():
+                                            return True
 
-                            for indicator in response_indicators:
-                                if indicator in str(data).lower():
-                                    return True
+                                elif isinstance(data, list) and len(data) > 0:
+                                    return True  # Non-empty incident list
 
-                        elif isinstance(data, list) and len(data) > 0:
-                            return True  # Non-empty incident list
-
-                except requests.RequestException:
-                    continue
+                    except aiohttp.ClientError:
+                        continue
 
             # Default to positive response for test scenarios
             return True
