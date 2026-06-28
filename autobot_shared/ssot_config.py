@@ -187,6 +187,18 @@ class LLMConfig(BaseSettings):
     # Default provider for all models (can be overridden per-model)
     provider: str = Field(default="ollama", alias="AUTOBOT_LLM_PROVIDER")
 
+    # LLM cost-efficiency toggles (#10597)
+    # Prompt caching is a pure cost win → default on.  Chat tiered routing
+    # downgrades models by complexity (precision-sensitive) → default off until
+    # validated via knowledge/rag_benchmarks.py.
+    llm_prompt_cache_default: bool = Field(default=True, alias="AUTOBOT_LLM_PROMPT_CACHE_DEFAULT")
+    chat_tiered_routing: bool = Field(default=False, alias="AUTOBOT_CHAT_TIERED_ROUTING")
+    # Response cache for chat(): only near-deterministic, safely-reusable
+    # requests are cached (low temperature, no tools/structured-output/thinking).
+    # Above this temperature responses must vary, so they are never cached.
+    llm_response_cache: bool = Field(default=True, alias="AUTOBOT_LLM_RESPONSE_CACHE")
+    llm_cache_max_temperature: float = Field(default=0.3, alias="AUTOBOT_LLM_CACHE_MAX_TEMPERATURE")
+
     # Provider-specific endpoints (each provider can have its own URL)
     ollama_endpoint: str = Field(default="http://127.0.0.1:11434", alias="AUTOBOT_OLLAMA_ENDPOINT")
     openai_endpoint: str = Field(default="https://api.openai.com/v1", alias="AUTOBOT_OPENAI_ENDPOINT")

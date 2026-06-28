@@ -197,10 +197,12 @@ class AnthropicProvider(BaseProvider):
             "temperature": request.temperature,
         }
         if system_content:
-            # Prompt caching (#8171): when enable_prompt_cache=True is set in
-            # request metadata the system message is sent as a content-block
-            # list so Anthropic can cache it across repeated requests.
-            if request.metadata.get("enable_prompt_cache"):
+            # Prompt caching (#8171, #10597): the system message is sent as a
+            # content-block list so Anthropic can cache it across repeated
+            # requests.  Defaults on via config.llm_prompt_cache_default (pure
+            # cost win on the large static system prompt); a caller may still
+            # opt out per-request with enable_prompt_cache=False.
+            if request.metadata.get("enable_prompt_cache", config.llm_prompt_cache_default):
                 kwargs["system"] = [{"type": "text", "text": system_content, "cache_control": {"type": "ephemeral"}}]
             else:
                 kwargs["system"] = system_content
