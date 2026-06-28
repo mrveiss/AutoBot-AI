@@ -179,19 +179,19 @@ if __name__ == "__main__":
 
     async def test_monitoring():
         """Test performance monitoring with metrics and recommendations."""
-        print("Testing Performance Monitoring System...")  # noqa: print
+        logger.info("Testing Performance Monitoring System...")
 
         # Collect metrics
         metrics = await performance_monitor.collect_all_metrics()
-        print(f"Collected metrics: {json.dumps(metrics, indent=2, default=str)}")  # noqa: print  # noqa: print
+        logger.info("Collected metrics: %s", json.dumps(metrics, indent=2, default=str))
 
         # Get dashboard
         dashboard = await performance_monitor.get_current_performance_dashboard()
-        print(f"Performance dashboard: {json.dumps(dashboard, indent=2, default=str)}")  # noqa: print  # noqa: print
+        logger.info("Performance dashboard: %s", json.dumps(dashboard, indent=2, default=str))
 
         # Get recommendations
         recommendations = await performance_monitor.get_performance_optimization_recommendations()
-        print(f"Optimization recommendations: {json.dumps(recommendations, indent=2)}")  # noqa: print  # noqa: print
+        logger.info("Optimization recommendations: %s", json.dumps(recommendations, indent=2))
 
     # Run test
     run_or_schedule(test_monitoring())

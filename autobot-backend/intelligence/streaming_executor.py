@@ -27,7 +27,7 @@ from autobot_shared.logging_manager import get_logger
 if __name__ == "__main__":
     import sys as _sys
 
-    print(  # noqa: print
+    print(  # noqa: print  # canonical: ignore py-print-smoke
         "intelligence.streaming_executor has no runnable __main__ block.\n"
         "Run the demo via:\n"
         "  python3 autobot-backend/intelligence/demos/run_streaming_executor.py",

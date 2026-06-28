@@ -604,6 +604,6 @@ if __name__ == "__main__":
         similar = await processor.get_similar_intents("show network info", limit=3)
 
         for suggestion in similar:
-            print(f"- {suggestion.explanation} " f"(confidence: {suggestion.confidence:.2f})")  # noqa: print
+            logger.info("- %s (confidence: %.2f)", suggestion.explanation, suggestion.confidence)
 
     run_or_schedule(test_processor())

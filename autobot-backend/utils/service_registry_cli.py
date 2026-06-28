@@ -27,16 +27,16 @@ from .service_registry import ServiceStatus, get_service_registry, get_service_u
 
 def print_header(title: str):
     """Print a formatted header"""
-    print(f"\n{'=' * len(title)}")  # noqa: print
-    print(title)  # noqa: print
-    print("=" * len(title))  # noqa: print
+    print(f"\n{'=' * len(title)}")  # noqa: print  # canonical: ignore py-print-smoke
+    print(title)  # noqa: print  # canonical: ignore py-print-smoke
+    print("=" * len(title))  # noqa: print  # canonical: ignore py-print-smoke
 
 
 def print_status(status: str, message: str):
     """Print a status message with emoji"""
     status_emojis = {"success": "✅", "error": "❌", "warning": "⚠️", "info": "ℹ️"}
     emoji = status_emojis.get(status, "•")
-    print(f"{emoji} {message}")  # noqa: print
+    print(f"{emoji} {message}")  # noqa: print  # canonical: ignore py-print-smoke
 
 
 def cmd_status(args):
@@ -48,9 +48,9 @@ def cmd_status(args):
         info = registry.get_deployment_info()
 
         print_status("success", "Registry initialized successfully")
-        print(f"   Mode: {info['deployment_mode']}")  # noqa: print
-        print(f"   Domain: {info['domain']}")  # noqa: print
-        print(f"   Services: {info['services_count']}")  # noqa: print
+        print(f"   Mode: {info['deployment_mode']}")  # noqa: print  # canonical: ignore py-print-smoke
+        print(f"   Domain: {info['domain']}")  # noqa: print  # canonical: ignore py-print-smoke
+        print(f"   Services: {info['services_count']}")  # noqa: print  # canonical: ignore py-print-smoke
 
         print_header("Service URLs")
         for service, details in info["services"].items():
@@ -78,7 +78,7 @@ async def cmd_health(args):
             if health.status == ServiceStatus.HEALTHY:
                 print_status("success", f"{service:15} → {health.status.value}")
                 if hasattr(health, "response_time") and health.response_time > 0:
-                    print(f"{'':18}Response time: {health.response_time:.3f}s")  # noqa: print  # noqa: print
+                    print(f"{'':18}Response time: {health.response_time:.3f}s")  # noqa: print  # canonical: ignore py-print-smoke
                 healthy_count += 1
             elif health.status == ServiceStatus.CIRCUIT_OPEN:
                 print_status("error", f"{service:15} → Circuit breaker OPEN")
@@ -123,13 +123,13 @@ def cmd_config(args):
 
         if config:
             print_status("success", "Configuration found")
-            print(f"   Name: {config.name}")  # noqa: print
-            print(f"   Host: {config.host}")  # noqa: print
-            print(f"   Port: {config.port}")  # noqa: print
-            print(f"   Scheme: {config.scheme}")  # noqa: print
-            print(f"   Health Endpoint: {config.health_endpoint}")  # noqa: print
-            print(f"   Timeout: {config.timeout}s")  # noqa: print
-            print(f"   Circuit Breaker Threshold: {config.circuit_breaker_threshold}")  # noqa: print  # noqa: print
+            print(f"   Name: {config.name}")  # noqa: print  # canonical: ignore py-print-smoke
+            print(f"   Host: {config.host}")  # noqa: print  # canonical: ignore py-print-smoke
+            print(f"   Port: {config.port}")  # noqa: print  # canonical: ignore py-print-smoke
+            print(f"   Scheme: {config.scheme}")  # noqa: print  # canonical: ignore py-print-smoke
+            print(f"   Health Endpoint: {config.health_endpoint}")  # noqa: print  # canonical: ignore py-print-smoke
+            print(f"   Timeout: {config.timeout}s")  # noqa: print  # canonical: ignore py-print-smoke
+            print(f"   Circuit Breaker Threshold: {config.circuit_breaker_threshold}")  # noqa: print  # canonical: ignore py-print-smoke
         else:
             print_status("error", "Service not found")
             return 1
@@ -158,7 +158,7 @@ async def cmd_test_service(args):
         if health.status == ServiceStatus.HEALTHY:
             print_status("success", "Service is healthy")
             if hasattr(health, "response_time") and health.response_time > 0:
-                print(f"   Response time: {health.response_time:.3f}s")  # noqa: print
+                print(f"   Response time: {health.response_time:.3f}s")  # noqa: print  # canonical: ignore py-print-smoke
         else:
             print_status("error", f"Service is {health.status.value}")
 
@@ -183,7 +183,7 @@ async def _test_services(registry, services: list) -> dict:
     """
     results = {}
     for service in services:
-        print(f"🔄 Testing {service}...")  # noqa: print
+        print(f"🔄 Testing {service}...")  # noqa: print  # canonical: ignore py-print-smoke
         try:
             health = await registry.check_service_health(service)
             results[service] = {
@@ -219,12 +219,12 @@ def _display_test_results(results: dict) -> tuple:
         if result["status"] == "healthy":
             print_status("success", f"{service:15} → {result['url']}")
             if result.get("response_time", 0) > 0:
-                print(f"{'':18}Response: {result['response_time']:.3f}s")  # noqa: print
+                print(f"{'':18}Response: {result['response_time']:.3f}s")  # noqa: print  # canonical: ignore py-print-smoke
             healthy_services.append(service)
         else:
             print_status("error", f"{service:15} → {result['status']}")
             if "error" in result:
-                print(f"{'':18}Error: {result['error']}")  # noqa: print
+                print(f"{'':18}Error: {result['error']}")  # noqa: print  # canonical: ignore py-print-smoke
             unhealthy_services.append(service)
 
     return healthy_services, unhealthy_services
@@ -245,7 +245,7 @@ def _print_test_summary(services: list, healthy: list, unhealthy: list) -> None:
     print_status("success", f"Healthy: {len(healthy)}")
     if unhealthy:
         print_status("error", f"Unhealthy: {len(unhealthy)}")
-        print(f"   Issues: {', '.join(unhealthy)}")  # noqa: print
+        print(f"   Issues: {', '.join(unhealthy)}")  # noqa: print  # canonical: ignore py-print-smoke
 
 
 async def cmd_test_all(args):
@@ -267,7 +267,7 @@ async def cmd_test_all(args):
                 "results": results,
             }
             print_header("JSON Output")
-            print(json.dumps(json_output, indent=2))  # noqa: print
+            print(json.dumps(json_output, indent=2))  # noqa: print  # canonical: ignore py-print-smoke
 
         return 0 if len(unhealthy) == 0 else 1
 
@@ -285,16 +285,16 @@ def cmd_deploy_info(args):
         info = registry.get_deployment_info()
 
         print_status("success", "Deployment information:")
-        print(f"   Mode: {info['deployment_mode']}")  # noqa: print
-        print(f"   Domain: {info['domain']}")  # noqa: print
-        print(f"   Services: {info['services_count']}")  # noqa: print
+        print(f"   Mode: {info['deployment_mode']}")  # noqa: print  # canonical: ignore py-print-smoke
+        print(f"   Domain: {info['domain']}")  # noqa: print  # canonical: ignore py-print-smoke
+        print(f"   Services: {info['services_count']}")  # noqa: print  # canonical: ignore py-print-smoke
 
         if args.verbose:
             print_header("Detailed Service Information")
             for service, details in info["services"].items():
-                print(f"📦 {service}")  # noqa: print
-                print(f"   URL: {details['url']}")  # noqa: print
-                print(f"   Health: {details['health']}")  # noqa: print
+                print(f"📦 {service}")  # noqa: print  # canonical: ignore py-print-smoke
+                print(f"   URL: {details['url']}")  # noqa: print  # canonical: ignore py-print-smoke
+                print(f"   Health: {details['health']}")  # noqa: print  # canonical: ignore py-print-smoke
 
         return 0
 

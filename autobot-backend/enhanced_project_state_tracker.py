@@ -16,6 +16,7 @@ Original file: 1,505 lines → Package with focused modules
 import sys
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
 
 # Re-export all public APIs from the package
 from project_state_tracking import (  # Types and enums; Models; Database; Main tracker; Convenience functions; CLI handlers; Backward compatibility aliases for sync functions
@@ -83,6 +84,8 @@ __all__ = [
     "_save_milestone_sync",
 ]
 
+logger = get_logger(__name__)
+
 
 # CLI entry point
 if __name__ == "__main__":
@@ -105,7 +108,7 @@ if __name__ == "__main__":
         if handler:
             await handler(tracker)
         else:
-            print(f"Unknown command: {command}")  # noqa: print
-            print("Available commands: snapshot, summary, report, metrics, test-tracking, export")  # noqa: print
+            logger.error("Unknown command: %s", command)
+            logger.info("Available commands: snapshot, summary, report, metrics, test-tracking, export")
 
     run_or_schedule(main())

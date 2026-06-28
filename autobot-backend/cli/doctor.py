@@ -184,32 +184,32 @@ def run_doctor(fix: bool = False) -> int:
 
     for r in results:
         symbol = "✓" if r.ok else "✗"
-        print(f"{symbol} {r.message}")
+        print(f"{symbol} {r.message}")  # noqa: print  # canonical: ignore py-print-smoke
 
     if not failures:
-        print("\nAll checks passed.")
+        print("\nAll checks passed.")  # noqa: print  # canonical: ignore py-print-smoke
         return 0
 
-    print(f"\n{len(failures)} issue(s) found.")
+    print(f"\n{len(failures)} issue(s) found.")  # noqa: print  # canonical: ignore py-print-smoke
 
     if fix:
         if fixable:
-            print(f"Auto-repairing {len(fixable)} fixable issue(s)...")
+            print(f"Auto-repairing {len(fixable)} fixable issue(s)...")  # noqa: print  # canonical: ignore py-print-smoke
             for r in fixable:
                 try:
                     r.fix()
-                    print(f"  Fixed: {r.name}")
+                    print(f"  Fixed: {r.name}")  # noqa: print  # canonical: ignore py-print-smoke
                 except Exception as exc:
-                    print(f"  Failed to fix {r.name}: {exc}")
+                    print(f"  Failed to fix {r.name}: {exc}")  # noqa: print  # canonical: ignore py-print-smoke
         manual = [r for r in failures if not r.fixable]
         if manual:
-            print(f"{len(manual)} issue(s) require manual intervention.")
+            print(f"{len(manual)} issue(s) require manual intervention.")  # noqa: print  # canonical: ignore py-print-smoke
             return 1
         return 0
     else:
         auto_fixable = len(fixable)
         manual = len(failures) - auto_fixable
-        print(f"Run `autobot doctor --fix` to auto-repair ({auto_fixable} fixable, {manual} manual).")
+        print(f"Run `autobot doctor --fix` to auto-repair ({auto_fixable} fixable, {manual} manual).")  # noqa: print  # canonical: ignore py-print-smoke
         return 1
 
 

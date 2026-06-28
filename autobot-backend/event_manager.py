@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
     async def test_listener(event):
         """Example listener that prints received event data."""
-        print(f"Local Listener received: {event}")  # noqa: print
+        logger.info("Local Listener received: %s", event)
 
     async def main():
         """Main test function demonstrating EventManager usage."""
@@ -108,7 +108,7 @@ if __name__ == "__main__":
         # Simulate WebSocket broadcast callback
         async def mock_websocket_broadcast(event):
             """Mock callback that simulates WebSocket event broadcast."""
-            print(f"WebSocket Broadcast: {event}")  # noqa: print
+            logger.info("WebSocket Broadcast: %s", event)
 
         get_event_manager().register_websocket_broadcast(mock_websocket_broadcast)
 

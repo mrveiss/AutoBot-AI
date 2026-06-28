@@ -967,30 +967,30 @@ if __name__ == "__main__":
     manager = ProjectStateManager()
 
     if args.validate:
-        print("🔍 Running phase validation...")  # noqa: print
+        logger.info("🔍 Running phase validation...")
         results = manager.validate_all_phases()
-        print("✅ Validation completed")  # noqa: print
+        logger.info("✅ Validation completed")
 
     if args.status:
         status = manager.get_project_status()
-        print(json.dumps(status, indent=2, default=str))  # noqa: print
+        print(json.dumps(status, indent=2, default=str))  # noqa: print  # canonical: ignore py-print-smoke
 
     if args.report:
         report = manager.generate_validation_report()
-        print(report)  # noqa: print
+        print(report)  # noqa: print  # canonical: ignore py-print-smoke
 
     if args.auto_progress:
-        print("🔄 Running automated phase progression...")  # noqa: print
+        logger.info("🔄 Running automated phase progression...")
         result = manager.auto_progress_phases()
-        print(f"Changes made: {result['changes_made']}")  # noqa: print
-        print(f"Current phase: {result['current_phase']}")  # noqa: print
+        logger.info("Changes made: %s", result["changes_made"])
+        logger.info("Current phase: %s", result["current_phase"])
         if result["log"]:
-            print("Progression log:")  # noqa: print
+            logger.info("Progression log:")
             for log_entry in result["log"]:
-                print(f"  {log_entry}")  # noqa: print
+                logger.info("  %s", log_entry)
         if result["next_suggested"]:
-            print(f"Next suggested phase: {result['next_suggested']}")  # noqa: print
+            logger.info("Next suggested phase: %s", result["next_suggested"])
 
     if not any([args.validate, args.status, args.report, args.auto_progress]):
-        print("AutoBot Project State Manager")  # noqa: print
-        print("Use --help for options")  # noqa: print
+        logger.info("AutoBot Project State Manager")
+        logger.info("Use --help for options")

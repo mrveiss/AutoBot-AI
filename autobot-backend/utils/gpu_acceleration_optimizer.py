@@ -394,22 +394,22 @@ if __name__ == "__main__":
 
     async def test_gpu_optimization():
         """Test GPU optimization functionality."""
-        print("Testing GPU Acceleration Optimizer...")  # noqa: print
+        logger.info("Testing GPU Acceleration Optimizer...")
 
         # Get capabilities
         capabilities = get_gpu_capabilities()
-        print(f"GPU Capabilities: {json.dumps(capabilities, indent=2)}")  # noqa: print
+        logger.info("GPU Capabilities: %s", json.dumps(capabilities, indent=2))
 
         # Run benchmark
         benchmark = await benchmark_gpu()
-        print(f"GPU Benchmark: {json.dumps(benchmark, indent=2, default=str)}")  # noqa: print  # noqa: print
+        logger.info("GPU Benchmark: %s", json.dumps(benchmark, indent=2, default=str))
 
         # Monitor efficiency
         efficiency = await monitor_gpu_efficiency()
-        print(f"GPU Efficiency: {json.dumps(efficiency, indent=2, default=str)}")  # noqa: print  # noqa: print
+        logger.info("GPU Efficiency: %s", json.dumps(efficiency, indent=2, default=str))
 
         # Optimize for multi-modal
         optimization = await optimize_gpu_for_multimodal()
-        print(f"Optimization Result: " f"{json.dumps(asdict(optimization), indent=2, default=str)}")  # noqa: print
+        logger.info("Optimization Result: %s", json.dumps(asdict(optimization), indent=2, default=str))
 
     run_or_schedule(test_gpu_optimization())
