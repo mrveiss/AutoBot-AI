@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 import numpy as np
 
 from autobot_shared.logging_manager import get_logger
-from enhanced_memory_manager_async import TaskPriority
+from memory import TaskPriority  # canonical enum (#10626)
 from task_execution_tracker import get_task_tracker
 from voice_processing.models import AudioInput, SpeechRecognitionResult
 from voice_processing.types import SpeechQuality

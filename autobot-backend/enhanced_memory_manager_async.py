@@ -26,8 +26,13 @@ from autobot_shared.status_enums import TaskStatus
 logger = get_logger(__name__)
 
 
-class Priority(Enum):
-    """Task priority levels"""
+class _InternalPriority(Enum):
+    """Internal integer priority for SQLite column storage only.
+
+    #10626: External callers must import TaskPriority from ``memory`` (canonical
+    string-valued enum). This class is intentionally private; ``TaskEntry``
+    still needs integer values for the ``priority INTEGER`` DB column.
+    """
 
     LOW = 1
     MEDIUM = 3
@@ -36,8 +41,8 @@ class Priority(Enum):
     CRITICAL = 9
 
 
-# Alias for backward compatibility
-TaskPriority = Priority
+# Keep bare name for internal module use (TaskEntry.priority field).
+Priority = _InternalPriority
 
 # Performance optimization: O(1) lookup for terminal task statuses (Issue #326)
 TERMINAL_TASK_STATUSES = {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED}

@@ -16,10 +16,7 @@ import time
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from enhanced_memory_manager_async import (
-    TaskPriority,
-    get_async_enhanced_memory_manager,
-)
+from memory import TaskPriority, get_enhanced_memory_manager  # canonical (#10626)
 from utils.multimodal_performance_monitor import performance_monitor
 
 from .models import MultiModalInput, ProcessingResult
@@ -70,7 +67,7 @@ class UnifiedMultiModalProcessor:
         self.vision_processor = VisionProcessor()
         self.voice_processor = VoiceProcessor()
         self.context_processor = ContextProcessor()
-        self.memory_manager = get_async_enhanced_memory_manager()
+        self.memory_manager = get_enhanced_memory_manager()
         self.logger = get_logger(__name__)
 
         # Performance monitoring integration
@@ -537,15 +534,20 @@ class UnifiedMultiModalProcessor:
                 "processing_time": result.processing_time,
             }
 
-            await self.memory_manager.store_task(
-                task_id=result.result_id,
-                task_type="multimodal_processing",
-                description=f"Multi-modal processing: {result.modality_type.value}",
-                status="completed" if result.success else "failed",
-                priority=TaskPriority.MEDIUM,
-                subtasks=[],
-                context=task_data,
-                execution_details={"result_data": result.result_data},
+            # #10626: store_task() does not exist on UnifiedMemoryManager;
+            # use store_memory() with EXECUTION category instead.
+            from memory.enums import MemoryCategory
+
+            await self.memory_manager.store_memory(
+                category=MemoryCategory.EXECUTION,
+                content=f"Multi-modal processing: {result.modality_type.value}",
+                metadata={
+                    "result_id": result.result_id,
+                    "task_type": "multimodal_processing",
+                    "status": "completed" if result.success else "failed",
+                    "priority": TaskPriority.MEDIUM.value,
+                    **task_data,
+                },
             )
 
         except Exception as e:
