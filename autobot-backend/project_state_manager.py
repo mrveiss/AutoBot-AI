@@ -568,10 +568,10 @@ class ProjectStateManager:
                 "Self-referential endpoint validation skipped to prevent deadlock",
             )
 
-        import requests
+        import httpx
 
         try:
-            response = requests.get(capability.validation_target, timeout=5)
+            response = httpx.get(capability.validation_target, timeout=5)
             success = response.status_code < 400
             return ValidationResult(
                 capability.name,
