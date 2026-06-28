@@ -44,6 +44,15 @@ def test_multiuser_single_box_keeps_all_users():
     assert _has_user(out, "autobot_app")
 
 
+def test_auth_method_invariant_scram_no_trust():
+    """Every app-user entry uses scram-sha-256; no trust / network widening."""
+    out = _render(db_user="autobot_app", postgresql_app_users=["slm_app", "autobot_app"])
+    assert "trust" not in out
+    assert "0.0.0.0/0" not in out
+    # one scram line per user per scope (local + v4 + v6) = 2 users * 3 = 6
+    assert out.count("scram-sha-256") == 6
+
+
 def test_remote_access_entries_preserved():
     out = _render(
         db_user="autobot_app",
