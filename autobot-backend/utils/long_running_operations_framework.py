@@ -486,11 +486,15 @@ if __name__ == "__main__":
                 test_op = await manager.get_operation(test_op_id)
 
                 if indexing_op and test_op:
-                    print(  # noqa: print
-                        f"Indexing: {indexing_op.status.value} - " f"{indexing_op.progress.progress_percent:.1f}%"
+                    logger.info(
+                        "Indexing: %s - %.1f%%",
+                        indexing_op.status.value,
+                        indexing_op.progress.progress_percent,
                     )
-                    print(  # noqa: print
-                        f"Testing: {test_op.status.value} - " f"{test_op.progress.progress_percent:.1f}%"
+                    logger.info(
+                        "Testing: %s - %.1f%%",
+                        test_op.status.value,
+                        test_op.progress.progress_percent,
                     )
 
                     if indexing_op.status in (
@@ -504,7 +508,7 @@ if __name__ == "__main__":
 
                 await asyncio.sleep(TimingConstants.MEDIUM_DELAY)
 
-            print("All operations completed!")  # noqa: print
+            logger.info("All operations completed!")
 
         finally:
             await manager.stop_background_processor()

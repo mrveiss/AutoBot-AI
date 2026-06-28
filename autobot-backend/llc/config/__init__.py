@@ -14,6 +14,8 @@ import logging
 import os
 from decimal import Decimal, InvalidOperation
 
+from autobot_shared.ssot_config import config as _ssot_config
+
 _cfg_logger = logging.getLogger(__name__)
 
 
@@ -27,8 +29,14 @@ def _env_decimal(name: str, default: str) -> Decimal:
         return Decimal(default)
 
 
+def _default_agent_api_base_url() -> str:
+    """Derive the LLC agent API base URL from SSOT config (vm.main / port.backend)."""
+    return f"{_ssot_config.backend_url}/api"
+
+
 # Agent API base URL (used for context assembly and heartbeat payloads).
-AGENT_API_BASE_URL = os.environ.get("LLC_AGENT_API_BASE_URL", "http://localhost:8001/api")
+# Env var LLC_AGENT_API_BASE_URL takes precedence; default derives from SSOT.
+AGENT_API_BASE_URL = os.environ.get("LLC_AGENT_API_BASE_URL", _default_agent_api_base_url())
 
 # Default dollar budget limit for newly provisioned agent budget rows.
 # Override via LLC_DEFAULT_BUDGET_LIMIT env var (GH#9901).

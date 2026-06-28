@@ -25,7 +25,9 @@ import uuid
 def _get_company_id(args: argparse.Namespace) -> uuid.UUID:
     raw = getattr(args, "company_id", None) or os.environ.get("AUTOBOT_LLC_COMPANY_ID")
     if not raw:
-        print("ERROR: provide --company-id or set AUTOBOT_LLC_COMPANY_ID", file=sys.stderr)
+        print(
+            "ERROR: provide --company-id or set AUTOBOT_LLC_COMPANY_ID", file=sys.stderr
+        )  # noqa: print  # canonical: ignore py-print-smoke
         sys.exit(1)
     return uuid.UUID(raw)
 
@@ -41,12 +43,12 @@ async def _list(args: argparse.Namespace) -> None:
         svc = AgentWikiService()
         entries = await svc.list_entries(session, args.agent_id, company_id, getattr(args, "namespace", None))
     if not entries:
-        print("(no wiki entries)")
+        print("(no wiki entries)")  # noqa: print  # canonical: ignore py-print-smoke
         return
     for e in entries:
-        print(f"[{e.namespace}/{e.key}] {e.title}  (id={e.id})")
+        print(f"[{e.namespace}/{e.key}] {e.title}  (id={e.id})")  # noqa: print  # canonical: ignore py-print-smoke
         if getattr(args, "verbose", False):
-            print(f"  {e.body[:120]}")
+            print(f"  {e.body[:120]}")  # noqa: print  # canonical: ignore py-print-smoke
 
 
 async def _create(args: argparse.Namespace) -> None:
@@ -68,7 +70,9 @@ async def _create(args: argparse.Namespace) -> None:
             body=args.body,
         )
         await session.commit()
-    print(f"Created: {entry.id}  [{entry.namespace}/{entry.key}] {entry.title}")
+    print(
+        f"Created: {entry.id}  [{entry.namespace}/{entry.key}] {entry.title}"
+    )  # noqa: print  # canonical: ignore py-print-smoke
 
 
 async def _delete(args: argparse.Namespace) -> None:
@@ -82,11 +86,11 @@ async def _delete(args: argparse.Namespace) -> None:
         svc = AgentWikiService()
         entry = await svc.get_entry(session, uuid.UUID(args.id), args.agent_id, company_id)
         if entry is None:
-            print("ERROR: entry not found", file=sys.stderr)
+            print("ERROR: entry not found", file=sys.stderr)  # noqa: print  # canonical: ignore py-print-smoke
             sys.exit(1)
         await svc.delete_entry(session, entry)
         await session.commit()
-    print(f"Deleted: {args.id}")
+    print(f"Deleted: {args.id}")  # noqa: print  # canonical: ignore py-print-smoke
 
 
 async def _context(args: argparse.Namespace) -> None:
@@ -99,7 +103,7 @@ async def _context(args: argparse.Namespace) -> None:
     async with factory() as session:
         svc = AgentWikiService()
         md = await svc.get_wiki_context(session, args.agent_id, company_id)
-    print(md if md else "(empty wiki)")
+    print(md if md else "(empty wiki)")  # noqa: print  # canonical: ignore py-print-smoke
 
 
 def main(argv: list[str] | None = None) -> None:

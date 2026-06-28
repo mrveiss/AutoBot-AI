@@ -495,8 +495,6 @@ NEXT: System will be updated"""
             for cmd in validated_commands:
                 logger.info("  ✓ {cmd.command}")
 
-        print()  # noqa: print
-
     # Show statistics
     logger.info("=== Parser Statistics ===")
     stats = parser.get_statistics()

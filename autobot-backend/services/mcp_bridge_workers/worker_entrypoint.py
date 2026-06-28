@@ -220,7 +220,7 @@ def main() -> None:
         stream=sys.stderr,
     )
     if len(sys.argv) != 2:
-        print("usage: worker_entrypoint.py <bridge_module>", file=sys.stderr)
+        logger.error("usage: worker_entrypoint.py <bridge_module>")
         sys.exit(2)
     _apply_rlimits()
     run_or_schedule(_serve(sys.argv[1]))
