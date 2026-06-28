@@ -45,7 +45,11 @@ class LoggingManager:
 
     _initialized = False
     _loggers: Dict[str, logging.Logger] = {}
-    _lock = threading.Lock()
+    # Re-entrant: get_logger() holds this lock while the lazy config-manager
+    # import chain it triggers (config -> network_constants -> redis -> metrics
+    # -> monitoring) calls get_logger() again on the same thread. A plain Lock
+    # self-deadlocks there (#10632); RLock lets the same thread re-acquire.
+    _lock = threading.RLock()
 
     @classmethod
     def get_logger(cls, name: str, log_type: str = "backend") -> logging.Logger:
