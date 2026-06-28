@@ -40,7 +40,7 @@ from autobot_shared.logging_manager import get_logger
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.threshold_constants import TimingConstants
 from desktop_streaming_manager import get_desktop_streaming
-from enhanced_memory_manager_async import TaskPriority
+from memory import TaskPriority  # canonical enum (#10626)
 from takeover_manager import TakeoverTrigger, get_takeover_manager
 from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata

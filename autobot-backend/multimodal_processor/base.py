@@ -13,7 +13,7 @@ Part of Issue #381 - God Class Refactoring
 from typing import Any
 
 from autobot_shared.logging_manager import get_logger
-from enhanced_memory_manager_async import get_async_enhanced_memory_manager
+from memory import get_enhanced_memory_manager  # canonical manager (#10626)
 
 from .models import MultiModalInput, ProcessingResult
 
@@ -25,7 +25,7 @@ class BaseModalProcessor:
         """Initialize base processor with type-specific logger and memory manager."""
         self.processor_type = processor_type
         self.logger = get_logger(f"{__name__}.{processor_type}")
-        self.memory_manager = get_async_enhanced_memory_manager()
+        self.memory_manager = get_enhanced_memory_manager()
 
     async def process(self, input_data: MultiModalInput) -> ProcessingResult:
         """Process input and return result"""
