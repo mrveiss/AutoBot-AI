@@ -807,14 +807,13 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                         }
                     )
                     citations = await svc.compress_kb_results(citations, max_tokens=max_kb_tokens)
-                    # Rebuild knowledge context from trimmed citations
+                    # Rebuild knowledge context from trimmed citations via the shared
+                    # builder so the [Source N] labels + grounding instruction match
+                    # the uncompressed path (#10652, review of #10656).
                     if citations:
-                        lines = ["KNOWLEDGE CONTEXT:"]
-                        for i, c in enumerate(citations, 1):
-                            score = c.get("score", 0.0)
-                            content = c.get("content", "").strip()
-                            lines.append(f"{i}. [score: {score:.2f}] {content}")
-                        knowledge_context = "\n".join(lines)
+                        from services.knowledge.service import build_grounded_context
+
+                        knowledge_context = build_grounded_context([c.get("content", "") for c in citations])
                         logger.info(
                             "[#3770] KB compressed to %d citations (%d tokens)",
                             len(citations),
