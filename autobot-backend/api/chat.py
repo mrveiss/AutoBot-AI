@@ -30,6 +30,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.schemas_chat import (
+    ChatCapabilitiesData,
+    ChatData,
     ChatDeleteData,
     ChatHealthData,
     ChatMessage,
@@ -40,8 +42,6 @@ from api.schemas_chat import (
     ConversationSummarizeRequest,
     DetectLanguageData,
     DetectLanguageRequest,
-    EnhancedChatCapabilitiesData,
-    EnhancedChatData,
     TranslateData,
     TranslateRequest,
 )
@@ -1800,7 +1800,7 @@ async def _execute_enhanced_chat_pipeline(
     knowledge_base,
     request_id: str,
     preferences: ChatPreferences | None,
-) -> EnhancedChatData:
+) -> ChatData:
     """Helper for process_enhanced_chat_message. Ref: #1088, #6502 (typed return).
 
     Runs the full enhanced chat pipeline: store user message, retrieve context,
@@ -1830,7 +1830,7 @@ async def _execute_enhanced_chat_pipeline(
 
     ai_message_id = await _store_enhanced_ai_response(ai_response, session_id, request_id, chat_history_manager)
 
-    return EnhancedChatData(
+    return ChatData(
         content=ai_response.get("content", ""),
         role="assistant",
         session_id=session_id,
@@ -1848,7 +1848,7 @@ async def process_enhanced_chat_message(
     config: Metadata,
     request_id: str,
     preferences: ChatPreferences | None = None,
-) -> EnhancedChatData:
+) -> ChatData:
     """
     Process a chat message with AI Stack enhanced capabilities.
 
@@ -1987,13 +1987,13 @@ async def _generate_enhanced_stream(
 # ====================================================================
 
 
-@router.post("/enhanced", response_model=DataResponse[EnhancedChatData])
+@router.post("/enhanced", response_model=DataResponse[ChatData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_chat",
+    operation="chat_enhanced",
     error_code_prefix="CHAT",
 )
-async def enhanced_chat(
+async def chat_enhanced(
     current_user: dict = Depends(get_current_user),
     message: ChatMessage = None,
     request: Request = None,
@@ -2092,10 +2092,10 @@ async def stream_enhanced_chat(
 @router.get("/health-enhanced", response_model=ChatHealthData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_chat_health_check",
+    operation="chat_health_enhanced",
     error_code_prefix="CHAT",
 )
-async def enhanced_chat_health_check(
+async def chat_health_enhanced(
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -2143,7 +2143,7 @@ async def enhanced_chat_health_check(
         )
 
 
-@router.get("/capabilities", response_model=DataResponse[EnhancedChatCapabilitiesData])
+@router.get("/capabilities", response_model=DataResponse[ChatCapabilitiesData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_enhanced_chat_capabilities",

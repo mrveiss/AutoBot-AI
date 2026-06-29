@@ -27,6 +27,7 @@ from autobot_shared.logging_manager import get_logger
 from .adapters import (
     BaseAdapter,
     DiscordAdapter,
+    GatewayMessage,
     IMessageAdapter,
     MatrixAdapter,
     NormalizedResponse,
@@ -34,7 +35,6 @@ from .adapters import (
     SlackAdapter,
     TeamsAdapter,
     TelegramAdapter,
-    UnifiedMessage,
     WebAdapter,
     WhatsAppAdapter,
 )
@@ -96,7 +96,7 @@ class GatewayManager:
         self.response_handlers[platform] = handler
         self.logger.info(f"Registered response handler for platform: {platform}")
 
-    async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:
+    async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
         """
         Normalize a raw platform-specific message to unified schema.
 
@@ -106,7 +106,7 @@ class GatewayManager:
             raw_message: Platform-specific message dict with 'platform' key
 
         Returns:
-            UnifiedMessage in normalized format
+            GatewayMessage in normalized format
 
         Raises:
             ValueError: If platform not supported or validation fails
@@ -162,8 +162,8 @@ class GatewayManager:
 
     async def route_message(
         self,
-        unified_message: UnifiedMessage,
-        agent_handler: Callable[[UnifiedMessage], Dict[str, Any]],
+        unified_message: GatewayMessage,
+        agent_handler: Callable[[GatewayMessage], Dict[str, Any]],
     ) -> None:
         """
         Route normalized message through agent and send response to platform.
@@ -208,7 +208,7 @@ class GatewayManager:
 
     async def start_processing(
         self,
-        agent_handler: Callable[[UnifiedMessage], Dict[str, Any]],
+        agent_handler: Callable[[GatewayMessage], Dict[str, Any]],
         workers: int = 5,
     ) -> None:
         """

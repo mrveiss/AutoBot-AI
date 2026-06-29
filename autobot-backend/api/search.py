@@ -4,7 +4,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Enhanced Search API with NPU Acceleration
+Search API with NPU Acceleration
 Provides NPU-accelerated semantic search endpoints for AutoBot
 """
 
@@ -17,14 +17,14 @@ from fastapi import APIRouter, HTTPException
 from ai_hardware_accelerator import HardwareDevice
 from api.schemas_knowledge import (
     BenchmarkRequest,
-    EnhancedSearchBenchmarkResponse,
-    EnhancedSearchConnectivityResponse,
-    EnhancedSearchHardwareStatusResponse,
-    EnhancedSearchOptimizeResponse,
-    EnhancedSearchPerformanceAnalyticsResponse,
     NPUOptimizationRequest,
     NPUSearchRequest,
     NPUSearchResponse,
+    SearchBenchmarkResponse,
+    SearchConnectivityResponse,
+    SearchHardwareStatusResponse,
+    SearchOptimizeResponse,
+    SearchPerformanceAnalyticsResponse,
 )
 from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -34,9 +34,9 @@ from autobot_shared.logging_manager import get_llm_logger
 from npu_semantic_search import get_npu_search_engine
 from type_defs.common import Metadata
 
-logger = get_llm_logger("enhanced_search_api")
+logger = get_llm_logger("search_api")
 
-router = APIRouter(tags=["Enhanced Search"])
+router = APIRouter(tags=["Search"])
 
 
 def _parse_force_device(force_device_str: str | None) -> HardwareDevice | None:
@@ -98,10 +98,10 @@ def _convert_metrics_to_api_format(metrics) -> dict:
 @router.post("/semantic", response_model=NPUSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_semantic_search",
+    operation="semantic_search",
     error_code_prefix="ENHANCED_SEARCH",
 )
-async def enhanced_semantic_search(request: NPUSearchRequest):
+async def semantic_search(request: NPUSearchRequest):
     """
     Perform NPU-enhanced semantic search.
 
@@ -155,7 +155,7 @@ async def enhanced_semantic_search(request: NPUSearchRequest):
         raise HTTPException(status_code=500, detail="Search failed")
 
 
-@router.get("/hardware/status", response_model=EnhancedSearchHardwareStatusResponse)
+@router.get("/hardware/status", response_model=SearchHardwareStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_hardware_status",
@@ -184,7 +184,7 @@ async def get_hardware_status():
         raise HTTPException(status_code=500, detail="Failed to get hardware status")
 
 
-@router.post("/benchmark", response_model=EnhancedSearchBenchmarkResponse)
+@router.post("/benchmark", response_model=SearchBenchmarkResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="benchmark_search_performance",
@@ -215,7 +215,7 @@ async def benchmark_search_performance(request: BenchmarkRequest):
         raise HTTPException(status_code=500, detail="Benchmark failed")
 
 
-@router.post("/optimize", response_model=EnhancedSearchOptimizeResponse)
+@router.post("/optimize", response_model=SearchOptimizeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="optimize_search_engine",
@@ -247,7 +247,7 @@ async def optimize_search_engine(request: NPUOptimizationRequest):
         raise HTTPException(status_code=500, detail="Optimization failed")
 
 
-@router.get("/performance/analytics", response_model=EnhancedSearchPerformanceAnalyticsResponse)
+@router.get("/performance/analytics", response_model=SearchPerformanceAnalyticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_analytics",
@@ -291,7 +291,7 @@ async def get_performance_analytics():
         raise HTTPException(status_code=500, detail="Failed to get performance analytics")
 
 
-@router.get("/test/connectivity", response_model=EnhancedSearchConnectivityResponse)
+@router.get("/test/connectivity", response_model=SearchConnectivityResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_npu_connectivity",
@@ -465,7 +465,7 @@ def _generate_system_recommendations(statistics: Metadata, hardware_status: Meta
     return recommendations
 
 
-register_singleton_probe("enhanced_search", get_npu_search_engine, async_getter=True)
+register_singleton_probe("search", get_npu_search_engine, async_getter=True)
 
 
 # Health check endpoint
