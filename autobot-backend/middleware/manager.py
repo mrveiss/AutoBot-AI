@@ -13,7 +13,7 @@ import threading
 from typing import Any, Dict, List, Type
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.plugin_sdk.unified_registry import get_unified_registry
+from autobot_shared.plugin_sdk.registry import get_registry
 from middleware.base import Extension, HookContext
 from middleware.hooks import HookPoint
 
@@ -80,7 +80,7 @@ class ExtensionManager:
         # Sort by priority
         self.extensions.sort(key=lambda e: e.priority)
 
-        get_unified_registry().register(extension.manifest)
+        get_registry().register(extension.manifest)
 
         logger.info(
             "[Issue #658] Registered extension '%s' (priority=%d)",
@@ -104,7 +104,7 @@ class ExtensionManager:
 
         extension = self._extension_map.pop(name)
         self.extensions.remove(extension)
-        get_unified_registry().unregister(name)
+        get_registry().unregister(name)
 
         logger.info("[Issue #658] Unregistered extension '%s'", name)
         return True

@@ -3,7 +3,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-UnifiedRegistry (GH#7369)
+Registry (GH#7369)
 
 Single registry for all manifest types: plugins, skills, and extensions.
 """
@@ -18,14 +18,14 @@ from .manifest_contract import ManifestContract
 logger = logging.getLogger(__name__)
 
 
-class UnifiedRegistry:
+class Registry:
     """Singleton registry that accepts any ManifestContract-conforming manifest."""
 
-    _instance: "UnifiedRegistry" | None = None
+    _instance: "Registry" | None = None
     _lock: threading.Lock = threading.Lock()
     _manifests: dict[str, ManifestContract]
 
-    def __new__(cls) -> "UnifiedRegistry":
+    def __new__(cls) -> "Registry":
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -39,13 +39,13 @@ class UnifiedRegistry:
         if not isinstance(manifest, ManifestContract):
             raise TypeError(f"Object does not satisfy ManifestContract: {type(manifest)}")
         self._manifests[manifest.name] = manifest
-        logger.debug("UnifiedRegistry: registered %s (%s)", manifest.name, manifest.kind)
+        logger.debug("Registry: registered %s (%s)", manifest.name, manifest.kind)
 
     def unregister(self, name: str) -> bool:
         """Remove a manifest by name. Returns True if it was present."""
         if name in self._manifests:
             del self._manifests[name]
-            logger.debug("UnifiedRegistry: unregistered %s", name)
+            logger.debug("Registry: unregistered %s", name)
             return True
         return False
 
@@ -62,6 +62,6 @@ class UnifiedRegistry:
         self._manifests.clear()
 
 
-def get_unified_registry() -> UnifiedRegistry:
-    """Return the process-level UnifiedRegistry singleton."""
-    return UnifiedRegistry()
+def get_registry() -> Registry:
+    """Return the process-level Registry singleton."""
+    return Registry()
