@@ -128,6 +128,7 @@ class LLMResponseCache:
         top_k: int = 40,
         top_p: float = 0.9,
         max_tokens: int | None = None,
+        structured_output: bool = False,
     ) -> str:
         """
         Generate cache key with high-performance xxhash (3-5x faster than MD5).
@@ -144,6 +145,9 @@ class LLMResponseCache:
             max_tokens: Output token ceiling — part of the key so calls that
                 differ only by max_tokens (e.g. a 1024-token extraction vs a
                 full-length chat) don't collide (#10597).
+            structured_output: Whether JSON output is forced — part of the key so
+                a structured request never reuses a free-text cached response,
+                and vice versa (#10665).
 
         Returns:
             Cache key string in format "llm_cache:{hash}"
@@ -156,6 +160,7 @@ class LLMResponseCache:
             top_k,
             top_p,
             max_tokens,
+            structured_output,
         )
 
         # xxhash is 3-5x faster than MD5 for cache key generation

@@ -38,6 +38,7 @@ async def test_fact_extractor_uses_extraction_llm_type():
 
     _, kwargs = ext.llm.chat.call_args
     assert kwargs.get("llm_type") == "extraction"
+    assert kwargs.get("structured_output") is True  # #10665: forced JSON for reliable parsing
 
 
 @pytest.mark.asyncio
@@ -62,3 +63,4 @@ async def test_entity_extractor_uses_extraction_llm_type():
 
     _, kwargs = ext.llm.chat.call_args
     assert kwargs.get("llm_type") == "extraction"
+    assert kwargs.get("structured_output") is True  # #10665: forced JSON for reliable parsing

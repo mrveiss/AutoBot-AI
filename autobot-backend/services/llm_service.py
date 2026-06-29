@@ -238,6 +238,7 @@ class LLMService:
                 start_time,
                 temperature=temp,
                 max_tokens=tokens,
+                structured_output=request.structured_output,
             )
             if cached is not None:
                 self._calculate_cache_hit_rate(cached)
@@ -1005,12 +1006,14 @@ class LLMService:
 
         Only near-deterministic, safely-reusable requests qualify: caching must
         be enabled, the response cache present, and the request must not stream,
-        use tools, force structured output, request extended thinking, or run at
-        a temperature above the configured determinism threshold.
+        use tools, request extended thinking, or run at a temperature above the
+        configured determinism threshold. Forced structured output IS cacheable
+        (#10665) — it's deterministic JSON and is part of the cache key, so a
+        structured request never reuses a free-text response.
         """
         if not (use_cache and config.llm_response_cache and self._response_cache is not None):
             return False
-        if request.stream or request.structured_output:
+        if request.stream:
             return False
         if getattr(request, "tools", None) or getattr(request, "tool_choice", None):
             return False
@@ -1065,13 +1068,15 @@ class LLMService:
         start_time: float,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        structured_output: bool = False,
     ) -> tuple:
         """Look up L1/L2 cache for a chat request.
 
         Mirrors the cache-check block in ``LLMInterface._check_cache``
         (interface.py line 765).  Shared by ``chat()`` (#10597) and the
-        optimized vLLM path; ``temperature`` and ``max_tokens`` are part of the
-        cache key so calls differing only in those don't collide.
+        optimized vLLM path; ``temperature``, ``max_tokens`` and
+        ``structured_output`` are part of the cache key so calls differing only
+        in those don't collide.
 
         Returns:
             ``(LLMResponse, cache_key)`` on hit; ``(None, cache_key)`` on miss.
@@ -1081,6 +1086,7 @@ class LLMService:
             model=model_name,
             temperature=temperature,
             max_tokens=max_tokens,
+            structured_output=structured_output,
         )
         cached = await self._response_cache.get(cache_key)
         if cached is not None:

@@ -275,7 +275,9 @@ class FactExtractor(BaseCognifier):
         """
         blocks = "\n\n".join(f"Chunk {i}:\n{c.content[:MAX_CHUNK_CHARS]}" for i, c in enumerate(chunks))
         prompt = FACT_EXTRACTION_BATCH_PROMPT.format(chunks=blocks)
-        response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type="extraction")
+        response = await self.llm.chat(
+            [{"role": "user", "content": prompt}], llm_type="extraction", structured_output=True
+        )
         parsed = parse_llm_json_response(response.content)
         if not isinstance(parsed, dict):
             raise ValueError("batched fact response was not a JSON object")
@@ -300,7 +302,9 @@ class FactExtractor(BaseCognifier):
         """Extract facts from a single chunk using LLM."""
         try:
             prompt = FACT_EXTRACTION_PROMPT.format(text=chunk.content[:MAX_CHUNK_CHARS])
-            response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type="extraction")
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}], llm_type="extraction", structured_output=True
+            )
             parsed = parse_llm_json_response(response.content)
             raw_facts = parsed if isinstance(parsed, list) else []
             return self._convert_to_facts(raw_facts, chunk, context.document_id)

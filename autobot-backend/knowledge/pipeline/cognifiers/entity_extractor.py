@@ -262,7 +262,9 @@ class EntityExtractor(BaseCognifier):
         """Extract entities from a single chunk."""
         try:
             prompt = ENTITY_EXTRACTION_PROMPT.format(text=chunk.content)
-            response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type="extraction")
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}], llm_type="extraction", structured_output=True
+            )
             parsed = parse_llm_json_response(response.content)
             raw_entities = parsed if isinstance(parsed, list) else []
             return self._convert_to_entities(raw_entities, chunk, context.document_id)
