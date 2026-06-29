@@ -50,6 +50,26 @@ Text:
 {text}
 """
 
+# Batched variant (#10647): extract facts from multiple labeled chunks in one
+# call, keyed by chunk index, to cut LLM round-trips.
+FACT_EXTRACTION_BATCH_PROMPT = """Extract atomic facts from each of the following text chunks.
+
+Each chunk is labeled "Chunk N:". For each fact provide:
+- subject, predicate, object
+- fact_type: One of 'statement', 'relationship', 'property', 'definition', 'rule', 'measurement'
+- description, context, confidence (0.0-1.0)
+
+Return a JSON object mapping each chunk index (as a string) to its array of facts;
+use an empty array for chunks with no facts. Example for two chunks:
+{{
+  "0": [{{"subject": "...", "predicate": "...", "object": "...", "fact_type": "statement", "description": "...", "context": "...", "confidence": 0.9}}],
+  "1": []
+}}
+
+Chunks:
+{chunks}
+"""
+
 # NLP-based patterns for fact extraction (Issue #3395)
 # Used when sentence-level parsing can identify simple facts
 NLP_PATTERNS = [
@@ -219,11 +239,40 @@ class FactExtractor(BaseCognifier):
         return all_facts
 
     async def _process_batch(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[AtomicFact]:
-        """Process a batch of chunks."""
-        facts = []
-        for chunk in chunks:
-            chunk_facts = await self._extract_from_chunk(chunk, context)
-            facts.extend(chunk_facts)
+        """Extract facts from a batch of chunks in one LLM call (#10647).
+
+        Falls back to per-chunk extraction on any parse/shape failure so
+        correctness never regresses. Single-chunk batches skip batching.
+        """
+        if not chunks:
+            return []
+        if len(chunks) == 1:
+            return await self._extract_from_chunk(chunks[0], context)
+        try:
+            return await self._extract_batched(chunks, context)
+        except Exception as e:
+            logger.warning("Batched fact extraction failed (%s); falling back to per-chunk", e)
+            facts: List[AtomicFact] = []
+            for chunk in chunks:
+                facts.extend(await self._extract_from_chunk(chunk, context))
+            return facts
+
+    async def _extract_batched(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[AtomicFact]:
+        """Extract facts from multiple chunks in a single LLM call (#10647).
+
+        Raises on a non-object response so the caller can fall back to per-chunk.
+        """
+        blocks = "\n\n".join(f"Chunk {i}:\n{c.content[:2000]}" for i, c in enumerate(chunks))
+        prompt = FACT_EXTRACTION_BATCH_PROMPT.format(chunks=blocks)
+        response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type="extraction")
+        parsed = parse_llm_json_response(response.content)
+        if not isinstance(parsed, dict):
+            raise ValueError("batched fact response was not a JSON object")
+        facts: List[AtomicFact] = []
+        for i, chunk in enumerate(chunks):
+            raw = parsed.get(str(i), [])
+            if isinstance(raw, list):
+                facts.extend(self._convert_to_facts(raw, chunk, context.document_id))
         return facts
 
     async def _extract_from_chunk(self, chunk: ProcessedChunk, context: PipelineContext) -> List[AtomicFact]:
