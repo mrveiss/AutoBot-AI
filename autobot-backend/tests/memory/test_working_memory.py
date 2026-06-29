@@ -167,10 +167,10 @@ async def test_clear_returns_zero_when_no_keys(service):
 
 
 def test_manager_exposes_working_memory_property():
-    """UnifiedMemoryManager.working_memory returns a WorkingMemoryService singleton."""
-    from memory.manager import UnifiedMemoryManager
+    """MemoryManager.working_memory returns a WorkingMemoryService singleton."""
+    from memory.manager import MemoryManager
 
-    mgr = UnifiedMemoryManager(
+    mgr = MemoryManager(
         db_path="/tmp/test_wm_manager.db"  # nosec B108 - test/controlled code uses tmpdir intentionally
     )
     svc = mgr.working_memory

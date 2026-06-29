@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
 
 from markdown_reference_system import MarkdownReferenceSystem
-from memory import TaskPriority, UnifiedMemoryManager
+from memory import MemoryManager, TaskPriority
 from task_execution_tracker import TaskExecutionTracker
 
 
@@ -25,7 +25,7 @@ async def test_enhanced_memory_system():
 
     # Test 1: Enhanced Memory Manager
     print("\n1. Testing Enhanced Memory Manager...")  # noqa: print
-    memory_manager = UnifiedMemoryManager(db_path="data/test_enhanced_memory.db")
+    memory_manager = MemoryManager(db_path="data/test_enhanced_memory.db")
 
     # Create a test task
     task_id = memory_manager.create_task_record(
@@ -132,7 +132,7 @@ async def test_embedding_system():
     """Test the embedding storage system"""
     print("\n6. Testing Embedding Storage System...")  # noqa: print
 
-    memory_manager = UnifiedMemoryManager(db_path="data/test_enhanced_memory.db")
+    memory_manager = MemoryManager(db_path="data/test_enhanced_memory.db")
 
     # Test embedding storage
     test_content = "This is a test document for embedding storage validation"

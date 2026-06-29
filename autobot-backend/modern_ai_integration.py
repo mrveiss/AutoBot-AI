@@ -28,7 +28,7 @@ from constants.model_constants import (
     OPENAI_GPT4_TURBO_PREVIEW,
     OPENAI_GPT4_VISION_PREVIEW,
 )
-from memory import TaskPriority, UnifiedMemoryManager
+from memory import MemoryManager, TaskPriority
 from task_execution_tracker import get_task_tracker as _get_task_tracker
 
 task_tracker = _get_task_tracker()
@@ -671,9 +671,9 @@ class LocalModelProvider(BaseAIProvider):
 class ModernAIIntegration:
     """Main integration system for modern AI models"""
 
-    def __init__(self, memory_manager: UnifiedMemoryManager | None = None):
+    def __init__(self, memory_manager: MemoryManager | None = None):
         """Initialize modern AI integration with memory and providers."""
-        self.memory_manager = memory_manager or UnifiedMemoryManager()
+        self.memory_manager = memory_manager or MemoryManager()
         self.providers: Dict[AIProvider, BaseAIProvider] = {}
         self.model_configs = self._load_model_configurations()
 
