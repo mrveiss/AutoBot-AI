@@ -17,14 +17,14 @@ from fastapi import APIRouter, HTTPException
 from ai_hardware_accelerator import HardwareDevice
 from api.schemas_knowledge import (
     BenchmarkRequest,
+    NPUOptimizationRequest,
+    NPUSearchRequest,
+    NPUSearchResponse,
     SearchBenchmarkResponse,
     SearchConnectivityResponse,
     SearchHardwareStatusResponse,
     SearchOptimizeResponse,
     SearchPerformanceAnalyticsResponse,
-    NPUOptimizationRequest,
-    NPUSearchRequest,
-    NPUSearchResponse,
 )
 from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

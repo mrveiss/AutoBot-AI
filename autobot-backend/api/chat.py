@@ -30,12 +30,12 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.schemas_chat import (
+    ChatCapabilitiesData,
+    ChatData,
     ChatDeleteData,
     ChatHealthData,
     ChatMessage,
     ChatMessageData,
-    ChatCapabilitiesData,
-    ChatData,
     ChatPreferences,
     ChatSaveData,
     ChatStatsData,
