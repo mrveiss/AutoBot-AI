@@ -16,7 +16,7 @@ import time
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from memory import TaskPriority, get_enhanced_memory_manager  # canonical (#10626)
+from memory import TaskPriority, get_memory_manager
 from utils.multimodal_performance_monitor import performance_monitor
 
 from .models import MultiModalInput, ProcessingResult
@@ -67,7 +67,7 @@ class UnifiedMultiModalProcessor:
         self.vision_processor = VisionProcessor()
         self.voice_processor = VoiceProcessor()
         self.context_processor = ContextProcessor()
-        self.memory_manager = get_enhanced_memory_manager()
+        self.memory_manager = get_memory_manager()
         self.logger = get_logger(__name__)
 
         # Performance monitoring integration

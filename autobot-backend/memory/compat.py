@@ -12,8 +12,7 @@ _get_embedding_cache_size, cleanup_old_data) now live on MemoryManager
 directly.
 
 #10666 B2: UnifiedMemoryManager renamed to MemoryManager.
-get_enhanced_memory_manager() and get_memory_manager() both return a
-MemoryManager singleton for backward compatibility.
+get_memory_manager() is the canonical factory.
 """
 
 from typing import Dict, List
@@ -106,19 +105,15 @@ class LongTermMemoryManager:
 
 
 # ============================================================================
-# GLOBAL INSTANCES (for drop-in replacement)
-# get_memory_manager() is the canonical factory.
-# get_enhanced_memory_manager() is retained for call-site backward compat.
+# GLOBAL INSTANCES
 # ============================================================================
 
 get_memory_manager = lazy_singleton(MemoryManager)
-get_enhanced_memory_manager = get_memory_manager  # backward compat alias
 get_long_term_memory_manager = lazy_singleton(LongTermMemoryManager)
 
 
 __all__ = [
     "LongTermMemoryManager",
     "get_memory_manager",
-    "get_enhanced_memory_manager",
     "get_long_term_memory_manager",
 ]

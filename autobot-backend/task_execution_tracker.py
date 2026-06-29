@@ -19,7 +19,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.status_enums import Priority, TaskPriority, TaskStatus  # canonical enums (#10626)
-from memory import MemoryManager, TaskExecutionRecord, get_enhanced_memory_manager
+from memory import MemoryManager, TaskExecutionRecord, get_memory_manager
 
 logger = get_logger(__name__)
 
@@ -49,7 +49,7 @@ class TaskExecutionTracker:
 
     def __init__(self, memory_manager: MemoryManager | None = None):
         """Initialize task tracker with memory manager and callback registry."""
-        self.memory_manager = memory_manager or get_enhanced_memory_manager()
+        self.memory_manager = memory_manager or get_memory_manager()
         self.active_tasks: Dict[str, Dict[str, Any]] = {}
         self.task_callbacks: Dict[str, List[Callable]] = {}
 

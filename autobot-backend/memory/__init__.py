@@ -41,7 +41,6 @@ from .cache import LRUCacheManager
 # Backward Compatibility Wrappers
 from .compat import (
     LongTermMemoryManager,
-    get_enhanced_memory_manager,
     get_long_term_memory_manager,
     get_memory_manager,
 )
@@ -92,6 +91,5 @@ __all__ = [
     "LongTermMemoryManager",
     # Global Instances
     "get_memory_manager",
-    "get_enhanced_memory_manager",
     "get_long_term_memory_manager",
 ]
