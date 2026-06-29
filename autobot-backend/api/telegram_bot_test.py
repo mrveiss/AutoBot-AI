@@ -10,7 +10,7 @@ These verify the inbound path is actually reachable and dispatched:
   integration registry, which would double-mount the routes),
 - the webhook/config routes are exposed,
 - the gateway TelegramAdapter normalizes a raw Telegram Update into a
-  UnifiedMessage (text, command, and file attachments),
+  GatewayMessage (text, command, and file attachments),
 - command handling produces the expected replies.
 """
 

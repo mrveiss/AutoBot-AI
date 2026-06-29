@@ -34,8 +34,7 @@ from api.schemas_agent import (
     AgentStatusData,
     CommandApprovalPayload,
     DevelopmentAnalysisData,
-    EnhancedGoalData,
-    EnhancedGoalPayload,
+    GoalData,
     GoalPayload,
     MultiAgentCoordinationData,
     MultiAgentTaskPayload,
@@ -1000,14 +999,14 @@ def _determine_coordination_mode(payload, selected_agents: list) -> str:
 # ====================================================================
 
 
-@router.post("/goal/enhanced", response_model=DataResponse[EnhancedGoalData])
+@router.post("/goal/enhanced", response_model=DataResponse[GoalData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_enhanced_goal",
     error_code_prefix="AGENT",
 )
 async def execute_enhanced_goal(
-    payload: EnhancedGoalPayload,
+    payload: GoalPayload,
     request: Request,
     config=Depends(get_config),
     knowledge_base=Depends(get_knowledge_base),
@@ -1308,10 +1307,10 @@ async def get_agents_status():
 @router.get("/health/enhanced", response_model=AgentHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_agent_health",
+    operation="agent_health",
     error_code_prefix="AGENT",
 )
-async def enhanced_agent_health():
+async def agent_health():
     """Enhanced health check for agent services."""
     try:
         ai_client = await get_ai_stack_client()

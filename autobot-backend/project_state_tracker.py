@@ -4,13 +4,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Enhanced Project State Tracking System - Facade Module
+Project State Tracking System - Facade Module
 
 This module provides backward compatibility by re-exporting all public APIs
 from the refactored src.project_state_tracking package.
 
 Part of Issue #381 - God Class Refactoring
-Original file: 1,505 lines → Package with focused modules
+Original file: 1,505 lines -> Package with focused modules
 """
 
 import sys
@@ -19,15 +19,15 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 
 # Re-export all public APIs from the package
-from project_state_tracking import (  # Types and enums; Models; Database; Main tracker; Convenience functions; CLI handlers; Backward compatibility aliases for sync functions
+from project_state_tracking import (
     COMMAND_HANDLERS,
     DATABASE_SCHEMA_INDICES,
     DATABASE_SCHEMA_TABLES,
     REDIS_METRIC_KEYS,
     SIGNIFICANT_CHANGES,
     SIGNIFICANT_INTERACTIONS,
-    EnhancedProjectStateTracker,
     ProjectMilestone,
+    ProjectStateTracker,
     StateChange,
     StateChangeType,
     StateSnapshot,
@@ -63,7 +63,7 @@ __all__ = [
     "DATABASE_SCHEMA_TABLES",
     "DATABASE_SCHEMA_INDICES",
     # Main tracker
-    "EnhancedProjectStateTracker",
+    "ProjectStateTracker",
     "get_state_tracker",
     # Convenience functions
     "track_system_error",
