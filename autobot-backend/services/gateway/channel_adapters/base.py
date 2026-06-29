@@ -12,7 +12,7 @@ Defines the interface that all channel adapters must implement.
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
-from ..types import ChannelType, GatewaySession, UnifiedMessage
+from ..types import ChannelMessage, ChannelType, GatewaySession
 
 
 class BaseChannelAdapter(ABC):
@@ -35,7 +35,7 @@ class BaseChannelAdapter(ABC):
     @abstractmethod
     async def send_message(
         self,
-        message: UnifiedMessage,
+        message: ChannelMessage,
         session: GatewaySession,
         connection_context: Any | None = None,
     ) -> bool:
@@ -56,7 +56,7 @@ class BaseChannelAdapter(ABC):
         self,
         raw_data: Any,
         session: GatewaySession,
-    ) -> UnifiedMessage | None:
+    ) -> ChannelMessage | None:
         """
         Receive and parse a message from this channel.
 
@@ -65,7 +65,7 @@ class BaseChannelAdapter(ABC):
             session: Session associated with the message
 
         Returns:
-            UnifiedMessage if parsed successfully, None otherwise
+            ChannelMessage if parsed successfully, None otherwise
         """
 
     @abstractmethod

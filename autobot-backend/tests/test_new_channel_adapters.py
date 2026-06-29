@@ -27,7 +27,7 @@ from services.gateway import (
     NormalizedResponse,
     SignalAdapter,
     TelegramAdapter,
-    UnifiedMessage,
+    GatewayMessage,
 )
 
 
@@ -50,7 +50,7 @@ class TestTelegramAdapter:
             }
         }
         unified = await adapter.normalize_message(raw)
-        assert isinstance(unified, UnifiedMessage)
+        assert isinstance(unified, GatewayMessage)
         assert unified.platform == "telegram"
         assert unified.user_id == "123456"
         assert unified.channel_id == "-9001"
