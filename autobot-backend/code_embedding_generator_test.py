@@ -103,6 +103,8 @@ def test_convert_to_openvino_falls_back_to_cpu_on_error():
     assert gen.openvino_model is None
     assert gen.npu_available is False
     assert gen._openvino_device == "cpu"
+    # #10689: NPU was detected pre-fallback but we're now on CPU → underutilized
+    assert gen.npu_underutilized is True
 
 
 # ---------------------------------------------------------------------------

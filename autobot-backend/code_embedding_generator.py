@@ -185,16 +185,20 @@ class CodeEmbeddingGenerator:
                 target_device,
                 "NPU" in devices,
             )
-            self._emit_utilization_signal("NPU" in devices, self._openvino_device)
+            # #10689: NPU was detected (this method only runs when npu_available);
+            # flag if we ended up compiling somewhere other than NPU.
+            self._emit_utilization_signal(self.npu_available, self._openvino_device)
 
         except Exception as e:
             logger.warning("OpenVINO conversion failed: %s, using PyTorch", e)
+            # #10689: read detection-time NPU presence BEFORE resetting the flag,
+            # so the signal reflects "NPU was detected on this box" without
+            # re-probing a driver that may have just failed.
+            npu_was_present = self.npu_available
             self.openvino_model = None
             self._openvino_device = "cpu"
             self.npu_available = False
-            # #10689: a conversion failure on an NPU box means the accelerator is
-            # going unused — flag it distinctly so monitoring can catch it.
-            self._emit_utilization_signal(self._npu_device_present(), "cpu")
+            self._emit_utilization_signal(npu_was_present, "cpu")
 
     @staticmethod
     def _npu_underutilized(npu_present: bool, device_used: str) -> bool:
@@ -209,16 +213,6 @@ class CodeEmbeddingGenerator:
                 "NPU_UNDERUTILIZED: NPU hardware detected but CodeBERT embeddings running on %s",
                 device_used,
             )
-
-    @staticmethod
-    def _npu_device_present() -> bool:
-        """Best-effort check for NPU hardware, safe to call from the failure path (#10689)."""
-        try:
-            from openvino.runtime import Core
-
-            return "NPU" in Core().available_devices
-        except Exception:  # openvino missing or probe failed — assume no NPU
-            return False
 
     def _get_cache_key(self, code: str, language: str) -> str:
         """Generate cache key for code embedding."""
