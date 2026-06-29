@@ -230,7 +230,7 @@ class FactExtractor(BaseCognifier):
         """Extract facts from a single chunk using LLM."""
         try:
             prompt = FACT_EXTRACTION_PROMPT.format(text=chunk.content[:2000])
-            response = await self.llm.chat([{"role": "user", "content": prompt}])
+            response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type="extraction")
             parsed = parse_llm_json_response(response.content)
             raw_facts = parsed if isinstance(parsed, list) else []
             return self._convert_to_facts(raw_facts, chunk, context.document_id)

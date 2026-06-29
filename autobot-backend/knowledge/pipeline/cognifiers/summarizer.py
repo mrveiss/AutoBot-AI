@@ -216,7 +216,7 @@ class HierarchicalSummarizer(BaseCognifier):
         """Summarize text using LLM."""
         try:
             prompt = SUMMARY_PROMPT.format(max_words=max_words, text=text)
-            response = await self.llm.chat([{"role": "user", "content": prompt}])
+            response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type="analysis")
             raw = parse_llm_json_response(response.content, fallback_dict=True)
             parsed = raw if isinstance(raw, dict) else {"summary": "", "key_topics": [], "key_entities": []}
 

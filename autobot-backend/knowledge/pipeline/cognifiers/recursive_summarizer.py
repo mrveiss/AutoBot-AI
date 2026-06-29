@@ -253,7 +253,7 @@ class RecursiveSummarizer(BaseCognifier):
 
     async def _generate_and_parse(self, prompt: str) -> dict:
         """Call LLM and parse JSON response (#1383: extracted helper)."""
-        response = await self.llm.chat([{"role": "user", "content": prompt}])
+        response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type="analysis")
         raw = parse_llm_json_response(response.content, fallback_dict=True)
         if isinstance(raw, dict):
             return raw

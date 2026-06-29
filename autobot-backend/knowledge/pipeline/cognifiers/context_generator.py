@@ -86,7 +86,7 @@ class ContextGeneratorCognifier(BaseCognifier):
     async def _call_llm_for_summary(self, doc_text: str) -> str:
         prompt = _SUMMARY_PROMPT.format(doc_text=doc_text[:_DOC_TEXT_LIMIT])
         try:
-            response = await self.llm.chat([{"role": "user", "content": prompt}])
+            response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type="analysis")
             return response.content.strip()
         except Exception as e:  # noqa: BLE001
             logger.error("Context summary LLM call failed: %s", e)
@@ -108,7 +108,7 @@ class ContextGeneratorCognifier(BaseCognifier):
             return ""
         prompt = _CHUNK_PROMPT.format(doc_summary=doc_summary, chunk_text=chunk_text)
         try:
-            response = await self.llm.chat([{"role": "user", "content": prompt}])
+            response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type="analysis")
             return response.content.strip()
         except Exception as e:  # noqa: BLE001
             logger.error("Chunk context LLM call failed: %s", e)
