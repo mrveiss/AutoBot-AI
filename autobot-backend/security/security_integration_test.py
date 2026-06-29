@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 # Import system components
 from app_factory import create_app
-from enhanced_security_layer import EnhancedSecurityLayer
+from security_layer import SecurityLayer
 from secure_command_executor import CommandRisk, SecureCommandExecutor
 
 
@@ -46,7 +46,7 @@ def security_layer(temp_audit_file):
                 "guest": {"permissions": ["read_only"]},
             },
         }
-        return EnhancedSecurityLayer()
+        return SecurityLayer()
 
 
 class TestSecuritySystemIntegration:
@@ -246,7 +246,7 @@ class TestDockerSandboxIntegration:
                 "use_docker_sandbox": True,
             }
 
-            security = EnhancedSecurityLayer()
+            security = SecurityLayer()
             assert security.use_docker_sandbox is True
             assert security.command_executor.use_docker_sandbox is True
 

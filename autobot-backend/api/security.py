@@ -31,7 +31,7 @@ from api.schemas_system import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from enhanced_security_layer import EnhancedSecurityLayer
+from security_layer import SecurityLayer
 from security.domain_security import get_domain_security_manager
 from security.threat_intelligence import ThreatLevel, get_threat_intelligence_service
 
@@ -70,7 +70,7 @@ async def get_security_status(request: Request):
             )
         else:
             # No security layer found - initialize enhanced security layer on demand
-            enhanced_security = EnhancedSecurityLayer()
+            enhanced_security = SecurityLayer()
             request.app.state.enhanced_security_layer = enhanced_security
 
             pending_approvals = enhanced_security.get_pending_approvals()
@@ -97,7 +97,7 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
         # Get or initialize enhanced security layer
         security_layer = getattr(request.app.state, "enhanced_security_layer", None)
         if not security_layer:
-            security_layer = EnhancedSecurityLayer()
+            security_layer = SecurityLayer()
             request.app.state.enhanced_security_layer = security_layer
 
         # Approve or deny the command
@@ -126,7 +126,7 @@ async def get_pending_approvals(request: Request):
         # Get or initialize enhanced security layer
         security_layer = getattr(request.app.state, "enhanced_security_layer", None)
         if not security_layer:
-            security_layer = EnhancedSecurityLayer()
+            security_layer = SecurityLayer()
             request.app.state.enhanced_security_layer = security_layer
         pending = security_layer.get_pending_approvals()
 
@@ -148,7 +148,7 @@ async def get_command_history(request: Request, user: str = None, limit: int = 5
         # Get or initialize enhanced security layer
         security_layer = getattr(request.app.state, "enhanced_security_layer", None)
         if not security_layer:
-            security_layer = EnhancedSecurityLayer()
+            security_layer = SecurityLayer()
             request.app.state.enhanced_security_layer = security_layer
         history = security_layer.get_command_history(user=user, limit=limit)
 
@@ -197,7 +197,7 @@ async def get_audit_log(request: Request, limit: int = 100):
         # Get or initialize enhanced security layer
         security_layer = getattr(request.app.state, "enhanced_security_layer", None)
         if not security_layer:
-            security_layer = EnhancedSecurityLayer()
+            security_layer = SecurityLayer()
             request.app.state.enhanced_security_layer = security_layer
 
         # Use extracted helper (Issue #315 - reduced depth)

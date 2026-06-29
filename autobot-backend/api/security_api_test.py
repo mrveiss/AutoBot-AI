@@ -90,7 +90,7 @@ class TestSecurityAPI:
         # Remove both security layers
         delattr(self.app.state, "enhanced_security_layer")
 
-        with patch("api.security.EnhancedSecurityLayer") as MockSecurityLayer:
+        with patch("api.security.SecurityLayer") as MockSecurityLayer:
             mock_instance = MagicMock()
             mock_instance.get_pending_approvals.return_value = []
             mock_instance.enable_auth = False
@@ -390,7 +390,7 @@ class TestSecurityAPIIntegration:
         self.app.include_router(router, prefix="/api/security")
 
         # Use real enhanced security layer (mocked where needed)
-        with patch("api.security.EnhancedSecurityLayer") as MockSecurityLayer:
+        with patch("api.security.SecurityLayer") as MockSecurityLayer:
             mock_instance = MagicMock()
             mock_instance.enable_auth = False
             mock_instance.enable_command_security = True
@@ -425,7 +425,7 @@ class TestSecurityAPIIntegration:
             delattr(self.app.state, "enhanced_security_layer")
 
         with patch(
-            "api.security.EnhancedSecurityLayer",
+            "api.security.SecurityLayer",
             side_effect=Exception("Init error"),
         ):
             response = self.client.get("/api/security/status")

@@ -1,7 +1,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """
-Unit tests for EnhancedSecurityLayer module
+Unit tests for SecurityLayer module
 Tests integrated security features including role-based access and command execution
 """
 
@@ -14,12 +14,12 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 # Import the modules to test
-from enhanced_security_layer import EnhancedSecurityLayer
+from security_layer import SecurityLayer
 from secure_command_executor import CommandRisk
 
 
-class TestEnhancedSecurityLayer:
-    """Test EnhancedSecurityLayer functionality"""
+class TestSecurityLayer:
+    """Test SecurityLayer functionality"""
 
     def setup_method(self):
         """Set up test fixtures"""
@@ -28,7 +28,13 @@ class TestEnhancedSecurityLayer:
         self.temp_audit_file.close()
 
         # Mock config to use temporary file
-        with patch("enhanced_security_layer.global_config_manager") as mock_config:
+        with (
+            patch("security_layer.get_config_manager") as mock_get_cm,
+            patch("security_layer.config") as mock_ssot_config,
+        ):
+            mock_ssot_config.single_user_mode = "false"
+            mock_ssot_config.audit_log_file = self.temp_audit_file.name
+            mock_config = mock_get_cm.return_value
             mock_config.get.return_value = {
                 "enable_auth": False,
                 "enable_command_security": True,
@@ -42,7 +48,7 @@ class TestEnhancedSecurityLayer:
                     "guest": {"permissions": []},
                 },
             }
-            self.security = EnhancedSecurityLayer()
+            self.security = SecurityLayer()
 
     def teardown_method(self):
         """Clean up test fixtures"""
@@ -52,7 +58,7 @@ class TestEnhancedSecurityLayer:
             pass
 
     def test_initialization(self):
-        """Test EnhancedSecurityLayer initializes correctly"""
+        """Test SecurityLayer initializes correctly"""
         assert self.security.enable_auth is False
         assert self.security.enable_command_security is True
         assert self.security.command_approval_required is True
@@ -65,7 +71,13 @@ class TestEnhancedSecurityLayer:
     def test_create_security_policy(self):
         """Test security policy creation from configuration"""
         # Test with custom policies in config
-        with patch("enhanced_security_layer.global_config_manager") as mock_config:
+        with (
+            patch("security_layer.get_config_manager") as mock_get_cm,
+            patch("security_layer.config") as mock_ssot_config,
+        ):
+            mock_ssot_config.single_user_mode = "false"
+            mock_ssot_config.audit_log_file = ""
+            mock_config = mock_get_cm.return_value
             mock_config.get.return_value = {
                 "enable_command_security": True,
                 "command_policies": {
@@ -75,7 +87,7 @@ class TestEnhancedSecurityLayer:
                 },
             }
 
-            security = EnhancedSecurityLayer()
+            security = SecurityLayer()
             policy = security.command_executor.policy
 
             assert "custom_safe" in policy.safe_commands
@@ -451,19 +463,25 @@ class TestEnhancedSecurityLayer:
 
 
 # Integration tests
-class TestEnhancedSecurityLayerIntegration:
-    """Integration tests for EnhancedSecurityLayer with SecureCommandExecutor"""
+class TestSecurityLayerIntegration:
+    """Integration tests for SecurityLayer with SecureCommandExecutor"""
 
     def setup_method(self):
         """Set up test fixtures"""
-        with patch("enhanced_security_layer.global_config_manager") as mock_config:
+        with (
+            patch("security_layer.get_config_manager") as mock_get_cm,
+            patch("security_layer.config") as mock_ssot_config,
+        ):
+            mock_ssot_config.single_user_mode = "false"
+            mock_ssot_config.audit_log_file = ""
+            mock_config = mock_get_cm.return_value
             mock_config.get.return_value = {
                 "enable_auth": False,
                 "enable_command_security": True,
                 "command_approval_required": False,  # Disable for integration tests
                 "use_docker_sandbox": False,
             }
-            self.security = EnhancedSecurityLayer()
+            self.security = SecurityLayer()
 
     @pytest.mark.asyncio
     async def test_end_to_end_safe_command(self):
