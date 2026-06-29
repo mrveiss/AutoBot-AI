@@ -5,7 +5,7 @@
 """Phase 2 backend persistence consolidation tests (Issue #7572).
 
 Pins four acceptance criteria from the SSOT design:
-  1. ChatMessage / EnhancedChatMessage require session_id (→ 422 when absent)
+  1. ChatMessage requires session_id (→ 422 when absent)
   2. process_enhanced_chat_message returns HTTP 422 for invalid session_id format
   3. chat:recent sorted-set has TTL applied after every zadd
   4. save_session writes disk before updating Redis cache
@@ -24,7 +24,7 @@ from pydantic import ValidationError
 
 
 class TestSessionIdRequired:
-    """ChatMessage and EnhancedChatMessage must reject requests missing session_id."""
+    """ChatMessage must reject requests missing session_id."""
 
     def test_chat_message_without_session_id_raises_422_schema_error(self):
         from api.schemas_chat import ChatMessage
@@ -38,10 +38,11 @@ class TestSessionIdRequired:
         ), "Pydantic must flag session_id as missing — FastAPI surfaces this as HTTP 422"
 
     def test_enhanced_chat_message_without_session_id_raises_422_schema_error(self):
-        from api.schemas_chat import EnhancedChatMessage
+        # Consolidated into ChatMessage (#10654); same validation applies
+        from api.schemas_chat import ChatMessage
 
         with pytest.raises(ValidationError) as exc_info:
-            EnhancedChatMessage(content="hello")
+            ChatMessage(content="hello")
 
         errors = exc_info.value.errors()
         assert any(e["loc"] == ("session_id",) for e in errors)
@@ -53,9 +54,10 @@ class TestSessionIdRequired:
         assert msg.session_id == "abc-123"
 
     def test_enhanced_chat_message_with_session_id_is_accepted(self):
-        from api.schemas_chat import EnhancedChatMessage
+        # Consolidated into ChatMessage (#10654); same validation applies
+        from api.schemas_chat import ChatMessage
 
-        msg = EnhancedChatMessage(content="hello", session_id="abc-123")
+        msg = ChatMessage(content="hello", session_id="abc-123")
         assert msg.session_id == "abc-123"
 
 
@@ -64,7 +66,7 @@ class TestSessionIdRequired:
 # ---------------------------------------------------------------------------
 
 
-class TestEnhancedChatMessage422:
+class TestEnhancedChatSession422:
     """process_enhanced_chat_message raises HTTPException(422) for bad format."""
 
     @pytest.mark.asyncio
@@ -72,10 +74,10 @@ class TestEnhancedChatMessage422:
         from fastapi import HTTPException
 
         from api.chat import process_enhanced_chat_message
-        from api.schemas_chat import EnhancedChatMessage
+        from api.schemas_chat import ChatMessage
 
         with patch("api.chat.validate_chat_session_id", return_value=False):
-            msg = EnhancedChatMessage(content="hello", session_id="BAD_FORMAT")
+            msg = ChatMessage(content="hello", session_id="BAD_FORMAT")
             with pytest.raises(HTTPException) as exc_info:
                 await process_enhanced_chat_message(
                     message=msg,
