@@ -1145,7 +1145,7 @@ class SearchRequest(BaseModel):
         max_length=100,
         description="Session ID for analytics correlation",
     )
-    # Advanced v2 options (folded from former /enhanced_search_v2 — #10666)
+    # Advanced search options (folded from former advanced endpoint — #10666)
     enable_query_expansion: bool = Field(
         default=False,
         description="Expand query with synonyms/related terms before searching",

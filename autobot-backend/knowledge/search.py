@@ -193,7 +193,7 @@ class SearchMixin:
         enable_reranking: bool = False,
         min_score: float = 0.0,
         board_id: str | None = None,
-        # ---- Advanced params (formerly enhanced_search_v2) ----
+        # ---- Advanced params (formerly advanced search v2) ----
         enable_query_expansion: bool = False,
         enable_relevance_scoring: bool = False,
         enable_clustering: bool = False,
@@ -715,7 +715,7 @@ class SearchMixin:
         """Rerank results using cross-encoder for improved relevance."""
         return await get_reranker().rerank(query, results, top_k)
 
-    # enhanced_search_v2 folded into search() — Issue #10666
+    # advanced search v2 path folded into search() — Issue #10666
 
     def _extract_search_params(self, ctx: SearchContext) -> Dict[str, Any]:
         """Extract search parameters from context (Issue #398: extracted)."""

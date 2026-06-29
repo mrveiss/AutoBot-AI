@@ -15,7 +15,7 @@ Migration guide (deprecated routes removed in #10666):
 - /enhanced_search  → /search with tags/mode/enable_reranking params
 - /rag_search       → /search with enable_rag=true (+ reformulate_query=true)
 - /similarity_search → /search with mode=semantic, min_score=<threshold>
-- /enhanced_search_v2 → /search with enable_query_expansion/enable_clustering etc.
+- advanced search → /search with enable_query_expansion/enable_clustering etc.
 
 Related Issues: #78 (Search Quality), #185 (Split), #209 (Knowledge split),
                 #555 (Consolidation), #10666 (Deprecated duplicate removal)
@@ -555,7 +555,7 @@ async def search(request: SearchRequest, req: Request):
 
     Migration (#10666): /enhanced_search→tags/reranking params,
     /rag_search→enable_rag=true, /similarity_search→mode=semantic+min_score,
-    /enhanced_search_v2→enable_query_expansion/enable_clustering etc.
+    advanced search→enable_query_expansion/enable_clustering etc.
     """
     # Check KB initialization (Issue #665: uses helper)
     kb_to_use, error_response = await _check_kb_initialization(req)
