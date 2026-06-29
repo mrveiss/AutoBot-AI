@@ -1307,10 +1307,10 @@ async def get_agents_status():
 @router.get("/health/enhanced", response_model=AgentHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_agent_health",
+    operation="agent_health",
     error_code_prefix="AGENT",
 )
-async def enhanced_agent_health():
+async def agent_health():
     """Enhanced health check for agent services."""
     try:
         ai_client = await get_ai_stack_client()
