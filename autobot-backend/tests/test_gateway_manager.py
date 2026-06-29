@@ -23,10 +23,10 @@ import pytest
 from services.gateway import (
     DiscordAdapter,
     GatewayManager,
+    GatewayMessage,
     NormalizedResponse,
     SlackAdapter,
     TeamsAdapter,
-    GatewayMessage,
     WebAdapter,
     WhatsAppAdapter,
 )

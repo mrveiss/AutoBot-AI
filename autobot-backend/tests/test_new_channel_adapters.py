@@ -22,12 +22,12 @@ import pytest
 
 from services.gateway import (
     GatewayManager,
+    GatewayMessage,
     IMessageAdapter,
     MatrixAdapter,
     NormalizedResponse,
     SignalAdapter,
     TelegramAdapter,
-    GatewayMessage,
 )
 
 
