@@ -11,8 +11,9 @@
 # On multi-VM fleets autobot_users lives on its own instance and is
 # provisioned by deploy-user-management-db.yml Phase 2. On a single box that
 # instance is shared with the SLM, so we must:
-#   * add autobot_app WITHOUT dropping slm_app from pg_hba (uses the
-#     multi-user pg_hba.conf.j2 — postgresql_app_users), and
+#   * add autobot_app's pg_hba rules NON-destructively via
+#     community.postgresql.postgresql_pg_hba (edits in place, never rewrites
+#     the file) so the SLM's slm_app + remote-access lines stay intact, and
 #   * store autobot creds in a SEPARATE file so the SLM's
 #     db-credentials.env is never clobbered.
 # We deliberately do NOT redeploy postgresql.conf here (reload, not restart)
