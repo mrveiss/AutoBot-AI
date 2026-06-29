@@ -13,7 +13,7 @@ implementations:
 - enhanced_orchestration/EnhancedMultiAgentOrchestrator (merged in #5040)
 
 Refactored in #5058: god-class decomposed into collaborators.
-  - WorkflowRunner  (enhanced_orchestration/workflow_runner.py) — execution engine
+  - WorkflowRunner  (orchestration/workflow_runner.py) — execution engine (#10666 B3 moved)
   - PerformanceTracker (orchestration/performance_tracker.py) — metrics
   - Three execution entry points unified: process_user_request → execute_enhanced_workflow
     → create_workflow_plan + WorkflowRunner.execute_workflow
@@ -25,6 +25,8 @@ Primitives extracted in #5060:
                         orchestration/orchestrator_stubs.py
                         orchestration/orchestrator_legacy_api.py
                         orchestration/orchestrator_prompts.py
+
+Issue #10666 B3: enhanced_orchestration package fully merged into orchestration.
 """
 
 import asyncio
@@ -38,35 +40,29 @@ from typing import Any, Dict, List, Set, Tuple
 from autobot_shared.logging_manager import get_logger
 from config.manager import get_config_manager as _get_config_manager
 from constants.threshold_constants import LLMDefaults, TimingConstants
-from enhanced_orchestration.agent_router import AgentRouter
-from enhanced_orchestration.collaboration_coordinator import CollaborationCoordinator
-
-# Issue #5040: multi-agent imports
-from enhanced_orchestration.types import (
-    FALLBACK_TIERS,
-    AgentPerformance,
-    AgentTask,
-    ExecutionStrategy,
-    WorkflowPlan,
-)
-from enhanced_orchestration.workflow_planning import StrategyPlanner
-from enhanced_orchestration.workflow_runner import WorkflowRunner
+from autobot_shared.workflow import ExecutionStrategy
 from memory import LongTermMemoryManager
 
-# Issue #381: shared orchestration types
-# GH #6820: wire-in AgentRegistry, WorkflowMemory, WorkflowPlanner (previously orphaned)
-# GH #6816: wire-in CausalExecutor, CausalErrorRecovery (previously orphaned)
+# Issue #5040 / #10666 B3: multi-agent imports (consolidated into orchestration)
 from orchestration import (
+    FALLBACK_TIERS,
     AgentCapability,
     AgentInteraction,
+    AgentPerformance,
     AgentProfile,
     AgentRegistry,
+    AgentRouter,
+    AgentTask,
     CausalErrorRecovery,
+    CollaborationCoordinator,
     DocumentationType,
+    StrategyPlanner,
     WorkflowDocumentation,
     WorkflowDocumenter,
     WorkflowMemory,
+    WorkflowPlan,
     WorkflowPlanner,
+    WorkflowRunner,
     get_recovery_recommender,
 )
 from orchestration.causal_error_analyzer import (  # noqa: F401 (GH #6816)

@@ -3,25 +3,29 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Workflow Execution Primitives  (#7379 boundary)
+Unified Orchestration Package  (#7379 boundary, #10666 B3 consolidation)
 
-BOUNDARY: this package owns single-workflow execution building blocks.
-Use it when you need to BUILD or RUN a single workflow.
-
-The sibling `enhanced_orchestration/` package owns multi-agent coordination
-(strategy selection, agent routing, Redis pub/sub collaboration, subagent
-dispatch). New multi-agent features go there; new single-workflow primitives
-go here.
-
-Issue #381: Extracted from enhanced_orchestrator.py god class refactoring.
-Provides agent orchestration, workflow planning, and auto-documentation.
+Issue #10666 Batch B3: enhanced_orchestration/ merged INTO orchestration/.
+This is now the single package for ALL orchestration concerns — both
+single-workflow execution primitives AND multi-agent coordination.
 
 This package contains:
-- types: Enums and dataclasses for workflow plans, steps, and agents
+- types: Enums and dataclasses (AgentCapability, AgentPerformance,
+  AgentTask/WorkflowTask alias, WorkflowPlan with structured_criteria,
+  WorkflowDependencies, FALLBACK_TIERS, ...)
 - agent_registry: Agent registration and management
+- agent_router: TaskAgentScorer / AgentRouter — workflow-task scoring (#6819)
 - workflow_planner: Map capability requirements to available agents
+- workflow_planning: StrategyPlanner — multi-agent strategy & plan building
+- workflow_runner: WorkflowRunner — multi-agent execution engine (#5058)
 - workflow_executor: Execute a single workflow step by step
 - workflow_documentation: Auto-documentation and knowledge extraction
+- collaboration_coordinator: Redis pub/sub collaboration layer (#6393)
+- subagent_dispatcher: Autonomous subagent spawning for parallel workstreams
+- blocked_plan_resumer: Recovery for stalled multi-agent plans (#7431)
+- execution_strategies/: Strategy implementations (sequential/parallel/
+  pipeline/collaborative/adaptive) — ExecutionStrategyHandler dispatcher
+- success_criteria: Structured success criteria evaluation (#3293)
 - dag_executor: DAG-based execution with condition/branch routing (#2140)
 - graph_runner: Unified graph model (AutoBotGraph, GraphRunner) (#3228)
 - error_handler: Step-level error handling and checkpointing (#2154)
@@ -34,12 +38,17 @@ This package contains:
 - performance_tracker: Timing and cost metrics for workflow runs (#5058)
 """
 
+from autobot_shared.workflow import ExecutionStrategy
+
 from .agent_registry import AgentRegistry, get_default_agents
+from .agent_router import AgentRouter, TaskAgentScorer
+from .blocked_plan_resumer import BlockedPlanResumer
 from .causal_error_recovery import CausalErrorRecovery, RecoveryPlan, get_recovery_recommender
 from .causal_executor import CausalExecutor
 
 # GH #6816: causal subsystem — wired as recoverable execution mode in StepErrorHandler
 from .causal_models import CausalMetadata, EffectTrace
+from .collaboration_coordinator import CollaborationCoordinator
 from .dag_executor import (
     DAGExecutor,
     NodeType,
@@ -63,6 +72,7 @@ from .execution_modes import (
     ExecutionMode,
     StepPlan,
 )
+from .execution_strategies import ExecutionStrategyHandler
 from .graph_runner import (
     END,
     START,
@@ -83,12 +93,23 @@ from .sub_workflow import (
     extract_sub_workflow_step,
     is_sub_workflow_step,
 )
-from .success_criteria import SuccessCriteriaEvaluator  # noqa: F401
+from .subagent_dispatcher import SubagentDispatcher, SubagentTask, get_subagent_dispatcher
+from .success_criteria import (  # noqa: F401
+    CriteriaResult,
+    EvaluationResult,
+    SuccessCriteria,
+    SuccessCriteriaEvaluator,
+    SuccessCriteriaType,
+)
 from .types import (
+    FALLBACK_TIERS,
     AgentCapability,
     AgentInteraction,
+    AgentPerformance,
     AgentProfile,
+    AgentTask,
     DocumentationType,
+    WorkflowDependencies,
     WorkflowDocumentation,
     WorkflowPlan,
     WorkflowStep,
@@ -98,24 +119,45 @@ from .workflow_documentation import WorkflowDocumenter
 from .workflow_executor import WorkflowExecutor
 from .workflow_memory import WorkflowMemory
 from .workflow_planner import WorkflowPlanner
+from .workflow_planning import StrategyPlanner
+from .workflow_runner import WorkflowRunner
 
 __all__ = [
-    # Types and dataclasses
+    # Canonical strategy enum (re-exported from autobot_shared.workflow for convenience)
+    "ExecutionStrategy",
+    # Types and dataclasses (single-workflow)
     "AgentCapability",
     "AgentInteraction",
+    "AgentPerformance",
     "AgentProfile",
     "DocumentationType",
     "WorkflowDocumentation",
     "WorkflowPlan",
     "WorkflowStep",
+    # Multi-agent types (folded in from enhanced_orchestration #10666 B3)
+    "FALLBACK_TIERS",
+    "AgentTask",
+    "WorkflowDependencies",
     # Agent management
     "AgentRegistry",
     "get_default_agents",
-    # Workflow components
+    # Agent routing / scoring (#6819)
+    "TaskAgentScorer",
+    "AgentRouter",
+    # Workflow components (single-workflow)
     "WorkflowDocumenter",
     "WorkflowExecutor",
     "WorkflowMemory",
     "WorkflowPlanner",
+    # Multi-agent coordination (folded in from enhanced_orchestration #10666 B3)
+    "StrategyPlanner",
+    "WorkflowRunner",
+    "CollaborationCoordinator",
+    "SubagentDispatcher",
+    "SubagentTask",
+    "get_subagent_dispatcher",
+    "BlockedPlanResumer",
+    "ExecutionStrategyHandler",
     # Unified graph model (#3228)
     "END",
     "START",
@@ -161,7 +203,11 @@ __all__ = [
     "StepPlan",
     # Performance tracking (#5058)
     "PerformanceTracker",
-    # Success criteria evaluation (GH #6832)
+    # Success criteria evaluation (GH #3293/#6832)
+    "SuccessCriteriaType",
+    "SuccessCriteria",
+    "CriteriaResult",
+    "EvaluationResult",
     "SuccessCriteriaEvaluator",
     # Causal DAG execution and error recovery (GH #6816)
     "CausalExecutor",
