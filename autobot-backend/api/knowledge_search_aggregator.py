@@ -32,7 +32,7 @@ from api.schemas_knowledge import (
     KnowledgeUnifiedGraphResponse,
     KnowledgeUnifiedSearchResponse,
     KnowledgeUnifiedStatsResponse,
-    UnifiedSearchRequest,
+    SearchRequest,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -323,7 +323,7 @@ def _search_documentation(query: str, doc_results_count: int, score_threshold: f
     operation="unified_search",
     error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
-async def unified_search(req: Request, body: UnifiedSearchRequest):
+async def unified_search(req: Request, body: SearchRequest):
     """
     Search across all knowledge sources in a unified query.
 
@@ -344,7 +344,7 @@ async def unified_search(req: Request, body: UnifiedSearchRequest):
 
     # Search facts (Issue #620: uses helper)
     if "facts" in body.include_sources and kb is not None:
-        await _search_facts(kb, body.query, body.top_k, result)
+        await _search_facts(kb, body.query, body.limit, result)
 
     # Expand with relations (Issue #620: uses helper)
     if "relations" in body.include_sources and body.expand_relations and kb is not None:
@@ -352,7 +352,7 @@ async def unified_search(req: Request, body: UnifiedSearchRequest):
 
     # Search documentation (Issue #620: uses helper)
     if "documentation" in body.include_sources and body.doc_results > 0:
-        _search_documentation(body.query, body.doc_results, body.score_threshold, result)
+        _search_documentation(body.query, body.doc_results, body.min_score, result)
 
     # Calculate totals
     result["total_results"] = len(result["facts"]) + len(result["related_facts"]) + len(result["documentation"])

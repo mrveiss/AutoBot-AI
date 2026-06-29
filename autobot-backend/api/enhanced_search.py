@@ -17,14 +17,14 @@ from fastapi import APIRouter, HTTPException
 from ai_hardware_accelerator import HardwareDevice
 from api.schemas_knowledge import (
     BenchmarkRequest,
-    EnhancedSearchBenchmarkResponse,
-    EnhancedSearchConnectivityResponse,
-    EnhancedSearchHardwareStatusResponse,
-    EnhancedSearchOptimizeResponse,
-    EnhancedSearchPerformanceAnalyticsResponse,
     NPUOptimizationRequest,
     NPUSearchRequest,
     NPUSearchResponse,
+    SearchBenchmarkResponse,
+    SearchConnectivityResponse,
+    SearchHardwareStatusResponse,
+    SearchOptimizeResponse,
+    SearchPerformanceAnalyticsResponse,
 )
 from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -155,7 +155,7 @@ async def enhanced_semantic_search(request: NPUSearchRequest):
         raise HTTPException(status_code=500, detail="Search failed")
 
 
-@router.get("/hardware/status", response_model=EnhancedSearchHardwareStatusResponse)
+@router.get("/hardware/status", response_model=SearchHardwareStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_hardware_status",
@@ -184,7 +184,7 @@ async def get_hardware_status():
         raise HTTPException(status_code=500, detail="Failed to get hardware status")
 
 
-@router.post("/benchmark", response_model=EnhancedSearchBenchmarkResponse)
+@router.post("/benchmark", response_model=SearchBenchmarkResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="benchmark_search_performance",
@@ -215,7 +215,7 @@ async def benchmark_search_performance(request: BenchmarkRequest):
         raise HTTPException(status_code=500, detail="Benchmark failed")
 
 
-@router.post("/optimize", response_model=EnhancedSearchOptimizeResponse)
+@router.post("/optimize", response_model=SearchOptimizeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="optimize_search_engine",
@@ -247,7 +247,7 @@ async def optimize_search_engine(request: NPUOptimizationRequest):
         raise HTTPException(status_code=500, detail="Optimization failed")
 
 
-@router.get("/performance/analytics", response_model=EnhancedSearchPerformanceAnalyticsResponse)
+@router.get("/performance/analytics", response_model=SearchPerformanceAnalyticsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_analytics",
@@ -291,7 +291,7 @@ async def get_performance_analytics():
         raise HTTPException(status_code=500, detail="Failed to get performance analytics")
 
 
-@router.get("/test/connectivity", response_model=EnhancedSearchConnectivityResponse)
+@router.get("/test/connectivity", response_model=SearchConnectivityResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_npu_connectivity",
