@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Unified audit service — single taxonomy for all audit categories (#6475).
+"""Canonical audit service — single taxonomy for all audit categories (#6475).
 
 Three prior log modules (services/event_log.py, services/audit/audit_log.py,
 knowledge/audit_log.py) each stored overlapping data in separate Redis keys.
@@ -10,7 +10,7 @@ This module provides one canonical surface; the three originals forward to it
 via shim helpers defined at the bottom of each legacy file.
 
 Migration plan:
-  Phase 1 (done):   unified_audit.py landed; legacy files have shim wrappers.
+  Phase 1 (done):   audit.py landed; legacy files have shim wrappers.
   Phase 2 (GH#8290): Callers migrated area-by-area to import from here.
                      Backwards-compatible bridge symbols are exported so callers
                      only need to update their import line, not their call sites.
@@ -90,7 +90,7 @@ async def record(event: AuditEvent) -> None:
     redis = await get_async_redis_client(database="main")
     if redis is None:
         logger.debug(
-            "unified_audit: Redis unavailable, event dropped: %s/%s",
+            "audit: Redis unavailable, event dropped: %s/%s",
             event.category,
             event.action,
         )
@@ -112,7 +112,7 @@ def emit(event: AuditEvent) -> None:
 
     Safe to call from any sync or async context.
     """
-    run_redis_write(record(event), label="unified_audit")
+    run_redis_write(record(event), label="audit")
 
 
 # Capture the real emit before the Phase-2 bridge shadows the name below.
@@ -334,7 +334,7 @@ def audit_record(
 
 
 class KnowledgeAuditLog(_KnowledgeAuditLog):
-    """Bridge: subclass of ``KnowledgeAuditLog`` that delegates to unified_audit.
+    """Bridge: subclass of ``KnowledgeAuditLog`` that delegates to audit.
 
     Callers that instantiate ``KnowledgeAuditLog(redis_client)`` and call
     ``.log_event()`` continue to work unchanged (GH#8290 Phase 2).

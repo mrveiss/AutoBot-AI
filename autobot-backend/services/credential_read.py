@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Unified-store read path for imported credentials (#10088 / Task 3c-2).
+"""Read path for imported credentials from the envelope store (#10088 / Task 3c-2).
 
-Resolves a credential imported from the legacy SQLite store into the unified envelope
+Resolves a credential imported from the legacy SQLite store into the envelope
 store via the ``imported_from_sqlite`` marker the 3c-1 import stamped, and decrypts it
 through the owner's user vault. Lives in the service layer (not the heavy
 ``knowledge.connectors`` package) so it imports cleanly in the minimal migration-gate
@@ -24,7 +24,7 @@ async def read_imported_credential_in_session(session, secret_id: str, owner_id:
     Matches the legacy SQLite id via the ``imported_from_sqlite`` marker the 3c-1 import
     stamped (scoped to *owner_id* for defence in depth), then decrypts through the owner's
     user vault. Returns a SecretsService-shaped dict (``{"created_by", "value"}``), or
-    ``None`` to fall back to SQLite. Any unified-read failure — not imported, not
+    ``None`` to fall back to SQLite. Any envelope-read failure — not imported, not
     accessible, or a corrupt/partial row — returns ``None`` so the fallback can never be
     fatal while SQLite is still authoritative.
     """
@@ -35,7 +35,7 @@ async def read_imported_credential_in_session(session, secret_id: str, owner_id:
     from autobot_shared.secrets_envelope import DecryptionError, UnsupportedFormatError
     from autobot_shared.secrets_vault import VaultKind, VaultRef
     from models.secret import Secret
-    from services.unified_secrets_service import SecretAccessError, SecretNotFoundError, UnifiedSecretsService
+    from services.envelope_secrets_service import EnvelopeSecretsService, SecretAccessError, SecretNotFoundError
 
     try:
         owner_uuid = uuid.UUID(str(owner_id))
@@ -57,7 +57,7 @@ async def read_imported_credential_in_session(session, secret_id: str, owner_id:
     if row is None:
         return None  # not yet imported → SQLite fallback
     try:
-        plaintext = await UnifiedSecretsService(root_key=root_key).read(
+        plaintext = await EnvelopeSecretsService(root_key=root_key).read(
             session, secret_id=row.id, accessible_vaults={VaultRef(VaultKind.USER, str(owner_id))}
         )
     except (
@@ -69,16 +69,16 @@ async def read_imported_credential_in_session(session, secret_id: str, owner_id:
         ValueError,
     ) as exc:
         logger.warning(
-            "Unified read unusable for imported secret %s (owner %s): %s — falling back", secret_id, owner_id, exc
+            "Envelope read unusable for imported secret %s (owner %s): %s — falling back", secret_id, owner_id, exc
         )
         return None
     return {"created_by": str(owner_id), "value": plaintext.decode("utf-8")}
 
 
 async def load_imported_credential(secret_id: str, owner_id: str) -> dict | None:
-    """Acquire a session and read an imported credential from the unified store.
+    """Acquire a session and read an imported credential from the envelope store.
 
-    Returns ``None`` to fall back to SQLite when the unified store is not configured
+    Returns ``None`` to fall back to SQLite when the envelope store is not configured
     (root key unset) on this deployment. See :func:`read_imported_credential_in_session`.
     """
     from autobot_shared.secrets_envelope import load_root_key
@@ -87,7 +87,7 @@ async def load_imported_credential(secret_id: str, owner_id: str) -> dict | None
     try:
         root_key = load_root_key()
     except RuntimeError:
-        return None  # unified store not configured on this deployment
+        return None  # envelope store not configured on this deployment
 
     factory = get_async_session_factory()
     async with factory() as session:

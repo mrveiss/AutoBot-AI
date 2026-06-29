@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Dual-write mirror of connector credentials into the unified store (#10088 / Task 3c-2).
+"""Dual-write mirror of connector credentials into the envelope store (#10088 / Task 3c-2).
 
 Expand-phase write side of the expand/contract cutover. When dual-write is enabled, every
-ConnectorCredentialStore write also mirrors the credential into the unified envelope store,
+ConnectorCredentialStore write also mirrors the credential into the envelope store,
 keyed by the same ``imported_from_sqlite`` marker the read path resolves. SQLite stays the
 canonical store, so the public helpers are **best-effort**: a mirror failure is logged and
-swallowed (never breaks the canonical SQLite write), and a missing/stale unified copy simply
+swallowed (never breaks the canonical SQLite write), and a missing/stale envelope copy simply
 degrades to the SQLite fallback on read. Lives in the service layer (not the heavy
 ``knowledge.connectors`` package) so it imports cleanly in the minimal migration-gate env.
 """
@@ -44,7 +44,7 @@ async def _find_by_marker(session, sqlite_id: str, owner_uuid):
 async def mirror_in_session(
     session, sqlite_id: str, owner_id: str, value: str, root_key: bytes, *, name=None, secret_type=None
 ) -> None:
-    """Testable core: upsert the unified copy within *session* (caller commits).
+    """Testable core: upsert the envelope copy within *session* (caller commits).
 
     Rotates an existing copy (matched by marker + owner); creates one when absent and
     ``name``/``secret_type`` are supplied (the create paths). Owner not a uuid → no-op.
@@ -52,15 +52,15 @@ async def mirror_in_session(
     import uuid
 
     from autobot_shared.secrets_vault import VaultKind, VaultRef
-    from services.unified_secrets_service import UnifiedSecretsService
+    from services.envelope_secrets_service import EnvelopeSecretsService
 
     try:
         owner_uuid = uuid.UUID(str(owner_id))
     except ValueError:
-        return  # owner isn't a uuid → cannot key a unified row
+        return  # owner isn't a uuid → cannot key an envelope row
 
     vault = VaultRef(VaultKind.USER, str(owner_id))
-    svc = UnifiedSecretsService(root_key=root_key)
+    svc = EnvelopeSecretsService(root_key=root_key)
     row = await _find_by_marker(session, sqlite_id, owner_uuid)
     if row is not None:
         await svc.rotate_value(session, secret_id=row.id, new_plaintext=value.encode("utf-8"), actor_vaults={vault})
@@ -76,14 +76,14 @@ async def mirror_in_session(
         created.extra_data = {_MARKER: str(sqlite_id)}
         await session.flush()
     else:
-        logger.debug("No unified copy for credential %s and no name/type to create one — skipping mirror", sqlite_id)
+        logger.debug("No envelope copy for credential %s and no name/type to create one — skipping mirror", sqlite_id)
 
 
 async def delete_in_session(session, sqlite_id: str, owner_id: str, root_key: bytes) -> None:
-    """Testable core: delete the unified copy within *session* by marker (caller commits)."""
+    """Testable core: delete the envelope copy within *session* by marker (caller commits)."""
     import uuid
 
-    from services.unified_secrets_service import UnifiedSecretsService
+    from services.envelope_secrets_service import EnvelopeSecretsService
 
     try:
         owner_uuid = uuid.UUID(str(owner_id))
@@ -92,7 +92,7 @@ async def delete_in_session(session, sqlite_id: str, owner_id: str, root_key: by
     row = await _find_by_marker(session, sqlite_id, owner_uuid)
     if row is None:
         return
-    await UnifiedSecretsService(root_key=root_key).delete(session, secret_id=row.id)
+    await EnvelopeSecretsService(root_key=root_key).delete(session, secret_id=row.id)
 
 
 def _root_key_or_none():
@@ -101,13 +101,13 @@ def _root_key_or_none():
     try:
         return load_root_key()
     except RuntimeError:
-        return None  # unified store not configured on this deployment
+        return None  # envelope store not configured on this deployment
 
 
 async def mirror_credential_to_unified(
     sqlite_id: str, owner_id: str, value: str, *, name=None, secret_type=None
 ) -> None:
-    """Best-effort upsert of a credential's unified copy. Never raises."""
+    """Best-effort upsert of a credential's envelope copy. Never raises."""
     try:
         root_key = _root_key_or_none()
         if root_key is None:
@@ -118,15 +118,15 @@ async def mirror_credential_to_unified(
             await mirror_in_session(session, sqlite_id, owner_id, value, root_key, name=name, secret_type=secret_type)
             await session.commit()
     except Exception as exc:  # dual-write must never break the canonical SQLite write
-        logger.warning("Unified mirror failed for credential %s (owner %s): %s", sqlite_id, owner_id, exc)
+        logger.warning("Envelope mirror failed for credential %s (owner %s): %s", sqlite_id, owner_id, exc)
 
 
 async def delete_credential_from_unified(sqlite_id: str, owner_id: str) -> None:
-    """Best-effort delete of a credential's unified copy by marker. Never raises.
+    """Best-effort delete of a credential's envelope copy by marker. Never raises.
 
-    Logged at ERROR (not WARNING): a swallowed delete leaves an active unified copy of a
+    Logged at ERROR (not WARNING): a swallowed delete leaves an active envelope copy of a
     credential already revoked in SQLite, which read-first would serve — see #10088 (the
-    revoke-resurrection gate that must be closed before the unified read flag is enabled).
+    revoke-resurrection gate that must be closed before the envelope read flag is enabled).
     """
     try:
         root_key = _root_key_or_none()
@@ -138,4 +138,4 @@ async def delete_credential_from_unified(sqlite_id: str, owner_id: str) -> None:
             await delete_in_session(session, sqlite_id, owner_id, root_key)
             await session.commit()
     except Exception as exc:  # never break the canonical revoke; surface loudly for reconciliation
-        logger.error("Unified delete failed for credential %s (owner %s): %s", sqlite_id, owner_id, exc)
+        logger.error("Envelope delete failed for credential %s (owner %s): %s", sqlite_id, owner_id, exc)
