@@ -793,9 +793,12 @@ class NPUWorkerManager(AsyncInitializable):
     def _build_worker_metrics(self, worker_id: str, status: NPUWorkerStatus) -> NPUWorkerMetrics:
         """Derive per-worker metrics from heartbeat-reported counters (#10697).
 
-        success_rate / requests_per_minute / peak_load are computed from the
-        heartbeat's task counters + uptime. avg_response_time_ms needs per-worker
-        latency aggregation (follow-up) and is left at its default.
+        success_rate is computed from the heartbeat's task counters. Caveats
+        (refinements tracked as follow-ups): requests_per_minute is a lifetime
+        average (completed/uptime), not a recent/windowed rate; peak_load is the
+        current load sample at heartbeat time, not a true max-observed; and
+        avg_response_time_ms needs per-worker latency aggregation (#10698) so is
+        left at its default.
         """
         completed = getattr(status, "total_tasks_completed", 0) or 0
         failed = getattr(status, "total_tasks_failed", 0) or 0
