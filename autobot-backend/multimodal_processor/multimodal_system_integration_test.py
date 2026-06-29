@@ -39,7 +39,7 @@ class TestUnifiedMultiModalSystem:
         return config
 
     @pytest.fixture
-    def unified_processor(self, mock_config):
+    def processor(self, mock_config):
         """Create unified processor with mocked config"""
         with patch(
             "multimodal_processor.processors.vision.get_config_section",
@@ -48,7 +48,7 @@ class TestUnifiedMultiModalSystem:
             return UnifiedMultiModalProcessor()
 
     @pytest.mark.asyncio
-    async def test_image_processing_workflow(self, unified_processor):
+    async def test_image_processing_workflow(self, processor):
         """Test complete image processing workflow"""
         # Create image input
         image_input = MultiModalInput(
@@ -60,7 +60,7 @@ class TestUnifiedMultiModalSystem:
         )
 
         # Mock vision processor to return test results
-        with patch.object(unified_processor.vision_processor, "process", new_callable=AsyncMock) as mock_process:
+        with patch.object(processor.vision_processor, "process", new_callable=AsyncMock) as mock_process:
             mock_result = Mock()
             mock_result.result_id = "vision_test_image_001"
             mock_result.input_id = "test_image_001"
@@ -78,7 +78,7 @@ class TestUnifiedMultiModalSystem:
             mock_process.return_value = mock_result
 
             # Process the input
-            result = await unified_processor.process(image_input)
+            result = await processor.process(image_input)
 
             # Verify processing
             assert result.success is True
@@ -91,7 +91,7 @@ class TestUnifiedMultiModalSystem:
             mock_process.assert_called_once_with(image_input)
 
     @pytest.mark.asyncio
-    async def test_audio_processing_workflow(self, unified_processor):
+    async def test_audio_processing_workflow(self, processor):
         """Test complete audio processing workflow"""
         # Create audio input
         audio_input = MultiModalInput(
@@ -103,7 +103,7 @@ class TestUnifiedMultiModalSystem:
         )
 
         # Mock voice processor
-        with patch.object(unified_processor.voice_processor, "process", new_callable=AsyncMock) as mock_process:
+        with patch.object(processor.voice_processor, "process", new_callable=AsyncMock) as mock_process:
             mock_result = Mock()
             mock_result.result_id = "voice_test_audio_001"
             mock_result.input_id = "test_audio_001"
@@ -121,7 +121,7 @@ class TestUnifiedMultiModalSystem:
             mock_process.return_value = mock_result
 
             # Process the input
-            result = await unified_processor.process(audio_input)
+            result = await processor.process(audio_input)
 
             # Verify processing
             assert result.success is True
@@ -132,7 +132,7 @@ class TestUnifiedMultiModalSystem:
             mock_process.assert_called_once_with(audio_input)
 
     @pytest.mark.asyncio
-    async def test_combined_modality_processing(self, unified_processor):
+    async def test_combined_modality_processing(self, processor):
         """Test processing of combined multi-modal input"""
         # Create combined input
         combined_input = MultiModalInput(
@@ -159,20 +159,20 @@ class TestUnifiedMultiModalSystem:
 
         with (
             patch.object(
-                unified_processor.vision_processor,
+                processor.vision_processor,
                 "process",
                 new_callable=AsyncMock,
                 return_value=vision_result,
             ),
             patch.object(
-                unified_processor.voice_processor,
+                processor.voice_processor,
                 "process",
                 new_callable=AsyncMock,
                 return_value=voice_result,
             ),
         ):
             # Process combined input
-            result = await unified_processor.process(combined_input)
+            result = await processor.process(combined_input)
 
             # Verify combined processing
             assert result.success is True
@@ -183,7 +183,7 @@ class TestUnifiedMultiModalSystem:
             assert result.result_data["confidence"] == 0.85  # Average of 0.8 and 0.9
 
     @pytest.mark.asyncio
-    async def test_processing_error_handling(self, unified_processor):
+    async def test_processing_error_handling(self, processor):
         """Test error handling in processing workflow"""
         # Create input that will cause an error
         error_input = MultiModalInput(
@@ -195,22 +195,22 @@ class TestUnifiedMultiModalSystem:
 
         # Mock processor to raise exception
         with patch.object(
-            unified_processor.vision_processor,
+            processor.vision_processor,
             "process",
             side_effect=Exception("Processing failed"),
         ):
             # Process should handle error gracefully
-            result = await unified_processor.process(error_input)
+            result = await processor.process(error_input)
 
             # Verify error handling
             assert result.success is False
             assert result.error_message == "Multi-modal processing failed: Processing failed"
             assert result.confidence == 0.0
 
-    def test_statistics_tracking(self, unified_processor):
+    def test_statistics_tracking(self, processor):
         """Test that processing statistics are tracked correctly"""
         # Initial stats should be empty
-        initial_stats = unified_processor.get_stats()
+        initial_stats = processor.get_stats()
         assert initial_stats["total_processed"] == 0
         assert initial_stats["successful_processed"] == 0
         assert initial_stats["failed_processed"] == 0
@@ -220,11 +220,11 @@ class TestUnifiedMultiModalSystem:
         error_result = Mock(success=False, modality_type=ModalityType.AUDIO, processing_time=0.5)
 
         # Update stats
-        unified_processor._update_stats(success_result)
-        unified_processor._update_stats(error_result)
+        processor._update_stats(success_result)
+        processor._update_stats(error_result)
 
         # Check updated stats
-        stats = unified_processor.get_stats()
+        stats = processor.get_stats()
         assert stats["total_processed"] == 2
         assert stats["successful_processed"] == 1
         assert stats["failed_processed"] == 1
@@ -232,27 +232,27 @@ class TestUnifiedMultiModalSystem:
         assert stats["modality_counts"]["image"] == 1
         assert stats["modality_counts"]["audio"] == 1
 
-    def test_stats_reset(self, unified_processor):
+    def test_stats_reset(self, processor):
         """Test statistics reset functionality"""
         # Add some stats
         mock_result = Mock(success=True, modality_type=ModalityType.TEXT, processing_time=2.0)
-        unified_processor._update_stats(mock_result)
+        processor._update_stats(mock_result)
 
         # Verify stats exist
-        stats = unified_processor.get_stats()
+        stats = processor.get_stats()
         assert stats["total_processed"] == 1
 
         # Reset stats
-        unified_processor.reset_stats()
+        processor.reset_stats()
 
         # Verify stats are reset
-        stats = unified_processor.get_stats()
+        stats = processor.get_stats()
         assert stats["total_processed"] == 0
         assert stats["successful_processed"] == 0
         assert stats["avg_processing_time"] == 0.0
 
     @pytest.mark.asyncio
-    async def test_memory_storage_integration(self, unified_processor):
+    async def test_memory_storage_integration(self, processor):
         """Test integration with memory manager for result storage"""
         # Create test input
         test_input = MultiModalInput(
@@ -264,8 +264,8 @@ class TestUnifiedMultiModalSystem:
 
         # Mock context processor and memory manager
         with (
-            patch.object(unified_processor.context_processor, "process", new_callable=AsyncMock) as mock_process,
-            patch.object(unified_processor.memory_manager, "store_task", new_callable=AsyncMock) as mock_store,
+            patch.object(processor.context_processor, "process", new_callable=AsyncMock) as mock_process,
+            patch.object(processor.memory_manager, "store_task", new_callable=AsyncMock) as mock_store,
         ):
             mock_result = Mock(
                 result_id="context_test_memory_001",
@@ -282,7 +282,7 @@ class TestUnifiedMultiModalSystem:
             mock_process.return_value = mock_result
 
             # Process input
-            await unified_processor.process(test_input)
+            await processor.process(test_input)
 
             # Verify result storage was attempted
             mock_store.assert_called_once()

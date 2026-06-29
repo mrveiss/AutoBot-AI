@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
-from .base_adapter import BaseAdapter, NormalizedResponse, UnifiedMessage
+from .base_adapter import BaseAdapter, GatewayMessage, NormalizedResponse
 
 logger = get_logger(__name__)
 
@@ -19,13 +19,13 @@ class TeamsAdapter(BaseAdapter):
     def __init__(self) -> None:
         super().__init__("teams")
 
-    async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:
+    async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
         """Convert Teams message to unified schema."""
         metadata = await self.extract_metadata(raw_message)
         metadata["message_id"] = raw_message.get("id")
         metadata["reply_to_id"] = raw_message.get("replyToId")
 
-        return UnifiedMessage(
+        return GatewayMessage(
             user_id=raw_message["from"]["id"],
             platform="teams",
             channel_id=raw_message["channelData"]["channel"]["id"],

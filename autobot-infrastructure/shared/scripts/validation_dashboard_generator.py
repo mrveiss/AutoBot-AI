@@ -21,7 +21,7 @@ from typing import Any, Dict, List
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from enhanced_project_state_tracker import get_state_tracker
+from project_state_tracker import get_state_tracker
 from phase_progression_manager import get_progression_manager
 from scripts.phase_validation_system import PhaseValidator
 from utils.html_dashboard_utils import create_dashboard_header, get_light_theme_css

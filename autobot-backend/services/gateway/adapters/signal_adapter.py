@@ -15,7 +15,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
-from .base_adapter import BaseAdapter, NormalizedResponse, UnifiedMessage
+from .base_adapter import BaseAdapter, GatewayMessage, NormalizedResponse
 
 logger = get_logger(__name__)
 
@@ -36,7 +36,7 @@ class SignalAdapter(BaseAdapter):
         if not self._enabled:
             logger.info("SignalAdapter loaded but AUTOBOT_SIGNAL_ENABLED is not set — outbound sends disabled")
 
-    async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:
+    async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
         """Convert signal-cli envelope/semaphore webhook to unified schema."""
         metadata = await self.extract_metadata(raw_message)
 
@@ -53,7 +53,7 @@ class SignalAdapter(BaseAdapter):
 
         channel_id = group_info.get("groupId") or source
 
-        return UnifiedMessage(
+        return GatewayMessage(
             user_id=source,
             platform="signal",
             channel_id=channel_id,

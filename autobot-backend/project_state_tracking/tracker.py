@@ -76,11 +76,11 @@ except ImportError:
 logger = get_logger(__name__)
 
 
-class EnhancedProjectStateTracker:
-    """Enhanced tracking system for comprehensive project state management."""
+class ProjectStateTracker:
+    """Tracking system for comprehensive project state management."""
 
     def __init__(self, db_path: str = "data/project_state_tracking.db"):
-        """Initialize enhanced project state tracker with database and validators."""
+        """Initialize project state tracker with database and validators."""
         self.db_path = db_path
         # Use centralized PathConstants (Issue #380)
         self.project_root = PATH.PROJECT_ROOT
@@ -546,9 +546,9 @@ class EnhancedProjectStateTracker:
 
 
 # Global instance (thread-safe)
-_state_tracker = lazy_singleton(EnhancedProjectStateTracker)
+_state_tracker = lazy_singleton(ProjectStateTracker)
 
 
-def get_state_tracker() -> EnhancedProjectStateTracker:
+def get_state_tracker() -> ProjectStateTracker:
     """Get singleton instance of state tracker (thread-safe)."""
     return _state_tracker()
