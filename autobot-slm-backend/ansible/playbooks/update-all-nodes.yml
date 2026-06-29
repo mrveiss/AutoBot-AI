@@ -668,7 +668,9 @@
 
     - name: "[PLAY 2] Backend | Wait for API to be ready"
       uri:
-        url: "https://{{ ansible_host }}:8443/api/health"
+        # Backend serves via nginx on 443 (and uvicorn on 8001); there is no
+        # 8443 listener — probe the nginx-proxied endpoint like the SLM does.
+        url: "https://{{ ansible_host }}/api/health"
         validate_certs: false
         status_code: 200
       register: backend_health_check
