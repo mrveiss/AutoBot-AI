@@ -202,7 +202,7 @@ class MonitoringAndAlertingTester:
                 "backend_monitoring",
                 get_test_backend_url() + "/api/monitoring/services",
             ),
-            ("ollama", "http://127.0.0.1:11434/api/tags"),
+            ("ollama", "http://127.0.0.1:11434/api/tags"),  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         ]
 
         for service_name, endpoint in health_endpoints:

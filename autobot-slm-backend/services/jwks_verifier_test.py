@@ -78,7 +78,7 @@ for _name in [
 # Stub config before jwks_verifier imports it
 _config_stub = _types.ModuleType("config")
 _settings_stub = MagicMock()
-_settings_stub.authority_base_url = "http://localhost:8001"
+_settings_stub.authority_base_url = "http://localhost:8001"  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 _settings_stub.authority_jwks_path = "/.well-known/jwks.json"
 _settings_stub.jwks_cache_ttl_seconds = 3600
 _settings_stub.jwks_fetch_timeout_seconds = 10.0

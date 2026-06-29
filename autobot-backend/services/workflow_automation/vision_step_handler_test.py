@@ -145,7 +145,7 @@ class TestExecuteVisionStep:
             result = await execute_vision_step(
                 "vision-capture",
                 {"target": "vnc"},
-                backend_url="https://localhost:8443",
+                backend_url="https://localhost:8443",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
             )
 
         assert result["success"] is True
@@ -159,7 +159,7 @@ class TestExecuteVisionStep:
         result = await execute_vision_step(
             "vision-click",
             {"target": "web"},
-            backend_url="https://localhost:8443",
+            backend_url="https://localhost:8443",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         )
         assert result["success"] is False
         assert "browser_session_id" in result["result"]
@@ -176,7 +176,7 @@ class TestExecuteVisionStep:
             result = await execute_vision_step(
                 "vision-ocr",
                 {"target": "vnc"},
-                backend_url="https://localhost:8443",
+                backend_url="https://localhost:8443",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
             )
 
         assert result["success"] is False
@@ -262,7 +262,7 @@ class TestWebOcrPipeline:
                     "browser_session_id": "sess-1",
                     "region": [0, 0, 100, 100],
                 },
-                backend_url="https://localhost:8443",
+                backend_url="https://localhost:8443",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
             )
 
         assert result["success"] is True

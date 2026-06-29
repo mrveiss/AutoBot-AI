@@ -320,7 +320,7 @@ class TestCustomOpenAIProviderMetadata:
     @pytest.mark.asyncio
     async def test_provider_metadata_populated(self):
         provider = CustomOpenAIProvider(
-            settings={"base_url": "http://localhost:8000/v1", "default_model": "local-model"}
+            settings={"base_url": "http://localhost:8000/v1", "default_model": "local-model"}  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         )
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=_make_custom_response("Hello from local!"))

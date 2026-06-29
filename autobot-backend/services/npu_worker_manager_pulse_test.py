@@ -30,7 +30,7 @@ def _make_worker_config(worker_id: str = "test-worker-1") -> NPUWorkerConfig:
     return NPUWorkerConfig(
         id=worker_id,
         name="Test Worker",
-        url="http://127.0.0.1:8099",
+        url="http://127.0.0.1:8099",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         enabled=True,
         priority=5,
     )

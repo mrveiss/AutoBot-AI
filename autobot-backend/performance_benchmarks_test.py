@@ -192,7 +192,7 @@ class TestKnowledgeBasePerformance:
                         "provider": "ollama",
                         "providers": {
                             "ollama": {
-                                "host": "http://localhost:11434",
+                                "host": "http://localhost:11434",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                                 "selected_model": "nomic-embed-text",
                             }
                         },

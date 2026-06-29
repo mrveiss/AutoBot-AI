@@ -159,7 +159,7 @@ async def test_container_discovery():
     logger.info("=== Testing Container Discovery ===")
 
     try:
-        config = AgentClientConfig({"container_base_url": "http://localhost:8080"})
+        config = AgentClientConfig({"container_base_url": "http://localhost:8080"})  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
         client = AgentClient(config)
         await client.initialize()

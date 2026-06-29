@@ -158,7 +158,7 @@ class TestEmitFullPromptReady:
         get_extension_manager().register(watcher)
 
         original = "System prompt\n\nUser: hello\n\nAssistant:"
-        llm_params = {"model": "llama3", "endpoint": "http://localhost:11434/api/generate"}
+        llm_params = {"model": "llama3", "endpoint": "http://localhost:11434/api/generate"}  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         context = {"session_id": "sess-abc", "message": "hello"}
 
         await _emit_full_prompt_ready(original, llm_params, context)

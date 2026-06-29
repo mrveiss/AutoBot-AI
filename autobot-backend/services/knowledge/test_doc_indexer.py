@@ -43,7 +43,7 @@ def _make_stub(name: str) -> types.ModuleType:
 
 # autobot_shared.ssot_config — only get_ollama_url is used at module level
 _ssot = _make_stub("autobot_shared.ssot_config")
-_ssot.get_ollama_url = lambda: "http://localhost:11434"  # type: ignore[attr-defined]
+_ssot.get_ollama_url = lambda: "http://localhost:11434"  # type: ignore[attr-defined]  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
 # constants.path_constants — PATH.DATA_DIR and PATH.PROJECT_ROOT must be real Paths
 _constants = _make_stub("constants")

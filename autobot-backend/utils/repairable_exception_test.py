@@ -226,7 +226,7 @@ class TestErrorClassification:
 
         handler = ToolHandlerMixin()
         result = handler._classify_command_error(
-            command="curl http://localhost:9999", error="Connection refused", stderr=""
+            command="curl http://localhost:9999", error="Connection refused", stderr=""  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         )
         assert result is not None
         assert isinstance(result, RepairableException)
