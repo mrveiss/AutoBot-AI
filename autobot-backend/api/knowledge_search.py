@@ -574,8 +574,9 @@ async def search(request: SearchRequest, req: Request):
     if request.enable_rag and RAG_AVAILABLE:
         return await _consolidated_rag_search(request, kb_to_use)
 
-    # Path 2: Enhanced search with tags/filtering/v2 options
-    if request.tags or request.min_score > 0 or hasattr(kb_to_use, "enhanced_search") or request.uses_v2_features():
+    # Path 2: Enhanced search with tags/filtering/advanced options
+    has_enhanced = hasattr(kb_to_use, "enhanced_search")
+    if request.tags or request.min_score > 0 or has_enhanced or request.uses_advanced_features():
         return await _consolidated_enhanced_search(request, kb_to_use)
 
     # Path 3: Basic search (Issue #665: uses helper)
@@ -586,15 +587,15 @@ async def _consolidated_enhanced_search(request: SearchRequest, kb_to_use) -> di
     """
     Handle enhanced search path for consolidated endpoint (#555, #10666).
 
-    Dispatches to enhanced_search_v2 when v2 params are set (folded from
+    Dispatches to enhanced_search_v2 when advanced params are set (folded from
     former /enhanced_search_v2 route — #10666).  Falls back to enhanced_search
     or basic search + filtering when those KB methods are unavailable.
     """
     kb_class_name = kb_to_use.__class__.__name__
 
-    # Dispatch to enhanced_search_v2 when v2-specific features are requested (#10666)
-    if request.uses_v2_features() and hasattr(kb_to_use, "enhanced_search_v2"):
-        return await kb_to_use.enhanced_search_v2(**request.to_v2_params())
+    # Dispatch to enhanced_search_v2 when advanced features are requested (#10666)
+    if request.uses_advanced_features() and hasattr(kb_to_use, "enhanced_search_v2"):
+        return await kb_to_use.enhanced_search_v2(**request.to_advanced_params())
 
     # Use enhanced_search if available
     if hasattr(kb_to_use, "enhanced_search"):
