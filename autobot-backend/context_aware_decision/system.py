@@ -18,7 +18,7 @@ import numpy as np
 
 from autobot_shared.logging_manager import get_logger
 from memory import TaskPriority  # canonical enum (#10626)
-from memory import UnifiedMemoryManager
+from memory import MemoryManager
 from task_execution_tracker import get_task_tracker
 
 from .collectors import ContextCollector
@@ -33,9 +33,9 @@ logger = get_logger(__name__)
 class ContextAwareDecisionSystem:
     """Main context-aware decision making system."""
 
-    def __init__(self, memory_manager: UnifiedMemoryManager | None = None):
+    def __init__(self, memory_manager: MemoryManager | None = None):
         """Initialize decision system with memory manager, collector, and engine."""
-        self.memory_manager = memory_manager or UnifiedMemoryManager()
+        self.memory_manager = memory_manager or MemoryManager()
         self.context_collector = ContextCollector()
         self.decision_engine = DecisionEngine()
         self.time_provider = TimeProvider()

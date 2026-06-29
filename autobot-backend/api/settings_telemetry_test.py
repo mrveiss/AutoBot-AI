@@ -5,8 +5,8 @@
 """Tests for POST/GET /api/settings/telemetry (Issue #9035, #10000).
 
 Covers:
-  - POST returns 200 with Postgres available (session present)
-  - POST returns 200 without Postgres (single_user mode, session=None) — bug fixed by #10000
+  - POST returns 200 with a DB session present
+  - POST returns 200 when the optional session is None (defensive guard) — #10000
   - Audit trail is called when session is present, skipped when None
   - GET returns 200 and correct field values
 
@@ -38,7 +38,7 @@ async def _session_present():
 
 
 async def _session_absent():
-    """Stub for get_optional_db_session: yields None (single_user mode)."""
+    """Stub for get_optional_db_session: yields None (defensive-guard path)."""
     yield None
 
 
@@ -166,20 +166,19 @@ class TestPostTelemetryWithPostgres:
 
 
 # ---------------------------------------------------------------------------
-# POST /api/settings/telemetry — without Postgres (single_user) — Issue #10000
+# POST /api/settings/telemetry — optional session is None (defensive) — #10000
 # ---------------------------------------------------------------------------
 
 
-class TestPostTelemetrySingleUserMode:
-    """In single_user mode get_optional_db_session yields None.
+class TestPostTelemetryNoSession:
+    """When get_optional_db_session yields None the endpoint must still save.
 
-    The endpoint must save the config and return 200 without touching the DB.
-    Before the #10000 fix this path raised HTTP 503 because the endpoint used
-    get_db_session which hard-raises 503 in single_user mode.
+    The endpoint saves the config and returns 200 without touching the DB,
+    guarding its audit-trail write with ``if session is not None`` (#10000).
     """
 
     def test_returns_200_without_postgres(self):
-        """POST /api/settings/telemetry succeeds with session=None (single_user)."""
+        """POST /api/settings/telemetry succeeds with session=None."""
         app = _make_app(with_session=False)
 
         fake_cfg = {"telemetry": {"enabled": True, "anonymous_usage_stats": True, "first_run_prompt_shown": False}}

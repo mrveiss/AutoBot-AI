@@ -116,8 +116,8 @@ async def _keepalive_loop(ws: WebSocket, stop_event: asyncio.Event) -> None:
 )
 async def live_events_endpoint(websocket: WebSocket):
     """WebSocket endpoint for scoped real-time event streaming (#1408)."""
-    # #9963: use the canonical WS auth (JWT + single-user-mode bypass), same
-    # as /api/ws — the local raw-JWT check rejected single_user deployments.
+    # #9963: use the canonical WS auth (JWT), same as /api/ws — the local
+    # raw-JWT check was too strict and rejected valid deployments.
     from auth_middleware import authenticate_websocket
 
     user_payload: dict | None = await authenticate_websocket(websocket)

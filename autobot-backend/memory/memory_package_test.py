@@ -4,7 +4,7 @@
 Test Suite for Memory Package (src/memory/).
 
 Tests features including:
-- UnifiedMemoryManager (task execution history, general storage)
+- MemoryManager (task execution history, general storage)
 - LRU caching and monitoring
 - Backward compatibility wrappers
 """
@@ -24,11 +24,11 @@ from memory import (
     LongTermMemoryManager,
     MemoryCategory,
     MemoryEntry,
+    MemoryManager,
     StorageStrategy,
     TaskExecutionRecord,
     TaskPriority,
     TaskStatus,
-    UnifiedMemoryManager,
 )
 
 
@@ -37,7 +37,7 @@ def test_1_import_verification():
     print("\n[TEST 1] Import verification...")  # noqa: print
 
     # Verify classes
-    assert UnifiedMemoryManager is not None
+    assert MemoryManager is not None
     assert LongTermMemoryManager is not None
 
     # Verify enums
@@ -59,7 +59,7 @@ async def test_2_task_execution_logging():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_tasks.db"
-        manager = UnifiedMemoryManager(str(db_path))
+        manager = MemoryManager(str(db_path))
 
         # Create task record
         record = TaskExecutionRecord(
@@ -94,7 +94,7 @@ async def test_3_general_memory_storage():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_memory.db"
-        manager = UnifiedMemoryManager(str(db_path))
+        manager = MemoryManager(str(db_path))
 
         # Store memory entry
         entry_id = await manager.store_memory(
@@ -129,7 +129,7 @@ def test_4_lru_caching():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_cache.db"
-        manager = UnifiedMemoryManager(str(db_path), enable_cache=True)
+        manager = MemoryManager(str(db_path), enable_cache=True)
 
         # Put items in cache
         manager.cache_put("key1", "value1")
@@ -156,7 +156,7 @@ async def test_5_strategy_pattern():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_strategy.db"
-        manager = UnifiedMemoryManager(str(db_path), enable_cache=True)
+        manager = MemoryManager(str(db_path), enable_cache=True)
 
         # Task strategy
         task = TaskExecutionRecord(
@@ -190,14 +190,14 @@ async def test_5_strategy_pattern():
 
 
 def test_6_backward_compatibility_enhanced():
-    """Test 6: UnifiedMemoryManager sync compatibility methods (log_task_execution, log_task_sync)"""
-    print("\n[TEST 6] UnifiedMemoryManager sync-wrapper backward compatibility...")  # noqa: print
+    """Test 6: MemoryManager sync compatibility methods (log_task_execution, log_task_sync)"""
+    print("\n[TEST 6] MemoryManager sync-wrapper backward compatibility...")  # noqa: print
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_enhanced.db"
 
-        # UnifiedMemoryManager carries all sync wrappers formerly on EnhancedMemoryManager
-        manager = UnifiedMemoryManager(str(db_path))
+        # MemoryManager carries all sync wrappers formerly on EnhancedMemoryManager
+        manager = MemoryManager(str(db_path))
         assert manager is not None
 
         # Create task record
@@ -226,7 +226,7 @@ def test_6_backward_compatibility_enhanced():
         task_id2 = manager.log_task_execution(record2)
         assert task_id2 == "bc-002"
 
-    print("✅ PASSED: UnifiedMemoryManager sync-wrapper backward compatibility works")  # noqa: print
+    print("✅ PASSED: MemoryManager sync-wrapper backward compatibility works")  # noqa: print
 
 
 async def test_7_backward_compatibility_longterm():
@@ -261,7 +261,7 @@ def test_8_sync_wrappers():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_sync.db"
-        manager = UnifiedMemoryManager(str(db_path))
+        manager = MemoryManager(str(db_path))
 
         # Test sync wrapper
         record = TaskExecutionRecord(
@@ -286,7 +286,7 @@ async def test_9_statistics():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_stats.db"
-        manager = UnifiedMemoryManager(str(db_path), enable_cache=True)
+        manager = MemoryManager(str(db_path), enable_cache=True)
 
         # Add some data
         task = TaskExecutionRecord(
@@ -321,7 +321,7 @@ def test_10_all_features_preserved():
     """Test 10: Verify all features from 3 managers preserved"""
     print("\n[TEST 10] All features preserved...")  # noqa: print
 
-    manager = UnifiedMemoryManager(enable_cache=True, enable_monitoring=False)
+    manager = MemoryManager(enable_cache=True, enable_monitoring=False)
 
     # Enhanced memory features
     assert hasattr(manager, "log_task")

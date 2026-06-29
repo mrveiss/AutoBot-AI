@@ -3,10 +3,10 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Unified Memory Manager Package - Modularized architecture
+Memory Manager Package - Modularized architecture (Issue #10666 B2 consolidation)
 
-This package consolidates 5 memory manager implementations into a clean,
-SOLID-principles-based modular structure.
+This package consolidates 5 memory manager implementations into a single canonical
+MemoryManager, SOLID-principles-based and modular.
 
 Package Structure:
 - enums.py: Shared enumeration types
@@ -20,19 +20,19 @@ Package Structure:
 - working_memory.py: Redis-backed session-scoped short-term memory
 - essential_story.py: Always-loaded compact memory summary for LLM prompts
 - agent_diary.py: Per-agent cross-session journal backed by knowledge base
-- manager.py: Main UnifiedMemoryManager class (composes all subsystems)
+- manager.py: Canonical MemoryManager class (composes all subsystems + provider router)
 - compat.py: Backward compatibility wrappers
 
-All three memory subsystems (WorkingMemoryService, EssentialStoryGenerator,
-AgentDiaryService) are exposed as properties on UnifiedMemoryManager so agents
-access them via ``self.memory_manager.working_memory``, etc., without direct
-subsystem imports.
+All memory subsystems (WorkingMemoryService, EssentialStoryGenerator,
+AgentDiaryService) and the provider-routing sub-layer are exposed as properties
+on MemoryManager so agents access them via ``self.memory_manager.working_memory``,
+``self.memory_manager.provider``, etc., without direct subsystem imports.
 
 For backward compatibility, all exports from the original unified_memory_manager.py
 are re-exported here.
 """
 
-# Memory Subsystems (exposed via UnifiedMemoryManager properties)
+# Memory Subsystems (exposed via MemoryManager properties)
 from .agent_diary import AgentDiaryService
 
 # Cache and Monitor
@@ -41,16 +41,16 @@ from .cache import LRUCacheManager
 # Backward Compatibility Wrappers
 from .compat import (
     LongTermMemoryManager,
-    get_enhanced_memory_manager,
     get_long_term_memory_manager,
+    get_memory_manager,
 )
 
 # Enums
 from .enums import MemoryCategory, StorageStrategy, TaskPriority, TaskStatus
 from .essential_story import EssentialStoryGenerator
 
-# Main Manager (composes all subsystems above)
-from .manager import UnifiedMemoryManager
+# Canonical Manager (composes all subsystems above)
+from .manager import MemoryManager
 
 # Data Models
 from .models import MemoryEntry, TaskExecutionRecord
@@ -85,11 +85,11 @@ __all__ = [
     "GeneralStorage",
     "LRUCacheManager",
     "MemoryMonitor",
-    # Main Manager
-    "UnifiedMemoryManager",
+    # Canonical Manager
+    "MemoryManager",
     # Compatibility Wrappers
     "LongTermMemoryManager",
     # Global Instances
-    "get_enhanced_memory_manager",
+    "get_memory_manager",
     "get_long_term_memory_manager",
 ]

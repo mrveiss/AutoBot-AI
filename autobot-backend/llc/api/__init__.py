@@ -39,9 +39,9 @@ from .sprints import router as sprints_router
 from .templates import router as templates_router
 from .work_items import router as work_items_router
 
-# GH#10010: All LLC routes require Postgres.  In single_user mode the session
-# factory hard-raises; the postgres_required dependency converts that to a
-# clean 503 Service Unavailable before any handler or sub-dependency runs.
+# GH#10010: All LLC routes require Postgres, which AutoBot always provides
+# (#10636).  The postgres_required dependency is retained as a router-level
+# hook for these Postgres-backed routes.
 router = APIRouter(prefix="/llc", tags=["llc"], dependencies=[Depends(postgres_required)])
 router.include_router(activity_router)
 router.include_router(boards_router)
