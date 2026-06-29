@@ -58,7 +58,7 @@ class TestKnowledgeBaseAdapter:
         assert results[0]["content"] == "test content"
 
     @pytest.mark.asyncio
-    async def test_search_kb_v2(self) -> None:
+    async def test_search_kb_knowledge_base_v2_impl(self) -> None:
         """Test search with KnowledgeBase V2 implementation."""
         # Mock KnowledgeBase V2
         mock_kb = AsyncMock()
