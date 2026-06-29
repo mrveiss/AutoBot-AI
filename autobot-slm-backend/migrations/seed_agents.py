@@ -20,7 +20,7 @@ import logging
 import sys
 from pathlib import Path
 
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL, config as _ssot_config
 
 # Add parent directories to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -29,8 +29,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# Default Ollama endpoint
-DEFAULT_OLLAMA_ENDPOINT = "http://127.0.0.1:11434"
+# Default Ollama endpoint — resolved from SSOT (AUTOBOT_OLLAMA_ENDPOINT env var)
+DEFAULT_OLLAMA_ENDPOINT = _ssot_config.llm.ollama_endpoint
 
 
 async def seed_agents():

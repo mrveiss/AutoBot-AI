@@ -29,6 +29,13 @@ except ImportError:
     print("ERROR: aiohttp not installed. Install: pip install aiohttp", file=sys.stderr)
     sys.exit(1)
 
+try:
+    from autobot_shared.ssot_config import config as _ssot_config
+
+    _DEFAULT_SLM_URL = _ssot_config.slm_url
+except Exception:
+    _DEFAULT_SLM_URL = os.getenv("SLM_API_URL", "http://localhost:8000")  # canonical: ignore py-hardcoded-url
+
 
 class SLMClient:
     """Simple SLM API client for node management."""
@@ -126,8 +133,8 @@ async def main() -> int:
     )
     parser.add_argument(
         "--api-url",
-        default=os.getenv("SLM_API_URL", "http://localhost:8002"),
-        help="SLM API URL (default: from SLM_API_URL env or http://localhost:8002)",
+        default=os.getenv("SLM_API_URL", _DEFAULT_SLM_URL),
+        help="SLM API URL (default: from SLM_API_URL env or SSOT config)",
     )
     parser.add_argument(
         "--api-token",
@@ -182,7 +189,7 @@ async def main() -> int:
         ip = node.get("ip_address", "unknown")
         status = node.get("status", "unknown")
 
-        print(f"\nNode found:")
+        print("\nNode found:")
         print(f"  ID:       {node_id}")
         print(f"  Hostname: {hostname}")
         print(f"  IP:       {ip}")
