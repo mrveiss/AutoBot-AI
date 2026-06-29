@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
-from .base_adapter import BaseAdapter, NormalizedResponse, UnifiedMessage
+from .base_adapter import BaseAdapter, GatewayMessage, NormalizedResponse
 
 logger = get_logger(__name__)
 
@@ -19,7 +19,7 @@ class WhatsAppAdapter(BaseAdapter):
     def __init__(self) -> None:
         super().__init__("whatsapp")
 
-    async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:
+    async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
         """Convert WhatsApp message to unified schema."""
         metadata = await self.extract_metadata(raw_message)
         metadata["message_id"] = raw_message.get("id")
@@ -31,7 +31,7 @@ class WhatsAppAdapter(BaseAdapter):
         if raw_message.get("media_id"):
             metadata["media_id"] = raw_message["media_id"]
 
-        return UnifiedMessage(
+        return GatewayMessage(
             user_id=raw_message["from"],
             platform="whatsapp",
             channel_id=raw_message["chat_id"],
