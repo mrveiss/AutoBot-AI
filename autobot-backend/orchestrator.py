@@ -33,7 +33,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from config.manager import get_config_manager as _get_config_manager
@@ -678,6 +678,10 @@ class Orchestrator(_DeprecatedRequestMixin):
     async def get_agent_recommendations(self, capabilities_needed: Set) -> List[str]:
         """Get recommended agents for a task. Delegates to WorkflowRunner (#5058)."""
         return await self._runner.get_agent_recommendations(capabilities_needed)
+
+    async def get_agent_recommendations_scored(self, capabilities_needed: Set) -> List[Tuple[str, float]]:
+        """Get (agent, score) recommendations. Delegates to WorkflowRunner (#10660)."""
+        return await self._runner.get_agent_recommendations_scored(capabilities_needed)
 
     def get_performance_report(self) -> Dict[str, Any]:
         """Performance report. Delegates to WorkflowRunner (#5058)."""

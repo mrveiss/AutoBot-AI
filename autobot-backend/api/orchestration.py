@@ -271,8 +271,10 @@ async def recommend_agents(
         if not capabilities_needed:
             raise HTTPException(status_code=400, detail="No valid capabilities specified")
 
-        # Get recommendations
-        recommendations = await orchestrator.get_agent_recommendations(capabilities_needed)
+        # Get recommendations with ranking scores (#10660); names preserved for
+        # backward compatibility, scores surfaced as an additive field.
+        scored = await orchestrator.get_agent_recommendations_scored(capabilities_needed)
+        recommendations = [agent for agent, _ in scored]
 
         return JSONResponse(
             status_code=200,
@@ -282,6 +284,7 @@ async def recommend_agents(
                 "capabilities_requested": request.capabilities_needed,
                 "recommended_agents": recommendations,
                 "agent_count": len(recommendations),
+                "agent_scores": [{"agent": agent, "score": round(score, 4)} for agent, score in scored],
             },
         )
 

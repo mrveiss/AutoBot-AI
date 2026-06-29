@@ -17,7 +17,7 @@ orchestration.WorkflowExecutor remains canonical for the legacy step-based path.
 
 import asyncio
 import time
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from enhanced_orchestration.agent_router import AgentRouter
@@ -128,6 +128,9 @@ class WorkflowRunner:
 
     async def get_agent_recommendations(self, capabilities_needed: Set) -> List[str]:
         return await self._agent_router.get_agent_recommendations(capabilities_needed)
+
+    async def get_agent_recommendations_scored(self, capabilities_needed: Set) -> List[Tuple[str, float]]:
+        return await self._agent_router.get_agent_recommendations_scored(capabilities_needed)
 
     def get_blocked_plan_resumer(self) -> Any:
         """Return the BlockedPlanResumer for this runner (lazy-constructed).

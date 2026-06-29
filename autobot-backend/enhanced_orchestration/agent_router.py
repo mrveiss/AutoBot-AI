@@ -10,7 +10,7 @@ it from ``agents.agent_orchestration.routing.AgentRouter`` (522 LOC, user-reques
 *user-request* routing.  The old name is retained as an alias for backward compatibility.
 """
 
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from orchestration import AgentCapability
@@ -39,8 +39,15 @@ class TaskAgentScorer:
         self._perf = performance_tracker
         self._agent_client_registry = agent_registry
 
-    async def get_agent_recommendations(self, capabilities_needed: Set) -> List[str]:
-        suitable = []
+    async def get_agent_recommendations_scored(self, capabilities_needed: Set) -> List[Tuple[str, float]]:
+        """Return (agent, score) pairs ranked best-first (#10660).
+
+        Score blends reliability (0.5), capability-coverage (0.3) and experience
+        (0.2). Previously the score was computed then discarded; callers that
+        want the ranking confidence use this, while get_agent_recommendations
+        keeps returning a plain name list for backward compatibility.
+        """
+        suitable: List[Tuple[str, float]] = []
         for agent, caps in self.agent_capabilities.items():
             if not capabilities_needed.issubset(caps):
                 continue
@@ -54,7 +61,11 @@ class TaskAgentScorer:
             )
             suitable.append((agent, score))
         suitable.sort(key=lambda x: x[1], reverse=True)
-        return [a for a, _ in suitable]
+        return suitable
+
+    async def get_agent_recommendations(self, capabilities_needed: Set) -> List[str]:
+        scored = await self.get_agent_recommendations_scored(capabilities_needed)
+        return [agent for agent, _ in scored]
 
     async def get_agent_instance(self, agent_type: str) -> Any | None:
         agent = self._agent_client_registry.get_agent(agent_type)

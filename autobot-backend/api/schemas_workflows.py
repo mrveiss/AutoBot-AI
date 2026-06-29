@@ -2615,6 +2615,8 @@ class OrchestrationAgentRecommendResponse(BaseModel):
     capabilities_requested: List[str] = Field(default_factory=list)
     recommended_agents: List[Any] = Field(default_factory=list)
     agent_count: int = 0
+    # #10660: ranking scores [{agent, score}] for the recommended agents.
+    agent_scores: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class OrchestrationActiveWorkflowsResponse(BaseModel):
