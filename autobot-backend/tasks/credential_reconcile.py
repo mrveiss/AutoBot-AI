@@ -17,16 +17,16 @@ from celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="tasks.reconcile_unified_credentials")
-def reconcile_unified_credentials() -> dict:
+@celery_app.task(name="tasks.reconcile_credentials")
+def reconcile_credentials() -> dict:
     """Reconcile mirrored unified credential copies against the canonical SQLite store."""
     return asyncio.run(_run())
 
 
 async def _run() -> dict:
     from autobot_shared.secrets_envelope import load_root_key
+    from services.credential_reconcile import reconcile_connector_credentials
     from services.secrets_service import get_secrets_service
-    from services.unified_credential_reconcile import reconcile_connector_credentials
     from user_management.database import get_async_session_factory
 
     try:
@@ -50,5 +50,5 @@ async def _run() -> dict:
         "failed": len(report.failed),
         "aborted": report.aborted,
     }
-    logger.info("Unified credential reconcile: %s", result)
+    logger.info("Credential reconcile: %s", result)
     return result

@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from services.audit.unified_audit import EventType, query_events  # GH#8290 Phase 2
+from services.audit.audit import EventType, query_events  # GH#8290 Phase 2
 from utils.catalog_http_exceptions import raise_auth_error
 
 router = APIRouter(prefix="/admin", tags=["admin", "compliance"])

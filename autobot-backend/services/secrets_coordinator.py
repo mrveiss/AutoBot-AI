@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Authorization + envelope orchestration for the unified secrets API (#10088 / Task 2.4).
+"""Authorization + envelope orchestration for the secrets API (#10088 / Task 2.4).
 
 The seam between HTTP and the store: each operation resolves the caller's
 :class:`PrincipalFacts` (Task 2.3 part 2), applies the RBAC policy
 (``secrets_authz``, Task 2.3 part 1), then calls the envelope
-``UnifiedSecretsService`` (Task 2.2). Kept free of FastAPI so it is testable
+``EnvelopeSecretsService`` (Task 2.2). Kept free of FastAPI so it is testable
 against Postgres without loading the whole app (the only Postgres CI job runs a
 minimal dep set); the ``/api/v2/secrets`` router is a thin shell over this.
 
@@ -41,15 +41,15 @@ from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
 from models.secret_dependency import SecretDependency
 from models.secret_grant import SecretGrant
+from services.envelope_secrets_service import (
+    EnvelopeSecretsService,
+    SecretAccessError,
+    SecretNotFoundError,
+)
 from services.secret_dependency_service import SecretDependencyService
 from services.secrets_access_audit import SecretAccessReport, describe_secret_access
 from services.secrets_authz import PrincipalFacts, authorize
 from services.secrets_principal_resolver import resolve_principal_facts
-from services.unified_secrets_service import (
-    SecretAccessError,
-    SecretNotFoundError,
-    UnifiedSecretsService,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +60,8 @@ _SERVICE_OWNER_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 class SecretsCoordinator:
     """Resolve facts → authorize → call the envelope service."""
 
-    def __init__(self, service: UnifiedSecretsService | None = None) -> None:
-        self._service = service if service is not None else UnifiedSecretsService()
+    def __init__(self, service: EnvelopeSecretsService | None = None) -> None:
+        self._service = service if service is not None else EnvelopeSecretsService()
 
     async def _facts(self, session: AsyncSession, user_id: uuid.UUID, permissions: set[str]) -> PrincipalFacts:
         return await resolve_principal_facts(session, user_id, permissions)

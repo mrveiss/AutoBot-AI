@@ -106,7 +106,7 @@ from knowledge.schemas.stats import (
 # NOTE: Tag-related models moved to knowledge_tags.py
 # NOTE: Search models (SearchRequest) defined in schemas_knowledge.py (#10666 B1)
 from knowledge_factory import get_or_create_knowledge_base
-from services.audit.unified_audit import AuditAction, audit_record  # GH#8290 Phase 2
+from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 from utils.path_validation import contains_path_traversal
 
 # =============================================================================

@@ -2,21 +2,21 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Reconcile mirrored unified credential copies against canonical SQLite (#10088 / #10337).
+"""Reconcile mirrored envelope credential copies against canonical SQLite (#10088 / #10337).
 
 Closes the revoke-resurrection + silent-desync gate of the connector-store cutover. The
-dual-write mirror (#10334) is best-effort, so a swallowed unified delete/rotate can leave the
-unified copy out of sync with the canonical SQLite store — and with read-first enabled a
+dual-write mirror (#10334) is best-effort, so a swallowed envelope delete/rotate can leave the
+envelope copy out of sync with the canonical SQLite store — and with read-first enabled a
 revoked credential could be resurrected, or a stale token served. This sweep walks every
-marker'd unified row and reconciles it against SQLite:
+marker'd envelope row and reconciles it against SQLite:
 
-- SQLite row absent **or inactive** (revoked) → delete the unified copy.
-- SQLite row active but the value drifted → re-seal the unified copy to the SQLite value.
+- SQLite row absent **or inactive** (revoked) → delete the envelope copy.
+- SQLite row active but the value drifted → re-seal the envelope copy to the SQLite value.
 
 **Destructive-safety.** Deletes are irreversible (hard delete), so the sweep refuses to run
 when the canonical store can't be positively confirmed authoritative *and populated*:
 - SQLite file missing or its table absent → abort (``OperationalError``/``FileNotFoundError``).
-- SQLite present but **empty**, or the sweep would delete **every** unified copy → abort. A
+- SQLite present but **empty**, or the sweep would delete **every** envelope copy → abort. A
   populated mirror against an empty canonical store is indistinguishable from a misconfigured
   or wiped DB (``get_secrets_service`` auto-creates an empty ``secrets.db`` at a bad path), so
   it must never be read as "everything revoked".
@@ -44,7 +44,7 @@ class ReconcileReport:
     """Counts for one reconciliation sweep (``aborted`` when SQLite was unsafe to trust)."""
 
     checked: int = 0
-    deleted: int = 0  # revoked/absent in SQLite → removed from unified
+    deleted: int = 0  # revoked/absent in SQLite → removed from envelope
     resynced: int = 0  # value drifted → re-sealed to the SQLite value
     ok: int = 0  # already consistent
     undecryptable: int = 0  # active SQLite rows whose value couldn't decrypt → drift-blind
@@ -74,7 +74,7 @@ def _read_sqlite_state(sqlite_path: str, fernet) -> tuple[dict[str, dict], int]:
                 try:
                     value = fernet.decrypt(r["encrypted_value"].encode("utf-8")).decode("utf-8")
                 except (InvalidToken, ValueError):
-                    undecryptable += 1  # keep the unified copy, skip value resync (drift-blind)
+                    undecryptable += 1  # keep the envelope copy, skip value resync (drift-blind)
             state[str(r["id"])] = {"active": bool(r["is_active"]), "value": value}
         return state, undecryptable
     finally:
@@ -91,7 +91,7 @@ async def _reconcile_one(session, svc, row, src, report: ReconcileReport) -> Non
     from autobot_shared.secrets_vault import VaultKind, VaultRef
 
     # The marker is the SQLite row's global PRIMARY KEY, so (marker → one row → one owner) is
-    # 1:1; the authorizing vault is the unified row's own owner. If SQLite ever adopts per-user
+    # 1:1; the authorizing vault is the envelope row's own owner. If SQLite ever adopts per-user
     # id namespaces this coupling must be revisited.
     vaults = {VaultRef(VaultKind.USER, str(row.owner_id))}
     if src is None or not src["active"]:
@@ -111,13 +111,13 @@ async def _reconcile_one(session, svc, row, src, report: ReconcileReport) -> Non
 async def reconcile_connector_credentials(
     session, *, sqlite_path: str, fernet: "Fernet | MultiFernet", root_key: bytes
 ) -> ReconcileReport:
-    """Reconcile every marker'd unified row against the canonical SQLite store. Caller commits."""
+    """Reconcile every marker'd envelope row against the canonical SQLite store. Caller commits."""
     from sqlalchemy import select
     from sqlalchemy.exc import SQLAlchemyError
 
     from autobot_shared.secrets_envelope import DecryptionError, UnsupportedFormatError
     from models.secret import Secret
-    from services.unified_secrets_service import SecretAccessError, SecretNotFoundError, UnifiedSecretsService
+    from services.envelope_secrets_service import EnvelopeSecretsService, SecretAccessError, SecretNotFoundError
 
     report = ReconcileReport()
     try:
@@ -135,12 +135,12 @@ async def reconcile_connector_credentials(
     # total wipe — that is far more likely a misconfigured/wiped store than a real "revoke all".
     if rows and (not sqlite_state or all(_is_revoked(sqlite_state, r) for r in rows)):
         logger.error(
-            "Reconcile aborted — would delete all %d unified copies (canonical empty=%s)", len(rows), not sqlite_state
+            "Reconcile aborted — would delete all %d envelope copies (canonical empty=%s)", len(rows), not sqlite_state
         )
         report.aborted = True
         return report
 
-    svc = UnifiedSecretsService(root_key=root_key)
+    svc = EnvelopeSecretsService(root_key=root_key)
     for row in rows:
         src = sqlite_state.get(str(row.extra_data.get(_MARKER)))
         try:

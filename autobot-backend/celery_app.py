@@ -239,10 +239,10 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.cleanup_expired_snapshots",
         "schedule": crontab(hour=3, minute=0),
     },
-    # #10337: hourly reconciliation of mirrored unified credential copies against canonical
+    # #10337: hourly reconciliation of mirrored credential copies against canonical
     # SQLite — bounds the revoke-resurrection window of the connector-store cutover (#10088).
-    "reconcile-unified-credentials-hourly": {
-        "task": "tasks.reconcile_unified_credentials",
+    "reconcile-credentials-hourly": {
+        "task": "tasks.reconcile_credentials",
         "schedule": crontab(minute=20),
     },
     # GH#8995: data-hygiene retention tasks (nightly, staggered to avoid Redis contention)

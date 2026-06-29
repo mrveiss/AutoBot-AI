@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""HTTP surface for the unified envelope secrets store (#10088 / Task 2.4 part 2).
+"""HTTP surface for the envelope secrets store (#10088 / Task 2.4 part 2).
 
 A thin FastAPI shell over :class:`SecretsCoordinator` (which does the real
 resolve→authorize→service work). Mounted at ``/api/v2/secrets`` on a new prefix,
@@ -33,8 +33,8 @@ from autobot_shared.secrets_vault import VaultKind, VaultRef
 from llc.deps import get_session
 from models.secret import Secret
 from security.service_auth import validate_service_auth
+from services.envelope_secrets_service import SecretAccessError, SecretNotFoundError
 from services.secrets_coordinator import SecretsCoordinator
-from services.unified_secrets_service import SecretAccessError, SecretNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def get_coordinator() -> SecretsCoordinator:
         try:
             _coordinator = SecretsCoordinator()
         except RuntimeError as exc:
-            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "unified secrets store not configured") from exc
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "envelope secrets store not configured") from exc
     return _coordinator
 
 

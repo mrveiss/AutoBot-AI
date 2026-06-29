@@ -171,8 +171,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "log_forwarding",
     ),
     ("api.secrets", "/secrets", ["secrets"], "secrets"),
-    # Unified envelope secrets store (#10088) — new prefix; legacy /secrets untouched.
-    ("api.unified_secrets", "/v2/secrets", ["secrets", "v2"], "unified_secrets"),
+    # Envelope secrets store (#10088) — new prefix; legacy /secrets untouched.
+    ("api.envelope_secrets", "/v2/secrets", ["secrets", "v2"], "envelope_secrets"),
     # Issue #2153: workflow-scoped encrypted credential storage
     (
         "api.workflow_secrets",

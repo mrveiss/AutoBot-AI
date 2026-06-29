@@ -19,9 +19,9 @@ from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from api import unified_secrets
+from api import envelope_secrets
+from services.envelope_secrets_service import EnvelopeSecretsService
 from services.secrets_coordinator import SecretsCoordinator
-from services.unified_secrets_service import UnifiedSecretsService
 from tests.migrations.conftest import requires_postgres, run_alembic
 
 pytestmark = [pytest.mark.migration_gate, requires_postgres]
@@ -56,17 +56,17 @@ async def client(fresh_db_url):
         await s.commit()
 
     app = FastAPI()
-    app.include_router(unified_secrets.router, prefix=_P)
+    app.include_router(envelope_secrets.router, prefix=_P)
 
     async def _session_override():
         async with maker() as sess:
             yield sess
 
-    app.dependency_overrides[unified_secrets.get_session] = _session_override
-    app.dependency_overrides[unified_secrets.get_coordinator] = lambda: SecretsCoordinator(
-        UnifiedSecretsService(root_key=_ROOT)
+    app.dependency_overrides[envelope_secrets.get_session] = _session_override
+    app.dependency_overrides[envelope_secrets.get_coordinator] = lambda: SecretsCoordinator(
+        EnvelopeSecretsService(root_key=_ROOT)
     )
-    app.dependency_overrides[unified_secrets.principal] = _principal_override
+    app.dependency_overrides[envelope_secrets.principal] = _principal_override
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://t", follow_redirects=True) as c:
@@ -191,7 +191,7 @@ async def service_client(fresh_db_url):
     maker = async_sessionmaker(engine, expire_on_commit=False)
 
     app = FastAPI()
-    app.include_router(unified_secrets.router, prefix=_P)
+    app.include_router(envelope_secrets.router, prefix=_P)
 
     async def _session_override():
         async with maker() as sess:
@@ -200,11 +200,11 @@ async def service_client(fresh_db_url):
     async def _service_principal_override():
         return "test-slm"
 
-    app.dependency_overrides[unified_secrets.get_session] = _session_override
-    app.dependency_overrides[unified_secrets.get_coordinator] = lambda: SecretsCoordinator(
-        UnifiedSecretsService(root_key=_ROOT)
+    app.dependency_overrides[envelope_secrets.get_session] = _session_override
+    app.dependency_overrides[envelope_secrets.get_coordinator] = lambda: SecretsCoordinator(
+        EnvelopeSecretsService(root_key=_ROOT)
     )
-    app.dependency_overrides[unified_secrets.service_principal] = _service_principal_override
+    app.dependency_overrides[envelope_secrets.service_principal] = _service_principal_override
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://t", follow_redirects=True) as c:

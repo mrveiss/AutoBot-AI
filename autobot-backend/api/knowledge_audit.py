@@ -25,7 +25,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.time_utils import now_utc
 from knowledge_factory import get_or_create_knowledge_base
-from services.audit.unified_audit import KnowledgeAuditLog  # GH#8290 Phase 2
+from services.audit.audit import KnowledgeAuditLog  # GH#8290 Phase 2
 
 logger = get_logger(__name__)
 

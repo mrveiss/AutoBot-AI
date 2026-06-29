@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Unified envelope SecretsService — CRUD + sharing orchestration (#10088 / Task 2.2).
+"""Envelope SecretsService — CRUD + sharing orchestration (#10088 / Task 2.2).
 
 Orchestrates the envelope crypto (``autobot_shared.secrets_envelope``) over the
 ``secrets`` + ``secret_grants`` schema (Task 2.1) using the canonical vault
@@ -58,7 +58,7 @@ def _vault_strs(vaults: Iterable[VaultRef]) -> set[str]:
     return {v.to_str() for v in vaults}
 
 
-class UnifiedSecretsService:
+class EnvelopeSecretsService:
     """Envelope CRUD + sharing over ``secrets`` / ``secret_grants``."""
 
     def __init__(self, root_key: bytes | None = None) -> None:

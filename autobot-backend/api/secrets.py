@@ -52,7 +52,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from middleware.proxy_utils import get_client_ip
-from services.audit.unified_audit import AuditAction, audit_record  # GH#8290 Phase 2
+from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
