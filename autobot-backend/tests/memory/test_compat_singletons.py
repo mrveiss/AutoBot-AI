@@ -27,9 +27,9 @@ def test_get_memory_manager_returns_instance_not_callable():
     """get_memory_manager() must return MemoryManager, not a function."""
     with patch.object(MemoryManager, "__init__", return_value=None):
         result = get_memory_manager()
-    assert not inspect.isfunction(result), (
-        f"get_memory_manager() returned {type(result).__name__!r}; expected MemoryManager instance"
-    )
+    assert not inspect.isfunction(
+        result
+    ), f"get_memory_manager() returned {type(result).__name__!r}; expected MemoryManager instance"
     assert isinstance(result, MemoryManager)
 
 
@@ -38,8 +38,7 @@ def test_get_long_term_memory_manager_returns_instance_not_callable():
     with patch.object(MemoryManager, "__init__", return_value=None):
         result = get_long_term_memory_manager()
     assert not inspect.isfunction(result), (
-        f"get_long_term_memory_manager() returned {type(result).__name__!r}; "
-        "expected LongTermMemoryManager instance"
+        f"get_long_term_memory_manager() returned {type(result).__name__!r}; " "expected LongTermMemoryManager instance"
     )
     assert isinstance(result, LongTermMemoryManager)
 
