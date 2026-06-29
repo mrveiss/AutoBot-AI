@@ -40,7 +40,10 @@
   become_user: postgres
   register: _existing_login_roles
   changed_when: false
-  failed_when: false
+  # Fail loud: if we cannot determine the existing app users we must NOT
+  # proceed to render pg_hba, since falling back to [db_user] alone would
+  # drop the sibling user (e.g. slm_app) — the exact clobber this avoids.
+  # Postgres is already installed+started by install.yml before configure.
 
 - name: Compute pg_hba app users (existing roles + this role's db_user)
   ansible.builtin.set_fact:
