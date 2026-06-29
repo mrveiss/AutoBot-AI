@@ -534,7 +534,7 @@ class UnifiedMultiModalProcessor:
                 "processing_time": result.processing_time,
             }
 
-            # #10626: store_task() does not exist on UnifiedMemoryManager;
+            # #10626: store_task() does not exist on MemoryManager;
             # use store_memory() with EXECUTION category instead.
             from memory.enums import MemoryCategory
 

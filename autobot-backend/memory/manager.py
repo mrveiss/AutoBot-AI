@@ -3,7 +3,15 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Unified Memory Manager - Main memory management class
+Memory Manager - Canonical memory management class (Issue #10666 B2 consolidation)
+
+Consolidates two previously separate managers:
+- MemoryManager (memory/manager.py) — SQLite/LRU/task/general/embedding store
+- MemoryManager (services/memory/memory_manager.py) — PostgreSQL+external provider router
+
+The provider-routing sub-layer (prefetch, sync, entity CRUD, health_check) is now
+accessible via the ``provider`` property, keeping the two concerns clearly separated
+within a single canonical class.
 """
 
 import asyncio
@@ -28,12 +36,151 @@ from .working_memory import WorkingMemoryService
 logger = get_logger(__name__)
 
 
-class UnifiedMemoryManager:
+class _ProviderRouter:
     """
-    Unified Memory Manager - Phase 5 Consolidation
+    Provider-routing sub-layer (folded in from services/memory/MemoryManager).
+
+    Routes entity/knowledge-graph operations to a built-in PostgreSQL provider
+    and an optional external provider (Redis or Milvus).  Accessible as
+    ``MemoryManager.provider``.
+    """
+
+    def __init__(self) -> None:
+        # Lazy-import to avoid hard-dep on postgres/external at construction time
+        from services.memory.postgres_provider import PostgresMemoryProvider
+
+        self.built_in: PostgresMemoryProvider = PostgresMemoryProvider()
+        self.external: Any | None = None
+        self.external_enabled: bool = False
+
+    async def initialize(self) -> None:
+        from services.memory.external_provider_factory import ExternalProviderFactory
+
+        try:
+            await self.built_in.initialize()
+            logger.info("Built-in PostgreSQL memory provider initialized")
+            try:
+                self.external = await ExternalProviderFactory.get_provider()
+                if self.external:
+                    self.external_enabled = True
+                    logger.info("External memory provider initialized")
+            except Exception as exc:
+                logger.warning("External memory provider unavailable, using built-in only: %s", exc)
+                self.external = None
+                self.external_enabled = False
+        except Exception as exc:
+            logger.error("Failed to initialize provider router: %s", exc)
+            raise
+
+    async def close(self) -> None:
+        from services.memory.external_provider_factory import ExternalProviderFactory
+
+        try:
+            if self.built_in:
+                await self.built_in.close()
+            if self.external:
+                await self.external.close()
+            await ExternalProviderFactory.close()
+            logger.info("Provider router closed")
+        except Exception as exc:
+            logger.error("Error closing provider router: %s", exc)
+
+    async def prefetch(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        if self.external_enabled and self.external:
+            try:
+                result = await self.external.prefetch(context)
+                if result:
+                    return result
+            except Exception as exc:
+                logger.warning("External provider prefetch failed, falling back to built-in: %s", exc)
+        try:
+            return await self.built_in.prefetch(context)
+        except Exception as exc:
+            logger.error("Built-in provider prefetch failed: %s", exc)
+            return {}
+
+    async def sync(self, turn: Dict[str, Any]) -> None:
+        try:
+            await self.built_in.sync(turn)
+        except Exception as exc:
+            logger.error("Built-in provider sync failed: %s", exc)
+            raise
+        if self.external_enabled and self.external:
+            try:
+                await self.external.sync(turn)
+            except Exception as exc:
+                logger.warning("External provider sync failed, continuing: %s", exc)
+
+    async def search(
+        self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None
+    ) -> List[Dict[str, Any]]:
+        if self.external_enabled and self.external:
+            try:
+                results = await self.external.search(query, limit, filters)
+                if results:
+                    return results
+            except Exception as exc:
+                logger.warning("External provider search failed, falling back to built-in: %s", exc)
+        try:
+            return await self.built_in.search(query, limit, filters)
+        except Exception as exc:
+            logger.error("Built-in provider search failed: %s", exc)
+            return []
+
+    async def get_entity(self, entity_id: str) -> Dict[str, Any] | None:
+        try:
+            return await self.built_in.get_entity(entity_id)
+        except Exception as exc:
+            logger.error("Error getting entity: %s", exc)
+            return None
+
+    async def update_entity(self, entity_id: str, updates: Dict[str, Any]) -> None:
+        try:
+            await self.built_in.update_entity(entity_id, updates)
+        except Exception as exc:
+            logger.error("Built-in provider update failed: %s", exc)
+            raise
+        if self.external_enabled and self.external:
+            try:
+                await self.external.update_entity(entity_id, updates)
+            except Exception as exc:
+                logger.warning("External provider update failed: %s", exc)
+
+    async def delete_entity(self, entity_id: str) -> None:
+        try:
+            await self.built_in.delete_entity(entity_id)
+        except Exception as exc:
+            logger.error("Built-in provider delete failed: %s", exc)
+            raise
+        if self.external_enabled and self.external:
+            try:
+                await self.external.delete_entity(entity_id)
+            except Exception as exc:
+                logger.warning("External provider delete failed: %s", exc)
+
+    async def health_check(self) -> Dict[str, bool]:
+        health: Dict[str, bool] = {}
+        try:
+            health["built_in"] = await self.built_in.health_check()
+        except Exception as exc:
+            logger.error("Built-in health check failed: %s", exc)
+            health["built_in"] = False
+        if self.external_enabled and self.external:
+            try:
+                health["external"] = await self.external.health_check()
+            except Exception as exc:
+                logger.warning("External health check failed: %s", exc)
+                health["external"] = False
+        return health
+
+
+class MemoryManager:
+    """
+    Memory Manager — canonical single memory manager for AutoBot.
 
     Combines features from 5 memory managers into a single, reusable,
-    SOLID-principles-based implementation.
+    SOLID-principles-based implementation, and folds in the provider-routing
+    sub-layer (formerly services/memory/MemoryManager) as the ``provider`` property.
 
     Features:
     - Task execution history (from enhanced_memory_manager.py)
@@ -41,6 +188,7 @@ class UnifiedMemoryManager:
     - LRU caching (from optimized_memory_manager.py)
     - Memory monitoring (from optimized_memory_manager.py)
     - Unified storage API with strategy pattern
+    - Provider routing: PostgreSQL + external (Redis/Milvus) via ``provider``
     - Async-first design with sync wrappers
     - Backward compatibility wrappers
 
@@ -54,8 +202,8 @@ class UnifiedMemoryManager:
     7. DRY: Single implementation (no separate sync/async files)
 
     Example Usage:
-        >>> # Task execution (enhanced_memory API)
-        >>> manager = UnifiedMemoryManager()
+        >>> # Task execution
+        >>> manager = MemoryManager()
         >>> record = TaskExecutionRecord(
         ...     task_id="task-001",
         ...     task_name="Process Document",
@@ -65,20 +213,16 @@ class UnifiedMemoryManager:
         ... )
         >>> await manager.log_task(record)
 
-        >>> # General memory (memory_manager API)
+        >>> # General memory
         >>> await manager.store_memory(
         ...     MemoryCategory.FACT,
         ...     "AutoBot supports multi-modal AI",
         ...     metadata={"source": "documentation"}
         ... )
 
-        >>> # Caching (optimized_memory API)
-        >>> manager.cache_put("key", "value")
-        >>> value = manager.cache_get("key")
-
-        >>> # Unified API with strategy
-        >>> await manager.store(record, StorageStrategy.TASK_EXECUTION)
-        >>> await manager.store(entry, StorageStrategy.GENERAL_MEMORY)
+        >>> # Provider-routing (entity graph)
+        >>> await manager.provider.initialize()
+        >>> results = await manager.provider.search("machine learning")
     """
 
     def __init__(
@@ -94,7 +238,7 @@ class UnifiedMemoryManager:
         monitor: MemoryMonitor | None = None,
     ):
         """
-        Initialize Unified Memory Manager
+        Initialize Memory Manager.
 
         Args:
             db_path: Path to SQLite database
@@ -130,25 +274,26 @@ class UnifiedMemoryManager:
         self._essential_story: EssentialStoryGenerator | None = None
         self._agent_diary: AgentDiaryService | None = None
 
-        logger.info("Unified Memory Manager created at %s", self.db_path)
+        # Provider-routing sub-layer (lazily instantiated on first access)
+        self._provider: _ProviderRouter | None = None
+
+        logger.info("Memory Manager created at %s", self.db_path)
 
     async def _ensure_initialized(self):
         """
-        Ensure database is initialized (thread-safe lazy initialization)
+        Ensure database is initialized (thread-safe lazy initialization).
 
         Uses double-check locking to prevent race conditions when multiple
         concurrent calls attempt to initialize the database simultaneously.
         """
         if not self._initialized:
             async with self._init_lock:
-                # Double-check after acquiring lock
                 if not self._initialized:
                     await self._init_database()
                     self._initialized = True
 
     async def _init_database(self):
-        """Initialize database schema"""
-        # Issue #379: Initialize both storage backends in parallel
+        """Initialize database schema."""
         await asyncio.gather(
             self._task_storage.initialize(),
             self._general_storage.initialize(),
@@ -160,7 +305,7 @@ class UnifiedMemoryManager:
 
     async def log_task(self, record: TaskExecutionRecord) -> str:
         """
-        Log task execution record (async)
+        Log task execution record (async).
 
         Args:
             record: TaskExecutionRecord to log
@@ -171,46 +316,33 @@ class UnifiedMemoryManager:
         Raises:
             ValueError: If task_id or task_name is empty
         """
-        # Input validation
         if not record.task_id or not record.task_id.strip():
             raise ValueError("task_id cannot be empty")
         if not record.task_name or not record.task_name.strip():
             raise ValueError("task_name cannot be empty")
-
         await self._ensure_initialized()
         return await self._task_storage.log_task(record)
 
     def log_task_sync(self, record: TaskExecutionRecord) -> str:
         """
-        Log task execution record (sync wrapper)
+        Log task execution record (sync wrapper).
 
         Backward compatibility wrapper for synchronous code.
-
-        Handles both sync and async contexts properly by detecting if an event
-        loop is already running and using a thread executor in that case.
-
-        For async code, prefer using: await manager.log_task(record)
+        For async code, prefer: await manager.log_task(record)
         """
-        # #7469: delegate to the shared run_or_schedule helper that
-        # centralizes the try-loop / threadpool defensive pattern.
         from autobot_shared.async_compat import run_or_schedule
 
         return run_or_schedule(self.log_task(record))
 
     async def update_task_status(self, task_id: str, status: TaskStatus, **kwargs) -> bool:
         """
-        Update task status and optional fields
+        Update task status and optional fields.
 
         Args:
             task_id: Task identifier
             status: New task status
-            **kwargs: Additional fields to update
-                - started_at: datetime
-                - completed_at: datetime
-                - duration_seconds: float
-                - error_message: str
-                - outputs: Dict
-                - retry_count: int
+            **kwargs: Additional fields — started_at, completed_at,
+                      duration_seconds, error_message, outputs, retry_count
 
         Returns:
             True if updated, False otherwise
@@ -218,27 +350,17 @@ class UnifiedMemoryManager:
         Raises:
             ValueError: If task_id is empty or invalid kwargs provided
         """
-        # Input validation
         if not task_id or not task_id.strip():
             raise ValueError("task_id cannot be empty")
         if "duration_seconds" in kwargs and kwargs["duration_seconds"] < 0:
             raise ValueError("duration_seconds cannot be negative")
         if "retry_count" in kwargs and kwargs["retry_count"] < 0:
             raise ValueError("retry_count cannot be negative")
-
         await self._ensure_initialized()
         return await self._task_storage.update_task(task_id, status=status, **kwargs)
 
     async def get_task(self, task_id: str) -> TaskExecutionRecord | None:
-        """
-        Retrieve single task by ID
-
-        Args:
-            task_id: Task identifier
-
-        Returns:
-            TaskExecutionRecord or None if not found
-        """
+        """Retrieve single task by ID."""
         await self._ensure_initialized()
         return await self._task_storage.get_task(task_id)
 
@@ -251,20 +373,7 @@ class UnifiedMemoryManager:
         end_date: datetime | None = None,
         limit: int = 100,
     ) -> List[TaskExecutionRecord]:
-        """
-        Query task execution history with filters
-
-        Args:
-            agent_type: Filter by agent type
-            status: Filter by task status
-            priority: Filter by task priority
-            start_date: Filter by start date
-            end_date: Filter by end date
-            limit: Maximum number of results
-
-        Returns:
-            List of TaskExecutionRecord matching filters
-        """
+        """Query task execution history with filters."""
         await self._ensure_initialized()
         filters = {
             "agent_type": agent_type,
@@ -278,18 +387,13 @@ class UnifiedMemoryManager:
 
     async def get_task_statistics(self, days_back: int | None = None) -> Dict[str, Any]:
         """
-        Get task execution statistics
+        Get task execution statistics.
 
         Args:
-            days_back: Unused filter parameter (kept for API compatibility). The
-                       underlying storage returns stats for all time; callers may
-                       pass days_back to satisfy call-site contracts.
+            days_back: Unused filter parameter (kept for API compatibility).
 
         Returns:
-            Dictionary with task statistics:
-            - total_tasks: Total number of tasks
-            - by_status: Count by status
-            - by_priority: Count by priority
+            Dictionary with total_tasks, by_status, by_priority.
         """
         await self._ensure_initialized()
         return await self._task_storage.get_stats()
@@ -307,7 +411,7 @@ class UnifiedMemoryManager:
         embedding: bytes | None = None,
     ) -> int:
         """
-        Store general purpose memory entry
+        Store general purpose memory entry.
 
         Args:
             category: Memory category (MemoryCategory enum or string)
@@ -322,12 +426,10 @@ class UnifiedMemoryManager:
         Raises:
             ValueError: If category or content is empty/invalid
         """
-        # Input validation
         if isinstance(category, str) and (not category or not category.strip()):
             raise ValueError("category cannot be empty string")
         if not content or not content.strip():
             raise ValueError("content cannot be empty")
-
         await self._ensure_initialized()
         entry = MemoryEntry(
             id=None,
@@ -349,29 +451,17 @@ class UnifiedMemoryManager:
         reference_path: str | None = None,
     ) -> List[MemoryEntry]:
         """
-        Retrieve memories by category and filters
-
-        Args:
-            category: Memory category
-            limit: Maximum number of results
-            start_date: Filter by start date
-            end_date: Filter by end date
-            reference_path: Filter by reference path
-
-        Returns:
-            List of MemoryEntry matching filters
+        Retrieve memories by category and filters.
 
         Raises:
             ValueError: If limit is invalid or date range is invalid
         """
-        # Input validation
         if limit <= 0:
             raise ValueError("limit must be positive")
         if limit > 10000:
             raise ValueError("limit cannot exceed 10000")
         if start_date and end_date and start_date > end_date:
             raise ValueError("start_date cannot be after end_date")
-
         await self._ensure_initialized()
         filters = {
             "limit": limit,
@@ -382,28 +472,12 @@ class UnifiedMemoryManager:
         return await self._general_storage.retrieve(category, filters)
 
     async def search_memories(self, query: str) -> List[MemoryEntry]:
-        """
-        Search memories by content or metadata
-
-        Args:
-            query: Search query string
-
-        Returns:
-            List of MemoryEntry matching query
-        """
+        """Search memories by content or metadata."""
         await self._ensure_initialized()
         return await self._general_storage.search(query)
 
     async def cleanup_old_memories(self, retention_days: int | None = None) -> int:
-        """
-        Remove memories older than retention period
-
-        Args:
-            retention_days: Retention period (uses default if None)
-
-        Returns:
-            Number of entries deleted
-        """
+        """Remove memories older than retention period. Returns number deleted."""
         await self._ensure_initialized()
         days = retention_days or self.retention_days
         return await self._general_storage.cleanup_old(days)
@@ -413,57 +487,24 @@ class UnifiedMemoryManager:
     # ========================================================================
 
     def cache_get(self, key: str) -> Any | None:
-        """
-        Get item from cache
-
-        Args:
-            key: Cache key
-
-        Returns:
-            Cached value or None if not found
-        """
+        """Get item from cache. Returns None if cache disabled or key missing."""
         if not self._cache:
             return None
         return self._cache.get(key)
 
     def cache_put(self, key: str, value: Any) -> None:
-        """
-        Put item in cache
-
-        Args:
-            key: Cache key
-            value: Value to cache
-        """
+        """Put item in cache."""
         if self._cache:
             self._cache.put(key, value)
 
     def cache_evict(self, count: int) -> int:
-        """
-        Evict oldest items from cache
-
-        Args:
-            count: Number of items to evict
-
-        Returns:
-            Number of items evicted
-        """
+        """Evict oldest items from cache. Returns number evicted."""
         if not self._cache:
             return 0
         return self._cache.evict(count)
 
     def cache_stats(self) -> Dict[str, Any]:
-        """
-        Get cache statistics
-
-        Returns:
-            Dictionary with cache statistics:
-            - enabled: Whether cache is enabled
-            - size: Current cache size
-            - max_size: Maximum cache size
-            - hits: Cache hits
-            - misses: Cache misses
-            - hit_rate: Cache hit rate
-        """
+        """Get cache statistics (enabled, size, max_size, hits, misses, hit_rate)."""
         if not self._cache:
             return {"enabled": False}
         return self._cache.stats()
@@ -473,13 +514,7 @@ class UnifiedMemoryManager:
     # ========================================================================
 
     async def _store_task_execution(self, data: Any) -> str:
-        """Store data using task execution strategy. Issue #620.
-
-        Args:
-            data: Data to store (must be TaskExecutionRecord)
-
-        Returns:
-            Task ID of stored record
+        """Store data using task execution strategy.
 
         Raises:
             TypeError: If data is not a TaskExecutionRecord
@@ -489,13 +524,7 @@ class UnifiedMemoryManager:
         return await self.log_task(data)
 
     async def _store_general_memory(self, data: Any) -> int:
-        """Store data using general memory strategy. Issue #620.
-
-        Args:
-            data: Data to store (must be MemoryEntry)
-
-        Returns:
-            Entry ID of stored memory
+        """Store data using general memory strategy.
 
         Raises:
             TypeError: If data is not a MemoryEntry
@@ -511,14 +540,7 @@ class UnifiedMemoryManager:
         )
 
     def _store_cached(self, data: Any) -> str:
-        """Store data using cache strategy. Issue #620.
-
-        Args:
-            data: Data to cache
-
-        Returns:
-            Cache key for stored data
-        """
+        """Store data using cache strategy. Returns cache key."""
         key = hashlib.sha256(str(data).encode()).hexdigest()[:16]
         self.cache_put(key, data)
         return key
@@ -529,7 +551,7 @@ class UnifiedMemoryManager:
         strategy: StorageStrategy = StorageStrategy.TASK_EXECUTION,
     ) -> str | int:
         """
-        Unified storage interface with strategy pattern
+        Unified storage interface with strategy pattern.
 
         Args:
             data: Data to store (TaskExecutionRecord, MemoryEntry, or any)
@@ -543,7 +565,6 @@ class UnifiedMemoryManager:
             ValueError: If strategy is unknown
         """
         await self._ensure_initialized()
-
         if strategy == StorageStrategy.TASK_EXECUTION:
             return await self._store_task_execution(data)
         elif strategy == StorageStrategy.GENERAL_MEMORY:
@@ -555,117 +576,89 @@ class UnifiedMemoryManager:
 
     # ========================================================================
     # MEMORY SUBSYSTEM PROPERTIES
-    # Agents access all three subsystems via these properties so they
-    # never need to import WorkingMemoryService, EssentialStoryGenerator,
-    # or AgentDiaryService directly.
+    # Agents access subsystems via these properties so they never need to
+    # import WorkingMemoryService, EssentialStoryGenerator, AgentDiaryService,
+    # or _ProviderRouter directly.
     # ========================================================================
 
     @property
     def working_memory(self) -> WorkingMemoryService:
-        """Redis-backed session-scoped short-term memory (eager, TTL-backed).
-
-        Instantiated at construction time; safe to call immediately.
-        """
+        """Redis-backed session-scoped short-term memory (eager, TTL-backed)."""
         return self._working_memory
 
     @property
     def essential_story(self) -> EssentialStoryGenerator:
-        """Always-loaded compact memory summary generator (lazy-init).
-
-        First access constructs the instance; subsequent accesses are free.
-        """
+        """Always-loaded compact memory summary generator (lazy-init)."""
         if self._essential_story is None:
             self._essential_story = EssentialStoryGenerator()
         return self._essential_story
 
     @property
     def agent_diary(self) -> AgentDiaryService:
-        """Per-agent cross-session journal backed by the knowledge base (lazy-init).
-
-        First access constructs the instance; subsequent accesses are free.
-        """
+        """Per-agent cross-session journal backed by the knowledge base (lazy-init)."""
         if self._agent_diary is None:
             self._agent_diary = AgentDiaryService()
         return self._agent_diary
+
+    @property
+    def provider(self) -> _ProviderRouter:
+        """Provider-routing sub-layer: PostgreSQL + external (Redis/Milvus) entity graph.
+
+        Exposes: initialize(), close(), prefetch(), sync(), search(),
+                 get_entity(), update_entity(), delete_entity(), health_check().
+        Call ``await manager.provider.initialize()`` before use.
+        """
+        if self._provider is None:
+            self._provider = _ProviderRouter()
+        return self._provider
 
     # ========================================================================
     # STATISTICS & MONITORING
     # ========================================================================
 
     async def get_statistics(self) -> Dict[str, Any]:
-        """
-        Get comprehensive memory statistics
-
-        Returns:
-            Dictionary with statistics from all components:
-            - task_storage: Task execution statistics
-            - general_storage: General memory statistics
-            - cache: Cache statistics
-            - system_memory: System memory usage (if monitoring enabled)
-        """
+        """Get comprehensive memory statistics (task, general, cache, system)."""
         await self._ensure_initialized()
         stats = {
             "task_storage": await self._task_storage.get_stats(),
             "general_storage": await self._general_storage.get_stats(),
             "cache": self.cache_stats(),
         }
-
         if self._monitor:
             stats["system_memory"] = self._monitor.get_usage()
-
         return stats
 
     def get_memory_usage(self) -> Dict[str, Any] | None:
-        """
-        Get current system memory usage
-
-        Returns:
-            Memory usage dictionary or None if monitoring disabled
-        """
+        """Get current system memory usage. Returns None if monitoring disabled."""
         if not self._monitor:
             return None
         return self._monitor.get_usage()
 
     async def adaptive_cleanup(self, memory_threshold: float = 0.8) -> Dict[str, int]:
         """
-        Perform adaptive cleanup based on memory pressure
+        Perform adaptive cleanup based on memory pressure.
 
         Args:
             memory_threshold: Memory usage threshold (0.0-1.0)
 
         Returns:
-            Dictionary with cleanup counts:
-            - cache_evicted: Items evicted from cache
-            - memories_deleted: Old memories deleted
+            Dictionary with cache_evicted and memories_deleted counts.
         """
         await self._ensure_initialized()
         cleanup_counts = {"cache_evicted": 0, "memories_deleted": 0}
-
-        # Check if cleanup needed
         if self._monitor and self._monitor.should_cleanup(memory_threshold):
             logger.info("Memory pressure detected, performing adaptive cleanup")
-
-            # Evict 20% of cache
             if self._cache:
                 cache_size = self._cache.stats()["size"]
                 evict_count = int(cache_size * 0.2)
                 cleanup_counts["cache_evicted"] = self.cache_evict(evict_count)
-
-            # Cleanup old memories
             cleanup_counts["memories_deleted"] = await self.cleanup_old_memories()
-
-            # Force garbage collection
             gc.collect()
-
             logger.info("Cleanup completed: %s", cleanup_counts)
-
         return cleanup_counts
 
     # ========================================================================
-    # SYNC CONVENIENCE API (migrated from EnhancedMemoryManager compat wrapper #10572)
-    # These are the only methods callers need from the old compat subclass.
-    # Sync callers that cannot await should use these wrappers; all other
-    # callers should use the async methods directly.
+    # SYNC CONVENIENCE API (migrated from EnhancedMemoryManager compat #10572)
     # ========================================================================
 
     def _run_sync(self, coro):
@@ -689,12 +682,14 @@ class UnifiedMemoryManager:
         Generates a deterministic task_id from task_name + current UTC timestamp.
         Do NOT call from async code — use await log_task() instead.
         """
-        import hashlib
+        import hashlib as _hashlib
 
         from .enums import TaskPriority as _TP
         from .enums import TaskStatus
 
-        task_id = hashlib.sha256(f"{task_name}_{datetime.now(tz=timezone.utc).isoformat()}".encode()).hexdigest()[:16]
+        task_id = _hashlib.sha256(
+            f"{task_name}_{datetime.now(tz=timezone.utc).isoformat()}".encode()
+        ).hexdigest()[:16]
         record = TaskExecutionRecord(
             task_id=task_id,
             task_name=task_name,
@@ -771,8 +766,6 @@ class UnifiedMemoryManager:
     ) -> bool:
         """Store a markdown-file reference against a task (sync wrapper).
 
-        Persists the reference as a general memory entry so it survives across
-        sessions without requiring a separate table.  Returns True on success.
         Do NOT call from async code — use await store_memory() directly instead.
         """
         from .enums import MemoryCategory
@@ -795,33 +788,23 @@ class UnifiedMemoryManager:
         return True
 
     def _get_embedding_cache_size(self) -> int:
-        """Return the current number of entries in the LRU cache.
-
-        Used by the API layer to expose cache occupancy without accessing
-        the cache object directly.  Returns 0 when caching is disabled.
-        """
+        """Return current LRU cache occupancy. Returns 0 when caching is disabled."""
         stats = self.cache_stats()
         return int(stats.get("size", 0))
 
     def cleanup_old_data(self, days_to_keep: int = 90) -> Dict[str, Any]:
-        """Remove records older than days_to_keep and return a summary dict (sync wrapper).
+        """Remove records older than days_to_keep (sync wrapper).
 
-        Return shape matches the original EnhancedMemoryManager.cleanup_old_data()
-        API so existing callers need no changes:
-            {"tasks_deleted": N, "embeddings_deleted": 0}
-
+        Returns: {"tasks_deleted": N, "embeddings_deleted": 0}
         Do NOT call from async code — use await cleanup_old_memories() directly.
         """
         deleted = self._run_sync(self.cleanup_old_memories(days_to_keep))
-        result: Dict[str, Any] = {
-            "tasks_deleted": deleted,
-            "embeddings_deleted": 0,
-        }
+        result: Dict[str, Any] = {"tasks_deleted": deleted, "embeddings_deleted": 0}
         logger.info("cleanup_old_data completed: %s", result)
         return result
 
     def log_task_execution(self, record: "TaskExecutionRecord") -> str:
-        """Alias for log_task_sync for backward compatibility (sync wrapper).
+        """Alias for log_task_sync (sync wrapper, backward compatibility).
 
         Do NOT call from async code — use await log_task() instead.
         """
@@ -868,8 +851,6 @@ class UnifiedMemoryManager:
     ) -> bool:
         """Persist an embedding vector as a general memory entry (sync wrapper).
 
-        The vector is JSON-serialised and stored in the GENERAL_MEMORY category
-        so it survives across restarts without a dedicated vector table.
         Do NOT call from async code — use await store_memory() directly instead.
         """
         import json as _json
@@ -894,4 +875,4 @@ class UnifiedMemoryManager:
         return True
 
 
-__all__ = ["UnifiedMemoryManager"]
+__all__ = ["MemoryManager"]

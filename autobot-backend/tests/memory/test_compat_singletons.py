@@ -8,7 +8,7 @@ get_enhanced_memory_manager() and get_long_term_memory_manager() must return
 class instances, not the lazy_singleton callable.
 
 #10572: EnhancedMemoryManager class removed; get_enhanced_memory_manager() now
-returns a UnifiedMemoryManager instance (the canonical manager).
+returns a MemoryManager instance (the canonical manager).
 """
 
 import inspect
@@ -19,22 +19,22 @@ from memory.compat import (
     get_enhanced_memory_manager,
     get_long_term_memory_manager,
 )
-from memory.manager import UnifiedMemoryManager
+from memory.manager import MemoryManager
 
 
 def test_get_enhanced_memory_manager_returns_instance_not_callable():
-    """get_enhanced_memory_manager() must return UnifiedMemoryManager, not a function."""
-    with patch.object(UnifiedMemoryManager, "__init__", return_value=None):
+    """get_enhanced_memory_manager() must return MemoryManager, not a function."""
+    with patch.object(MemoryManager, "__init__", return_value=None):
         result = get_enhanced_memory_manager()
     assert not inspect.isfunction(result), (
-        f"get_enhanced_memory_manager() returned {type(result).__name__!r}; " "expected UnifiedMemoryManager instance"
+        f"get_enhanced_memory_manager() returned {type(result).__name__!r}; " "expected MemoryManager instance"
     )
-    assert isinstance(result, UnifiedMemoryManager)
+    assert isinstance(result, MemoryManager)
 
 
 def test_get_long_term_memory_manager_returns_instance_not_callable():
     """get_long_term_memory_manager() must return LongTermMemoryManager, not a function."""
-    with patch.object(UnifiedMemoryManager, "__init__", return_value=None):
+    with patch.object(MemoryManager, "__init__", return_value=None):
         result = get_long_term_memory_manager()
     assert not inspect.isfunction(result), (
         f"get_long_term_memory_manager() returned {type(result).__name__!r}; " "expected LongTermMemoryManager instance"
@@ -44,7 +44,7 @@ def test_get_long_term_memory_manager_returns_instance_not_callable():
 
 def test_get_enhanced_memory_manager_singleton():
     """Two calls return the same object."""
-    with patch.object(UnifiedMemoryManager, "__init__", return_value=None):
+    with patch.object(MemoryManager, "__init__", return_value=None):
         a = get_enhanced_memory_manager()
         b = get_enhanced_memory_manager()
     assert a is b
@@ -52,7 +52,7 @@ def test_get_enhanced_memory_manager_singleton():
 
 def test_get_long_term_memory_manager_singleton():
     """Two calls return the same object."""
-    with patch.object(UnifiedMemoryManager, "__init__", return_value=None):
+    with patch.object(MemoryManager, "__init__", return_value=None):
         a = get_long_term_memory_manager()
         b = get_long_term_memory_manager()
     assert a is b

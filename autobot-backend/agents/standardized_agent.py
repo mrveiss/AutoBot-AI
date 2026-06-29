@@ -21,7 +21,7 @@ from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.prompt_rules import LEDGER_VS_EXECUTOR_RULE
-from memory.manager import UnifiedMemoryManager
+from memory.manager import MemoryManager
 from prompt_manager import get_language_instruction, resolve_language
 
 from .base_agent import AgentRequest, AgentResponse, BaseAgent, DeploymentMode
@@ -55,8 +55,8 @@ class StandardizedAgent(BaseAgent):
         self.logger = get_logger(f"{__name__}.{agent_type}")
 
         # Lazy memory facade — created on first access so agents that never
-        # use memory don't pay the UnifiedMemoryManager construction cost.
-        self._memory_manager: UnifiedMemoryManager | None = None
+        # use memory don't pay the MemoryManager construction cost.
+        self._memory_manager: MemoryManager | None = None
 
         # Action handlers mapping - to be configured by subclasses
         self._action_handlers: Dict[str, ActionHandler] = {}
@@ -75,12 +75,12 @@ class StandardizedAgent(BaseAgent):
         self._async_stats_lock = asyncio.Lock()
 
     @property
-    def memory_manager(self) -> UnifiedMemoryManager:
+    def memory_manager(self) -> MemoryManager:
         """Unified memory facade (lazy-init). Subsystems via properties:
         working_memory, essential_story, agent_diary.
         """
         if self._memory_manager is None:
-            self._memory_manager = UnifiedMemoryManager()
+            self._memory_manager = MemoryManager()
         return self._memory_manager
 
     def register_action_handler(self, action: str, handler: ActionHandler):

@@ -14,7 +14,7 @@ from typing import Any, Dict, List
 import numpy as np
 
 from autobot_shared.logging_manager import get_logger
-from memory import TaskPriority, UnifiedMemoryManager
+from memory import TaskPriority, MemoryManager
 from task_execution_tracker import get_task_tracker
 
 from .screen_analyzer import ScreenAnalyzer
@@ -26,9 +26,9 @@ logger = get_logger(__name__)
 class ComputerVisionSystem:
     """Main computer vision system coordinator"""
 
-    def __init__(self, memory_manager: UnifiedMemoryManager | None = None):
+    def __init__(self, memory_manager: MemoryManager | None = None):
         """Initialize vision system with memory manager and screen analyzer."""
-        self.memory_manager = memory_manager or UnifiedMemoryManager()
+        self.memory_manager = memory_manager or MemoryManager()
         self.screen_analyzer = ScreenAnalyzer()
 
         # Analysis history

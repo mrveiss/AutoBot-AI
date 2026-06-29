@@ -6,7 +6,7 @@
 Enhanced Memory API for AutoBot Phase 7
 Provides endpoints for task execution tracking, markdown management, and memory analytics
 
-Migrated (#10572): uses UnifiedMemoryManager (memory/manager.py) exclusively.
+Migrated (#10572): uses MemoryManager (memory/manager.py) exclusively.
 AsyncEnhancedMemoryManager and the standalone enhanced_memory_manager module
 are no longer referenced here.
 """
@@ -39,7 +39,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from markdown_reference_system import MarkdownReferenceSystem
-from memory import TaskPriority, TaskStatus, UnifiedMemoryManager
+from memory import TaskPriority, TaskStatus, MemoryManager
 from task_execution_tracker import get_task_tracker
 
 logger = get_logger(__name__)
@@ -54,13 +54,13 @@ _markdown_system: MarkdownReferenceSystem | None = None
 TERMINAL_TASK_STATUSES = {TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.FAILED}
 
 # Singleton memory manager (instantiated once per process)
-get_memory_manager_singleton = lazy_singleton(UnifiedMemoryManager)
+get_memory_manager_singleton = lazy_singleton(MemoryManager)
 
 
-async def _get_managers() -> tuple[UnifiedMemoryManager, MarkdownReferenceSystem]:
-    """Return the singleton UnifiedMemoryManager and lazily-initialised MarkdownReferenceSystem."""
+async def _get_managers() -> tuple[MemoryManager, MarkdownReferenceSystem]:
+    """Return the singleton MemoryManager and lazily-initialised MarkdownReferenceSystem."""
     global _markdown_system
-    memory_manager: UnifiedMemoryManager = get_memory_manager_singleton()
+    memory_manager: MemoryManager = get_memory_manager_singleton()
     if _markdown_system is None:
         async with _markdown_system_lock:
             if _markdown_system is None:

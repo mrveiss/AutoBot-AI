@@ -16,7 +16,7 @@ import numpy as np
 
 from autobot_shared.logging_manager import get_logger
 from memory import TaskPriority  # canonical enum (#10626)
-from memory import UnifiedMemoryManager
+from memory import MemoryManager
 from task_execution_tracker import get_task_tracker
 
 from .constants import HIGH_RISK_COMMAND_TYPES, HIGH_RISK_INTENTS, SCREEN_STATE_INTENTS
@@ -32,9 +32,9 @@ logger = get_logger(__name__)
 class VoiceProcessingSystem:
     """Main voice processing system coordinator"""
 
-    def __init__(self, memory_manager: UnifiedMemoryManager | None = None):
+    def __init__(self, memory_manager: MemoryManager | None = None):
         """Initialize voice processing system with speech recognition and TTS engines."""
-        self.memory_manager = memory_manager or UnifiedMemoryManager()
+        self.memory_manager = memory_manager or MemoryManager()
         self.speech_recognition = SpeechRecognitionEngine()
         self.nlp_processor = NaturalLanguageProcessor()
         self.tts_engine = TextToSpeechEngine()
