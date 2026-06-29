@@ -1990,10 +1990,10 @@ async def _generate_enhanced_stream(
 @router.post("/enhanced", response_model=DataResponse[ChatData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_chat",
+    operation="chat_enhanced",
     error_code_prefix="CHAT",
 )
-async def enhanced_chat(
+async def chat_enhanced(
     current_user: dict = Depends(get_current_user),
     message: ChatMessage = None,
     request: Request = None,
@@ -2092,10 +2092,10 @@ async def stream_enhanced_chat(
 @router.get("/health-enhanced", response_model=ChatHealthData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_chat_health_check",
+    operation="chat_health_enhanced",
     error_code_prefix="CHAT",
 )
-async def enhanced_chat_health_check(
+async def chat_health_enhanced(
     current_user: dict = Depends(get_current_user),
 ):
     """

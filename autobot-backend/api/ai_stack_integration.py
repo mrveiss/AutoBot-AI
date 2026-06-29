@@ -191,10 +191,10 @@ async def analyze_documents(documents: List[Metadata], admin_check: bool = Depen
 @router.post("/chat/enhanced", response_model=DataResponse[ChatResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_chat",
+    operation="chat",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-async def enhanced_chat(
+async def chat(
     request: ChatRequest,
     admin_check: bool = Depends(check_admin_permission),
     knowledge_base=Depends(get_knowledge_base),
@@ -264,10 +264,10 @@ async def extract_knowledge(
 @router.post("/knowledge/enhanced-search", response_model=DataResponse[KnowledgeSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_knowledge_search",
+    operation="knowledge_search",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-async def enhanced_knowledge_search(
+async def knowledge_search(
     query: str,
     search_type: str = "comprehensive",
     max_results: int = 10,
@@ -647,4 +647,4 @@ async def legacy_enhanced_chat(
     Issue #744: Requires admin authentication.
     """
     request = ChatRequest(message=message, context=context)
-    return await enhanced_chat(request)
+    return await chat(request)

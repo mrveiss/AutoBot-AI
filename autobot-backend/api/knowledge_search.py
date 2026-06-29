@@ -532,10 +532,10 @@ async def _execute_basic_search_with_reranking(request: SearchRequest, kb_to_use
 @router.post("/search", response_model=KnowledgeSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="consolidated_search",
+    operation="search",
     error_code_prefix="KNOWLEDGE_SEARCH",
 )
-async def consolidated_search(request: SearchRequest, req: Request):
+async def search(request: SearchRequest, req: Request):
     """
     Consolidated knowledge base search endpoint (Issue #555).
 
@@ -722,10 +722,10 @@ def _enhanced_search_not_initialized_response() -> dict:
 @router.post("/enhanced_search", deprecated=True, response_model=KBSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_search",
+    operation="search_enhanced",
     error_code_prefix="KNOWLEDGE_SEARCH",
 )
-async def enhanced_search(request: SearchRequest, req: Request):
+async def search_enhanced(request: SearchRequest, req: Request):
     """
     **[DEPRECATED]** Use POST /search with appropriate parameters instead.
 
@@ -984,10 +984,10 @@ async def _fallback_to_enhanced_search(kb_to_use, params: dict):
 @router.post("/enhanced_search_v2", deprecated=True, response_model=KBSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_search_v2",
+    operation="search_enhanced_v2",
     error_code_prefix="KNOWLEDGE_SEARCH",
 )
-async def enhanced_search_v2(request: dict, req: Request):
+async def search_enhanced_v2(request: dict, req: Request):
     """
     **[DEPRECATED]** Use POST /search with appropriate parameters instead.
 
