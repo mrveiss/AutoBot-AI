@@ -402,7 +402,15 @@
         body: "{}"
         body_format: json
         validate_certs: false
+        timeout: 30
         status_code: [200, 404]
+      register: slm_mark_synced_play1
+      # The SLM API is briefly slow on this endpoint right after a restart, so a
+      # single attempt read-times-out and the node never gets marked synced
+      # (#10634). Retry until it answers; still non-fatal if it never does.
+      until: slm_mark_synced_play1.status | default(-1) in [200, 404]
+      retries: 6
+      delay: 10
       delegate_to: localhost
       ignore_errors: true
       when: slm_login_play1.status == 200
@@ -946,7 +954,14 @@
         body: "{}"
         body_format: json
         validate_certs: false
+        timeout: 30
         status_code: [200, 404]
+      register: node_mark_synced
+      # Retry the briefly-slow post-restart endpoint instead of one-shot
+      # timing out so the node actually gets marked synced (#10634).
+      until: node_mark_synced.status | default(-1) in [200, 404]
+      retries: 6
+      delay: 10
       delegate_to: localhost
       ignore_errors: true
       when: slm_token | default('') | length > 0
