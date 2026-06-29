@@ -27,6 +27,24 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 
+def _extract_json_object(raw_text: str) -> Dict[str, Any]:
+    """Parse a JSON object from an LLM response, tolerating markdown code fences (#10672).
+
+    structured_output=True makes supporting providers emit valid JSON; providers
+    that ignore it may still wrap the object in a ```json fence, so strip that
+    before parsing. Raises json.JSONDecodeError on genuinely unparseable text.
+    """
+    try:
+        return json.loads(raw_text)
+    except json.JSONDecodeError:
+        if "```" in raw_text:
+            block = raw_text.split("```", 2)[1]
+            if block.lstrip().lower().startswith("json"):
+                block = block.lstrip()[4:]
+            return json.loads(block.strip())
+        raise
+
+
 class JudgmentConfidence(Enum):
     """Confidence levels for LLM judgments"""
 
@@ -164,7 +182,9 @@ class BaseLLMJudge:
                     {"role": "system", "content": self._get_system_prompt()},
                     {"role": "user", "content": prompt},
                 ],
+                llm_type="analysis",
                 temperature=0.1,  # Low temperature for consistent judgments
+                structured_output=True,  # #10672: force valid JSON so judgments aren't dropped
             )
 
             return response
@@ -214,7 +234,7 @@ Be precise, objective, and helpful in your judgments."""
                 raw_text = llm_response
             else:
                 raw_text = llm_response.get("content", "")
-            evaluation = json.loads(raw_text)
+            evaluation = _extract_json_object(raw_text)
 
             # Parse criterion scores
             criterion_scores = []
