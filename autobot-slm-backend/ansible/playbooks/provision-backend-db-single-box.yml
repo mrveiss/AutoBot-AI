@@ -30,11 +30,7 @@
     autobot_db_user: autobot_app
     autobot_db_name: autobot_users
     autobot_creds_file: /etc/autobot/autobot-db-credentials.env
-    # Every app user that shares this instance — keeps slm_app in pg_hba.
-    postgresql_app_users:
-      - slm_app
-      - autobot_app
-    pg_config_dir: "/etc/postgresql/{{ postgresql_version | default('16') }}/main"
+    pg_hba_path: "/etc/postgresql/{{ postgresql_version | default('16') }}/main/pg_hba.conf"
 
   tasks:
     - name: "Read existing autobot_app password (idempotent reuse)"
@@ -79,14 +75,25 @@
         login_unix_socket: /var/run/postgresql
       become_user: postgres
 
-    - name: "Render pg_hba.conf with both app users (slm_app + autobot_app)"
-      ansible.builtin.template:
-        src: ../roles/postgresql/templates/pg_hba.conf.j2
-        dest: "{{ pg_config_dir }}/pg_hba.conf"
-        owner: postgres
-        group: postgres
-        mode: '0640'
+    # Add ONLY autobot_app's entries, leaving every existing line (the SLM's
+    # slm_app local/host and any remote-access entries) untouched. This is
+    # non-destructive — unlike rendering the whole template — so the live SLM
+    # database is never cut off. (#10636, review of #10640)
+    - name: "Add pg_hba entries for autobot_app (non-destructive)"
+      community.postgresql.postgresql_pg_hba:
+        dest: "{{ pg_hba_path }}"
+        contype: "{{ item.contype }}"
+        users: "{{ autobot_db_user }}"
+        databases: all
+        address: "{{ item.address | default(omit) }}"
+        method: scram-sha-256
+        state: present
         backup: true
+      loop:
+        - { contype: local }
+        - { contype: host, address: "127.0.0.1/32" }
+        - { contype: host, address: "::1/128" }
+      become_user: postgres
       notify: Reload PostgreSQL
 
     - name: "Write autobot-db-credentials.env (separate from SLM creds)"
