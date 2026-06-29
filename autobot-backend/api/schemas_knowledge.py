@@ -1022,23 +1022,12 @@ class FactIdValidator(BaseModel):
 
 
 class SearchRequest(BaseModel):
-    """Request model for search endpoints"""
+    """Canonical request model for knowledge-base vector/document search (Issue #78, #685, #10654).
 
-    query: str = Field(..., min_length=1, max_length=1000)
-    limit: int = Field(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=100)
-    category: str | None = Field(default=None, max_length=100)
-
-    @field_validator("category")
-    @classmethod
-    def validate_category(cls, v):
-        """Validate category format"""
-        if v and not _ALNUM_ID_RE.match(v):
-            raise ValueError("Invalid category format")
-        return v
-
-
-class EnhancedSearchRequest(BaseModel):
-    """Enhanced search request with tag filtering and hybrid mode (Issue #78, #685)"""
+    Consolidates the former bare SearchRequest (3-field, dead) and EnhancedSearchRequest into one
+    model. All added fields carry defaults, so existing callers that only set query/limit/category
+    remain fully backward-compatible.
+    """
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
     limit: int = Field(
@@ -1060,7 +1049,7 @@ class EnhancedSearchRequest(BaseModel):
     )
     mode: str = Field(
         default=CategoryDefaults.SEARCH_MODE_HYBRID,
-        description="Search mode: 'semantic' (vector only), 'keyword' (text only), " "'hybrid' (both)",
+        description="Search mode: 'semantic' (vector only), 'keyword' (text only), 'hybrid' (both)",
     )
     enable_reranking: bool = Field(
         default=False,
@@ -1081,7 +1070,7 @@ class EnhancedSearchRequest(BaseModel):
     board_id: str | None = Field(
         default=None,
         max_length=100,
-        description=("Project-scoped board ID for namespaced search. " "None / '__global__' searches all boards."),
+        description="Project-scoped board ID for namespaced search. None / '__global__' searches all boards.",
     )
 
     @field_validator("category")
@@ -1156,6 +1145,10 @@ class EnhancedSearchRequest(BaseModel):
     def get_safe_mode(self, valid_modes: set) -> str:
         """Get mode with fallback if not in valid modes (Issue #372)."""
         return self.mode if self.mode in valid_modes else "auto"
+
+
+# Backward-compat alias — all callers have been migrated to SearchRequest (#10654)
+EnhancedSearchRequest = SearchRequest
 
 
 class ConsolidatedSearchRequest(BaseModel):
@@ -4561,7 +4554,7 @@ class EventSearchRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class UnifiedSearchRequest(BaseModel):
+class UnifiedSearchRequest(BaseModel):  # canonical: ignore py-duplicate-concept — multi-source search (#10654)
     """Request model for unified knowledge search."""
 
     query: str = Field(..., description="Search query text")
