@@ -80,20 +80,23 @@
     # slm_app local/host and any remote-access entries) untouched. This is
     # non-destructive — unlike rendering the whole template — so the live SLM
     # database is never cut off. (#10636, review of #10640)
+    # Only host (TCP) rules: the backend connects to 127.0.0.1 via asyncpg, not
+    # the unix socket, so no `local` rule is needed (and postgresql_pg_hba
+    # rejects an address on a local rule). slm_app's existing rules are left
+    # untouched.
     - name: "Add pg_hba entries for autobot_app (non-destructive)"
       community.postgresql.postgresql_pg_hba:
         dest: "{{ pg_hba_path }}"
-        contype: "{{ item.contype }}"
+        contype: host
         users: "{{ autobot_db_user }}"
         databases: all
-        address: "{{ item.address | default(omit) }}"
+        address: "{{ item }}"
         method: scram-sha-256
         state: present
         backup: true
       loop:
-        - { contype: local }
-        - { contype: host, address: "127.0.0.1/32" }
-        - { contype: host, address: "::1/128" }
+        - "127.0.0.1/32"
+        - "::1/128"
       become_user: postgres
       notify: Reload PostgreSQL
 
