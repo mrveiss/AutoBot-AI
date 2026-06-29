@@ -6,16 +6,21 @@
 Deployment Mode Configuration for User Management System
 
 Supports 4 deployment modes:
-- single_user: No auth required, personal/dev use
-- single_company: One org with users and teams
+- single_user: DEPRECATED (#10636) — not a supported runtime mode; AutoBot
+  always runs full Postgres-backed user management. Enum retained only while
+  remaining call sites are removed.
+- single_company: One org with users and teams (default)
 - multi_company: Multiple orgs (multi-tenant), isolated data
 - provider: Full multi-tenant with billing, quotas, social login
 """
 
+import logging
 from dataclasses import dataclass, field
 from enum import Enum
 
 from autobot_shared.ssot_config import config
+
+logger = logging.getLogger(__name__)
 
 
 def _get_default_postgres_host() -> str:
@@ -167,8 +172,15 @@ def get_deployment_config() -> DeploymentConfig:
     try:
         mode = DeploymentMode(mode_str)
     except ValueError:
-        # Default to single_user for invalid values
-        mode = DeploymentMode.SINGLE_USER
+        # AutoBot always runs full, Postgres-backed user management (#10636).
+        # An unset/invalid AUTOBOT_USER_MODE defaults to single_company —
+        # never single_user, which is being retired as a runtime mode.
+        if mode_str:
+            logger.warning(
+                "AUTOBOT_USER_MODE=%r is invalid; defaulting to single_company (full user management)",
+                mode_str,
+            )
+        mode = DeploymentMode.SINGLE_COMPANY
 
     # Get feature flags for this mode
     features = MODE_FEATURES[mode]
