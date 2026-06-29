@@ -50,7 +50,9 @@ def _get_sync_session():
 
                 from user_management.database import get_async_engine
 
-                _sync_session_factory = sessionmaker(bind=get_async_engine().sync_engine)
+                _sync_session_factory = sessionmaker(  # canonical: ignore py-adhoc-db-engine
+                    bind=get_async_engine().sync_engine  # sync wrapper over canonical engine (thread context)
+                )
     return session_scope(_sync_session_factory)
 
 

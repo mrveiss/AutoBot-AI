@@ -103,7 +103,9 @@ class PatternDataset(Dataset):
         # so we share the same connection pool instead of creating a second engine (#10570).
         # PatternDataset.__getitem__ is called from torch DataLoader worker threads
         # (sync context), so a sync session is genuinely required here.
-        self._SessionLocal = sessionmaker(bind=get_async_engine().sync_engine)
+        self._SessionLocal = sessionmaker(  # canonical: ignore py-adhoc-db-engine
+            bind=get_async_engine().sync_engine  # sync wrapper over canonical engine (DataLoader worker threads)
+        )
 
         # Load patterns from database
         self.patterns = self._load_patterns()
