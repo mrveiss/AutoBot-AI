@@ -44,7 +44,7 @@ def main() -> int:
         logger.error("Import error: %s — run from autobot-slm-backend/ with its venv active.", exc)
         return 1
 
-    engine = create_engine(get_db_url(), future=True)
+    engine = create_engine(get_db_url(), future=True)  # canonical: ignore py-adhoc-db-engine (standalone admin script)
     updated = 0
     skipped = 0
     errors = 0

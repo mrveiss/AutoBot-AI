@@ -136,10 +136,12 @@ HeartbeatScheduler = _sched_mod.HeartbeatScheduler
 
 @pytest.fixture
 async def db_factory():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)  # canonical: ignore py-adhoc-db-engine
     async with engine.begin() as conn:
         await conn.run_sync(_Base.metadata.create_all)
-    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    factory = async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
     yield factory
     await engine.dispose()
 
