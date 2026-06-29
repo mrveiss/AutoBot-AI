@@ -40,7 +40,7 @@ from services.budget_policy import (
 @pytest.fixture
 async def async_db_session():
     """Create an in-memory SQLite database for testing."""
-    engine = create_async_engine(
+    engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
         "sqlite+aiosqlite:///:memory:",
         echo=False,
     )
@@ -51,7 +51,9 @@ async def async_db_session():
 
         await conn.run_sync(Base.metadata.create_all)
 
-    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    factory = async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
     configure_session_factory(factory)
 
     async with factory() as session:

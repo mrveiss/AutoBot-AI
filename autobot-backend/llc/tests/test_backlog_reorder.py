@@ -318,7 +318,9 @@ _item_counter = 0
 
 @pytest_asyncio.fixture
 async def backlog_engine():  # noqa: ANN201
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:")
+    eng = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
+        "sqlite+aiosqlite:///:memory:"
+    )
     await harness.create_loop_schema(eng)
     yield eng
     await eng.dispose()
@@ -326,7 +328,9 @@ async def backlog_engine():  # noqa: ANN201
 
 @pytest_asyncio.fixture
 async def backlog_session_factory(backlog_engine):  # noqa: ANN001, ANN201
-    return async_sessionmaker(backlog_engine, expire_on_commit=False, class_=AsyncSession)
+    return async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
+        backlog_engine, expire_on_commit=False, class_=AsyncSession
+    )
 
 
 async def _seed_backlog_item(

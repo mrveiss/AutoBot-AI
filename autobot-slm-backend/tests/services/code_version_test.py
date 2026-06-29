@@ -18,9 +18,9 @@ from models.database import Base, CodeStatus, Node  # noqa: E402, F401
 @pytest.fixture(scope="function")
 def slm_db_session():
     """Create an in-memory SQLite database for SLM models."""
-    engine = create_engine("sqlite:///:memory:", echo=False)
+    engine = create_engine("sqlite:///:memory:", echo=False)  # canonical: ignore py-adhoc-db-engine (test-local engine)
     Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine)
+    SessionLocal = sessionmaker(bind=engine)  # canonical: ignore py-adhoc-db-engine (test-local session factory)
     session = SessionLocal()
     try:
         yield session
