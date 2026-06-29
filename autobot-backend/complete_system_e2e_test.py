@@ -207,7 +207,9 @@ async def main():
     print()  # noqa: print
     print("🚀 Next Steps:")  # noqa: print
     print("   1. Start AutoBot: ./run_agent.sh")  # noqa: print
-    print("   2. Open frontend: http://localhost:5173")  # noqa: print  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+    print(
+        "   2. Open frontend: http://localhost:5173"
+    )  # noqa: print  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
     print("   3. Navigate to 'Workflows' tab")  # noqa: print
     print("   4. Test with complex requests like:")  # noqa: print
     print("      'find tools for network scanning'")  # noqa: print

@@ -20,7 +20,8 @@ import logging
 import sys
 from pathlib import Path
 
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL, config as _ssot_config
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.ssot_config import config as _ssot_config
 
 # Add parent directories to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))

@@ -37,7 +37,9 @@ def test_check_env_file_missing(tmp_path):
 
 def test_check_env_file_ok(tmp_path):
     env = tmp_path / ".env"
-    env.write_text("OLLAMA_HOST=http://localhost:11434\n" "REDIS_URL=redis://localhost\n" "CHROMADB_HOST=localhost\n")  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+    env.write_text(
+        "OLLAMA_HOST=http://localhost:11434\n" "REDIS_URL=redis://localhost\n" "CHROMADB_HOST=localhost\n"
+    )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
     result = check_env_file(str(env))
     assert result.ok
 

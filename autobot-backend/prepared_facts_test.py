@@ -219,7 +219,9 @@ def test_provider_fact_auth_configured_via_api_token():
 
 
 def test_provider_fact_auth_configured_via_base_url():
-    fact = ProviderRuntimeFact.build_at_startup("ollama", _provider_with(base_url="http://localhost:11434"))  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+    fact = ProviderRuntimeFact.build_at_startup(
+        "ollama", _provider_with(base_url="http://localhost:11434")
+    )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
     assert fact.auth_configured is True
 
 
@@ -229,12 +231,16 @@ def test_provider_fact_auth_not_configured():
 
 
 def test_provider_fact_is_local_ollama():
-    fact = ProviderRuntimeFact.build_at_startup("ollama", _provider_with(base_url="http://localhost:11434"))  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+    fact = ProviderRuntimeFact.build_at_startup(
+        "ollama", _provider_with(base_url="http://localhost:11434")
+    )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
     assert fact.is_local is True
 
 
 def test_provider_fact_is_local_vllm():
-    fact = ProviderRuntimeFact.build_at_startup("vllm", _provider_with(base_url="http://localhost:8000"))  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+    fact = ProviderRuntimeFact.build_at_startup(
+        "vllm", _provider_with(base_url="http://localhost:8000")
+    )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
     assert fact.is_local is True
 
 

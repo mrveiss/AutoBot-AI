@@ -22,7 +22,9 @@ logger = structlog.get_logger()
 class NPUWorkerTester:
     """Test NPU worker functionality"""
 
-    def __init__(self, npu_url: str = "http://localhost:8081"):  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+    def __init__(
+        self, npu_url: str = "http://localhost:8081"
+    ):  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         self.npu_url = npu_url
         self.session = None
 

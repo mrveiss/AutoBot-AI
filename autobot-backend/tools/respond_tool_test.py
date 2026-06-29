@@ -119,7 +119,11 @@ class TestRespondToolProcessing:
         break_loop_result = None
 
         async for item in handler._process_tool_calls(
-            tool_calls, "session_1", "terminal_1", "http://localhost:11434", "llama3"  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+            tool_calls,
+            "session_1",
+            "terminal_1",
+            "http://localhost:11434",
+            "llama3",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         ):
             if isinstance(item, tuple):
                 break_loop_result = item
@@ -150,7 +154,11 @@ class TestRespondToolProcessing:
 
         break_loop_result = None
         async for item in handler._process_tool_calls(
-            tool_calls, "session_1", "terminal_1", "http://localhost:11434", "llama3"  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+            tool_calls,
+            "session_1",
+            "terminal_1",
+            "http://localhost:11434",
+            "llama3",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         ):
             if isinstance(item, tuple):
                 break_loop_result = item
@@ -176,7 +184,11 @@ class TestRespondToolProcessing:
 
         break_loop_result = None
         async for item in handler._process_tool_calls(
-            tool_calls, "session_1", "terminal_1", "http://localhost:11434", "llama3"  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+            tool_calls,
+            "session_1",
+            "terminal_1",
+            "http://localhost:11434",
+            "llama3",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         ):
             if isinstance(item, tuple):
                 break_loop_result = item
@@ -196,7 +208,11 @@ class TestRespondToolProcessing:
 
         messages = []
         async for item in handler._process_tool_calls(
-            tool_calls, "session_1", "terminal_1", "http://localhost:11434", "llama3"  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+            tool_calls,
+            "session_1",
+            "terminal_1",
+            "http://localhost:11434",
+            "llama3",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         ):
             if not isinstance(item, tuple):
                 messages.append(item)
@@ -228,7 +244,9 @@ class TestBreakLoopIntegration:
         ]
 
         final_tuple = None
-        async for item in handler._process_tool_calls(tool_calls, "s1", "t1", "http://localhost:11434", "llama3"):  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+        async for item in handler._process_tool_calls(
+            tool_calls, "s1", "t1", "http://localhost:11434", "llama3"
+        ):  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
             if isinstance(item, tuple) and len(item) == 2:
                 final_tuple = item
 
@@ -270,7 +288,9 @@ class TestBackwardsCompatibility:
         tool_calls = []
 
         final_tuple = None
-        async for item in handler._process_tool_calls(tool_calls, "s1", "t1", "http://localhost:11434", "llama3"):  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+        async for item in handler._process_tool_calls(
+            tool_calls, "s1", "t1", "http://localhost:11434", "llama3"
+        ):  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
             if isinstance(item, tuple) and len(item) == 2:
                 final_tuple = item
 

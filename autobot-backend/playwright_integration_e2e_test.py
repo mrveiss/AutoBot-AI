@@ -27,7 +27,9 @@ async def test_playwright_service():
         print("-" * 40)  # noqa: print
 
         try:
-            async with session.get("http://localhost:3000/health") as response:  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+            async with session.get(
+                "http://localhost:3000/health"
+            ) as response:  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                 if response.status == 200:
                     health_data = await response.json()
                     print("✅ Playwright service is healthy")  # noqa: print
@@ -51,7 +53,9 @@ async def test_playwright_service():
         }
 
         try:
-            async with session.post("http://localhost:3000/scrape", json=scrape_request) as response:  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+            async with session.post(
+                "http://localhost:3000/scrape", json=scrape_request
+            ) as response:  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                 if response.status == 200:
                     result = await response.json()
                     print("✅ Web scraping successful")  # noqa: print

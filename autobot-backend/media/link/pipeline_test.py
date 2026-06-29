@@ -390,7 +390,9 @@ class TestLinkPipelineJina:
     async def test_jina_skipped_for_localhost(self):
         """Jina fast-path is not attempted for localhost URLs."""
         pipe = LinkPipeline()
-        assert not pipe._is_public_url("http://localhost:8080/page")  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+        assert not pipe._is_public_url(
+            "http://localhost:8080/page"
+        )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         assert not pipe._is_public_url("http://127.0.0.1/api")
 
     @pytest.mark.asyncio

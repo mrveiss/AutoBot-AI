@@ -146,7 +146,9 @@ class TestSLMClientReconnectBackoff:
     """Tests for exponential backoff in the WebSocket reconnect loop (#4664)."""
 
     def _make_client(self) -> SLMClient:
-        return SLMClient(slm_url="https://127.0.0.1:8000")  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+        return SLMClient(
+            slm_url="https://127.0.0.1:8000"
+        )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
     @pytest.mark.asyncio
     async def test_reconnect_delay_starts_at_one_second(self) -> None:
@@ -453,7 +455,9 @@ class TestWsUrlPrefixSelection:
     @pytest.mark.asyncio
     async def test_loopback_host_uses_api_prefix(self) -> None:
         """Loopback SLM URL (direct port, no nginx) uses /api/ws/events (#9967)."""
-        client = SLMClient(slm_url="http://127.0.0.1:8000")  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+        client = SLMClient(
+            slm_url="http://127.0.0.1:8000"
+        )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
         with (
             patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
@@ -469,7 +473,9 @@ class TestWsUrlPrefixSelection:
     @pytest.mark.asyncio
     async def test_localhost_name_uses_api_prefix(self) -> None:
         """'localhost' hostname (loopback) also uses /api/ws/events, not /slm prefix."""
-        client = SLMClient(slm_url="http://localhost:8000")  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+        client = SLMClient(
+            slm_url="http://localhost:8000"
+        )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
         with (
             patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),

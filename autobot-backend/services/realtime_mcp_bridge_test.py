@@ -171,7 +171,9 @@ class TestTranslateInputSchema:
 
 class TestServerIdFromUri:
     def test_http_uri(self):
-        assert _server_id_from_uri("http://localhost:8200") == "localhost_8200"  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+        assert (
+            _server_id_from_uri("http://localhost:8200") == "localhost_8200"
+        )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
     def test_sse_uri(self):
         assert _server_id_from_uri("sse://mcp.example.com/events") == "mcp_example_com"

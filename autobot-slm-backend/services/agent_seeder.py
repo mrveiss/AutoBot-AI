@@ -24,8 +24,8 @@ from autobot_shared.ssot_config import (
     QUALITY_MODEL,
     ROUTING_MODEL,
     SYSTEM_MODEL,
-    config as _ssot_config,
 )
+from autobot_shared.ssot_config import config as _ssot_config
 from models.database import Agent
 
 logger = logging.getLogger(__name__)

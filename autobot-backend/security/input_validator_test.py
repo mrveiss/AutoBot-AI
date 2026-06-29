@@ -124,7 +124,9 @@ class TestURLValidation:
 
     def test_localhost_url(self):
         validator = WebResearchInputValidator()
-        result = validator.validate_url("http://localhost:8080/")  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+        result = validator.validate_url(
+            "http://localhost:8080/"
+        )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         assert len(result["warnings"]) > 0
 
 
