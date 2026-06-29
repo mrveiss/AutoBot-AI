@@ -208,22 +208,30 @@ class ChatMessageData(BaseModel):
 
 
 class ChatHealthComponents(BaseModel):
-    """Component health subsection of ChatHealthData."""
+    """Component health subsection of ChatHealthData (kept for import compat)."""
 
     chat_history_manager: str
     llm_service: str
 
 
 class ChatHealthData(BaseModel):
-    """Response shape for GET /chat/health (#6497).
+    """Response shape for GET /chat/health and GET /health-enhanced (#6497, #10654).
 
-    Wire format is the model itself — no DataResponse envelope. The route
-    declares response_model=ChatHealthData directly.
+    Canonical model for both health endpoints. Wire format is the model itself —
+    no DataResponse envelope. ``components`` is Dict[str, Any] so it handles
+    both the fixed {chat_history_manager, llm_service} shape from /chat/health
+    and the heterogeneous per-component map from /health-enhanced.
+    ``error`` is only populated on the /health-enhanced error path.
     """
 
     status: str
     timestamp: str
-    components: ChatHealthComponents
+    components: Dict[str, Any]
+    error: str | None = None
+
+
+# Backward-compat alias — existing imports of EnhancedChatHealthData keep working.
+EnhancedChatHealthData = ChatHealthData
 
 
 class ChatStatsData(BaseModel):
@@ -267,20 +275,6 @@ class EnhancedChatData(BaseModel):
     timestamp: str | None = None
     metadata: Dict[str, Any] | None = None
     knowledge_sources: List[Dict[str, Any]] | None = None
-
-
-class EnhancedChatHealthData(BaseModel):
-    """Response shape for GET /health-enhanced (#6497).
-
-    Wire format is the model itself — no DataResponse envelope. The
-    components map is heterogeneous (per-component status strings keyed
-    by component name) so it is typed as Dict[str, Any].
-    """
-
-    status: str
-    timestamp: str
-    components: Dict[str, Any]
-    error: str | None = None
 
 
 class EnhancedChatCapabilitiesData(BaseModel):
@@ -459,7 +453,14 @@ class ChatResetRequest(BaseModel):
 
 
 class ChatMessage(BaseModel):
-    """Chat message model for requests"""
+    """Chat message model for requests — canonical for both /chat and /enhanced (#10654).
+
+    All ``EnhancedChatMessage``-only fields (use_ai_stack, use_knowledge_base,
+    response_style, include_sources) carry defaults so a plain /chat request
+    that omits them validates without change. ``reasoning_effort`` is used by
+    /chat only and is also optional, so /enhanced requests that omit it still
+    validate.
+    """
 
     content: str = Field(..., min_length=1, max_length=50000, description="Message content")
     role: str = Field(
@@ -475,6 +476,12 @@ class ChatMessage(BaseModel):
         description="Preferred response language code (e.g. 'en', 'es', 'de'). "
         "Overrides personality language when set.",
     )
+    # AI Stack fields (used by /enhanced endpoints; defaulted so /chat requests omit safely)
+    use_ai_stack: bool = Field(True, description="Whether to use AI Stack for enhanced responses")
+    use_knowledge_base: bool = Field(True, description="Whether to include knowledge base context")
+    response_style: str = Field("conversational", description="Response style preference")
+    include_sources: bool = Field(True, description="Whether to include source citations")
+    # Thinking / reasoning fields (shared by both /chat and /enhanced)
     thinking_mode_enabled: bool | None = Field(
         None,
         description="Enable extended thinking mode for reasoning models (Claude 3.7+, DeepSeek R1). "
@@ -496,6 +503,10 @@ class ChatMessage(BaseModel):
     )
 
 
+# Backward-compat alias — existing imports of EnhancedChatMessage keep working.
+EnhancedChatMessage = ChatMessage
+
+
 class ChatResponse(BaseModel):
     """Chat response model"""
 
@@ -515,41 +526,6 @@ class MessageHistory(BaseModel):
     total_count: int
     page: int = 1
     per_page: int = 50
-
-
-class EnhancedChatMessage(BaseModel):
-    """Enhanced chat message with AI Stack integration."""
-
-    content: str = Field(..., min_length=1, max_length=50000, description="Message content")
-    role: str = Field(
-        default=CategoryDefaults.ROLE_USER,
-        pattern="^(user|assistant|system)$",
-        description="Message role",
-    )
-    session_id: str = Field(..., description="Chat session ID")
-    message_type: str | None = Field("text", description="Message type")
-    metadata: Metadata | None = Field(default_factory=dict, description="Additional metadata")
-    language: str | None = Field(
-        None,
-        description="Preferred response language code (e.g. 'en', 'es', 'de'). "
-        "Overrides personality language when set.",
-    )
-    use_ai_stack: bool = Field(True, description="Whether to use AI Stack for enhanced responses")
-    use_knowledge_base: bool = Field(True, description="Whether to include knowledge base context")
-    response_style: str = Field("conversational", description="Response style preference")
-    include_sources: bool = Field(True, description="Whether to include source citations")
-    thinking_mode_enabled: bool | None = Field(
-        None,
-        description="Enable extended thinking mode for reasoning models (Claude 3.7+, DeepSeek R1). "
-        "When enabled, the model performs chain-of-thought reasoning before responding.",
-    )
-    thinking_budget_tokens: int | None = Field(
-        None,
-        ge=1000,
-        le=128000,
-        description="Thinking budget in tokens (e.g., 1000, 5000, 10000, 63000). "
-        "Only used when thinking_mode_enabled=True. Limits the amount of reasoning tokens.",
-    )
 
 
 class ChatPreferences(BaseModel):
