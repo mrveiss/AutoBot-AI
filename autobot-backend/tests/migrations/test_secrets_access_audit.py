@@ -17,8 +17,8 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from autobot_shared.secrets_vault import VaultKind, VaultRef
-from services.secrets_access_audit import describe_secret_access
 from services.envelope_secrets_service import EnvelopeSecretsService
+from services.secrets_access_audit import describe_secret_access
 from tests.migrations.conftest import requires_postgres, run_alembic
 
 pytestmark = [pytest.mark.migration_gate, requires_postgres]
@@ -135,8 +135,8 @@ async def test_describe_unshared_secret_lists_only_owner(session):
 
 
 async def test_coordinator_authorizes_owner_denies_stranger(session):
-    from services.secrets_coordinator import SecretsCoordinator
     from services.envelope_secrets_service import SecretAccessError, SecretNotFoundError
+    from services.secrets_coordinator import SecretsCoordinator
 
     coord = SecretsCoordinator(service=EnvelopeSecretsService(root_key=_ROOT))
     owner = VaultRef(VaultKind.USER, str(_OWNER))
@@ -164,8 +164,8 @@ async def test_coordinator_authorizes_owner_denies_stranger(session):
 async def test_company_member_cannot_audit(session):
     # H1: a company MEMBER can read/write company secrets but lacks 'share' authority, so it must
     # NOT be able to enumerate who-has-access. Only OWNER/ADMIN/LEAD (manage authority) or admins may.
-    from services.secrets_coordinator import SecretsCoordinator
     from services.envelope_secrets_service import SecretAccessError
+    from services.secrets_coordinator import SecretsCoordinator
 
     await _seed_memberships(session)  # _BOB is a "member" of _COMPANY
     coord = SecretsCoordinator(service=EnvelopeSecretsService(root_key=_ROOT))

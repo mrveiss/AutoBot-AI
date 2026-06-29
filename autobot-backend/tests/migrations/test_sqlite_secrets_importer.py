@@ -18,8 +18,8 @@ from cryptography.fernet import Fernet
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from autobot_shared.secrets_vault import VaultKind, VaultRef
-from services.sqlite_secrets_importer import import_sqlite_secrets
 from services.envelope_secrets_service import EnvelopeSecretsService
+from services.sqlite_secrets_importer import import_sqlite_secrets
 from tests.migrations.conftest import requires_postgres, run_alembic
 
 pytestmark = [pytest.mark.migration_gate, requires_postgres]

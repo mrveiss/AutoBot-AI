@@ -17,8 +17,8 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from autobot_shared.secrets_vault import VaultKind, VaultRef
-from services.secrets_coordinator import SecretsCoordinator
 from services.envelope_secrets_service import EnvelopeSecretsService, SecretAccessError, SecretNotFoundError
+from services.secrets_coordinator import SecretsCoordinator
 from tests.migrations.conftest import requires_postgres, run_alembic
 
 pytestmark = [pytest.mark.migration_gate, requires_postgres]

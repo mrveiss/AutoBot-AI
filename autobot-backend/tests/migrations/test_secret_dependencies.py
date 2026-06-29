@@ -18,8 +18,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
-from services.secret_dependency_service import SecretDependencyService
 from services.envelope_secrets_service import EnvelopeSecretsService
+from services.secret_dependency_service import SecretDependencyService
 from tests.migrations.conftest import requires_postgres, run_alembic
 
 pytestmark = [pytest.mark.migration_gate, requires_postgres]
@@ -98,8 +98,8 @@ async def test_secret_deletion_cascades_dependencies(session):
 async def test_coordinator_describe_dependencies_authz(session):
     # The /dependencies endpoint routes through coordinator.describe_dependencies, gated on manage
     # (share) authority — owner/admin may view the impact list; a stranger may not.
-    from services.secrets_coordinator import SecretsCoordinator
     from services.envelope_secrets_service import SecretAccessError, SecretNotFoundError
+    from services.secrets_coordinator import SecretsCoordinator
 
     coord = SecretsCoordinator(service=EnvelopeSecretsService(root_key=_ROOT))
     owner = VaultRef(VaultKind.USER, str(_OWNER))

@@ -25,8 +25,8 @@ def reconcile_credentials() -> dict:
 
 async def _run() -> dict:
     from autobot_shared.secrets_envelope import load_root_key
-    from services.secrets_service import get_secrets_service
     from services.credential_reconcile import reconcile_connector_credentials
+    from services.secrets_service import get_secrets_service
     from user_management.database import get_async_session_factory
 
     try:

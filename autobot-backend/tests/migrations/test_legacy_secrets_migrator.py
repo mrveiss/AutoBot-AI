@@ -19,8 +19,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
-from services.legacy_secrets_migrator import migrate_pg_legacy_secrets
 from services.envelope_secrets_service import EnvelopeSecretsService
+from services.legacy_secrets_migrator import migrate_pg_legacy_secrets
 from tests.migrations.conftest import requires_postgres, run_alembic
 
 pytestmark = [pytest.mark.migration_gate, requires_postgres]
