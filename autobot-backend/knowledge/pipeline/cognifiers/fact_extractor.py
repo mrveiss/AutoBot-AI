@@ -59,10 +59,14 @@ Each chunk is labeled "Chunk N:". For each fact provide:
 - fact_type: One of 'statement', 'relationship', 'property', 'definition', 'rule', 'measurement'
 - description, context, confidence (0.0-1.0)
 
-Return a JSON object mapping each chunk index (as a string) to its array of facts;
-use an empty array for chunks with no facts. Example for two chunks:
+Return a JSON object mapping each chunk index (as a string) to its array of facts
+(each fact uses the same fields listed above); use an empty array for chunks with
+no facts. Example for two chunks:
 {{
-  "0": [{{"subject": "...", "predicate": "...", "object": "...", "fact_type": "statement", "description": "...", "context": "...", "confidence": 0.9}}],
+  "0": [
+    {{"subject": "...", "predicate": "...", "object": "...",
+      "fact_type": "statement", "description": "...", "context": "...", "confidence": 0.9}}
+  ],
   "1": []
 }}
 
