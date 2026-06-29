@@ -17,7 +17,7 @@ Two authority domains, dispatched on :class:`VaultKind`:
   :class:`MembershipRole` in that company maps directly to allowed actions.
 
 The output ``accessible_vaults`` set is exactly what
-``UnifiedSecretsService.read``/``list_for_vaults`` take; ``authorize`` gates the
+``EnvelopeSecretsService.read``/``list_for_vaults`` take; ``authorize`` gates the
 mutating operations (write/share/revoke) before the service acts.
 """
 

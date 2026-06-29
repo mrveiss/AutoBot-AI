@@ -6,14 +6,14 @@
 
 The SLM Manager is a *client* of the autobot-backend unified-secrets API.
 Secrets are stored in the **System vault** via HMAC-authenticated HTTP calls
-(``unified_vault_client``), replacing the previous SLM-local ``SystemSecret``
+(``vault_client``), replacing the previous SLM-local ``SystemSecret``
 table as the canonical store.
 
 Backward-compatible read path
 ------------------------------
 During rollout (before migration runs) the vault may not yet hold a secret.
 ``retrieve_secret`` falls back to the legacy ``SystemSecret`` table when the
-vault lookup returns ``UnifiedVaultSecretNotFound``.  Once ``migrate_to_vault``
+vault lookup returns ``VaultSecretNotFound``.  Once ``migrate_to_vault``
 has been run the fallback never fires.
 
 Secret naming in the vault
@@ -133,8 +133,8 @@ class SSOSecretsManager:
         Idempotent: updates the vault secret when ``{field}_vault_id`` is
         already present in config (or when a vault entry with that name exists).
         """
-        from user_management.services.unified_vault_client import (
-            UnifiedVaultClientError,
+        from user_management.services.vault_client import (
+            VaultClientError,
             is_configured,
             vault_create,
             vault_rotate,
@@ -161,7 +161,7 @@ class SSOSecretsManager:
                     meta = await vault_create(name, _SECRET_TYPE, value)
                     existing_vault_id_str = str(meta["id"])
                     logger.info("unified-vault: created SSO secret field=%s provider=%s", field, provider_id)
-            except UnifiedVaultClientError as exc:
+            except VaultClientError as exc:
                 # Vault unavailable — keep plaintext out of config, propagate.
                 logger.error("unified-vault: failed to store SSO secret field=%s: %s", field, type(exc).__name__)
                 raise
@@ -178,9 +178,9 @@ class SSOSecretsManager:
         Primary: unified vault (via vault UUID cached in provider config).
         Fallback: legacy SystemSecret table (migration window only).
         """
-        from user_management.services.unified_vault_client import (
-            UnifiedVaultClientError,
-            UnifiedVaultSecretNotFound,
+        from user_management.services.vault_client import (
+            VaultClientError,
+            VaultSecretNotFound,
             is_configured,
             vault_read,
         )
@@ -195,13 +195,13 @@ class SSOSecretsManager:
         if vault_id is not None:
             try:
                 return await vault_read(vault_id)
-            except UnifiedVaultSecretNotFound:
+            except VaultSecretNotFound:
                 logger.warning(
                     "unified-vault: secret not found, falling back to legacy; field=%s provider=%s",
                     field,
                     provider_id,
                 )
-            except UnifiedVaultClientError as exc:
+            except VaultClientError as exc:
                 logger.error(
                     "unified-vault: read failed field=%s: %s; falling back to legacy",
                     field,
@@ -213,7 +213,7 @@ class SSOSecretsManager:
             if vault_id is not None:
                 try:
                     return await vault_read(vault_id)
-                except UnifiedVaultClientError as exc:
+                except VaultClientError as exc:
                     logger.warning(
                         "unified-vault: read-by-name failed field=%s provider=%s: %s; falling back to legacy",
                         field,
@@ -226,9 +226,9 @@ class SSOSecretsManager:
 
     async def delete_secrets(self, provider_id: uuid.UUID) -> None:
         """Delete all vault secrets for an SSO provider."""
-        from user_management.services.unified_vault_client import (
-            UnifiedVaultClientError,
-            UnifiedVaultSecretNotFound,
+        from user_management.services.vault_client import (
+            VaultClientError,
+            VaultSecretNotFound,
             is_configured,
             vault_delete,
         )
@@ -247,9 +247,9 @@ class SSOSecretsManager:
             try:
                 await vault_delete(vault_id)
                 logger.info("unified-vault: deleted SSO secret field=%s provider=%s", field, provider_id)
-            except UnifiedVaultSecretNotFound:
+            except VaultSecretNotFound:
                 pass  # already gone — idempotent
-            except UnifiedVaultClientError as exc:
+            except VaultClientError as exc:
                 logger.warning("unified-vault: delete failed field=%s: %s", field, type(exc).__name__)
 
         # Also clean up legacy SystemSecret rows if present.
@@ -278,8 +278,8 @@ class SSOSecretsManager:
         """
         from models.database import SystemSecret
         from services.encryption import decrypt_data
-        from user_management.services.unified_vault_client import (
-            UnifiedVaultClientError,
+        from user_management.services.vault_client import (
+            VaultClientError,
             vault_create,
         )
 
@@ -326,7 +326,7 @@ class SSOSecretsManager:
 
             try:
                 meta = await vault_create(key, _SECRET_TYPE, plaintext)
-            except UnifiedVaultClientError as exc:
+            except VaultClientError as exc:
                 logger.error(
                     "migrate_to_vault: vault_create failed field=%s provider=%s: %s",
                     field,
@@ -376,7 +376,7 @@ class SSOSecretsManager:
 
     async def _find_vault_id_by_name(self, provider_id: uuid.UUID, field: str) -> uuid.UUID | None:
         """Scan vault listing to find a secret by canonical name (slow path)."""
-        from user_management.services.unified_vault_client import UnifiedVaultClientError, vault_list
+        from user_management.services.vault_client import VaultClientError, vault_list
 
         target = _vault_name(provider_id, field)
         try:
@@ -384,7 +384,7 @@ class SSOSecretsManager:
             for entry in entries:
                 if entry.get("name") == target:
                     return uuid.UUID(entry["id"])
-        except UnifiedVaultClientError:
+        except VaultClientError:
             pass
         return None
 

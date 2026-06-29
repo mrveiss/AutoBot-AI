@@ -17,8 +17,8 @@ from datetime import timedelta
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import now_utc, parse_utc_iso
-from services.unified_credential_read import load_imported_credential
-from services.unified_credential_write import delete_credential_from_unified, mirror_credential_to_unified
+from services.credential_read import load_imported_credential
+from services.credential_write import delete_credential_from_unified, mirror_credential_to_unified
 
 logger = get_logger(__name__)
 

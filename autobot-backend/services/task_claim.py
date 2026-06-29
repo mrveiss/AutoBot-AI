@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from services.audit.unified_audit import AuditCategory, AuditEvent, emit
+from services.audit.audit import AuditCategory, AuditEvent, emit
 
 logger = get_logger(__name__)
 
