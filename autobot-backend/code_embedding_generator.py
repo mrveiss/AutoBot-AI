@@ -69,6 +69,8 @@ class CodeEmbeddingGenerator:
         self._init_lock = asyncio.Lock()
         # Issue #3290: track actual OpenVINO compiled device for accurate metrics
         self._openvino_device = "cpu"
+        # #10689: True when NPU hardware is present but embeddings run elsewhere.
+        self.npu_underutilized = False
 
     async def initialize(self) -> None:
         """Initialize the CodeBERT model with hardware detection."""
@@ -183,12 +185,40 @@ class CodeEmbeddingGenerator:
                 target_device,
                 "NPU" in devices,
             )
+            self._emit_utilization_signal("NPU" in devices, self._openvino_device)
 
         except Exception as e:
             logger.warning("OpenVINO conversion failed: %s, using PyTorch", e)
             self.openvino_model = None
             self._openvino_device = "cpu"
             self.npu_available = False
+            # #10689: a conversion failure on an NPU box means the accelerator is
+            # going unused — flag it distinctly so monitoring can catch it.
+            self._emit_utilization_signal(self._npu_device_present(), "cpu")
+
+    @staticmethod
+    def _npu_underutilized(npu_present: bool, device_used: str) -> bool:
+        """True when NPU hardware exists but embeddings run elsewhere (#10689)."""
+        return npu_present and device_used.lower() != "npu"
+
+    def _emit_utilization_signal(self, npu_present: bool, device_used: str) -> None:
+        """Flag + warn when an available NPU is going unused, so it's observable (#10689)."""
+        self.npu_underutilized = self._npu_underutilized(npu_present, device_used)
+        if self.npu_underutilized:
+            logger.warning(
+                "NPU_UNDERUTILIZED: NPU hardware detected but CodeBERT embeddings running on %s",
+                device_used,
+            )
+
+    @staticmethod
+    def _npu_device_present() -> bool:
+        """Best-effort check for NPU hardware, safe to call from the failure path (#10689)."""
+        try:
+            from openvino.runtime import Core
+
+            return "NPU" in Core().available_devices
+        except Exception:  # openvino missing or probe failed — assume no NPU
+            return False
 
     def _get_cache_key(self, code: str, language: str) -> str:
         """Generate cache key for code embedding."""
