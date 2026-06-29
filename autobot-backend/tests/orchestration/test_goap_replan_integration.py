@@ -207,8 +207,8 @@ async def test_goap_replan_unreachable_falls_back_to_fallback_chain():
 
 
 def _make_strategy_planner():
-    from orchestration.workflow_planning import StrategyPlanner
     from orchestration.types import AgentCapability
+    from orchestration.workflow_planning import StrategyPlanner
 
     agent_caps = {
         "research_agent": {AgentCapability.RESEARCH},

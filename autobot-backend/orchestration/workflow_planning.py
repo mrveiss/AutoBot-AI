@@ -24,7 +24,6 @@ import uuid
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
-
 from autobot_shared.workflow import ExecutionStrategy
 
 from .types import AgentCapability, AgentTask, WorkflowPlan

@@ -38,9 +38,9 @@ from enum import Enum
 from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.workflow import ExecutionStrategy
 from config.manager import get_config_manager as _get_config_manager
 from constants.threshold_constants import LLMDefaults, TimingConstants
-from autobot_shared.workflow import ExecutionStrategy
 from memory import LongTermMemoryManager
 
 # Issue #5040 / #10666 B3: multi-agent imports (consolidated into orchestration)
