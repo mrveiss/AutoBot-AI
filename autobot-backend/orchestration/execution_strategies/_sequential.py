@@ -2,7 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Sequential execution strategy (GH #6830)."""
+"""Sequential execution strategy (GH #6830).
+
+Moved from enhanced_orchestration.execution_strategies._sequential to
+orchestration.execution_strategies._sequential (issue #10666 B3).
+"""
 
 import asyncio
 from typing import Any, Callable, Dict

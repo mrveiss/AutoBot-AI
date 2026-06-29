@@ -2,11 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Unit tests for success_criteria module.  Issue #3293."""
+"""Unit tests for success_criteria module.  Issue #3293.
+
+Moved from enhanced_orchestration/success_criteria_test.py (issue #10666 B3).
+"""
 
 import pytest
 
-from enhanced_orchestration.success_criteria import (
+from orchestration.success_criteria import (
     CriteriaResult,
     EvaluationResult,
     SuccessCriteria,

@@ -8,13 +8,15 @@ GH #6819: This class was renamed from ``AgentRouter`` to ``TaskAgentScorer`` to 
 it from ``agents.agent_orchestration.routing.AgentRouter`` (522 LOC, user-request routing).
 ``TaskAgentScorer`` handles *workflow-task* scoring; the other ``AgentRouter`` handles
 *user-request* routing.  The old name is retained as an alias for backward compatibility.
+
+Moved from enhanced_orchestration.agent_router to orchestration.agent_router (issue #10666 B3).
 """
 
 from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from orchestration import AgentCapability
 from orchestration.performance_tracker import PerformanceTracker
+from orchestration.types import AgentCapability
 
 logger = get_logger("task_agent_scorer")
 

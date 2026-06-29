@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-# Make ``autobot-backend`` importable for bare ``enhanced_orchestration.*`` imports.
+# Make ``autobot-backend`` importable for bare ``orchestration.*`` imports.
 _BACKEND = Path(__file__).resolve().parent.parent
 if str(_BACKEND) not in sys.path:
     sys.path.insert(0, str(_BACKEND))
@@ -54,7 +54,7 @@ def test_workflow_task_has_skill_binding_fields() -> None:
 
 @pytest.fixture
 def planner():
-    from enhanced_orchestration.workflow_planning import StrategyPlanner
+    from orchestration.workflow_planning import StrategyPlanner
 
     return StrategyPlanner(agent_capabilities={})
 
@@ -62,7 +62,7 @@ def planner():
 @pytest.fixture
 def strict_planner():
     """StrategyPlanner with strict_gap_fill=True for Phase 3 tests."""
-    from enhanced_orchestration.workflow_planning import StrategyPlanner
+    from orchestration.workflow_planning import StrategyPlanner
 
     return StrategyPlanner(agent_capabilities={}, strict_gap_fill=True)
 
@@ -164,7 +164,7 @@ async def test_router_exception_leaves_skill_fields_none(planner, plan_data) -> 
 async def test_router_unavailable_silent_fallback(monkeypatch, planner, plan_data) -> None:
     """If skill_router cannot be instantiated, plan-build still succeeds."""
     # Force the lazy init to fail by monkeypatching the import path
-    import enhanced_orchestration.workflow_planning as wp
+    import orchestration.workflow_planning as wp
 
     wp.StrategyPlanner._get_skill_router
 
@@ -280,7 +280,7 @@ async def test_no_match_unsuccessful_response_does_not_trigger_gap_fill(planner,
 
 def test_strict_gap_fill_default_is_lenient() -> None:
     """StrategyPlanner defaults to lenient mode (strict_gap_fill=False)."""
-    from enhanced_orchestration.workflow_planning import StrategyPlanner
+    from orchestration.workflow_planning import StrategyPlanner
 
     p = StrategyPlanner(agent_capabilities={})
     assert p.strict_gap_fill is False

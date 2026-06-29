@@ -2,7 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Unit tests for BlockedPlanResumer (#7431)."""
+"""Unit tests for BlockedPlanResumer (#7431).
+
+Moved from enhanced_orchestration/blocked_plan_resumer_test.py (issue #10666 B3).
+"""
 
 import asyncio
 import json
@@ -10,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from enhanced_orchestration.blocked_plan_resumer import BlockedPlanResumer
+from orchestration.blocked_plan_resumer import BlockedPlanResumer
 
 
 def _runner_with_plans(active: dict) -> MagicMock:

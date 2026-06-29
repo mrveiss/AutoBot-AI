@@ -2,7 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Autonomous subagent spawning for parallel workstreams."""
+"""Autonomous subagent spawning for parallel workstreams.
+
+Moved from enhanced_orchestration.subagent_dispatcher to
+orchestration.subagent_dispatcher (issue #10666 B3).
+"""
 
 import asyncio
 import json

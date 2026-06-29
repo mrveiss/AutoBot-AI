@@ -13,6 +13,11 @@ production callers (only re-exports through ``__init__.py``); the alias
 preserves the import path so any future caller of ``orchestration.types``
 gets the canonical type, per the wire-in-not-delete rule.
 
+Issue #10666 Batch B3: Folded in symbols previously owned by
+``enhanced_orchestration/types.py`` (FALLBACK_TIERS, WorkflowDependencies,
+WorkflowPlan subclass with structured_criteria) as part of the full
+enhanced_orchestration → orchestration consolidation.
+
 Contains enums and dataclasses for agent orchestration.
 """
 
@@ -20,18 +25,37 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Set
+from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, List, Set
 
 from autobot_shared.workflow import WorkflowPlan as _SharedWorkflowPlan
 from autobot_shared.workflow import WorkflowTask as _WorkflowTask
 from constants.status_enums import TaskStatus
+
+if TYPE_CHECKING:
+    from orchestration.success_criteria import SuccessCriteria
 
 # Transitional aliases — Phase 3 of #6951 consolidates the two #381-derivative
 # shapes here onto canonical types. ``orchestration.types`` had zero importers
 # of these names by the time this landed (verified on Dev_new_gui), so the
 # alias is risk-free and preserves the import path for any future caller.
 WorkflowStep = _WorkflowTask
-WorkflowPlan = _SharedWorkflowPlan
+
+# Canonical set of fallback tier names (formerly enhanced_orchestration.types.FALLBACK_TIERS).
+FALLBACK_TIERS: FrozenSet[str] = frozenset({"basic", "emergency"})
+
+
+@dataclass
+class WorkflowPlan(_SharedWorkflowPlan):
+    """Enhanced workflow plan with structured success criteria.
+
+    Inherits every field from ``autobot_shared.workflow.WorkflowPlan`` (#6951
+    Phase 1b). ``structured_criteria`` (#3293) lives here — it depends on
+    backend-only ``SuccessCriteria`` semantics for partial/full/failed evaluation.
+
+    Folded in from enhanced_orchestration.types (issue #10666 B3).
+    """
+
+    structured_criteria: List["SuccessCriteria"] = field(default_factory=list)
 
 
 class AgentCapability(Enum):
@@ -129,5 +153,24 @@ class AgentInteraction:
     outcome: str = TaskStatus.PENDING.value
 
 
-# NOTE: ``WorkflowStep`` and ``WorkflowPlan`` aliases are declared at module
-# top alongside the imports they depend on. See the docstring for context.
+@dataclass
+class WorkflowDependencies:
+    """Groups the callable dependencies injected into ExecutionStrategyHandler (#6422).
+
+    Replaces 6 positional Callable params with a single named container, making
+    the constructor testable and the dependency surface explicit.
+
+    Folded in from enhanced_orchestration.types (issue #10666 B3).
+    """
+
+    execute_single_task: Callable
+    topological_sort_tasks: Callable
+    dependencies_met: Callable
+    group_pipeline_stages: Callable
+    enhance_task_for_collaboration: Callable
+    coordinate_collaboration: Callable
+
+
+# AgentTask is the canonical WorkflowTask alias — re-export for callers
+# previously importing from enhanced_orchestration.types (issue #10666 B3).
+AgentTask = _WorkflowTask

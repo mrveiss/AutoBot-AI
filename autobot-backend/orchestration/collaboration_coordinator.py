@@ -2,7 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Redis pub/sub collaboration coordinator extracted from WorkflowRunner (#6393)."""
+"""Redis pub/sub collaboration coordinator extracted from WorkflowRunner (#6393).
+
+Moved from enhanced_orchestration.collaboration_coordinator to
+orchestration.collaboration_coordinator (issue #10666 B3).
+"""
 
 import asyncio
 import json

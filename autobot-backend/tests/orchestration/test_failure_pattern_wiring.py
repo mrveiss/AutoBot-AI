@@ -9,6 +9,8 @@ Verifies the previously-unwired detector is now driven on workflow failure:
 - a known recurring pattern is surfaced as `known_failure_pattern` (read side)
 - a first-time failure returns no annotation
 - detector/Redis errors never break failure handling
+
+Moved from tests/enhanced_orchestration/ to tests/orchestration/ (issue #10666 B3).
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ import types
 
 import pytest
 
-from enhanced_orchestration.workflow_runner import WorkflowRunner
+from orchestration.workflow_runner import WorkflowRunner
 
 
 class _FakeDetector:

@@ -13,6 +13,9 @@ agent routing and collaboration to injected collaborators.  It does not handle D
 or step-level checkpoints — those remain in orchestration.WorkflowExecutor and
 CheckpointResumer.  WorkflowRunner is the post-#5058 successor for the multi-agent path;
 orchestration.WorkflowExecutor remains canonical for the legacy step-based path.
+
+Moved from enhanced_orchestration.workflow_runner to orchestration.workflow_runner
+(issue #10666 B3).
 """
 
 import asyncio
@@ -20,14 +23,14 @@ import time
 from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from enhanced_orchestration.agent_router import AgentRouter
-from enhanced_orchestration.collaboration_coordinator import CollaborationCoordinator
-from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
-from enhanced_orchestration.success_criteria import SuccessCriteriaEvaluator
-from enhanced_orchestration.types import AgentTask, WorkflowDependencies, WorkflowPlan
-from enhanced_orchestration.workflow_planning import StrategyPlanner
 from events.bus import PersistStrategy, publish_event
+from orchestration.agent_router import AgentRouter
+from orchestration.collaboration_coordinator import CollaborationCoordinator
+from orchestration.execution_strategies import ExecutionStrategyHandler
 from orchestration.performance_tracker import PerformanceTracker
+from orchestration.success_criteria import SuccessCriteriaEvaluator
+from orchestration.types import AgentTask, WorkflowDependencies, WorkflowPlan
+from orchestration.workflow_planning import StrategyPlanner
 
 logger = get_logger("workflow_runner")
 
@@ -143,7 +146,7 @@ class WorkflowRunner:
         skill is promoted. #7431, ADR-006 §Q1.
         """
         if self._resumer is None:
-            from enhanced_orchestration.blocked_plan_resumer import BlockedPlanResumer
+            from orchestration.blocked_plan_resumer import BlockedPlanResumer
 
             self._resumer = BlockedPlanResumer(self)
         return self._resumer

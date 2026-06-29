@@ -2,7 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Unit tests for CollaborationCoordinator. Issue #6421."""
+"""Unit tests for CollaborationCoordinator. Issue #6421.
+
+Moved from enhanced_orchestration/collaboration_coordinator_test.py (issue #10666 B3).
+"""
 
 import asyncio
 import json
@@ -10,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from enhanced_orchestration.collaboration_coordinator import CollaborationCoordinator
+from orchestration.collaboration_coordinator import CollaborationCoordinator
 
 # ---------------------------------------------------------------------------
 # Helpers

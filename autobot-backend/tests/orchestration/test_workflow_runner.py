@@ -2,18 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Unit tests for WorkflowRunner. Issue #6421."""
+"""Unit tests for WorkflowRunner. Issue #6421.
+
+Moved from enhanced_orchestration/workflow_runner_test.py (issue #10666 B3).
+"""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from enhanced_orchestration.types import (
-    AgentTask,
-    ExecutionStrategy,
-    WorkflowPlan,
-)
-from enhanced_orchestration.workflow_runner import WorkflowRunner
+from autobot_shared.workflow import ExecutionStrategy
+from orchestration.types import AgentTask, WorkflowPlan
+from orchestration.workflow_runner import WorkflowRunner
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -80,7 +80,7 @@ def _make_runner(criteria_evaluator=None):
 
 
 def test_default_criteria_evaluator_created_when_none():
-    from enhanced_orchestration.success_criteria import SuccessCriteriaEvaluator
+    from orchestration.success_criteria import SuccessCriteriaEvaluator
 
     runner = _make_runner()
     assert isinstance(runner._criteria_evaluator, SuccessCriteriaEvaluator)
@@ -134,8 +134,7 @@ async def test_fallback_depth_capped_at_5():
         mock_handler.execute_by_strategy = AsyncMock(side_effect=RuntimeError("always fails"))
         mock_handler_fn.return_value = mock_handler
 
-        with patch("enhanced_orchestration.workflow_runner._get_event_manager") as mock_em:
-            mock_em.return_value.publish = AsyncMock()
+        with patch("events.bus.publish_event", new_callable=AsyncMock):
 
             root_plan = _plan()
             # Build a chain of 6 fallbacks (depth 0-5 = 6 levels total)
@@ -401,8 +400,7 @@ async def test_try_resume_clears_pending_re_binds_and_executes(_fresh_pending_sk
         mock_handler.execute_by_strategy = AsyncMock(return_value={"t1": {"status": "completed"}})
         mock_handler_fn.return_value = mock_handler
 
-        with patch("enhanced_orchestration.workflow_runner._get_event_manager") as mock_em:
-            mock_em.return_value.publish = AsyncMock()
+        with patch("events.bus.publish_event", new_callable=AsyncMock):
             result = await runner.try_resume_blocked_plan(plan.plan_id)
 
     assert result["resumed"] is True
@@ -461,8 +459,7 @@ async def test_try_resume_clears_pending_skills_registry_entry(_fresh_pending_sk
         mock_handler = AsyncMock()
         mock_handler.execute_by_strategy = AsyncMock(return_value={})
         mock_handler_fn.return_value = mock_handler
-        with patch("enhanced_orchestration.workflow_runner._get_event_manager") as mock_em:
-            mock_em.return_value.publish = AsyncMock()
+        with patch("events.bus.publish_event", new_callable=AsyncMock):
             await runner.try_resume_blocked_plan(plan.plan_id)
 
     assert get_pending_skills_registry().get(binding.pending_skill_id) is None
