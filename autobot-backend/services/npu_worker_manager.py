@@ -38,7 +38,7 @@ from utils.async_initializable import AsyncInitializable
 logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for worker events that include full data
-_WORKER_FULL_DATA_EVENTS = frozenset({"worker.added", "worker.updated"})
+_WORKER_FULL_DATA_EVENTS = frozenset({"worker.added", "worker.updated", "worker.metrics.updated"})
 
 # GH#6739: Pulse-probe canary config path
 _PULSE_CANARIES_CONFIG = Path("config/npu_pulse_canaries.yaml")
@@ -790,6 +790,39 @@ class NPUWorkerManager(AsyncInitializable):
         except Exception as e:
             logger.error("Failed to store worker status in Redis: %s", e)
 
+    def _build_worker_metrics(self, worker_id: str, status: NPUWorkerStatus) -> NPUWorkerMetrics:
+        """Derive per-worker metrics from heartbeat-reported counters (#10697).
+
+        success_rate is computed from the heartbeat's task counters. Caveats
+        (refinements tracked as follow-ups): requests_per_minute is a lifetime
+        average (completed/uptime), not a recent/windowed rate; peak_load is the
+        current load sample at heartbeat time, not a true max-observed; and
+        avg_response_time_ms needs per-worker latency aggregation (#10698) so is
+        left at its default.
+        """
+        completed = getattr(status, "total_tasks_completed", 0) or 0
+        failed = getattr(status, "total_tasks_failed", 0) or 0
+        total = completed + failed
+        uptime = getattr(status, "uptime_seconds", 0) or 0
+        return NPUWorkerMetrics(
+            id=worker_id,
+            success_rate=round(completed / total * 100.0, 2) if total else 100.0,
+            requests_per_minute=round(completed / (uptime / 60.0), 2) if uptime else 0.0,
+            peak_load=getattr(status, "current_load", 0) or 0,
+        )
+
+    async def _store_worker_metrics(self, worker_id: str, metrics: NPUWorkerMetrics) -> None:
+        """Store worker metrics in Redis (#10697; mirrors _store_worker_status)."""
+        if not self.redis_client:
+            return
+
+        try:
+            key = f"npu:worker:{worker_id}:metrics"
+            ttl = self._load_balancing_config.health_check_interval * 2
+            await self.redis_client.setex(key, ttl, metrics.json())
+        except Exception as e:
+            logger.error("Failed to store worker metrics in Redis: %s", e)
+
     async def _emit_worker_event(self, event_type: str, worker_details: NPUWorkerDetails) -> None:
         """Emit worker event via event_manager (Issue #372 - refactored)"""
         try:
@@ -950,12 +983,17 @@ class NPUWorkerManager(AsyncInitializable):
 
         # Store in Redis
         await self._store_worker_status(worker_id, status)
+        # #10697: produce per-worker metrics from the heartbeat counters so the
+        # npu.worker.metrics.updated subscribers (live UI, cache invalidation)
+        # actually receive data — previously there was no producer at all.
+        await self._store_worker_metrics(worker_id, self._build_worker_metrics(worker_id, status))
 
-        # Emit status changed event if worker exists
+        # Emit status + metrics events if worker exists
         if worker_id in self._workers:
             worker_details = await self.get_worker(worker_id)
             if worker_details:
                 await self._emit_worker_event("worker.heartbeat", worker_details)
+                await self._emit_worker_event("worker.metrics.updated", worker_details)
 
         logger.debug("Updated worker status from heartbeat: %s", worker_id)
 
