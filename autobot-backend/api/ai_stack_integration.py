@@ -15,16 +15,16 @@ from fastapi import APIRouter, Depends
 
 from api.schemas_agent import (
     ComprehensiveResearchData,
-    EnhancedKnowledgeSearchData,
+    KnowledgeSearchData,
     MultiAgentQueryData,
 )
 from api.schemas_ai_stack import (
     AIStackAgentsData,
+    ChatResult,
     ClassificationResult,
     CodeSearchResult,
     DevelopmentSpeedupResult,
     DocumentAnalysisResult,
-    EnhancedChatResult,
     KnowledgeExtractionResult,
     QueryReformulationResult,
     RAGQueryResult,
@@ -33,9 +33,9 @@ from api.schemas_ai_stack import (
 )
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
+    ChatRequest,
     ContentClassificationRequest,
     DevelopmentAnalysisRequest,
-    EnhancedChatRequest,
     KbCodeSearchRequest,
     KnowledgeExtractionRequest,
     RAGQueryRequest,
@@ -188,14 +188,14 @@ async def analyze_documents(documents: List[Metadata], admin_check: bool = Depen
 # ====================================================================
 
 
-@router.post("/chat/enhanced", response_model=DataResponse[EnhancedChatResult])
+@router.post("/chat/enhanced", response_model=DataResponse[ChatResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_chat",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
 async def enhanced_chat(
-    request: EnhancedChatRequest,
+    request: ChatRequest,
     admin_check: bool = Depends(check_admin_permission),
     knowledge_base=Depends(get_knowledge_base),
 ):
@@ -261,7 +261,7 @@ async def extract_knowledge(
     return create_success_response(result, "Knowledge extraction completed successfully")
 
 
-@router.post("/knowledge/enhanced-search", response_model=DataResponse[EnhancedKnowledgeSearchData])
+@router.post("/knowledge/enhanced-search", response_model=DataResponse[KnowledgeSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_knowledge_search",
@@ -630,7 +630,7 @@ async def legacy_rag_search(
     return await rag_query(request)
 
 
-@router.post("/legacy/enhanced-chat", response_model=DataResponse[EnhancedChatResult])
+@router.post("/legacy/enhanced-chat", response_model=DataResponse[ChatResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="legacy_enhanced_chat",
@@ -646,5 +646,5 @@ async def legacy_enhanced_chat(
 
     Issue #744: Requires admin authentication.
     """
-    request = EnhancedChatRequest(message=message, context=context)
+    request = ChatRequest(message=message, context=context)
     return await enhanced_chat(request)

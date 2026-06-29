@@ -25840,18 +25840,19 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("context", reformulate_source)
 
     def test_batch_153_migration_preserves_pydantic_models(self):
-        """Verify migration preserves Pydantic request models"""
+        """Verify migration preserves Pydantic request models (#10666 B1: SearchRequest
+        renamed to SearchRequest; AIStackSearchRequest is the ai_stack variant)"""
         from api import knowledge_ai_stack
 
-        # Verify request models are defined
-        self.assertTrue(hasattr(knowledge_ai_stack, "EnhancedSearchRequest"))
+        # Verify request models are defined (AIStackSearchRequest is the ai-stack variant)
+        self.assertTrue(hasattr(knowledge_ai_stack, "AIStackSearchRequest"))
         self.assertTrue(hasattr(knowledge_ai_stack, "KnowledgeExtractionRequest"))
         self.assertTrue(hasattr(knowledge_ai_stack, "DocumentAnalysisRequest"))
         self.assertTrue(hasattr(knowledge_ai_stack, "RAGQueryRequest"))
 
         # Verify models are used in endpoints
         enhanced_search_source = inspect.getsource(knowledge_ai_stack.enhanced_search)
-        self.assertIn("EnhancedSearchRequest", enhanced_search_source)
+        self.assertIn("AIStackSearchRequest", enhanced_search_source)
 
     # ==============================================
     # BATCH 154: metrics.py - COMPLETE (100%)

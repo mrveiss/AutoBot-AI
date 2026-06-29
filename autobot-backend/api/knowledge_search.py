@@ -22,14 +22,12 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Request
 
-from api.schemas_knowledge import ConsolidatedSearchRequest
-from api.schemas_knowledge import SearchRequest as EnhancedSearchRequest
+from api.schemas_knowledge import SearchRequest
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.schemas import (
-    EnhancedSearchResponse,
-    EnhancedSearchV2Response,
     ExpandQueryResponse,
+    KBSearchResponse,
     KnowledgeSearchResponse,
     RagSearchResponse,
     RecordClickResponse,
@@ -495,7 +493,7 @@ async def _check_empty_kb_for_search(kb_to_use, query: str, mode: str) -> dict |
     return None
 
 
-async def _execute_basic_search_with_reranking(request: ConsolidatedSearchRequest, kb_to_use, query: str) -> dict:
+async def _execute_basic_search_with_reranking(request: SearchRequest, kb_to_use, query: str) -> dict:
     """
     Execute basic search with optional reranking.
 
@@ -512,7 +510,7 @@ async def _execute_basic_search_with_reranking(request: ConsolidatedSearchReques
     kb_class_name = kb_to_use.__class__.__name__
 
     # Execute basic search
-    results = await _execute_kb_search(kb_to_use, query, request.top_k, request.mode)
+    results = await _execute_kb_search(kb_to_use, query, request.limit, request.mode)
 
     # Apply reranking if requested
     if request.enable_reranking:
@@ -537,7 +535,7 @@ async def _execute_basic_search_with_reranking(request: ConsolidatedSearchReques
     operation="consolidated_search",
     error_code_prefix="KNOWLEDGE_SEARCH",
 )
-async def consolidated_search(request: ConsolidatedSearchRequest, req: Request):
+async def consolidated_search(request: SearchRequest, req: Request):
     """
     Consolidated knowledge base search endpoint (Issue #555).
 
@@ -595,7 +593,7 @@ async def consolidated_search(request: ConsolidatedSearchRequest, req: Request):
     return await _execute_basic_search_with_reranking(request, kb_to_use, query)
 
 
-async def _consolidated_enhanced_search(request: ConsolidatedSearchRequest, kb_to_use) -> dict:
+async def _consolidated_enhanced_search(request: SearchRequest, kb_to_use) -> dict:
     """
     Handle enhanced search path for consolidated endpoint (Issue #555).
 
@@ -609,7 +607,7 @@ async def _consolidated_enhanced_search(request: ConsolidatedSearchRequest, kb_t
         return result
 
     # Fallback: basic search with post-filtering
-    results = await _execute_kb_search(kb_to_use, request.query, request.top_k, request.mode)
+    results = await _execute_kb_search(kb_to_use, request.query, request.limit, request.mode)
 
     # Apply min_score filter
     if request.min_score > 0:
@@ -629,7 +627,7 @@ async def _consolidated_enhanced_search(request: ConsolidatedSearchRequest, kb_t
     )
 
 
-async def _consolidated_rag_search(request: ConsolidatedSearchRequest, kb_to_use) -> dict:
+async def _consolidated_rag_search(request: SearchRequest, kb_to_use) -> dict:
     """
     Handle RAG-enhanced search path for consolidated endpoint (Issue #555).
 
@@ -647,7 +645,7 @@ async def _consolidated_rag_search(request: ConsolidatedSearchRequest, kb_to_use
     reformulated_queries = await _reformulate_query_if_requested(query, request.reformulate_query)
 
     # Search with all queries
-    all_results = await _search_with_all_queries(kb_to_use, reformulated_queries, request.top_k)
+    all_results = await _search_with_all_queries(kb_to_use, reformulated_queries, request.limit)
 
     # Apply min_score filter
     if request.min_score > 0:
@@ -683,7 +681,7 @@ async def _get_kb_for_enhanced_search(req: Request):
     return await get_or_create_knowledge_base(req.app, force_refresh=False)
 
 
-async def _enhanced_search_fallback(kb_to_use, request: EnhancedSearchRequest) -> dict:
+async def _enhanced_search_fallback(kb_to_use, request: SearchRequest) -> dict:
     """Helper for enhanced_search. Ref: #1088.
 
     Perform basic search when the KB does not support enhanced_search.
@@ -691,7 +689,7 @@ async def _enhanced_search_fallback(kb_to_use, request: EnhancedSearchRequest) -
 
     Args:
         kb_to_use: Knowledge base instance
-        request: EnhancedSearchRequest from the caller
+        request: SearchRequest from the caller
 
     Returns:
         Fallback response dict built by the request model.
@@ -721,13 +719,13 @@ def _enhanced_search_not_initialized_response() -> dict:
     }
 
 
-@router.post("/enhanced_search", deprecated=True, response_model=EnhancedSearchResponse)
+@router.post("/enhanced_search", deprecated=True, response_model=KBSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_search",
     error_code_prefix="KNOWLEDGE_SEARCH",
 )
-async def enhanced_search(request: EnhancedSearchRequest, req: Request):
+async def enhanced_search(request: SearchRequest, req: Request):
     """
     **[DEPRECATED]** Use POST /search with appropriate parameters instead.
 
@@ -983,7 +981,7 @@ async def _fallback_to_enhanced_search(kb_to_use, params: dict):
     )
 
 
-@router.post("/enhanced_search_v2", deprecated=True, response_model=EnhancedSearchV2Response)
+@router.post("/enhanced_search_v2", deprecated=True, response_model=KBSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_search_v2",
