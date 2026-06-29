@@ -24335,7 +24335,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import chat_enhanced
 
         source = inspect.getsource(chat_enhanced.compatible_chat_message)
-        self.assertIn("EnhancedChatMessage", source)
+        self.assertIn("ChatMessage", source)
         self.assertIn("use_ai_stack", source)
         self.assertIn("use_knowledge_base", source)
 

@@ -230,10 +230,6 @@ class ChatHealthData(BaseModel):
     error: str | None = None
 
 
-# Backward-compat alias — existing imports of EnhancedChatHealthData keep working.
-EnhancedChatHealthData = ChatHealthData
-
-
 class ChatStatsData(BaseModel):
     """data payload for GET /chat/stats (#6490).
 
@@ -455,7 +451,7 @@ class ChatResetRequest(BaseModel):
 class ChatMessage(BaseModel):
     """Chat message model for requests — canonical for both /chat and /enhanced (#10654).
 
-    All ``EnhancedChatMessage``-only fields (use_ai_stack, use_knowledge_base,
+    Fields from the former enhanced variant (use_ai_stack, use_knowledge_base,
     response_style, include_sources) carry defaults so a plain /chat request
     that omits them validates without change. ``reasoning_effort`` is used by
     /chat only and is also optional, so /enhanced requests that omit it still
@@ -501,10 +497,6 @@ class ChatMessage(BaseModel):
         "Overrides the user's account-level default. Omit to use the user default. "
         "When 'auto' or absent the provider's own defaults are used (#9017).",
     )
-
-
-# Backward-compat alias — existing imports of EnhancedChatMessage keep working.
-EnhancedChatMessage = ChatMessage
 
 
 class ChatResponse(BaseModel):

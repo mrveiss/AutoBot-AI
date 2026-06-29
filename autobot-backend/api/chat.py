@@ -42,8 +42,6 @@ from api.schemas_chat import (
     DetectLanguageRequest,
     EnhancedChatCapabilitiesData,
     EnhancedChatData,
-    EnhancedChatHealthData,
-    EnhancedChatMessage,
     TranslateData,
     TranslateRequest,
 )
@@ -1585,7 +1583,7 @@ async def send_direct_chat_response(
 
 
 async def _store_enhanced_user_message(
-    message: EnhancedChatMessage,
+    message: ChatMessage,
     session_id: str,
     chat_history_manager,
 ) -> str:
@@ -1622,7 +1620,7 @@ async def _store_enhanced_user_message(
 
 
 async def _get_enhanced_chat_context(
-    message: EnhancedChatMessage,
+    message: ChatMessage,
     session_id: str,
     chat_history_manager,
 ) -> list:
@@ -1645,7 +1643,7 @@ async def _get_enhanced_chat_context(
 
 
 async def _enhance_with_knowledge_base(
-    message: EnhancedChatMessage,
+    message: ChatMessage,
     knowledge_base,
 ) -> tuple:
     """Enhance context with knowledge base search."""
@@ -1682,7 +1680,7 @@ def _get_ai_stack_message_limit(chat_history_manager, model_name: str | None) ->
 
 
 async def _generate_ai_stack_chat_response(
-    message: EnhancedChatMessage,
+    message: ChatMessage,
     chat_context: list,
     enhanced_context: str | None,
     chat_history_manager,
@@ -1796,7 +1794,7 @@ async def _store_enhanced_ai_response(
 
 
 async def _execute_enhanced_chat_pipeline(
-    message: EnhancedChatMessage,
+    message: ChatMessage,
     session_id: str,
     chat_history_manager,
     knowledge_base,
@@ -1844,7 +1842,7 @@ async def _execute_enhanced_chat_pipeline(
 
 
 async def process_enhanced_chat_message(
-    message: EnhancedChatMessage,
+    message: ChatMessage,
     chat_history_manager,
     knowledge_base,
     config: Metadata,
@@ -1890,7 +1888,7 @@ def _format_sse_event(data: dict) -> str:
 
 
 async def _stream_ai_stack_response(
-    message: EnhancedChatMessage,
+    message: ChatMessage,
     session_id: str,
     chat_history_manager,
     request_id: str,
@@ -1951,7 +1949,7 @@ def _stream_enhanced_fallback_response(session_id: str):
 
 
 async def _generate_enhanced_stream(
-    message: EnhancedChatMessage,
+    message: ChatMessage,
     request: Request,
     request_id: str,
     preferences: ChatPreferences | None,
@@ -1997,7 +1995,7 @@ async def _generate_enhanced_stream(
 )
 async def enhanced_chat(
     current_user: dict = Depends(get_current_user),
-    message: EnhancedChatMessage = None,
+    message: ChatMessage = None,
     request: Request = None,
     preferences: ChatPreferences | None = None,
     config=Depends(get_config),
@@ -2065,7 +2063,7 @@ async def enhanced_chat(
 )
 async def stream_enhanced_chat(
     current_user: dict = Depends(get_current_user),
-    message: EnhancedChatMessage = None,
+    message: ChatMessage = None,
     request: Request = None,
     preferences: ChatPreferences | None = None,
 ):
@@ -2091,7 +2089,7 @@ async def stream_enhanced_chat(
     )
 
 
-@router.get("/health-enhanced", response_model=EnhancedChatHealthData)
+@router.get("/health-enhanced", response_model=ChatHealthData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_chat_health_check",
