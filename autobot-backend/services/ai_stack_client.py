@@ -135,7 +135,7 @@ class AIStackClient:
         """Initialize AI Stack client with base URL and HTTP client configuration.
 
         When `enabled` is False (env AUTOBOT_AI_STACK_ENABLED=false, default off
-        for compose/single_user with no AI Stack VM), health probes short-circuit
+        for deployments with no AI Stack VM), health probes short-circuit
         to a "disabled" status with no network attempts — stopping the per-boot
         warning flood (#9782).
         """

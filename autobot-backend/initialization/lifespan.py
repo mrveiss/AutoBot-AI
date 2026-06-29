@@ -11,7 +11,6 @@ Handles application startup and shutdown with 2-phase initialization:
 """
 
 import asyncio
-import functools
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -77,36 +76,6 @@ async def update_app_state_multi(**kwargs) -> None:
         app_state.update(kwargs)
 
 
-def _llc_postgres_available() -> bool:
-    """LLC persistence requires Postgres (single_company+). In single_user mode
-    it is intentionally unavailable, so callers skip rather than error (#9713)."""
-    try:
-        from user_management.config import get_deployment_config
-
-        return get_deployment_config().postgres_enabled
-    except Exception:
-        return False
-
-
-def requires_postgres(feature: str):
-    """Decorator: skip the wrapped async function with one INFO line when Postgres
-    is disabled (single_user mode).  Apply to startup helpers that have no
-    app.state side-effect on skip; for functions that must also set
-    app.state.X = None on skip keep an explicit guard instead (#9913 #9765)."""
-
-    def deco(fn):
-        @functools.wraps(fn)
-        async def wrapper(*args, **kwargs):
-            if not _llc_postgres_available():
-                logger.info("%s: skipped (Postgres disabled — single_user mode)", feature)
-                return None
-            return await fn(*args, **kwargs)
-
-        return wrapper
-
-    return deco
-
-
 def configure_logging():
     """Configure logging level from environment variable"""
     from autobot_shared.ssot_config import config as _ssot_cfg
@@ -120,27 +89,6 @@ def configure_logging():
         get_logger(logger_name).setLevel(LOG_LEVEL_VALUE)
 
     logger.info("📊 Logging level set to: %s (%s)", LOG_LEVEL, LOG_LEVEL_VALUE)
-
-
-def warn_if_dev_auth_bypass_enabled() -> None:
-    """Loud boot-time warning when AUTOBOT_DEV_AUTH_BYPASS=true (Issue #6838).
-
-    The single_user synthetic-admin login shortcut is opt-in. When the flag is
-    set, /api/auth/login mints an admin JWT for any credential pair — which is
-    intended for local development only. Surfaced loudly so operators notice
-    if it leaks into a production deployment.
-    """
-    from api.auth import _dev_auth_bypass_enabled
-
-    if not _dev_auth_bypass_enabled():
-        return
-    banner = "=" * 72
-    logger.warning(banner)
-    logger.warning("⚠️  AUTOBOT_DEV_AUTH_BYPASS=true — /api/auth/login will mint an admin")
-    logger.warning("    JWT for ANY credentials in single_user mode. DO NOT use in")
-    logger.warning("    production. Unset the flag or switch AUTOBOT_USER_MODE away from")
-    logger.warning("    single_user to disable. See issue #6838.")
-    logger.warning(banner)
 
 
 async def _init_cache_coordinator() -> None:
@@ -841,7 +789,6 @@ async def _init_llc_outbound_sync(app: FastAPI) -> None:
         app.state.llc_outbound_sync = None
 
 
-@requires_postgres("LLC Routine Scheduler")
 async def _init_llc_routine_scheduler(app: FastAPI) -> None:
     """Start the LLC RoutineScheduler that fires cron-based routines (GH#8229)."""
     logger.info("LLC Routine Scheduler: Starting...")
@@ -865,12 +812,6 @@ async def _init_heartbeat_scheduler(app: FastAPI) -> None:
     GH#8225: Prefers the LLC HeartbeatScheduler; falls back to legacy when
     the LLC package is unavailable, preventing duplicate sorted-set writes.
     """
-    # Both the LLC and legacy paths need the Postgres-backed agent DB; in
-    # single_user mode get_async_session_factory() hard-raises (#9783).
-    if not _llc_postgres_available():
-        logger.info("Heartbeat scheduler: skipped (Postgres disabled — single_user mode)")
-        app.state.heartbeat_scheduler = None
-        return
     # GH#8225: Try LLC scheduler first; it owns llc:heartbeat:schedule.
     # Use get_heartbeat_scheduler() — same lazy_singleton instance used by API routes —
     # so cleanup_services.stop() drains tasks from both startup-fired and API-triggered runs.
@@ -1002,70 +943,66 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
             # Build mesh brain components and register them so every RAGService.initialize()
             # can construct its OWN NeuralMeshRetriever with closures bound to its own
             # optimizer — eliminating the shared-singleton coupling (#4765).
-            # NeuralMesh requires the Postgres-backed engine; skip cleanly in single_user (#9765).
-            if not _llc_postgres_available():
-                logger.info("Neural Mesh RAG: skipped (Postgres disabled — single_user mode)")
-            else:
-                try:
-                    from autobot_shared.redis_client import get_async_redis_client
-                    from knowledge.search_components.query_classifier import QueryClassifier
-                    from knowledge.search_components.reranking import ResultReranker
-                    from services.mesh_brain.edge_learner import EdgeLearner
-                    from services.mesh_brain.mesh_db_adapter import create_mesh_db_adapter
-                    from services.mesh_brain.ppr import PersonalizedPageRank
-                    from user_management.database import get_async_engine
+            try:
+                from autobot_shared.redis_client import get_async_redis_client
+                from knowledge.search_components.query_classifier import QueryClassifier
+                from knowledge.search_components.reranking import ResultReranker
+                from services.mesh_brain.edge_learner import EdgeLearner
+                from services.mesh_brain.mesh_db_adapter import create_mesh_db_adapter
+                from services.mesh_brain.ppr import PersonalizedPageRank
+                from user_management.database import get_async_engine
 
-                    _mesh_db = create_mesh_db_adapter(get_async_engine())
-                    _redis = get_async_redis_client()
-                    _ppr = PersonalizedPageRank(db=_mesh_db)
-                    _edge_learner = EdgeLearner(db=_mesh_db, redis=_redis)
+                _mesh_db = create_mesh_db_adapter(get_async_engine())
+                _redis = get_async_redis_client()
+                _ppr = PersonalizedPageRank(db=_mesh_db)
+                _edge_learner = EdgeLearner(db=_mesh_db, redis=_redis)
 
-                    _mesh_components = {
-                        "mesh_db": _mesh_db,
-                        "ppr": _ppr,
-                        "edge_learner": _edge_learner,
-                        "reranker": ResultReranker(),
-                        "classifier": QueryClassifier(),
-                        "llm": None,
-                    }
+                _mesh_components = {
+                    "mesh_db": _mesh_db,
+                    "ppr": _ppr,
+                    "edge_learner": _edge_learner,
+                    "reranker": ResultReranker(),
+                    "classifier": QueryClassifier(),
+                    "llm": None,
+                }
 
-                    # Store on app.state for introspection / health checks.
-                    app.state.mesh_components = _mesh_components
+                # Store on app.state for introspection / health checks.
+                app.state.mesh_components = _mesh_components
 
-                    # Expose mesh_db on app.state so _start_community_clustering_loop can use it (#4834).
-                    app.state.mesh_db = _mesh_db
+                # Expose mesh_db on app.state so _start_community_clustering_loop can use it (#4834).
+                app.state.mesh_db = _mesh_db
 
-                    # Register components; each future RAGService.initialize() builds its own
-                    # retriever from these, binding closures to its own optimizer (#4765).
-                    register_shared_mesh_components(_mesh_components)
+                # Register components; each future RAGService.initialize() builds its own
+                # retriever from these, binding closures to its own optimizer (#4765).
+                register_shared_mesh_components(_mesh_components)
 
-                    # Trigger re-initialization for already-created RAGService instances so they
-                    # also build per-instance retrievers (covers chat_workflow_manager and the
-                    # get_rag_service() singleton that were created before this point).
-                    import services.rag_service as _rag_mod
+                # Trigger re-initialization for already-created RAGService instances so they
+                # also build per-instance retrievers (covers chat_workflow_manager and the
+                # get_rag_service() singleton that were created before this point).
+                import services.rag_service as _rag_mod
 
-                    for _existing in [
-                        _rag_mod._rag_service_instance,
+                for _existing in [
+                    _rag_mod._rag_service_instance,
+                    getattr(
                         getattr(
-                            getattr(
-                                getattr(app.state, "chat_workflow_manager", None),
-                                "knowledge_service",
-                                None,
-                            ),
-                            "rag_service",
+                            getattr(app.state, "chat_workflow_manager", None),
+                            "knowledge_service",
                             None,
                         ),
-                    ]:
-                        if _existing is not None and _existing._mesh_retriever is None:
-                            _existing._initialized = False  # force re-init on next call
-                            logger.info("Queued per-instance NeuralMeshRetriever build for existing RAGService (#4765)")
+                        "rag_service",
+                        None,
+                    ),
+                ]:
+                    if _existing is not None and _existing._mesh_retriever is None:
+                        _existing._initialized = False  # force re-init on next call
+                        logger.info("Queued per-instance NeuralMeshRetriever build for existing RAGService (#4765)")
 
-                    logger.info(
-                        "✅ [ 87%] Neural Mesh RAG: mesh components registered; "
-                        "per-instance NeuralMeshRetriever will build on next initialize() (#4765)"
-                    )
-                except Exception as _mesh_wire_err:
-                    logger.warning("Neural Mesh RAG wiring skipped (non-fatal): %s", _mesh_wire_err)
+                logger.info(
+                    "✅ [ 87%] Neural Mesh RAG: mesh components registered; "
+                    "per-instance NeuralMeshRetriever will build on next initialize() (#4765)"
+                )
+            except Exception as _mesh_wire_err:
+                logger.warning("Neural Mesh RAG wiring skipped (non-fatal): %s", _mesh_wire_err)
 
             graph_rag_service = GraphRAGService(
                 rag_service=rag_service,
@@ -1312,7 +1249,6 @@ async def _init_llm_adapters() -> None:
         logger.warning("LLM adapter initialization failed (non-critical): %s", exc)
 
 
-@requires_postgres("Agent Registry")
 async def _seed_agent_registry() -> None:
     """Populate agents table from DEFAULT_AGENT_CONFIGS (#1754)."""
     logger.info("[ 97%%] Agent Registry: Seeding agents table...")
@@ -1327,7 +1263,6 @@ async def _seed_agent_registry() -> None:
         logger.warning("Agent registry seeding failed: %s", e)
 
 
-@requires_postgres("Default Admin Seed")
 async def _seed_default_admin() -> None:
     """Seed the default platform-admin into autobot_users (#10199).
 
@@ -1370,10 +1305,6 @@ async def _init_process_adapter(app: FastAPI) -> None:
 
     NON-CRITICAL: process management endpoints return 503 until this completes.
     """
-    if not _llc_postgres_available():
-        logger.info("[ 96%%] Process Adapter: skipped (Postgres disabled — single_user mode)")
-        app.state.process_adapter_service = None
-        return
     logger.info("[ 96%%] Process Adapter: Initializing...")
     try:
         from api.process_management import set_process_adapter_service
@@ -1658,10 +1589,6 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
 
 async def _init_liveness_monitor(app: FastAPI) -> None:
     """Start LLC LivenessMonitor to recover stuck heartbeat runs (GH#9028)."""
-    if not _llc_postgres_available():
-        logger.info("LLC LivenessMonitor: skipped (Postgres disabled — single_user mode)")
-        app.state.llc_liveness_monitor = None
-        return
     logger.info("LLC LivenessMonitor: Starting...")
     try:
         from llc.scheduler.liveness_monitor import LivenessMonitor
@@ -1677,10 +1604,6 @@ async def _init_liveness_monitor(app: FastAPI) -> None:
 
 async def _init_budget_watchdog(app: FastAPI) -> None:
     """Start LLC BudgetWatchdog for per-agent budget enforcement (GH#9029)."""
-    if not _llc_postgres_available():
-        logger.info("LLC BudgetWatchdog: skipped (Postgres disabled — single_user mode)")
-        app.state.llc_budget_watchdog = None
-        return
     logger.info("LLC BudgetWatchdog: Starting...")
     try:
         from llc.scheduler.budget_watchdog import BudgetWatchdog
@@ -1694,7 +1617,6 @@ async def _init_budget_watchdog(app: FastAPI) -> None:
         app.state.llc_budget_watchdog = None
 
 
-@requires_postgres("LLC SessionCheckpointer")
 async def _recover_agent_sessions(app: FastAPI) -> None:
     """Re-queue runs that were interrupted by a previous server crash (GH#9026)."""
     logger.info("LLC SessionCheckpointer: recovering incomplete runs...")
@@ -1709,10 +1631,6 @@ async def _recover_agent_sessions(app: FastAPI) -> None:
 
 async def _init_session_checkpointer(app: FastAPI) -> None:
     """Start LLC SessionCheckpointer for periodic session state persistence (GH#9026)."""
-    if not _llc_postgres_available():
-        logger.info("LLC SessionCheckpointer: skipped (Postgres disabled — single_user mode)")
-        app.state.llc_session_checkpointer = None
-        return
     logger.info("LLC SessionCheckpointer: Starting...")
     try:
         from llc.scheduler.session_checkpointer import SessionCheckpointer
@@ -2103,7 +2021,6 @@ def create_lifespan_manager():
         # Configure logging
         configure_logging()
         logger.info("🚀 AutoBot Backend starting up...")
-        warn_if_dev_auth_bypass_enabled()
 
         # Create bounded thread pool executor to prevent thread explosion
         # This replaces the default unbounded asyncio executor

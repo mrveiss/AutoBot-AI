@@ -102,30 +102,8 @@ async def search_users_for_sharing(
 ) -> UserSearchResponse:
     """Search users by name/username for the knowledge sharing dialog.
 
-    Works in all deployment modes:
-    - single_user: Returns available=False with an empty list.
-    - multi-user with postgres: Returns matching users from the database.
+    Returns matching users from the Postgres-backed user store.
     """
-    from user_management.config import DeploymentMode, get_deployment_config
-
-    config = get_deployment_config()
-
-    if config.mode == DeploymentMode.SINGLE_USER:
-        logger.debug("search_users_for_sharing: single_user mode, returning unavailable")
-        return UserSearchResponse(
-            users=[],
-            available=False,
-            message="User search is not available in single-user mode",
-        )
-
-    if not config.postgres_enabled:
-        logger.debug("search_users_for_sharing: postgres disabled, returning unavailable")
-        return UserSearchResponse(
-            users=[],
-            available=False,
-            message="User search requires database support",
-        )
-
     return await _search_users_from_db(q, limit)
 
 
@@ -221,13 +199,8 @@ async def get_current_user_profile(
 ):
     """Get current user's profile.
 
-    Works in all deployment modes:
-    - single_user: Returns default admin user (no DB required)
-    - Other modes: Returns user from database or session
+    Returns the authenticated user's profile from session/JWT claims.
     """
-    from user_management.config import DeploymentMode, get_deployment_config
-
-    config = get_deployment_config()
     username = current_user.get("username")
 
     if not username:
@@ -236,31 +209,6 @@ async def get_current_user_profile(
             detail="Unable to identify current user",
         )
 
-    # In single_user mode, return synthetic user without DB access
-    if config.mode == DeploymentMode.SINGLE_USER:
-        return UserResponse(
-            id=uuid.uuid4(),  # Generate consistent ID based on username
-            email=current_user.get("email", f"{username}@autobot.local"),
-            username=username,
-            display_name=username.title(),
-            is_active=True,
-            is_verified=True,
-            mfa_enabled=False,
-            is_platform_admin=True,  # Single user is always admin
-            preferences={},
-            roles=[],
-            created_at=None,
-            updated_at=None,
-        )
-
-    # In other modes, try to fetch from database
-    if config.postgres_enabled:
-        pass
-
-        # This will need the Request object, so we handle it differently
-        # For now, return session-based user if no DB
-
-    # Fallback: Return user from session data (config-based user)
     return UserResponse(
         id=uuid.uuid4(),
         email=current_user.get("email", f"{username}@autobot.local"),

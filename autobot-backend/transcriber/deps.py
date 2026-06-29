@@ -24,7 +24,7 @@ def can_access(row: dict, caller_id: str) -> bool:
     Only the row owner may access the row.  The caller_id must equal the
     stored user_id exactly:
 
-    - owner == caller_id  → allow (includes single_user: "default" == "default")
+    - owner == caller_id  → allow (includes the "default" == "default" case)
     - different real users → deny
     - DEFAULT_USER row + real caller  → DENY  (this was the IDOR — #9968)
     - unowned / falsy user_id row    → deny (create_recording always stamps user_id)

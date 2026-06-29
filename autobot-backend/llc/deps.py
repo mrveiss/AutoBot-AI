@@ -45,45 +45,16 @@ from user_management.database import get_async_session_factory
 
 _T = TypeVar("_T")
 
-_POSTGRES_UNAVAILABLE_DETAIL = (
-    "This feature requires PostgreSQL (single_company or multi_company mode). "
-    "The current deployment runs in single_user mode where the LLC data layer "
-    "is unavailable."
-)
-
 
 def postgres_required() -> None:
-    """FastAPI dependency: raise 503 when Postgres is disabled (single_user mode).
+    """FastAPI dependency hook for LLC endpoints requiring a Postgres session.
 
-    Apply as a router-level dependency or per-handler dependency on any LLC
-    endpoint that requires a Postgres-backed session (#10010).  This produces
-    a clean 503 Service Unavailable instead of an unhandled RuntimeError from
-    ``get_async_session_factory()``.
-
-    Usage (router-level — covers all routes on the router)::
-
-        from llc.deps import postgres_required
-        router = APIRouter(dependencies=[Depends(postgres_required)])
-
-    Usage (per-handler)::
-
-        @router.get("/")
-        async def handler(_: None = Depends(postgres_required)):
-            ...
+    AutoBot always runs full, Postgres-backed user management (#10636), so this
+    gate always passes.  Retained as a router-level dependency hook so existing
+    router wiring (``APIRouter(dependencies=[Depends(postgres_required)])``)
+    stays in place.
     """
-    try:
-        from user_management.config import get_deployment_config
-
-        if not get_deployment_config().postgres_enabled:
-            raise HTTPException(
-                status_code=503,
-                detail=_POSTGRES_UNAVAILABLE_DETAIL,
-            )
-    except HTTPException:
-        raise
-    except Exception:
-        # Config unavailable — let the session factory decide; don't mask errors.
-        pass
+    return None
 
 
 async def get_session(
@@ -99,9 +70,6 @@ async def get_session(
     Because every LLC router shares this single function object, a test's
     ``app.dependency_overrides[get_session]`` overrides the session for ALL
     migrated llc routers mounted on that app, not just one module.
-
-    Raises HTTP 503 in single_user mode before touching the session factory
-    (#10010) via the ``postgres_required`` gate dependency.
     """
     factory = get_async_session_factory()
     async with factory() as session:
