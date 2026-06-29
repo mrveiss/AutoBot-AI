@@ -22732,7 +22732,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertEqual(progress_percentage, 100.0)
 
     def test_batch_135_migration_preserves_state_tracker_integration(self):
-        """Verify migration preserves enhanced_project_state_tracker integration"""
+        """Verify migration preserves project_state_tracker integration"""
         from api import state_tracking
 
         # Check get_state_tracking_status preserves tracker usage
