@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from knowledge.pipeline.cognifiers.context_generator import ContextGeneratorCognifier
 from knowledge.pipeline.cognifiers.entity_extractor import EntityExtractor
 from knowledge.pipeline.cognifiers.fact_extractor import FactExtractor
 
@@ -37,6 +38,19 @@ async def test_fact_extractor_uses_extraction_llm_type():
 
     _, kwargs = ext.llm.chat.call_args
     assert kwargs.get("llm_type") == "extraction"
+
+
+@pytest.mark.asyncio
+async def test_context_generator_uses_analysis_llm_type():
+    # analysis-typed cognifier — the cache-consequential branch (temp 0.4 → not cached).
+    gen = ContextGeneratorCognifier.__new__(ContextGeneratorCognifier)
+    gen.llm = types.SimpleNamespace(chat=AsyncMock(return_value=types.SimpleNamespace(content="a summary")))
+
+    out = await gen._call_llm_for_summary("some document text")
+
+    assert out == "a summary"
+    _, kwargs = gen.llm.chat.call_args
+    assert kwargs.get("llm_type") == "analysis"
 
 
 @pytest.mark.asyncio
