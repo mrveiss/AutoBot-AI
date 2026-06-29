@@ -5329,7 +5329,7 @@ All notable changes to this project will be documented in this file.
 
 - *(api/analytics)* Wire-in EngagementMetricsResponse — backend endpoint + frontend composable (#7111) (#7790) ([#7790](https://github.com/mrveiss/AutoBot-AI/pull/7790))
 
-- *(plugin_sdk)* ManifestContract Protocol + UnifiedRegistry (GH#7369) (#7769) ([#7769](https://github.com/mrveiss/AutoBot-AI/pull/7769))
+- *(plugin_sdk)* ManifestContract Protocol + Registry (GH#7369) (#7769) ([#7769](https://github.com/mrveiss/AutoBot-AI/pull/7769))
 
 - *(frontend)* Implement useFileSandbox() composable (GH#7409) (#7772) ([#7772](https://github.com/mrveiss/AutoBot-AI/pull/7772))
 

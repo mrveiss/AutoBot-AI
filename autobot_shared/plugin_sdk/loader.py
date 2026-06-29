@@ -24,7 +24,7 @@ from typing import Dict, List, Tuple, Type
 
 from .base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
 from .hooks import validate_hook_names
-from .unified_registry import get_unified_registry
+from .registry import get_registry
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +138,7 @@ class PluginLoader:
 
             # Register with plugin registry and unified registry
             self.registry.register(plugin)
-            get_unified_registry().register(manifest)
+            get_registry().register(manifest)
 
             logger.info("Loaded plugin: %s v%s", manifest.name, manifest.version)
             return plugin
@@ -169,7 +169,7 @@ class PluginLoader:
 
             # Unregister from plugin registry and unified registry
             self.registry.unregister(name)
-            get_unified_registry().unregister(name)
+            get_registry().unregister(name)
 
             logger.info("Unloaded plugin: %s", name)
             return True
