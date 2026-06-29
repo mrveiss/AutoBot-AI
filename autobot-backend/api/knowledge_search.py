@@ -22,7 +22,7 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Request
 
-from api.schemas_knowledge import ConsolidatedSearchRequest, EnhancedSearchRequest
+from api.schemas_knowledge import ConsolidatedSearchRequest, SearchRequest as EnhancedSearchRequest
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.schemas import (
