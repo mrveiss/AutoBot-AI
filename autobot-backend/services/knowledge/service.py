@@ -29,6 +29,25 @@ GROUNDING_INSTRUCTION = (
     "you don't know rather than guessing."
 )
 
+
+def build_grounded_context(contents: List[str]) -> str:
+    """Build the KB context block: optional grounding instruction + [Source N] labels (#10652).
+
+    Shared by ChatKnowledgeService.format_knowledge_context and the chat
+    compression rebuild (llm_handler) so the format + grounding instruction
+    never drift between the two paths.
+    """
+    if not contents:
+        return ""
+    lines: List[str] = []
+    if config.chat_grounding_enabled:
+        lines.append(GROUNDING_INSTRUCTION)
+    lines.append("KNOWLEDGE CONTEXT:")
+    for i, content in enumerate(contents, 1):
+        lines.append(f"[Source {i}] {content.strip()}")
+    return "\n".join(lines)
+
+
 # Issue #556: Standard knowledge categories for chat RAG
 KNOWLEDGE_CATEGORIES = {
     "system_knowledge": "OS commands, man pages, system configurations",
@@ -265,23 +284,11 @@ class ChatKnowledgeService:
         Returns:
             Formatted context string for LLM
         """
-        if not facts:
-            return ""
-
-        # #10652: optional grounding instruction so the model answers from the
-        # cited sources and admits when they're insufficient (reversible flag).
-        context_lines: List[str] = []
-        if config.chat_grounding_enabled:
-            context_lines.append(GROUNDING_INSTRUCTION)
-
-        context_lines.append("KNOWLEDGE CONTEXT:")
-
-        # #10652: label each fact "[Source N]" so the model can cite it; N aligns
-        # with the rank in format_citations() that the frontend displays.
-        for i, fact in enumerate(facts, 1):
-            context_lines.append(f"[Source {i}] {fact.content.strip()}")
-
-        return "\n".join(context_lines)
+        # #10652: delegate to the shared builder so the per-fact "[Source N]"
+        # labels and grounding instruction stay identical to the compression
+        # rebuild path in llm_handler. N aligns with the rank in
+        # format_citations() that the frontend displays.
+        return build_grounded_context([fact.content for fact in facts])
 
     def format_citations(self, facts: List[SearchResult]) -> List[Dict]:
         """

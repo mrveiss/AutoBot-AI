@@ -205,6 +205,19 @@ def test_format_knowledge_context_grounding_can_be_disabled(
     assert "[Source 1]" in context  # source labels are unconditional
 
 
+def test_build_grounded_context_shared_builder(monkeypatch) -> None:
+    """#10652: the shared builder (reused by the compression path) labels + grounds."""
+    from autobot_shared.ssot_config import config
+    from services.knowledge.service import build_grounded_context
+
+    monkeypatch.setattr(config, "chat_grounding_enabled", True, raising=False)
+    ctx = build_grounded_context(["fact one", "fact two"])
+    assert "[Source 1] fact one" in ctx
+    assert "[Source 2] fact two" in ctx
+    assert "say you don't know" in ctx  # grounding instruction applied here too
+    assert build_grounded_context([]) == ""  # empty → no instruction, no header
+
+
 def test_format_citations(mock_rag_service, sample_search_results) -> None:
     """Test citation formatting."""
     service = ChatKnowledgeService(mock_rag_service)
