@@ -573,6 +573,36 @@
       no_log: true
       tags: [backend, env]
 
+    # Internal service API key — backend must use the same key the SLM expects.
+    # Written by the backend role into /etc/autobot/autobot-backend.env (#10632).
+    - name: "[PLAY 2] Backend | Read AUTOBOT_INTERNAL_API_KEY (#10636)"
+      ansible.builtin.shell:
+        cmd: >-
+          grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*'
+          /etc/autobot/autobot-backend.env 2>/dev/null || true
+      register: existing_internal_api_key
+      become: true
+      when: "'backend' in group_names"
+      failed_when: false
+      changed_when: false
+      no_log: true
+      tags: [backend, env]
+
+    # Full user management requires the autobot_app DB password, written by the
+    # single-box provisioning play into autobot-db-credentials.env (#10636).
+    - name: "[PLAY 2] Backend | Read autobot_app DB password (#10636)"
+      ansible.builtin.shell:
+        cmd: >-
+          grep -oP '^AUTOBOT_DB_PASSWORD=\K.*'
+          /etc/autobot/autobot-db-credentials.env 2>/dev/null || true
+      register: existing_autobot_db_password
+      become: true
+      when: "'backend' in group_names"
+      failed_when: false
+      changed_when: false
+      no_log: true
+      tags: [backend, env]
+
     - name: "[PLAY 2] Backend | Load shared backend env vars (#2727)"
       ansible.builtin.include_vars:
         file: vars/backend-env.yml
@@ -594,6 +624,10 @@
         backend_secret_key: "{{ existing_secret_key.stdout | default(lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true), true) }}"
         # #10400: prefer SLM_SECRET_KEY when present, else keep the role default.
         backend_jwt_secret: "{{ (existing_slm_secret_key.stdout | default('') | trim) if (existing_slm_secret_key.stdout | default('') | trim) | length > 0 else (existing_secret_key.stdout | default('') | trim) }}"
+        # #10636: internal service API key + full-user-management DB password,
+        # read from /etc/autobot above (no longer undefined / single_user).
+        autobot_internal_api_key: "{{ existing_internal_api_key.stdout | default('') | trim }}"
+        backend_postgres_password: "{{ existing_autobot_db_password.stdout | default('') | trim }}"
       tags: [backend, env]
 
     - name: "[PLAY 2] Backend | Read backend user mode (#10001)"

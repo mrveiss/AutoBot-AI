@@ -59,6 +59,12 @@ postgresql_credentials_file: "db-credentials.env"
 
 # Database user and databases (override per-playbook)
 db_user: "slm_app"
+# App users that share THIS Postgres instance, rendered into pg_hba.conf.
+# Defaults to [db_user] (one user per instance — multi-VM, unchanged). On a
+# collapsed single-box deploy set this to every app user on the instance
+# (e.g. [slm_app, autobot_app]) so provisioning one never drops the others
+# from pg_hba (#10636).
+postgresql_app_users: "{{ [db_user] }}"
 db_host: "127.0.0.1"
 db_env_prefix: "SLM"
 databases:
