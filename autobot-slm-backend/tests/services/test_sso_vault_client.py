@@ -61,23 +61,23 @@ if "autobot_shared" not in sys.modules:
 _sso_model_stub = MagicMock()
 sys.modules.setdefault("user_management.models.sso", _sso_model_stub)
 
-# Pre-stub user_management.services.unified_vault_client (lazy-imported in rotation)
+# Pre-stub user_management.services.vault_client (lazy-imported in rotation)
 # We set real AsyncMock placeholders; individual tests replace them via patch.object.
-_uvc_stub = types.ModuleType("user_management.services.unified_vault_client")
+_uvc_stub = types.ModuleType("user_management.services.vault_client")
 _uvc_stub.vault_rewrap_kek = AsyncMock()  # type: ignore[attr-defined]
 _uvc_stub.vault_rotate = AsyncMock()  # type: ignore[attr-defined]
 _uvc_stub.vault_read = AsyncMock()  # type: ignore[attr-defined]
 _uvc_stub.vault_delete = AsyncMock()  # type: ignore[attr-defined]
 _uvc_stub.vault_list = AsyncMock()  # type: ignore[attr-defined]
 _uvc_stub.vault_create = AsyncMock()  # type: ignore[attr-defined]
-_uvc_stub.UnifiedVaultClientError = Exception  # type: ignore[attr-defined]
-_uvc_stub.UnifiedVaultSecretNotFound = Exception  # type: ignore[attr-defined]
+_uvc_stub.VaultClientError = Exception  # type: ignore[attr-defined]
+_uvc_stub.VaultSecretNotFound = Exception  # type: ignore[attr-defined]
 _uvc_stub.is_configured = lambda: False  # type: ignore[attr-defined]
-sys.modules["user_management.services.unified_vault_client"] = _uvc_stub
+sys.modules["user_management.services.vault_client"] = _uvc_stub
 
-# Load unified_vault_client directly (reads real module code)
+# Load vault_client directly (reads real module code)
 _vault_client_mod = _load_module(
-    "user_management/services/unified_vault_client.py",
+    "user_management/services/vault_client.py",
     "_vault_client_under_test",
 )
 
@@ -108,7 +108,7 @@ def _mock_provider(provider_id: uuid.UUID, config: dict) -> MagicMock:
 
 
 # ---------------------------------------------------------------------------
-# unified_vault_client tests
+# vault_client tests
 # ---------------------------------------------------------------------------
 
 
@@ -118,7 +118,7 @@ class TestUnifiedVaultClientConfig:
     def test_check_configured_raises_when_both_keys_missing(self, monkeypatch):
         monkeypatch.setattr(_vault_client_mod, "_SERVICE_KEY", "")
         monkeypatch.setattr(_vault_client_mod, "_INTERNAL_API_KEY", "")
-        with pytest.raises(_vault_client_mod.UnifiedVaultClientError, match="AUTOBOT_INTERNAL_API_KEY"):
+        with pytest.raises(_vault_client_mod.VaultClientError, match="AUTOBOT_INTERNAL_API_KEY"):
             _vault_client_mod._check_configured()
 
     def test_check_configured_passes_with_service_key(self, monkeypatch):
@@ -192,7 +192,7 @@ class TestUnifiedVaultClientConfig:
             "ClientSession",
             return_value=session_mock,
         ):
-            with pytest.raises(_vault_client_mod.UnifiedVaultSecretNotFound):
+            with pytest.raises(_vault_client_mod.VaultSecretNotFound):
                 await _vault_client_mod._request("GET", "/api/v2/secrets/system/some-id")
 
     @pytest.mark.asyncio
@@ -212,7 +212,7 @@ class TestUnifiedVaultClientConfig:
         session_mock.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(sys.modules["aiohttp"], "ClientSession", return_value=session_mock):
-            with pytest.raises(_vault_client_mod.UnifiedVaultClientError):
+            with pytest.raises(_vault_client_mod.VaultClientError):
                 await _vault_client_mod._request("GET", "/api/v2/secrets/system/some-id")
 
     @pytest.mark.asyncio

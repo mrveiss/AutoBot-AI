@@ -6,7 +6,7 @@
 
 Postgres-backed (migration-gate job): seeds legacy Fernet ``secrets`` rows of
 each scope on an ``upgrade head`` schema, runs the migrator, and verifies each
-row is now envelope-readable via UnifiedSecretsService with the right owner vault
+row is now envelope-readable via EnvelopeSecretsService with the right owner vault
 and grants.
 """
 
@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
 from services.legacy_secrets_migrator import migrate_pg_legacy_secrets
-from services.unified_secrets_service import UnifiedSecretsService
+from services.envelope_secrets_service import EnvelopeSecretsService
 from tests.migrations.conftest import requires_postgres, run_alembic
 
 pytestmark = [pytest.mark.migration_gate, requires_postgres]
@@ -71,7 +71,7 @@ async def test_migrates_each_scope_and_envelope_readable(session):
     await session.commit()
     assert report.total_legacy == 4 and report.migrated == 4 and report.failed == []
 
-    svc = UnifiedSecretsService(root_key=_ROOT)
+    svc = EnvelopeSecretsService(root_key=_ROOT)
 
     # user → readable via the owner's user vault
     assert (
@@ -161,7 +161,7 @@ async def test_org_without_org_id_demoted_with_warning(session):
     await session.commit()
     assert report.migrated == 1 and len(report.warnings) == 1
     assert row.owner_vault == f"user:{_OWNER}"
-    svc = UnifiedSecretsService(root_key=_ROOT)
+    svc = EnvelopeSecretsService(root_key=_ROOT)
     assert (
         await svc.read(session, secret_id=row.id, accessible_vaults={VaultRef(VaultKind.USER, str(_OWNER))}) == b"o-val"
     )

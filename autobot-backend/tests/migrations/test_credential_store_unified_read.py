@@ -16,8 +16,8 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from autobot_shared.secrets_vault import VaultKind, VaultRef
-from services.unified_credential_read import read_imported_credential_in_session
-from services.unified_secrets_service import UnifiedSecretsService
+from services.credential_read import read_imported_credential_in_session
+from services.envelope_secrets_service import EnvelopeSecretsService
 from tests.migrations.conftest import requires_postgres, run_alembic
 
 pytestmark = [pytest.mark.migration_gate, requires_postgres]
@@ -37,7 +37,7 @@ async def session(fresh_db_url):
 
 
 async def _seed(session, legacy_id: str, value: bytes, owner=_OWNER):
-    svc = UnifiedSecretsService(root_key=_ROOT)
+    svc = EnvelopeSecretsService(root_key=_ROOT)
     secret = await svc.create(
         session,
         owner_vault=VaultRef(VaultKind.USER, str(owner)),

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""End-to-end tests for UnifiedSecretsService (#10088 / Task 2.2).
+"""End-to-end tests for EnvelopeSecretsService (#10088 / Task 2.2).
 
 Co-located under tests/migrations because that is AutoBot's Postgres-backed CI
 job (migration-gate): the service stores JSONB + Uuid columns, so it needs a
@@ -19,10 +19,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
 from models.secret_grant import SecretGrant
-from services.unified_secrets_service import (
+from services.envelope_secrets_service import (
+    EnvelopeSecretsService,
     SecretAccessError,
     SecretNotFoundError,
-    UnifiedSecretsService,
 )
 from tests.migrations.conftest import requires_postgres
 
@@ -48,7 +48,7 @@ async def session(fresh_db_url):
 
 @pytest.fixture()
 def svc():
-    return UnifiedSecretsService(root_key=_ROOT)
+    return EnvelopeSecretsService(root_key=_ROOT)
 
 
 async def _new(svc, session, **kw):
@@ -160,7 +160,7 @@ async def test_rotate_kek_same_plaintext_decrypts(svc, session):
     await svc.rotate_kek(session, secret_id=secret.id, new_root_key=_ROOT2, actor_vaults={_USER})
     await session.commit()
     # Decrypt with new root key
-    svc2 = UnifiedSecretsService(root_key=_ROOT2)
+    svc2 = EnvelopeSecretsService(root_key=_ROOT2)
     plaintext = await svc2.read(session, secret_id=secret.id, accessible_vaults={_USER})
     assert plaintext == b"kek_test"
 
@@ -184,7 +184,7 @@ async def test_rotate_kek_rewraps_all_grantees(svc, session):
     await session.commit()
     await svc.rotate_kek(session, secret_id=secret.id, new_root_key=_ROOT2, actor_vaults={_USER})
     await session.commit()
-    svc2 = UnifiedSecretsService(root_key=_ROOT2)
+    svc2 = EnvelopeSecretsService(root_key=_ROOT2)
     assert await svc2.read(session, secret_id=secret.id, accessible_vaults={_USER}) == b"shared"
     assert await svc2.read(session, secret_id=secret.id, accessible_vaults={_COMPANY}) == b"shared"
 
