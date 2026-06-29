@@ -263,10 +263,10 @@ async def _run_all_search_sources(
 @router.post("/search/enhanced", response_model=DataResponse[AIStackEnhancedSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_search",
+    operation="search",
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-async def enhanced_search(
+async def search(
     request_data: AIStackEnhancedSearchRequest,
     req: Request,
     knowledge_base=Depends(get_knowledge_base),
@@ -663,10 +663,10 @@ async def get_enhanced_stats(
 @router.get("/health/enhanced", response_model=DataResponse[AIStackEnhancedHealthData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_knowledge_health",
+    operation="knowledge_health",
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-async def enhanced_knowledge_health(
+async def knowledge_health(
     current_user: dict = Depends(get_current_user),
 ):
     """

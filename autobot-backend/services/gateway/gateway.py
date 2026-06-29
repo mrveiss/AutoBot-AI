@@ -21,7 +21,7 @@ from .channel_adapters.base import BaseChannelAdapter
 from .config import GatewayConfig
 from .message_router import MessageRouter
 from .session_manager import SessionManager
-from .types import ChannelType, GatewaySession, MessageType, UnifiedMessage
+from .types import ChannelMessage, ChannelType, GatewaySession, MessageType
 
 logger = get_logger(__name__)
 
@@ -163,7 +163,7 @@ class Gateway:
         self._connection_contexts[session.session_id] = connection_context
 
         # Send session start message
-        start_message = UnifiedMessage(
+        start_message = ChannelMessage(
             session_id=session.session_id,
             channel=channel,
             message_type=MessageType.SESSION_START,
@@ -190,7 +190,7 @@ class Gateway:
             return False
 
         # Send session end message
-        end_message = UnifiedMessage(
+        end_message = ChannelMessage(
             session_id=session_id,
             channel=session.channel,
             message_type=MessageType.SESSION_END,
@@ -212,7 +212,7 @@ class Gateway:
         # Close session
         return await self.session_manager.close_session(session_id)
 
-    async def send_message(self, message: UnifiedMessage) -> bool:
+    async def send_message(self, message: ChannelMessage) -> bool:
         """
         Send a message through the Gateway.
 
@@ -260,7 +260,7 @@ class Gateway:
         self,
         raw_data: Any,
         session_id: str,
-    ) -> UnifiedMessage | None:
+    ) -> ChannelMessage | None:
         """
         Receive and parse a message from a channel.
 
@@ -269,7 +269,7 @@ class Gateway:
             session_id: Session receiving the message
 
         Returns:
-            Parsed UnifiedMessage or None
+            Parsed ChannelMessage or None
         """
         # Get session
         session = await self.session_manager.get_session(session_id)
@@ -281,7 +281,7 @@ class Gateway:
         if not await self.session_manager.consume_rate_limit(session_id):
             logger.warning("Rate limit exceeded for session %s", session_id)
             # Send rate limit error
-            error_msg = UnifiedMessage(
+            error_msg = ChannelMessage(
                 session_id=session_id,
                 channel=session.channel,
                 message_type=MessageType.SYSTEM_ERROR,
@@ -305,7 +305,7 @@ class Gateway:
 
     async def route_and_process(
         self,
-        message: UnifiedMessage,
+        message: ChannelMessage,
         context: Dict | None = None,
     ) -> Dict[str, Any]:
         """

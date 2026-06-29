@@ -320,10 +320,10 @@ def _search_documentation(query: str, doc_results_count: int, score_threshold: f
 @router.post("/search", response_model=KnowledgeUnifiedSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="unified_search",
+    operation="search",
     error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
-async def unified_search(req: Request, body: SearchRequest):
+async def search(req: Request, body: SearchRequest):
     """
     Search across all knowledge sources in a unified query.
 
@@ -363,10 +363,10 @@ async def unified_search(req: Request, body: SearchRequest):
 @router.get("/stats", response_model=KnowledgeUnifiedStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="unified_stats",
+    operation="stats",
     error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
-async def unified_stats(req: Request):
+async def stats(req: Request):
     """Get statistics from all unified knowledge sources (KB facts, relations, docs). Ref: #1088."""
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 

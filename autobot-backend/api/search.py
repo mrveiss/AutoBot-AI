@@ -4,7 +4,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Enhanced Search API with NPU Acceleration
+Search API with NPU Acceleration
 Provides NPU-accelerated semantic search endpoints for AutoBot
 """
 
@@ -34,9 +34,9 @@ from autobot_shared.logging_manager import get_llm_logger
 from npu_semantic_search import get_npu_search_engine
 from type_defs.common import Metadata
 
-logger = get_llm_logger("enhanced_search_api")
+logger = get_llm_logger("search_api")
 
-router = APIRouter(tags=["Enhanced Search"])
+router = APIRouter(tags=["Search"])
 
 
 def _parse_force_device(force_device_str: str | None) -> HardwareDevice | None:
@@ -98,10 +98,10 @@ def _convert_metrics_to_api_format(metrics) -> dict:
 @router.post("/semantic", response_model=NPUSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_semantic_search",
+    operation="semantic_search",
     error_code_prefix="ENHANCED_SEARCH",
 )
-async def enhanced_semantic_search(request: NPUSearchRequest):
+async def semantic_search(request: NPUSearchRequest):
     """
     Perform NPU-enhanced semantic search.
 
@@ -465,7 +465,7 @@ def _generate_system_recommendations(statistics: Metadata, hardware_status: Meta
     return recommendations
 
 
-register_singleton_probe("enhanced_search", get_npu_search_engine, async_getter=True)
+register_singleton_probe("search", get_npu_search_engine, async_getter=True)
 
 
 # Health check endpoint

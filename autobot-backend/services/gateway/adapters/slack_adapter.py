@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
-from .base_adapter import BaseAdapter, NormalizedResponse, UnifiedMessage
+from .base_adapter import BaseAdapter, GatewayMessage, NormalizedResponse
 
 logger = get_logger(__name__)
 
@@ -19,13 +19,13 @@ class SlackAdapter(BaseAdapter):
     def __init__(self) -> None:
         super().__init__("slack")
 
-    async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:
+    async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
         """Convert Slack message to unified schema."""
         metadata = await self.extract_metadata(raw_message)
         metadata["thread_ts"] = raw_message.get("thread_ts")
         metadata["is_thread_reply"] = bool(raw_message.get("thread_ts"))
 
-        return UnifiedMessage(
+        return GatewayMessage(
             user_id=raw_message["user_id"],
             platform="slack",
             channel_id=raw_message["channel_id"],

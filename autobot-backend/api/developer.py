@@ -167,8 +167,8 @@ async def get_system_info():
 
 
 # Custom exception handler for 404 errors with developer mode enhancements
-async def enhanced_404_handler(request: Request, exc: HTTPException):
-    """Enhanced 404 handler that provides helpful suggestions in developer mode"""
+async def not_found_handler(request: Request, exc: HTTPException):
+    """404 handler that provides helpful suggestions in developer mode"""
     developer_mode = unified_config_manager.get_nested("developer.enabled", False)
     enhanced_errors = unified_config_manager.get_nested("developer.enhanced_errors", True)
 
@@ -199,8 +199,8 @@ async def enhanced_404_handler(request: Request, exc: HTTPException):
 
 
 # Custom exception handler for 405 errors (Method Not Allowed)
-async def enhanced_405_handler(request: Request, exc: HTTPException):
-    """Enhanced 405 handler for developer mode"""
+async def method_not_allowed_handler(request: Request, exc: HTTPException):
+    """405 handler for developer mode"""
     developer_mode = unified_config_manager.get_nested("developer.enabled", False)
     enhanced_errors = unified_config_manager.get_nested("developer.enhanced_errors", True)
 

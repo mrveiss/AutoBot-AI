@@ -66,9 +66,9 @@ class SessionStatus(str, Enum):
 
 
 @dataclass
-class UnifiedMessage:
+class ChannelMessage:
     """
-    Unified message format across all channels.
+    Routed channel message format across all Gateway channels.
 
     Attributes:
         message_id: Unique message identifier
@@ -101,7 +101,7 @@ class UnifiedMessage:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "UnifiedMessage":
+    def from_dict(cls, data: Dict[str, Any]) -> "ChannelMessage":
         """Create message from dictionary."""
         return cls(
             message_id=data.get("message_id", str(uuid4())),
