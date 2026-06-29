@@ -9,30 +9,31 @@ This module contains all search-related API endpoints for the knowledge base.
 Extracted from knowledge.py for better maintainability (Issue #185, #209).
 
 Endpoints:
-- POST /search - CONSOLIDATED search endpoint with all features (Issue #555)
-- POST /enhanced_search - [DEPRECATED] Use /search with appropriate params
-- POST /rag_search - [DEPRECATED] Use /search with enable_rag=true
-- POST /similarity_search - [DEPRECATED] Use /search with mode=semantic
+- POST /search - Single canonical search endpoint with all features (#555, #10666)
 
-Related Issues: #78 (Search Quality), #185 (Split), #209 (Knowledge split), #555 (Consolidation)
+Migration guide (deprecated routes removed in #10666):
+- /enhanced_search  → /search with tags/mode/enable_reranking params
+- /rag_search       → /search with enable_rag=true (+ reformulate_query=true)
+- /similarity_search → /search with mode=semantic, min_score=<threshold>
+- /enhanced_search_v2 → /search with enable_query_expansion/enable_clustering etc.
+
+Related Issues: #78 (Search Quality), #185 (Split), #209 (Knowledge split),
+                #555 (Consolidation), #10666 (Deprecated duplicate removal)
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import List
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 
 from api.schemas_knowledge import SearchRequest
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.schemas import (
     ExpandQueryResponse,
-    KBSearchResponse,
     KnowledgeSearchResponse,
-    RagSearchResponse,
     RecordClickResponse,
     SearchAnalyticsResponse,
-    SimilaritySearchResponse,
 )
 from knowledge.vector_search_engine import SearchResult as _EngineResult
 from knowledge.vector_search_engine import get_vector_search_engine
@@ -368,26 +369,6 @@ def _convert_results_to_documents(results: List[Metadata], original_query: str) 
     return documents
 
 
-def _parse_rag_search_params(request: dict) -> tuple:
-    """Helper for rag_enhanced_search. Ref: #1088.
-
-    Extract and resolve query, search_limit, and reformulate_query from the
-    raw request dict, applying the same precedence rules as the original handler.
-
-    Args:
-        request: Raw request dict from the endpoint
-
-    Returns:
-        Tuple of (query, search_limit, reformulate_query)
-    """
-    query = request.get("query", "")
-    top_k = request.get("top_k", 10)
-    limit = request.get("limit", 10)
-    reformulate_query = request.get("reformulate_query", True)
-    search_limit = limit if request.get("limit") is not None else top_k
-    return query, search_limit, reformulate_query
-
-
 async def _process_with_rag_agent(
     original_query: str,
     all_results: List[Metadata],
@@ -532,40 +513,49 @@ async def _execute_basic_search_with_reranking(request: SearchRequest, kb_to_use
 @router.post("/search", response_model=KnowledgeSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="search",
+    operation="consolidated_search",
     error_code_prefix="KNOWLEDGE_SEARCH",
 )
 async def search(request: SearchRequest, req: Request):
     """
-    Consolidated knowledge base search endpoint (Issue #555).
+    Canonical knowledge base search endpoint (#555, #10666).
 
-    This is the PRIMARY search endpoint that combines all search capabilities:
-    - Basic search (query, top_k)
+    Single entry point combining all search capabilities:
+    - Basic search (query, limit/top_k)
     - Enhanced search (tags, hybrid mode, reranking)
     - RAG search (query reformulation, synthesis)
-    - Advanced filtering (date filters, term filters)
+    - Advanced filtering (date filters, term filters, clustering)
     - Analytics tracking
 
     **Parameters:**
     - **query** (required): Search query string
-    - **top_k**: Maximum results (default: 10, max: 100)
+    - **limit** / **top_k**: Maximum results (default: 10, max: 100)
     - **category**: Filter by category
-    - **mode**: Search mode - 'semantic', 'keyword', 'hybrid' (default), 'auto'
+    - **mode**: Search mode — 'semantic', 'keyword', 'hybrid' (default), 'auto'
     - **enable_rag**: Enable RAG enhancement for synthesized responses
     - **enable_reranking**: Enable cross-encoder reranking
     - **reformulate_query**: Expand query for better coverage
     - **return_context**: Return optimized context for chat integration
-    - **tags**: Filter by tags
-    - **tags_match_any**: Match ANY tag (true) or ALL tags (false, default)
+    - **tags** / **tags_match_any**: Tag filtering
     - **min_score**: Minimum score threshold (0.0-1.0)
     - **offset**: Pagination offset
     - **include_documentation**: Also search project documentation
     - **include_relations**: Include related facts
+    - **enable_query_expansion**: Synonym/related-term expansion
+    - **enable_relevance_scoring**: Additional relevance scoring
+    - **enable_clustering**: Cluster results by topic
+    - **exclude_sources**: Exclude results from these source IDs
+    - **verified_only**: Return only verified/approved facts
+    - **created_after** / **created_before**: Date range filters (YYYY-MM-DD)
+    - **exclude_terms** / **require_terms**: Term inclusion/exclusion
+    - **session_id** / **track_analytics**: Analytics correlation
 
     **Returns:** results, total_results, query, mode, rag_enhanced,
     reranking_applied, synthesized_response (if enable_rag=true).
-    Migration: /enhanced_search→tags/reranking, /rag_search→enable_rag=true,
-    /similarity_search→mode=semantic. Issue #665: extracted helpers. #1088.
+
+    Migration (#10666): /enhanced_search→tags/reranking params,
+    /rag_search→enable_rag=true, /similarity_search→mode=semantic+min_score,
+    /enhanced_search_v2→enable_query_expansion/enable_clustering etc.
     """
     # Check KB initialization (Issue #665: uses helper)
     kb_to_use, error_response = await _check_kb_initialization(req)
@@ -573,20 +563,19 @@ async def search(request: SearchRequest, req: Request):
         return error_response
 
     query = request.query
-    logger.info("Consolidated search: %s", request.get_log_summary())
+    logger.info("Search: %s", request.get_log_summary())
 
     # Check if KB is empty (Issue #665: uses helper)
     empty_response = await _check_empty_kb_for_search(kb_to_use, query, request.mode)
     if empty_response:
         return empty_response
 
-    # Determine which search path to use based on features requested
     # Path 1: Full RAG search with synthesis
     if request.enable_rag and RAG_AVAILABLE:
         return await _consolidated_rag_search(request, kb_to_use)
 
-    # Path 2: Enhanced search with tags/filtering
-    if request.tags or request.min_score > 0 or hasattr(kb_to_use, "enhanced_search"):
+    # Path 2: Enhanced search with tags/filtering/v2 options
+    if request.tags or request.min_score > 0 or hasattr(kb_to_use, "enhanced_search") or request.uses_v2_features():
         return await _consolidated_enhanced_search(request, kb_to_use)
 
     # Path 3: Basic search (Issue #665: uses helper)
@@ -595,11 +584,17 @@ async def search(request: SearchRequest, req: Request):
 
 async def _consolidated_enhanced_search(request: SearchRequest, kb_to_use) -> dict:
     """
-    Handle enhanced search path for consolidated endpoint (Issue #555).
+    Handle enhanced search path for consolidated endpoint (#555, #10666).
 
-    Uses KB enhanced_search if available, falls back to basic search + filtering.
+    Dispatches to enhanced_search_v2 when v2 params are set (folded from
+    former /enhanced_search_v2 route — #10666).  Falls back to enhanced_search
+    or basic search + filtering when those KB methods are unavailable.
     """
     kb_class_name = kb_to_use.__class__.__name__
+
+    # Dispatch to enhanced_search_v2 when v2-specific features are requested (#10666)
+    if request.uses_v2_features() and hasattr(kb_to_use, "enhanced_search_v2"):
+        return await kb_to_use.enhanced_search_v2(**request.to_v2_params())
 
     # Use enhanced_search if available
     if hasattr(kb_to_use, "enhanced_search"):
@@ -667,374 +662,9 @@ async def _consolidated_rag_search(request: SearchRequest, kb_to_use) -> dict:
         }
 
 
-async def _get_kb_for_enhanced_search(req: Request):
-    """Helper for enhanced_search. Ref: #1088.
-
-    Retrieve and return the knowledge base instance, or None if unavailable.
-
-    Args:
-        req: FastAPI request object
-
-    Returns:
-        Knowledge base instance, or None if not initialized.
-    """
-    return await get_or_create_knowledge_base(req.app, force_refresh=False)
-
-
-async def _enhanced_search_fallback(kb_to_use, request: SearchRequest) -> dict:
-    """Helper for enhanced_search. Ref: #1088.
-
-    Perform basic search when the KB does not support enhanced_search.
-    Uses the request model's safe-mode and fallback-response helpers.
-
-    Args:
-        kb_to_use: Knowledge base instance
-        request: SearchRequest from the caller
-
-    Returns:
-        Fallback response dict built by the request model.
-    """
-    logger.warning("KB implementation does not support enhanced_search, using fallback")
-    results = await kb_to_use.search(
-        query=request.query,
-        top_k=request.limit,
-        mode=request.get_safe_mode(VALID_SEARCH_MODES),
-    )
-    return request.get_fallback_response(results)
-
-
-def _enhanced_search_not_initialized_response() -> dict:
-    """Helper for enhanced_search. Ref: #1088.
-
-    Return the standard error response when the knowledge base is not initialized.
-
-    Returns:
-        Error response dict with success=False and an explanatory message.
-    """
-    return {
-        "success": False,
-        "results": [],
-        "total_count": 0,
-        "message": "Knowledge base not initialized - please check logs for errors",
-    }
-
-
-@router.post("/enhanced_search", deprecated=True, response_model=KBSearchResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_enhanced",
-    error_code_prefix="KNOWLEDGE_SEARCH",
-)
-async def search_enhanced(request: SearchRequest, req: Request):
-    """
-    **[DEPRECATED]** Use POST /search with appropriate parameters instead.
-
-    Migration: Use `/search` with these parameters:
-    - `tags`: for tag filtering
-    - `tags_match_any`: for tag match mode
-    - `mode`: for search mode
-    - `enable_reranking`: for reranking
-    - `min_score`: for score threshold
-
-    ---
-
-    Enhanced search with tag filtering, hybrid mode, and query preprocessing.
-
-    Issue #78: Search Quality Improvements
-
-    Features:
-    - Hybrid search mode (semantic + keyword with RRF)
-    - Tag-based filtering (match all or any)
-    - Query preprocessing (abbreviation expansion)
-    - Minimum score threshold
-    - Optional cross-encoder reranking
-    - Pagination support
-
-    Request body:
-    - query: Search query string
-    - limit: Maximum results (default: 10, max: 100)
-    - offset: Pagination offset (default: 0)
-    - category: Optional category filter
-    - tags: Optional list of tags to filter by
-    - tags_match_any: If True, match ANY tag. If False, match ALL (default: False)
-    - mode: "semantic", "keyword", or "hybrid" (default: "hybrid")
-    - enable_reranking: Enable cross-encoder reranking (default: False)
-    - min_score: Minimum similarity score 0.0-1.0 (default: 0.0)
-
-    Returns:
-    - success: Boolean status
-    - results: List of search results
-    - total_count: Total matching results (before pagination)
-    - query_processed: The preprocessed query used
-    - mode: Search mode used
-    - tags_applied: Tags used for filtering
-    - min_score_applied: Minimum score threshold used
-    - reranking_applied: Whether reranking was applied
-    """
-    # Issue #555: Log deprecation warning
-    logger.warning("DEPRECATED: /enhanced_search called. Use /search with tags/mode/enable_reranking params instead.")
-    kb_to_use = await _get_kb_for_enhanced_search(req)
-
-    if kb_to_use is None:
-        return _enhanced_search_not_initialized_response()
-
-    # Issue #372: Fallback when KB does not support enhanced_search
-    if not hasattr(kb_to_use, "enhanced_search"):
-        return await _enhanced_search_fallback(kb_to_use, request)
-
-    # Issue #372: Use model method for log summary and search params
-    logger.info("Enhanced search: %s", request.get_log_summary())
-    return await kb_to_use.enhanced_search(**request.to_search_params())
-
-
-@router.post("/rag_search", deprecated=True, response_model=RagSearchResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="rag_enhanced_search",
-    error_code_prefix="KNOWLEDGE_SEARCH",
-)
-async def rag_enhanced_search(request: dict, req: Request):
-    """
-    **[DEPRECATED]** Use POST /search with `enable_rag=true` instead.
-
-    Migration: use `enable_rag=true`, `reformulate_query=true` in /search.
-    RAG-enhanced search with query reformulation, multi-query dedup, and synthesis.
-    Issue #281: Refactored to use extracted helpers. #1088: param extraction.
-    """
-    # Issue #555: Log deprecation warning
-    logger.warning("DEPRECATED: /rag_search called. Use /search with enable_rag=true instead.")
-    if not RAG_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="RAG functionality not available - AI Stack may not be running",
-        )
-
-    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
-    if kb_to_use is None:
-        return _build_kb_not_initialized_response()
-
-    # Issue #1088: parse params via helper
-    query, search_limit, reformulate_query = _parse_rag_search_params(request)
-
-    if not query:
-        raise HTTPException(status_code=400, detail="Query is required")
-
-    logger.info(f"RAG-enhanced search request: '{query}' " f"(top_k={search_limit}, reformulate={reformulate_query})")
-
-    # Check if knowledge base is empty (Issue #281: uses helper)
-    empty_response = await _check_empty_kb_for_rag(kb_to_use, query)
-    if empty_response:
-        return empty_response
-
-    # Step 1: Query reformulation (Issue #281: uses helper)
-    reformulated_queries = await _reformulate_query_if_requested(query, reformulate_query)
-
-    # Step 2: Search with all queries (Issue #281: uses helper)
-    all_results = await _search_with_all_queries(kb_to_use, reformulated_queries, search_limit)
-
-    # Step 3: RAG processing or empty response (Issue #665: uses helpers)
-    if all_results:
-        return await _process_with_rag_agent(query, all_results, reformulated_queries, kb_to_use)
-    return _build_no_results_response(query, reformulated_queries)
-
-
-@router.post("/similarity_search", deprecated=True, response_model=SimilaritySearchResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="similarity_search",
-    error_code_prefix="KNOWLEDGE_SEARCH",
-)
-async def similarity_search(request: dict, req: Request):
-    """
-    **[DEPRECATED]** Use POST /search with `mode=semantic` instead (Issue #665: refactored).
-
-    Migration: Use `/search` with these parameters:
-    - `mode`: "semantic" (for pure vector search)
-    - `min_score`: for threshold filtering (e.g., 0.7)
-    - `enable_rag`: for RAG enhancement
-    """
-    # Issue #555: Log deprecation warning
-    logger.warning("DEPRECATED: /similarity_search called. Use /search with mode=semantic, min_score params instead.")
-    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
-    if kb_to_use is None:
-        return {
-            "results": [],
-            "total_results": 0,
-            "message": "Knowledge base not initialized - please check logs for errors",
-        }
-
-    query = request.get("query", "")
-    top_k = request.get("top_k", 10)
-    threshold = request.get("threshold", 0.7)
-    use_rag = request.get("use_rag", False)
-
-    logger.info(f"Similarity search request: '{query}' " f"(top_k={top_k}, threshold={threshold}, use_rag={use_rag})")
-
-    # Execute search with appropriate parameters
-    kb_class_name = kb_to_use.__class__.__name__
-    results = await _execute_similarity_kb_search(kb_to_use, kb_class_name, query, top_k)
-
-    # Filter by threshold if specified
-    results = _filter_by_threshold(results, threshold)
-
-    # Build response with optional RAG enhancement
-    return await _build_similarity_response(query, results, threshold, kb_class_name, use_rag)
-
-
-async def _execute_similarity_kb_search(
-    kb_to_use: Any, kb_class_name: str, query: str, top_k: int
-) -> List[Dict[str, Any]]:
-    """Execute similarity search with appropriate KB parameters (Issue #665: extracted helper)."""
-    if kb_class_name == "KnowledgeBaseV2":
-        # KnowledgeBaseV2 uses 'top_k' parameter
-        return await kb_to_use.search(query=query, top_k=top_k)
-    else:
-        # Original KnowledgeBase uses 'similarity_top_k' parameter
-        return await kb_to_use.search(query=query, similarity_top_k=top_k)
-
-
-def _filter_by_threshold(results: List[Dict[str, Any]], threshold: float) -> List[Dict[str, Any]]:
-    """Filter results by score threshold (Issue #665: extracted helper)."""
-    if threshold <= 0:
-        return results
-    return [r for r in results if r.get("score", 0) >= threshold]
-
-
-async def _build_similarity_response(
-    query: str,
-    results: List[Dict[str, Any]],
-    threshold: float,
-    kb_class_name: str,
-    use_rag: bool,
-) -> Dict[str, Any]:
-    """Build similarity search response (Issue #665: extracted helper)."""
-    base_response = {
-        "results": results,
-        "total_results": len(results),
-        "query": query,
-        "threshold": threshold,
-        "kb_implementation": kb_class_name,
-    }
-
-    # Enhanced search with RAG if requested and available
-    if use_rag and RAG_AVAILABLE and results:
-        try:
-            rag_enhancement = await _enhance_search_with_rag(query, results)
-            return {
-                **base_response,
-                "rag_enhanced": True,
-                "rag_analysis": rag_enhancement,
-            }
-        except Exception as e:
-            logger.error("RAG enhancement failed: %s", e)
-            # Continue with regular results if RAG fails
-
-    return {**base_response, "rag_enhanced": False}
-
-
 # =============================================================================
-# Issue #78: Enhanced Search v2 and Analytics Endpoints
+# Issue #78: Analytics Endpoints
 # =============================================================================
-
-
-def _extract_search_v2_params(request: dict) -> dict:
-    """Extract enhanced_search_v2 parameters from request (Issue #398: extracted)."""
-    return {
-        "query": request.get("query", ""),
-        "limit": request.get("limit", 10),
-        "offset": request.get("offset", 0),
-        "category": request.get("category"),
-        "tags": request.get("tags"),
-        "tags_match_any": request.get("tags_match_any", False),
-        "mode": request.get("mode", "hybrid"),
-        "enable_reranking": request.get("enable_reranking", False),
-        "min_score": request.get("min_score", 0.0),
-        "enable_query_expansion": request.get("enable_query_expansion", False),
-        "enable_relevance_scoring": request.get("enable_relevance_scoring", False),
-        "enable_clustering": request.get("enable_clustering", False),
-        "track_analytics": request.get("track_analytics", True),
-        "created_after": request.get("created_after"),
-        "created_before": request.get("created_before"),
-        "exclude_terms": request.get("exclude_terms"),
-        "require_terms": request.get("require_terms"),
-        "exclude_sources": request.get("exclude_sources"),
-        "verified_only": request.get("verified_only", False),
-        "session_id": request.get("session_id"),
-    }
-
-
-async def _fallback_to_enhanced_search(kb_to_use, params: dict):
-    """Fallback to regular enhanced_search when v2 not available (Issue #398: extracted)."""
-    logger.warning("KB does not support enhanced_search_v2, using fallback")
-    return await kb_to_use.enhanced_search(
-        query=params["query"],
-        limit=params["limit"],
-        offset=params["offset"],
-        category=params["category"],
-        tags=params["tags"],
-        tags_match_any=params["tags_match_any"],
-        mode=params["mode"],
-        enable_reranking=params["enable_reranking"],
-        min_score=params["min_score"],
-    )
-
-
-@router.post("/enhanced_search_v2", deprecated=True, response_model=KBSearchResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="search_enhanced_v2",
-    error_code_prefix="KNOWLEDGE_SEARCH",
-)
-async def search_enhanced_v2(request: dict, req: Request):
-    """
-    **[DEPRECATED]** Use POST /search with appropriate parameters instead.
-
-    Migration: All v2 features are now in `/search`:
-    - `created_after`, `created_before`: Date filtering
-    - `exclude_terms`, `require_terms`: Term filtering
-    - `session_id`, `track_analytics`: Analytics
-
-    ---
-
-    Enhanced search v2 with Issue #78 improvements (Issue #398: refactored).
-
-    Features: Query expansion, relevance scoring, filtering, clustering, analytics.
-    See API documentation for full parameter list.
-    """
-    # Issue #555: Log deprecation warning
-    logger.warning("DEPRECATED: /enhanced_search_v2 called. Use /search with extended params instead.")
-    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
-    if kb_to_use is None:
-        return {
-            "success": False,
-            "results": [],
-            "total_count": 0,
-            "message": "Knowledge base not initialized",
-        }
-
-    # Extract parameters using helper
-    params = _extract_search_v2_params(request)
-    query = params["query"]
-
-    if not query:
-        raise HTTPException(status_code=400, detail="Query is required")
-
-    # Fallback if KB doesn't support enhanced_search_v2
-    if not hasattr(kb_to_use, "enhanced_search_v2"):
-        return await _fallback_to_enhanced_search(kb_to_use, params)
-
-    logger.info(
-        "Enhanced search v2: '%s' (expansion=%s, clustering=%s, relevance=%s)",
-        query,
-        params["enable_query_expansion"],
-        params["enable_clustering"],
-        params["enable_relevance_scoring"],
-    )
-
-    return await kb_to_use.enhanced_search_v2(**params)
 
 
 @router.get("/search_analytics", response_model=SearchAnalyticsResponse)
@@ -1092,6 +722,8 @@ async def record_search_click(request: dict):
     - result_id: ID of the clicked result
     - session_id: Optional session identifier
     """
+    from fastapi import HTTPException
+
     try:
         from knowledge.search_quality import get_search_analytics
 
@@ -1133,6 +765,8 @@ async def expand_query(request: dict):
     - original_query: The input query
     - expanded_queries: List of expanded query variations
     """
+    from fastapi import HTTPException
+
     try:
         from knowledge.search_quality import get_query_expander
 
