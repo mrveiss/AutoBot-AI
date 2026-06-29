@@ -6,7 +6,7 @@ Hosts and ports belong in ``autobot_shared.ssot_config``, not inline string
 literals. Docstrings are ignored (documentation may cite example URLs); only
 real string values are flagged. See canonical-debt umbrella #10569.
 
-WARN until the sites in #10573 are migrated, then promote to BLOCK.
+Promoted to BLOCK after #10627 cleaned all 87 prod+test sites (2026-06-29).
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from tools.lint.canonical.diagnostic import Diagnostic
 
 RULE_ID = "py-hardcoded-url"
 ISSUE = "#10573"
-SEVERITY = "warn"
+SEVERITY = "block"
 TARGETS = ["autobot-backend", "autobot-slm-backend"]
 DESCRIPTION = "Hardcoded localhost/127.0.0.1:port literal — resolve via ssot_config"
 FIX_HINT = (
