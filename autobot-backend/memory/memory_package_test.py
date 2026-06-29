@@ -24,11 +24,11 @@ from memory import (
     LongTermMemoryManager,
     MemoryCategory,
     MemoryEntry,
+    MemoryManager,
     StorageStrategy,
     TaskExecutionRecord,
     TaskPriority,
     TaskStatus,
-    MemoryManager,
 )
 
 

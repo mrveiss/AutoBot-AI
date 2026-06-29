@@ -111,9 +111,7 @@ class _ProviderRouter:
             except Exception as exc:
                 logger.warning("External provider sync failed, continuing: %s", exc)
 
-    async def search(
-        self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None
-    ) -> List[Dict[str, Any]]:
+    async def search(self, query: str, limit: int = 10, filters: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
         if self.external_enabled and self.external:
             try:
                 results = await self.external.search(query, limit, filters)
@@ -687,9 +685,7 @@ class MemoryManager:
         from .enums import TaskPriority as _TP
         from .enums import TaskStatus
 
-        task_id = _hashlib.sha256(
-            f"{task_name}_{datetime.now(tz=timezone.utc).isoformat()}".encode()
-        ).hexdigest()[:16]
+        task_id = _hashlib.sha256(f"{task_name}_{datetime.now(tz=timezone.utc).isoformat()}".encode()).hexdigest()[:16]
         record = TaskExecutionRecord(
             task_id=task_id,
             task_name=task_name,

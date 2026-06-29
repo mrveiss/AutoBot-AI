@@ -16,7 +16,7 @@ from typing import Any, Callable, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from memory import TaskPriority, MemoryManager
+from memory import MemoryManager, TaskPriority
 
 logger = get_logger(__name__)
 

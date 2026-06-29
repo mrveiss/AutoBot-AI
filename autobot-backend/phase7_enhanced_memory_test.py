@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
 
 from markdown_reference_system import MarkdownReferenceSystem
-from memory import TaskPriority, MemoryManager
+from memory import MemoryManager, TaskPriority
 from task_execution_tracker import TaskExecutionTracker
 
 

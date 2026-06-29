@@ -14,7 +14,7 @@ from typing import Any, Dict, List
 import numpy as np
 
 from autobot_shared.logging_manager import get_logger
-from memory import TaskPriority, MemoryManager
+from memory import MemoryManager, TaskPriority
 from task_execution_tracker import get_task_tracker
 
 from .screen_analyzer import ScreenAnalyzer

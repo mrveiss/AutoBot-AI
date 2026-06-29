@@ -19,7 +19,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.status_enums import Priority, TaskPriority, TaskStatus  # canonical enums (#10626)
-from memory import TaskExecutionRecord, MemoryManager, get_enhanced_memory_manager
+from memory import MemoryManager, TaskExecutionRecord, get_enhanced_memory_manager
 
 logger = get_logger(__name__)
 

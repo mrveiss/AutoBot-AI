@@ -39,7 +39,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from markdown_reference_system import MarkdownReferenceSystem
-from memory import TaskPriority, TaskStatus, MemoryManager
+from memory import MemoryManager, TaskPriority, TaskStatus
 from task_execution_tracker import get_task_tracker
 
 logger = get_logger(__name__)
