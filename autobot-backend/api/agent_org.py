@@ -119,8 +119,8 @@ async def get_agents_status(
 ) -> AgentStatusListResponse:
     """Return all registered agents with runtime status (#10502, #10511).
 
-    PG-optional: when PostgreSQL is disabled (single_user mode) the endpoint
-    falls back to the in-memory ``AgentRegistry`` populated from
+    Uses the Postgres-backed ``AgentOrgService`` when a session is available,
+    with a defensive fallback to the in-memory ``AgentRegistry`` populated from
     ``DEFAULT_AGENT_CONFIGS`` so the Home dashboard "Agent Activity Monitor"
     returns 200 instead of 503.
     """

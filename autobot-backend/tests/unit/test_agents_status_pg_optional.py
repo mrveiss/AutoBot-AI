@@ -7,7 +7,7 @@ Unit tests for the PG-optional /api/agents/status endpoint (#10511, #10526).
 
 Verifies:
 - _fallback_agents_from_registry() returns valid AgentStatusItem-shaped dicts
-  when called without a Postgres session (single_user mode).
+  when called without a Postgres session (defensive fallback).
 - Agent type mapping (_ORCH_TYPE_MAP) covers all default agent types.
 - AdapterRegistry population: _init_llm_adapters registers at least the
   Ollama adapter without raising.

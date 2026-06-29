@@ -267,7 +267,7 @@ class AuthenticationMiddleware:
         """
         return {
             # user_id/sub so user endpoints (e.g. /users/me/preferences) resolve
-            # the identity in single_user mode; without them they 401'd ('User ID
+            # the identity when auth is disabled; without them they 401'd ('User ID
             # not found in token') → frontend logout → login redirect loop.
             "user_id": "admin",
             "sub": "admin",
@@ -667,16 +667,6 @@ class AuthenticationMiddleware:
         if not self.enable_auth:
             return self._get_auth_disabled_user()
 
-        # Single-user mode: bypass auth (mirrors check_admin_permission behavior)
-        try:
-            from user_management.config import DeploymentMode, get_deployment_config
-
-            deployment_config = get_deployment_config()
-            if deployment_config.mode == DeploymentMode.SINGLE_USER:
-                return self._get_auth_disabled_user()
-        except Exception:
-            logger.debug("Suppressed exception in try block", exc_info=True)
-
         # Try authentication methods in priority order
         user = self._extract_user_from_jwt(request)
         if user:
@@ -899,15 +889,6 @@ def check_admin_permission(request: Request) -> bool:
         logger.debug("Internal API key auth: granting admin access")
         return True
 
-    # Check for single user mode - bypass auth and grant admin access
-    from user_management.config import DeploymentMode, get_deployment_config
-
-    deployment_config = get_deployment_config()
-    if deployment_config.mode == DeploymentMode.SINGLE_USER:
-        # In single user mode, all requests are treated as admin
-        logger.debug("Single user mode: granting admin access")
-        return True
-
     user_data = get_auth_middleware().get_user_from_request(request)
 
     if not user_data:
@@ -1001,9 +982,7 @@ async def require_device_jwt(
 async def authenticate_websocket(websocket) -> dict | None:
     """Authenticate a WebSocket connection.
 
-    Checks for JWT token in query params. Falls back to synthetic admin
-    in single-user mode (mirrors get_user_from_request single-user bypass).
-    Returns None if unauthenticated.
+    Checks for JWT token in query params. Returns None if unauthenticated.
 
     Issue #2818: Add auth before websocket.accept() to reject unauthenticated
     connections at the protocol handshake level.
@@ -1035,25 +1014,5 @@ async def authenticate_websocket(websocket) -> dict | None:
         except Exception:
             logger.warning("WebSocket JWT authentication failed")
             return None
-
-    # Single-user mode bypass — same logic as get_user_from_request
-    try:
-        from user_management.config import DeploymentMode, get_deployment_config
-
-        deployment_config = get_deployment_config()
-        if deployment_config.mode == DeploymentMode.SINGLE_USER:
-            return {
-                # user_id/sub so user endpoints (e.g. /users/me/preferences) can
-                # resolve the identity; without them they 401'd ('User ID not found
-                # in token') and the frontend logged out → login redirect loop.
-                "user_id": "admin",
-                "sub": "admin",
-                "username": "admin",
-                "role": "admin",
-                "email": f"admin@{ssot_config.auth.domain}",
-                "source": "single_user_mode",
-            }
-    except Exception:
-        logger.debug("Suppressed exception in single-user mode check", exc_info=True)
 
     return None

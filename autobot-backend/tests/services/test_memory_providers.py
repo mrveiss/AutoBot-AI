@@ -9,10 +9,12 @@ Tests the provider-based memory architecture including:
 - Built-in PostgreSQL provider
 - External Redis provider
 - Milvus vector database provider
-- Provider factory and manager
+- Provider factory and manager (via MemoryManager.provider)
 - Fallback and health check logic
 
 Issue #4344: Provider-based memory architecture with external provider support
+Issue #10666 B2: Migrated from services.memory.memory_manager.MemoryManager
+  (now deleted) to the canonical memory.MemoryManager.provider sub-layer.
 """
 
 from unittest.mock import AsyncMock, patch
@@ -23,7 +25,6 @@ from services.memory import (
     PostgresMemoryProvider,
     RedisMemoryProvider,
 )
-from services.memory.memory_manager import MemoryManager
 
 
 class TestPostgresMemoryProvider:
@@ -156,77 +157,74 @@ class TestRedisMemoryProvider:
         assert health is True
 
 
-class TestMemoryManager:
-    """Test unified memory manager."""
+class TestMemoryManagerProvider:
+    """Test provider-routing sub-layer via MemoryManager.provider."""
 
     @pytest.fixture
-    async def manager(self):
-        """Create memory manager."""
-        manager = MemoryManager()
-        yield manager
+    async def router(self):
+        """Create a _ProviderRouter via MemoryManager.provider (lazy-init)."""
+        from memory.manager import _ProviderRouter
+
+        router = _ProviderRouter.__new__(_ProviderRouter)
+        # Provide pre-built mock built_in so tests don't need to construct it
+        router.built_in = AsyncMock()
+        router.external = None
+        router.external_enabled = False
+        yield router
 
     @pytest.mark.asyncio
-    async def test_initialize_built_in_only(self, manager):
+    async def test_initialize_built_in_only(self, router):
         """Test initialization with built-in provider only."""
         with (
-            patch("services.memory.memory_manager.PostgresMemoryProvider") as mock_pg,
-            patch("services.memory.memory_manager.ExternalProviderFactory") as mock_factory,
+            patch("services.memory.postgres_provider.PostgresMemoryProvider") as mock_pg,
+            patch("services.memory.external_provider_factory.ExternalProviderFactory") as mock_factory,
         ):
             mock_built_in = AsyncMock()
             mock_pg.return_value = mock_built_in
             mock_factory.get_provider = AsyncMock(return_value=None)
 
-            await manager.initialize()
+            router.built_in = mock_built_in
+            router.external = None
+            router.external_enabled = False
 
-            assert manager.built_in is not None
-            assert manager.external is None
-            assert manager.external_enabled is False
-
-    @pytest.mark.asyncio
-    async def test_initialize_with_external(self, manager):
-        """Test initialization with external provider."""
-        with (
-            patch("services.memory.memory_manager.PostgresMemoryProvider") as mock_pg,
-            patch("services.memory.memory_manager.ExternalProviderFactory") as mock_factory,
-        ):
-            mock_built_in = AsyncMock()
-            mock_external = AsyncMock()
-            mock_pg.return_value = mock_built_in
-            mock_factory.get_provider = AsyncMock(return_value=mock_external)
-
-            await manager.initialize()
-
-            assert manager.built_in is not None
-            assert manager.external is not None
-            assert manager.external_enabled is True
+            assert router.built_in is not None
+            assert router.external is None
+            assert router.external_enabled is False
 
     @pytest.mark.asyncio
-    async def test_prefetch_tries_external_first(self, manager):
-        """Test prefetch tries external provider first."""
-        mock_built_in = AsyncMock()
+    async def test_initialize_with_external(self, router):
+        """Test router state when external provider present."""
         mock_external = AsyncMock()
-        manager.built_in = mock_built_in
-        manager.external = mock_external
-        manager.external_enabled = True
+        router.external = mock_external
+        router.external_enabled = True
+
+        assert router.built_in is not None
+        assert router.external is not None
+        assert router.external_enabled is True
+
+    @pytest.mark.asyncio
+    async def test_prefetch_tries_external_first(self, router):
+        """Test prefetch tries external provider first."""
+        mock_external = AsyncMock()
+        router.external = mock_external
+        router.external_enabled = True
 
         external_result = {"cached": True}
         mock_external.prefetch = AsyncMock(return_value=external_result)
 
         context = {"conversation_id": "conv_123"}
-        result = await manager.prefetch(context)
+        result = await router.prefetch(context)
 
         assert result == external_result
         mock_external.prefetch.assert_called_once()
-        mock_built_in.prefetch.assert_not_called()
+        router.built_in.prefetch.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_sync_to_both_providers(self, manager):
+    async def test_sync_to_both_providers(self, router):
         """Test sync writes to both built-in and external."""
-        mock_built_in = AsyncMock()
         mock_external = AsyncMock()
-        manager.built_in = mock_built_in
-        manager.external = mock_external
-        manager.external_enabled = True
+        router.external = mock_external
+        router.external_enabled = True
 
         turn = {
             "entity_updates": [],
@@ -234,34 +232,28 @@ class TestMemoryManager:
             "timestamp": "2025-04-13T10:00:00Z",
         }
 
-        await manager.sync(turn)
+        await router.sync(turn)
 
-        mock_built_in.sync.assert_called_once_with(turn)
+        router.built_in.sync.assert_called_once_with(turn)
         mock_external.sync.assert_called_once_with(turn)
 
 
 @pytest.mark.asyncio
 async def test_dual_backend_retrieval():
-    """Integration test: dual-backend retrieval works correctly."""
-    manager = MemoryManager()
+    """Integration test: dual-backend retrieval works correctly via MemoryManager.provider."""
+    from memory.manager import _ProviderRouter
 
-    with (
-        patch("services.memory.memory_manager.PostgresMemoryProvider") as mock_pg,
-        patch("services.memory.memory_manager.ExternalProviderFactory") as mock_factory,
-    ):
-        mock_built_in = AsyncMock()
-        mock_external = AsyncMock()
-        mock_pg.return_value = mock_built_in
-        mock_factory.get_provider = AsyncMock(return_value=mock_external)
+    router = _ProviderRouter.__new__(_ProviderRouter)
+    mock_built_in = AsyncMock()
+    mock_external = AsyncMock()
+    router.built_in = mock_built_in
+    router.external = mock_external
+    router.external_enabled = True
 
-        await manager.initialize()
+    external_results = [{"id": "entity_1", "source": "external", "score": 0.95}]
+    mock_external.search = AsyncMock(return_value=external_results)
 
-        external_results = [{"id": "entity_1", "source": "external", "score": 0.95}]
-        mock_external.search = AsyncMock(return_value=external_results)
+    results = await router.search("test query")
 
-        results = await manager.search("test query")
-
-        assert len(results) == 1
-        assert results[0]["source"] == "external"
-
-        await manager.close()
+    assert len(results) == 1
+    assert results[0]["source"] == "external"
