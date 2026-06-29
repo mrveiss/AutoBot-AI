@@ -30,7 +30,7 @@ Added in PR for issue #10577 (umbrella #10569). All rules are Python AST rules r
 | Rule ID | Issue | Layer | Severity | Description | Repo-wide count (2026-06-28) |
 |---|---|---|---|---|---|
 | `py-adhoc-db-engine` | #10570 | Python | warn | `create_engine`/`sessionmaker` outside the canonical async factory | 39 (includes tests; migrate via #10570) |
-| `py-hardcoded-url` | #10573 | Python | warn | `http://localhost\|127.0.0.1:PORT` literal — resolve via `ssot_config` | 87 (migrate via #10573) |
+| `py-hardcoded-url` | #10573 | Python | block | `http://localhost\|127.0.0.1:PORT` literal — resolve via `ssot_config` | 0 (promoted to BLOCK after #10627 cleaned all 87 sites: 5 prod fixed, 6 prod waived, 76 test waived) |
 | `py-banned-suffix-filename` | #10575 | Python | block | Source file named `_fix`/`_v2`/`_old`/`_copy` — edit canonical module | 0 (clean after sibling PRs; BLOCK safe) |
 | `py-sync-requests-in-async` | #10576 | Python | block | Blocking `requests.*` inside `async def` — use async HTTP client | 0 (promoted to BLOCK after #10627 cohort 1 cleared all 14 sites) |
 | `py-duplicate-concept` | #10577 | Python | warn | `Enhanced*`/`Unified*` class shadows a base-name class in the same file | 5 (merge into canonical class) |
@@ -39,6 +39,7 @@ Added in PR for issue #10577 (umbrella #10569). All rules are Python AST rules r
 
 - `py-banned-suffix-filename` → **block**: repo-wide scan on 2026-06-28 found 0 violations after sibling PR #10575 cleaned all `_fix`-named scripts. Safe to fail-fast on new introductions.
 - `py-sync-requests-in-async` → **block**: all 14 violations cleared by PR for #10627 cohort 1 (2026-06-28). Four files converted to `aiohttp.ClientSession`. Safe to fail-fast on new introductions.
+- `py-hardcoded-url` → **block**: all 87 violations resolved by #10627 (2026-06-29): 5 prod sites fixed via `config.llm.ollama_endpoint` / `config.slm_url`, 6 prod sites waived (bootstrap fallbacks + embedded templates + instructional log text), 76 test sites waived (fixture URLs, mock data, test-only port values). Safe to fail-fast on new introductions.
 - All others → **warn**: pre-existing violations exist across the codebase. Each rule's tracking issue owns the migration. Promote to BLOCK once the issue is closed and a follow-up repo-wide scan is clean.
 
 ## Waivers

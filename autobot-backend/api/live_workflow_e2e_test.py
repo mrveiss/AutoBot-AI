@@ -236,7 +236,9 @@ async def main():
         print("🎯 Ready for Production Use!")  # noqa: print
         print()  # noqa: print
         print("🔧 How to Use:")  # noqa: print
-        print("   1. Open frontend: http://localhost:5173")  # noqa: print
+        print(
+            "   1. Open frontend: http://localhost:5173"
+        )  # noqa: print  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         print("   2. Navigate to 'Workflows' tab")  # noqa: print
         print("   3. Try complex requests:")  # noqa: print
         print("      • 'find tools for network scanning'")  # noqa: print

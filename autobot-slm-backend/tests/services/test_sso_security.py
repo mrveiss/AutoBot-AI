@@ -309,7 +309,9 @@ class TestOauthSecurity:
         from autobot_shared.security.input_sanitizer import validate_url
 
         with pytest.raises(ValueError, match="localhost"):
-            validate_url("http://localhost:8000/callback")
+            validate_url(
+                "http://localhost:8000/callback"
+            )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
     @pytest.mark.asyncio
     async def test_oauth_callback_url_ssrf_prevention_private_ip(self):

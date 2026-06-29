@@ -242,7 +242,7 @@ class TestPrepareCharRequestToolAwareness:
         """StreamingManager always returns True; must be overridden when tools active."""
         provider = _make_provider()
         provider.streaming_manager.should_use_streaming.return_value = True
-        provider.ollama_host = "http://localhost:11434"
+        provider.ollama_host = "http://localhost:11434"  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
         req = _make_request(model="llama3.1:8b", tools=[_TOOL])
         _, _, _, use_streaming, data, _ = provider._prepare_chat_request(req)
@@ -254,7 +254,7 @@ class TestPrepareCharRequestToolAwareness:
         """Non-capable model with tools: streaming unchanged, tools not injected."""
         provider = _make_provider()
         provider.streaming_manager.should_use_streaming.return_value = True
-        provider.ollama_host = "http://localhost:11434"
+        provider.ollama_host = "http://localhost:11434"  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
         req = _make_request(model="llama2", tools=[_TOOL])
         _, _, _, use_streaming, data, _ = provider._prepare_chat_request(req)
@@ -266,7 +266,7 @@ class TestPrepareCharRequestToolAwareness:
         """Incapable model with structured_output=True, tools=[...]: format=json must survive."""
         provider = _make_provider()
         provider.streaming_manager.should_use_streaming.return_value = False
-        provider.ollama_host = "http://localhost:11434"
+        provider.ollama_host = "http://localhost:11434"  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
         req = _make_request(model="llama2", tools=[_TOOL], structured_output=True)
         _, _, _, _, data, _ = provider._prepare_chat_request(req)

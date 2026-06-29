@@ -163,7 +163,9 @@ def test_build_callback_url_host_with_port():
     )
 
     result = sso_auth._build_callback_url(request)
-    assert result == "http://localhost:8000/api/auth/sso/callback"
+    assert (
+        result == "http://localhost:8000/api/auth/sso/callback"
+    )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
 
 def test_build_callback_url_case_insensitive():

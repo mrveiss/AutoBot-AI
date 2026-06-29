@@ -26,7 +26,9 @@ class TestHelpers:
         assert _extract_domain("https://example.com/path?q=1") == "https://example.com"
 
     def test_extract_domain_preserves_port(self) -> None:
-        assert _extract_domain("http://localhost:8080/path") == "http://localhost:8080"
+        assert (
+            _extract_domain("http://localhost:8080/path") == "http://localhost:8080"
+        )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
     def test_robots_cache_key_format(self) -> None:
         key = _robots_cache_key("https://example.com")

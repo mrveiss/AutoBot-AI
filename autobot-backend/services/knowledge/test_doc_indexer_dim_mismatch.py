@@ -42,7 +42,8 @@ def _make_stub(name: str) -> types.ModuleType:
 
 
 _ssot = _make_stub("autobot_shared.ssot_config")
-_ssot.get_ollama_url = lambda: "http://localhost:11434"  # type: ignore[attr-defined]
+_mock_ollama_url = "http://localhost:11434"  # canonical: ignore py-hardcoded-url — test mock
+_ssot.get_ollama_url = lambda: _mock_ollama_url  # type: ignore[attr-defined]
 
 _constants = _make_stub("constants")
 _path_constants = _make_stub("constants.path_constants")

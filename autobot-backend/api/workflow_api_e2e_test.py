@@ -240,7 +240,9 @@ async def main():
         print("🎯 System Status: FULLY OPERATIONAL")  # noqa: print
         print()  # noqa: print
         print("🎮 Ready for Frontend Testing:")  # noqa: print
-        print("   1. Open: http://localhost:5173")  # noqa: print
+        print(
+            "   1. Open: http://localhost:5173"
+        )  # noqa: print  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         print("   2. Navigate to 'Workflows' tab")  # noqa: print
         print("   3. Try complex requests and watch orchestration!")  # noqa: print
         print()  # noqa: print

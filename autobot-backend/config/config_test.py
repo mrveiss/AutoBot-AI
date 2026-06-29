@@ -129,7 +129,10 @@ TEST_RESPONSES = {
     "commands": ["help", "status", "exit", "quit"],
     "files": ["test.txt", "/tmp/test", "example.json"],  # nosec B108 - test/controlled code uses tmpdir intentionally
     "names": ["test_user", "admin", "user"],
-    "urls": ["http://localhost:8080", "http://example.com"],
+    "urls": [
+        "http://localhost:8080",
+        "http://example.com",
+    ],  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
     "default": ["", "default", "skip"],
 }
 
