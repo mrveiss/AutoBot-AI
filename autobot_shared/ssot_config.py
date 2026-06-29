@@ -198,6 +198,10 @@ class LLMConfig(BaseSettings):
     # Above this temperature responses must vary, so they are never cached.
     llm_response_cache: bool = Field(default=True, alias="AUTOBOT_LLM_RESPONSE_CACHE")
     llm_cache_max_temperature: float = Field(default=0.3, alias="AUTOBOT_LLM_CACHE_MAX_TEMPERATURE")
+    # Ground chat answers in retrieved KB sources: instruct the model to answer
+    # from the provided [Source N] context, cite them, and admit when the context
+    # is insufficient (#10652). Reversible flag; changes answer style.
+    chat_grounding_enabled: bool = Field(default=True, alias="AUTOBOT_CHAT_GROUNDING")
 
     # Provider-specific endpoints (each provider can have its own URL)
     ollama_endpoint: str = Field(default="http://127.0.0.1:11434", alias="AUTOBOT_OLLAMA_ENDPOINT")

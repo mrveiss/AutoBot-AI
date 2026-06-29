@@ -164,10 +164,10 @@ def test_format_knowledge_context(mock_rag_service, sample_search_results) -> No
     # Format first 2 results
     context = service.format_knowledge_context(sample_search_results[:2])
 
-    # Verify structure
+    # Verify structure — facts carry citable [Source N] labels (#10652)
     assert "KNOWLEDGE CONTEXT:" in context
-    assert "1. [score: 0.92]" in context
-    assert "2. [score: 0.82]" in context
+    assert "[Source 1]" in context
+    assert "[Source 2]" in context
     assert "Redis is configured" in context
     assert "redis-cli" in context
 
@@ -177,6 +177,32 @@ def test_format_knowledge_context_empty(mock_rag_service) -> None:
     service = ChatKnowledgeService(mock_rag_service)
     context = service.format_knowledge_context([])
     assert context == ""
+
+
+def test_format_knowledge_context_includes_grounding_instruction(
+    mock_rag_service, sample_search_results, monkeypatch
+) -> None:
+    """#10652: grounding instruction is prepended when the flag is on."""
+    from autobot_shared.ssot_config import config
+
+    monkeypatch.setattr(config, "chat_grounding_enabled", True, raising=False)
+    service = ChatKnowledgeService(mock_rag_service)
+    context = service.format_knowledge_context(sample_search_results[:1])
+    assert "[Source N]" in context  # instruction tells the model how to cite
+    assert "say you don't know" in context
+
+
+def test_format_knowledge_context_grounding_can_be_disabled(
+    mock_rag_service, sample_search_results, monkeypatch
+) -> None:
+    """#10652: instruction omitted when flag off; source labels stay."""
+    from autobot_shared.ssot_config import config
+
+    monkeypatch.setattr(config, "chat_grounding_enabled", False, raising=False)
+    service = ChatKnowledgeService(mock_rag_service)
+    context = service.format_knowledge_context(sample_search_results[:1])
+    assert "say you don't know" not in context
+    assert "[Source 1]" in context  # source labels are unconditional
 
 
 def test_format_citations(mock_rag_service, sample_search_results) -> None:

@@ -14,12 +14,20 @@ from typing import Any, Dict, List, Tuple
 
 from advanced_rag_optimizer import SearchResult
 from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.ssot_config import config
 from services.rag_service import RAGService
 
 from .context_enhancer import get_context_enhancer
 from .doc_searcher import DocumentationSearcher, get_documentation_searcher
 from .intent_detector import get_query_intent_detector
 from .types import EnhancedQuery, QueryIntentResult, QueryKnowledgeIntent
+
+# #10652: prepended to the KB context to ground chat answers in cited sources.
+GROUNDING_INSTRUCTION = (
+    "Answer the user's question using the knowledge sources below. Cite the sources "
+    "you rely on inline as [Source N]. If the sources do not contain the answer, say "
+    "you don't know rather than guessing."
+)
 
 # Issue #556: Standard knowledge categories for chat RAG
 KNOWLEDGE_CATEGORIES = {
@@ -260,18 +268,19 @@ class ChatKnowledgeService:
         if not facts:
             return ""
 
-        # Build context header
-        context_lines = ["KNOWLEDGE CONTEXT:"]
+        # #10652: optional grounding instruction so the model answers from the
+        # cited sources and admits when they're insufficient (reversible flag).
+        context_lines: List[str] = []
+        if config.chat_grounding_enabled:
+            context_lines.append(GROUNDING_INSTRUCTION)
 
-        # Add each fact with ranking
+        context_lines.append("KNOWLEDGE CONTEXT:")
+
+        # #10652: label each fact "[Source N]" so the model can cite it; N aligns
+        # with the rank in format_citations() that the frontend displays.
         for i, fact in enumerate(facts, 1):
-            # Use rerank_score if available for display
-            score = fact.rerank_score if fact.rerank_score is not None else fact.hybrid_score
+            context_lines.append(f"[Source {i}] {fact.content.strip()}")
 
-            # Format: "1. [score: 0.95] Fact content here"
-            context_lines.append(f"{i}. [score: {score:.2f}] {fact.content.strip()}")
-
-        # Join with newlines
         return "\n".join(context_lines)
 
     def format_citations(self, facts: List[SearchResult]) -> List[Dict]:
