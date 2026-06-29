@@ -257,7 +257,7 @@ class ChatDeleteData(BaseModel):
     deleted: Any
 
 
-class EnhancedChatData(BaseModel):
+class ChatData(BaseModel):
     """data payload for POST /enhanced.
 
     Mirrors ChatMessageData with an additional ``knowledge_sources``
@@ -273,7 +273,7 @@ class EnhancedChatData(BaseModel):
     knowledge_sources: List[Dict[str, Any]] | None = None
 
 
-class EnhancedChatCapabilitiesData(BaseModel):
+class ChatCapabilitiesData(BaseModel):
     """data payload for GET /capabilities.
 
     Some fields are absent on the fallback path when AI Stack is

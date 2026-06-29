@@ -1006,7 +1006,7 @@ class AgentTaskData(BaseModel):
     result: Dict[str, Any] | None = None
 
 
-class EnhancedGoalData(AgentTaskData):
+class GoalData(AgentTaskData):
     """data payload for POST /agent/goal/enhanced."""
 
     goal: str
@@ -1059,7 +1059,7 @@ class MultiAgentQueryData(BaseModel):
     results: Dict[str, Any]
 
 
-class EnhancedKnowledgeSearchData(BaseModel):
+class KnowledgeSearchData(BaseModel):
     """data payload for POST /ai-stack/knowledge/enhanced-search."""
 
     local_kb: List[Dict[str, Any]]
@@ -1553,21 +1553,18 @@ class OrganizationStatsResponse(BaseModel):
 
 
 class GoalPayload(BaseModel):
-    goal: str
-    use_phi2: bool = False
-    user_role: str = "user"
+    """Goal payload — unified from bare and enhanced variants (#10666 B1).
 
-
-class CommandApprovalPayload(BaseModel):
-    task_id: str
-    approved: bool
-    user_role: str = "user"
-
-
-class EnhancedGoalPayload(BaseModel):
-    """Enhanced goal payload with AI Stack integration."""
+    The simple /goal endpoint reads only ``goal``/``use_phi2``/``user_role``.
+    The /goal/enhanced endpoint also reads the remaining optional fields.
+    All added fields carry defaults, so existing callers that only send
+    ``goal`` remain fully backward-compatible.
+    """
 
     goal: str = Field(..., min_length=1, max_length=10000, description="Goal description")
+    use_phi2: bool = False
+    user_role: str = "user"
+    # Fields from the former GoalPayload — all optional so /goal callers unaffected
     agents: List[str] | None = Field(None, description="Specific agents to use")
     coordination_mode: str = Field("intelligent", description="Coordination mode (parallel, sequential, intelligent)")
     priority: str = Field("normal", description="Task priority (low, normal, high, urgent)")
@@ -1575,6 +1572,12 @@ class EnhancedGoalPayload(BaseModel):
     use_knowledge_base: bool = Field(True, description="Use knowledge base for context")
     include_reasoning: bool = Field(False, description="Include reasoning steps")
     max_execution_time: int = Field(300, ge=30, le=1800, description="Max execution time in seconds")
+
+
+class CommandApprovalPayload(BaseModel):
+    task_id: str
+    approved: bool
+    user_role: str = "user"
 
 
 class MultiAgentTaskPayload(BaseModel):

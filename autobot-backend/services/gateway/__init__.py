@@ -7,6 +7,7 @@
 from .adapters import (
     BaseAdapter,
     DiscordAdapter,
+    GatewayMessage,
     IMessageAdapter,
     MatrixAdapter,
     NormalizedResponse,
@@ -14,7 +15,6 @@ from .adapters import (
     SlackAdapter,
     TeamsAdapter,
     TelegramAdapter,
-    UnifiedMessage,
     WebAdapter,
     WhatsAppAdapter,
 )
@@ -26,7 +26,7 @@ __all__ = [
     "MessageQueue",
     "RateLimiter",
     "BaseAdapter",
-    "UnifiedMessage",
+    "GatewayMessage",
     "NormalizedResponse",
     "SlackAdapter",
     "DiscordAdapter",
