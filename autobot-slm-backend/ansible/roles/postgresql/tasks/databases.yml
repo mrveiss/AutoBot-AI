@@ -14,7 +14,7 @@
 - name: Read existing password from credentials file
   ansible.builtin.shell:
     cmd: >-
-      grep '^SLM_DB_PASSWORD='
+      grep '^{{ db_env_prefix }}_DB_PASSWORD='
       {{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}
       | cut -d= -f2
   register: _existing_db_password
