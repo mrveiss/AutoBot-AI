@@ -40,10 +40,9 @@ def _company_os_enabled() -> bool:
     """
     Whether the Company OS (LLC) module is available in this deployment.
 
-    The LLC company endpoints require a PostgreSQL-backed company/multi-company
-    deployment; in single_user mode (the default) they return 503. The frontend
-    consumes this flag to hide the Company OS nav item and render an
-    informational empty-state instead of surfacing a raw 503 (#10502).
+    The LLC company endpoints require a PostgreSQL-backed deployment, which
+    AutoBot always provides (#10636).  The frontend consumes this flag to
+    decide whether to surface the Company OS nav item (#10502).
     """
     try:
         from user_management.config import get_deployment_config

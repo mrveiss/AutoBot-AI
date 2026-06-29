@@ -15,8 +15,6 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_middleware import get_auth_middleware
-from autobot_shared.ssot_config import config as ssot_config
-from user_management.config import DeploymentMode, get_deployment_config
 from user_management.database import get_async_session
 from user_management.services import (
     OrganizationService,
@@ -30,36 +28,20 @@ async def get_db_session() -> AsyncSession:
     """
     Get database session dependency.
 
-    Raises HTTPException if PostgreSQL is not enabled.
+    PostgreSQL is always required (#10636), so this always yields a session.
     """
-    config = get_deployment_config()
-
-    if not config.postgres_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"User management is not available in {config.mode.value} mode",
-        )
-
     async for session in get_async_session():
         yield session
 
 
 async def get_optional_db_session() -> AsyncGenerator[Optional[AsyncSession], None]:
-    """Get database session when Postgres is available, or None in single_user mode.
+    """Get a database session.
 
-    Use this dependency for endpoints whose primary operation is independent of
-    the database (e.g. config-file writes) but that record an optional audit
-    trail when Postgres is available.  The caller must guard any DB operation
-    with ``if session is not None``.
-
-    Issue #10000: telemetry consent save must work in single_user mode.
+    Retained as a distinct dependency (yielding ``Optional[AsyncSession]``) for
+    endpoints that defensively guard their DB operations with
+    ``if session is not None``.  PostgreSQL is always enabled (#10636), so a
+    session is always yielded.
     """
-    config = get_deployment_config()
-
-    if not config.postgres_enabled:
-        yield None
-        return
-
     async for session in get_async_session():
         yield session
 
@@ -69,20 +51,7 @@ def get_current_user(request: Request) -> dict:
     Get current authenticated user from request.
 
     Returns user data dict from auth middleware.
-    In single_user mode, returns a default admin user (auth bypassed).
     """
-    config = get_deployment_config()
-
-    # In single_user mode, authentication is bypassed - return default admin
-    if config.mode == DeploymentMode.SINGLE_USER:
-        return {
-            "username": "admin",
-            "email": f"admin@{ssot_config.auth.domain}",
-            "role": "admin",
-            "is_platform_admin": True,
-            "auth_disabled": True,
-        }
-
     user_data = get_auth_middleware().get_user_from_request(request)
     if not user_data:
         raise HTTPException(
@@ -99,8 +68,7 @@ def get_current_user_id(
 
     GH#9037: per-user resources (e.g. provider credentials) key on the user's
     UUID. Real authenticated users carry an ``id``/``user_id``/``sub`` claim;
-    service/internal principals do not, so they are rejected here. Deployment-
-    mode gating (single_user → 503) is handled by ``get_db_session``.
+    service/internal principals do not, so they are rejected here.
     """
     raw = current_user.get("id") or current_user.get("user_id") or current_user.get("sub")
     if not raw:
@@ -162,15 +130,11 @@ def require_user_management_enabled():
     """
     Dependency that ensures user management is enabled.
 
-    Raises HTTPException if not in appropriate deployment mode.
+    AutoBot always runs full, Postgres-backed user management (#10636), so this
+    gate always passes.  Retained as a dependency hook for the user-management
+    routers.
     """
-    config = get_deployment_config()
-
-    if config.mode == DeploymentMode.SINGLE_USER:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User management is disabled in single_user mode",
-        )
+    return None
 
 
 def require_org_context(

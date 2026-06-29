@@ -999,10 +999,9 @@ async def update_telemetry_settings(
     is disabled, the AnalyticsMiddleware and VoiceRealtimeTelemetry
     services skip data collection.
 
-    Requires admin permission.  Works in single_user mode (no Postgres
-    required): the consent state is persisted to settings.json via
-    ConfigService; the DB audit trail is skipped when Postgres is
-    unavailable (Issue #10000).
+    Requires admin permission.  The consent state is persisted to
+    settings.json via ConfigService; a DB audit-trail revision is also
+    recorded (Issue #10000).
 
     Args:
         request: New telemetry settings
@@ -1030,8 +1029,8 @@ async def update_telemetry_settings(
 
     changed = _compute_flat_diff(before_config, merged_config)
 
-    # Audit trail requires Postgres — skip gracefully in single_user mode
-    # (Issue #10000: telemetry consent must save without user management).
+    # Record a DB audit-trail revision (Issue #10000). Defensive None-guard
+    # retained in case an override yields no session.
     if session is not None:
         await ConfigRevisionService(session).create_revision(
             entity_type="system",

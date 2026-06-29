@@ -5,10 +5,8 @@
 """
 Deployment Mode Configuration for User Management System
 
-Supports 4 deployment modes:
-- single_user: DEPRECATED (#10636) — not a supported runtime mode; AutoBot
-  always runs full Postgres-backed user management. Enum retained only while
-  remaining call sites are removed.
+AutoBot always runs full, Postgres-backed user management (#10636). Supports
+3 deployment modes:
 - single_company: One org with users and teams (default)
 - multi_company: Multiple orgs (multi-tenant), isolated data
 - provider: Full multi-tenant with billing, quotas, social login
@@ -42,7 +40,6 @@ def _get_default_postgres_host() -> str:
 class DeploymentMode(str, Enum):
     """Deployment mode enumeration."""
 
-    SINGLE_USER = "single_user"
     SINGLE_COMPANY = "single_company"
     MULTI_COMPANY = "multi_company"
     PROVIDER = "provider"
@@ -97,18 +94,6 @@ class DeploymentConfig:
 
 # Feature flags for each deployment mode
 MODE_FEATURES: dict[DeploymentMode, FeatureFlags] = {
-    DeploymentMode.SINGLE_USER: FeatureFlags(
-        user_management=False,
-        team_management=False,
-        organization_switcher=False,
-        sso_configuration=False,
-        social_login=False,
-        tenant_admin_dashboard=False,
-        api_key_management=False,
-        audit_log=False,
-        quota_management=False,
-        billing=False,
-    ),
     DeploymentMode.SINGLE_COMPANY: FeatureFlags(
         user_management=True,
         team_management=True,
@@ -166,15 +151,14 @@ def get_deployment_config() -> DeploymentConfig:
     # Get user management mode from environment or config
     # Note: AUTOBOT_USER_MODE is separate from AUTOBOT_DEPLOYMENT_MODE (infrastructure)
     # AUTOBOT_DEPLOYMENT_MODE = hybrid/local/distributed (infrastructure)
-    # AUTOBOT_USER_MODE = single_user/single_company/multi_company/provider (user mgmt)
+    # AUTOBOT_USER_MODE = single_company/multi_company/provider (user mgmt)
     mode_str = config.user_mode.lower()
 
     try:
         mode = DeploymentMode(mode_str)
     except ValueError:
         # AutoBot always runs full, Postgres-backed user management (#10636).
-        # An unset/invalid AUTOBOT_USER_MODE defaults to single_company —
-        # never single_user, which is being retired as a runtime mode.
+        # An unset/invalid AUTOBOT_USER_MODE defaults to single_company.
         if mode_str:
             logger.warning(
                 "AUTOBOT_USER_MODE=%r is invalid; defaulting to single_company (full user management)",
@@ -185,8 +169,8 @@ def get_deployment_config() -> DeploymentConfig:
     # Get feature flags for this mode
     features = MODE_FEATURES[mode]
 
-    # Check if PostgreSQL is enabled (required for non-single_user modes)
-    postgres_enabled = mode != DeploymentMode.SINGLE_USER
+    # PostgreSQL is always required for full user management (#10636).
+    postgres_enabled = True
 
     # Load PostgreSQL configuration from environment (uses SSOT fallback)
     postgres_host = config.postgres_host
@@ -220,6 +204,9 @@ def is_feature_enabled(feature: str) -> bool:
 
 
 def requires_auth() -> bool:
-    """Check if authentication is required for the current deployment mode."""
-    config = get_deployment_config()
-    return config.mode != DeploymentMode.SINGLE_USER
+    """Check if authentication is required for the current deployment mode.
+
+    AutoBot always runs full, Postgres-backed user management (#10636), so
+    authentication is always required.
+    """
+    return True

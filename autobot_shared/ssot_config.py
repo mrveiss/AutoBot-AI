@@ -1332,7 +1332,6 @@ class MiscConfig(BaseSettings):
     desktop_depth: str = Field(default="", alias="AUTOBOT_DESKTOP_DEPTH")
     desktop_max_sessions: str = Field(default="", alias="AUTOBOT_DESKTOP_MAX_SESSIONS")
     desktop_resolution: str = Field(default="", alias="AUTOBOT_DESKTOP_RESOLUTION")
-    dev_auth_bypass: str = Field(default="", alias="AUTOBOT_DEV_AUTH_BYPASS")
     dev_mode: str = Field(default="", alias="AUTOBOT_DEV_MODE")
     encryption_key: str = Field(default="", alias="AUTOBOT_ENCRYPTION_KEY")
     env: str = Field(default="", alias="AUTOBOT_ENV")
@@ -1613,7 +1612,6 @@ class FeatureConfig(BaseSettings):
     semantic_chunking: bool = Field(default=True, alias="AUTOBOT_SEMANTIC_CHUNKING")
     debug_mode: bool = Field(default=False, alias="AUTOBOT_DEBUG_MODE")
     hot_reload: bool = Field(default=True, alias="AUTOBOT_HOT_RELOAD")
-    single_user_mode: bool = Field(default=True, alias="AUTOBOT_SINGLE_USER_MODE")
     permission_system_v2: bool = Field(default=False, alias="AUTOBOT_PERMISSION_SYSTEM_V2")
 
     # Subsystem feature flags — issue #3017

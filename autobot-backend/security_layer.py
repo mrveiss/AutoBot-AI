@@ -43,9 +43,6 @@ def _resolve_audit_log_file() -> str:
 
 _AUDIT_LOG_FILE = _resolve_audit_log_file()
 
-# Performance optimization: O(1) lookup for boolean string values (Issue #326)
-BOOLEAN_TRUE_VALUES = {"true", "1", "yes"}
-
 # Performance optimization: O(1) lookup for deprecated privileged roles (Issue #326)
 DEPRECATED_PRIVILEGED_ROLES = {"god", "superuser", "root"}
 
@@ -56,22 +53,10 @@ class SecurityLayer:
         # Use centralized config manager instead of direct file loading
         self.security_config = get_config_manager().get("security_config", {})
 
-        # Check for single-user mode (development/personal use)
-        self.single_user_mode = str(config.single_user_mode).lower() in BOOLEAN_TRUE_VALUES
-
-        # If single-user mode is enabled, disable all authentication
-        # Issue #745: Added security warning for production awareness
-        if self.single_user_mode:
-            self.enable_auth = False
-            logger.warning(
-                "SECURITY: Single-user mode enabled - authentication disabled. "
-                "Set AUTOBOT_SINGLE_USER_MODE=false for production deployments."
-            )
-        else:
-            # Issue #745: Default to True for production security
-            # Authentication should be enabled unless explicitly disabled
-            self.enable_auth = self.security_config.get("enable_auth", True)
-            logger.info("Multi-user mode - authentication enabled by default")
+        # Issue #745: Default to True for production security.
+        # Authentication is enabled unless explicitly disabled in security_config.
+        self.enable_auth = self.security_config.get("enable_auth", True)
+        logger.info("Authentication enabled by default")
 
         self.audit_log_file = self.security_config.get("audit_log_file") or _AUDIT_LOG_FILE
         self.roles = self.security_config.get("roles", {})

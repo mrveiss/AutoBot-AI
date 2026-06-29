@@ -325,8 +325,6 @@ async def test_run_jwt_blocked_on_non_allowed_path(jwt_secret, monkeypatch):
 
     store, factory = _make_redis_store()
     monkeypatch.setattr("services.run_jwt.get_async_redis_client", factory)
-    # Disable single-user mode so the run JWT fallback path is reached
-    monkeypatch.setenv("AUTOBOT_SINGLE_USER_MODE", "false")
 
     run_id = str(uuid.uuid4())
     token = mint_run_jwt(run_id, "task-1", "agent-1", "tenant-1", ["task:read"])
