@@ -14,6 +14,9 @@ Decomposed from single 317-LOC god class into per-strategy files:
 
 ExecutionStrategyHandler is the thin dispatcher that selects and instantiates
 the appropriate strategy based on the workflow plan.
+
+Moved from enhanced_orchestration.execution_strategies to
+orchestration.execution_strategies (issue #10666 B3).
 """
 
 import asyncio

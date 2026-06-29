@@ -14,6 +14,9 @@ in ``autobot-backend/orchestration/workflow_planner.py``.  Both classes were his
 called ``WorkflowPlanner`` and every import site aliased this one ``as StrategyPlanner``;
 the rename removes that aliasing smell (#6817).  The orphan status of the canonical class
 is tracked separately in #6820.
+
+Moved from enhanced_orchestration.workflow_planning to orchestration.workflow_planning
+(issue #10666 B3).
 """
 
 import re
@@ -21,8 +24,9 @@ import uuid
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.workflow import ExecutionStrategy
 
-from .types import AgentCapability, AgentTask, ExecutionStrategy, WorkflowPlan
+from .types import AgentCapability, AgentTask, WorkflowPlan
 
 logger = get_logger(__name__)
 

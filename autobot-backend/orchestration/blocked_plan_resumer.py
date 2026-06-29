@@ -31,6 +31,9 @@ Failure modes are tolerated:
 
 Lifecycle: ``start()`` is idempotent; ``stop()`` cancels the listener
 task. WorkflowRunner is responsible for both calls.
+
+Moved from enhanced_orchestration.blocked_plan_resumer to
+orchestration.blocked_plan_resumer (issue #10666 B3).
 """
 
 import asyncio

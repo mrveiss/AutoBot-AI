@@ -235,12 +235,12 @@ export class KnowledgeRepository extends ApiRepository {
     }))
   }
 
-  // RAG-enhanced search using dedicated endpoint
+  // RAG-enhanced search — migrated from /rag_search to /search (#10666)
   async ragSearch(request: RagSearchRequest): Promise<RagSearchResponse> {
-    const response = await this.post<RagSearchResponse>(`${getApiBase()}/knowledge_base/rag_search`, {
+    const response = await this.post<RagSearchResponse>(`${getApiBase()}/knowledge_base/search`, {
       query: request.query,
-      top_k: request.top_k || 10,
-      limit: request.limit || 10,
+      limit: request.limit || request.top_k || 10,
+      enable_rag: true,
       reformulate_query: request.reformulate_query !== false
     })
     return response.data

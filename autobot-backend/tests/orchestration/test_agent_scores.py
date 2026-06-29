@@ -2,7 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""TaskAgentScorer surfaces ranking scores instead of discarding them (#10660)."""
+"""TaskAgentScorer surfaces ranking scores instead of discarding them (#10660).
+
+Moved from tests/enhanced_orchestration/ to tests/orchestration/ (issue #10666 B3).
+"""
 
 from __future__ import annotations
 
@@ -10,7 +13,7 @@ import types
 
 import pytest
 
-from enhanced_orchestration.agent_router import TaskAgentScorer
+from orchestration.agent_router import TaskAgentScorer
 
 
 def _scorer():

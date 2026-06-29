@@ -20,8 +20,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from autobot_shared.workflow import ExecutionStrategy
-from enhanced_orchestration.types import AgentTask, WorkflowPlan
-from enhanced_orchestration.workflow_runner import WorkflowRunner
+from orchestration.types import AgentTask, WorkflowPlan
+from orchestration.workflow_runner import WorkflowRunner
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -207,8 +207,8 @@ async def test_goap_replan_unreachable_falls_back_to_fallback_chain():
 
 
 def _make_strategy_planner():
-    from enhanced_orchestration.workflow_planning import StrategyPlanner
     from orchestration.types import AgentCapability
+    from orchestration.workflow_planning import StrategyPlanner
 
     agent_caps = {
         "research_agent": {AgentCapability.RESEARCH},

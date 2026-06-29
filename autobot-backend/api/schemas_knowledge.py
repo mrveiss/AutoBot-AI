@@ -1145,6 +1145,28 @@ class SearchRequest(BaseModel):
         max_length=100,
         description="Session ID for analytics correlation",
     )
+    # Advanced v2 options (folded from former /enhanced_search_v2 — #10666)
+    enable_query_expansion: bool = Field(
+        default=False,
+        description="Expand query with synonyms/related terms before searching",
+    )
+    enable_relevance_scoring: bool = Field(
+        default=False,
+        description="Apply additional relevance scoring on top of vector similarity",
+    )
+    enable_clustering: bool = Field(
+        default=False,
+        description="Cluster results by topic before returning",
+    )
+    exclude_sources: List[str] | None = Field(
+        default=None,
+        max_items=20,
+        description="Exclude results from these source identifiers",
+    )
+    verified_only: bool = Field(
+        default=False,
+        description="Return only facts that have been verified/approved",
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -1193,7 +1215,7 @@ class SearchRequest(BaseModel):
     # === Issue #372: Feature Envy Reduction Methods ===
 
     def to_search_params(self) -> dict:
-        """Convert to parameters dict for knowledge base search (Issue #372)."""
+        """Convert to parameters dict for knowledge base enhanced_search (Issue #372)."""
         return {
             "query": self.query,
             "limit": self.limit,
@@ -1221,6 +1243,46 @@ class SearchRequest(BaseModel):
             "min_score": self.min_score,
             "board_id": self.board_id,
         }
+
+    def to_v2_params(self) -> dict:
+        """Convert to parameters dict for knowledge base enhanced_search_v2 (#10666)."""
+        return {
+            "query": self.query,
+            "limit": self.limit,
+            "offset": self.offset,
+            "category": self.category,
+            "tags": self.tags,
+            "tags_match_any": self.tags_match_any,
+            "mode": self.mode,
+            "enable_reranking": self.enable_reranking,
+            "min_score": self.min_score,
+            "enable_query_expansion": self.enable_query_expansion,
+            "enable_relevance_scoring": self.enable_relevance_scoring,
+            "enable_clustering": self.enable_clustering,
+            "track_analytics": self.track_analytics,
+            "created_after": self.created_after,
+            "created_before": self.created_before,
+            "exclude_terms": self.exclude_terms,
+            "require_terms": self.require_terms,
+            "exclude_sources": self.exclude_sources,
+            "verified_only": self.verified_only,
+            "session_id": self.session_id,
+        }
+
+    def uses_v2_features(self) -> bool:
+        """Return True when any v2-only field is set (#10666)."""
+        return bool(
+            self.enable_query_expansion
+            or self.enable_relevance_scoring
+            or self.enable_clustering
+            or self.exclude_sources
+            or self.verified_only
+            or self.created_after
+            or self.created_before
+            or self.exclude_terms
+            or self.require_terms
+            or self.session_id
+        )
 
     def get_log_summary(self) -> str:
         """Get formatted log summary string (Issue #372 - reduces feature envy)."""

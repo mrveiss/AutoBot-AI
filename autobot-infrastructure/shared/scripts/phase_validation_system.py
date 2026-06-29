@@ -165,7 +165,7 @@ class PhaseValidationCriteria:
                 "autobot-backend/orchestrator.py",
                 "autobot-backend/api/orchestration.py",
             ],
-            "directories": ["autobot-backend/enhanced_orchestration/"],
+            "directories": ["autobot-backend/orchestration/"],
             "endpoints": ["/api/orchestration/status"],
             "orchestration_features": [
                 "task_planning",

@@ -2,7 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Pipeline execution strategy (GH #6830)."""
+"""Pipeline execution strategy (GH #6830).
+
+Moved from enhanced_orchestration.execution_strategies._pipeline to
+orchestration.execution_strategies._pipeline (issue #10666 B3).
+"""
 
 import asyncio
 from typing import Any, Callable, Dict

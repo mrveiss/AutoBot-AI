@@ -8,8 +8,8 @@ import asyncio
 
 import pytest
 
-from enhanced_orchestration.execution_strategies import ExecutionStrategyHandler
-from enhanced_orchestration.types import (
+from orchestration.execution_strategies import ExecutionStrategyHandler
+from orchestration.types import (
     AgentTask,
     ExecutionStrategy,
     WorkflowDependencies,

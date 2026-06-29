@@ -38,9 +38,10 @@ _BACKEND = Path(__file__).resolve().parent.parent
 if str(_BACKEND) not in sys.path:
     sys.path.insert(0, str(_BACKEND))
 
-from enhanced_orchestration.types import AgentTask, ExecutionStrategy, WorkflowPlan
-from enhanced_orchestration.workflow_planning import StrategyPlanner
-from enhanced_orchestration.workflow_runner import WorkflowRunner
+from autobot_shared.workflow import ExecutionStrategy
+from orchestration.types import AgentTask, WorkflowPlan
+from orchestration.workflow_planning import StrategyPlanner
+from orchestration.workflow_runner import WorkflowRunner
 
 # ---------------------------------------------------------------------------
 # Shared test helpers
@@ -223,7 +224,7 @@ async def test_execute_workflow_end_to_end_with_skill_bound_plan() -> None:
 
     with (
         patch("skills.registry.get_skill_registry", return_value=stub_reg),
-        patch("enhanced_orchestration.workflow_runner._get_event_manager") as mock_em,
+        patch("orchestration.workflow_runner._get_event_manager") as mock_em,
     ):
         mock_em.return_value.publish = AsyncMock()
         result = await runner.execute_workflow(plan)
@@ -302,7 +303,7 @@ async def test_try_resume_unblocks_plan_and_executes_when_skill_synthesized() ->
 
     with (
         patch("skills.registry.get_skill_registry", return_value=stub_reg),
-        patch("enhanced_orchestration.workflow_runner._get_event_manager") as mock_em,
+        patch("orchestration.workflow_runner._get_event_manager") as mock_em,
     ):
         mock_em.return_value.publish = AsyncMock()
         result = await runner.try_resume_blocked_plan(plan.plan_id)
@@ -378,7 +379,7 @@ async def test_blocked_plan_resumer_handle_event_calls_try_resume() -> None:
     runner = _make_runner(active_workflows={plan.plan_id: plan})
     runner.try_resume_blocked_plan = AsyncMock(return_value={"resumed": True})
 
-    from enhanced_orchestration.blocked_plan_resumer import BlockedPlanResumer
+    from orchestration.blocked_plan_resumer import BlockedPlanResumer
 
     resumer = BlockedPlanResumer(runner)
     await resumer._handle_event(json.dumps({"skill_name": "new_skill"}))
@@ -409,7 +410,7 @@ async def test_blocked_plan_resumer_skips_non_blocked_plans() -> None:
     )
     runner.try_resume_blocked_plan = AsyncMock(return_value={"resumed": True})
 
-    from enhanced_orchestration.blocked_plan_resumer import BlockedPlanResumer
+    from orchestration.blocked_plan_resumer import BlockedPlanResumer
 
     resumer = BlockedPlanResumer(runner)
     await resumer._handle_event(json.dumps({"skill_name": "skill_x"}))
