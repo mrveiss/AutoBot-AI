@@ -11648,7 +11648,8 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_decorator_placement(self):
         """Test batch 72 endpoints have decorators in correct order"""
-        from api.agent import agent_health as enhanced_agent_health, receive_goal_compat
+        from api.agent import agent_health as enhanced_agent_health
+        from api.agent import receive_goal_compat
 
         for endpoint in [receive_goal_compat, enhanced_agent_health]:
             source = inspect.getsource(endpoint)
@@ -11663,7 +11664,8 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_error_category_consistency(self):
         """Test batch 72 endpoints all use ErrorCategory.SERVER_ERROR"""
-        from api.agent import agent_health as enhanced_agent_health, receive_goal_compat
+        from api.agent import agent_health as enhanced_agent_health
+        from api.agent import receive_goal_compat
 
         for endpoint in [receive_goal_compat, enhanced_agent_health]:
             source = inspect.getsource(endpoint)
@@ -11675,7 +11677,8 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_error_prefix_consistency(self):
         """Test batch 72 endpoints all use AGENT_ENHANCED prefix"""
-        from api.agent import agent_health as enhanced_agent_health, receive_goal_compat
+        from api.agent import agent_health as enhanced_agent_health
+        from api.agent import receive_goal_compat
 
         for endpoint in [receive_goal_compat, enhanced_agent_health]:
             source = inspect.getsource(endpoint)
@@ -11687,7 +11690,8 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_mixed_pattern_consistency(self):
         """Test batch 72 endpoints all use Mixed Pattern (preserve outer try-catch)"""
-        from api.agent import agent_health as enhanced_agent_health, receive_goal_compat
+        from api.agent import agent_health as enhanced_agent_health
+        from api.agent import receive_goal_compat
 
         for endpoint in [receive_goal_compat, enhanced_agent_health]:
             source = inspect.getsource(endpoint)
@@ -11700,7 +11704,8 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_business_logic_preservation(self):
         """Test batch 72 endpoints preserve business logic (fallback/degraded responses)"""
-        from api.agent import agent_health as enhanced_agent_health, receive_goal_compat
+        from api.agent import agent_health as enhanced_agent_health
+        from api.agent import receive_goal_compat
 
         # receive_goal_compat should have fallback logic
         compat_source = inspect.getsource(receive_goal_compat)
@@ -14259,7 +14264,9 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
         """Test batch 87 endpoints use correct patterns (2 Simple, 1 Mixed)"""
         from api.ai_stack_integration import (
             analyze_documents,
-            chat as enhanced_chat,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             extract_knowledge,
         )
 
@@ -14316,7 +14323,9 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
         """Test batch 87 endpoints have correct operation names in decorator"""
         from api.ai_stack_integration import (
             analyze_documents,
-            chat as enhanced_chat,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             extract_knowledge,
         )
 
@@ -14390,7 +14399,9 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
         """Test batch 87 endpoints have correct decorator parameters"""
         from api.ai_stack_integration import (
             analyze_documents,
-            chat as enhanced_chat,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             extract_knowledge,
         )
 
@@ -14409,7 +14420,9 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
         """Test batch 87 endpoints don't call handle_ai_stack_error"""
         from api.ai_stack_integration import (
             analyze_documents,
-            chat as enhanced_chat,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             extract_knowledge,
         )
 
@@ -14427,7 +14440,9 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
         from api.ai_stack_integration import (
             ai_stack_health_check,
             analyze_documents,
-            chat as enhanced_chat,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             extract_knowledge,
             list_ai_agents,
             rag_query,
@@ -14457,7 +14472,9 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
         """Comprehensive test for all batch 87 migrations"""
         from api.ai_stack_integration import (
             analyze_documents,
-            chat as enhanced_chat,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             extract_knowledge,
         )
 
@@ -14501,11 +14518,15 @@ class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
         from api.ai_stack_integration import (
             ai_stack_health_check,
             analyze_documents,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             comprehensive_research,
-            chat as enhanced_chat,
-            knowledge_search as enhanced_knowledge_search,
             extract_knowledge,
             get_system_knowledge,
+        )
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import (
             list_ai_agents,
             rag_query,
             reformulate_query,
@@ -14537,8 +14558,10 @@ class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
         """Test batch 88 endpoints use correct patterns (2 Simple, 2 Mixed)"""
         from api.ai_stack_integration import (
             comprehensive_research,
-            knowledge_search as enhanced_knowledge_search,
             get_system_knowledge,
+        )
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import (
             web_research,
         )
 
@@ -14652,8 +14675,10 @@ class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
         """Test all batch 88 endpoints use AI_STACK error code prefix"""
         from api.ai_stack_integration import (
             comprehensive_research,
-            knowledge_search as enhanced_knowledge_search,
             get_system_knowledge,
+        )
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import (
             web_research,
         )
 
@@ -14672,8 +14697,10 @@ class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
         """Test batch 88 endpoints removed outer try-catch blocks"""
         from api.ai_stack_integration import (
             comprehensive_research,
-            knowledge_search as enhanced_knowledge_search,
             get_system_knowledge,
+        )
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import (
             web_research,
         )
 
@@ -14724,8 +14751,10 @@ class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
         """Test all batch 88 endpoints comprehensively"""
         from api.ai_stack_integration import (
             comprehensive_research,
-            knowledge_search as enhanced_knowledge_search,
             get_system_knowledge,
+        )
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import (
             web_research,
         )
 
@@ -14793,12 +14822,16 @@ class TestBatch89AIStackIntegrationMigrations(unittest.TestCase):
             ai_stack_health_check,
             analyze_development_speedup,
             analyze_documents,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             classify_content,
             comprehensive_research,
-            chat as enhanced_chat,
-            knowledge_search as enhanced_knowledge_search,
             extract_knowledge,
             get_system_knowledge,
+        )
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import (
             list_ai_agents,
             rag_query,
             reformulate_query,
@@ -15080,12 +15113,16 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             ai_stack_health_check,
             analyze_development_speedup,
             analyze_documents,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             classify_content,
             comprehensive_research,
-            chat as enhanced_chat,
-            knowledge_search as enhanced_knowledge_search,
             extract_knowledge,
             get_system_knowledge,
+        )
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import (
             legacy_enhanced_chat,
             legacy_rag_search,
             list_ai_agents,
@@ -15130,12 +15167,16 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             ai_stack_health_check,
             analyze_development_speedup,
             analyze_documents,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             classify_content,
             comprehensive_research,
-            chat as enhanced_chat,
-            knowledge_search as enhanced_knowledge_search,
             extract_knowledge,
             get_system_knowledge,
+        )
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import (
             legacy_enhanced_chat,
             legacy_rag_search,
             list_ai_agents,
@@ -15380,12 +15421,16 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             ai_stack_health_check,
             analyze_development_speedup,
             analyze_documents,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             classify_content,
             comprehensive_research,
-            chat as enhanced_chat,
-            knowledge_search as enhanced_knowledge_search,
             extract_knowledge,
             get_system_knowledge,
+        )
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import (
             legacy_enhanced_chat,
             legacy_rag_search,
             list_ai_agents,
