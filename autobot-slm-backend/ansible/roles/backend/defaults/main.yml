@@ -36,9 +36,10 @@ backend_redis_port: 6379
 backend_redis_password: ""
 
 # User management mode (Issue #2953)
-# single_user: no auth, no PostgreSQL (default for single-host installs)
-# single_company/multi_company/provider: requires PostgreSQL
-backend_user_mode: "single_user"
+# AutoBot always runs full, Postgres-backed user management (#10636).
+# single_company/multi_company/provider — all require PostgreSQL.
+# There is no single_user mode; do not reintroduce it as a fallback.
+backend_user_mode: "single_company"
 
 # PostgreSQL for non-single_user modes (Issue #2953)
 backend_postgres_host: "127.0.0.1"
