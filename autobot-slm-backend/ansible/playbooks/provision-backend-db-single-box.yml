@@ -76,6 +76,19 @@
         login_unix_socket: /var/run/postgresql
       become_user: postgres
 
+    # PG15+: the `public` schema no longer grants CREATE to non-owners, so the
+    # database-level grant above is not enough for Alembic to create tables.
+    # Grant schema-level privileges so the backend migrations can run.
+    - name: "Grant autobot_app privileges on schema public"
+      community.postgresql.postgresql_privs:
+        database: "{{ autobot_db_name }}"
+        type: schema
+        objs: public
+        privs: ALL
+        role: "{{ autobot_db_user }}"
+        login_unix_socket: /var/run/postgresql
+      become_user: postgres
+
     # Add ONLY autobot_app's entries, leaving every existing line (the SLM's
     # slm_app local/host and any remote-access entries) untouched. This is
     # non-destructive — unlike rendering the whole template — so the live SLM
@@ -98,7 +111,16 @@
         - "127.0.0.1/32"
         - "::1/128"
       become_user: postgres
-      notify: Reload PostgreSQL
+
+    # Explicit reload (not a handler): handlers only fire on change and are
+    # flushed at play end, so an idempotent rerun (or a play that fails after
+    # editing pg_hba) would leave the running server with stale auth. Reload
+    # unconditionally so the verify below tests the live config. (#10636)
+    - name: "Reload PostgreSQL to apply pg_hba"
+      ansible.builtin.systemd:
+        name: postgresql
+        state: reloaded
+      changed_when: false
 
     - name: "Write autobot-db-credentials.env (separate from SLM creds)"
       ansible.builtin.copy:
@@ -124,9 +146,3 @@
         login_password: "{{ autobot_db_password }}"
         login_host: 127.0.0.1
       no_log: true
-
-  handlers:
-    - name: Reload PostgreSQL
-      ansible.builtin.systemd:
-        name: postgresql
-        state: reloaded
