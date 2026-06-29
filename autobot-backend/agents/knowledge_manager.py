@@ -237,9 +237,7 @@ class KnowledgeManager:
         self._initialized = False
         self._init_lock = asyncio.Lock()
 
-        logger.info(
-            f"KnowledgeManager created (temporal={enable_temporal}, " f"machine_aware={enable_machine_aware})"
-        )
+        logger.info(f"KnowledgeManager created (temporal={enable_temporal}, " f"machine_aware={enable_machine_aware})")
 
     async def _ensure_initialized(self):
         """

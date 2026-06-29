@@ -17,8 +17,8 @@ from memory import MemoryManager
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
-    ProcessingIntent,
     MultiModalProcessor,
+    ProcessingIntent,
 )
 from services.config_service import ConfigService
 
