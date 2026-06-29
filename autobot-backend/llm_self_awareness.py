@@ -19,9 +19,9 @@ import aiofiles
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
-from project_state_tracker import get_state_tracker
 from phase_progression_manager import get_progression_manager
 from project_state_manager import get_project_state_manager
+from project_state_tracker import get_state_tracker
 
 logger = get_logger(__name__)
 
