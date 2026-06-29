@@ -55,7 +55,7 @@ from knowledge.search_components.hybrid_search import HybridSearcher
 # Issue #3828: canonical vector search engine — SearchMixin.search() delegates here.
 from knowledge.vector_search_engine import SearchResult as _EngineSearchResult
 from knowledge.vector_search_engine import get_vector_search_engine
-from models.task_context import EnhancedSearchContext
+from models.task_context import SearchContext
 
 if TYPE_CHECKING:
     import aioredis
@@ -177,24 +177,109 @@ class SearchMixin:
         )
         return results
 
-    async def search(
+    async def search(  # noqa: PLR0913
         self,
         query: str,
         top_k: int = 10,
         similarity_top_k: int = None,
         filters: Dict[str, Any] | None = None,
         mode: str = "auto",
-    ) -> List[Dict[str, Any]]:
-        """Search the knowledge base.
+        # ---- Enhanced params (formerly enhanced_search) ----
+        limit: int | None = None,
+        offset: int = 0,
+        category: str | None = None,
+        tags: List[str] | None = None,
+        tags_match_any: bool = False,
+        enable_reranking: bool = False,
+        min_score: float = 0.0,
+        board_id: str | None = None,
+        # ---- Advanced params (formerly enhanced_search_v2) ----
+        enable_query_expansion: bool = False,
+        enable_relevance_scoring: bool = False,
+        enable_clustering: bool = False,
+        track_analytics: bool = True,
+        created_after: str | None = None,
+        created_before: str | None = None,
+        exclude_terms: List[str] | None = None,
+        require_terms: List[str] | None = None,
+        exclude_sources: List[str] | None = None,
+        verified_only: bool = False,
+        session_id: str | None = None,
+    ):
+        """Canonical KB search — consolidates basic, enhanced, and advanced paths (#10666).
 
-        Issue #398: refactored.
-        Issue #934: filters is now passed to ChromaDB as a metadata where clause.
-        Issue #3828: delegates to VectorSearchEngine for unified hardware dispatch.
+        Three call modes, selected automatically by parameter presence:
 
-        The legacy _execute_vector_search path is kept as the final fallback so
-        that any sub-class that overrides _query_chromadb / _deduplicate_results
-        continues to work correctly.
+        **Basic** (returns ``List[Dict]``): pass only ``query`` / ``top_k`` / ``filters``.
+          Delegates to VectorSearchEngine with a ChromaDB fallback.
+          Issue #398, #934, #3828.
+
+        **Enhanced** (returns ``Dict[str, Any]``): pass any of ``limit``, ``tags``,
+          ``category``, ``min_score``, ``board_id``, ``enable_reranking``.
+          Runs the full hybrid pipeline with tag filtering and optional reranking.
+          Issue #3242.
+
+        **Advanced** (returns ``Dict[str, Any]``): additionally pass query-expansion,
+          relevance-scoring, clustering, date-range, or term-filter params.
+          All advanced capabilities route through ``search_ctx``.
+          Issue #78.
         """
+        advanced = bool(
+            enable_query_expansion
+            or enable_relevance_scoring
+            or enable_clustering
+            or exclude_sources
+            or verified_only
+            or created_after
+            or created_before
+            or exclude_terms
+            or require_terms
+            or session_id
+        )
+        enhanced = limit is not None or tags is not None or category is not None or min_score > 0 or board_id
+
+        if advanced or enhanced:
+            eff_limit = limit if limit is not None else top_k
+            eff_mode = mode if mode != "auto" else "hybrid"
+            ctx = SearchContext.from_params(
+                query=query,
+                limit=eff_limit,
+                offset=offset,
+                category=category,
+                tags=tags,
+                tags_match_any=tags_match_any,
+                mode=eff_mode,
+                enable_reranking=enable_reranking,
+                min_score=min_score,
+                enable_query_expansion=enable_query_expansion,
+                enable_relevance_scoring=enable_relevance_scoring,
+                enable_clustering=enable_clustering,
+                track_analytics=track_analytics,
+                created_after=created_after,
+                created_before=created_before,
+                exclude_terms=exclude_terms,
+                require_terms=require_terms,
+                exclude_sources=exclude_sources,
+                verified_only=verified_only,
+                session_id=session_id,
+            )
+            if advanced:
+                return await self.search_ctx(ctx)
+            # Enhanced (no advanced params): use the simpler enhanced pipeline
+            return await self._run_enhanced_search(
+                query=query,
+                limit=eff_limit,
+                offset=offset,
+                category=category,
+                tags=tags,
+                tags_match_any=tags_match_any,
+                mode=eff_mode,
+                enable_reranking=enable_reranking,
+                min_score=min_score,
+                board_id=board_id,
+            )
+
+        # ---- Basic vector search path ----
         self.ensure_initialized()
         similarity_top_k = similarity_top_k or top_k
 
@@ -477,8 +562,8 @@ class SearchMixin:
             results = await self._rerank_results(processed_query, results)
         return results
 
-    @error_boundary(component="knowledge_base", function="enhanced_search")
-    async def enhanced_search(
+    @error_boundary(component="knowledge_base", function="_run_enhanced_search")
+    async def _run_enhanced_search(
         self,
         query: str,
         limit: int = 10,
@@ -491,10 +576,10 @@ class SearchMixin:
         min_score: float = 0.0,
         board_id: str | None = None,
     ) -> Dict[str, Any]:
-        """Enhanced search with filtering and reranking (Issue #398: refactored).
+        """Enhanced search pipeline — invoked by ``search()`` when enhanced params present.
 
-        Issue #3242: board_id scopes search to a project board. None / '__global__'
-        searches all boards (existing behaviour, no regression).
+        Issue #398: refactored. Issue #3242: board_id scopes search to a project board.
+        Callers should use ``search(query, limit=..., tags=...)`` rather than this private method.
         """
         self.ensure_initialized()
         if not query.strip():
@@ -548,7 +633,7 @@ class SearchMixin:
                 enable_reranking,
             )
         except Exception as e:
-            logger.error("Enhanced search failed: %s", e)
+            logger.error("Enhanced search pipeline failed: %s", e)
             return {
                 "success": False,
                 "results": [],
@@ -630,56 +715,9 @@ class SearchMixin:
         """Rerank results using cross-encoder for improved relevance."""
         return await get_reranker().rerank(query, results, top_k)
 
-    @error_boundary(component="knowledge_base", function="enhanced_search_v2")
-    async def enhanced_search_v2(
-        self,
-        query: str,
-        limit: int = 10,
-        offset: int = 0,
-        category: str | None = None,
-        tags: List[str] | None = None,
-        tags_match_any: bool = False,
-        mode: str = "hybrid",
-        enable_reranking: bool = False,
-        min_score: float = 0.0,
-        enable_query_expansion: bool = False,
-        enable_relevance_scoring: bool = False,
-        enable_clustering: bool = False,
-        track_analytics: bool = True,
-        created_after: str | None = None,
-        created_before: str | None = None,
-        exclude_terms: List[str] | None = None,
-        require_terms: List[str] | None = None,
-        exclude_sources: List[str] | None = None,
-        verified_only: bool = False,
-        session_id: str | None = None,
-    ) -> Dict[str, Any]:
-        """Enhanced search v2 with full Issue #78 improvements."""
-        ctx = EnhancedSearchContext.from_params(
-            query=query,
-            limit=limit,
-            offset=offset,
-            category=category,
-            tags=tags,
-            tags_match_any=tags_match_any,
-            mode=mode,
-            enable_reranking=enable_reranking,
-            min_score=min_score,
-            enable_query_expansion=enable_query_expansion,
-            enable_relevance_scoring=enable_relevance_scoring,
-            enable_clustering=enable_clustering,
-            track_analytics=track_analytics,
-            created_after=created_after,
-            created_before=created_before,
-            exclude_terms=exclude_terms,
-            require_terms=require_terms,
-            exclude_sources=exclude_sources,
-            verified_only=verified_only,
-            session_id=session_id,
-        )
-        return await self.enhanced_search_v2_ctx(ctx)
+    # enhanced_search_v2 folded into search() — Issue #10666
 
-    def _extract_search_params(self, ctx: EnhancedSearchContext) -> Dict[str, Any]:
+    def _extract_search_params(self, ctx: SearchContext) -> Dict[str, Any]:
         """Extract search parameters from context (Issue #398: extracted)."""
         return {
             "query": ctx.query_params.query,
@@ -802,9 +840,9 @@ class SearchMixin:
             params["limit"],
         )
 
-    @error_boundary(component="knowledge_base", function="enhanced_search_v2_ctx")
-    async def enhanced_search_v2_ctx(self, ctx: EnhancedSearchContext) -> Dict[str, Any]:
-        """Enhanced search v2 using EnhancedSearchContext (Issue #398: refactored)."""
+    @error_boundary(component="knowledge_base", function="search_ctx")
+    async def search_ctx(self, ctx: SearchContext) -> Dict[str, Any]:
+        """Enhanced search v2 using SearchContext (Issue #398: refactored)."""
         self.ensure_initialized()
 
         params = self._extract_search_params(ctx)
@@ -848,7 +886,7 @@ class SearchMixin:
             return self._finalize_search_response(results, params, processed_query, len(queries_to_search), duration_ms)
 
         except Exception as e:
-            logger.error("Enhanced search v2 failed: %s", e)
+            logger.error("Advanced search failed: %s", e)
             import traceback
 
             logger.error(traceback.format_exc())

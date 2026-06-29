@@ -1244,8 +1244,8 @@ class SearchRequest(BaseModel):
             "board_id": self.board_id,
         }
 
-    def to_v2_params(self) -> dict:
-        """Convert to parameters dict for knowledge base enhanced_search_v2 (#10666)."""
+    def to_advanced_params(self) -> dict:
+        """Convert to parameters dict for knowledge base advanced search (#10666)."""
         return {
             "query": self.query,
             "limit": self.limit,
@@ -1269,8 +1269,8 @@ class SearchRequest(BaseModel):
             "session_id": self.session_id,
         }
 
-    def uses_v2_features(self) -> bool:
-        """Return True when any v2-only field is set (#10666)."""
+    def uses_advanced_features(self) -> bool:
+        """Return True when any advanced-only field is set (#10666)."""
         return bool(
             self.enable_query_expansion
             or self.enable_relevance_scoring
@@ -4775,7 +4775,7 @@ class NPUOptimizationRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class AIStackEnhancedSearchRequest(BaseModel):
+class AIStackSearchRequest(BaseModel):
     """Enhanced search request with AI Stack integration."""
 
     query: str = Field(..., min_length=1, max_length=5000, description="Search query")

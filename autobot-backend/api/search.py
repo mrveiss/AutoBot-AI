@@ -119,7 +119,7 @@ async def semantic_search(request: NPUSearchRequest):
         search_engine = await get_npu_search_engine()
         force_device = _parse_force_device(request.force_device)
 
-        search_results, metrics = await search_engine.enhanced_search(
+        search_results, metrics = await search_engine.search(
             query=request.query,
             similarity_top_k=request.similarity_top_k,
             filters=request.filters,
@@ -310,7 +310,7 @@ async def test_npu_connectivity():
         await search_engine._test_npu_connectivity()
 
         # Test search functionality with a simple query
-        test_results, test_metrics = await search_engine.enhanced_search(
+        test_results, test_metrics = await search_engine.search(
             query="test connectivity", similarity_top_k=3, enable_npu_acceleration=True
         )
 

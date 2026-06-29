@@ -5,18 +5,19 @@
 """
 Multimodal Processor Package
 
-Unified multi-modal AI processing with vision, voice, and context modalities.
+Multi-modal AI processing with vision, voice, and context modalities.
 Features GPU-accelerated models (CLIP, BLIP-2, Whisper, Wav2Vec2) and
 attention-based cross-modal fusion.
 
 Part of Issue #381 - God Class Refactoring
+Part of Issue #10666 - Naming consolidation (UnifiedMultiModalProcessor -> MultiModalProcessor)
 
 Original module: 1,512 lines
 New package: ~1,100 lines across focused modules
 
 Usage:
     from multimodal_processor import (
-        UnifiedMultiModalProcessor,
+        MultiModalProcessor,
         ModalityType,
         ProcessingIntent,
         MultiModalInput,
@@ -28,7 +29,7 @@ Usage:
     result = await unified_processor.process(input_data)
 
     # Or create custom instance
-    processor = UnifiedMultiModalProcessor()
+    processor = MultiModalProcessor()
     result = await processor.process(input_data)
 """
 
@@ -43,8 +44,8 @@ from .base import BaseModalProcessor
 # Data models
 from .models import MultiModalInput, ProcessingResult
 
-# Main processor
-from .processor import UnifiedMultiModalProcessor
+# Main processor (renamed from UnifiedMultiModalProcessor — Issue #10666)
+from .processor import MultiModalProcessor
 
 # Processors
 from .processors import (
@@ -76,8 +77,8 @@ from .types import (
 _EMBEDDING_FIELDS = EMBEDDING_FIELDS
 
 
-class _LazyUnifiedProcessor:
-    """Lazy proxy for UnifiedMultiModalProcessor.
+class _LazyProcessor:
+    """Lazy proxy for MultiModalProcessor.
 
     Defers model loading (CLIP, BLIP-2, Whisper, Wav2Vec2) until first use
     to prevent 5-6 minute startup delays. Issue #940.
@@ -85,15 +86,15 @@ class _LazyUnifiedProcessor:
     Thread-safe via double-checked locking.
     """
 
-    _instance: "UnifiedMultiModalProcessor" | None = None  # noqa: F821
+    _instance: "MultiModalProcessor" | None = None
     _lock = threading.Lock()
 
-    def _get_instance(self) -> "UnifiedMultiModalProcessor":  # noqa: F821
+    def _get_instance(self) -> "MultiModalProcessor":
         """Return the real processor, creating it on first call."""
         if self._instance is None:
             with self._lock:
                 if self._instance is None:
-                    self.__class__._instance = UnifiedMultiModalProcessor()
+                    self.__class__._instance = MultiModalProcessor()
         return self._instance  # type: ignore[return-value]
 
     def __getattr__(self, name: str) -> Any:
@@ -106,7 +107,7 @@ class _LazyUnifiedProcessor:
 
 
 # Singleton instance — lazy-loaded on first attribute access (Issue #940)
-unified_processor = _LazyUnifiedProcessor()
+unified_processor = _LazyProcessor()
 
 # ---------------------------------------------------------------------------
 # Backward-compatibility shim (previously in multimodal_processor.py — Issue #3554)
@@ -117,28 +118,8 @@ unified_processor = _LazyUnifiedProcessor()
 # Alias for old callers that used ModalInput instead of MultiModalInput
 ModalInput = MultiModalInput
 
-
-class MultiModalProcessor:
-    """Compatibility wrapper around the lazy unified processor singleton."""
-
-    def __init__(self):
-        self._unified = unified_processor
-
-    async def process(self, input_data: MultiModalInput) -> ProcessingResult:
-        """Process multi-modal input using unified processor."""
-        return await self._unified.process(input_data)
-
-    def get_stats(self) -> dict:
-        """Get processing statistics."""
-        return self._unified.get_stats()
-
-    def reset_stats(self) -> None:
-        """Reset processing statistics."""
-        self._unified.reset_stats()
-
-
-# Global instance for backward compatibility
-multimodal_processor = MultiModalProcessor()
+# Global instance for backward compatibility (Issue #3554)
+multimodal_processor = unified_processor
 
 __all__ = [
     # Types and enums
@@ -168,12 +149,11 @@ __all__ = [
     "ContextProcessor",
     "VISION_MODELS_AVAILABLE",
     "AUDIO_MODELS_AVAILABLE",
-    # Main processor
-    "UnifiedMultiModalProcessor",
-    # Singleton
+    # Main processor (Issue #10666: was UnifiedMultiModalProcessor)
+    "MultiModalProcessor",
+    # Singletons
     "unified_processor",
     # Backward-compatibility shim (Issue #3554)
     "ModalInput",
-    "MultiModalProcessor",
     "multimodal_processor",
 ]

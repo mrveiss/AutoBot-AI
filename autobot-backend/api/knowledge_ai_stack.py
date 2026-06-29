@@ -21,7 +21,7 @@ from api.schemas_knowledge import (
     AIStackDocumentAnalysisData,
     AIStackEnhancedHealthData,
     AIStackEnhancedSearchData,
-    AIStackEnhancedSearchRequest,
+    AIStackSearchRequest,
     AIStackEnhancedStatsData,
     AIStackKnowledgeExtractData,
     AIStackKnowledgeExtractionRequest,
@@ -216,7 +216,7 @@ def _combine_search_results(
 
 
 async def _run_all_search_sources(
-    request_data: "AIStackEnhancedSearchRequest",
+    request_data: "AIStackSearchRequest",
     req: Request,
     knowledge_base,
 ) -> Dict[str, Any]:
@@ -267,7 +267,7 @@ async def _run_all_search_sources(
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
 async def search(
-    request_data: AIStackEnhancedSearchRequest,
+    request_data: AIStackSearchRequest,
     req: Request,
     knowledge_base=Depends(get_knowledge_base),
     current_user: dict = Depends(get_current_user),

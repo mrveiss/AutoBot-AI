@@ -134,7 +134,7 @@ class IMachineAwareManager(Protocol):
 # ============================================================================
 
 
-class UnifiedKnowledgeManager:
+class KnowledgeManager:
     """
     Unified Knowledge Manager - Phase 6 Consolidation
 
@@ -162,7 +162,7 @@ class UnifiedKnowledgeManager:
 
     Example Usage:
         >>> # Full-featured initialization
-        >>> manager = UnifiedKnowledgeManager(
+        >>> manager = KnowledgeManager(
         ...     knowledge_base=kb,
         ...     enable_temporal=True,
         ...     enable_machine_aware=True
@@ -238,7 +238,7 @@ class UnifiedKnowledgeManager:
         self._init_lock = asyncio.Lock()
 
         logger.info(
-            f"UnifiedKnowledgeManager created (temporal={enable_temporal}, " f"machine_aware={enable_machine_aware})"
+            f"KnowledgeManager created (temporal={enable_temporal}, " f"machine_aware={enable_machine_aware})"
         )
 
     async def _ensure_initialized(self):
@@ -1064,17 +1064,17 @@ class UnifiedKnowledgeManager:
 
 import threading
 
-_unified_knowledge_manager_instance: UnifiedKnowledgeManager | None = None
-_unified_knowledge_manager_lock = threading.Lock()
+_knowledge_manager_instance: KnowledgeManager | None = None
+_knowledge_manager_lock = threading.Lock()
 
 
-def get_unified_knowledge_manager(
+def get_knowledge_manager(
     knowledge_base: KnowledgeBase | None = None,
     enable_temporal: bool = True,
     enable_machine_aware: bool = True,
-) -> UnifiedKnowledgeManager:
+) -> KnowledgeManager:
     """
-    Get global UnifiedKnowledgeManager instance (singleton, thread-safe)
+    Get global KnowledgeManager instance (singleton, thread-safe)
 
     Args:
         knowledge_base: KnowledgeBase instance (required on first call)
@@ -1082,33 +1082,33 @@ def get_unified_knowledge_manager(
         enable_machine_aware: Enable machine-specific adaptation
 
     Returns:
-        Global UnifiedKnowledgeManager instance
+        Global KnowledgeManager instance
 
     Raises:
         ValueError: If knowledge_base not provided on first call
 
     Example:
         >>> # First call - provide knowledge_base
-        >>> manager = get_unified_knowledge_manager(kb, enable_temporal=True)
+        >>> manager = get_knowledge_manager(kb, enable_temporal=True)
         >>> # Subsequent calls - reuse instance
-        >>> manager = get_unified_knowledge_manager()
+        >>> manager = get_knowledge_manager()
     """
-    global _unified_knowledge_manager_instance
+    global _knowledge_manager_instance
 
-    if _unified_knowledge_manager_instance is None:
-        with _unified_knowledge_manager_lock:
+    if _knowledge_manager_instance is None:
+        with _knowledge_manager_lock:
             # Double-check after acquiring lock
-            if _unified_knowledge_manager_instance is None:
+            if _knowledge_manager_instance is None:
                 if knowledge_base is None:
-                    raise ValueError("knowledge_base required on first call to get_unified_knowledge_manager()")
+                    raise ValueError("knowledge_base required on first call to get_knowledge_manager()")
 
-                _unified_knowledge_manager_instance = UnifiedKnowledgeManager(
+                _knowledge_manager_instance = KnowledgeManager(
                     knowledge_base=knowledge_base,
                     enable_temporal=enable_temporal,
                     enable_machine_aware=enable_machine_aware,
                 )
 
-    return _unified_knowledge_manager_instance
+    return _knowledge_manager_instance
 
 
 # ============================================================================
@@ -1117,13 +1117,13 @@ def get_unified_knowledge_manager(
 
 __all__ = [
     # Main Manager
-    "UnifiedKnowledgeManager",
+    "KnowledgeManager",
     # Protocols
     "ITemporalManager",
     "ISystemKnowledgeManager",
     "IMachineAwareManager",
     # Global Instance
-    "get_unified_knowledge_manager",
+    "get_knowledge_manager",
     # Re-export from composed managers for convenience
     "TemporalMetadata",
     "FreshnessStatus",

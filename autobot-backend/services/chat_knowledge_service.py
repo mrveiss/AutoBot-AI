@@ -29,7 +29,7 @@ from services.knowledge import (
     ChatKnowledgeService,
     ConversationContextEnhancer,
     DocumentationSearcher,
-    EnhancedQuery,
+    Query,
     QueryIntentResult,
     QueryKnowledgeIntent,
     QueryKnowledgeIntentDetector,
@@ -42,7 +42,7 @@ __all__ = [
     # Types and dataclasses
     "QueryKnowledgeIntent",
     "QueryIntentResult",
-    "EnhancedQuery",
+    "Query",
     # Classes
     "QueryKnowledgeIntentDetector",
     "ConversationContextEnhancer",

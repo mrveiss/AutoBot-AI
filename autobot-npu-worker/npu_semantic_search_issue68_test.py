@@ -27,12 +27,12 @@ async def test_embedding_cache():
     # First search - cache miss
     query = "authentication system"
     start = time.time()
-    results1, metrics1 = await engine.enhanced_search(query, similarity_top_k=5)
+    results1, metrics1 = await engine.search(query, similarity_top_k=5)
     time1 = (time.time() - start) * 1000
 
     # Second search - should hit cache
     start = time.time()
-    results2, metrics2 = await engine.enhanced_search(query, similarity_top_k=5)
+    results2, metrics2 = await engine.search(query, similarity_top_k=5)
     time2 = (time.time() - start) * 1000
 
     # Get cache stats
@@ -83,7 +83,7 @@ async def test_performance_metrics():
 
     engine = await get_npu_search_engine()
 
-    results, metrics = await engine.enhanced_search("configuration management", similarity_top_k=5)
+    results, metrics = await engine.search("configuration management", similarity_top_k=5)
 
     print(f"Total search time: {metrics.total_search_time_ms:.2f}ms")
     print(f"Embedding generation: {metrics.embedding_generation_time_ms:.2f}ms")
@@ -108,12 +108,12 @@ async def test_npu_acceleration():
     engine = await get_npu_search_engine()
 
     # Test with NPU acceleration enabled
-    results_npu, metrics_npu = await engine.enhanced_search(
+    results_npu, metrics_npu = await engine.search(
         "machine learning model", similarity_top_k=5, enable_npu_acceleration=True
     )
 
     # Test with NPU acceleration disabled (CPU fallback)
-    results_cpu, metrics_cpu = await engine.enhanced_search(
+    results_cpu, metrics_cpu = await engine.search(
         "machine learning model", similarity_top_k=5, enable_npu_acceleration=False
     )
 
