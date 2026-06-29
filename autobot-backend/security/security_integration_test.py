@@ -15,8 +15,8 @@ from fastapi.testclient import TestClient
 
 # Import system components
 from app_factory import create_app
-from security_layer import SecurityLayer
 from secure_command_executor import CommandRisk, SecureCommandExecutor
+from security_layer import SecurityLayer
 
 
 @pytest.fixture

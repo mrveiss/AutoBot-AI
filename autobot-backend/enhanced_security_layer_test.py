@@ -13,9 +13,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from secure_command_executor import CommandRisk
+
 # Import the modules to test
 from security_layer import SecurityLayer
-from secure_command_executor import CommandRisk
 
 
 class TestSecurityLayer:

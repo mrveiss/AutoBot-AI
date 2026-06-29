@@ -15,12 +15,12 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from security_layer import SecurityLayer
 from security.prompt_injection_detector import (
     InjectionRisk,
     PromptInjectionDetector,
     get_prompt_injection_detector,
 )
+from security_layer import SecurityLayer
 from utils.command_validator import CommandValidator
 
 logger = get_logger(__name__)

@@ -23,9 +23,9 @@ INSTALLATION:
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from security_layer import SecurityLayer
 from security.prompt_injection_detector import get_prompt_injection_detector
 from security.secure_llm_command_parser import get_secure_llm_parser
+from security_layer import SecurityLayer
 
 logger = get_logger(__name__)
 

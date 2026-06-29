@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from security_layer import SecurityLayer
 from secure_command_executor import CommandRisk
+from security_layer import SecurityLayer
 
 
 class TestSecurityEdgeCases:

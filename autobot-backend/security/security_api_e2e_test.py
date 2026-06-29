@@ -13,8 +13,8 @@ import sys
 # Add src directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
-from security_layer import SecurityLayer
 from secure_command_executor import SecureCommandExecutor
+from security_layer import SecurityLayer
 
 
 async def test_security_layer():
