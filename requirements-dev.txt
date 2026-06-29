@@ -7,5 +7,5 @@
 
 # Explicit re-declaration ensures both packages are present in the dev venv
 # even when pip resolves the -r chain in unexpected order.
-structlog>=25.5.0    # service_auth_enforcement, service_auth_logging, service_client
-aiosqlite>=0.21.0   # memory/storage/general_storage, memory/storage/task_storage, utils/async_database_pool
+structlog>=26.1.0    # service_auth_enforcement, service_auth_logging, service_client
+aiosqlite>=0.22.1   # memory/storage/general_storage, memory/storage/task_storage, utils/async_database_pool
