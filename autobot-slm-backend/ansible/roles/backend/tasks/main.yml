@@ -664,7 +664,7 @@
     databases:
       - "{{ backend_postgres_db | default('autobot_users') }}"
     postgresql_listen_addresses: "localhost"
-  when: (backend_user_mode | default('single_user')) != 'single_user'
+  when: (backend_user_mode | default('single_company')) != 'single_user'
   tags: ['backend', 'postgresql']
 
 # ==========================================================
@@ -714,6 +714,43 @@
   loop:
     - /etc/autobot/certs/server-key.pem
     - /etc/autobot/certs/server-cert.pem
+
+# #10636: full-user-management secrets for the runtime .env. The DB password
+# is created by the postgresql role above (db_password); the internal service
+# API key and the initial-admin password (which seeds the default admin on
+# first boot) come from /etc/autobot/slm-secrets.env (written by slm_manager).
+# Without these the clean-install .env has no DB password / admin → /login has
+# no account, matching the deploy-path wiring in update-all-nodes.yml.
+- name: "Backend | Read AUTOBOT_INTERNAL_API_KEY for .env (#10636)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*'
+      /etc/autobot/slm-secrets.env 2>/dev/null || true
+  register: _backend_internal_api_key
+  changed_when: false
+  failed_when: false
+  no_log: true
+  tags: ['backend', 'config']
+
+- name: "Backend | Read admin seed password (AUTOBOT_ADMIN_PASSWORD, fallback SLM_ADMIN_PASSWORD) (#10636)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
+      || grep -oP '^SLM_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
+      || true
+  register: _backend_admin_password
+  changed_when: false
+  failed_when: false
+  no_log: true
+  tags: ['backend', 'config']
+
+- name: "Backend | Set full-user-management .env facts (#10636)"
+  ansible.builtin.set_fact:
+    autobot_internal_api_key: "{{ _backend_internal_api_key.stdout | default('') | trim }}"
+    autobot_admin_password: "{{ _backend_admin_password.stdout | default('') | trim }}"
+    backend_postgres_password: "{{ db_password | default(backend_postgres_password | default('')) }}"
+  no_log: true
+  tags: ['backend', 'config']
 
 # Issue #2824: Deploy .env to backend_code_dir so the systemd
 # EnvironmentFile directive can find it.  Previous code deployed to

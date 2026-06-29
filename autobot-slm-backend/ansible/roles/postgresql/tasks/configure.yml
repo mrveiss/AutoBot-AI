@@ -26,6 +26,28 @@
   become: true
   notify: Restart PostgreSQL
 
+# On a collapsed single-box deploy one Postgres instance serves several app
+# users (slm_app + autobot_app). Discover every existing login role so the
+# rendered pg_hba keeps them ALL — rendering for this role's db_user alone
+# would drop the others and cut off (e.g.) the SLM database (#10636).
+- name: Discover existing app login roles
+  community.postgresql.postgresql_query:
+    query: >-
+      SELECT rolname FROM pg_roles
+      WHERE rolcanlogin AND rolname <> 'postgres' AND rolname NOT LIKE 'pg\_%'
+    login_unix_socket: /var/run/postgresql
+  become: true
+  become_user: postgres
+  register: _existing_login_roles
+  changed_when: false
+  failed_when: false
+
+- name: Compute pg_hba app users (existing roles + this role's db_user)
+  ansible.builtin.set_fact:
+    postgresql_app_users: >-
+      {{ ((_existing_login_roles.query_result | default([]) | map(attribute='rolname') | list)
+          + [db_user]) | unique }}
+
 - name: Deploy pg_hba.conf
   ansible.builtin.template:
     src: pg_hba.conf.j2
