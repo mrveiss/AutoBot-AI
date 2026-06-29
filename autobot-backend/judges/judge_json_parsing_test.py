@@ -33,6 +33,12 @@ def test_extract_json_raises_on_unparseable():
         _extract_json_object("this is not json")
 
 
+def test_extract_json_fenced_but_invalid_raises():
+    # a fenced block whose body isn't valid JSON must still raise, not return junk
+    with pytest.raises(json.JSONDecodeError):
+        _extract_json_object("```json\nnot valid json\n```")
+
+
 @pytest.mark.asyncio
 async def test_judge_call_forces_structured_output():
     judge = BaseLLMJudge.__new__(BaseLLMJudge)  # bypass heavy __init__
