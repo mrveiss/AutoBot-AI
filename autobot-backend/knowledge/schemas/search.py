@@ -37,12 +37,12 @@ class KnowledgeSearchResponse(BaseModel):
     message: str | None = None
 
 
-class EnhancedSearchResponse(BaseModel):
-    """Shape returned by deprecated POST /enhanced_search.
+class KBSearchResponse(BaseModel):
+    """Shape returned by deprecated POST /enhanced_search and /enhanced_search_v2 (#10666 B1).
 
-    Mirrors the kb.enhanced_search() contract: success, results, total_count,
-    query_processed, mode, tags_applied, min_score_applied, reranking_applied.
-    extra="allow" handles KB-specific additions.
+    Consolidates the former enhanced_search (full shape) and enhanced_search_v2
+    (V2 was a strict subset: only success/results/total_count/message) response shapes.
+    extra="allow" handles KB-specific additions on either code path.
     """
 
     model_config = ConfigDict(extra="allow")
@@ -90,18 +90,7 @@ class SimilaritySearchResponse(BaseModel):
     rag_analysis: Dict[str, Any] | None = None
 
 
-class EnhancedSearchV2Response(BaseModel):
-    """Shape returned by deprecated POST /enhanced_search_v2.
-
-    Delegates to kb.enhanced_search_v2(); mirrors the enhanced_search shape.
-    """
-
-    model_config = ConfigDict(extra="allow")
-
-    success: bool = True
-    results: List[Dict[str, Any]] = Field(default_factory=list)
-    total_count: int = 0
-    message: str | None = None
+# /enhanced_search_v2 response shape folded into KBSearchResponse above (#10666 B1)
 
 
 class SearchAnalyticsResponse(BaseModel):

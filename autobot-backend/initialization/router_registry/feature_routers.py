@@ -342,12 +342,12 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["cache"],
         "cache_management",
     ),
-    # Enhanced features
+    # NPU-accelerated search (#10666 B7: renamed from enhanced_search)
     (
-        "api.enhanced_search",
+        "api.search",
         "/enhanced-search",
         ["enhanced-search"],
-        "enhanced_search",
+        "search",
     ),
     (
         "api.enhanced_memory",

@@ -361,8 +361,8 @@ class ExistingOperationMigrator:
             Async function for enhanced indexing operation.
         """
 
-        async def enhanced_indexing_operation(context: OperationExecutionContext):
-            """Enhanced indexing with proper progress tracking and checkpoints."""
+        async def indexing_operation(context: OperationExecutionContext):
+            """Indexing with proper progress tracking and checkpoints."""
             codebase_path = Path(PATH.PROJECT_ROOT)
 
             # Collect files using helper (Issue #665)
@@ -396,7 +396,7 @@ class ExistingOperationMigrator:
                 )
                 raise
 
-        return enhanced_indexing_operation
+        return indexing_operation
 
     async def migrate_knowledge_base_indexing(self):
         """Migrate existing knowledge base indexing operation.
@@ -406,13 +406,13 @@ class ExistingOperationMigrator:
         BEFORE: Simple 30-second timeout, no progress/checkpoint, lost work on timeout.
         AFTER: Dynamic timeout, real-time progress, checkpoint every 100 files, resume capability.
         """
-        enhanced_indexing_operation = await self._create_indexing_operation_function()
+        indexing_op = await self._create_indexing_operation_function()
 
         operation_id = await self.manager.create_operation(
             operation_type=OperationType.CODEBASE_INDEXING,
             name="Enhanced Knowledge Base Indexing",
             description="Migrate from simple timeout to checkpoint-based indexing",
-            operation_function=enhanced_indexing_operation,
+            operation_function=indexing_op,
             priority=OperationPriority.NORMAL,
             estimated_items=len(list(Path(PATH.PROJECT_ROOT).rglob("*.py"))),
             execute_immediately=False,
@@ -691,8 +691,8 @@ class ExistingOperationMigrator:
         AFTER: Dynamic timeout, real-time progress, resume capability, incremental scanning.
         """
 
-        async def enhanced_security_scan_operation(context: OperationExecutionContext):
-            """Enhanced security scan with checkpointing and progress tracking."""
+        async def security_scan_operation(context: OperationExecutionContext):
+            """Security scan with checkpointing and progress tracking."""
             scan_paths = [Path(PATH.PROJECT_ROOT)]
             scan_types = ["vulnerability", "dependency", "secrets"]
 
@@ -717,7 +717,7 @@ class ExistingOperationMigrator:
             operation_type=OperationType.SECURITY_SCAN,
             name="Enhanced Security Scan",
             description="Migrate from fixed timeout to dynamic checkpoint-based security scanning",
-            operation_function=enhanced_security_scan_operation,
+            operation_function=security_scan_operation,
             priority=OperationPriority.HIGH,
             estimated_items=1000,
             execute_immediately=False,
@@ -918,8 +918,8 @@ def _create_enhanced_operation(func, args, kwargs, progress_callback):
     both sync and async functions appropriately. Issue #620.
     """
 
-    async def enhanced_operation(context: OperationExecutionContext):
-        """Enhanced operation with progress tracking."""
+    async def operation(context: OperationExecutionContext):
+        """Operation with progress tracking."""
         # Inject progress callback if function expects it
         if progress_callback or "progress_callback" in func.__code__.co_varnames:
             kwargs["progress_callback"] = _create_progress_wrapper(context)
@@ -929,10 +929,10 @@ def _create_enhanced_operation(func, args, kwargs, progress_callback):
             return await func(*args, **kwargs)
         return await asyncio.to_thread(func, *args, **kwargs)
 
-    return enhanced_operation
+    return operation
 
 
-async def _execute_via_operation_manager(enhanced_operation, operation_type, func, priority, items):
+async def _execute_via_operation_manager(op_callable, operation_type, func, priority, items):
     """
     Execute operation through the operation manager.
 
@@ -942,7 +942,7 @@ async def _execute_via_operation_manager(enhanced_operation, operation_type, fun
         operation_type=operation_type,
         name=f"Migrated: {func.__name__}",
         description=f"Auto-migrated operation from {func.__module__}.{func.__name__}",
-        operation_function=enhanced_operation,
+        operation_function=op_callable,
         priority=priority,
         estimated_items=items,
         execute_immediately=True,

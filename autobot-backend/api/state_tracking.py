@@ -30,7 +30,7 @@ from api.schemas_workflows import (
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from enhanced_project_state_tracker import (
+from project_state_tracker import (
     StateChangeType,
     TrackingMetric,
     get_state_tracker,

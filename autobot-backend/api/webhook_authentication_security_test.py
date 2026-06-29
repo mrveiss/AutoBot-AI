@@ -138,7 +138,7 @@ class TestTelegramWebhookAuthentication:
         ):
             mock_gateway.normalize_message = AsyncMock(
                 return_value=type(
-                    "UnifiedMessage",
+                    "GatewayMessage",
                     (),
                     {
                         "user_id": "123",
