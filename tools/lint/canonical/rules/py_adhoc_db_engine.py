@@ -8,7 +8,11 @@ Production code must obtain sessions from the canonical async session factory
 the async-first contract. Migration code and the canonical factory itself are
 exempt. See canonical-debt umbrella #10569.
 
-WARN until the call sites in #10570 are migrated, then promote to BLOCK.
+Promoted to BLOCK in #10627 (py-adhoc-db-engine cohort): all 39 pre-existing
+call sites have been either migrated to the canonical factory or waived with
+``# canonical: ignore py-adhoc-db-engine`` where the sync wrapper over the
+canonical engine (background threads / DataLoader workers) or a test-local
+in-memory engine is genuinely required.
 """
 
 from __future__ import annotations
@@ -22,7 +26,7 @@ from tools.lint.canonical.diagnostic import Diagnostic
 
 RULE_ID = "py-adhoc-db-engine"
 ISSUE = "#10570"
-SEVERITY = "warn"
+SEVERITY = "block"
 TARGETS = ["autobot-backend", "autobot-slm-backend"]
 DESCRIPTION = "Ad-hoc create_engine/sessionmaker — use the canonical async session factory"
 FIX_HINT = (
