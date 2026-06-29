@@ -398,3 +398,49 @@ async def test_fresh_heartbeat_proceeds_to_inference(mgr, online_status):
 
     client_mock.get_available_models.assert_called_once()
     client_mock.run_inference.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# #10697 — worker metrics producer (npu.worker.metrics.updated)
+# ---------------------------------------------------------------------------
+
+
+def _metrics_status(completed: int, failed: int, uptime: int, load: int) -> NPUWorkerStatus:
+    return NPUWorkerStatus(
+        id="m-worker",
+        status=WorkerStatus.ONLINE,
+        current_load=load,
+        total_tasks_completed=completed,
+        total_tasks_failed=failed,
+        uptime_seconds=uptime,
+        last_heartbeat=datetime.now(tz=timezone.utc),
+    )
+
+
+def test_build_worker_metrics_computes_real_rates():
+    mgr = _make_manager()
+    m = mgr._build_worker_metrics("m-worker", _metrics_status(completed=90, failed=10, uptime=120, load=3))
+    assert m.id == "m-worker"
+    assert m.success_rate == 90.0  # 90 / (90+10) * 100
+    assert m.requests_per_minute == 45.0  # 90 / (120s / 60) = 45/min
+    assert m.peak_load == 3
+
+
+def test_build_worker_metrics_no_traffic_defaults():
+    mgr = _make_manager()
+    m = mgr._build_worker_metrics("m-worker", _metrics_status(completed=0, failed=0, uptime=0, load=0))
+    assert m.success_rate == 100.0  # no tasks → treat as healthy
+    assert m.requests_per_minute == 0.0
+
+
+@pytest.mark.asyncio
+async def test_store_worker_metrics_writes_correct_key():
+    redis = AsyncMock()
+    mgr = _make_manager(redis_client=redis)
+    mgr.redis_client = redis
+    m = mgr._build_worker_metrics("m-worker", _metrics_status(50, 0, 60, 1))
+
+    await mgr._store_worker_metrics("m-worker", m)
+
+    args, _ = redis.setex.call_args
+    assert args[0] == "npu:worker:m-worker:metrics"  # stored under the metrics key
