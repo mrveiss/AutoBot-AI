@@ -82,6 +82,35 @@ async def test_malformed_batch_falls_back_to_per_chunk():
 
 
 @pytest.mark.asyncio
+async def test_single_fact_dict_value_is_coerced_to_list():
+    ext = _extractor()
+    c0, c1 = _chunk("c0"), _chunk("c1")
+    # chunk 0 returns a single fact object instead of a list — should be tolerated.
+    resp = json.dumps({"0": _fact("A"), "1": [_fact("B")]})
+    ext.llm = types.SimpleNamespace(chat=AsyncMock(return_value=types.SimpleNamespace(content=resp)))
+
+    facts = await ext._process_batch([c0, c1], _ctx())
+
+    assert ext.llm.chat.call_count == 1  # no fallback; coerced, not dropped
+    assert {f.subject for f in facts} == {"A", "B"}
+
+
+@pytest.mark.asyncio
+async def test_disjoint_keys_fall_back_to_per_chunk():
+    ext = _extractor()
+    c0, c1 = _chunk("c0"), _chunk("c1")
+    # valid object, but keys don't match chunk indices (e.g. model used names)
+    bad = types.SimpleNamespace(content=json.dumps({"chunk_a": [_fact("A")]}))
+    per_chunk = types.SimpleNamespace(content=json.dumps([_fact("X")]))
+    ext.llm = types.SimpleNamespace(chat=AsyncMock(side_effect=[bad, per_chunk, per_chunk]))
+
+    facts = await ext._process_batch([c0, c1], _ctx())
+
+    assert ext.llm.chat.call_count == 3  # disjoint keys → fallback to per-chunk
+    assert len(facts) == 2
+
+
+@pytest.mark.asyncio
 async def test_single_chunk_skips_batching():
     ext = _extractor()
     ext.llm = types.SimpleNamespace(

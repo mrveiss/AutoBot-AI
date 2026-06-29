@@ -24,6 +24,9 @@ from services.llm_service import get_llm_service
 
 logger = get_logger(__name__)
 
+# Max characters of a chunk sent to the LLM (shared by per-chunk and batched paths).
+MAX_CHUNK_CHARS = 2000
+
 FACT_EXTRACTION_PROMPT = """Extract atomic facts from the following text.
 
 For each fact, provide:
@@ -245,8 +248,11 @@ class FactExtractor(BaseCognifier):
     async def _process_batch(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[AtomicFact]:
         """Extract facts from a batch of chunks in one LLM call (#10647).
 
-        Falls back to per-chunk extraction on any parse/shape failure so
-        correctness never regresses. Single-chunk batches skip batching.
+        Falls back to per-chunk extraction on any structural failure (non-object
+        response, keys that don't match the chunk indices, or an exception);
+        structural correctness never regresses. A valid response that merely
+        omits some chunk keys is logged, not retried. Single-chunk batches skip
+        batching.
         """
         if not chunks:
             return []
@@ -264,25 +270,36 @@ class FactExtractor(BaseCognifier):
     async def _extract_batched(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[AtomicFact]:
         """Extract facts from multiple chunks in a single LLM call (#10647).
 
-        Raises on a non-object response so the caller can fall back to per-chunk.
+        Raises on a non-object response, or one whose keys are disjoint from the
+        chunk indices, so the caller falls back to per-chunk extraction.
         """
-        blocks = "\n\n".join(f"Chunk {i}:\n{c.content[:2000]}" for i, c in enumerate(chunks))
+        blocks = "\n\n".join(f"Chunk {i}:\n{c.content[:MAX_CHUNK_CHARS]}" for i, c in enumerate(chunks))
         prompt = FACT_EXTRACTION_BATCH_PROMPT.format(chunks=blocks)
         response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type="extraction")
         parsed = parse_llm_json_response(response.content)
         if not isinstance(parsed, dict):
             raise ValueError("batched fact response was not a JSON object")
+        if {str(i) for i in range(len(chunks))}.isdisjoint(parsed.keys()):
+            raise ValueError("batched response keys do not match chunk indices")
         facts: List[AtomicFact] = []
+        matched = 0
         for i, chunk in enumerate(chunks):
-            raw = parsed.get(str(i), [])
+            raw = parsed.get(str(i))
+            if raw is None:
+                continue
+            matched += 1
+            if isinstance(raw, dict):  # tolerate a single fact object
+                raw = [raw]
             if isinstance(raw, list):
                 facts.extend(self._convert_to_facts(raw, chunk, context.document_id))
+        if matched < len(chunks):
+            logger.debug("Batched fact extraction matched %d/%d chunks", matched, len(chunks))
         return facts
 
     async def _extract_from_chunk(self, chunk: ProcessedChunk, context: PipelineContext) -> List[AtomicFact]:
         """Extract facts from a single chunk using LLM."""
         try:
-            prompt = FACT_EXTRACTION_PROMPT.format(text=chunk.content[:2000])
+            prompt = FACT_EXTRACTION_PROMPT.format(text=chunk.content[:MAX_CHUNK_CHARS])
             response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type="extraction")
             parsed = parse_llm_json_response(response.content)
             raw_facts = parsed if isinstance(parsed, list) else []
