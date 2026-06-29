@@ -1342,6 +1342,10 @@ async def _seed_default_admin() -> None:
 
         async with get_async_session_factory()() as session:
             await seed_default_admin(session)
+            # seed_default_admin (via UserService) only flushes; without an
+            # explicit commit the created admin is rolled back on session
+            # exit and never persists (#10636).
+            await session.commit()
     except Exception as e:
         logger.warning("Default admin seeding failed (non-critical): %s", e)
 

@@ -97,9 +97,11 @@ class _FakeCache:
         self.gets = 0
         self.sets = 0
 
-    def generate_cache_key(self, messages, model, temperature, top_k=40, top_p=0.9, max_tokens=None) -> str:
+    def generate_cache_key(
+        self, messages, model, temperature, top_k=40, top_p=0.9, max_tokens=None, structured_output=False
+    ) -> str:
         last = messages[-1]["content"] if messages else ""
-        return f"{model}|{temperature}|{max_tokens}|{last}"
+        return f"{model}|{temperature}|{max_tokens}|{structured_output}|{last}"
 
     async def get(self, key):
         self.gets += 1
@@ -167,14 +169,26 @@ async def test_chat_use_cache_false_bypasses():
 
 
 @pytest.mark.asyncio
-async def test_chat_structured_output_not_cached():
+async def test_chat_low_temp_structured_output_is_cached():
+    # #10665: deterministic (low-temp) structured output IS cacheable.
     svc, provider, _ = _make_service()
     messages = [{"role": "user", "content": "give json"}]
 
     await svc.chat(messages, temperature=0.0, structured_output=True)
     await svc.chat(messages, temperature=0.0, structured_output=True)
-    # Structured-output responses are not safely reusable → not cached.
-    assert provider.calls == 2
+    assert provider.calls == 1  # second served from cache
+
+
+@pytest.mark.asyncio
+async def test_chat_structured_and_freetext_do_not_collide():
+    # #10665: structured_output is part of the key, so a structured request never
+    # reuses a free-text cached response.
+    svc, provider, _ = _make_service()
+    messages = [{"role": "user", "content": "same prompt"}]
+
+    await svc.chat(messages, temperature=0.0, structured_output=False)
+    await svc.chat(messages, temperature=0.0, structured_output=True)
+    assert provider.calls == 2  # different cache keys → no collision
 
 
 @pytest.mark.asyncio

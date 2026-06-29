@@ -308,7 +308,9 @@ class CausalRelationshipExtractor(BaseCognifier):
         """
         try:
             prompt = CAUSAL_EXTRACTION_PROMPT.format(text=chunk.content)
-            response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type="extraction")
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}], llm_type="extraction", structured_output=True
+            )
             parsed = parse_llm_json_response(response.content)
             raw_edges = parsed if isinstance(parsed, list) else []
             return self._convert_to_causal_edges(raw_edges, chunk, context.document_id)

@@ -244,7 +244,9 @@ class RelationshipExtractor(BaseCognifier):
         try:
             entity_list = self._format_entity_list(entities, chunk)
             prompt = RELATIONSHIP_EXTRACTION_PROMPT.format(entities=entity_list, text=chunk.content)
-            response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type="extraction")
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}], llm_type="extraction", structured_output=True
+            )
             parsed = parse_llm_json_response(response.content)
             raw_rels = parsed if isinstance(parsed, list) else []
             return self._convert_to_relationships(raw_rels, chunk, entity_map)
