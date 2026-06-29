@@ -37,7 +37,7 @@
     "@vue/tsconfig": "^0.9.1",
     "eslint": "^10.6.0",
     "eslint-plugin-vue": "^10.9.2",
-    "postcss": "^8.5.15",
+    "postcss": "^8.5.16",
     "storybook": "^10.4.6",
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.3",
