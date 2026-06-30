@@ -10,7 +10,7 @@ Features GPU-accelerated models (CLIP, BLIP-2, Whisper, Wav2Vec2) and
 attention-based cross-modal fusion.
 
 Part of Issue #381 - God Class Refactoring
-Part of Issue #10666 - Naming consolidation (UnifiedMultiModalProcessor -> MultiModalProcessor)
+Part of Issue #10666 - Naming consolidation (prefix strip)
 
 Original module: 1,512 lines
 New package: ~1,100 lines across focused modules
@@ -44,7 +44,7 @@ from .base import BaseModalProcessor
 # Data models
 from .models import MultiModalInput, ProcessingResult
 
-# Main processor (renamed from UnifiedMultiModalProcessor — Issue #10666)
+# Main processor (Issue #10666 — prefix strip)
 from .processor import MultiModalProcessor
 
 # Processors
@@ -149,7 +149,7 @@ __all__ = [
     "ContextProcessor",
     "VISION_MODELS_AVAILABLE",
     "AUDIO_MODELS_AVAILABLE",
-    # Main processor (Issue #10666: was UnifiedMultiModalProcessor)
+    # Main processor (Issue #10666 — prefix strip)
     "MultiModalProcessor",
     # Singletons
     "unified_processor",

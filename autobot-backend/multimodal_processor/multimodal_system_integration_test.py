@@ -414,7 +414,7 @@ class TestUnifiedMultiModalSystem:
         """Test MultiModalProcessor import + singleton API (Issue #10666: consolidated)."""
         from multimodal_processor import MultiModalProcessor, multimodal_processor, unified_processor
 
-        # MultiModalProcessor is the canonical class (renamed from UnifiedMultiModalProcessor)
+        # MultiModalProcessor is the canonical class (Issue #10666 prefix strip)
         assert MultiModalProcessor is not None
 
         # multimodal_processor singleton is the lazy proxy (same object as unified_processor)
