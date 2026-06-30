@@ -5671,7 +5671,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/search": {
+    "/api/knowledge_base/aggregated/search": {
         parameters: {
             query?: never;
             header?: never;
@@ -5681,21 +5681,21 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Unified Search
-         * @description Search across all knowledge sources in a unified query.
+         * Aggregated Search
+         * @description Search across all knowledge sources in an aggregated query.
          *
          *     Issue #620: Refactored to use extracted helper methods.
          *
          *     Returns results from all sources with source attribution.
          */
-        post: operations["unified_search_api_knowledge_base_unified_search_post"];
+        post: operations["aggregated_search_api_knowledge_base_aggregated_search_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/stats": {
+    "/api/knowledge_base/aggregated/stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -5703,10 +5703,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Unified Stats
-         * @description Get statistics from all unified knowledge sources (KB facts, relations, docs). Ref: #1088.
+         * Aggregated Stats
+         * @description Get statistics from all aggregated knowledge sources (KB facts, relations, docs). Ref: #1088.
          */
-        get: operations["unified_stats_api_knowledge_base_unified_stats_get"];
+        get: operations["aggregated_stats_api_knowledge_base_aggregated_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5715,7 +5715,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/context": {
+    "/api/knowledge_base/aggregated/context": {
         parameters: {
             query?: never;
             header?: never;
@@ -5726,7 +5726,7 @@ export interface paths {
         put?: never;
         /**
          * Get Llm Context
-         * @description Get formatted context for LLM prompts from unified knowledge sources.
+         * @description Get formatted context for LLM prompts from aggregated knowledge sources.
          *
          *     Retrieves and formats knowledge from all sources into a context string
          *     suitable for inclusion in LLM prompts.
@@ -5736,14 +5736,14 @@ export interface paths {
          *     - Source citations
          *     - Metadata about retrieved content
          */
-        post: operations["get_llm_context_api_knowledge_base_unified_context_post"];
+        post: operations["get_llm_context_api_knowledge_base_aggregated_context_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/documentation/search": {
+    "/api/knowledge_base/aggregated/documentation/search": {
         parameters: {
             query?: never;
             header?: never;
@@ -5761,7 +5761,7 @@ export interface paths {
          *         n_results: Maximum results to return
          *         score_threshold: Minimum relevance score (0-1)
          */
-        get: operations["search_documentation_api_knowledge_base_unified_documentation_search_get"];
+        get: operations["search_documentation_api_knowledge_base_aggregated_documentation_search_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5770,7 +5770,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/documentation/stats": {
+    "/api/knowledge_base/aggregated/documentation/stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -5783,7 +5783,7 @@ export interface paths {
          *
          *     Returns document count and indexing status.
          */
-        get: operations["documentation_stats_api_knowledge_base_unified_documentation_stats_get"];
+        get: operations["documentation_stats_api_knowledge_base_aggregated_documentation_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5792,7 +5792,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/graph": {
+    "/api/knowledge_base/aggregated/graph": {
         parameters: {
             query?: never;
             header?: never;
@@ -5800,17 +5800,17 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Unified Graph Simple
-         * @description GET version of unified graph for simple requests.
+         * Get Aggregated Graph Simple
+         * @description GET version of aggregated graph for simple requests.
          *
-         *     Returns a unified knowledge graph with default settings.
-         *     For more control, use POST /unified/graph with GraphRequest body.
+         *     Returns an aggregated knowledge graph with default settings.
+         *     For more control, use POST /aggregated/graph with GraphRequest body.
          */
-        get: operations["get_unified_graph_simple_api_knowledge_base_unified_graph_get"];
+        get: operations["get_aggregated_graph_simple_api_knowledge_base_aggregated_graph_get"];
         put?: never;
         /**
-         * Get Unified Graph
-         * @description Get unified knowledge graph combining categories, facts, and relations.
+         * Get Aggregated Graph
+         * @description Get aggregated knowledge graph combining categories, facts, and relations.
          *
          *     This endpoint is designed for the KnowledgeGraph.vue component to visualize
          *     all knowledge sources in a single graph. It returns:
@@ -5823,7 +5823,7 @@ export interface paths {
          *     - entities: List of nodes with id, name, type, observations
          *     - relations: List of edges with from, to, type, strength
          */
-        post: operations["get_unified_graph_api_knowledge_base_unified_graph_post"];
+        post: operations["get_aggregated_graph_api_knowledge_base_aggregated_graph_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -72198,7 +72198,7 @@ export interface components {
         };
         /**
          * GraphRequest
-         * @description Request model for unified knowledge graph.
+         * @description Request model for aggregated knowledge graph.
          */
         GraphRequest: {
             /**
@@ -76007,10 +76007,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeUnifiedContextResponse
-         * @description Response for POST /unified/context.
+         * KnowledgeAggregatedContextResponse
+         * @description Response for POST /aggregated/context.
          */
-        KnowledgeUnifiedContextResponse: {
+        KnowledgeAggregatedContextResponse: {
             /** Success */
             success: boolean;
             /** Context */
@@ -76025,10 +76025,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeUnifiedGraphResponse
-         * @description Response for POST /unified/graph and GET /unified/graph.
+         * KnowledgeAggregatedGraphResponse
+         * @description Response for POST /aggregated/graph and GET /aggregated/graph.
          */
-        KnowledgeUnifiedGraphResponse: {
+        KnowledgeAggregatedGraphResponse: {
             /** Success */
             success: boolean;
             /** Data */
@@ -76043,10 +76043,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeUnifiedSearchResponse
-         * @description Response for POST /unified/search.
+         * KnowledgeAggregatedSearchResponse
+         * @description Response for POST /aggregated/search.
          */
-        KnowledgeUnifiedSearchResponse: {
+        KnowledgeAggregatedSearchResponse: {
             /** Success */
             success: boolean;
             /** Query */
@@ -76065,12 +76065,12 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeUnifiedStatsResponse
-         * @description Response for GET /unified/stats.
+         * KnowledgeAggregatedStatsResponse
+         * @description Response for GET /aggregated/stats.
          *
          *     Sections are populated dynamically — extra fields allowed.
          */
-        KnowledgeUnifiedStatsResponse: {
+        KnowledgeAggregatedStatsResponse: {
             /** Success */
             success: boolean;
             /** Knowledge Base */
@@ -105895,7 +105895,7 @@ export interface operations {
             };
         };
     };
-    unified_search_api_knowledge_base_unified_search_post: {
+    aggregated_search_api_knowledge_base_aggregated_search_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -105914,7 +105914,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeUnifiedSearchResponse"];
+                    "application/json": components["schemas"]["KnowledgeAggregatedSearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -105928,7 +105928,7 @@ export interface operations {
             };
         };
     };
-    unified_stats_api_knowledge_base_unified_stats_get: {
+    aggregated_stats_api_knowledge_base_aggregated_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -105943,12 +105943,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeUnifiedStatsResponse"];
+                    "application/json": components["schemas"]["KnowledgeAggregatedStatsResponse"];
                 };
             };
         };
     };
-    get_llm_context_api_knowledge_base_unified_context_post: {
+    get_llm_context_api_knowledge_base_aggregated_context_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -105967,7 +105967,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeUnifiedContextResponse"];
+                    "application/json": components["schemas"]["KnowledgeAggregatedContextResponse"];
                 };
             };
             /** @description Validation Error */
@@ -105981,7 +105981,7 @@ export interface operations {
             };
         };
     };
-    search_documentation_api_knowledge_base_unified_documentation_search_get: {
+    search_documentation_api_knowledge_base_aggregated_documentation_search_get: {
         parameters: {
             query: {
                 query: string;
@@ -106014,7 +106014,7 @@ export interface operations {
             };
         };
     };
-    documentation_stats_api_knowledge_base_unified_documentation_stats_get: {
+    documentation_stats_api_knowledge_base_aggregated_documentation_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -106034,7 +106034,7 @@ export interface operations {
             };
         };
     };
-    get_unified_graph_simple_api_knowledge_base_unified_graph_get: {
+    get_aggregated_graph_simple_api_knowledge_base_aggregated_graph_get: {
         parameters: {
             query?: {
                 /** @description Maximum facts to include */
@@ -106054,7 +106054,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeUnifiedGraphResponse"];
+                    "application/json": components["schemas"]["KnowledgeAggregatedGraphResponse"];
                 };
             };
             /** @description Validation Error */
@@ -106068,7 +106068,7 @@ export interface operations {
             };
         };
     };
-    get_unified_graph_api_knowledge_base_unified_graph_post: {
+    get_aggregated_graph_api_knowledge_base_aggregated_graph_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -106087,7 +106087,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeUnifiedGraphResponse"];
+                    "application/json": components["schemas"]["KnowledgeAggregatedGraphResponse"];
                 };
             };
             /** @description Validation Error */
