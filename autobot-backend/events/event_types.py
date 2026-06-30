@@ -29,3 +29,8 @@ AGENT_ABSTAINED = "agent_abstained"
 # Agent loop — belief cache hit (loop.py → LiveEventManager → WebSocket)
 # Emitted when a high-confidence cached assertion suppresses a redundant tool call.
 BELIEF_CACHE_HIT = "belief_cache_hit"
+
+# Agent loop — mid-task steering (#10543)
+# Emitted when the loop absorbs a human steering message and acknowledges it.
+# Frontend consumers can show the acknowledgement alongside approval controls.
+STEERING_RECEIVED = "steering_received"

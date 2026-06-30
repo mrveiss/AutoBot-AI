@@ -316,7 +316,7 @@ async def example_database_exhaustion():
 # =============================================================================
 
 
-async def example_enhanced_decision():
+async def example_decision():
     """
     Show how to enhance Decision objects with counterfactual predictions.
 
@@ -392,7 +392,7 @@ async def main():
     """Run all examples."""
     await example_network_timeout()
     await example_database_exhaustion()
-    await example_enhanced_decision()
+    await example_decision()
 
 
 if __name__ == "__main__":

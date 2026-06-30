@@ -22,6 +22,7 @@ from fastapi import HTTPException, Request, status
 from autobot_shared.redis_client import get_async_redis_client
 from user_management.config import get_deployment_config
 from user_management.database import db_session_context
+from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services import TenantContext, UserService
 
 logger = logging.getLogger(__name__)
@@ -365,12 +366,40 @@ def _require_authentication(user_id: uuid.UUID | None, permissions_desc: str) ->
 
 
 # ---------------------------------------------------------------------------
-# Audit helper (stub — replace with real audit sink when available)
+# Audit helper — persists permission-denied events to the audit trail (GH #10719)
 # ---------------------------------------------------------------------------
 
 
-async def _emit_permission_denied_audit(user_id: object, permission: str, path: str) -> None:
+async def _emit_permission_denied_audit(
+    user_id: uuid.UUID | None,
+    permission: str,
+    path: str,
+    *,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> None:
+    """Persist a permission-denied event to the audit trail.
+
+    Belt-and-suspenders: always logs a warning even when DB write fails so the
+    denial is never silently lost.  A DB failure is caught, logged as an error,
+    and does NOT propagate — the caller's 403 is unaffected.
+    """
     logger.warning("Permission denied: user=%s permission=%s path=%s", user_id, permission, path)
+    try:
+        async with db_session_context() as session:
+            entry = AuditLog(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                action=AuditAction.PERMISSION_DENIED,
+                resource_type=AuditResourceType.ENDPOINT,
+                outcome="denied",
+                details={"permission": permission, "path": path},
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            session.add(entry)
+    except Exception as exc:
+        logger.error("RBAC: failed to persist permission-denied audit entry: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -395,8 +424,13 @@ def require_permission(permission: str):
 
             has_perm = await rbac_middleware.check_permission(user_id, perm_str, org_id)
             if not has_perm:
-                logger.warning("RBAC: permission denied user=%s perm=%s", user_id, perm_str)
-                # TODO: Emit permission denied audit event
+                await _emit_permission_denied_audit(
+                    user_id,
+                    perm_str,
+                    str(request.url.path),
+                    ip_address=request.client.host if request.client else None,
+                    user_agent=request.headers.get("user-agent"),
+                )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Permission '{perm_str}' required",
@@ -422,8 +456,13 @@ def require_any_permission(permissions: List[str]):
 
             has_perm = await rbac_middleware.check_any_permission(user_id, permissions, org_id)
             if not has_perm:
-                logger.warning("RBAC: permission denied user=%s required_any=%s", user_id, perm_strs)
-                # TODO: Emit permission denied audit event
+                await _emit_permission_denied_audit(
+                    user_id,
+                    str(perm_strs),
+                    str(request.url.path),
+                    ip_address=request.client.host if request.client else None,
+                    user_agent=request.headers.get("user-agent"),
+                )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"One of these permissions required: {perm_strs}",
@@ -449,8 +488,13 @@ def require_all_permissions(permissions: List[str]):
 
             has_perm = await rbac_middleware.check_all_permissions(user_id, permissions, org_id)
             if not has_perm:
-                logger.warning("RBAC: permission denied user=%s required_all=%s", user_id, perm_strs)
-                # TODO: Emit permission denied audit event
+                await _emit_permission_denied_audit(
+                    user_id,
+                    str(perm_strs),
+                    str(request.url.path),
+                    ip_address=request.client.host if request.client else None,
+                    user_agent=request.headers.get("user-agent"),
+                )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"All of these permissions required: {perm_strs}",

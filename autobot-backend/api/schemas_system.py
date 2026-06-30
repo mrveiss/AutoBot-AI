@@ -126,7 +126,7 @@ class SystemMetricsResponse(BaseModel):
 class SystemCacheCoordinatorStatsResponse(BaseModel):
     """Response for GET /api/cache/stats.
 
-    Shape is defined by CacheCoordinator.get_unified_stats() — opaque.
+    Shape is defined by CacheCoordinator.get_cache_stats() — opaque.
     """
 
     model_config = {"extra": "allow"}
@@ -2313,6 +2313,17 @@ class TerminalToolApprovalRequest(BaseModel):
     approved: bool = Field(..., description="Whether the tool execution is approved")
     comment: str | None = Field(None, description="Optional reason for the decision")
     task_id: str | None = Field(None, description="Task ID from the APPROVAL_REQUIRED event")
+
+
+class TaskSteeringRequest(BaseModel):
+    """Request to send a steering message to a running agent task (#10543).
+
+    Steering amends the active plan without stopping the loop — the guidance
+    is absorbed at the top of the next ANALYZE_EVENTS phase.
+    """
+
+    guidance: str = Field(..., description="Human correction or direction text injected into the running loop")
+    task_id: str | None = Field(None, description="Task ID (also available from URL path)")
 
 
 class TerminalInterruptRequest(BaseModel):

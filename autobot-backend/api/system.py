@@ -945,7 +945,7 @@ async def get_cache_coordinator_stats(
         from cache import get_cache_coordinator
 
         coordinator = await get_cache_coordinator()
-        return coordinator.get_unified_stats()
+        return coordinator.get_cache_stats()
     except Exception as e:
         logger.error("Error getting cache coordinator stats: %s", str(e))
         raise HTTPException(status_code=500, detail="Error getting cache coordinator stats")

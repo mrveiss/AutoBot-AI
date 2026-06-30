@@ -325,6 +325,7 @@ class ProviderRegistry:
         from llm_shared.providers.custom_openai import CustomOpenAIProvider
         from llm_shared.providers.groq import GroqProvider
         from llm_shared.providers.huggingface import HuggingFaceProvider
+        from llm_shared.providers.mistral import MistralProvider
         from llm_shared.providers.nous_portal import NousPortalProvider
         from llm_shared.providers.ollama_provider import OllamaProvider
         from llm_shared.providers.openai import OpenAIProvider
@@ -337,6 +338,7 @@ class ProviderRegistry:
             "openai": OpenAIProvider,
             "ollama": OllamaProvider,
             "groq": GroqProvider,
+            "mistral": MistralProvider,
             "huggingface": HuggingFaceProvider,
             "custom_openai": CustomOpenAIProvider,
             "openrouter": OpenRouterProvider,
@@ -528,6 +530,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     from llm_shared.providers.custom_openai import CustomOpenAIProvider
     from llm_shared.providers.groq import GroqProvider
     from llm_shared.providers.huggingface import HuggingFaceProvider
+    from llm_shared.providers.mistral import MistralProvider
     from llm_shared.providers.nous_portal import NousPortalProvider
     from llm_shared.providers.openai import OpenAIProvider
     from llm_shared.providers.openrouter import OpenRouterProvider
@@ -574,6 +577,21 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         fallback.append(groq_provider.provider_name)
     else:
         logger.debug("GROQ_API_KEY not set — Groq provider not registered")
+
+    # Mistral — registered when API key is present (Issue #10549)
+    mistral_key = config.mistral_api_key
+    if mistral_key:
+        mistral_provider = MistralProvider(
+            settings={
+                "api_key": mistral_key,
+                "base_url": config.mistral_api_base_url or None,
+                "default_model": config.mistral_default_model or None,
+            }
+        )
+        registry.register(mistral_provider)
+        fallback.append(mistral_provider.provider_name)
+    else:
+        logger.debug("MISTRAL_API_KEY not set — Mistral provider not registered")
 
     # HuggingFace — registered when HF token is present
     hf_token = config.hf_token or config.huggingface_api_token

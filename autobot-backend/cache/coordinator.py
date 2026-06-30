@@ -38,7 +38,7 @@ class CacheCoordinator(AsyncInitializable):
         coordinator = await get_cache_coordinator()
         coordinator.register(my_cache)
         await coordinator.check_pressure()
-        stats = coordinator.get_unified_stats()
+        stats = coordinator.get_cache_stats()
     """
 
     _instance: "CacheCoordinator" | None = None
@@ -140,7 +140,7 @@ class CacheCoordinator(AsyncInitializable):
                 logger.info(f"Evicted {evicted} items from {name}")
         return results
 
-    def get_unified_stats(self) -> Dict[str, Any]:
+    def get_cache_stats(self) -> Dict[str, Any]:
         """
         Aggregate stats from all registered caches.
 
