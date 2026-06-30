@@ -22,7 +22,7 @@ def test_positive_flags_literal_but_not_docstring():
     diags = _check("positive.py")
     assert len(diags) == 1
     assert diags[0].rule_id == "py-hardcoded-url"
-    assert diags[0].severity == "warn"
+    assert diags[0].severity == "block"
 
 
 def test_negative_fixture_produces_no_diagnostics():
@@ -36,4 +36,4 @@ def test_waiver_fixture_produces_no_diagnostics():
 def test_rule_metadata_present():
     for attr in ("RULE_ID", "ISSUE", "SEVERITY", "TARGETS", "DESCRIPTION", "FIX_HINT"):
         assert hasattr(py_hardcoded_url, attr), f"missing {attr}"
-    assert py_hardcoded_url.SEVERITY == "warn"
+    assert py_hardcoded_url.SEVERITY == "block"
