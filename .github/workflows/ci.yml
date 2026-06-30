@@ -324,7 +324,7 @@ jobs:
 
         # Test core imports
         PYTHONPATH="autobot-backend:autobot_shared:$PYTHONPATH" \
-          python3 -c 'from security.enhanced_security_layer import EnhancedSecurityLayer; from security.secure_command_executor import SecureCommandExecutor; from app_factory import create_app; print("Core imports working")'
+          python3 -c 'from security_layer import SecurityLayer; from security.secure_command_executor import SecureCommandExecutor; from app_factory import create_app; print("Core imports working")'
 
     - name: Generate deployment artifact
       run: |

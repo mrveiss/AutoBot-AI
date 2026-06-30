@@ -35,13 +35,13 @@ Architecture:
 
 Key Components:
 --------------
-1. ConsolidatedTerminalWebSocket
+1. TerminalWebSocket
    - WebSocket handler for real-time terminal I/O
    - Manages PTY process lifecycle
    - Buffers output for chat integration
    - Sends output to ChatHistoryManager when linked to conversation
 
-2. ConsolidatedTerminalManager
+2. TerminalManager
    - Session registry and lifecycle management
    - Signal handling (SIGINT, SIGTERM, etc.)
    - Session cleanup and resource management
@@ -302,7 +302,7 @@ ssh_terminal_manager = _SSHTerminalManager()
 
 
 # Import handler classes (extracted from this file - Issue #210)
-from api.terminal_handlers import ConsolidatedTerminalWebSocket, session_manager
+from api.terminal_handlers import TerminalWebSocket, session_manager
 
 # Import tool management router (extracted from this file - Issue #185)
 from api.terminal_tools import router as tools_router
@@ -819,8 +819,8 @@ async def get_session_audit_log(
 async def _init_terminal_handler(
     websocket: WebSocket,
     session_id: str,
-) -> "ConsolidatedTerminalWebSocket":
-    """Helper for consolidated_terminal_websocket. Ref: #1088.
+) -> "TerminalWebSocket":
+    """Helper for terminal_websocket. Ref: #1088.
 
     Resolves session config, acquires Redis client, constructs and starts
     the terminal handler, and registers it with the session manager.
@@ -830,7 +830,7 @@ async def _init_terminal_handler(
         session_id: Session identifier
 
     Returns:
-        Started ConsolidatedTerminalWebSocket instance
+        Started TerminalWebSocket instance
     """
     config = session_manager.session_configs.get(session_id, {})
     security_level = SecurityLevel(config.get("security_level", SecurityLevel.STANDARD.value))
@@ -845,7 +845,7 @@ async def _init_terminal_handler(
     except Exception as e:
         logger.warning("Could not get Redis client for terminal logging: %s", e)
 
-    terminal = ConsolidatedTerminalWebSocket(websocket, session_id, security_level, conversation_id, redis_client)
+    terminal = TerminalWebSocket(websocket, session_id, security_level, conversation_id, redis_client)
     session_manager.add_connection(session_id, terminal)
     await terminal.start()
     return terminal
@@ -853,10 +853,10 @@ async def _init_terminal_handler(
 
 async def _run_terminal_message_loop(
     websocket: WebSocket,
-    terminal: "ConsolidatedTerminalWebSocket",
+    terminal: "TerminalWebSocket",
     session_id: str,
 ) -> None:
-    """Helper for consolidated_terminal_websocket. Ref: #1088.
+    """Helper for terminal_websocket. Ref: #1088.
 
     Drives the receive loop, dispatching each message to the terminal handler.
     Handles WebSocketDisconnect and generic errors with appropriate logging.
@@ -895,10 +895,10 @@ async def _run_terminal_message_loop(
 @router.websocket("/ws/{session_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="consolidated_terminal_websocket",
+    operation="terminal_websocket",
     error_code_prefix="TERMINAL",
 )
-async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str):
+async def terminal_websocket(websocket: WebSocket, session_id: str):
     """
     Primary WebSocket endpoint for consolidated terminal access.
 
@@ -1286,8 +1286,8 @@ async def get_terminal_features(
         - Integration points
     """
     return {
-        "manager_class": "ConsolidatedTerminalManager",
-        "websocket_class": "ConsolidatedTerminalWebSocket",
+        "manager_class": "TerminalManager",
+        "websocket_class": "TerminalWebSocket",
         "pty_implementation": "SimplePTY",
         "implementations": [
             {
