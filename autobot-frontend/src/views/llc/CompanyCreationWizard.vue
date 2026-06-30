@@ -397,19 +397,38 @@ function getDefaultIcon(cat: TemplateCategory): string {
   return icons[cat] || 'building'
 }
 
+/**
+ * Derive a backend-valid company slug from the company name.
+ * Backend requires slug matching ^[a-z0-9-]+$ (CompanyBase). We lowercase,
+ * collapse runs of non-alphanumeric chars to a single dash, and strip
+ * leading/trailing dashes. Falls back to a timestamp-based slug if empty.
+ */
+function slugify(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return slug || `company-${Date.now()}`
+}
+
 async function createCompany() {
   loading.value = true
   error.value = null
 
   try {
-    // Step 1: Create the company
+    // Step 1: Create the company.
+    // Field names must match the backend CompanyCreate/CompanyBase schema
+    // (autobot-backend/llc/models/company.py): slug is required, the budget key
+    // is budget_monthly_cents, the mission maps to description, and llc_status
+    // is left to the backend default (ONBOARDING) — do not send a bogus status.
     const companyPayload = {
       name: companyConfig.value.name,
+      slug: slugify(companyConfig.value.name),
       issue_prefix: companyConfig.value.issue_prefix,
-      mission: companyConfig.value.mission || undefined,
-      monthly_budget_cents: companyConfig.value.monthly_budget_cents,
+      description: companyConfig.value.mission || undefined,
+      budget_monthly_cents: companyConfig.value.monthly_budget_cents,
       brand_color: companyConfig.value.brand_color,
-      status: 'active',
     }
 
     logger.info('Creating company', companyPayload)
@@ -446,13 +465,19 @@ async function createCompany() {
 
 <style scoped>
 .company-creation-wizard {
+  /* Fill the available space provided by the app layout's <main> element
+     (App.vue: main.flex-1.min-h-0 + router-view.h-full). Using 100vh here
+     overflowed past the viewport by the header height and pushed the footer
+     action buttons (Back/Next/Create) out of view. */
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
   background: var(--bg-primary);
 }
 
 .wizard-header {
+  flex-shrink: 0;
   padding: var(--spacing-6) var(--spacing-4);
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-elevated);
@@ -523,6 +548,7 @@ async function createCompany() {
 
 .wizard-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: var(--spacing-6) var(--spacing-4);
 }
@@ -795,6 +821,7 @@ async function createCompany() {
 }
 
 .wizard-actions {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   gap: var(--spacing-3);
