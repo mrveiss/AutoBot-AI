@@ -228,11 +228,11 @@ export type DocsWatcherControlResponse = components['schemas']['DocsWatcherContr
 export type KnowledgeStatsResponse = components['schemas']['KnowledgeStatsResponse']
 
 /**
- * `GET /knowledge_base/health/enhanced` response.
+ * `GET /knowledge_base/health/status` response.
  * #9724: the legacy flat `KnowledgeHealthResponse` schema no longer exists in
- * the generated contract — the health surface moved to the enhanced endpoint.
+ * the generated contract — the health surface moved to the health/status endpoint.
  */
-export type KnowledgeHealthResponse = components['schemas']['DataResponse_AIStackEnhancedHealthData_']
+export type KnowledgeHealthResponse = components['schemas']['DataResponse_AIStackHealthStatusData_']
 
 /** Machine profile capabilities sub-object. */
 export type MachineProfileCapabilities = components['schemas']['MachineProfileCapabilities']
