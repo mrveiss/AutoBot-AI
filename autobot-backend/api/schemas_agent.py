@@ -1007,7 +1007,7 @@ class AgentTaskData(BaseModel):
 
 
 class GoalData(AgentTaskData):
-    """data payload for POST /agent/goal/advanced."""
+    """data payload for POST /agent/goal/orchestrated."""
 
     goal: str
     coordination_mode: str
@@ -1556,7 +1556,7 @@ class GoalPayload(BaseModel):
     """Goal payload — unified from bare and advanced variants (#10666 B1).
 
     The simple /goal endpoint reads only ``goal``/``use_phi2``/``user_role``.
-    The /goal/advanced endpoint also reads the remaining optional fields.
+    The /goal/orchestrated endpoint also reads the remaining optional fields.
     All added fields carry defaults, so existing callers that only send
     ``goal`` remain fully backward-compatible.
     """

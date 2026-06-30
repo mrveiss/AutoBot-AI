@@ -5411,7 +5411,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/ai-stack/search/advanced": {
+    "/api/knowledge_base/ai-stack/search": {
         parameters: {
             query?: never;
             header?: never;
@@ -5421,8 +5421,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Advanced Search
-         * @description Advanced search combining local knowledge base with AI Stack RAG capabilities.
+         * Multi-Source AI Stack Search
+         * @description Multi-source search combining local knowledge base with AI Stack RAG capabilities.
          *
          *     Issue #281: Refactored from 144 lines to use extracted helper methods.
          *     Issue #744: Requires authenticated user.
@@ -5432,7 +5432,7 @@ export interface paths {
          *     - AI Stack RAG-enhanced retrieval
          *     - Intelligent result ranking and synthesis
          */
-        post: operations["search_api_knowledge_base_ai_stack_search_advanced_post"];
+        post: operations["search_api_knowledge_base_ai_stack_search_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5564,7 +5564,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/ai-stack/stats/advanced": {
+    "/api/knowledge_base/ai-stack/stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -5577,7 +5577,7 @@ export interface paths {
          *
          *     Issue #744: Requires authenticated user.
          */
-        get: operations["get_aistack_stats_api_knowledge_base_ai_stack_stats_advanced_get"];
+        get: operations["get_aistack_stats_api_knowledge_base_ai_stack_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9271,7 +9271,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/search/advanced": {
+    "/api/knowledge_base/ai-stack/search-kb": {
         parameters: {
             query?: never;
             header?: never;
@@ -9281,8 +9281,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Advanced Search
-         * @description Advanced search combining local knowledge base with AI Stack RAG capabilities.
+         * Multi-Source AI Stack Search
+         * @description Multi-source search combining local knowledge base with AI Stack RAG capabilities.
          *
          *     Issue #281: Refactored from 144 lines to use extracted helper methods.
          *     Issue #744: Requires authenticated user.
@@ -9292,7 +9292,7 @@ export interface paths {
          *     - AI Stack RAG-enhanced retrieval
          *     - Intelligent result ranking and synthesis
          */
-        post: operations["search_api_knowledge_base_search_advanced_post"];
+        post: operations["search_api_knowledge_base_search_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9424,7 +9424,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/stats/advanced": {
+    "/api/knowledge_base/ai-stack/stats-kb": {
         parameters: {
             query?: never;
             header?: never;
@@ -9437,7 +9437,7 @@ export interface paths {
          *
          *     Issue #744: Requires authenticated user.
          */
-        get: operations["get_aistack_stats_api_knowledge_base_stats_advanced_get"];
+        get: operations["get_aistack_stats_api_knowledge_base_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -15545,7 +15545,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agent/goal/advanced": {
+    "/api/agent/goal/orchestrated": {
         parameters: {
             query?: never;
             header?: never;
@@ -15555,13 +15555,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Execute Goal Advanced
-         * @description Execute goal using AI Stack multi-agent coordination.
+         * Execute Orchestrated Goal
+         * @description Execute goal via multi-agent orchestration with AI Stack coordination.
          *
          *     Issue #398: refactored.
          *     Issue #744: Requires authenticated user.
          */
-        post: operations["execute_goal_advanced_api_agent_goal_advanced_post"];
+        post: operations["execute_orchestrated_goal_api_agent_goal_orchestrated_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -50525,7 +50525,7 @@ export interface components {
         };
         /**
          * AIStackSearchData
-         * @description data payload for POST /search/advanced.
+         * @description data payload for POST /ai-stack/search.
          */
         AIStackSearchData: {
             [key: string]: unknown;
@@ -50575,7 +50575,7 @@ export interface components {
         };
         /**
          * AIStackStatsData
-         * @description data payload for GET /stats/advanced.
+         * @description data payload for GET /ai-stack/stats.
          */
         AIStackStatsData: {
             [key: string]: unknown;
@@ -68912,7 +68912,7 @@ export interface components {
         };
         /**
          * GoalData
-         * @description data payload for POST /agent/goal/advanced.
+         * @description data payload for POST /agent/goal/orchestrated.
          */
         GoalData: {
             /** Agents Used */
@@ -105600,7 +105600,7 @@ export interface operations {
             };
         };
     };
-    search_api_knowledge_base_ai_stack_search_advanced_post: {
+    search_api_knowledge_base_ai_stack_search_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -105795,7 +105795,7 @@ export interface operations {
             };
         };
     };
-    get_aistack_stats_api_knowledge_base_ai_stack_stats_advanced_get: {
+    get_aistack_stats_api_knowledge_base_ai_stack_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -110289,7 +110289,7 @@ export interface operations {
             };
         };
     };
-    search_api_knowledge_base_search_advanced_post: {
+    search_api_knowledge_base_search_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -110484,7 +110484,7 @@ export interface operations {
             };
         };
     };
-    get_aistack_stats_api_knowledge_base_stats_advanced_get: {
+    get_aistack_stats_api_knowledge_base_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -118256,7 +118256,7 @@ export interface operations {
             };
         };
     };
-    execute_goal_advanced_api_agent_goal_advanced_post: {
+    execute_orchestrated_goal_api_agent_goal_orchestrated_post: {
         parameters: {
             query?: never;
             header?: never;

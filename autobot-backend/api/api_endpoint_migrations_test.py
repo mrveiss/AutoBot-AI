@@ -11122,52 +11122,52 @@ class TestBatch69AgentTerminalMigrations(unittest.TestCase):
 class TestBatch70AgentMigrations(unittest.TestCase):
     """Test batch 70 migrations: agent.py first 3 endpoints"""
 
-    # Test 1: execute_goal_advanced decorator presence
-    def test_execute_goal_advanced_decorator_present(self):
-        """Test execute_goal_advanced has @with_error_handling decorator"""
-        from api.agent import execute_goal_advanced
+    # Test 1: execute_orchestrated_goal decorator presence
+    def test_execute_orchestrated_goal_decorator_present(self):
+        """Test execute_orchestrated_goal has @with_error_handling decorator"""
+        from api.agent import execute_orchestrated_goal
 
-        source = inspect.getsource(execute_goal_advanced)
+        source = inspect.getsource(execute_orchestrated_goal)
         self.assertIn(
             "@with_error_handling",
             source,
-            "execute_goal_advanced should have @with_error_handling decorator",
+            "execute_orchestrated_goal should have @with_error_handling decorator",
         )
         self.assertIn(
             "ErrorCategory.SERVER_ERROR",
             source,
-            "execute_goal_advanced should use SERVER_ERROR category",
+            "execute_orchestrated_goal should use SERVER_ERROR category",
         )
         self.assertIn(
             'error_code_prefix="AGENT"',
             source,
-            "execute_goal_advanced should use AGENT error code prefix",
+            "execute_orchestrated_goal should use AGENT error code prefix",
         )
 
-    # Test 2: execute_goal_advanced Mixed Pattern compliance
-    def test_execute_goal_advanced_mixed_pattern(self):
-        """Test execute_goal_advanced uses Mixed Pattern - preserves nested try-catches"""
-        from api.agent import execute_goal_advanced
+    # Test 2: execute_orchestrated_goal Mixed Pattern compliance
+    def test_execute_orchestrated_goal_mixed_pattern(self):
+        """Test execute_orchestrated_goal uses Mixed Pattern - preserves nested try-catches"""
+        from api.agent import execute_orchestrated_goal
 
-        source = inspect.getsource(execute_goal_advanced)
+        source = inspect.getsource(execute_orchestrated_goal)
         # Should have nested try-catches for: agent list, KB enhancement, AIStackError
         try_count = source.count("    try:")
         self.assertGreaterEqual(
             try_count,
             3,
-            "execute_goal_advanced should have at least 3 nested try-catch blocks (agent list, KB, AIStackError)",
+            "execute_orchestrated_goal should have at least 3 nested try-catch blocks (agent list, KB, AIStackError)",
         )
         # Should have AIStackError handling
         self.assertIn("except AIStackError", source)
         # Should have fallback for agent list
         self.assertIn('available_agents = ["chat", "rag", "research"]', source)
 
-    # Test 3: execute_goal_advanced business logic preserved
-    def test_execute_goal_advanced_business_logic(self):
-        """Test execute_goal_advanced preserves business logic - HTTPException for unavailable agents"""
-        from api.agent import execute_goal_advanced
+    # Test 3: execute_orchestrated_goal business logic preserved
+    def test_execute_orchestrated_goal_business_logic(self):
+        """Test execute_orchestrated_goal preserves business logic - HTTPException for unavailable agents"""
+        from api.agent import execute_orchestrated_goal
 
-        source = inspect.getsource(execute_goal_advanced)
+        source = inspect.getsource(execute_orchestrated_goal)
         # Should raise HTTPException for unavailable agents
         self.assertIn("if not selected_agents:", source)
         self.assertIn("raise HTTPException", source)
@@ -11284,11 +11284,11 @@ class TestBatch70AgentMigrations(unittest.TestCase):
         from api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
-            execute_goal_advanced,
+            execute_orchestrated_goal,
         )
 
         for endpoint in [
-            execute_goal_advanced,
+            execute_orchestrated_goal,
             coordinate_multi_agent_task,
             comprehensive_research_task,
         ]:
@@ -11305,11 +11305,11 @@ class TestBatch70AgentMigrations(unittest.TestCase):
         from api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
-            execute_goal_advanced,
+            execute_orchestrated_goal,
         )
 
         for endpoint in [
-            execute_goal_advanced,
+            execute_orchestrated_goal,
             coordinate_multi_agent_task,
             comprehensive_research_task,
         ]:
@@ -11326,11 +11326,11 @@ class TestBatch70AgentMigrations(unittest.TestCase):
         from api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
-            execute_goal_advanced,
+            execute_orchestrated_goal,
         )
 
         for endpoint in [
-            execute_goal_advanced,
+            execute_orchestrated_goal,
             coordinate_multi_agent_task,
             comprehensive_research_task,
         ]:
@@ -11348,11 +11348,11 @@ class TestBatch70AgentMigrations(unittest.TestCase):
         from api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
-            execute_goal_advanced,
+            execute_orchestrated_goal,
         )
 
         for endpoint in [
-            execute_goal_advanced,
+            execute_orchestrated_goal,
             coordinate_multi_agent_task,
             comprehensive_research_task,
         ]:
@@ -11371,11 +11371,11 @@ class TestBatch70AgentMigrations(unittest.TestCase):
         from api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
-            execute_goal_advanced,
+            execute_orchestrated_goal,
         )
 
         for endpoint in [
-            execute_goal_advanced,
+            execute_orchestrated_goal,
             coordinate_multi_agent_task,
             comprehensive_research_task,
         ]:

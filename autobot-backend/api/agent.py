@@ -995,24 +995,24 @@ def _determine_coordination_mode(payload, selected_agents: list) -> str:
 
 
 # ====================================================================
-# AI Stack Agent Endpoints (Issue #708 consolidation)
+# Multi-Agent Orchestration Endpoints (Issue #708 consolidation)
 # ====================================================================
 
 
-@router.post("/goal/advanced", response_model=DataResponse[GoalData])
+@router.post("/goal/orchestrated", response_model=DataResponse[GoalData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="execute_goal_advanced",
+    operation="execute_orchestrated_goal",
     error_code_prefix="AGENT",
 )
-async def execute_goal_advanced(
+async def execute_orchestrated_goal(
     payload: GoalPayload,
     request: Request,
     config=Depends(get_config),
     knowledge_base=Depends(get_knowledge_base),
     current_user: dict = Depends(get_current_user),
 ):
-    """Execute goal using AI Stack multi-agent coordination.
+    """Execute goal via multi-agent orchestration with AI Stack coordination.
 
     Issue #398: refactored.
     Issue #744: Requires authenticated user.
@@ -1058,7 +1058,7 @@ async def execute_goal_advanced(
         )
 
     except AIStackError as e:
-        await handle_ai_stack_error(e, "Advanced goal execution")
+        await handle_ai_stack_error(e, "Orchestrated goal execution")
 
 
 @router.post("/multi-agent/coordinate", response_model=DataResponse[MultiAgentCoordinationData])
