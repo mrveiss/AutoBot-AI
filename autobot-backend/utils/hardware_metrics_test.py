@@ -34,9 +34,9 @@ from utils.hardware_metrics import (
     add_phase9_alert_callback,
     collect_phase9_metrics,
     get_phase9_performance_dashboard,
-    phase9_monitor,
-    start_phase9_monitoring,
-    stop_phase9_monitoring,
+    hardware_monitor,
+    start_hardware_monitoring,
+    stop_hardware_monitoring,
 )
 
 # Configure logging
@@ -44,7 +44,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = get_logger(__name__)
 
 
-class Phase9MonitoringSystemTest:
+class HardwareMonitoringSystemTest:
     """Comprehensive test suite for Phase 9 monitoring system"""
 
     def __init__(self):
@@ -101,11 +101,11 @@ class Phase9MonitoringSystemTest:
 
         try:
             # Test GPU detection
-            gpu_available = phase9_monitor.gpu_available
+            gpu_available = hardware_monitor.gpu_available
             logger.info(f"   GPU Available: {'✓' if gpu_available else '✗'}")
 
             # Test NPU detection
-            npu_available = phase9_monitor.npu_available
+            npu_available = hardware_monitor.npu_available
             logger.info(f"   NPU Available: {'✓' if npu_available else '✗'}")
 
             # Get detailed capabilities
@@ -134,20 +134,20 @@ class Phase9MonitoringSystemTest:
 
         try:
             # Check initial state
-            initial_state = phase9_monitor.monitoring_active
+            initial_state = hardware_monitor.monitoring_active
             logger.info(f"   Initial monitoring state: {initial_state}")
 
             # Test buffer initialization
-            gpu_buffer_size = len(phase9_monitor.gpu_metrics_buffer)
-            npu_buffer_size = len(phase9_monitor.npu_metrics_buffer)
-            system_buffer_size = len(phase9_monitor.system_metrics_buffer)
+            gpu_buffer_size = len(hardware_monitor.gpu_metrics_buffer)
+            npu_buffer_size = len(hardware_monitor.npu_metrics_buffer)
+            system_buffer_size = len(hardware_monitor.system_metrics_buffer)
 
             logger.info(f"   GPU metrics buffer: {gpu_buffer_size} entries")
             logger.info(f"   NPU metrics buffer: {npu_buffer_size} entries")
             logger.info(f"   System metrics buffer: {system_buffer_size} entries")
 
             # Test configuration
-            config = phase9_monitor.performance_baselines
+            config = hardware_monitor.performance_baselines
             logger.info(f"   Performance baselines configured: {len(config)} baselines")
 
             self.test_results["monitor_initialization"] = {
@@ -229,14 +229,14 @@ class Phase9MonitoringSystemTest:
 
                 # Test individual metric collection
                 if gpu_metrics:
-                    gpu_individual = await phase9_monitor.collect_gpu_metrics()
+                    gpu_individual = await hardware_monitor.collect_gpu_metrics()
                     logger.info(f"   Individual GPU collection: {'✓' if gpu_individual else '✗'}")
 
                 if npu_metrics:
-                    npu_individual = await phase9_monitor.collect_npu_metrics()
+                    npu_individual = await hardware_monitor.collect_npu_metrics()
                     logger.info(f"   Individual NPU collection: {'✓' if npu_individual else '✗'}")
 
-                system_individual = await phase9_monitor.collect_system_performance_metrics()
+                system_individual = await hardware_monitor.collect_system_performance_metrics()
                 logger.info(f"   Individual system collection: {'✓' if system_individual else '✗'}")
 
             self.test_results["metrics_collection"] = {
@@ -263,9 +263,9 @@ class Phase9MonitoringSystemTest:
 
         try:
             # Start monitoring
-            monitoring_started = not phase9_monitor.monitoring_active
+            monitoring_started = not hardware_monitor.monitoring_active
             if monitoring_started:
-                await start_phase9_monitoring()
+                await start_hardware_monitoring()
                 logger.info("   Monitoring started: ✓")
             else:
                 logger.info("   Monitoring already active: ✓")
@@ -275,14 +275,14 @@ class Phase9MonitoringSystemTest:
             await asyncio.sleep(10)
 
             # Check if metrics are being collected
-            gpu_buffer_size = len(phase9_monitor.gpu_metrics_buffer)
-            system_buffer_size = len(phase9_monitor.system_metrics_buffer)
+            gpu_buffer_size = len(hardware_monitor.gpu_metrics_buffer)
+            system_buffer_size = len(hardware_monitor.system_metrics_buffer)
 
             logger.info(f"   GPU metrics collected: {gpu_buffer_size}")
             logger.info(f"   System metrics collected: {system_buffer_size}")
 
             # Test monitoring status
-            monitoring_active = phase9_monitor.monitoring_active
+            monitoring_active = hardware_monitor.monitoring_active
             logger.info(f"   Monitoring active: {'✓' if monitoring_active else '✗'}")
 
             self.test_results["realtime_monitoring"] = {
@@ -364,7 +364,7 @@ class Phase9MonitoringSystemTest:
             logger.info("   Alert callback registered: ✓")
 
             # Check existing alerts
-            existing_alerts = list(phase9_monitor.performance_alerts)
+            existing_alerts = list(hardware_monitor.performance_alerts)
             logger.info(f"   Existing alerts: {len(existing_alerts)}")
 
             # Test alert structure
@@ -553,7 +553,7 @@ class Phase9MonitoringSystemTest:
                 logger.info(f"   Auto batching: {current_config.auto_batch_sizing}")
 
             # Test performance baselines
-            baselines = phase9_monitor.performance_baselines
+            baselines = hardware_monitor.performance_baselines
             baselines_configured = len(baselines) > 0
 
             logger.info(f"   Performance baselines: {'✓' if baselines_configured else '✗'}")
@@ -620,9 +620,9 @@ class Phase9MonitoringSystemTest:
             "test_results": self.test_results,
             "alerts_received": self.alerts_received,
             "system_info": {
-                "gpu_available": phase9_monitor.gpu_available,
-                "npu_available": phase9_monitor.npu_available,
-                "monitoring_active": phase9_monitor.monitoring_active,
+                "gpu_available": hardware_monitor.gpu_available,
+                "npu_available": hardware_monitor.npu_available,
+                "monitoring_active": hardware_monitor.monitoring_active,
             },
         }
 
@@ -651,9 +651,9 @@ class Phase9MonitoringSystemTest:
         # Hardware summary
         print("🔧 HARDWARE SUMMARY")  # noqa: print
         print("=" * 50)  # noqa: print
-        print(f"GPU Available: {'✓' if phase9_monitor.gpu_available else '✗'}")  # noqa: print  # noqa: print
-        print(f"NPU Available: {'✓' if phase9_monitor.npu_available else '✗'}")  # noqa: print  # noqa: print
-        print(f"Monitoring Active: {'✓' if phase9_monitor.monitoring_active else '✗'}")  # noqa: print  # noqa: print
+        print(f"GPU Available: {'✓' if hardware_monitor.gpu_available else '✗'}")  # noqa: print  # noqa: print
+        print(f"NPU Available: {'✓' if hardware_monitor.npu_available else '✗'}")  # noqa: print  # noqa: print
+        print(f"Monitoring Active: {'✓' if hardware_monitor.monitoring_active else '✗'}")  # noqa: print  # noqa: print
         print()  # noqa: print
 
         # Recommendations
@@ -672,7 +672,7 @@ class Phase9MonitoringSystemTest:
                     print(f"   • Fix {test_name}: {result.get('error', 'Unknown error')}")  # noqa: print
 
         # Save report
-        report_file = f"phase9_monitoring_test_report_{int(time.time())}.json"
+        report_file = f"hardware_monitoring_test_report_{int(time.time())}.json"
         with open(report_file, "w") as f:
             json.dump(report, f, indent=2, default=str)
 
@@ -689,7 +689,7 @@ async def main():
     print("=" * 80)  # noqa: print
 
     # Initialize and run test suite
-    test_suite = Phase9MonitoringSystemTest()
+    test_suite = HardwareMonitoringSystemTest()
 
     try:
         await test_suite.run_full_test_suite()
@@ -703,8 +703,8 @@ async def main():
     finally:
         # Cleanup - stop monitoring if it was started
         try:
-            if phase9_monitor.monitoring_active:
-                await stop_phase9_monitoring()
+            if hardware_monitor.monitoring_active:
+                await stop_hardware_monitoring()
                 logger.info("Monitoring stopped during cleanup")
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")

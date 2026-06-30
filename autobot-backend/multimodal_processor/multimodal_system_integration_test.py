@@ -412,14 +412,13 @@ class TestUnifiedMultiModalSystem:
 
     def test_multimodal_backward_compatibility(self):
         """Test MultiModalProcessor import + singleton API (Issue #10666: consolidated)."""
-        from multimodal_processor import MultiModalProcessor, multimodal_processor, unified_processor
+        from multimodal_processor import MultiModalProcessor, processor
 
         # MultiModalProcessor is the canonical class (Issue #10666 prefix strip)
         assert MultiModalProcessor is not None
 
-        # multimodal_processor singleton is the lazy proxy (same object as unified_processor)
-        assert multimodal_processor is not None
-        assert multimodal_processor is unified_processor
+        # processor singleton is the lazy proxy
+        assert processor is not None
 
         # MultiModalProcessor (the real class) has the expected API
         assert hasattr(MultiModalProcessor, "get_stats")

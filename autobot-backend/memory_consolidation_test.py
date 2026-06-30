@@ -2,7 +2,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """
-Test script for Phase 7 Enhanced Memory System
+Test script for Memory Consolidation System
 Validates core functionality without requiring full backend restart
 """
 
@@ -18,14 +18,14 @@ from memory import MemoryManager, TaskPriority
 from task_execution_tracker import TaskExecutionTracker
 
 
-async def test_enhanced_memory_system():
+async def test_memory_consolidation_system():
     """Test the enhanced memory system components"""
-    print("🧠 Testing Phase 7: Enhanced Memory System")  # noqa: print
+    print("🧠 Testing Memory Consolidation System")  # noqa: print
     print("=" * 50)  # noqa: print
 
     # Test 1: Enhanced Memory Manager
-    print("\n1. Testing Enhanced Memory Manager...")  # noqa: print
-    memory_manager = MemoryManager(db_path="data/test_enhanced_memory.db")
+    print("\n1. Testing Memory Manager...")  # noqa: print
+    memory_manager = MemoryManager(db_path="data/test_task_memory.db")
 
     # Create a test task
     task_id = memory_manager.create_task_record(
@@ -122,7 +122,7 @@ async def test_enhanced_memory_system():
         print(f"   - {agent}: {perf['success_rate_percent']}% success, {perf['total_tasks']} tasks")  # noqa: print
 
     print("\n" + "=" * 50)  # noqa: print
-    print("🎉 Phase 7 Enhanced Memory System Test PASSED!")  # noqa: print
+    print("🎉 Memory Consolidation System Test PASSED!")  # noqa: print
     print("All core components are functioning correctly.")  # noqa: print
 
     return True
@@ -132,7 +132,7 @@ async def test_embedding_system():
     """Test the embedding storage system"""
     print("\n6. Testing Embedding Storage System...")  # noqa: print
 
-    memory_manager = MemoryManager(db_path="data/test_enhanced_memory.db")
+    memory_manager = MemoryManager(db_path="data/test_task_memory.db")
 
     # Test embedding storage
     test_content = "This is a test document for embedding storage validation"
@@ -165,10 +165,10 @@ def main():
     """Main test function"""
     try:
         # Run async tests
-        asyncio.run(test_enhanced_memory_system())
+        asyncio.run(test_memory_consolidation_system())
         asyncio.run(test_embedding_system())
 
-        print("\n🚀 Phase 7 Enhanced Memory System is ready for production!")  # noqa: print  # noqa: print
+        print("\n🚀 Memory Consolidation System is ready for production!")  # noqa: print  # noqa: print
 
     except Exception as e:
         print(f"\n❌ Test failed with error: {e}")  # noqa: print

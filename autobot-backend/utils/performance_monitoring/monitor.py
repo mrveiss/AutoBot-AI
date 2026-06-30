@@ -51,7 +51,7 @@ class PerformanceMonitor:
     Focuses on GPU/NPU acceleration, multi-modal AI performance, and
     distributed system optimization.
 
-    Note: Renamed from Phase9PerformanceMonitor - "Phase9" naming is deprecated.
+    Note: Canonical performance monitor; see hardware_metrics.py for HardwarePerformanceMonitor.
     """
 
     def _initialize_collectors(self) -> None:

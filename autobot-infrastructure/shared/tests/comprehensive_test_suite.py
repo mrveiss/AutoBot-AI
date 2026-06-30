@@ -16,7 +16,7 @@ This comprehensive test suite validates all Phase 9 features including:
 10. Multi-Modal Processing capabilities
 
 Usage:
-    python tests/phase9_comprehensive_test_suite.py [--verbose] [--performance] [--integration]
+    python tests/comprehensive_test_suite.py [--verbose] [--performance] [--integration]
 """
 
 import argparse
@@ -82,7 +82,7 @@ class TestSuiteConfig:
     performance_iterations: int = 10
 
 
-class Phase9TestSuite:
+class ComprehensiveTestSuite:
     """Main test suite for AutoBot Phase 9 features"""
 
     def __init__(self, config: TestSuiteConfig = None):
@@ -695,7 +695,6 @@ class Phase9TestSuite:
         logger.info("🌐 Testing Frontend-Backend Integration...")
 
         frontend_url = f"http://{self.config.frontend_host}:{self.config.frontend_port}"
-        _backend_url = f"http://{self.config.backend_host}:{self.config.backend_port}"
 
         # Test frontend accessibility
         start_time = time.time()
@@ -1177,12 +1176,12 @@ class Phase9TestSuite:
         }
 
         # Save report to file
-        report_file = self.results_dir / f"phase9_comprehensive_test_report_{self.timestamp}.json"
+        report_file = self.results_dir / f"comprehensive_test_report_{self.timestamp}.json"
         with open(report_file, "w") as f:
             json.dump(report, f, indent=2)
 
         # Save human-readable summary
-        summary_file = self.results_dir / f"phase9_test_summary_{self.timestamp}.txt"
+        summary_file = self.results_dir / f"comprehensive_test_summary_{self.timestamp}.txt"
         with open(summary_file, "w") as f:
             f.write("AutoBot Phase 9 Comprehensive Test Report\n")
             f.write(f"{'='*50}\n\n")
@@ -1326,7 +1325,7 @@ async def main():
                     setattr(config, key, value)
 
     # Create and run test suite
-    test_suite = Phase9TestSuite(config)
+    test_suite = ComprehensiveTestSuite(config)
     await test_suite.run_comprehensive_test_suite(
         include_performance=args.performance, include_integration=args.integration
     )

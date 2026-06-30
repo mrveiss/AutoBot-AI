@@ -2,7 +2,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """
-Test script for Phase 9: Advanced AI Integration and Multi-Modal
+Test script for Multimodal AI Integration
 Capabilities. Validates multi-modal processing, computer vision, voice
 processing, context-aware decisions, and modern AI integration
 """
@@ -53,11 +53,11 @@ def test_api_connectivity():
             return False
     except requests.exceptions.ConnectionError:
         print(  # noqa: print
-            f"⚠️ Cannot connect to backend API at {get_test_backend_url()} " "(not required for Phase 9 tests)"
+            f"⚠️ Cannot connect to backend API at {get_test_backend_url()} " "(not required for multimodal tests)"
         )
         return False
     except Exception as e:
-        print(f"⚠️ API connectivity test failed: {e} " "(continuing with Phase 9 tests)")  # noqa: print
+        print(f"⚠️ API connectivity test failed: {e} " "(continuing with multimodal tests)")  # noqa: print
         return False
 
 
@@ -312,7 +312,7 @@ async def test_modern_ai_integration():
     try:
         response = await get_modern_ai_integration().process_with_ai(
             provider=AIProvider.LOCAL_MODEL,
-            prompt="Describe the capabilities of AutoBot Phase 9",
+            prompt="Describe the capabilities of AutoBot Multimodal AI",
             task_type="description_generation",
         )
         print(f"✅ Local model response: {response.finish_reason}")  # noqa: print
@@ -354,8 +354,8 @@ async def test_modern_ai_integration():
 
 
 async def test_integration():
-    """Test integration between Phase 9 components"""
-    print("\n🔄 Testing Phase 9 Component Integration...")  # noqa: print
+    """Test integration between multimodal components"""
+    print("\n🔄 Testing Multimodal Component Integration...")  # noqa: print
     print("=" * 50)  # noqa: print
 
     # Test 1: Multi-Modal to Computer Vision Integration
@@ -413,9 +413,9 @@ async def test_integration():
         print(f"⚠️ Context + AI integration test failed: {e}")  # noqa: print
 
     # Test 3: Full Pipeline Integration
-    print("\n3. Testing Full Phase 9 Pipeline...")  # noqa: print
+    print("\n3. Testing Full Multimodal Pipeline...")  # noqa: print
     try:
-        # Simulate a complete Phase 9 workflow
+        # Simulate a complete multimodal workflow
         print("   → Analyzing screen with computer vision...")  # noqa: print
         screen_analysis = await computer_vision_system.analyze_and_understand_screen()
 
@@ -447,7 +447,7 @@ async def test_integration():
 
 async def main():
     """Main test function"""
-    print("🚀 Phase 9: Advanced AI Integration and Multi-Modal Capabilities Test")  # noqa: print  # noqa: print
+    print("🚀 Multimodal AI Integration Test")  # noqa: print  # noqa: print
     print("=" * 80)  # noqa: print
 
     test_results = []
@@ -457,7 +457,7 @@ async def main():
         api_available = test_api_connectivity()
         test_results.append(("API Connectivity", api_available))
 
-        # Test Phase 9 core components
+        # Test multimodal core components
         multimodal_result = await test_multimodal_processor()
         test_results.append(("Multi-Modal Processor", multimodal_result))
 

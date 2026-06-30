@@ -33,7 +33,7 @@ Added in PR for issue #10577 (umbrella #10569). All rules are Python AST rules r
 | `py-hardcoded-url` | #10573 | Python | block | `http://localhost\|127.0.0.1:PORT` literal — resolve via `ssot_config` | 0 (promoted to BLOCK after #10627 cleaned all 87 sites: 5 prod fixed, 6 prod waived, 76 test waived) |
 | `py-banned-suffix-filename` | #10575 | Python | block | Source file named `_fix`/`_v2`/`_old`/`_copy` — edit canonical module | 0 (clean after sibling PRs; BLOCK safe) |
 | `py-sync-requests-in-async` | #10576 | Python | block | Blocking `requests.*` inside `async def` — use async HTTP client | 0 (promoted to BLOCK after #10627 cohort 1 cleared all 14 sites) |
-| `py-duplicate-concept` | #10577 | Python | warn | `Enhanced*`/`Unified*` class shadows a base-name class in the same file | 5 (merge into canonical class) |
+| `py-duplicate-concept` | #10577 | Python | block | `Enhanced*`/`Unified*` class shadows a base-name class in the same file | 0 (promoted to BLOCK in #10666: all 5 sites renamed/consolidated) |
 
 **Severity rationale:**
 
@@ -41,6 +41,7 @@ Added in PR for issue #10577 (umbrella #10569). All rules are Python AST rules r
 - `py-adhoc-db-engine` → **block**: all 39 violations resolved in #10627 py-adhoc-db-engine cohort (2026-06-29): 4 prod services waived as sync-sessionmaker over canonical engine (background thread context), 1 standalone admin script waived, 34 test-local in-memory engine/session sites waived. Safe to fail-fast on new introductions.
 - `py-sync-requests-in-async` → **block**: all 14 violations cleared by PR for #10627 cohort 1 (2026-06-28). Four files converted to `aiohttp.ClientSession`. Safe to fail-fast on new introductions.
 - `py-hardcoded-url` → **block**: all 87 violations resolved by #10627 (2026-06-29): 5 prod sites fixed via `config.llm.ollama_endpoint` / `config.slm_url`, 6 prod sites waived (bootstrap fallbacks + embedded templates + instructional log text), 76 test sites waived (fixture URLs, mock data, test-only port values). Safe to fail-fast on new introductions.
+- `py-duplicate-concept` → **block**: all 5 violations resolved in #10666 (2026-06-30): enhanced_memory.py renamed to task_memory.py, unified_processor renamed to processor, Phase9PerformanceMonitor renamed to HardwarePerformanceMonitor, Phase9MonitoringSystemTest renamed to HardwareMonitoringSystemTest, Phase9MonitoringManager renamed to HardwareMonitoringManager. Safe to fail-fast on new introductions. Exception: `FlashAttentionV2` / `TestFlashAttentionV2` registered in ARCHITECTURE_EXCEPTIONS.md.
 - All others → **warn**: pre-existing violations exist across the codebase. Each rule's tracking issue owns the migration. Promote to BLOCK once the issue is closed and a follow-up repo-wide scan is clean.
 
 ## Waivers
