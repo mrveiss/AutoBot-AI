@@ -9,7 +9,7 @@ export class AgentsResource {
   constructor(private readonly client: AutoBotHttpClient) {}
 
   health(): Promise<AgentHealth> {
-    return this.client.get("/health/enhanced");
+    return this.client.get("/health/detailed");
   }
 
   getConfig(): Promise<DataResponse<AgentConfig>> {
