@@ -22,15 +22,15 @@ Usage:
         ProcessingIntent,
         MultiModalInput,
         ProcessingResult,
-        unified_processor,  # Singleton instance
+        processor,  # Canonical singleton instance
     )
 
     # Use singleton
-    result = await unified_processor.process(input_data)
+    result = await processor.process(input_data)
 
     # Or create custom instance
-    processor = MultiModalProcessor()
-    result = await processor.process(input_data)
+    custom = MultiModalProcessor()
+    result = await custom.process(input_data)
 """
 
 from __future__ import annotations
@@ -106,8 +106,8 @@ class _LazyProcessor:
         return True
 
 
-# Singleton instance — lazy-loaded on first attribute access (Issue #940)
-unified_processor = _LazyProcessor()
+# Singleton instance — lazy-loaded on first attribute access (Issue #940, renamed #10666)
+processor = _LazyProcessor()
 
 # ---------------------------------------------------------------------------
 # Backward-compatibility shim (previously in multimodal_processor.py — Issue #3554)
@@ -117,9 +117,6 @@ unified_processor = _LazyProcessor()
 
 # Alias for old callers that used ModalInput instead of MultiModalInput
 ModalInput = MultiModalInput
-
-# Global instance for backward compatibility (Issue #3554)
-multimodal_processor = unified_processor
 
 __all__ = [
     # Types and enums
@@ -151,9 +148,8 @@ __all__ = [
     "AUDIO_MODELS_AVAILABLE",
     # Main processor (Issue #10666 — prefix strip)
     "MultiModalProcessor",
-    # Singletons
-    "unified_processor",
+    # Canonical singleton (Issue #10666)
+    "processor",
     # Backward-compatibility shim (Issue #3554)
     "ModalInput",
-    "multimodal_processor",
 ]
