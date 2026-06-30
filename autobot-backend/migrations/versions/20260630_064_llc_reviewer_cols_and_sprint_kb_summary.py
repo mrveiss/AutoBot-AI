@@ -14,6 +14,7 @@ Forward-only drift reconciliation, idempotent (``ADD COLUMN IF NOT EXISTS``).
 Revision ID: 20260630_064
 Revises: 20260629_063
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -32,12 +33,10 @@ def upgrade() -> None:
         op.execute('ALTER TABLE "llc_work_items" ADD COLUMN IF NOT EXISTS reviewer_user_id UUID')
         op.execute('ALTER TABLE "llc_work_items" ADD COLUMN IF NOT EXISTS reviewer_agent_id UUID')
         op.execute(
-            'CREATE INDEX IF NOT EXISTS ix_llc_work_items_reviewer_user_id '
-            'ON "llc_work_items" (reviewer_user_id)'
+            "CREATE INDEX IF NOT EXISTS ix_llc_work_items_reviewer_user_id " 'ON "llc_work_items" (reviewer_user_id)'
         )
         op.execute(
-            'CREATE INDEX IF NOT EXISTS ix_llc_work_items_reviewer_agent_id '
-            'ON "llc_work_items" (reviewer_agent_id)'
+            "CREATE INDEX IF NOT EXISTS ix_llc_work_items_reviewer_agent_id " 'ON "llc_work_items" (reviewer_agent_id)'
         )
 
     if has_table("llc_sprints"):
