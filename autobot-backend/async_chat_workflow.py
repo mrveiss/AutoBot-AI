@@ -22,6 +22,7 @@ from dependency_container import inject_services
 from knowledge_base_factory import get_knowledge_base
 from llm_shared.models import ChatMessage, LLMResponse  # Phase 2D #3185
 from retry_mechanism import RetryConfig, RetryStrategy, with_retry
+from services.knowledge.service import build_grounded_context  # #10656 shared helper
 
 logger = get_logger(__name__)
 
@@ -151,8 +152,8 @@ class AsyncChatWorkflow:
             # Stage 2: Knowledge search
             knowledge_status, kb_results = await self._workflow_knowledge_search(user_message)
 
-            # Stage 3: LLM response generation
-            llm_response = await self._workflow_llm_generate(user_message, llm, workflow_steps)
+            # Stage 3: LLM response generation (grounded with KB results, #10732)
+            llm_response = await self._workflow_llm_generate(user_message, llm, workflow_steps, kb_results)
 
             # Stage 4: Build and return result
             return self._build_success_result(
@@ -240,11 +241,17 @@ class AsyncChatWorkflow:
             logger.error("Knowledge base search failed: %s", exc)
             return KnowledgeStatus.MISSING, []
 
-    async def _workflow_llm_generate(self, user_message: str, llm, workflow_steps: List[Dict[str, Any]]) -> LLMResponse:
+    async def _workflow_llm_generate(
+        self,
+        user_message: str,
+        llm,
+        workflow_steps: List[Dict[str, Any]],
+        kb_results: List[Dict[str, Any]] | None = None,
+    ) -> LLMResponse:
         """Generate LLM response and log workflow step. Issue #281: Extracted helper."""
         await self.add_workflow_message("thought", "🧠 Generating response using LLM...", step="llm_generation")
         await self.add_workflow_message("debug", "🔗 WORKFLOW: Connecting to Ollama...", step="llm_connection")
-        llm_response = await self._generate_llm_response(user_message, llm)
+        llm_response = await self._generate_llm_response(user_message, llm, kb_results or [])
         await self.add_workflow_message(
             "utility",
             "✅ LLM response received",
@@ -327,18 +334,34 @@ class AsyncChatWorkflow:
         else:
             return MessageType.GENERAL_QUERY
 
+    @staticmethod
+    def _build_kb_context_string(kb_results: List[Dict[str, Any]]) -> str:
+        """Return grounded KB context string from raw result dicts, or empty string. #10732.
+
+        Delegates to build_grounded_context (services/knowledge/service.py, #10656)
+        which gates on config.chat_grounding_enabled and formats [Source N] blocks.
+        Called from _generate_llm_response to prepend KB context to the system prompt.
+        """
+        if not kb_results:
+            return ""
+        return build_grounded_context([r["content"] for r in kb_results if r.get("content")])
+
     @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=10.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
-    async def _generate_llm_response(self, user_message: str, llm) -> LLMResponse:
-        """Generate LLM response with retry logic"""
+    async def _generate_llm_response(
+        self, user_message: str, llm, kb_results: List[Dict[str, Any]] | None = None
+    ) -> LLMResponse:
+        """Generate LLM response with retry logic. #10732: grounded when kb_results provided."""
+        base_system = (
+            "You are AutoBot, an advanced autonomous AI assistant. Provide helpful, accurate, and concise responses."
+        )
+        kb_context = self._build_kb_context_string(kb_results or [])
+        system_prompt = f"{kb_context}\n\n{base_system}" if kb_context else base_system
 
         # Prepare chat messages
-        messages = [ChatMessage(role="user", content=user_message)]
-
-        # Add system prompt for AutoBot context
-        system_prompt = (
-            "You are AutoBot, an advanced autonomous AI assistant. " "Provide helpful, accurate, and concise responses."
-        )
-        messages.insert(0, ChatMessage(role="system", content=system_prompt))
+        messages = [
+            ChatMessage(role="system", content=system_prompt),
+            ChatMessage(role="user", content=user_message),
+        ]
 
         # Generate response with timeout
         response = await asyncio.wait_for(
