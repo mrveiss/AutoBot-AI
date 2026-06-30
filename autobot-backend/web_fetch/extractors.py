@@ -220,6 +220,15 @@ async def extract_url(
         raise RuntimeError(result.error_code or "fetch_failed")
 
     safe_markdown = _strip_script_blocks(result.markdown or "")
+
+    # #10552: inspect web content through the content firewall before it reaches the LLM
+    from security.content_firewall import ContentSource, get_content_firewall
+
+    fw_verdict = await get_content_firewall().inspect(safe_markdown, source=ContentSource.WEB, context_label=url)
+    if fw_verdict.blocked:
+        raise RuntimeError(f"web_content_blocked_by_firewall: risk={fw_verdict.risk.value}")
+    safe_markdown = fw_verdict.content
+
     prompt = _build_extraction_prompt(safe_markdown, schema)
     raw = await _call_llm_for_extraction(prompt)
 

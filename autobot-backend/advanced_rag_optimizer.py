@@ -936,6 +936,17 @@ class AdvancedRAGOptimizer:
             header = self._build_context_header(query, context_parts, query_context)
             final_context = header + "\n---\n".join(context_parts)
 
+            # #10552: inspect assembled RAG context through the content firewall
+            from security.content_firewall import ContentSource, get_content_firewall
+
+            fw_verdict = await get_content_firewall().inspect(
+                final_context, source=ContentSource.RAG, context_label=query[:80]
+            )
+            if fw_verdict.blocked:
+                logger.warning("RAG context blocked by content firewall (risk=%s)", fw_verdict.risk.value)
+                return "[RAG context blocked by content firewall]", metrics
+            final_context = fw_verdict.content
+
             logger.info(
                 "Optimized context generated: %s characters from %s sources",
                 len(final_context),
