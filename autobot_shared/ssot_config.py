@@ -1642,6 +1642,93 @@ class FeatureConfig(BaseSettings):
     mcp: bool = Field(default=True, alias="AUTOBOT_FEATURE_MCP")
 
 
+class CostModelConfig(BaseSettings):
+    """Operator-supplied monthly cost estimates for hardware components.
+
+    Issue #10720: Replaces hardcoded literals in business_intelligence_dashboard.py
+    so operators can supply deployment-specific costs without editing source code.
+
+    All fields represent USD/month and are documented as ESTIMATES; the dashboard
+    renders them with an "estimated" label when the defaults are in use.
+
+    Override via environment variables, e.g.:
+        AUTOBOT_COST_CPU_MONTHLY_USD=75
+        AUTOBOT_COST_GPU_MONTHLY_USD=120
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # Per-component monthly cost estimates (USD).
+    # Defaults reflect a single-host deployment with a discrete GPU;
+    # operators MUST override these to reflect actual electricity + depreciation.
+    cpu_monthly_usd: float = Field(
+        default=50.0,
+        alias="AUTOBOT_COST_CPU_MONTHLY_USD",
+        description="Estimated monthly cost apportioned to CPU (USD). Operator-supplied estimate.",
+    )
+    gpu_monthly_usd: float = Field(
+        default=80.0,
+        alias="AUTOBOT_COST_GPU_MONTHLY_USD",
+        description="Estimated monthly cost apportioned to GPU incl. higher power draw (USD). Operator estimate.",
+    )
+    npu_monthly_usd: float = Field(
+        default=30.0,
+        alias="AUTOBOT_COST_NPU_MONTHLY_USD",
+        description="Estimated monthly cost apportioned to NPU (USD). Operator-supplied estimate.",
+    )
+    memory_monthly_usd: float = Field(
+        default=20.0,
+        alias="AUTOBOT_COST_MEMORY_MONTHLY_USD",
+        description="Estimated monthly cost apportioned to RAM (USD). Operator-supplied estimate.",
+    )
+    storage_monthly_usd: float = Field(
+        default=25.0,
+        alias="AUTOBOT_COST_STORAGE_MONTHLY_USD",
+        description="Estimated monthly cost apportioned to NVMe storage (USD). Operator-supplied estimate.",
+    )
+    network_monthly_usd: float = Field(
+        default=80.0,
+        alias="AUTOBOT_COST_NETWORK_MONTHLY_USD",
+        description="Estimated monthly internet cost (USD). Operator-supplied estimate.",
+    )
+
+    # Baseline utilization efficiency targets (percent) per component.
+    cpu_baseline_efficiency: float = Field(
+        default=70.0,
+        alias="AUTOBOT_COST_CPU_BASELINE_EFFICIENCY",
+        description="Target CPU utilisation percent for efficiency scoring.",
+    )
+    gpu_baseline_efficiency: float = Field(
+        default=60.0,
+        alias="AUTOBOT_COST_GPU_BASELINE_EFFICIENCY",
+        description="Target GPU utilisation percent for efficiency scoring.",
+    )
+    npu_baseline_efficiency: float = Field(
+        default=50.0,
+        alias="AUTOBOT_COST_NPU_BASELINE_EFFICIENCY",
+        description="Target NPU utilisation percent for efficiency scoring.",
+    )
+    memory_baseline_efficiency: float = Field(
+        default=80.0,
+        alias="AUTOBOT_COST_MEMORY_BASELINE_EFFICIENCY",
+        description="Target memory utilisation percent for efficiency scoring.",
+    )
+    storage_baseline_efficiency: float = Field(
+        default=60.0,
+        alias="AUTOBOT_COST_STORAGE_BASELINE_EFFICIENCY",
+        description="Target storage utilisation percent for efficiency scoring.",
+    )
+    network_baseline_efficiency: float = Field(
+        default=40.0,
+        alias="AUTOBOT_COST_NETWORK_BASELINE_EFFICIENCY",
+        description="Target network utilisation percent for efficiency scoring.",
+    )
+
+
 class TelemetryConfig(BaseSettings):
     """
     Telemetry and analytics opt-out configuration.
@@ -1726,6 +1813,7 @@ class AutoBotConfig(BaseSettings):
     )  # Issue #3397; alias avoids collision with system PATH env var
     misc: MiscConfig = Field(default_factory=MiscConfig)  # GH#7437: Unmapped env vars
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)  # Issue #9035
+    cost_model: CostModelConfig = Field(default_factory=CostModelConfig)  # Issue #10720
 
     # Top-level settings
     deployment_mode: str = Field(default="distributed", alias="AUTOBOT_DEPLOYMENT_MODE")
