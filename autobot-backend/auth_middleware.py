@@ -1001,8 +1001,10 @@ async def authenticate_websocket(websocket) -> dict | None:
     token = websocket.query_params.get("token")
     if token:
         try:
-            auth = AuthenticationMiddleware()
-            token_data = auth.verify_jwt_token(token)
+            # Use the singleton — a fresh AuthenticationMiddleware() generates a
+            # NEW ephemeral RS256 keypair, so it can't verify tokens signed by the
+            # singleton used at login → every WS handshake 403'd ("Disconnected").
+            token_data = get_auth_middleware().verify_jwt_token(token)
             if token_data:
                 result = {
                     "username": token_data["username"],
