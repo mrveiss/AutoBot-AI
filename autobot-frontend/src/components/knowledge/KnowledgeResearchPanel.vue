@@ -332,16 +332,25 @@ async function handleInteract(payload: { action: string; params: Record<string, 
 
 // ── Board helpers (Issue #3242) ───────────────────────────────────────────
 
-async function fetchBoards(): Promise<void> {
+async function fetchBoards(retry = true): Promise<void> {
   try {
     const data = await ApiClient.get<any>(`${getApiBase()}/knowledge_base/boards`) as { boards?: Board[] }
     if (Array.isArray(data.boards)) {
       boards.value = data.boards
     }
   } catch (e) {
-    logger.warn('Failed to fetch knowledge boards (non-critical):', e)
-    // Keep default __global__ board so research still works
-    boards.value = [{ board_id: '__global__', name: 'Global (all boards)' }]
+    logger.warn('Failed to fetch knowledge boards:', e)
+    // Issue #10718: retry once before falling back so a transient blip doesn't
+    // silently strand the user on the all-boards sentinel.
+    if (retry) {
+      await fetchBoards(false)
+      return
+    }
+    // Persistent failure: keep the legitimate __global__ all-boards mode so
+    // research still works, but surface a non-blocking notice — the load
+    // failure must not be silent.
+    boards.value = [{ board_id: '__global__', name: t('knowledge.research.globalAllBoards') }]
+    errorMsg.value = t('knowledge.research.errorBoardsLoad')
   }
 }
 

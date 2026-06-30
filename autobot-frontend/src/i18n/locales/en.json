@@ -3836,7 +3836,9 @@
       "statusReady": "Ready",
       "statusSearching": "Searching...",
       "statusStarting": "Starting...",
-      "statusStopped": "Stopped"
+      "statusStopped": "Stopped",
+      "globalAllBoards": "Global (all boards)",
+      "errorBoardsLoad": "Could not load research boards — using all boards"
     },
     "scopeSelector": {
       "group": "Group",
