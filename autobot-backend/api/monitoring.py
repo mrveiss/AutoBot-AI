@@ -205,45 +205,53 @@ _HEATMAP_RANGE: Dict[str, tuple] = {
 # Issue #474: AlertManager API timeout and cache
 _ALERTMANAGER_TIMEOUT = 5.0  # seconds
 _alertmanager_cache: Dict[str, Any] = {"alerts": [], "timestamp": 0, "ttl": 10}
+# Issue #10786: guard concurrent cache read-check + write (TOCTOU across await)
+_alertmanager_cache_lock = asyncio.Lock()
 
 
 async def _fetch_alertmanager_alerts() -> List[Dict[str, Any]]:
     """Fetch active alerts from Prometheus AlertManager.
 
     Issue #474: Provides real-time alert data from AlertManager.
+    Issue #10786: _alertmanager_cache_lock prevents thundering-herd: concurrent
+    callers that all see a stale timestamp would otherwise each launch an HTTP
+    request and race to overwrite the cache.  The lock serialises the check and
+    the write so only the first caller fetches; the rest get the freshly-cached
+    result.
 
     Returns:
         List of active alerts in frontend-compatible format.
     """
-    current_time = time.time()
+    async with _alertmanager_cache_lock:
+        current_time = time.time()
 
-    # Return cached data if still valid
-    if current_time - _alertmanager_cache["timestamp"] < _alertmanager_cache["ttl"]:
-        return _alertmanager_cache["alerts"]
+        # Return cached data if still valid (checked inside lock to avoid TOCTOU)
+        if current_time - _alertmanager_cache["timestamp"] < _alertmanager_cache["ttl"]:
+            return _alertmanager_cache["alerts"]
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            # AlertManager v2 API for active alerts
-            url = f"{ServiceURLs.ALERTMANAGER_API}/api/v2/alerts"
-            async with session.get(url, timeout=_ALERTMANAGER_TIMEOUT) as response:
-                if response.status == 200:
-                    raw_alerts = await response.json()
-                    formatted_alerts = _format_alertmanager_alerts(raw_alerts)
-                    _alertmanager_cache["alerts"] = formatted_alerts
-                    _alertmanager_cache["timestamp"] = current_time
-                    return formatted_alerts
-                else:
-                    logger.warning("AlertManager returned status %d", response.status)
-                    return _alertmanager_cache["alerts"]  # Return stale cache
-    except asyncio.TimeoutError:
-        logger.warning("AlertManager request timed out")
-        return _alertmanager_cache["alerts"]
-    except aiohttp.ClientError as e:
-        logger.warning("AlertManager connection error: %s", e)
-        return _alertmanager_cache["alerts"]
-    except Exception as e:
-        logger.error("Failed to fetch AlertManager alerts: %s", e)
-        return _alertmanager_cache["alerts"]
+        try:
+            async with aiohttp.ClientSession() as session:
+                # AlertManager v2 API for active alerts
+                url = f"{ServiceURLs.ALERTMANAGER_API}/api/v2/alerts"
+                async with session.get(url, timeout=_ALERTMANAGER_TIMEOUT) as response:
+                    if response.status == 200:
+                        raw_alerts = await response.json()
+                        formatted_alerts = _format_alertmanager_alerts(raw_alerts)
+                        _alertmanager_cache["alerts"] = formatted_alerts
+                        _alertmanager_cache["timestamp"] = current_time
+                        return formatted_alerts
+                    else:
+                        logger.warning("AlertManager returned status %d", response.status)
+                        return _alertmanager_cache["alerts"]  # Return stale cache
+        except asyncio.TimeoutError:
+            logger.warning("AlertManager request timed out")
+            return _alertmanager_cache["alerts"]
+        except aiohttp.ClientError as e:
+            logger.warning("AlertManager connection error: %s", e)
+            return _alertmanager_cache["alerts"]
+        except Exception as e:
+            logger.error("Failed to fetch AlertManager alerts: %s", e)
+            return _alertmanager_cache["alerts"]
 
 
 def _format_alertmanager_alerts(raw_alerts: List[Dict]) -> List[Dict[str, Any]]:
