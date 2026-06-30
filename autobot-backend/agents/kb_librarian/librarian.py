@@ -202,7 +202,7 @@ _TOOL_CACHE_TTL = 3600  # 1 hour TTL for tool research results
 _TOOL_CACHE_MAX_SIZE = 100  # Maximum number of tool types to cache
 
 
-class EnhancedKBLibrarian:
+class KBLibrarian:
     """
     Librarian that can search KB and coordinate with other agents for tool
     discovery.
@@ -715,4 +715,4 @@ METADATA:
         logger.info("Stored workflow documentation: %s", workflow_name)
 
 
-__all__ = ["EnhancedKBLibrarian"]
+__all__ = ["KBLibrarian"]

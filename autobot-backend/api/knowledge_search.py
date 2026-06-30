@@ -15,7 +15,7 @@ Migration guide (deprecated routes removed in #10666):
 - /enhanced_search  → /search with tags/mode/enable_reranking params
 - /rag_search       → /search with enable_rag=true (+ reformulate_query=true)
 - /similarity_search → /search with mode=semantic, min_score=<threshold>
-- /enhanced_search_v2 → /search with enable_query_expansion/enable_clustering etc.
+- advanced search → /search with enable_query_expansion/enable_clustering etc.
 
 Related Issues: #78 (Search Quality), #185 (Split), #209 (Knowledge split),
                 #555 (Consolidation), #10666 (Deprecated duplicate removal)
@@ -555,7 +555,7 @@ async def search(request: SearchRequest, req: Request):
 
     Migration (#10666): /enhanced_search→tags/reranking params,
     /rag_search→enable_rag=true, /similarity_search→mode=semantic+min_score,
-    /enhanced_search_v2→enable_query_expansion/enable_clustering etc.
+    advanced search→enable_query_expansion/enable_clustering etc.
     """
     # Check KB initialization (Issue #665: uses helper)
     kb_to_use, error_response = await _check_kb_initialization(req)
@@ -574,8 +574,8 @@ async def search(request: SearchRequest, req: Request):
     if request.enable_rag and RAG_AVAILABLE:
         return await _consolidated_rag_search(request, kb_to_use)
 
-    # Path 2: Enhanced search with tags/filtering/v2 options
-    if request.tags or request.min_score > 0 or hasattr(kb_to_use, "enhanced_search") or request.uses_v2_features():
+    # Path 2: Enhanced search with tags/filtering/advanced options
+    if request.tags or request.min_score > 0 or hasattr(kb_to_use, "search") or request.uses_advanced_features():
         return await _consolidated_enhanced_search(request, kb_to_use)
 
     # Path 3: Basic search (Issue #665: uses helper)
@@ -584,21 +584,21 @@ async def search(request: SearchRequest, req: Request):
 
 async def _consolidated_enhanced_search(request: SearchRequest, kb_to_use) -> dict:
     """
-    Handle enhanced search path for consolidated endpoint (#555, #10666).
+    Handle enhanced/advanced search path for consolidated endpoint (#555, #10666).
 
-    Dispatches to enhanced_search_v2 when v2 params are set (folded from
-    former /enhanced_search_v2 route — #10666).  Falls back to enhanced_search
-    or basic search + filtering when those KB methods are unavailable.
+    Uses the unified ``search()`` method with advanced params when available.
+    Falls back to basic search + post-filtering for KB implementations that
+    do not inherit SearchMixin.
     """
     kb_class_name = kb_to_use.__class__.__name__
 
-    # Dispatch to enhanced_search_v2 when v2-specific features are requested (#10666)
-    if request.uses_v2_features() and hasattr(kb_to_use, "enhanced_search_v2"):
-        return await kb_to_use.enhanced_search_v2(**request.to_v2_params())
+    # Unified search() handles both enhanced and advanced params (#10666)
+    if request.uses_advanced_features() and hasattr(kb_to_use, "search"):
+        return await kb_to_use.search(**request.to_advanced_params())
 
-    # Use enhanced_search if available
-    if hasattr(kb_to_use, "enhanced_search"):
-        result = await kb_to_use.enhanced_search(**request.to_legacy_params())
+    # Use search() with legacy params when advanced features not needed
+    if hasattr(kb_to_use, "search"):
+        result = await kb_to_use.search(**request.to_legacy_params())
         return result
 
     # Fallback: basic search with post-filtering

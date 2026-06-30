@@ -20,7 +20,7 @@ from services.rag_service import RAGService
 from .context_enhancer import get_context_enhancer
 from .doc_searcher import DocumentationSearcher, get_documentation_searcher
 from .intent_detector import get_query_intent_detector
-from .types import EnhancedQuery, QueryIntentResult, QueryKnowledgeIntent
+from .types import Query, QueryIntentResult, QueryKnowledgeIntent
 
 # #10652: prepended to the KB context to ground chat answers in cited sources.
 GROUNDING_INSTRUCTION = (
@@ -503,7 +503,7 @@ class ChatKnowledgeService:
         self,
         query: str,
         conversation_history: List[Dict[str, str]],
-    ) -> EnhancedQuery:
+    ) -> Query:
         """
         Enhance query with conversation context (Issue #665: extracted).
 
@@ -512,7 +512,7 @@ class ChatKnowledgeService:
             conversation_history: Previous exchanges
 
         Returns:
-            EnhancedQuery with context entities
+            Query with context entities
         """
         enhanced_query = self.context_enhancer.enhance_query(
             query=query,
@@ -565,7 +565,7 @@ class ChatKnowledgeService:
     def _get_search_query(
         self,
         query: str,
-        enhanced_query: EnhancedQuery,
+        enhanced_query: Query,
     ) -> str:
         """
         Get the search query to use for retrieval.
@@ -592,7 +592,7 @@ class ChatKnowledgeService:
         force_retrieval: bool = False,
         categories: List[str] | None = None,
         enable_smart_categories: bool = True,
-    ) -> Tuple[str, List[Dict], QueryIntentResult, EnhancedQuery | None]:
+    ) -> Tuple[str, List[Dict], QueryIntentResult, Query | None]:
         """Conversation-aware knowledge retrieval with context enhancement.
 
         Issue #249 Phase 3, #556, #665: Uses conversation history to enhance

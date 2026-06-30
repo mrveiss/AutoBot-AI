@@ -302,6 +302,9 @@ class GrowingKVCache:
         self._state = KVCacheState(chunk_size=self.chunk_size)
 
 
+# ARCHITECTURE_EXCEPTION: "FlashAttentionV2" retains the V2 suffix because
+# "FlashAttention-2" is the published algorithm name (Dao et al., 2023).
+# The suffix denotes the algorithm version, not an internal code iteration.
 class FlashAttentionV2:
     """Flash Attention v2 with variable-length sequence optimization.
 

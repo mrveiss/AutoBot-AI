@@ -38,9 +38,9 @@ class KnowledgeSearchResponse(BaseModel):
 
 
 class KBSearchResponse(BaseModel):
-    """Shape returned by deprecated POST /enhanced_search and /enhanced_search_v2 (#10666 B1).
+    """Shape returned by deprecated POST /enhanced_search and advanced KB search endpoints (#10666 B1).
 
-    Consolidates the former enhanced_search (full shape) and enhanced_search_v2
+    Consolidates the former enhanced_search (full shape) and advanced search
     (V2 was a strict subset: only success/results/total_count/message) response shapes.
     extra="allow" handles KB-specific additions on either code path.
     """
@@ -90,7 +90,7 @@ class SimilaritySearchResponse(BaseModel):
     rag_analysis: Dict[str, Any] | None = None
 
 
-# /enhanced_search_v2 response shape folded into KBSearchResponse above (#10666 B1)
+# advanced search v2 response shape folded into KBSearchResponse above (#10666 B1)
 
 
 class SearchAnalyticsResponse(BaseModel):

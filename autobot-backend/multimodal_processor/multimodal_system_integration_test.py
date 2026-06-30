@@ -16,8 +16,8 @@ from multimodal_processor import (
     ContextProcessor,
     ModalityType,
     MultiModalInput,
+    MultiModalProcessor,
     ProcessingIntent,
-    UnifiedMultiModalProcessor,
     VisionProcessor,
     VoiceProcessor,
 )
@@ -45,7 +45,7 @@ class TestUnifiedMultiModalSystem:
             "multimodal_processor.processors.vision.get_config_section",
             lambda section: mock_config.get_section(section),
         ):
-            return UnifiedMultiModalProcessor()
+            return MultiModalProcessor()
 
     @pytest.mark.asyncio
     async def test_image_processing_workflow(self, processor):
@@ -411,20 +411,20 @@ class TestUnifiedMultiModalSystem:
             assert result["screen_analysis"]["confidence_score"] == 0.8
 
     def test_multimodal_backward_compatibility(self):
-        """Test backward compatibility layer"""
-        from multimodal_processor import MultiModalProcessor, multimodal_processor
+        """Test MultiModalProcessor import + singleton API (Issue #10666: consolidated)."""
+        from multimodal_processor import MultiModalProcessor, multimodal_processor, unified_processor
 
-        # Test compatibility wrapper
-        compat_processor = MultiModalProcessor()
+        # MultiModalProcessor is the canonical class (Issue #10666 prefix strip)
+        assert MultiModalProcessor is not None
 
-        # Verify it wraps the unified processor
-        assert hasattr(compat_processor, "_unified")
-        assert hasattr(compat_processor, "get_stats")
-        assert hasattr(compat_processor, "reset_stats")
-
-        # Test global instance
+        # multimodal_processor singleton is the lazy proxy (same object as unified_processor)
         assert multimodal_processor is not None
-        assert isinstance(multimodal_processor, MultiModalProcessor)
+        assert multimodal_processor is unified_processor
+
+        # MultiModalProcessor (the real class) has the expected API
+        assert hasattr(MultiModalProcessor, "get_stats")
+        assert hasattr(MultiModalProcessor, "reset_stats")
+        assert hasattr(MultiModalProcessor, "process")
 
 
 if __name__ == "__main__":

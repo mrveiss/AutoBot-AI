@@ -296,11 +296,11 @@ class SearchQueryContext:
 
 
 @dataclass
-class EnhancedSearchQuery:
+class SearchQuery:
     """
     Query parameters for enhanced search operations.
 
-    Issue #375: Groups query-related parameters from enhanced_search_v2.
+    Issue #375: Groups query-related parameters for KB advanced search (#10666).
 
     Attributes:
         query: The search query string
@@ -322,11 +322,11 @@ class EnhancedSearchQuery:
 
 
 @dataclass
-class EnhancedSearchFilters:
+class SearchFilterParams:
     """
     Filter parameters for enhanced search operations.
 
-    Issue #375: Groups filter-related parameters from enhanced_search_v2.
+    Issue #375: Groups filter-related parameters for KB advanced search (#10666).
 
     Attributes:
         category: Optional category filter
@@ -344,11 +344,11 @@ class EnhancedSearchFilters:
 
 
 @dataclass
-class EnhancedSearchOptions:
+class SearchOptions:
     """
     Search option parameters for enhanced search operations.
 
-    Issue #375: Groups search option parameters from enhanced_search_v2.
+    Issue #375: Groups search option parameters for KB advanced search (#10666).
 
     Attributes:
         mode: Search mode ("semantic", "keyword", "hybrid")
@@ -370,12 +370,12 @@ class EnhancedSearchOptions:
 
 
 @dataclass
-class EnhancedSearchContext:
+class SearchContext:
     """
     Complete context for enhanced search operations.
 
     Issue #375: Combines all search parameters into a single context object,
-    reducing the 20-parameter signature of enhanced_search_v2 to 4 parameters.
+    reducing the 20-parameter signature of KB advanced search to 4 parameters (#10666).
 
     Attributes:
         query_params: Query-related parameters
@@ -384,9 +384,9 @@ class EnhancedSearchContext:
         session_id: Session ID for analytics tracking
     """
 
-    query_params: EnhancedSearchQuery
-    filters: EnhancedSearchFilters = field(default_factory=EnhancedSearchFilters)
-    options: EnhancedSearchOptions = field(default_factory=EnhancedSearchOptions)
+    query_params: SearchQuery
+    filters: SearchFilterParams = field(default_factory=SearchFilterParams)
+    options: SearchOptions = field(default_factory=SearchOptions)
     session_id: str | None = None
 
     @classmethod
@@ -412,15 +412,15 @@ class EnhancedSearchContext:
         exclude_sources: List[str] | None = None,
         verified_only: bool = False,
         session_id: str | None = None,
-    ) -> "EnhancedSearchContext":
+    ) -> "SearchContext":
         """
-        Create an EnhancedSearchContext from individual parameters.
+        Create an SearchContext from individual parameters.
 
         This factory method maintains backward compatibility by accepting
         the original 20 parameters and grouping them into the context object.
         """
         return cls(
-            query_params=EnhancedSearchQuery(
+            query_params=SearchQuery(
                 query=query,
                 limit=limit,
                 offset=offset,
@@ -429,14 +429,14 @@ class EnhancedSearchContext:
                 exclude_terms=exclude_terms,
                 require_terms=require_terms,
             ),
-            filters=EnhancedSearchFilters(
+            filters=SearchFilterParams(
                 category=category,
                 created_after=created_after,
                 created_before=created_before,
                 exclude_sources=exclude_sources,
                 verified_only=verified_only,
             ),
-            options=EnhancedSearchOptions(
+            options=SearchOptions(
                 mode=mode,
                 enable_reranking=enable_reranking,
                 min_score=min_score,

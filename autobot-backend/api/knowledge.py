@@ -1480,7 +1480,7 @@ async def upload_audio_file(
 
 # NOTE: Search endpoints in knowledge_search.py (Issue #209).
 # Canonical: /search only. Deprecated /enhanced_search, /rag_search,
-# /similarity_search, /enhanced_search_v2 removed in #10666.
+# /similarity_search, /enhanced_search (advanced) removed in #10666.
 
 
 @register_health_probe(KnownProbes.KNOWLEDGE)

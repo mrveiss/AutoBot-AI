@@ -20,13 +20,13 @@ from .context_enhancer import ConversationContextEnhancer, get_context_enhancer
 from .doc_searcher import DocumentationSearcher, get_documentation_searcher
 from .intent_detector import QueryKnowledgeIntentDetector, get_query_intent_detector
 from .service import KNOWLEDGE_CATEGORIES, ChatKnowledgeService
-from .types import EnhancedQuery, QueryIntentResult, QueryKnowledgeIntent
+from .types import Query, QueryIntentResult, QueryKnowledgeIntent
 
 __all__ = [
     # Types and dataclasses
     "QueryKnowledgeIntent",
     "QueryIntentResult",
-    "EnhancedQuery",
+    "Query",
     # Constants
     "KNOWLEDGE_CATEGORIES",
     # Classes

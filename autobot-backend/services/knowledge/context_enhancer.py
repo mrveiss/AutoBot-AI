@@ -14,7 +14,7 @@ from typing import Dict, List
 
 from autobot_shared.singleton_factory import lazy_singleton
 
-from .types import FOLLOWUP_KEYWORDS, EnhancedQuery
+from .types import FOLLOWUP_KEYWORDS, Query
 
 
 class ConversationContextEnhancer:
@@ -76,16 +76,16 @@ class ConversationContextEnhancer:
         # O(1) regex compilation, O(n) matching instead of O(n*p)
         self._combined_entity_re = re.compile("|".join(f"({p})" for p in self.ENTITY_PATTERNS), re.IGNORECASE)
 
-    def _build_no_enhancement_result(self, query: str) -> EnhancedQuery:
+    def _build_no_enhancement_result(self, query: str) -> Query:
         """Build result when no context enhancement is needed.
 
         Args:
             query: Original user query
 
         Returns:
-            EnhancedQuery with no modifications applied. Issue #620.
+            Query with no modifications applied. Issue #620.
         """
-        return EnhancedQuery(
+        return Query(
             original_query=query,
             enhanced_query=query,
             context_entities=[],
@@ -101,7 +101,7 @@ class ConversationContextEnhancer:
         context_entities: List[str],
         context_topics: List[str],
         word_count: int,
-    ) -> EnhancedQuery:
+    ) -> Query:
         """Build result with context enhancement applied.
 
         Args:
@@ -112,9 +112,9 @@ class ConversationContextEnhancer:
             word_count: Pre-computed word count
 
         Returns:
-            EnhancedQuery with enhancement details. Issue #620.
+            Query with enhancement details. Issue #620.
         """
-        return EnhancedQuery(
+        return Query(
             original_query=query,
             enhanced_query=enhanced_query,
             context_entities=context_entities,
@@ -128,7 +128,7 @@ class ConversationContextEnhancer:
         query: str,
         conversation_history: List[Dict[str, str]],
         max_history_items: int = 3,
-    ) -> EnhancedQuery:
+    ) -> Query:
         """
         Enhance a query with conversation context.
 
@@ -139,7 +139,7 @@ class ConversationContextEnhancer:
             max_history_items: Maximum number of history items to consider
 
         Returns:
-            EnhancedQuery with original and enhanced query
+            Query with original and enhanced query
         """
         # #624: Compute word_count once, pass to all methods
         word_count = len(query.split())
