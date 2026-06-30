@@ -39,6 +39,31 @@
       </div>
     </div>
 
+    <!-- Live Steering Affordance (#10543): visible only while task is running -->
+    <div v-if="task.status === 'running'" class="steering-section">
+      <div class="section-header">
+        <Icon name="edit" />
+        <h4>Steer Agent</h4>
+      </div>
+      <div class="steering-form">
+        <textarea
+          v-model="steeringText"
+          class="steering-input"
+          placeholder="Type guidance to redirect the agent (e.g. 'skip that file, focus on the tests')"
+          rows="2"
+          :disabled="steeringSent"
+        />
+        <button
+          class="steering-btn"
+          :disabled="!steeringText.trim() || steeringSent"
+          @click="sendSteering"
+        >
+          {{ steeringSent ? 'Guidance sent' : 'Send guidance' }}
+        </button>
+      </div>
+      <p v-if="steeringAck" class="steering-ack">{{ steeringAck }}</p>
+    </div>
+
     <!-- Abstention Reason Section (GH#6626) -->
     <div v-if="task.abstained && task.abstention_reason" class="abstention-section">
       <div class="section-header">
@@ -78,9 +103,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import AgentAbstentionBadge from './AgentAbstentionBadge.vue'
+import liveEventService from '@/services/LiveEventService'
 import type { AgentTask } from '@/types/models'
 
 /**
@@ -99,6 +125,28 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+// Steering state (#10543)
+const steeringText = ref('')
+const steeringSent = ref(false)
+const steeringAck = ref('')
+
+async function sendSteering(): Promise<void> {
+  const guidance = steeringText.value.trim()
+  if (!guidance || !props.task.id) return
+  try {
+    await liveEventService.sendSteeringMessage({ task_id: props.task.id, guidance })
+    steeringSent.value = true
+    steeringAck.value = 'Agent will absorb your guidance on the next iteration.'
+    steeringText.value = ''
+    setTimeout(() => {
+      steeringSent.value = false
+      steeringAck.value = ''
+    }, 4000)
+  } catch {
+    steeringAck.value = 'Failed to send guidance — check connection.'
+  }
+}
 
 const statusClass = computed(() => {
   const status = props.task.status
@@ -321,6 +369,60 @@ const formatDuration = (ms: number): string => {
   font-size: 0.875rem;
   color: var(--text-2, oklch(0.3 0 0));
   overflow-x: auto;
+}
+
+/* Steering affordance (#10543) */
+.steering-section {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-radius: 0.375rem;
+  background-color: oklch(0.97 0.01 240);
+  border: 1px solid oklch(0.82 0.06 240);
+}
+
+.steering-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.steering-input {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid oklch(0.75 0.06 240);
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  resize: vertical;
+  background-color: oklch(1 0 0);
+  color: var(--text-1, oklch(0.2 0 0));
+}
+
+.steering-input:disabled {
+  opacity: 0.6;
+}
+
+.steering-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background-color: oklch(0.5 0.12 240);
+  color: oklch(1 0 0);
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.steering-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.steering-ack {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  color: oklch(0.4 0.1 240);
 }
 
 /* Dark mode support */
