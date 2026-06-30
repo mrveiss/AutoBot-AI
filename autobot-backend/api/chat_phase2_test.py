@@ -6,7 +6,7 @@
 
 Pins four acceptance criteria from the SSOT design:
   1. ChatMessage requires session_id (→ 422 when absent)
-  2. process_enhanced_chat_message returns HTTP 422 for invalid session_id format
+  2. process_ai_stack_chat_message returns HTTP 422 for invalid session_id format
   3. chat:recent sorted-set has TTL applied after every zadd
   4. save_session writes disk before updating Redis cache
 """
@@ -62,24 +62,24 @@ class TestSessionIdRequired:
 
 
 # ---------------------------------------------------------------------------
-# 2. process_enhanced_chat_message returns HTTP 422 for invalid session_id
+# 2. process_ai_stack_chat_message returns HTTP 422 for invalid session_id
 # ---------------------------------------------------------------------------
 
 
-class TestEnhancedChatSession422:
-    """process_enhanced_chat_message raises HTTPException(422) for bad format."""
+class TestAiStackChatSession422:
+    """process_ai_stack_chat_message raises HTTPException(422) for bad format."""
 
     @pytest.mark.asyncio
     async def test_invalid_session_id_format_raises_422(self):
         from fastapi import HTTPException
 
-        from api.chat import process_enhanced_chat_message
+        from api.chat import process_ai_stack_chat_message
         from api.schemas_chat import ChatMessage
 
         with patch("api.chat.validate_chat_session_id", return_value=False):
             msg = ChatMessage(content="hello", session_id="BAD_FORMAT")
             with pytest.raises(HTTPException) as exc_info:
-                await process_enhanced_chat_message(
+                await process_ai_stack_chat_message(
                     message=msg,
                     chat_history_manager=MagicMock(),
                     knowledge_base=None,

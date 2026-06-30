@@ -215,13 +215,13 @@ class ChatHealthComponents(BaseModel):
 
 
 class ChatHealthData(BaseModel):
-    """Response shape for GET /chat/health and GET /health-enhanced (#6497, #10654).
+    """Response shape for GET /chat/health and GET /health-ai-stack (#6497, #10654).
 
     Canonical model for both health endpoints. Wire format is the model itself —
     no DataResponse envelope. ``components`` is Dict[str, Any] so it handles
     both the fixed {chat_history_manager, llm_service} shape from /chat/health
-    and the heterogeneous per-component map from /health-enhanced.
-    ``error`` is only populated on the /health-enhanced error path.
+    and the heterogeneous per-component map from /health-ai-stack.
+    ``error`` is only populated on the /health-ai-stack error path.
     """
 
     status: str
@@ -258,10 +258,10 @@ class ChatDeleteData(BaseModel):
 
 
 class ChatData(BaseModel):
-    """data payload for POST /enhanced.
+    """data payload for POST /ai-stack.
 
     Mirrors ChatMessageData with an additional ``knowledge_sources``
-    field for KB-augmented enhanced chats.
+    field for KB-augmented AI Stack chats.
     """
 
     content: str

@@ -1578,16 +1578,16 @@ async def send_direct_chat_response(
 
 
 # ====================================================================
-# Enhanced Chat Functions with AI Stack Integration (Issue #708 consolidation)
+# AI Stack Chat Functions (Issue #708 consolidation)
 # ====================================================================
 
 
-async def _store_enhanced_user_message(
+async def _store_ai_stack_user_message(
     message: ChatMessage,
     session_id: str,
     chat_history_manager,
 ) -> str:
-    """Store user message and log event for enhanced chat."""
+    """Store user message and log event for AI Stack chat."""
     user_message_id = str(uuid4())
     user_message_data = {
         "id": user_message_id,
@@ -1606,7 +1606,7 @@ async def _store_enhanced_user_message(
         await chat_history_manager.add_messages_batch(session_id, [_to_persisted_message(user_message_data, "message")])
 
     log_chat_event(
-        "enhanced_message_received",
+        "ai_stack_message_received",
         session_id,
         {
             "message_id": user_message_id,
@@ -1619,12 +1619,12 @@ async def _store_enhanced_user_message(
     return user_message_id
 
 
-async def _get_enhanced_chat_context(
+async def _get_ai_stack_chat_context(
     message: ChatMessage,
     session_id: str,
     chat_history_manager,
 ) -> list:
-    """Retrieve chat context from history for enhanced chat."""
+    """Retrieve chat context from history for AI Stack chat."""
     chat_context = []
     if hasattr(chat_history_manager, "get_session_messages"):
         try:
@@ -1758,13 +1758,13 @@ def _enhance_response_with_sources(
         ai_response["metadata"]["sources"] = sources_info
 
 
-async def _store_enhanced_ai_response(
+async def _store_ai_stack_ai_response(
     ai_response: Metadata,
     session_id: str,
     request_id: str,
     chat_history_manager,
 ) -> str:
-    """Store AI response and log event for enhanced chat."""
+    """Store AI response and log event for AI Stack chat."""
     ai_message_id = str(uuid4())
     ai_message_data = {
         "id": ai_message_id,
@@ -1780,7 +1780,7 @@ async def _store_enhanced_ai_response(
         await chat_history_manager.add_messages_batch(session_id, [_to_persisted_message(ai_message_data, "response")])
 
     log_chat_event(
-        "enhanced_response_generated",
+        "ai_stack_response_generated",
         session_id,
         {
             "message_id": ai_message_id,
@@ -1793,7 +1793,7 @@ async def _store_enhanced_ai_response(
     return ai_message_id
 
 
-async def _execute_enhanced_chat_pipeline(
+async def _execute_ai_stack_chat_pipeline(
     message: ChatMessage,
     session_id: str,
     chat_history_manager,
@@ -1801,15 +1801,15 @@ async def _execute_enhanced_chat_pipeline(
     request_id: str,
     preferences: ChatPreferences | None,
 ) -> ChatData:
-    """Helper for process_enhanced_chat_message. Ref: #1088, #6502 (typed return).
+    """Helper for process_ai_stack_chat_message. Ref: #1088, #6502 (typed return).
 
-    Runs the full enhanced chat pipeline: store user message, retrieve context,
+    Runs the full AI Stack chat pipeline: store user message, retrieve context,
     enrich with knowledge base, generate AI response, attach sources, store response,
     and return the final result.
     """
-    await _store_enhanced_user_message(message, session_id, chat_history_manager)
+    await _store_ai_stack_user_message(message, session_id, chat_history_manager)
 
-    chat_context = await _get_enhanced_chat_context(message, session_id, chat_history_manager)
+    chat_context = await _get_ai_stack_chat_context(message, session_id, chat_history_manager)
 
     enhanced_context, knowledge_sources = await _enhance_with_knowledge_base(message, knowledge_base)
 
@@ -1828,7 +1828,7 @@ async def _execute_enhanced_chat_pipeline(
 
     _enhance_response_with_sources(ai_response, knowledge_sources, message.include_sources)
 
-    ai_message_id = await _store_enhanced_ai_response(ai_response, session_id, request_id, chat_history_manager)
+    ai_message_id = await _store_ai_stack_ai_response(ai_response, session_id, request_id, chat_history_manager)
 
     return ChatData(
         content=ai_response.get("content", ""),
@@ -1841,7 +1841,7 @@ async def _execute_enhanced_chat_pipeline(
     )
 
 
-async def process_enhanced_chat_message(
+async def process_ai_stack_chat_message(
     message: ChatMessage,
     chat_history_manager,
     knowledge_base,
@@ -1850,7 +1850,7 @@ async def process_enhanced_chat_message(
     preferences: ChatPreferences | None = None,
 ) -> ChatData:
     """
-    Process a chat message with AI Stack enhanced capabilities.
+    Process a chat message with AI Stack capabilities.
 
     This function combines local knowledge base search with AI Stack's
     intelligent chat agents for superior conversational experience.
@@ -1861,7 +1861,7 @@ async def process_enhanced_chat_message(
 
         session_id = message.session_id
 
-        return await _execute_enhanced_chat_pipeline(
+        return await _execute_ai_stack_chat_pipeline(
             message,
             session_id,
             chat_history_manager,
@@ -1873,12 +1873,12 @@ async def process_enhanced_chat_message(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error processing enhanced chat message: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to process enhanced chat message")
+        logger.error("Error processing AI Stack chat message: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to process AI Stack chat message")
 
 
 # ====================================================================
-# Enhanced Chat Streaming Helpers (Issue #708 consolidation)
+# AI Stack Chat Streaming Helpers (Issue #708 consolidation)
 # ====================================================================
 
 
@@ -1896,7 +1896,7 @@ async def _stream_ai_stack_response(
 ):
     """Stream AI Stack enhanced response in chunks."""
     try:
-        response_data = await process_enhanced_chat_message(
+        response_data = await process_ai_stack_chat_message(
             message, chat_history_manager, None, {}, request_id, preferences
         )
 
@@ -1935,9 +1935,9 @@ async def _stream_ai_stack_response(
         )
 
 
-def _stream_enhanced_fallback_response(session_id: str):
+def _stream_ai_stack_fallback_response(session_id: str):
     """Stream fallback response when AI Stack not enabled."""
-    fallback_msg = "Thank you for your message. Enhanced streaming requires AI Stack " "integration."
+    fallback_msg = "Thank you for your message. AI Stack streaming requires AI Stack " "integration."
     return _format_sse_event(
         {
             "type": "chunk",
@@ -1948,7 +1948,7 @@ def _stream_enhanced_fallback_response(session_id: str):
     )
 
 
-async def _generate_enhanced_stream(
+async def _generate_ai_stack_stream(
     message: ChatMessage,
     request: Request,
     request_id: str,
@@ -1957,7 +1957,7 @@ async def _generate_enhanced_stream(
     """Generate streaming response with AI Stack integration."""
     try:
         session_id = message.session_id
-        yield _format_sse_event({"type": "start", "session_id": session_id, "enhanced": True})
+        yield _format_sse_event({"type": "start", "session_id": session_id, "ai_stack": True})
 
         chat_history_manager = get_chat_history_manager(request)
 
@@ -1967,7 +1967,7 @@ async def _generate_enhanced_stream(
             ):
                 yield event
         else:
-            yield _stream_enhanced_fallback_response(session_id)
+            yield _stream_ai_stack_fallback_response(session_id)
 
         yield _format_sse_event({"type": "end"})
 
@@ -1976,24 +1976,24 @@ async def _generate_enhanced_stream(
         yield _format_sse_event(
             {
                 "type": "error",
-                "content": "Error in enhanced streaming",
+                "content": "Error in AI Stack streaming",
                 "timestamp": utc_timestamp(),
             }
         )
 
 
 # ====================================================================
-# Enhanced Chat API Endpoints (Issue #708 consolidation)
+# AI Stack Chat API Endpoints (Issue #708 consolidation)
 # ====================================================================
 
 
-@router.post("/enhanced", response_model=DataResponse[ChatData])
+@router.post("/ai-stack", response_model=DataResponse[ChatData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="chat_enhanced",
+    operation="chat_ai_stack",
     error_code_prefix="CHAT",
 )
-async def chat_enhanced(
+async def chat_ai_stack(
     current_user: dict = Depends(get_current_user),
     message: ChatMessage = None,
     request: Request = None,
@@ -2002,10 +2002,10 @@ async def chat_enhanced(
     knowledge_base=Depends(get_knowledge_base),
 ):
     """
-    Enhanced chat endpoint with AI Stack integration.
+    AI Stack chat endpoint with knowledge base integration.
 
     This endpoint provides intelligent conversation with:
-    - AI Stack enhanced reasoning capabilities
+    - AI Stack reasoning capabilities
     - Knowledge base integration
     - Source citations
     - Customizable response preferences
@@ -2027,8 +2027,8 @@ async def chat_enhanced(
         # Get dependencies from request state
         chat_history_manager = get_chat_history_manager(request)
 
-        # Process the enhanced chat message
-        response_data = await process_enhanced_chat_message(
+        # Process the AI Stack chat message
+        response_data = await process_ai_stack_chat_message(
             message,
             chat_history_manager,
             knowledge_base,
@@ -2039,14 +2039,14 @@ async def chat_enhanced(
 
         return create_chat_response(
             response_data.model_dump(),
-            "Enhanced chat message processed successfully",
+            "AI Stack chat message processed successfully",
             request_id,
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("[%s] Enhanced chat error: %s", request_id, e)
+        logger.error("[%s] AI Stack chat error: %s", request_id, e)
         return create_error_response(
             error_code="INTERNAL_ERROR",
             message="Operation failed",
@@ -2055,22 +2055,22 @@ async def chat_enhanced(
         )
 
 
-@router.post("/stream-enhanced", response_model=None)  # StreamingResponse — no Pydantic schema
+@router.post("/stream-ai-stack", response_model=None)  # StreamingResponse — no Pydantic schema
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="stream_enhanced_chat",
+    operation="stream_ai_stack_chat",
     error_code_prefix="CHAT",
 )
-async def stream_enhanced_chat(
+async def stream_ai_stack_chat(
     current_user: dict = Depends(get_current_user),
     message: ChatMessage = None,
     request: Request = None,
     preferences: ChatPreferences | None = None,
 ):
     """
-    Stream enhanced chat response for real-time communication.
+    Stream AI Stack chat response for real-time communication.
 
-    Provides real-time streaming of AI Stack enhanced responses
+    Provides real-time streaming of AI Stack responses
     with knowledge base integration.
 
     Issue #744: Requires authenticated user.
@@ -2078,7 +2078,7 @@ async def stream_enhanced_chat(
     request_id = generate_request_id()
 
     return StreamingResponse(
-        _generate_enhanced_stream(message, request, request_id, preferences),
+        _generate_ai_stack_stream(message, request, request_id, preferences),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -2089,17 +2089,17 @@ async def stream_enhanced_chat(
     )
 
 
-@router.get("/health-enhanced", response_model=ChatHealthData)
+@router.get("/health-ai-stack", response_model=ChatHealthData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="chat_health_enhanced",
+    operation="chat_health_ai_stack",
     error_code_prefix="CHAT",
 )
-async def chat_health_enhanced(
+async def chat_health_ai_stack(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Health check for enhanced chat service including AI Stack connectivity.
+    Health check for AI Stack chat service including AI Stack connectivity.
 
     Issue #744: Requires authenticated user.
     """
@@ -2131,7 +2131,7 @@ async def chat_health_enhanced(
         )
 
     except Exception as e:
-        logger.error("Enhanced chat health check failed: %s", e)
+        logger.error("AI Stack chat health check failed: %s", e)
         return JSONResponse(
             status_code=503,
             media_type="application/json; charset=utf-8",
@@ -2146,14 +2146,14 @@ async def chat_health_enhanced(
 @router.get("/capabilities", response_model=DataResponse[ChatCapabilitiesData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_enhanced_chat_capabilities",
+    operation="get_chat_capabilities",
     error_code_prefix="CHAT",
 )
-async def get_enhanced_chat_capabilities(
+async def get_chat_capabilities(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Get enhanced chat capabilities and available features.
+    Get AI Stack chat capabilities and available features.
 
     Issue #744: Requires authenticated user.
     """
@@ -2180,7 +2180,7 @@ async def get_enhanced_chat_capabilities(
             "context_window": 10,
         }
 
-        return create_chat_response(capabilities, "Enhanced chat capabilities retrieved successfully")
+        return create_chat_response(capabilities, "Chat capabilities retrieved successfully")
 
     except Exception as e:
         logger.warning("Failed to get full capabilities: %s", e)
