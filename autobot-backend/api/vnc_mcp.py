@@ -538,7 +538,8 @@ async def desktop_screenshot_mcp() -> Metadata:
             tmp_path = tmp_file.name
 
         # Use scrot to capture screenshot
-        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+        result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
+            subprocess.run,
             ["scrot", "-o", tmp_path],
             capture_output=True,
             text=True,
@@ -548,7 +549,8 @@ async def desktop_screenshot_mcp() -> Metadata:
 
         if result.returncode != 0:
             # Fallback to import command
-            result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+            result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
+                subprocess.run,
                 ["import", "-window", "root", tmp_path],
                 capture_output=True,
                 text=True,
@@ -608,7 +610,8 @@ async def desktop_observe_state_mcp(request: DesktopObserveStateRequest) -> Meta
 
     # Get screen resolution
     try:
-        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+        result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
+            subprocess.run,
             ["xdpyinfo"],
             capture_output=True,
             text=True,
@@ -627,7 +630,8 @@ async def desktop_observe_state_mcp(request: DesktopObserveStateRequest) -> Meta
 
     # Get active window info
     try:
-        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+        result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
+            subprocess.run,
             ["xdotool", "getactivewindow", "getwindowname"],
             capture_output=True,
             text=True,
