@@ -6,7 +6,7 @@ Hosts and ports belong in ``autobot_shared.ssot_config``, not inline string
 literals. Docstrings are ignored (documentation may cite example URLs); only
 real string values are flagged. See canonical-debt umbrella #10569.
 
-Promoted to BLOCK after #10627 cleaned all 87 prod+test sites (2026-06-29).
+Production-scope (test fixtures use mock URLs); BLOCK after #10627/#10641 cleaned all prod sites.
 """
 
 from __future__ import annotations
@@ -42,7 +42,17 @@ def _docstring_constant_ids(tree: ast.AST) -> set[int]:
     return out
 
 
+def _is_test_file(file_path: Path) -> bool:
+    """Test fixtures legitimately use mock localhost URLs (not SSOT-resolvable)."""
+    name = file_path.name
+    return name.endswith("_test.py") or name.startswith("test_") or "tests" in file_path.parts
+
+
 def check(file_path: Path, tree: ast.AST, ctx: Context) -> list[Diagnostic]:
+    # Production-scope rule: SSOT config is for prod hosts/ports. Test files use
+    # mock localhost URLs that cannot resolve through ssot_config (#10569 AC).
+    if _is_test_file(file_path):
+        return []
     try:
         lines = file_path.read_text(encoding="utf-8").splitlines()
     except OSError:

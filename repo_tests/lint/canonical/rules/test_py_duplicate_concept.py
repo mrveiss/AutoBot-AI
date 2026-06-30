@@ -22,7 +22,7 @@ def test_positive_flags_enhanced_with_base():
     diags = _check("positive.py")
     assert len(diags) == 1
     assert diags[0].rule_id == "py-duplicate-concept"
-    assert diags[0].severity == "warn"
+    assert diags[0].severity == "block"
     assert "EnhancedFoo" in diags[0].message
 
 
@@ -37,4 +37,4 @@ def test_waiver_fixture_produces_no_diagnostics():
 def test_rule_metadata_present():
     for attr in ("RULE_ID", "ISSUE", "SEVERITY", "TARGETS", "DESCRIPTION", "FIX_HINT"):
         assert hasattr(py_duplicate_concept, attr), f"missing {attr}"
-    assert py_duplicate_concept.SEVERITY == "warn"
+    assert py_duplicate_concept.SEVERITY == "block"
