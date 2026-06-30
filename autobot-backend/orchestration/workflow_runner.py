@@ -486,7 +486,7 @@ class WorkflowRunner:
                 agent = await self._agent_router.get_agent_instance(task.agent_type)
                 if not agent:
                     raise Exception(f"Agent {task.agent_type} not available")
-                enhanced_inputs = task.get_enhanced_inputs(context)
+                enhanced_inputs = task.get_inputs(context)
                 result = await asyncio.wait_for(
                     agent.process_request({"action": task.action, "payload": enhanced_inputs}),
                     timeout=task.timeout_seconds,
@@ -533,7 +533,7 @@ class WorkflowRunner:
                 f"Failing step per ADR-006 'fail-don't-reroute' policy."
             )
 
-        enhanced_inputs = task.get_enhanced_inputs(context)
+        enhanced_inputs = task.get_inputs(context)
         action = task.skill_action or "execute"
         result = await asyncio.wait_for(
             skill.execute(action, enhanced_inputs),

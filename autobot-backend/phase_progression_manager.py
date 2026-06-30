@@ -368,7 +368,7 @@ class PhaseProgressionManager:
             },
         }
 
-    def _get_enhanced_interface_rule(self) -> Dict[str, Dict[str, Any]]:
+    def _get_interface_rule(self) -> Dict[str, Dict[str, Any]]:
         """Get rule for Phase 8: Enhanced Interface and Web Control Panel. Issue #620."""
         return {
             "Phase 8: Enhanced Interface and Web Control Panel": {
@@ -433,7 +433,7 @@ class PhaseProgressionManager:
         rules: Dict[str, Dict[str, Any]] = {}
         rules.update(self._get_agent_orchestrator_rule())
         rules.update(self._get_memory_enhancement_rule())
-        rules.update(self._get_enhanced_interface_rule())
+        rules.update(self._get_interface_rule())
         rules.update(self._get_local_intelligence_rule())
         rules.update(self._get_openvino_acceleration_rule())
         return rules
