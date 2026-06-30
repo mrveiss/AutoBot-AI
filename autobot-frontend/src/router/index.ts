@@ -1174,6 +1174,7 @@ export const routes: RouteRecordRaw[] = [
       { path: 'costs', name: 'llc-costs', component: () => import('@/views/llc/CostDashboard.vue'), props: true, meta: { title: 'Cost Dashboard', requiresAuth: true } },
       { path: 'heartbeat', name: 'llc-heartbeat', component: () => import('@/views/llc/HeartbeatMonitor.vue'), props: true, meta: { title: 'Heartbeat Monitor', requiresAuth: true } },
       { path: 'ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true } },
+      { path: 'members', name: 'llc-members', component: () => import('@/views/llc/MembersView.vue'), props: true, meta: { title: 'Members', requiresAuth: true } },
     ],
   },
   // Issue #9044: Transcriber — audio/video transcription module

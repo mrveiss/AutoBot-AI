@@ -45,6 +45,7 @@ const links = computed<SidebarLink[]>(() => {
     { labelKey: 'nav.llcTimeline', to: { path: `/llc/companies/${id}/timeline` } },
     { labelKey: 'nav.llcGoals', to: { path: '/llc/goals', query: { company: id } } },
     { labelKey: 'nav.llcOrgChart', to: { path: '/llc/org-chart', query: { company: id } } },
+    { labelKey: 'nav.llcMembers', to: { path: `/llc/companies/${id}/members` } },
     { labelKey: 'nav.llcApprovals', to: { path: `/llc/companies/${id}/approvals` } },
     { labelKey: 'nav.llcCosts', to: { path: `/llc/companies/${id}/costs` } },
     { labelKey: 'nav.llcHeartbeat', to: { path: `/llc/companies/${id}/heartbeat` } },
