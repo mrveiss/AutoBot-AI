@@ -207,7 +207,7 @@ which python3
 python3 --version
 /opt/autobot/venv/bin/python --version
 
-# Python venv (main backend on WSL — deadsnakes PPA + python3.12)
+# Python venv (main backend on WSL — deadsnakes PPA + python3.14)
 source /opt/autobot/autobot-backend/venv/bin/activate
 python --version
 ```
@@ -242,7 +242,7 @@ These were investigated during Issue #881 and ruled out as causes of connection 
 
 | Suspected Cause | Investigation | Verdict |
 |----------------|---------------|---------|
-| Python 3.13 incompatibility | Tested with Python 3.12 | ❌ Same issue |
+| Python 3.13 incompatibility | Tested with Python 3.14 | ❌ Same issue |
 | httptools ASGI server | Switched to h11 parser | ❌ Same issue |
 | uvloop event loop | Disabled, used asyncio | ❌ Same issue |
 | systemd service config | Ran directly via bash | ❌ Same issue |

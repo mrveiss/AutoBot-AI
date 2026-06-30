@@ -66,7 +66,7 @@ Install missing dependencies:
 ```bash
 # Ubuntu 22.04
 sudo apt update
-sudo apt install -y python3.12 python3.12-venv python3.12-dev \
+sudo apt install -y python3.14 python3.14-venv python3.14-dev \
                    nodejs npm git build-essential libssl-dev
 ```
 
@@ -259,12 +259,12 @@ cd autobot-slm-backend/ansible
 # Provision all roles for single-host
 ansible-playbook \
   -i inventory/localhost.yml \
-  -e "ansible_python_interpreter=/usr/bin/python3.12" \
+  -e "ansible_python_interpreter=/usr/bin/python3.14" \
   playbooks/provision-fleet-roles.yml
 ```
 
 This runs 6 provisioning phases:
-1. **Phase 1: System dependencies** (apt/npm packages, Python 3.12)
+1. **Phase 1: System dependencies** (apt/npm packages, Python 3.14)
 2. **Phase 2: Service setup** (create systemd units, directories, logging)
 3. **Phase 3: Code sync** (rsync application code from working directory)
 4. **Phase 4: Secrets** (generate TLS certs, Redis auth, API tokens)
@@ -417,7 +417,7 @@ cd autobot-slm-backend/ansible
 # Re-sync code and restart services
 ansible-playbook \
   -i inventory/localhost.yml \
-  -e "ansible_python_interpreter=/usr/bin/python3.12" \
+  -e "ansible_python_interpreter=/usr/bin/python3.14" \
   playbooks/provision-fleet-roles.yml \
   --tags "code,services"
 ```

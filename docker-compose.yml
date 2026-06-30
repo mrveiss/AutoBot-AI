@@ -318,7 +318,7 @@ services:
     # survives the with-secrets.sh entrypoint's `exec "$@"` as proper argv.
     entrypoint: ["/bin/sh", "/usr/local/bin/with-secrets.sh"]
     command:
-      - python3.12
+      - python3.14
       - -m
       - celery
       - -A
@@ -374,7 +374,7 @@ services:
       # $$HOSTNAME (escaped) expands inside the container at runtime. A single
       # $HOSTNAME is interpolated by Compose at parse time to an empty string,
       # making --destination "celery@" match no node → false unhealthy (#9714).
-      test: ["CMD-SHELL", "python3.12 -m celery -A celery_app inspect ping --destination celery@$$HOSTNAME --timeout 5"]
+      test: ["CMD-SHELL", "python3.14 -m celery -A celery_app inspect ping --destination celery@$$HOSTNAME --timeout 5"]
       interval: 30s
       timeout: 10s
       start_period: 30s
@@ -423,7 +423,7 @@ services:
     # beat — do not add it, or beat and the backend would run
     # `alembic upgrade head` concurrently (alembic takes no advisory lock).
     command: >
-      python3.12 -m celery -A celery_app beat
+      python3.14 -m celery -A celery_app beat
       --loglevel=info
       --scheduler celery.beat.PersistentScheduler
       --schedule /app/data/celerybeat-schedule

@@ -6,7 +6,7 @@
 
 **Architecture:** 5-phase dependency chain. Phase 1 hardens retrieval foundations. Phase 2 completes ECL pipeline with RAPTOR + MeshSeeder. Phase 3 adds PostgreSQL mesh graph + EdgeLearner + PPR + NeuralMeshRetriever. Phase 4 makes the mesh autonomous (Discoverer, Pruner, Promoter). Phase 5 adds agentic query decomposition + agent topology evolution.
 
-**Tech Stack:** Python 3.12, FastAPI, SQLAlchemy async (PostgreSQL), Redis Stack, ChromaDB, spaCy (NLP-light), pytest-asyncio, Alembic migrations.
+**Tech Stack:** Python 3.14, FastAPI, SQLAlchemy async (PostgreSQL), Redis Stack, ChromaDB, spaCy (NLP-light), pytest-asyncio, Alembic migrations.
 
 **Tracking Issue:** #1994
 **Design Document:** `docs/plans/2026-03-22-neural-mesh-rag-design.md`

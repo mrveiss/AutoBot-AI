@@ -40,7 +40,7 @@ services:
       # Mount the dev entrypoint script into the container
       - ./docker/backend/dev-entrypoint.sh:/app/docker/backend/dev-entrypoint.sh
     command: >
-      python3.12 -m uvicorn main:app
+      python3.14 -m uvicorn main:app
         --host 0.0.0.0 --port 8001
         --reload
         --reload-dir /app/autobot-backend
@@ -79,7 +79,7 @@ services:
       # Mount the dev entrypoint script into the container
       - ./docker/slm/dev-entrypoint.sh:/app/docker/slm/dev-entrypoint.sh
     command: >
-      python3.12 -m uvicorn main:app
+      python3.14 -m uvicorn main:app
         --host 0.0.0.0 --port 8000
         --reload
         --reload-dir /app/autobot-slm-backend

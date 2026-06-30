@@ -559,7 +559,7 @@ optional roles:
 │  nginx :8443      │
 │  celery workers   │       ┌─────────────────────────────────────────────────┐
 │  ollama :11434    │       │  .23  DATABASES                                  │
-│  (Python 3.12     │──────▶│  Redis Stack :6379   redis_exporter :9121        │
+│  (Python 3.14     │──────▶│  Redis Stack :6379   redis_exporter :9121        │
 │   deadsnakes venv)│       │  PostgreSQL :5432    (backend user mgmt)          │
 └───────────────────┘       └─────────────────────────────────────────────────┘
 
