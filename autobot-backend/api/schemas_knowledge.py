@@ -353,8 +353,8 @@ class KnowledgeCategorySearchResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class KnowledgeUnifiedSearchResponse(BaseModel):
-    """Response for POST /unified/search."""
+class KnowledgeAggregatedSearchResponse(BaseModel):
+    """Response for POST /aggregated/search."""
 
     success: bool
     query: str
@@ -365,8 +365,8 @@ class KnowledgeUnifiedSearchResponse(BaseModel):
     total_results: int
 
 
-class KnowledgeUnifiedStatsResponse(BaseModel):
-    """Response for GET /unified/stats.
+class KnowledgeAggregatedStatsResponse(BaseModel):
+    """Response for GET /aggregated/stats.
 
     Sections are populated dynamically — extra fields allowed.
     """
@@ -379,8 +379,8 @@ class KnowledgeUnifiedStatsResponse(BaseModel):
     documentation: Dict[str, Any]
 
 
-class KnowledgeUnifiedContextResponse(BaseModel):
-    """Response for POST /unified/context."""
+class KnowledgeAggregatedContextResponse(BaseModel):
+    """Response for POST /aggregated/context."""
 
     success: bool
     context: str
@@ -390,7 +390,7 @@ class KnowledgeUnifiedContextResponse(BaseModel):
 
 
 class KnowledgeDocumentationSearchResponse(BaseModel):
-    """Response for GET /unified/documentation/search."""
+    """Response for GET /aggregated/documentation/search."""
 
     success: bool
     query: str | None = None
@@ -400,7 +400,7 @@ class KnowledgeDocumentationSearchResponse(BaseModel):
 
 
 class KnowledgeDocumentationStatsResponse(BaseModel):
-    """Response for GET /unified/documentation/stats."""
+    """Response for GET /aggregated/documentation/stats."""
 
     success: bool
     indexed: bool | None = None
@@ -410,8 +410,8 @@ class KnowledgeDocumentationStatsResponse(BaseModel):
     document_count: int | None = None
 
 
-class KnowledgeUnifiedGraphResponse(BaseModel):
-    """Response for POST /unified/graph and GET /unified/graph."""
+class KnowledgeAggregatedGraphResponse(BaseModel):
+    """Response for POST /aggregated/graph and GET /aggregated/graph."""
 
     success: bool
     data: Dict[str, Any]
@@ -1125,11 +1125,11 @@ class SearchRequest(BaseModel):
         default=3,
         ge=0,
         le=10,
-        description="Max documentation results (unified multi-source search)",
+        description="Max documentation results (aggregated multi-source search)",
     )
     expand_relations: bool = Field(
         default=True,
-        description="Include related facts via graph (unified multi-source search)",
+        description="Include related facts via graph (aggregated multi-source search)",
     )
     include_sources: List[str] = Field(
         default=["facts", "relations", "documentation"],
@@ -4543,7 +4543,7 @@ class ContextRequest(BaseModel):
 
 
 class GraphRequest(BaseModel):
-    """Request model for unified knowledge graph."""
+    """Request model for aggregated knowledge graph."""
 
     max_facts: int = Field(50, ge=1, le=200, description="Maximum facts to include")
     max_depth: int = Field(2, ge=1, le=3, description="Maximum relation depth")

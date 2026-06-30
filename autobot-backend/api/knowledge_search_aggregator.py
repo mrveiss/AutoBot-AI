@@ -3,9 +3,9 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Unified Knowledge API - Single Entry Point for All Knowledge Retrieval
+Aggregated Knowledge API - Single Entry Point for All Knowledge Retrieval
 
-This API provides a unified interface for searching across:
+This API provides an aggregated interface for searching across:
 - Knowledge Base facts (ChromaDB vectors in autobot_kb collection)
 - Fact relations (graph-based connections between facts)
 - Documentation (ChromaDB vectors in autobot_docs collection)
@@ -13,9 +13,9 @@ This API provides a unified interface for searching across:
 Issue #250 Integration: Combines documentation search with RAG and graph search.
 
 Endpoints:
-- POST /unified/search - Search across all knowledge sources
-- GET /unified/stats - Statistics from all sources
-- POST /unified/context - Get context for LLM prompts
+- POST /aggregated/search - Search across all knowledge sources
+- GET /aggregated/stats - Statistics from all sources
+- POST /aggregated/context - Get context for LLM prompts
 """
 
 import asyncio
@@ -26,12 +26,12 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from api.schemas_knowledge import (
     ContextRequest,
     GraphRequest,
+    KnowledgeAggregatedContextResponse,
+    KnowledgeAggregatedGraphResponse,
+    KnowledgeAggregatedSearchResponse,
+    KnowledgeAggregatedStatsResponse,
     KnowledgeDocumentationSearchResponse,
     KnowledgeDocumentationStatsResponse,
-    KnowledgeUnifiedContextResponse,
-    KnowledgeUnifiedGraphResponse,
-    KnowledgeUnifiedSearchResponse,
-    KnowledgeUnifiedStatsResponse,
     SearchRequest,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -193,7 +193,7 @@ def _process_documentation_context(
     return total_length
 
 
-router = APIRouter(prefix="/unified", tags=["knowledge-unified"])
+router = APIRouter(prefix="/aggregated", tags=["knowledge-aggregated"])
 
 
 # ============================================================================
@@ -223,7 +223,7 @@ def get_documentation_searcher():
 
             _documentation_searcher = DocumentationSearcher()
             if _documentation_searcher.initialize():
-                logger.info("Documentation searcher initialized for unified API")
+                logger.info("Documentation searcher initialized for aggregated API")
                 return _documentation_searcher
             else:
                 logger.warning("Documentation searcher failed to initialize")
@@ -248,7 +248,7 @@ async def _search_facts(kb, query: str, top_k: int, result: dict) -> None:
     """
     Search facts via KnowledgeBase.
 
-    Issue #620: Extracted from unified_search.
+    Issue #620: Extracted from aggregated search.
 
     Args:
         kb: Knowledge base instance
@@ -271,7 +271,7 @@ async def _search_relations(kb, result: dict) -> None:
     """
     Expand facts with graph relations.
 
-    Issue #620: Extracted from unified_search.
+    Issue #620: Extracted from aggregated search.
 
     Args:
         kb: Knowledge base instance
@@ -293,7 +293,7 @@ def _search_documentation(query: str, doc_results_count: int, score_threshold: f
     """
     Search documentation collection.
 
-    Issue #620: Extracted from unified_search.
+    Issue #620: Extracted from aggregated search.
 
     Args:
         query: Search query
@@ -317,7 +317,7 @@ def _search_documentation(query: str, doc_results_count: int, score_threshold: f
         logger.warning("Documentation search failed: %s", e)
 
 
-@router.post("/search", response_model=KnowledgeUnifiedSearchResponse)
+@router.post("/search", response_model=KnowledgeAggregatedSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search",
@@ -325,7 +325,7 @@ def _search_documentation(query: str, doc_results_count: int, score_threshold: f
 )
 async def search(req: Request, body: SearchRequest):
     """
-    Search across all knowledge sources in a unified query.
+    Search across all knowledge sources in an aggregated query.
 
     Issue #620: Refactored to use extracted helper methods.
 
@@ -360,14 +360,14 @@ async def search(req: Request, body: SearchRequest):
     return result
 
 
-@router.get("/stats", response_model=KnowledgeUnifiedStatsResponse)
+@router.get("/stats", response_model=KnowledgeAggregatedStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stats",
     error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
 async def stats(req: Request):
-    """Get statistics from all unified knowledge sources (KB facts, relations, docs). Ref: #1088."""
+    """Get statistics from all aggregated knowledge sources (KB facts, relations, docs). Ref: #1088."""
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     stats = {
@@ -428,7 +428,7 @@ async def stats(req: Request):
     return stats
 
 
-@router.post("/context", response_model=KnowledgeUnifiedContextResponse)
+@router.post("/context", response_model=KnowledgeAggregatedContextResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_llm_context",
@@ -436,7 +436,7 @@ async def stats(req: Request):
 )
 async def get_llm_context(req: Request, body: ContextRequest):
     """
-    Get formatted context for LLM prompts from unified knowledge sources.
+    Get formatted context for LLM prompts from aggregated knowledge sources.
 
     Retrieves and formats knowledge from all sources into a context string
     suitable for inclusion in LLM prompts.
@@ -592,14 +592,14 @@ async def documentation_stats():
 
 
 # ============================================================================
-# Unified Knowledge Graph Endpoint (for KnowledgeGraph.vue)
+# Aggregated Knowledge Graph Endpoint (for KnowledgeGraph.vue)
 # ============================================================================
 
 
 def _create_category_node(category: Dict[str, Any]) -> Dict[str, Any]:
     """Create a graph node from a category.
 
-    Issue #707: Extracted helper for unified graph building.
+    Issue #707: Extracted helper for aggregated graph building.
     """
     return {
         "id": f"cat_{category.get('id', category.get('name', 'unknown'))}",
@@ -619,7 +619,7 @@ def _create_category_node(category: Dict[str, Any]) -> Dict[str, Any]:
 def _create_fact_node(fact: Dict[str, Any]) -> Dict[str, Any]:
     """Create a graph node from a fact.
 
-    Issue #707: Extracted helper for unified graph building.
+    Issue #707: Extracted helper for aggregated graph building.
     """
     content = fact.get("content", "")
     # Truncate long content for node label
@@ -647,7 +647,7 @@ def _process_category_tree(
 ) -> None:
     """Recursively process category tree into nodes and edges.
 
-    Issue #707: Extracted helper for unified graph building.
+    Issue #707: Extracted helper for aggregated graph building.
     """
     for category in tree:
         node = _create_category_node(category)
@@ -673,7 +673,7 @@ def _process_category_tree(
 async def _get_facts_for_graph(kb: Any, category_filter: str | None, max_facts: int) -> List[Dict[str, Any]]:
     """Get facts for the graph with optional category filtering.
 
-    Issue #707: Extracted helper for unified graph building.
+    Issue #707: Extracted helper for aggregated graph building.
     """
     if category_filter:
         # Get facts from specific category
@@ -688,7 +688,7 @@ async def _get_facts_for_graph(kb: Any, category_filter: str | None, max_facts: 
 async def _get_fact_relations_for_graph(kb: Any, fact_ids: List[str], max_relations: int = 100) -> List[Dict[str, Any]]:
     """Get relations between facts for the graph.
 
-    Issue #707: Extracted helper for unified graph building.
+    Issue #707: Extracted helper for aggregated graph building.
     """
     relations = []
     relation_set = set()
@@ -774,7 +774,7 @@ async def _process_category_tree_for_graph(
 ) -> Dict[str, str]:
     """Process category tree and build category map.
 
-    Issue #665: Extracted from get_unified_graph.
+    Issue #665: Extracted from get_aggregated_graph.
 
     Args:
         kb: Knowledge base instance
@@ -814,7 +814,7 @@ def _process_facts_into_nodes(
 ) -> List[str]:
     """Process facts into graph nodes and create category edges.
 
-    Issue #665: Extracted from get_unified_graph.
+    Issue #665: Extracted from get_aggregated_graph.
 
     Args:
         facts: List of fact dictionaries
@@ -851,7 +851,7 @@ def _process_facts_into_nodes(
 def _update_category_fact_counts(nodes: List[Dict], facts: List[Dict[str, Any]]) -> None:
     """Update fact counts in category nodes.
 
-    Issue #665: Extracted from get_unified_graph.
+    Issue #665: Extracted from get_aggregated_graph.
 
     Args:
         nodes: List of graph nodes
@@ -865,15 +865,15 @@ def _update_category_fact_counts(nodes: List[Dict], facts: List[Dict[str, Any]])
             node["metadata"]["fact_count"] = count
 
 
-@router.post("/graph", response_model=KnowledgeUnifiedGraphResponse)
+@router.post("/graph", response_model=KnowledgeAggregatedGraphResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_unified_graph",
+    operation="get_aggregated_graph",
     error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
-async def get_unified_graph(req: Request, body: GraphRequest):
+async def get_aggregated_graph(req: Request, body: GraphRequest):
     """
-    Get unified knowledge graph combining categories, facts, and relations.
+    Get aggregated knowledge graph combining categories, facts, and relations.
 
     This endpoint is designed for the KnowledgeGraph.vue component to visualize
     all knowledge sources in a single graph. It returns:
@@ -935,25 +935,25 @@ async def get_unified_graph(req: Request, body: GraphRequest):
     }
 
 
-@router.get("/graph", response_model=KnowledgeUnifiedGraphResponse)
+@router.get("/graph", response_model=KnowledgeAggregatedGraphResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_unified_graph_simple",
+    operation="get_aggregated_graph_simple",
     error_code_prefix="KNOWLEDGE_SEARCH_AGGREGATOR",
 )
-async def get_unified_graph_simple(
+async def get_aggregated_graph_simple(
     req: Request,
     max_facts: int = Query(50, ge=1, le=200, description="Maximum facts to include"),
     include_categories: bool = Query(True, description="Include category nodes"),
 ):
     """
-    GET version of unified graph for simple requests.
+    GET version of aggregated graph for simple requests.
 
-    Returns a unified knowledge graph with default settings.
-    For more control, use POST /unified/graph with GraphRequest body.
+    Returns an aggregated knowledge graph with default settings.
+    For more control, use POST /aggregated/graph with GraphRequest body.
     """
     body = GraphRequest(
         max_facts=max_facts,
         include_categories=include_categories,
     )
-    return await get_unified_graph(req, body)
+    return await get_aggregated_graph(req, body)

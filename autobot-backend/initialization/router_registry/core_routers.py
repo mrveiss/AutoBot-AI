@@ -349,7 +349,7 @@ def _get_knowledge_feature_routers() -> list:
         (
             knowledge_search_aggregator_router,
             "/knowledge_base",
-            ["knowledge-unified", "knowledge-search"],
+            ["knowledge-aggregated", "knowledge-search"],
             "knowledge_search_aggregator",
         ),
         (
