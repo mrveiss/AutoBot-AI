@@ -207,9 +207,20 @@ class AdvancedRAGOptimizer:
             overage,
         )
 
-    def _make_cache_key(self, query: str, max_results: int, enable_reranking: bool) -> str:
-        """Build a deterministic cache key from search parameters. Issue #1548."""
-        return f"{query}|{max_results}|{enable_reranking}"
+    def _make_cache_key(self, query: str, max_results: int, enable_reranking: bool, min_score: float = 0.0) -> str:
+        """Build a deterministic cache key from search parameters. Issue #1548 / #10703."""
+        return f"{query}|{max_results}|{enable_reranking}|{min_score}"
+
+    @staticmethod
+    def _apply_relevance_floor(results: List[SearchResult], min_score: float) -> List[SearchResult]:
+        """Drop results scoring below min_score (#10703).
+
+        Uses rerank_score when present, else hybrid_score. min_score <= 0 returns
+        the list unchanged (the default, so existing callers are unaffected).
+        """
+        if min_score <= 0.0:
+            return results
+        return [r for r in results if (r.rerank_score if r.rerank_score is not None else r.hybrid_score) >= min_score]
 
     def _get_cached_result(self, key: str) -> Tuple[List[SearchResult], RAGMetrics] | None:
         """Return cached result if present and within TTL, else None. Issue #1548."""
@@ -651,6 +662,7 @@ class AdvancedRAGOptimizer:
         max_results: int = 5,
         enable_reranking: bool = True,
         diversity_strategy: str = "cosine",
+        min_score: float = 0.0,
     ) -> Tuple[List[SearchResult], RAGMetrics]:
         """
         Perform advanced RAG search with all optimizations (Issue #665: refactored).
@@ -661,6 +673,9 @@ class AdvancedRAGOptimizer:
             enable_reranking: Whether to apply cross-encoder reranking.
             diversity_strategy: ``"cosine"`` (default word-overlap dedup) or
                 ``"map_elites"`` (structured coverage grid, Issue #4677).
+            min_score: Relevance floor (#10703) — drop results scoring below this
+                (rerank_score if present, else hybrid_score). Default 0.0 = no
+                floor, so existing callers are unaffected.
 
         Returns:
             (search_results, performance_metrics)
@@ -672,7 +687,7 @@ class AdvancedRAGOptimizer:
             logger.info("Advanced search: '%s' (max_results=%s)", query, max_results)
 
             # Cache read — skip all heavy operations on hit (Issue #1548)
-            cache_key = self._make_cache_key(query, max_results, enable_reranking)
+            cache_key = self._make_cache_key(query, max_results, enable_reranking, min_score)
             cached = self._get_cached_result(cache_key)
             if cached is not None:
                 return cached
@@ -697,6 +712,9 @@ class AdvancedRAGOptimizer:
 
             # Step 4: Apply context optimization and limit results
             optimized_results = self._optimize_result_count(final_results, max_results, context)
+
+            # #10703: relevance floor — drop sub-threshold results (default 0.0 = no-op).
+            optimized_results = self._apply_relevance_floor(optimized_results, min_score)
 
             metrics.final_results_count = len(optimized_results)
             metrics.total_time = time.time() - start_time
