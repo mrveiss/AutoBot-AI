@@ -2976,15 +2976,15 @@ try:
 except ImportError as e:
     logging.warning("Knowledge debug router not available: %s", e)
 
-# Unified Search - Combined search across all knowledge sources
-# Provides: /unified/search, /unified/stats, /unified/context, /unified/documentation/*,
-#           /unified/graph (for KnowledgeGraph.vue visualization)
+# Multi-Source Search - Combined search across all knowledge sources
+# Provides: /multi-source/search, /multi-source/stats, /multi-source/context, /multi-source/documentation/*,
+#           /multi-source/graph (for KnowledgeGraph.vue visualization)
 try:
-    from api.knowledge_search_aggregator import router as unified_router
+    from api.knowledge_search_aggregator import router as multi_source_router
 
-    router.include_router(unified_router, tags=["knowledge-unified", "documentation"])
+    router.include_router(multi_source_router, tags=["knowledge-multi-source", "documentation"])
 except ImportError as e:
-    logging.warning("Unified knowledge search router not available: %s", e)
+    logging.warning("Multi-source knowledge search router not available: %s", e)
 
 
 # ===== KB WATCH FOLDERS (Issue #9000) =====

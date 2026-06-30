@@ -5671,7 +5671,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/search": {
+    "/api/knowledge_base/multi-source/search": {
         parameters: {
             query?: never;
             header?: never;
@@ -5681,21 +5681,21 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Unified Search
-         * @description Search across all knowledge sources in a unified query.
+         * Multi-Source Search
+         * @description Search across all knowledge sources in a multi-source query.
          *
          *     Issue #620: Refactored to use extracted helper methods.
          *
          *     Returns results from all sources with source attribution.
          */
-        post: operations["unified_search_api_knowledge_base_unified_search_post"];
+        post: operations["multi_source_search_api_knowledge_base_multi_source_search_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/stats": {
+    "/api/knowledge_base/multi-source/stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -5703,10 +5703,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Unified Stats
-         * @description Get statistics from all unified knowledge sources (KB facts, relations, docs). Ref: #1088.
+         * Multi-Source Stats
+         * @description Get statistics from all multi-source knowledge endpoints (KB facts, relations, docs). Ref: #1088.
          */
-        get: operations["unified_stats_api_knowledge_base_unified_stats_get"];
+        get: operations["multi_source_stats_api_knowledge_base_multi_source_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5715,7 +5715,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/context": {
+    "/api/knowledge_base/multi-source/context": {
         parameters: {
             query?: never;
             header?: never;
@@ -5726,7 +5726,7 @@ export interface paths {
         put?: never;
         /**
          * Get Llm Context
-         * @description Get formatted context for LLM prompts from unified knowledge sources.
+         * @description Get formatted context for LLM prompts from multi-source knowledge endpoints.
          *
          *     Retrieves and formats knowledge from all sources into a context string
          *     suitable for inclusion in LLM prompts.
@@ -5736,14 +5736,14 @@ export interface paths {
          *     - Source citations
          *     - Metadata about retrieved content
          */
-        post: operations["get_llm_context_api_knowledge_base_unified_context_post"];
+        post: operations["get_llm_context_api_knowledge_base_multi_source_context_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/documentation/search": {
+    "/api/knowledge_base/multi-source/documentation/search": {
         parameters: {
             query?: never;
             header?: never;
@@ -5761,7 +5761,7 @@ export interface paths {
          *         n_results: Maximum results to return
          *         score_threshold: Minimum relevance score (0-1)
          */
-        get: operations["search_documentation_api_knowledge_base_unified_documentation_search_get"];
+        get: operations["search_documentation_api_knowledge_base_multi_source_documentation_search_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5770,7 +5770,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/documentation/stats": {
+    "/api/knowledge_base/multi-source/documentation/stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -5783,7 +5783,7 @@ export interface paths {
          *
          *     Returns document count and indexing status.
          */
-        get: operations["documentation_stats_api_knowledge_base_unified_documentation_stats_get"];
+        get: operations["documentation_stats_api_knowledge_base_multi_source_documentation_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5792,7 +5792,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/graph": {
+    "/api/knowledge_base/multi-source/graph": {
         parameters: {
             query?: never;
             header?: never;
@@ -5800,17 +5800,17 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Unified Graph Simple
-         * @description GET version of unified graph for simple requests.
+         * Get Multi-Source Graph Simple
+         * @description GET version of multi-source graph for simple requests.
          *
-         *     Returns a unified knowledge graph with default settings.
-         *     For more control, use POST /unified/graph with GraphRequest body.
+         *     Returns a multi-source knowledge graph with default settings.
+         *     For more control, use POST /multi-source/graph with GraphRequest body.
          */
-        get: operations["get_unified_graph_simple_api_knowledge_base_unified_graph_get"];
+        get: operations["get_multi_source_graph_simple_api_knowledge_base_multi_source_graph_get"];
         put?: never;
         /**
-         * Get Unified Graph
-         * @description Get unified knowledge graph combining categories, facts, and relations.
+         * Get Multi-Source Graph
+         * @description Get multi-source knowledge graph combining categories, facts, and relations.
          *
          *     This endpoint is designed for the KnowledgeGraph.vue component to visualize
          *     all knowledge sources in a single graph. It returns:
@@ -5823,7 +5823,7 @@ export interface paths {
          *     - entities: List of nodes with id, name, type, observations
          *     - relations: List of edges with from, to, type, strength
          */
-        post: operations["get_unified_graph_api_knowledge_base_unified_graph_post"];
+        post: operations["get_multi_source_graph_api_knowledge_base_multi_source_graph_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -72198,7 +72198,7 @@ export interface components {
         };
         /**
          * GraphRequest
-         * @description Request model for unified knowledge graph.
+         * @description Request model for multi-source knowledge graph.
          */
         GraphRequest: {
             /**
@@ -76007,10 +76007,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeUnifiedContextResponse
-         * @description Response for POST /unified/context.
+         * KnowledgeMultiSourceContextResponse
+         * @description Response for POST /multi-source/context.
          */
-        KnowledgeUnifiedContextResponse: {
+        KnowledgeMultiSourceContextResponse: {
             /** Success */
             success: boolean;
             /** Context */
@@ -76025,10 +76025,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeUnifiedGraphResponse
-         * @description Response for POST /unified/graph and GET /unified/graph.
+         * KnowledgeMultiSourceGraphResponse
+         * @description Response for POST /multi-source/graph and GET /multi-source/graph.
          */
-        KnowledgeUnifiedGraphResponse: {
+        KnowledgeMultiSourceGraphResponse: {
             /** Success */
             success: boolean;
             /** Data */
@@ -76043,10 +76043,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeUnifiedSearchResponse
-         * @description Response for POST /unified/search.
+         * KnowledgeMultiSourceSearchResponse
+         * @description Response for POST /multi-source/search.
          */
-        KnowledgeUnifiedSearchResponse: {
+        KnowledgeMultiSourceSearchResponse: {
             /** Success */
             success: boolean;
             /** Query */
@@ -76065,12 +76065,12 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeUnifiedStatsResponse
-         * @description Response for GET /unified/stats.
+         * KnowledgeMultiSourceStatsResponse
+         * @description Response for GET /multi-source/stats.
          *
          *     Sections are populated dynamically — extra fields allowed.
          */
-        KnowledgeUnifiedStatsResponse: {
+        KnowledgeMultiSourceStatsResponse: {
             /** Success */
             success: boolean;
             /** Knowledge Base */
@@ -105895,7 +105895,7 @@ export interface operations {
             };
         };
     };
-    unified_search_api_knowledge_base_unified_search_post: {
+    multi_source_search_api_knowledge_base_multi_source_search_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -105914,7 +105914,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeUnifiedSearchResponse"];
+                    "application/json": components["schemas"]["KnowledgeMultiSourceSearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -105928,7 +105928,7 @@ export interface operations {
             };
         };
     };
-    unified_stats_api_knowledge_base_unified_stats_get: {
+    multi_source_stats_api_knowledge_base_multi_source_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -105943,12 +105943,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeUnifiedStatsResponse"];
+                    "application/json": components["schemas"]["KnowledgeMultiSourceStatsResponse"];
                 };
             };
         };
     };
-    get_llm_context_api_knowledge_base_unified_context_post: {
+    get_llm_context_api_knowledge_base_multi_source_context_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -105967,7 +105967,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeUnifiedContextResponse"];
+                    "application/json": components["schemas"]["KnowledgeMultiSourceContextResponse"];
                 };
             };
             /** @description Validation Error */
@@ -105981,7 +105981,7 @@ export interface operations {
             };
         };
     };
-    search_documentation_api_knowledge_base_unified_documentation_search_get: {
+    search_documentation_api_knowledge_base_multi_source_documentation_search_get: {
         parameters: {
             query: {
                 query: string;
@@ -106014,7 +106014,7 @@ export interface operations {
             };
         };
     };
-    documentation_stats_api_knowledge_base_unified_documentation_stats_get: {
+    documentation_stats_api_knowledge_base_multi_source_documentation_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -106034,7 +106034,7 @@ export interface operations {
             };
         };
     };
-    get_unified_graph_simple_api_knowledge_base_unified_graph_get: {
+    get_multi_source_graph_simple_api_knowledge_base_multi_source_graph_get: {
         parameters: {
             query?: {
                 /** @description Maximum facts to include */
@@ -106054,7 +106054,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeUnifiedGraphResponse"];
+                    "application/json": components["schemas"]["KnowledgeMultiSourceGraphResponse"];
                 };
             };
             /** @description Validation Error */
@@ -106068,7 +106068,7 @@ export interface operations {
             };
         };
     };
-    get_unified_graph_api_knowledge_base_unified_graph_post: {
+    get_multi_source_graph_api_knowledge_base_multi_source_graph_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -106087,7 +106087,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeUnifiedGraphResponse"];
+                    "application/json": components["schemas"]["KnowledgeMultiSourceGraphResponse"];
                 };
             };
             /** @description Validation Error */
