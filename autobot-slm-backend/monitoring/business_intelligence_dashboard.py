@@ -519,9 +519,7 @@ class BusinessIntelligenceDashboard:
         try:
             utilization_data_raw = await self._get_current_utilization()
             if not utilization_data_raw.get("available", True):
-                self.logger.warning(
-                    "Utilization data unavailable (Redis down) — cost efficiency skipped (#10720)"
-                )
+                self.logger.warning("Utilization data unavailable (Redis down) — cost efficiency skipped (#10720)")
                 return cost_analyses
 
             # Strip the sentinel key before passing to component builder
@@ -780,9 +778,7 @@ class BusinessIntelligenceDashboard:
         """
         api_times = performance_data.get("api_response_times", [])
         if api_times:
-            avg_response_time = (
-                statistics.mean(api_times[-10:]) if len(api_times) >= 10 else statistics.mean(api_times)
-            )
+            avg_response_time = statistics.mean(api_times[-10:]) if len(api_times) >= 10 else statistics.mean(api_times)
             return max(0, 100 - (avg_response_time - 1.0) * 20)
         return 80.0
 
