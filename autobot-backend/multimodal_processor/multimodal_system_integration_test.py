@@ -16,8 +16,8 @@ from multimodal_processor import (
     ContextProcessor,
     ModalityType,
     MultiModalInput,
-    ProcessingIntent,
     MultiModalProcessor,
+    ProcessingIntent,
     VisionProcessor,
     VoiceProcessor,
 )
