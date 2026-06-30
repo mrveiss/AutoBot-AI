@@ -214,3 +214,9 @@ def test_relevance_floor_zero_is_noop():
 def test_make_cache_key_includes_min_score():
     opt = AdvancedRAGOptimizer()
     assert opt._make_cache_key("q", 5, True, 0.0) != opt._make_cache_key("q", 5, True, 0.5)
+
+
+def test_relevance_floor_keeps_exact_boundary():
+    # score == min_score is inclusive (>=); guards against a future > regression
+    kept = AdvancedRAGOptimizer._apply_relevance_floor([_sr(0.3)], 0.3)
+    assert len(kept) == 1
