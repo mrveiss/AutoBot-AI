@@ -247,8 +247,8 @@ class LogContainerResponse(BaseModel):
     source_type: str
 
 
-class LogUnifiedResponse(BaseModel):
-    """Response for GET /logs/unified."""
+class LogAggregatedResponse(BaseModel):
+    """Response for GET /logs/aggregated."""
 
     logs: List[Any]
     total_count: int
