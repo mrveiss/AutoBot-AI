@@ -116,7 +116,7 @@ class ComprehensiveMonitoringController:
                 asyncio.create_task(self._ai_analytics_loop()),
                 asyncio.create_task(self._bi_dashboard_loop()),
                 asyncio.create_task(self._apm_monitoring_loop()),
-                asyncio.create_task(self._consolidated_reporting_loop()),
+                asyncio.create_task(self._reporting_loop()),
             ]
 
             # Wait for all tasks or shutdown signal
@@ -268,33 +268,33 @@ class ComprehensiveMonitoringController:
                 self.logger.error(f"Error in APM monitoring loop: {e}")
                 await asyncio.sleep(self.intervals["apm_reporting"])
 
-    async def _consolidated_reporting_loop(self):
-        """Consolidated reporting loop - generates master reports."""
-        self.logger.info("📋 Starting consolidated reporting loop")
+    async def _reporting_loop(self):
+        """Periodic reporting loop - generates master reports every 10 minutes."""
+        self.logger.info("📋 Starting reporting loop")
 
         while self.monitoring_active and not self.shutdown_requested:
             try:
-                # Generate consolidated report every 10 minutes
+                # Generate report every 10 minutes
                 await asyncio.sleep(600)
 
                 if not self.monitoring_active:
                     break
 
-                await self._generate_consolidated_report()
+                await self._generate_report()
 
             except Exception as e:
-                self.logger.error(f"Error in consolidated reporting loop: {e}")
+                self.logger.error(f"Error in reporting loop: {e}")
                 await asyncio.sleep(600)
 
-    async def _generate_consolidated_report(self):
-        """Generate consolidated monitoring report."""
+    async def _generate_report(self):
+        """Generate and store a master monitoring report."""
         try:
-            self.logger.info("📋 Generating consolidated monitoring report...")
+            self.logger.info("📋 Generating monitoring report...")
 
             timestamp = datetime.now(timezone.utc).isoformat()
 
             # Compile all monitoring data
-            consolidated_report = {
+            report = {
                 "timestamp": timestamp,
                 "system_overview": await self._generate_system_overview(),
                 "performance_summary": self.monitoring_results.get("performance", {}),
@@ -305,13 +305,13 @@ class ComprehensiveMonitoringController:
                 "recommendations": await self._generate_recommendations(),
             }
 
-            # Store consolidated report
-            await self._store_consolidated_report(consolidated_report)
+            # Store report
+            await self._store_report(report)
 
-            self.logger.info("✅ Consolidated report generated successfully")
+            self.logger.info("✅ Monitoring report generated successfully")
 
         except Exception as e:
-            self.logger.error(f"Error generating consolidated report: {e}")
+            self.logger.error(f"Error generating report: {e}")
 
     async def _generate_system_overview(self) -> Dict[str, Any]:
         """Generate high-level system overview."""
@@ -450,19 +450,19 @@ class ComprehensiveMonitoringController:
             self.logger.error(f"Error generating recommendations: {e}")
             return ["Error generating recommendations"]
 
-    async def _store_consolidated_report(self, report: Dict[str, Any]):
-        """Store consolidated report to file."""
+    async def _store_report(self, report: Dict[str, Any]):
+        """Persist a monitoring report to the reports directory."""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            report_file = self.reports_path / f"consolidated_monitoring_report_{timestamp}.json"
+            report_file = self.reports_path / f"monitoring_report_{timestamp}.json"
 
             with open(report_file, "w", encoding="utf-8") as f:
                 json.dump(report, f, indent=2, default=str)
 
-            self.logger.info(f"📋 Consolidated report saved: {report_file}")
+            self.logger.info(f"📋 Report saved: {report_file}")
 
         except Exception as e:
-            self.logger.error(f"Error storing consolidated report: {e}")
+            self.logger.error(f"Error storing report: {e}")
 
     async def get_current_status(self) -> Dict[str, Any]:
         """Get current monitoring system status."""
@@ -514,7 +514,7 @@ class ComprehensiveMonitoringController:
             }
 
             # Store instant report
-            await self._store_consolidated_report(instant_report)
+            await self._store_report(instant_report)
 
             self.logger.info("⚡ Instant report generated successfully")
             return instant_report

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Extract shared infrastructure installs (nginx, Python 3.12, Node.js) into dedicated Ansible roles with a dependency resolution phase, so single-host and multi-host provisioning both work without conflicts.
+**Goal:** Extract shared infrastructure installs (nginx, Python 3.14, Node.js) into dedicated Ansible roles with a dependency resolution phase, so single-host and multi-host provisioning both work without conflicts.
 
 **Architecture:** Three new dependency roles (`nginx`, `python312`, `nodejs`) run in a new Phase 0 of the provisioning playbook. A static `ROLE_DEPENDENCIES` map in `role_registry.py` drives automatic dependency resolution. Service roles stop installing these packages themselves. Orphan detection and guarded removal via the nodes API.
 
@@ -187,9 +187,9 @@ git commit -m "feat(ansible): create shared nginx dependency role (#2747)"
 # autobot-slm-backend/ansible/roles/python312/defaults/main.yml
 ---
 python312_packages:
-  - python3.12
-  - python3.12-venv
-  - python3.12-dev
+  - python3.14
+  - python3.14-venv
+  - python3.14-dev
 ```
 
 - [ ] **Step 2: Create main tasks**
@@ -200,14 +200,14 @@ python312_packages:
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
-# Shared dependency role: Python 3.12 (deadsnakes PPA)
-# Installs Python 3.12 interpreter and venv support.
+# Shared dependency role: Python 3.14 (deadsnakes PPA)
+# Installs Python 3.14 interpreter and venv support.
 # Venv creation and pip installs stay in service roles.
 ---
 
-- name: "python312 | Check if Python 3.12 is available"
+- name: "python312 | Check if Python 3.14 is available"
   ansible.builtin.command:
-    cmd: python3.12 --version
+    cmd: python3.14 --version
   register: _py312_check
   changed_when: false
   failed_when: false
@@ -229,7 +229,7 @@ python312_packages:
   when: _py312_check.rc != 0
   tags: ['deps', 'python312']
 
-- name: "python312 | Install Python 3.12"
+- name: "python312 | Install Python 3.14"
   ansible.builtin.apt:
     name: "{{ python312_packages }}"
     state: present
@@ -238,9 +238,9 @@ python312_packages:
   when: _py312_check.rc != 0
   tags: ['deps', 'python312']
 
-- name: "python312 | Verify Python 3.12 is available"
+- name: "python312 | Verify Python 3.14 is available"
   ansible.builtin.command:
-    cmd: python3.12 --version
+    cmd: python3.14 --version
   changed_when: false
   tags: ['deps', 'python312']
 ```
@@ -369,7 +369,7 @@ Insert before Phase 1:
       when: "'nginx' in (node_dependencies | default([]))"
       tags: ['deps', 'nginx']
 
-    - name: "Deps | Install Python 3.12"
+    - name: "Deps | Install Python 3.14"
       ansible.builtin.include_role:
         name: python312
       when: "'python312' in (node_dependencies | default([]))"
@@ -390,12 +390,12 @@ Insert before Phase 1:
       when: "'nginx' in (pending_dep_removals | default([]))"
       tags: ['deps', 'removal']
 
-    - name: "Deps | Remove Python 3.12 if marked for removal"
+    - name: "Deps | Remove Python 3.14 if marked for removal"
       ansible.builtin.apt:
         name:
-          - python3.12
-          - python3.12-venv
-          - python3.12-dev
+          - python3.14
+          - python3.14-venv
+          - python3.14-dev
         state: absent
         purge: true
       when: "'python312' in (pending_dep_removals | default([]))"
@@ -429,10 +429,10 @@ git commit -m "feat(ansible): add Phase 0 shared dependency resolution to provis
 Remove the following from the prerequisites apt task (lines 19-34):
 - Remove `nginx` from the `name:` list (keep other packages like curl, gnupg, openssl, etc.)
 
-Remove Python 3.12 tasks (lines 37-61):
-- "Check if Python 3.12 is available"
-- "Add deadsnakes PPA for Python 3.12"
-- "Install Python 3.12"
+Remove Python 3.14 tasks (lines 37-61):
+- "Check if Python 3.14 is available"
+- "Add deadsnakes PPA for Python 3.14"
+- "Install Python 3.14"
 
 Remove Node.js tasks (lines 79-96):
 - "Check if NodeSource repo exists"
@@ -443,7 +443,7 @@ Keep Ansible PPA tasks (lines 66-77) — Ansible is not a shared dependency.
 
 - [ ] **Step 2: Apply edits**
 
-Remove `nginx` from the prerequisites list. Remove the 6 Python 3.12 and Node.js task blocks entirely.
+Remove `nginx` from the prerequisites list. Remove the 6 Python 3.14 and Node.js task blocks entirely.
 
 - [ ] **Step 3: Verify no broken references**
 
@@ -458,7 +458,7 @@ git commit -m "refactor(ansible): remove nginx/python312/nodejs installs from sl
 
 ---
 
-### Task 8: Remove Python 3.12 and nginx install from backend role
+### Task 8: Remove Python 3.14 and nginx install from backend role
 
 **Files:**
 - Modify: `autobot-slm-backend/ansible/roles/backend/tasks/main.yml`
@@ -467,13 +467,13 @@ git commit -m "refactor(ansible): remove nginx/python312/nodejs installs from sl
 
 Remove these task blocks:
 - "Install software-properties-common for PPA support" (lines 55-59)
-- "Add deadsnakes PPA for Python 3.12" (lines 61-65)
-- "Install Python 3.12 and build dependencies" (lines 67-103) — **NOTE:** this also installs build-essential, ffmpeg, tesseract, GUI/audio libs. These are backend-specific, not shared deps. Move them to a new task that installs only the non-Python packages.
+- "Add deadsnakes PPA for Python 3.14" (lines 61-65)
+- "Install Python 3.14 and build dependencies" (lines 67-103) — **NOTE:** this also installs build-essential, ffmpeg, tesseract, GUI/audio libs. These are backend-specific, not shared deps. Move them to a new task that installs only the non-Python packages.
 - "Backend nginx | Install nginx" (line 377-382)
 
-- [ ] **Step 2: Replace the large Python 3.12 install with backend-specific deps only**
+- [ ] **Step 2: Replace the large Python 3.14 install with backend-specific deps only**
 
-Replace the removed "Install Python 3.12 and build dependencies" block with:
+Replace the removed "Install Python 3.14 and build dependencies" block with:
 
 ```yaml
 - name: "Backend | Install backend-specific system dependencies"
@@ -721,7 +721,7 @@ Open `https://<host>/slm/setup` and trigger provisioning. Verify:
 
 ```bash
 systemctl status nginx
-python3.12 --version
+python3.14 --version
 node --version
 systemctl status autobot-slm-backend
 systemctl status redis-stack-server

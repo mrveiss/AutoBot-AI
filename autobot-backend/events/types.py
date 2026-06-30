@@ -100,6 +100,7 @@ class EventType(Enum):
     SYSTEM = auto()  # System events (startup, shutdown, errors)
     APPROVAL_REQUIRED = auto()  # Agent requests user approval before executing
     APPROVAL_RESPONSE = auto()  # User approval decision (approved / denied)
+    STEERING = auto()  # Human mid-task guidance injected into the running loop (#10543)
 
 
 @dataclass
@@ -701,6 +702,61 @@ def create_approval_required_event(
         source="agent",
         task_id=task_id,
         correlation_id=approval_id,
+    )
+
+
+# =============================================================================
+# Steering Event Types (#10543)
+# =============================================================================
+
+
+@dataclass
+class SteeringContent:
+    """Content schema for STEERING events — human mid-task guidance.
+
+    Published when a human sends a steering message to a running agent task.
+    The agent loop drains these at the top of ANALYZE_EVENTS each iteration
+    and applies them as high-priority plan amendments without restarting.
+    """
+
+    steering_id: str  # Stable ID for this guidance message
+    guidance: str  # Human-authored correction / direction text
+    amend_goal: bool = True  # Hint: agent should treat this as a goal amendment
+
+    def to_dict(self) -> dict:
+        return {
+            "steering_id": self.steering_id,
+            "guidance": self.guidance,
+            "amend_goal": self.amend_goal,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SteeringContent":
+        return cls(
+            steering_id=data["steering_id"],
+            guidance=data.get("guidance", ""),
+            amend_goal=data.get("amend_goal", True),
+        )
+
+
+def create_steering_event(
+    steering_id: str,
+    guidance: str,
+    task_id: str | None = None,
+    amend_goal: bool = True,
+) -> "AgentEvent":
+    """Helper to create a STEERING event (#10543)."""
+    content = SteeringContent(
+        steering_id=steering_id,
+        guidance=guidance,
+        amend_goal=amend_goal,
+    )
+    return AgentEvent(
+        event_type=EventType.STEERING,
+        content=content.to_dict(),
+        source="user",
+        task_id=task_id,
+        correlation_id=steering_id,
     )
 
 

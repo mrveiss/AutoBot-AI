@@ -19,15 +19,15 @@ from fastapi.responses import JSONResponse
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     AIStackDocumentAnalysisData,
-    AIStackEnhancedHealthData,
-    AIStackEnhancedSearchData,
-    AIStackEnhancedStatsData,
+    AIStackHealthStatusData,
     AIStackKnowledgeExtractData,
     AIStackKnowledgeExtractionRequest,
     AIStackQueryReformulateData,
     AIStackRAGQueryRequest,
     AIStackRagSearchData,
+    AIStackSearchData,
     AIStackSearchRequest,
+    AIStackStatsData,
     AIStackSystemInsightsData,
     DocumentAnalysisRequest,
 )
@@ -260,7 +260,7 @@ async def _run_all_search_sources(
     return results
 
 
-@router.post("/search/enhanced", response_model=DataResponse[AIStackEnhancedSearchData])
+@router.post("/search/advanced", response_model=DataResponse[AIStackSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search",
@@ -606,13 +606,13 @@ async def get_system_knowledge_insights(
 # ====================================================================
 
 
-@router.get("/stats/enhanced", response_model=DataResponse[AIStackEnhancedStatsData])
+@router.get("/stats/advanced", response_model=DataResponse[AIStackStatsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_enhanced_stats",
+    operation="get_aistack_stats",
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-async def get_enhanced_stats(
+async def get_aistack_stats(
     req: Request,
     current_user: dict = Depends(get_current_user),
 ):
@@ -660,7 +660,7 @@ async def get_enhanced_stats(
         )
 
 
-@router.get("/health/enhanced", response_model=DataResponse[AIStackEnhancedHealthData])
+@router.get("/health/status", response_model=DataResponse[AIStackHealthStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="knowledge_health",

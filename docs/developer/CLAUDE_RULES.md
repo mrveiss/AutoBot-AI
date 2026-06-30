@@ -240,7 +240,7 @@ The pre-commit wrapper (`scripts/hooks/pre-commit-branch-guard-wrapper`) runs `p
 **Deployment Verification Checklist — after deploying to ANY remote server:**
 
 1. No .env override conflicts
-2. Correct Python interpreter (Python 3.12 deadsnakes PPA venv)
+2. Correct Python interpreter (Python 3.14 deadsnakes PPA venv)
 3. Database migrations current
 4. Service actually restarted
 5. Endpoints responding

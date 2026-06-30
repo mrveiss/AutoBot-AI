@@ -63,7 +63,7 @@ sudo ./install.sh --unattended # Unattended (CI/automation)
 
 **The installer will:**
 1. Verify root access, systemd, disk space (5 GB+), memory (2 GB+), and internet
-2. Install system packages (Python 3.12, Node.js 20, nginx, Ansible, build tools, libpq)
+2. Install system packages (Python 3.14, Node.js 20, nginx, Ansible, build tools, libpq)
 3. Create the `autobot` system user with passwordless sudo
 4. Clone the repository and distribute code to service directories
 5. Run Ansible deployment for the SLM stack (PostgreSQL, backend, nginx)
@@ -312,12 +312,12 @@ EOF
 # Then restart WSL from PowerShell: wsl --shutdown
 ```
 
-**Issue: Python 3.12 not found**
+**Issue: Python 3.14 not found**
 ```bash
-# Install Python 3.12 via deadsnakes PPA
+# Install Python 3.14 via deadsnakes PPA
 sudo add-apt-repository ppa:deadsnakes/ppa
 sudo apt-get update
-sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
+sudo apt-get install -y python3.14 python3.14-venv python3.14-dev
 ```
 
 **Issue: Node.js/npm not found**

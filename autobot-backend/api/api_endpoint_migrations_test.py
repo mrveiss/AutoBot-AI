@@ -15105,25 +15105,24 @@ class TestBatch89AIStackIntegrationMigrations(unittest.TestCase):
 
 
 class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
-    """Test batch 90 migrations: ai_stack_integration.py final 3 endpoints (multi_agent_query, legacy_rag_search, legacy_enhanced_chat) - FINAL BATCH"""
+    """Test batch 90 migrations: ai_stack_integration.py final 2 endpoints (multi_agent_query, legacy_rag_search) - FINAL BATCH"""
 
     def test_ai_stack_integration_py_100_percent_complete(self):
-        """Test ai_stack_integration.py is 100% complete - all 17 endpoints migrated"""
+        """Test ai_stack_integration.py is 100% complete - all 16 endpoints migrated"""
         from api.ai_stack_integration import (
             ai_stack_health_check,
             analyze_development_speedup,
             analyze_documents,
         )
-        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import chat as ai_stack_chat
         from api.ai_stack_integration import (
             classify_content,
             comprehensive_research,
             extract_knowledge,
             get_system_knowledge,
         )
-        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import knowledge_search as ai_stack_knowledge_search
         from api.ai_stack_integration import (
-            legacy_enhanced_chat,
             legacy_rag_search,
             list_ai_agents,
             multi_agent_query,
@@ -15133,16 +15132,16 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             web_research,
         )
 
-        # All 17 endpoints must have @with_error_handling decorator
+        # All 16 endpoints must have @with_error_handling decorator
         all_endpoints = [
             ai_stack_health_check,
             list_ai_agents,
             rag_query,
             reformulate_query,
             analyze_documents,
-            enhanced_chat,
+            ai_stack_chat,
             extract_knowledge,
-            enhanced_knowledge_search,
+            ai_stack_knowledge_search,
             get_system_knowledge,
             comprehensive_research,
             web_research,
@@ -15151,10 +15150,9 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             classify_content,
             multi_agent_query,
             legacy_rag_search,
-            legacy_enhanced_chat,
         ]
 
-        # All 17 endpoints must have decorator
+        # All 16 endpoints must have decorator
         for endpoint in all_endpoints:
             source = inspect.getsource(endpoint)
             self.assertIn("@with_error_handling", source)
@@ -15162,22 +15160,21 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="AI_STACK"', source)
 
     def test_batch_90_progress_validation(self):
-        """Test batch 90 brings ai_stack_integration.py to 17/17 endpoints (100%)"""
+        """Test batch 90 brings ai_stack_integration.py to 16/16 endpoints (100%)"""
         from api.ai_stack_integration import (
             ai_stack_health_check,
             analyze_development_speedup,
             analyze_documents,
         )
-        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import chat as ai_stack_chat
         from api.ai_stack_integration import (
             classify_content,
             comprehensive_research,
             extract_knowledge,
             get_system_knowledge,
         )
-        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import knowledge_search as ai_stack_knowledge_search
         from api.ai_stack_integration import (
-            legacy_enhanced_chat,
             legacy_rag_search,
             list_ai_agents,
             multi_agent_query,
@@ -15194,9 +15191,9 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             rag_query,
             reformulate_query,
             analyze_documents,
-            enhanced_chat,
+            ai_stack_chat,
             extract_knowledge,
-            enhanced_knowledge_search,
+            ai_stack_knowledge_search,
             get_system_knowledge,
             comprehensive_research,
             web_research,
@@ -15205,11 +15202,10 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             classify_content,
             multi_agent_query,
             legacy_rag_search,
-            legacy_enhanced_chat,
         ]
 
-        # Verify we have exactly 17 endpoints
-        self.assertEqual(len(migrated_endpoints), 17)
+        # Verify we have exactly 16 endpoints
+        self.assertEqual(len(migrated_endpoints), 16)
 
         for endpoint in migrated_endpoints:
             source = inspect.getsource(endpoint)
@@ -15218,24 +15214,15 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="AI_STACK"', source)
 
     def test_batch_90_pattern_validation(self):
-        """Test batch 90 endpoints use correct patterns (2 Simple, 1 Mixed)"""
+        """Test batch 90 endpoints use correct patterns (1 Simple, 1 Mixed)"""
         from api.ai_stack_integration import (
-            legacy_enhanced_chat,
             legacy_rag_search,
             multi_agent_query,
         )
 
-        # Simple Pattern endpoints (should have 0 try-catch at function level)
-        simple_pattern_endpoints = [
-            ("legacy_rag_search", legacy_rag_search),
-            ("legacy_enhanced_chat", legacy_enhanced_chat),
-        ]
-
-        for name, endpoint in simple_pattern_endpoints:
-            source = inspect.getsource(endpoint)
-            # Count function-level try blocks (should be 0)
-            # Legacy endpoints are wrappers, no try-catch
-            self.assertNotIn("    try:", source, f"{name} should have no try-catch")
+        # Simple Pattern endpoint (should have 0 try-catch at function level)
+        source = inspect.getsource(legacy_rag_search)
+        self.assertNotIn("    try:", source, "legacy_rag_search should have no try-catch")
 
         # Mixed Pattern endpoint (should have inner try-catch blocks)
         source = inspect.getsource(multi_agent_query)
@@ -15286,30 +15273,9 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
         # Should call rag_query
         self.assertIn("await rag_query(request)", source)
 
-    def test_batch_90_legacy_enhanced_chat_has_decorator(self):
-        """Test legacy_enhanced_chat has @with_error_handling decorator"""
-        from api.ai_stack_integration import legacy_enhanced_chat
-
-        source = inspect.getsource(legacy_enhanced_chat)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="legacy_enhanced_chat"', source)
-        self.assertIn('error_code_prefix="AI_STACK"', source)
-
-    def test_batch_90_legacy_enhanced_chat_is_simple_wrapper(self):
-        """Test legacy_enhanced_chat is simple wrapper with no error handling (Simple Pattern)"""
-        from api.ai_stack_integration import legacy_enhanced_chat
-
-        source = inspect.getsource(legacy_enhanced_chat)
-        # Should be simple wrapper - no try-catch
-        self.assertNotIn("try:", source)
-        # Should call enhanced_chat
-        self.assertIn("await enhanced_chat(request)", source)
-
     def test_batch_90_all_endpoints_use_ai_stack_prefix(self):
         """Test all batch 90 endpoints use AI_STACK error code prefix"""
         from api.ai_stack_integration import (
-            legacy_enhanced_chat,
             legacy_rag_search,
             multi_agent_query,
         )
@@ -15317,7 +15283,6 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
         endpoints = [
             multi_agent_query,
             legacy_rag_search,
-            legacy_enhanced_chat,
         ]
 
         for endpoint in endpoints:
@@ -15326,22 +15291,12 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
 
     def test_batch_90_legacy_endpoints_are_concise(self):
         """Test batch 90 legacy endpoints are concise wrappers"""
-        from api.ai_stack_integration import legacy_enhanced_chat, legacy_rag_search
+        from api.ai_stack_integration import legacy_rag_search
 
         # Legacy endpoints should be simple wrappers (8-10 lines)
-        legacy_endpoints = [
-            ("legacy_rag_search", legacy_rag_search, 10),
-            ("legacy_enhanced_chat", legacy_enhanced_chat, 10),
-        ]
-
-        for name, endpoint, max_lines in legacy_endpoints:
-            source = inspect.getsource(endpoint)
-            line_count = len([ln for ln in source.split("\n") if ln.strip()])
-            self.assertLessEqual(
-                line_count,
-                max_lines,
-                f"{name} should be concise (≤{max_lines} lines)",
-            )
+        source = inspect.getsource(legacy_rag_search)
+        line_count = len([ln for ln in source.split("\n") if ln.strip()])
+        self.assertLessEqual(line_count, 10, "legacy_rag_search should be concise (≤10 lines)")
 
     def test_batch_90_multi_agent_query_removed_outer_exception(self):
         """Test multi_agent_query removed outer Exception with HTTPException raise"""
@@ -15356,7 +15311,6 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
     def test_batch_90_comprehensive_validation(self):
         """Test all batch 90 endpoints comprehensively"""
         from api.ai_stack_integration import (
-            legacy_enhanced_chat,
             legacy_rag_search,
             multi_agent_query,
         )
@@ -15364,7 +15318,6 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
         endpoints_info = [
             ("multi_agent_query", multi_agent_query, "Mixed"),
             ("legacy_rag_search", legacy_rag_search, "Simple"),
-            ("legacy_enhanced_chat", legacy_enhanced_chat, "Simple"),
         ]
 
         for name, endpoint, pattern in endpoints_info:
@@ -15422,16 +15375,15 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             analyze_development_speedup,
             analyze_documents,
         )
-        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import chat as ai_stack_chat
         from api.ai_stack_integration import (
             classify_content,
             comprehensive_research,
             extract_knowledge,
             get_system_knowledge,
         )
-        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import knowledge_search as ai_stack_knowledge_search
         from api.ai_stack_integration import (
-            legacy_enhanced_chat,
             legacy_rag_search,
             list_ai_agents,
             multi_agent_query,
@@ -15447,9 +15399,9 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             rag_query,
             reformulate_query,
             analyze_documents,
-            enhanced_chat,
+            ai_stack_chat,
             extract_knowledge,
-            enhanced_knowledge_search,
+            ai_stack_knowledge_search,
             get_system_knowledge,
             comprehensive_research,
             web_research,
@@ -15458,16 +15410,15 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             classify_content,
             multi_agent_query,
             legacy_rag_search,
-            legacy_enhanced_chat,
         ]
 
-        # Verify ALL 17 endpoints have the decorator
+        # Verify ALL 16 endpoints have the decorator
         for endpoint in all_endpoints:
             source = inspect.getsource(endpoint)
             self.assertIn("@with_error_handling", source)
 
         # This confirms 100% completion
-        self.assertEqual(len(all_endpoints), 17)
+        self.assertEqual(len(all_endpoints), 16)
 
 
 class TestBatch91ServiceMonitorMigrations(unittest.TestCase):
@@ -25756,15 +25707,15 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="get_system_knowledge_insights"', source)
         self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
 
-    def test_batch_153_get_enhanced_stats_simple_pattern(self):
-        """Verify get_enhanced_stats endpoint uses Simple Pattern"""
+    def test_batch_153_get_aistack_stats_simple_pattern(self):
+        """Verify get_aistack_stats endpoint uses Simple Pattern"""
         from api import knowledge_ai_stack
 
-        source = inspect.getsource(knowledge_ai_stack.get_enhanced_stats)
+        source = inspect.getsource(knowledge_ai_stack.get_aistack_stats)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="get_enhanced_stats"', source)
-        self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
+        self.assertIn('operation="get_aistack_stats"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_AI_STACK"', source)
 
     def test_batch_153_enhanced_knowledge_health_simple_pattern(self):
         """Verify enhanced_knowledge_health endpoint uses Simple Pattern"""
@@ -25787,7 +25738,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             knowledge_ai_stack.analyze_documents,
             knowledge_ai_stack.reformulate_query,
             knowledge_ai_stack.get_system_knowledge_insights,
-            knowledge_ai_stack.get_enhanced_stats,
+            knowledge_ai_stack.get_aistack_stats,
             knowledge_ai_stack.knowledge_health,
         ]
 
@@ -25810,7 +25761,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             knowledge_ai_stack.analyze_documents,
             knowledge_ai_stack.reformulate_query,
             knowledge_ai_stack.get_system_knowledge_insights,
-            knowledge_ai_stack.get_enhanced_stats,
+            knowledge_ai_stack.get_aistack_stats,
             knowledge_ai_stack.knowledge_health,
         ]
 
