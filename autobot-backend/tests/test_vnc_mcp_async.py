@@ -194,15 +194,15 @@ class TestVncMcpAsyncFunctions:
 
     def test_desktop_screenshot_mcp_is_async(self, vnc_mcp_module):
         fn = vnc_mcp_module.desktop_screenshot_mcp
-        assert inspect.iscoroutinefunction(fn), (
-            "desktop_screenshot_mcp must be an async def (event-loop blocking fix #10785)"
-        )
+        assert inspect.iscoroutinefunction(
+            fn
+        ), "desktop_screenshot_mcp must be an async def (event-loop blocking fix #10785)"
 
     def test_desktop_observe_state_mcp_is_async(self, vnc_mcp_module):
         fn = vnc_mcp_module.desktop_observe_state_mcp
-        assert inspect.iscoroutinefunction(fn), (
-            "desktop_observe_state_mcp must be an async def (event-loop blocking fix #10785)"
-        )
+        assert inspect.iscoroutinefunction(
+            fn
+        ), "desktop_observe_state_mcp must be an async def (event-loop blocking fix #10785)"
 
 
 class TestSubprocessDispatchedViaToThread:
@@ -229,9 +229,9 @@ class TestSubprocessDispatchedViaToThread:
         calls = mock_tt.call_args_list
         assert len(calls) >= 1, "asyncio.to_thread was never called"
         first_arg = calls[0].args[0]
-        assert first_arg is subprocess.run, (
-            f"Expected asyncio.to_thread(subprocess.run, ...) but first arg was {first_arg!r}"
-        )
+        assert (
+            first_arg is subprocess.run
+        ), f"Expected asyncio.to_thread(subprocess.run, ...) but first arg was {first_arg!r}"
         argv = calls[0].args[1]
         assert argv[0] == "scrot", f"Expected 'scrot' as argv[0], got {argv[0]!r}"
         kw = calls[0].kwargs
@@ -249,13 +249,9 @@ class TestSubprocessDispatchedViaToThread:
             await vnc_mcp_module.desktop_screenshot_mcp()
 
         calls = mock_tt.call_args_list
-        assert len(calls) >= 2, (
-            f"Expected >= 2 asyncio.to_thread calls (scrot + import fallback), got {len(calls)}"
-        )
+        assert len(calls) >= 2, f"Expected >= 2 asyncio.to_thread calls (scrot + import fallback), got {len(calls)}"
         fallback_argv = calls[1].args[1]
-        assert fallback_argv[0] == "import", (
-            f"Expected 'import' as fallback argv[0], got {fallback_argv[0]!r}"
-        )
+        assert fallback_argv[0] == "import", f"Expected 'import' as fallback argv[0], got {fallback_argv[0]!r}"
         kw = calls[1].kwargs
         assert kw.get("capture_output") is True
         assert kw.get("text") is True
@@ -293,9 +289,7 @@ class TestSubprocessDispatchedViaToThread:
             await vnc_mcp_module.desktop_observe_state_mcp(request_mock)
 
         calls = mock_tt.call_args_list
-        assert len(calls) >= 2, (
-            f"Expected >= 2 asyncio.to_thread calls (xdpyinfo + xdotool), got {len(calls)}"
-        )
+        assert len(calls) >= 2, f"Expected >= 2 asyncio.to_thread calls (xdpyinfo + xdotool), got {len(calls)}"
         argv = calls[1].args[1]
         assert argv[0] == "xdotool", f"Expected 'xdotool', got {argv[0]!r}"
         kw = calls[1].kwargs
