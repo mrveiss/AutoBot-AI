@@ -522,7 +522,7 @@ async def search(request: SearchRequest, req: Request):
 
     Single entry point combining all search capabilities:
     - Basic search (query, limit/top_k)
-    - Enhanced search (tags, hybrid mode, reranking)
+    - Search with tags, hybrid mode, reranking
     - RAG search (query reformulation, synthesis)
     - Advanced filtering (date filters, term filters, clustering)
     - Analytics tracking

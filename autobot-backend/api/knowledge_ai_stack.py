@@ -273,7 +273,7 @@ async def search(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Enhanced search combining local knowledge base with AI Stack RAG capabilities.
+    Search combining local knowledge base with AI Stack RAG capabilities.
 
     Issue #281: Refactored from 144 lines to use extracted helper methods.
     Issue #744: Requires authenticated user.
@@ -303,10 +303,10 @@ async def search(
         )
 
     except Exception as e:
-        logger.error("Enhanced search failed: %s", e)
+        logger.error("AI Stack search failed: %s", e)
         return create_error_response(
             error_code="SEARCH_ERROR",
-            message="Enhanced search failed",
+            message="AI Stack search failed",
             status_code=500,
         )
 
@@ -670,7 +670,7 @@ async def knowledge_health(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Enhanced health check including AI Stack connectivity.
+    Health check including AI Stack connectivity.
 
     Issue #744: Requires authenticated user.
     """
@@ -698,7 +698,7 @@ async def knowledge_health(
         return JSONResponse(status_code=200 if overall_healthy else 503, content=health_status)
 
     except Exception as e:
-        logger.error("Enhanced knowledge health check failed: %s", e)
+        logger.error("AI Stack knowledge health check failed: %s", e)
         return JSONResponse(
             status_code=503,
             content={

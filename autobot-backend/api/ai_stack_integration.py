@@ -200,7 +200,7 @@ async def chat(
     knowledge_base=Depends(get_knowledge_base),
 ):
     """
-    Enhanced chat with AI Stack integration and knowledge base support.
+    Chat with AI Stack integration and knowledge base support.
 
     This endpoint provides intelligent conversation with access to
     knowledge base and advanced AI reasoning capabilities.
@@ -228,7 +228,7 @@ async def chat(
         chat_history=request.chat_history,
     )
 
-    return create_success_response(chat_result, "Enhanced chat completed successfully")
+    return create_success_response(chat_result, "AI Stack chat completed successfully")
 
 
 # ====================================================================
@@ -275,7 +275,7 @@ async def knowledge_search(
     knowledge_base=Depends(get_knowledge_base),
 ):
     """
-    Enhanced knowledge search combining local KB and AI Stack capabilities.
+    Knowledge search combining local KB and AI Stack capabilities.
 
     Issue #744: Requires admin authentication.
     """
@@ -303,7 +303,7 @@ async def knowledge_search(
         logger.warning("AI Stack search failed: %s", e)
         results["aistack"] = {}
 
-    return create_success_response(results, "Enhanced knowledge search completed")
+    return create_success_response(results, "AI Stack knowledge search completed")
 
 
 @router.get("/knowledge/system", response_model=DataResponse[SystemKnowledgeResult])

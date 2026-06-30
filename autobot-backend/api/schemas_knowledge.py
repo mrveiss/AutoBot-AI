@@ -4733,7 +4733,7 @@ class MarkdownReferenceRequest(BaseModel):
 
 
 class NPUSearchRequest(BaseModel):
-    """Enhanced search request model."""
+    """AI Stack search request model."""
 
     query: str = Field(..., description="Search query")
     similarity_top_k: int = Field(10, description="Number of results to return", ge=1, le=100)
@@ -4743,7 +4743,7 @@ class NPUSearchRequest(BaseModel):
 
 
 class NPUSearchResponse(BaseModel):
-    """Enhanced search response model."""
+    """AI Stack search response model."""
 
     query: str
     results: List[Metadata]
@@ -4776,7 +4776,7 @@ class NPUOptimizationRequest(BaseModel):
 
 
 class AIStackSearchRequest(BaseModel):
-    """Enhanced search request with AI Stack integration."""
+    """Search request with AI Stack integration."""
 
     query: str = Field(..., min_length=1, max_length=5000, description="Search query")
     search_type: str = Field("comprehensive", description="Search type (precise, comprehensive, broad)")
