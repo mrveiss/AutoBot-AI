@@ -174,11 +174,11 @@ class AnalyticsService(AsyncRedisClientMixin):
         return self._cost
 
     # =========================================================================
-    # UNIFIED DASHBOARD
+    # ANALYTICS DASHBOARD
     # =========================================================================
 
     def _build_agents_section(self, agent_metrics: List[Any]) -> Dict[str, Any]:
-        """Build agents section for unified dashboard (Issue #665: extracted helper)."""
+        """Build agents section for analytics dashboard (Issue #665: extracted helper)."""
         return {
             "total_agents": len(agent_metrics),
             "total_tasks": sum(m.total_tasks for m in agent_metrics),
@@ -191,7 +191,7 @@ class AnalyticsService(AsyncRedisClientMixin):
         }
 
     def _build_maintenance_section(self, maintenance_recs: List[Any]) -> Dict[str, Any]:
-        """Build maintenance section for unified dashboard (Issue #665: extracted helper)."""
+        """Build maintenance section for analytics dashboard (Issue #665: extracted helper)."""
         return {
             "total_recommendations": len(maintenance_recs),
             "critical_count": sum(1 for r in maintenance_recs if r.priority == MaintenancePriority.CRITICAL),
@@ -202,9 +202,9 @@ class AnalyticsService(AsyncRedisClientMixin):
             ][:5],
         }
 
-    async def get_unified_dashboard(self, days: int = 30) -> Dict[str, Any]:
+    async def get_analytics_dashboard(self, days: int = 30) -> Dict[str, Any]:
         """
-        Get unified dashboard data aggregating all analytics sources.
+        Get aggregated dashboard data from all analytics sources.
 
         Args:
             days: Number of days to include in analysis

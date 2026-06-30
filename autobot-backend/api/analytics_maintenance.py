@@ -281,29 +281,29 @@ async def get_quick_wins(
 
 
 # ============================================================================
-# UNIFIED DASHBOARD ENDPOINTS
+# ANALYTICS DASHBOARD ENDPOINTS
 # ============================================================================
 
 
 @router.get("/dashboard", response_model=MaintenanceDashboardResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_unified_dashboard",
+    operation="get_analytics_dashboard",
     error_code_prefix="ANALYTICS_MAINTENANCE",
 )
-async def get_unified_dashboard(
+async def get_analytics_dashboard(
     days: int = Query(default=30, ge=1, le=365, description="Days to analyze"),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
-    Get unified analytics dashboard.
+    Get aggregated analytics dashboard.
 
     Aggregates all analytics sources into a single comprehensive view.
 
     Issue #744: Requires admin authentication.
     """
     service = get_analytics_service()
-    dashboard = await service.get_unified_dashboard(days)
+    dashboard = await service.get_analytics_dashboard(days)
 
     return dashboard
 
