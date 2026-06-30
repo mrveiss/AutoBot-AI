@@ -537,11 +537,9 @@ class AIStackClient:
     # Knowledge Base Librarian Integration
     # ====================================================================
 
-    async def search_knowledge_enhanced(
-        self, query: str, search_type: str = "comprehensive", max_results: int = 10
-    ) -> Metadata:
+    async def search_knowledge(self, query: str, search_type: str = "comprehensive", max_results: int = 10) -> Metadata:
         """
-        Enhanced knowledge base search using KB Librarian.
+        Knowledge base search using KB Librarian.
 
         Args:
             query: Search query
@@ -549,7 +547,7 @@ class AIStackClient:
             max_results: Maximum results to return
 
         Returns:
-            Enhanced search results with relevance ranking
+            Search results with relevance ranking
         """
         payload = {
             "query": query,

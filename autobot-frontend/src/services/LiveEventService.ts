@@ -12,7 +12,7 @@
 
 import { ref, watch, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import config from '@/config/ssot-config'
+import config, { getApiBase } from '@/config/ssot-config'
 import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
 import { useUserStore } from '@/stores/useUserStore'
 import { whenPiniaReady } from '@/utils/whenPiniaReady'
@@ -312,7 +312,7 @@ class LiveEventService {
    * Returns the parsed response on success or throws on HTTP error.
    */
   async sendSteeringMessage(msg: SteeringMessage): Promise<Record<string, unknown>> {
-    const url = `${config.apiUrl}/agent-terminal/tasks/${encodeURIComponent(msg.task_id)}/steer`
+    const url = `${getApiBase()}/agent-terminal/tasks/${encodeURIComponent(msg.task_id)}/steer`
     const resp = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

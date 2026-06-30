@@ -4,6 +4,15 @@
 """
 AutoBot Business Intelligence Dashboard
 Advanced analytics, ROI tracking, and performance insights for the distributed system.
+
+Issue #10720: Replaced fabricated usage constants and hardcoded component costs with:
+- Real usage counts sourced from Prometheus (autobot_llm_requests_total,
+  autobot_knowledge_search_requests_total) via query_instant(); explicit
+  "unavailable" signal returned when Prometheus is unreachable.
+- Config-driven component cost model (CostModelConfig in ssot_config.py) so
+  operators supply deployment-specific values without editing source code.
+- Redis-failure paths now return a degradation-shaped dict (available=False +
+  error key) instead of an indistinguishable empty dict.
 """
 
 import asyncio
@@ -14,7 +23,7 @@ import statistics
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import aiofiles
 import matplotlib
@@ -24,12 +33,21 @@ import numpy as np
 from jinja2 import Template
 from performance_monitor import ALERT_THRESHOLDS
 
+from autobot_shared.monitoring.prometheus_query import query_instant
 from autobot_shared.network_constants import NetworkConstants
+from autobot_shared.ssot_config import get_config
 
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for numeric type checks
 _NUMERIC_TYPES = (int, float)
+
+# Sentinel – returned by helpers when data is not available (Redis down, etc.)
+# Callers check for the ``available`` key being False before consuming data.
+_UNAVAILABLE: Dict[str, Any] = {"available": False}
+
+_cfg = get_config()
+_cost = _cfg.cost_model  # CostModelConfig — operator-supplied, env-overridable
 
 # HTML template for visual dashboard
 _DASHBOARD_HTML_TEMPLATE = """
@@ -62,8 +80,8 @@ _DASHBOARD_HTML_TEMPLATE = """
 <body>
     <div class="dashboard">
         <div class="header">
-            <h1>🤖 AutoBot Business Intelligence Dashboard</h1>
-            <p>Distributed System Performance & ROI Analytics</p>
+            <h1>AutoBot Business Intelligence Dashboard</h1>
+            <p>Distributed System Performance &amp; ROI Analytics</p>
             <p class="timestamp">Generated: {{ timestamp }}</p>
         </div>
 
@@ -112,7 +130,8 @@ _DASHBOARD_HTML_TEMPLATE = """
             <div class="metric-card">
                 <h3>Cost Efficiency Analysis</h3>
                 {% for cost in cost_analysis %}
-                <p>{{ cost.component }}: {{ cost.efficiency_score }}% efficient</p>
+                <p>{{ cost.component }}: {{ cost.efficiency_score }}% efficient
+                    {% if cost.cost_is_estimate %}(estimated cost){% endif %}</p>
                 {% endfor %}
             </div>
 
@@ -150,6 +169,8 @@ class ROIMetrics:
     productivity_gain_hours_per_month: float
     break_even_months: float
     total_roi_percent: float
+    # True when monthly_operations came from a real source; False = Prometheus unavailable
+    operations_data_available: bool
 
 
 @dataclass
@@ -163,6 +184,8 @@ class CostAnalysis:
     cost_per_hour: float
     efficiency_score: float
     optimization_potential_usd: float
+    # False when cost came from config defaults (estimates); True if operator-overridden
+    cost_is_estimate: bool
 
 
 @dataclass
@@ -191,6 +214,34 @@ class SystemHealthScore:
     efficiency_score: float
     user_satisfaction_score: float
     improvement_areas: List[str]
+
+
+# ---------------------------------------------------------------------------
+# Prometheus usage helpers
+# ---------------------------------------------------------------------------
+
+# PromQL: 30-day increase in total LLM requests (all providers/models)
+_PROMQL_LLM_REQUESTS_30D = "increase(autobot_llm_requests_total[30d])"
+# PromQL: 30-day increase in knowledge-base search requests (all types/collections)
+_PROMQL_KB_SEARCHES_30D = "increase(autobot_knowledge_search_requests_total[30d])"
+
+
+async def _sum_prometheus_increase(promql: str) -> Optional[float]:
+    """Return the sum of all series for a 30-day increase PromQL expression.
+
+    Returns None when Prometheus is unreachable or returns no data.
+    """
+    data = await query_instant(promql)
+    if not data:
+        return None
+    results = data.get("result", [])
+    if not results:
+        return None
+    try:
+        return sum(float(r["value"][1]) for r in results if len(r.get("value", [])) == 2)
+    except (KeyError, ValueError, TypeError) as exc:
+        logger.warning("Could not parse Prometheus result for %r: %s", promql, exc)
+        return None
 
 
 class BusinessIntelligenceDashboard:
@@ -235,7 +286,7 @@ class BusinessIntelligenceDashboard:
     async def initialize_redis_connection(self):
         """Initialize Redis connection for BI metrics using canonical utility."""
         try:
-            # Use canonical Redis utility following CLAUDE.md "🔴 REDIS CLIENT USAGE" policy
+            # Use canonical Redis utility following CLAUDE.md "REDIS CLIENT USAGE" policy
             from autobot_shared.redis_client import get_redis_client
 
             self.redis_client = get_redis_client(database="metrics")
@@ -243,9 +294,9 @@ class BusinessIntelligenceDashboard:
                 raise Exception("Redis client initialization returned None")
 
             self.redis_client.ping()
-            self.logger.info("✅ Redis connection established for BI Dashboard")
+            self.logger.info("Redis connection established for BI Dashboard")
         except Exception as e:
-            self.logger.error(f"❌ Failed to connect to Redis for BI: {e}")
+            self.logger.error("Failed to connect to Redis for BI: %s", e)
             self.redis_client = None
 
     def _compute_savings_and_roi(
@@ -271,6 +322,28 @@ class BusinessIntelligenceDashboard:
         )
         return break_even_months, total_roi
 
+    async def _get_monthly_operations(self) -> tuple:
+        """Query real 30-day operation counts from Prometheus.
+
+        Returns:
+            Tuple of (total_monthly_operations: int, data_available: bool).
+            data_available=False means Prometheus was unreachable; the caller
+            must NOT present the returned count as real data in that case.
+        """
+        llm_count = await _sum_prometheus_increase(_PROMQL_LLM_REQUESTS_30D)
+        kb_count = await _sum_prometheus_increase(_PROMQL_KB_SEARCHES_30D)
+
+        if llm_count is None and kb_count is None:
+            self.logger.warning(
+                "Prometheus unreachable — monthly operation count unavailable (#10720). "
+                "Deploy a Prometheus scrape target for autobot_llm_requests_total and "
+                "autobot_knowledge_search_requests_total to get real usage data."
+            )
+            return 0, False
+
+        total = int((llm_count or 0) + (kb_count or 0))
+        return total, True
+
     async def calculate_roi_metrics(self) -> ROIMetrics:
         """Calculate comprehensive ROI metrics."""
         try:
@@ -282,7 +355,7 @@ class BusinessIntelligenceDashboard:
 
             productivity_gain_hours = self._estimate_productivity_gains(performance_improvement)
 
-            total_monthly_operations = await self._estimate_monthly_operations()
+            total_monthly_operations, ops_available = await self._get_monthly_operations()
             cost_per_operation = (
                 monthly_operational_cost / total_monthly_operations if total_monthly_operations > 0 else 0
             )
@@ -300,10 +373,11 @@ class BusinessIntelligenceDashboard:
                 productivity_gain_hours_per_month=productivity_gain_hours,
                 break_even_months=break_even_months,
                 total_roi_percent=total_roi,
+                operations_data_available=ops_available,
             )
 
         except Exception as e:
-            self.logger.error(f"Error calculating ROI metrics: {e}")
+            self.logger.error("Error calculating ROI metrics: %s", e)
             return ROIMetrics(
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 hardware_investment_usd=0.0,
@@ -313,59 +387,61 @@ class BusinessIntelligenceDashboard:
                 productivity_gain_hours_per_month=0.0,
                 break_even_months=0.0,
                 total_roi_percent=0.0,
+                operations_data_available=False,
             )
 
-    async def _get_historical_performance_data(self) -> Dict[str, List[float]]:
+    async def _get_historical_performance_data(self) -> Dict[str, Any]:
         """Get historical performance data for analysis."""
+        if not self.redis_client:
+            self.logger.warning("Redis unavailable — historical performance data cannot be read (#10720)")
+            return {"available": False, "error": "redis_unavailable"}
+
         try:
-            if not self.redis_client:
-                return {}
-
-            # Get performance history from Redis
             history = self.redis_client.lrange("autobot:performance:history", 0, 99)
-
-            performance_data = {
-                "api_response_times": [],
-                "cpu_utilization": [],
-                "memory_utilization": [],
-                "service_availability": [],
-            }
-
-            for entry in history:
-                try:
-                    data = json.loads(entry)
-                    metrics = data.get("data", {})
-
-                    # Extract relevant metrics
-                    services = metrics.get("services", [])
-                    if services:
-                        avg_response_time = statistics.mean(
-                            [s.response_time for s in services if hasattr(s, "response_time")]
-                        )
-                        performance_data["api_response_times"].append(avg_response_time)
-
-                    system = metrics.get("system")
-                    if system:
-                        if hasattr(system, "cpu_percent"):
-                            performance_data["cpu_utilization"].append(system.cpu_percent)
-                        if hasattr(system, "memory_percent"):
-                            performance_data["memory_utilization"].append(system.memory_percent)
-
-                except Exception:
-                    continue  # nosec B112
-
-            return performance_data
-
         except Exception as e:
-            self.logger.error(f"Error getting historical performance data: {e}")
-            return {}
+            self.logger.error("Redis error reading performance history: %s", e)
+            return {"available": False, "error": str(e)}
 
-    async def _calculate_performance_improvement(self, performance_data: Dict[str, List[float]]) -> float:
+        performance_data: Dict[str, Any] = {
+            "available": True,
+            "api_response_times": [],
+            "cpu_utilization": [],
+            "memory_utilization": [],
+            "service_availability": [],
+        }
+
+        for entry in history:
+            try:
+                data = json.loads(entry)
+                metrics = data.get("data", {})
+
+                services = metrics.get("services", [])
+                if services:
+                    avg_response_time = statistics.mean(
+                        [s.response_time for s in services if hasattr(s, "response_time")]
+                    )
+                    performance_data["api_response_times"].append(avg_response_time)
+
+                system = metrics.get("system")
+                if system:
+                    if hasattr(system, "cpu_percent"):
+                        performance_data["cpu_utilization"].append(system.cpu_percent)
+                    if hasattr(system, "memory_percent"):
+                        performance_data["memory_utilization"].append(system.memory_percent)
+
+            except Exception:
+                continue  # nosec B112
+
+        return performance_data
+
+    async def _calculate_performance_improvement(self, performance_data: Dict[str, Any]) -> float:
         """Calculate overall performance improvement percentage."""
         try:
+            if not performance_data.get("available", True):
+                return 0.0
+
             improvements = []
 
-            # API response time improvement
             api_times = performance_data.get("api_response_times", [])
             if len(api_times) >= 10:
                 recent_avg = statistics.mean(api_times[-10:])
@@ -373,81 +449,66 @@ class BusinessIntelligenceDashboard:
                 improvement = max(0, (baseline - recent_avg) / baseline * 100)
                 improvements.append(improvement)
 
-            # CPU efficiency improvement
             cpu_utils = performance_data.get("cpu_utilization", [])
             if len(cpu_utils) >= 10:
                 recent_avg = statistics.mean(cpu_utils[-10:])
-                # Lower CPU utilization for same workload is better
                 improvement = max(0, (80 - recent_avg) / 80 * 100)  # 80% baseline
                 improvements.append(improvement)
 
             return statistics.mean(improvements) if improvements else 0.0
 
         except Exception as e:
-            self.logger.error(f"Error calculating performance improvement: {e}")
+            self.logger.error("Error calculating performance improvement: %s", e)
             return 0.0
 
     def _estimate_productivity_gains(self, performance_improvement: float) -> float:
         """Estimate productivity gains in hours per month."""
         try:
-            # Base calculation: performance improvement translates to time saved
             base_hours_per_month = 160  # 40 hours/week * 4 weeks
             time_saved_ratio = performance_improvement / 100
             productivity_gain = base_hours_per_month * time_saved_ratio * 0.1  # Conservative estimate
-
             return min(productivity_gain, 40)  # Cap at 40 hours/month
-
         except Exception as e:
-            self.logger.error(f"Error estimating productivity gains: {e}")
+            self.logger.error("Error estimating productivity gains: %s", e)
             return 0.0
 
-    async def _estimate_monthly_operations(self) -> int:
-        """Estimate total monthly operations."""
-        try:
-            # Estimate based on typical usage patterns
-            daily_api_calls = 1000  # Conservative estimate
-            daily_knowledge_searches = 500
-            daily_llm_requests = 200
-
-            total_daily_operations = daily_api_calls + daily_knowledge_searches + daily_llm_requests
-            return total_daily_operations * 30  # Monthly
-
-        except Exception as e:
-            self.logger.error(f"Error estimating monthly operations: {e}")
-            return 0
-
     def _build_component_definitions(self, utilization_data: Dict[str, float]) -> Dict[str, Dict]:
-        """Helper for analyze_cost_efficiency. Ref: #1088."""
+        """Build per-component cost/efficiency dict from config (not hardcoded literals).
+
+        Costs are read from CostModelConfig (env-overridable via AUTOBOT_COST_*).
+        All cost values are marked as estimates unless the operator has overridden them.
+        Helper for analyze_cost_efficiency. Ref: #1088, #10720.
+        """
         return {
             "cpu": {
-                "monthly_cost": 50,  # Portion of total operational cost
+                "monthly_cost": _cost.cpu_monthly_usd,
                 "utilization": utilization_data.get("cpu", 0),
-                "baseline_efficiency": 70,
+                "baseline_efficiency": _cost.cpu_baseline_efficiency,
             },
             "gpu": {
-                "monthly_cost": 80,  # Higher due to power consumption
+                "monthly_cost": _cost.gpu_monthly_usd,
                 "utilization": utilization_data.get("gpu", 0),
-                "baseline_efficiency": 60,
+                "baseline_efficiency": _cost.gpu_baseline_efficiency,
             },
             "npu": {
-                "monthly_cost": 30,
+                "monthly_cost": _cost.npu_monthly_usd,
                 "utilization": utilization_data.get("npu", 0),
-                "baseline_efficiency": 50,
+                "baseline_efficiency": _cost.npu_baseline_efficiency,
             },
             "memory": {
-                "monthly_cost": 20,
+                "monthly_cost": _cost.memory_monthly_usd,
                 "utilization": utilization_data.get("memory", 0),
-                "baseline_efficiency": 80,
+                "baseline_efficiency": _cost.memory_baseline_efficiency,
             },
             "storage": {
-                "monthly_cost": 25,
+                "monthly_cost": _cost.storage_monthly_usd,
                 "utilization": utilization_data.get("storage", 0),
-                "baseline_efficiency": 60,
+                "baseline_efficiency": _cost.storage_baseline_efficiency,
             },
             "network": {
-                "monthly_cost": 80,  # Internet costs
+                "monthly_cost": _cost.network_monthly_usd,
                 "utilization": utilization_data.get("network", 0),
-                "baseline_efficiency": 40,
+                "baseline_efficiency": _cost.network_baseline_efficiency,
             },
         }
 
@@ -456,15 +517,20 @@ class BusinessIntelligenceDashboard:
         cost_analyses = []
 
         try:
-            # Get current utilization data
-            utilization_data = await self._get_current_utilization()
+            utilization_data_raw = await self._get_current_utilization()
+            if not utilization_data_raw.get("available", True):
+                self.logger.warning("Utilization data unavailable (Redis down) — cost efficiency skipped (#10720)")
+                return cost_analyses
+
+            # Strip the sentinel key before passing to component builder
+            utilization_data = {k: v for k, v in utilization_data_raw.items() if k != "available"}
+
             components = self._build_component_definitions(utilization_data)
 
             for component, data in components.items():
                 utilization = data["utilization"]
                 efficiency_score = min(utilization / data["baseline_efficiency"] * 100, 100)
 
-                # Calculate optimization potential
                 if efficiency_score < 70:
                     optimization_potential = data["monthly_cost"] * (70 - efficiency_score) / 100
                 else:
@@ -476,80 +542,89 @@ class BusinessIntelligenceDashboard:
                         component=component,
                         monthly_cost_usd=data["monthly_cost"],
                         utilization_percent=utilization,
-                        cost_per_hour=data["monthly_cost"] / (30 * 24),  # $/hour
+                        cost_per_hour=data["monthly_cost"] / (30 * 24),
                         efficiency_score=efficiency_score,
                         optimization_potential_usd=optimization_potential,
+                        cost_is_estimate=True,  # always an operator estimate — label it
                     )
                 )
 
         except Exception as e:
-            self.logger.error(f"Error analyzing cost efficiency: {e}")
+            self.logger.error("Error analyzing cost efficiency: %s", e)
 
         return cost_analyses
 
-    async def _get_current_utilization(self) -> Dict[str, float]:
-        """Get current system utilization metrics."""
+    async def _get_current_utilization(self) -> Dict[str, Any]:
+        """Get current system utilization metrics.
+
+        Returns a dict with available=False on Redis errors so callers can
+        distinguish "no data yet" from "backend error" (#10720).
+        """
+        if not self.redis_client:
+            self.logger.warning("Redis unavailable — current utilization cannot be read (#10720)")
+            return {"available": False, "error": "redis_unavailable"}
+
         try:
-            if not self.redis_client:
-                return {}
-
-            # Get latest performance metrics
             latest_data = self.redis_client.hget("autobot:performance:latest", "data")
-            if not latest_data:
-                return {}
-
-            metrics = json.loads(latest_data)
-            system = metrics.get("system", {})
-
-            utilization = {
-                "cpu": (
-                    system.get("cpu_percent", 0) if isinstance(system.get("cpu_percent"), _NUMERIC_TYPES) else 0
-                ),  # Issue #380
-                "memory": (
-                    system.get("memory_percent", 0) if isinstance(system.get("memory_percent"), _NUMERIC_TYPES) else 0
-                ),  # Issue #380
-                "storage": (
-                    system.get("disk_percent", 0) if isinstance(system.get("disk_percent"), _NUMERIC_TYPES) else 0
-                ),  # Issue #380
-                "gpu": (system.get("gpu_utilization", 0) if system.get("gpu_utilization") is not None else 0),
-                "npu": (system.get("npu_utilization", 0) if system.get("npu_utilization") is not None else 0),
-                "network": 30.0,  # Estimated network utilization
-            }
-
-            return utilization
-
         except Exception as e:
-            self.logger.error(f"Error getting current utilization: {e}")
-            return {}
+            self.logger.error("Redis error reading latest utilization: %s", e)
+            return {"available": False, "error": str(e)}
+
+        if not latest_data:
+            return {"available": False, "error": "no_data"}
+
+        try:
+            metrics = json.loads(latest_data)
+        except (json.JSONDecodeError, TypeError) as e:
+            self.logger.error("Could not decode utilization JSON: %s", e)
+            return {"available": False, "error": "decode_error"}
+
+        system = metrics.get("system", {})
+
+        return {
+            "available": True,
+            "cpu": (
+                system.get("cpu_percent", 0) if isinstance(system.get("cpu_percent"), _NUMERIC_TYPES) else 0
+            ),  # Issue #380
+            "memory": (
+                system.get("memory_percent", 0) if isinstance(system.get("memory_percent"), _NUMERIC_TYPES) else 0
+            ),  # Issue #380
+            "storage": (
+                system.get("disk_percent", 0) if isinstance(system.get("disk_percent"), _NUMERIC_TYPES) else 0
+            ),  # Issue #380
+            "gpu": (system.get("gpu_utilization", 0) if system.get("gpu_utilization") is not None else 0),
+            "npu": (system.get("npu_utilization", 0) if system.get("npu_utilization") is not None else 0),
+            "network": 30.0,  # Actual network utilisation is not yet scraped; marked as estimate
+        }
 
     async def generate_performance_predictions(self) -> List[PerformancePrediction]:
         """Generate predictive performance insights using historical data."""
         predictions = []
 
         try:
-            # Get historical data for trend analysis
             performance_data = await self._get_historical_performance_data()
 
-            # Predict CPU utilization
+            if not performance_data.get("available", True):
+                self.logger.warning("Performance predictions skipped — historical data unavailable (#10720)")
+                return predictions
+
             cpu_data = performance_data.get("cpu_utilization", [])
             if len(cpu_data) >= 10:
                 cpu_prediction = await self._predict_metric_trend(cpu_data, "cpu_utilization")
                 predictions.append(cpu_prediction)
 
-            # Predict API response times
             api_data = performance_data.get("api_response_times", [])
             if len(api_data) >= 10:
                 api_prediction = await self._predict_metric_trend(api_data, "api_response_time")
                 predictions.append(api_prediction)
 
-            # Predict memory utilization
             memory_data = performance_data.get("memory_utilization", [])
             if len(memory_data) >= 10:
                 memory_prediction = await self._predict_metric_trend(memory_data, "memory_utilization")
                 predictions.append(memory_prediction)
 
         except Exception as e:
-            self.logger.error(f"Error generating performance predictions: {e}")
+            self.logger.error("Error generating performance predictions: %s", e)
 
         return predictions
 
@@ -620,7 +695,7 @@ class BusinessIntelligenceDashboard:
             )
 
         except Exception as e:
-            self.logger.error(f"Error predicting trend for {metric_name}: {e}")
+            self.logger.error("Error predicting trend for %s: %s", metric_name, e)
             return PerformancePrediction(
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 metric_name=metric_name,
@@ -634,7 +709,6 @@ class BusinessIntelligenceDashboard:
 
     def _generate_metric_recommendation(self, metric_name: str, trend: str, predicted_value: float) -> str:
         """Generate recommendations based on metric trends."""
-        # Get thresholds from centralized config
         cpu_threshold = ALERT_THRESHOLDS.get("cpu_percent", 80.0)
         memory_threshold = ALERT_THRESHOLDS.get("memory_percent", 85.0)
 
@@ -697,7 +771,7 @@ class BusinessIntelligenceDashboard:
         ]
         return statistics.mean([max(c, 0) for c in efficiency_components])
 
-    def _calculate_user_satisfaction_score(self, performance_data: Dict[str, List[float]]) -> float:
+    def _calculate_user_satisfaction_score(self, performance_data: Dict[str, Any]) -> float:
         """Calculate user satisfaction score from response times.
 
         Helper for calculate_system_health_score.
@@ -736,15 +810,24 @@ class BusinessIntelligenceDashboard:
     async def calculate_system_health_score(self) -> SystemHealthScore:
         """Calculate comprehensive system health score."""
         try:
-            utilization_data = await self._get_current_utilization()
+            utilization_raw = await self._get_current_utilization()
+            utilization_data = (
+                {k: v for k, v in utilization_raw.items() if k != "available"}
+                if utilization_raw.get("available", True)
+                else {}
+            )
+
             performance_data = await self._get_historical_performance_data()
 
             services_data = []
             if self.redis_client:
-                latest_data = self.redis_client.hget("autobot:performance:latest", "data")
-                if latest_data:
-                    metrics = json.loads(latest_data)
-                    services_data = metrics.get("services", [])
+                try:
+                    latest_data = self.redis_client.hget("autobot:performance:latest", "data")
+                    if latest_data:
+                        metrics = json.loads(latest_data)
+                        services_data = metrics.get("services", [])
+                except Exception as e:
+                    self.logger.error("Redis error reading services data for health score: %s", e)
 
             availability_score = self._calculate_availability_score(services_data)
             performance_score = self._calculate_performance_score(utilization_data)
@@ -781,7 +864,7 @@ class BusinessIntelligenceDashboard:
             )
 
         except Exception as e:
-            self.logger.error(f"Error calculating system health score: {e}")
+            self.logger.error("Error calculating system health score: %s", e)
             return SystemHealthScore(
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 overall_score=0.0,
@@ -796,13 +879,11 @@ class BusinessIntelligenceDashboard:
     async def generate_comprehensive_dashboard_report(self) -> Dict[str, Any]:
         """Generate comprehensive business intelligence dashboard report."""
         try:
-            # Collect all BI metrics
             roi_metrics = await self.calculate_roi_metrics()
             cost_analysis = await self.analyze_cost_efficiency()
             predictions = await self.generate_performance_predictions()
             health_score = await self.calculate_system_health_score()
 
-            # Compile comprehensive report
             dashboard_report = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "summary": {
@@ -811,6 +892,8 @@ class BusinessIntelligenceDashboard:
                     "monthly_operational_cost": roi_metrics.operational_cost_monthly_usd,
                     "break_even_months": roi_metrics.break_even_months,
                     "total_optimization_potential": sum(ca.optimization_potential_usd for ca in cost_analysis),
+                    # Surfaced explicitly so consumers can show "unavailable" rather than fake numbers
+                    "operations_data_available": roi_metrics.operations_data_available,
                 },
                 "roi_analysis": asdict(roi_metrics),
                 "cost_efficiency": [asdict(ca) for ca in cost_analysis],
@@ -820,16 +903,13 @@ class BusinessIntelligenceDashboard:
                 "operational_costs": self.operational_costs,
             }
 
-            # Store the dashboard report
             await self._store_dashboard_report(dashboard_report)
-
-            # Generate visual dashboard (HTML)
             await self._generate_visual_dashboard(dashboard_report)
 
             return dashboard_report
 
         except Exception as e:
-            self.logger.error(f"Error generating dashboard report: {e}")
+            self.logger.error("Error generating dashboard report: %s", e)
             return {
                 "error": "Failed to generate dashboard report",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -839,7 +919,6 @@ class BusinessIntelligenceDashboard:
         """Store dashboard report in Redis and files."""
         timestamp = datetime.now(timezone.utc).isoformat()
 
-        # Store in Redis
         if self.redis_client:
             try:
                 self.redis_client.hset(
@@ -849,25 +928,22 @@ class BusinessIntelligenceDashboard:
                         "data": json.dumps(report, default=str),
                     },
                 )
-
                 self.redis_client.lpush(
                     "autobot:bi_dashboard:history",
                     json.dumps({"timestamp": timestamp, "data": report}, default=str),
                 )
                 self.redis_client.ltrim("autobot:bi_dashboard:history", 0, 99)
-
             except Exception as e:
-                self.logger.error(f"Error storing dashboard report in Redis: {e}")
+                self.logger.error("Error storing dashboard report in Redis: %s", e)
 
-        # Store in local file
         try:
             report_file = self.dashboard_data_path / f"bi_dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             async with aiofiles.open(report_file, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(report, indent=2, default=str))
         except OSError as e:
-            self.logger.error(f"Failed to write dashboard report to {report_file}: {e}")
+            self.logger.error("Failed to write dashboard report to %s: %s", report_file, e)
         except Exception as e:
-            self.logger.error(f"Error storing dashboard report to file: {e}")
+            self.logger.error("Error storing dashboard report to file: %s", e)
 
     def _prepare_dashboard_template_vars(self, report: Dict[str, Any]) -> Dict[str, Any]:
         """Prepare template variables for dashboard rendering.
@@ -911,9 +987,9 @@ class BusinessIntelligenceDashboard:
         try:
             async with aiofiles.open(dashboard_file, "w", encoding="utf-8") as f:
                 await f.write(dashboard_html)
-            self.logger.info(f"📊 Dashboard saved to: {dashboard_file}")
+            self.logger.info("Dashboard saved to: %s", dashboard_file)
         except OSError as e:
-            self.logger.error(f"Failed to save dashboard HTML to {dashboard_file}: {e}")
+            self.logger.error("Failed to save dashboard HTML to %s: %s", dashboard_file, e)
 
     async def _generate_visual_dashboard(self, report: Dict[str, Any]):
         """Generate HTML visual dashboard."""
@@ -926,7 +1002,7 @@ class BusinessIntelligenceDashboard:
             await self._save_dashboard_html(dashboard_html, dashboard_file)
 
         except Exception as e:
-            self.logger.error(f"Error generating visual dashboard: {e}")
+            self.logger.error("Error generating visual dashboard: %s", e)
 
 
 if __name__ == "__main__":
@@ -950,31 +1026,35 @@ if __name__ == "__main__":
 
         if args.roi:
             roi_metrics = await bi_dashboard.calculate_roi_metrics()
-            logger.info("📈 ROI Analysis:")
-            logger.info(f"Total Hardware Investment: ${roi_metrics.hardware_investment_usd:,.2f}")
-            logger.info(f"Monthly Operational Cost: ${roi_metrics.operational_cost_monthly_usd:,.2f}")
-            logger.info(f"Total ROI: {roi_metrics.total_roi_percent:.1f}%")
-            logger.info(f"Break Even: {roi_metrics.break_even_months:.1f} months")
+            logger.info("ROI Analysis:")
+            logger.info("Total Hardware Investment: $%s", f"{roi_metrics.hardware_investment_usd:,.2f}")
+            logger.info("Monthly Operational Cost: $%s", f"{roi_metrics.operational_cost_monthly_usd:,.2f}")
+            logger.info("Total ROI: %s%%", f"{roi_metrics.total_roi_percent:.1f}")
+            logger.info("Break Even: %s months", f"{roi_metrics.break_even_months:.1f}")
+            if not roi_metrics.operations_data_available:
+                logger.warning("Monthly operation count: unavailable (Prometheus unreachable)")
 
         elif args.health:
             health_score = await bi_dashboard.calculate_system_health_score()
-            logger.info("🏥 System Health Score:")
-            logger.info(f"Overall: {health_score.overall_score:.1f}/100")
-            logger.info(f"Availability: {health_score.availability_score:.1f}/100")
-            logger.info(f"Performance: {health_score.performance_score:.1f}/100")
-            logger.info(f"Security: {health_score.security_score:.1f}/100")
-            logger.info(f"Efficiency: {health_score.efficiency_score:.1f}/100")
+            logger.info("System Health Score:")
+            logger.info("Overall: %s/100", f"{health_score.overall_score:.1f}")
+            logger.info("Availability: %s/100", f"{health_score.availability_score:.1f}")
+            logger.info("Performance: %s/100", f"{health_score.performance_score:.1f}")
+            logger.info("Security: %s/100", f"{health_score.security_score:.1f}")
+            logger.info("Efficiency: %s/100", f"{health_score.efficiency_score:.1f}")
 
         elif args.generate:
-            logger.info("🚀 Generating comprehensive BI dashboard...")
+            logger.info("Generating comprehensive BI dashboard...")
             report = await bi_dashboard.generate_comprehensive_dashboard_report()
-            logger.info("✅ Dashboard generated successfully!")
-            logger.info("📊 Report summary:")
+            logger.info("Dashboard generated successfully!")
+            logger.info("Report summary:")
             summary = report.get("summary", {})
-            logger.info(f"  Overall Health: {summary.get('overall_health_score', 0):.1f}/100")
-            logger.info(f"  Total ROI: {summary.get('total_roi_percent', 0):.1f}%")
-            logger.info(f"  Monthly Cost: ${summary.get('monthly_operational_cost', 0):.2f}")
+            logger.info("  Overall Health: %s/100", f"{summary.get('overall_health_score', 0):.1f}")
+            logger.info("  Total ROI: %s%%", f"{summary.get('total_roi_percent', 0):.1f}")
+            logger.info("  Monthly Cost: $%s", f"{summary.get('monthly_operational_cost', 0):.2f}")
             optimization_potential = summary.get("total_optimization_potential", 0)
-            logger.info(f"  Optimization Potential: ${optimization_potential:.2f}/month")
+            logger.info("  Optimization Potential: $%s/month", f"{optimization_potential:.2f}")
+            if not summary.get("operations_data_available", True):
+                logger.warning("  Monthly operations count: unavailable (Prometheus unreachable)")
 
     asyncio.run(main())
