@@ -46,15 +46,11 @@ _QUARANTINE_THRESHOLD: InjectionRisk = InjectionRisk[
 ]
 
 # Risk level at which content is blocked outright (or escalated to human).
-_BLOCK_THRESHOLD: InjectionRisk = InjectionRisk[
-    os.environ.get("AUTOBOT_FIREWALL_BLOCK_THRESHOLD", "HIGH").upper()
-]
+_BLOCK_THRESHOLD: InjectionRisk = InjectionRisk[os.environ.get("AUTOBOT_FIREWALL_BLOCK_THRESHOLD", "HIGH").upper()]
 
 # When True, HIGH/CRITICAL risk triggers an APPROVAL_REQUIRED event instead of
 # raising; the caller receives a FirewallVerdict with escalated=True.
-_ESCALATE_INSTEAD_OF_BLOCK: bool = (
-    os.environ.get("AUTOBOT_FIREWALL_ESCALATE", "false").lower() == "true"
-)
+_ESCALATE_INSTEAD_OF_BLOCK: bool = os.environ.get("AUTOBOT_FIREWALL_ESCALATE", "false").lower() == "true"
 
 # Risk order (mirrors PromptInjectionDetector._RISK_ORDER)
 _RISK_ORDER: dict[InjectionRisk, int] = {

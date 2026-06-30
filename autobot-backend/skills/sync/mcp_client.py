@@ -132,11 +132,11 @@ class MCPClient:
         # #10552: inspect MCP tool output through the content firewall
         if result is not None:
             raw_str = result if isinstance(result, str) else str(result)
-            verdict = await get_content_firewall().inspect(
-                raw_str, source=ContentSource.MCP, context_label=name
-            )
+            verdict = await get_content_firewall().inspect(raw_str, source=ContentSource.MCP, context_label=name)
             if verdict.blocked:
-                raise MCPError(code=-32603, message=f"MCP tool output blocked by content firewall (risk={verdict.risk.value})")
+                raise MCPError(
+                    code=-32603, message=f"MCP tool output blocked by content firewall (risk={verdict.risk.value})"
+                )
             result = verdict.content if isinstance(result, str) else result
         return result
 
@@ -195,7 +195,9 @@ class MCPClient:
                 raw_str, source=ContentSource.MCP, context_label=f"resource:{uri}"
             )
             if verdict.blocked:
-                raise MCPError(code=-32603, message=f"MCP resource blocked by content firewall (risk={verdict.risk.value})")
+                raise MCPError(
+                    code=-32603, message=f"MCP resource blocked by content firewall (risk={verdict.risk.value})"
+                )
             result = verdict.content if isinstance(result, str) else result
         return result
 
