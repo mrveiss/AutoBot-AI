@@ -3,6 +3,7 @@
 import appConfig from '@/config/AppConfig.js';
 import { createLogger } from '@/utils/debugUtils';
 import { getApiBase } from '@/config/ssot-config';
+import { getSelectedCompanyId } from '@/utils/orgContext';
 
 // Create scoped logger for ApiClient
 const logger = createLogger('ApiClient');
@@ -309,6 +310,16 @@ export class ApiClient {
       if (authToken) {
         const hdrs = fetchOptions.headers as Record<string, string>;
         hdrs['Authorization'] = `Bearer ${authToken}`;
+      }
+
+      // Inject the selected company as org/tenant context (#10750 A5). Omitted
+      // when no company is selected, so non-LLC requests are unaffected.
+      const orgId = getSelectedCompanyId();
+      if (orgId) {
+        const orgHdrs = fetchOptions.headers as Record<string, string>;
+        if (!orgHdrs['X-Organization-Id']) {
+          orgHdrs['X-Organization-Id'] = orgId;
+        }
       }
 
       // Handle body — support FormData (don't stringify, remove Content-Type)

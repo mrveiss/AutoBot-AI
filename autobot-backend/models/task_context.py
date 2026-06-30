@@ -454,7 +454,7 @@ class SearchResponseContext:
     """
     Context object for building enhanced search responses.
 
-    Issue #375: Replaces 15-parameter signature in _build_enhanced_search_response.
+    Issue #375: Replaces 15-parameter signature in _build_search_response.
     Groups response-building parameters into logical categories.
 
     Attributes:

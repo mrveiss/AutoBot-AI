@@ -265,8 +265,8 @@ class SearchMixin:
             )
             if advanced:
                 return await self.search_ctx(ctx)
-            # Enhanced (no advanced params): use the simpler enhanced pipeline
-            return await self._run_enhanced_search(
+            # Filtered/tagged (no advanced params): use the simpler search pipeline
+            return await self._run_search(
                 query=query,
                 limit=eff_limit,
                 offset=offset,
@@ -538,7 +538,7 @@ class SearchMixin:
         multiplier = 3 if tags or min_score > 0 else 1.5
         return min(int((limit + offset) * multiplier), 500)
 
-    async def _execute_enhanced_search_pipeline(
+    async def _execute_search_pipeline(
         self,
         processed_query: str,
         mode: str,
@@ -562,8 +562,8 @@ class SearchMixin:
             results = await self._rerank_results(processed_query, results)
         return results
 
-    @error_boundary(component="knowledge_base", function="_run_enhanced_search")
-    async def _run_enhanced_search(
+    @error_boundary(component="knowledge_base", function="_run_search")
+    async def _run_search(
         self,
         query: str,
         limit: int = 10,
@@ -576,7 +576,7 @@ class SearchMixin:
         min_score: float = 0.0,
         board_id: str | None = None,
     ) -> Dict[str, Any]:
-        """Enhanced search pipeline — invoked by ``search()`` when enhanced params present.
+        """Filtered/tagged search pipeline — invoked by ``search()`` when filter params present.
 
         Issue #398: refactored. Issue #3242: board_id scopes search to a project board.
         Callers should use ``search(query, limit=..., tags=...)`` rather than this private method.
@@ -610,7 +610,7 @@ class SearchMixin:
                 logger.debug("Board-scoped search: board_id=%s", board_id)
 
             fetch_limit = self._calculate_fetch_limit(limit, offset, tags, min_score)
-            results = await self._execute_enhanced_search_pipeline(
+            results = await self._execute_search_pipeline(
                 processed_query,
                 mode,
                 effective_category,
@@ -633,7 +633,7 @@ class SearchMixin:
                 enable_reranking,
             )
         except Exception as e:
-            logger.error("Enhanced search pipeline failed: %s", e)
+            logger.error("Search pipeline failed: %s", e)
             return {
                 "success": False,
                 "results": [],
@@ -822,7 +822,7 @@ class SearchMixin:
             results, params["enable_clustering"], params["offset"], params["limit"]
         )
         # Build response
-        return self._build_enhanced_search_response(
+        return self._build_search_response(
             results,
             unclustered,
             clusters,
@@ -1004,7 +1004,7 @@ class SearchMixin:
         """Cluster search results by topic."""
         return self._response_builder.cluster_search_results(results, enable_clustering, offset, limit)
 
-    def _build_enhanced_search_response(
+    def _build_search_response(
         self,
         results: List[Dict[str, Any]],
         unclustered: List[Dict[str, Any]],
@@ -1022,8 +1022,8 @@ class SearchMixin:
         offset: int,
         limit: int,
     ) -> Dict[str, Any]:
-        """Build the enhanced search response."""
-        return self._response_builder.build_enhanced_response(
+        """Build the search response."""
+        return self._response_builder.build_response(
             results,
             unclustered,
             clusters,
@@ -1041,9 +1041,9 @@ class SearchMixin:
             limit,
         )
 
-    def _build_enhanced_search_response_ctx(self, ctx) -> Dict[str, Any]:
-        """Build the enhanced search response using context."""
-        return self._response_builder.build_enhanced_response_ctx(ctx)
+    def _build_search_response_ctx(self, ctx) -> Dict[str, Any]:
+        """Build the search response using context."""
+        return self._response_builder.build_response_ctx(ctx)
 
     def ensure_initialized(self):
         """

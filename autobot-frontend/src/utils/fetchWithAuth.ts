@@ -10,7 +10,11 @@
  * exists to fix existing raw fetch() call-sites without a full refactor.
  *
  * Issue #979: JWT token not attached to backend API requests.
+ * Issue #10750 (A5): also attach the selected company as X-Organization-Id so
+ * org-scoped Company OS endpoints resolve tenant context.
  */
+
+import { applyOrgHeader } from '@/utils/orgContext'
 
 export function getAuthToken(): string | null {
   try {
@@ -27,21 +31,21 @@ export function getAuthToken(): string | null {
 }
 
 /**
- * Wraps native fetch() with Bearer-token injection.
- * If no valid token is found, the request proceeds unauthenticated
- * (matches pre-existing behaviour; let the server decide).
+ * Wraps native fetch() with Bearer-token injection and the X-Organization-Id
+ * header for the selected company. If no valid token is found the request still
+ * proceeds (matches pre-existing behaviour; let the server decide), and the org
+ * header is omitted when no company is selected.
  */
 export async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
   const token = getAuthToken()
-  if (!token) {
-    return fetch(url, options)
-  }
 
   // Build a new Headers object so we don't mutate the caller's options.
   const headers = new Headers(options.headers)
-  if (!headers.has('Authorization')) {
+  if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`)
   }
+  // Attach the selected company id as org context (#10750 A5); no-op when none.
+  applyOrgHeader(headers)
 
   return fetch(url, { ...options, headers })
 }

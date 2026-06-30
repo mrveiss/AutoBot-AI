@@ -160,6 +160,7 @@
     "companyOs": "Company OS",
     "llcDashboard": "Dashboard",
     "llcOrgChart": "Org Chart",
+    "llcMembers": "חברים",
     "llcGoals": "Goals",
     "llcCompanies": "Companies",
     "llcBacklog": "Backlog",
@@ -189,6 +190,38 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment runs in single_user mode, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it."
+  },
+  "llcMembers": {
+    "title": "חברים",
+    "subtitle": "נהל את האנשים השייכים לחברה זו ואת התפקידים שלהם.",
+    "addMember": "הוסף חבר",
+    "remove": "הסר",
+    "cancel": "בטל",
+    "loading": "טוען חברים…",
+    "empty": "אין חברים עדיין. הוסף את החבר הראשון לחברה זו.",
+    "noCompany": "בחר חברה כדי לנהל את חבריה.",
+    "colName": "שם",
+    "colRole": "תפקיד",
+    "colActions": "פעולות",
+    "addModalTitle": "הוסף חבר",
+    "userLabel": "משתמש",
+    "userPlaceholder": "בחר משתמש…",
+    "usersLoading": "טוען משתמשים…",
+    "noSelectableUsers": "אין משתמשים זמינים להוספה.",
+    "roleLabel": "תפקיד",
+    "confirmAdd": "הוסף",
+    "confirmRemove": "להסיר את {name} מחברה זו?",
+    "loadError": "טעינת החברים נכשלה.",
+    "addError": "הוספת החבר נכשלה.",
+    "removeError": "הסרת החבר נכשלה.",
+    "usersLoadError": "טעינת המשתמשים נכשלה.",
+    "role": {
+      "owner": "בעלים",
+      "admin": "מנהל",
+      "member": "חבר",
+      "guest": "אורח",
+      "lead": "מוביל"
+    }
   },
   "agent": {
     "registry": {
