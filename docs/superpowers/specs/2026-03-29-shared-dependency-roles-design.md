@@ -6,14 +6,14 @@
 
 ## Problem
 
-Multiple service roles independently install the same infrastructure packages (nginx, Python 3.12, Node.js). On multi-node deployments this is harmless — each node installs its own. On single-host deployments, roles conflict: duplicate nginx configs, redundant PPA additions, and no way to know if a dependency can be safely removed when a role is unassigned.
+Multiple service roles independently install the same infrastructure packages (nginx, Python 3.14, Node.js). On multi-node deployments this is harmless — each node installs its own. On single-host deployments, roles conflict: duplicate nginx configs, redundant PPA additions, and no way to know if a dependency can be safely removed when a role is unassigned.
 
 ### Current State
 
 | Dependency | Installed By |
 |---|---|
 | nginx | `slm_manager`, `backend`, `frontend` |
-| Python 3.12 | `slm_manager`, `backend`, `backend_services` |
+| Python 3.14 | `slm_manager`, `backend`, `backend_services` |
 | Node.js 20 | `slm_manager`, `frontend`, `browser`, `monitoring` |
 | PostgreSQL | `postgresql` (already standalone) |
 | Redis | `redis` (already standalone) |
@@ -59,7 +59,7 @@ Extract install logic from existing service roles into three new roles:
 
 **`roles/python312/`** — extracted from `slm_manager` and `backend`
 - Add deadsnakes PPA
-- Install python3.12, python3.12-venv, python3.12-dev
+- Install python3.14, python3.14-venv, python3.14-dev
 - Does NOT create venvs (stays in service roles)
 
 **`roles/nodejs/`** — extracted from `slm_manager`, `frontend`, `browser`
@@ -86,7 +86,7 @@ Add a new phase at the start of `provision-fleet-roles.yml`:
         name: nginx
       when: "'nginx' in (node_dependencies | default([]))"
 
-    - name: "Deps | Install Python 3.12"
+    - name: "Deps | Install Python 3.14"
       ansible.builtin.include_role:
         name: python312
       when: "'python312' in (node_dependencies | default([]))"
@@ -104,9 +104,9 @@ Add a new phase at the start of `provision-fleet-roles.yml`:
         purge: true
       when: "'nginx' in (pending_dep_removals | default([]))"
 
-    - name: "Deps | Remove Python 3.12 if marked"
+    - name: "Deps | Remove Python 3.14 if marked"
       ansible.builtin.apt:
-        name: [python3.12, python3.12-venv, python3.12-dev]
+        name: [python3.14, python3.14-venv, python3.14-dev]
         state: absent
         purge: true
       when: "'python312' in (pending_dep_removals | default([]))"
@@ -157,7 +157,7 @@ def can_remove_dependency(node_id: str, dep_name: str) -> bool:
 
 **New Ansible roles (3):**
 - `roles/nginx/tasks/main.yml` — install nginx, base config
-- `roles/python312/tasks/main.yml` — deadsnakes PPA, install python3.12
+- `roles/python312/tasks/main.yml` — deadsnakes PPA, install python3.14
 - `roles/nodejs/tasks/main.yml` — NodeSource repo, install nodejs
 
 **Modified Ansible roles (5) — remove install tasks:**

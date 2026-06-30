@@ -2957,9 +2957,9 @@ router.include_router(maintenance_router)
 # These routers were previously registered separately in feature_routers.py
 # Now consolidated under the main knowledge router for cleaner organization
 
-# AI Stack RAG Integration - Enhanced search, knowledge extraction, document analysis
-# Provides: /search/enhanced, /search/rag, /extract, /analyze/documents, /query/reformulate,
-#           /system/insights, /stats/enhanced, /health/enhanced
+# AI Stack RAG Integration - Advanced search, knowledge extraction, document analysis
+# Provides: /search/advanced, /search/rag, /extract, /analyze/documents, /query/reformulate,
+#           /system/insights, /stats/advanced, /health/status
 try:
     from api.knowledge_ai_stack import router as ai_stack_router
 

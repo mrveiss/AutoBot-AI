@@ -1060,7 +1060,7 @@ class MultiAgentQueryData(BaseModel):
 
 
 class KnowledgeSearchData(BaseModel):
-    """data payload for POST /ai-stack/knowledge/enhanced-search."""
+    """data payload for POST /ai-stack/knowledge/search."""
 
     local_kb: List[Dict[str, Any]]
     enhanced: Dict[str, Any]

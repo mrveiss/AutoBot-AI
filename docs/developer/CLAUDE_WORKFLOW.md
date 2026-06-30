@@ -39,8 +39,8 @@
 - If pre-commit hook fails: read error, fix, re-stage, retry (max 3) — never `--no-verify`
 
 **CI/Production Parity:**
-- CI runs Python 3.12 (deadsnakes PPA) — never use 3.13-only packages
-- All nodes: deadsnakes PPA python3.12 venv at `/opt/autobot/<component>/venv`
+- CI runs Python 3.14 (deadsnakes PPA) — never use 3.13-only packages
+- All nodes: deadsnakes PPA python3.14 venv at `/opt/autobot/<component>/venv`
 
 **Branch Strategy:**
 - Always target `Dev_new_gui` for PRs unless told otherwise
