@@ -2001,8 +2001,8 @@ class ChatKnowledgeSearchResultData(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class AIStackEnhancedSearchData(BaseModel):
-    """data payload for POST /search/enhanced."""
+class AIStackSearchData(BaseModel):
+    """data payload for POST /search/advanced."""
 
     model_config = {"extra": "allow"}
 
@@ -2037,14 +2037,14 @@ class AIStackSystemInsightsData(BaseModel):
     model_config = {"extra": "allow"}
 
 
-class AIStackEnhancedStatsData(BaseModel):
-    """data payload for GET /stats/enhanced."""
+class AIStackStatsData(BaseModel):
+    """data payload for GET /stats/advanced."""
 
     model_config = {"extra": "allow"}
 
 
-class AIStackEnhancedHealthData(BaseModel):
-    """data payload for GET /health/enhanced."""
+class AIStackHealthStatusData(BaseModel):
+    """data payload for GET /health/status."""
 
     model_config = {"extra": "allow"}
 

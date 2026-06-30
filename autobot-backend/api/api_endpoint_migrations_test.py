@@ -11119,55 +11119,55 @@ class TestBatch69AgentTerminalMigrations(unittest.TestCase):
         self.assertIn("session_id=session_id", source)
 
 
-class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
-    """Test batch 70 migrations: agent_enhanced.py first 3 endpoints"""
+class TestBatch70AgentMigrations(unittest.TestCase):
+    """Test batch 70 migrations: agent.py first 3 endpoints"""
 
-    # Test 1: execute_enhanced_goal decorator presence
-    def test_execute_enhanced_goal_decorator_present(self):
-        """Test execute_enhanced_goal has @with_error_handling decorator"""
-        from api.agent import execute_enhanced_goal
+    # Test 1: execute_goal_advanced decorator presence
+    def test_execute_goal_advanced_decorator_present(self):
+        """Test execute_goal_advanced has @with_error_handling decorator"""
+        from api.agent import execute_goal_advanced
 
-        source = inspect.getsource(execute_enhanced_goal)
+        source = inspect.getsource(execute_goal_advanced)
         self.assertIn(
             "@with_error_handling",
             source,
-            "execute_enhanced_goal should have @with_error_handling decorator",
+            "execute_goal_advanced should have @with_error_handling decorator",
         )
         self.assertIn(
             "ErrorCategory.SERVER_ERROR",
             source,
-            "execute_enhanced_goal should use SERVER_ERROR category",
+            "execute_goal_advanced should use SERVER_ERROR category",
         )
         self.assertIn(
-            'error_code_prefix="AGENT_ENHANCED"',
+            'error_code_prefix="AGENT"',
             source,
-            "execute_enhanced_goal should use AGENT_ENHANCED error code prefix",
+            "execute_goal_advanced should use AGENT error code prefix",
         )
 
-    # Test 2: execute_enhanced_goal Mixed Pattern compliance
-    def test_execute_enhanced_goal_mixed_pattern(self):
-        """Test execute_enhanced_goal uses Mixed Pattern - preserves nested try-catches"""
-        from api.agent import execute_enhanced_goal
+    # Test 2: execute_goal_advanced Mixed Pattern compliance
+    def test_execute_goal_advanced_mixed_pattern(self):
+        """Test execute_goal_advanced uses Mixed Pattern - preserves nested try-catches"""
+        from api.agent import execute_goal_advanced
 
-        source = inspect.getsource(execute_enhanced_goal)
+        source = inspect.getsource(execute_goal_advanced)
         # Should have nested try-catches for: agent list, KB enhancement, AIStackError
         try_count = source.count("    try:")
         self.assertGreaterEqual(
             try_count,
             3,
-            "execute_enhanced_goal should have at least 3 nested try-catch blocks (agent list, KB, AIStackError)",
+            "execute_goal_advanced should have at least 3 nested try-catch blocks (agent list, KB, AIStackError)",
         )
         # Should have AIStackError handling
         self.assertIn("except AIStackError", source)
         # Should have fallback for agent list
         self.assertIn('available_agents = ["chat", "rag", "research"]', source)
 
-    # Test 3: execute_enhanced_goal business logic preserved
-    def test_execute_enhanced_goal_business_logic(self):
-        """Test execute_enhanced_goal preserves business logic - HTTPException for unavailable agents"""
-        from api.agent import execute_enhanced_goal
+    # Test 3: execute_goal_advanced business logic preserved
+    def test_execute_goal_advanced_business_logic(self):
+        """Test execute_goal_advanced preserves business logic - HTTPException for unavailable agents"""
+        from api.agent import execute_goal_advanced
 
-        source = inspect.getsource(execute_enhanced_goal)
+        source = inspect.getsource(execute_goal_advanced)
         # Should raise HTTPException for unavailable agents
         self.assertIn("if not selected_agents:", source)
         self.assertIn("raise HTTPException", source)
@@ -11194,9 +11194,9 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
             "coordinate_multi_agent_task should use SERVER_ERROR category",
         )
         self.assertIn(
-            'error_code_prefix="AGENT_ENHANCED"',
+            'error_code_prefix="AGENT"',
             source,
-            "coordinate_multi_agent_task should use AGENT_ENHANCED error code prefix",
+            "coordinate_multi_agent_task should use AGENT error code prefix",
         )
 
     # Test 5: coordinate_multi_agent_task Mixed Pattern compliance
@@ -11241,9 +11241,9 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
             "comprehensive_research_task should use SERVER_ERROR category",
         )
         self.assertIn(
-            'error_code_prefix="AGENT_ENHANCED"',
+            'error_code_prefix="AGENT"',
             source,
-            "comprehensive_research_task should use AGENT_ENHANCED error code prefix",
+            "comprehensive_research_task should use AGENT error code prefix",
         )
 
     # Test 8: comprehensive_research_task Mixed Pattern compliance
@@ -11284,11 +11284,11 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
         from api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
-            execute_enhanced_goal,
+            execute_goal_advanced,
         )
 
         for endpoint in [
-            execute_enhanced_goal,
+            execute_goal_advanced,
             coordinate_multi_agent_task,
             comprehensive_research_task,
         ]:
@@ -11301,23 +11301,23 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
 
     # Test 11: Batch 70 consistency - all endpoints use same error code prefix
     def test_batch70_error_prefix_consistency(self):
-        """Test all batch 70 endpoints use AGENT_ENHANCED error code prefix"""
+        """Test all batch 70 endpoints use AGENT error code prefix"""
         from api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
-            execute_enhanced_goal,
+            execute_goal_advanced,
         )
 
         for endpoint in [
-            execute_enhanced_goal,
+            execute_goal_advanced,
             coordinate_multi_agent_task,
             comprehensive_research_task,
         ]:
             source = inspect.getsource(endpoint)
             self.assertIn(
-                'error_code_prefix="AGENT_ENHANCED"',
+                'error_code_prefix="AGENT"',
                 source,
-                f"{endpoint.__name__} should use AGENT_ENHANCED error code prefix",
+                f"{endpoint.__name__} should use AGENT error code prefix",
             )
 
     # Test 12: Batch 70 consistency - all endpoints follow Mixed Pattern
@@ -11326,11 +11326,11 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
         from api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
-            execute_enhanced_goal,
+            execute_goal_advanced,
         )
 
         for endpoint in [
-            execute_enhanced_goal,
+            execute_goal_advanced,
             coordinate_multi_agent_task,
             comprehensive_research_task,
         ]:
@@ -11348,11 +11348,11 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
         from api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
-            execute_enhanced_goal,
+            execute_goal_advanced,
         )
 
         for endpoint in [
-            execute_enhanced_goal,
+            execute_goal_advanced,
             coordinate_multi_agent_task,
             comprehensive_research_task,
         ]:
@@ -11371,11 +11371,11 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
         from api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
-            execute_enhanced_goal,
+            execute_goal_advanced,
         )
 
         for endpoint in [
-            execute_enhanced_goal,
+            execute_goal_advanced,
             coordinate_multi_agent_task,
             comprehensive_research_task,
         ]:
@@ -11393,8 +11393,8 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
             )
 
 
-class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
-    """Test batch 71 migrations: agent_enhanced.py next 3 endpoints"""
+class TestBatch71AgentMigrations(unittest.TestCase):
+    """Test batch 71 migrations: agent.py next 3 endpoints"""
 
     def test_analyze_development_task_decorator_present(self):
         """Test analyze_development_task has @with_error_handling decorator"""
@@ -11403,7 +11403,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
         source = inspect.getsource(analyze_development_task)
         self.assertIn("@with_error_handling", source)
         self.assertIn("ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('error_code_prefix="AGENT_ENHANCED"', source)
+        self.assertIn('error_code_prefix="AGENT"', source)
 
     def test_analyze_development_task_mixed_pattern(self):
         """Test analyze_development_task uses Mixed Pattern - preserves nested try-catch"""
@@ -11430,7 +11430,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
         source = inspect.getsource(list_available_agents)
         self.assertIn("@with_error_handling", source)
         self.assertIn("ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('error_code_prefix="AGENT_ENHANCED"', source)
+        self.assertIn('error_code_prefix="AGENT"', source)
 
     def test_list_available_agents_mixed_pattern(self):
         """Test list_available_agents uses Mixed Pattern - preserves nested try-catch"""
@@ -11457,7 +11457,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
         source = inspect.getsource(get_agents_status)
         self.assertIn("@with_error_handling", source)
         self.assertIn("ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('error_code_prefix="AGENT_ENHANCED"', source)
+        self.assertIn('error_code_prefix="AGENT"', source)
 
     def test_get_agents_status_mixed_pattern(self):
         """Test get_agents_status uses Mixed Pattern - preserves nested try-catch"""
@@ -11521,7 +11521,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
             )
 
     def test_batch71_error_prefix_consistency(self):
-        """Test batch 71 endpoints all use AGENT_ENHANCED prefix"""
+        """Test batch 71 endpoints all use AGENT prefix"""
         from api.agent import (
             analyze_development_task,
             get_agents_status,
@@ -11535,9 +11535,9 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
         ]:
             source = inspect.getsource(endpoint)
             self.assertIn(
-                'error_code_prefix="AGENT_ENHANCED"',
+                'error_code_prefix="AGENT"',
                 source,
-                f"{endpoint.__name__} should use AGENT_ENHANCED prefix",
+                f"{endpoint.__name__} should use AGENT prefix",
             )
 
     def test_batch71_mixed_pattern_consistency(self):
@@ -11587,8 +11587,8 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
             )
 
 
-class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
-    """Test batch 72 migrations: agent_enhanced.py final 2 endpoints"""
+class TestBatch72AgentMigrations(unittest.TestCase):
+    """Test batch 72 migrations: agent.py final 2 endpoints"""
 
     def test_receive_goal_compat_decorator_present(self):
         """Test receive_goal_compat has @with_error_handling decorator"""
@@ -11597,7 +11597,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
         source = inspect.getsource(receive_goal_compat)
         self.assertIn("@with_error_handling", source)
         self.assertIn("ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('error_code_prefix="AGENT_ENHANCED"', source)
+        self.assertIn('error_code_prefix="AGENT"', source)
 
     def test_receive_goal_compat_mixed_pattern(self):
         """Test receive_goal_compat uses Mixed Pattern - preserves outer try-catch"""
@@ -11618,40 +11618,39 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
         self.assertIn("except Exception", source)
         self.assertIn("fallback", source.lower())
 
-    def test_enhanced_agent_health_decorator_present(self):
-        """Test enhanced_agent_health has @with_error_handling decorator"""
-        from api.agent import agent_health as enhanced_agent_health
+    def test_agent_health_decorator_present(self):
+        """Test agent_health has @with_error_handling decorator"""
+        from api.agent import agent_health
 
-        source = inspect.getsource(enhanced_agent_health)
+        source = inspect.getsource(agent_health)
         self.assertIn("@with_error_handling", source)
         self.assertIn("ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('error_code_prefix="AGENT_ENHANCED"', source)
+        self.assertIn('error_code_prefix="AGENT"', source)
 
-    def test_enhanced_agent_health_mixed_pattern(self):
-        """Test enhanced_agent_health uses Mixed Pattern - preserves outer try-catch"""
-        from api.agent import agent_health as enhanced_agent_health
+    def test_agent_health_mixed_pattern(self):
+        """Test agent_health uses Mixed Pattern - preserves outer try-catch"""
+        from api.agent import agent_health
 
-        source = inspect.getsource(enhanced_agent_health)
+        source = inspect.getsource(agent_health)
         # Should preserve outer try-catch for degraded status business logic
         try_count = source.count("    try:")
         self.assertGreaterEqual(try_count, 1, "Should preserve outer try-catch for degraded status logic")
         self.assertIn("except Exception", source)
 
-    def test_enhanced_agent_health_degraded_logic(self):
-        """Test enhanced_agent_health preserves degraded status business logic"""
-        from api.agent import agent_health as enhanced_agent_health
+    def test_agent_health_degraded_logic(self):
+        """Test agent_health preserves degraded status business logic"""
+        from api.agent import agent_health
 
-        source = inspect.getsource(enhanced_agent_health)
+        source = inspect.getsource(agent_health)
         # Should return degraded status on exception
         self.assertIn("except Exception", source)
         self.assertIn('"status": "degraded"', source)
 
     def test_batch72_decorator_placement(self):
         """Test batch 72 endpoints have decorators in correct order"""
-        from api.agent import agent_health as enhanced_agent_health
-        from api.agent import receive_goal_compat
+        from api.agent import agent_health, receive_goal_compat
 
-        for endpoint in [receive_goal_compat, enhanced_agent_health]:
+        for endpoint in [receive_goal_compat, agent_health]:
             source = inspect.getsource(endpoint)
             # Router decorator should come before error handling decorator
             router_pos = source.find("@router")
@@ -11664,10 +11663,9 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_error_category_consistency(self):
         """Test batch 72 endpoints all use ErrorCategory.SERVER_ERROR"""
-        from api.agent import agent_health as enhanced_agent_health
-        from api.agent import receive_goal_compat
+        from api.agent import agent_health, receive_goal_compat
 
-        for endpoint in [receive_goal_compat, enhanced_agent_health]:
+        for endpoint in [receive_goal_compat, agent_health]:
             source = inspect.getsource(endpoint)
             self.assertIn(
                 "ErrorCategory.SERVER_ERROR",
@@ -11676,24 +11674,22 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
             )
 
     def test_batch72_error_prefix_consistency(self):
-        """Test batch 72 endpoints all use AGENT_ENHANCED prefix"""
-        from api.agent import agent_health as enhanced_agent_health
-        from api.agent import receive_goal_compat
+        """Test batch 72 endpoints all use AGENT prefix"""
+        from api.agent import agent_health, receive_goal_compat
 
-        for endpoint in [receive_goal_compat, enhanced_agent_health]:
+        for endpoint in [receive_goal_compat, agent_health]:
             source = inspect.getsource(endpoint)
             self.assertIn(
-                'error_code_prefix="AGENT_ENHANCED"',
+                'error_code_prefix="AGENT"',
                 source,
-                f"{endpoint.__name__} should use AGENT_ENHANCED prefix",
+                f"{endpoint.__name__} should use AGENT prefix",
             )
 
     def test_batch72_mixed_pattern_consistency(self):
         """Test batch 72 endpoints all use Mixed Pattern (preserve outer try-catch)"""
-        from api.agent import agent_health as enhanced_agent_health
-        from api.agent import receive_goal_compat
+        from api.agent import agent_health, receive_goal_compat
 
-        for endpoint in [receive_goal_compat, enhanced_agent_health]:
+        for endpoint in [receive_goal_compat, agent_health]:
             source = inspect.getsource(endpoint)
             try_count = source.count("    try:")
             self.assertGreaterEqual(
@@ -11704,16 +11700,15 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_business_logic_preservation(self):
         """Test batch 72 endpoints preserve business logic (fallback/degraded responses)"""
-        from api.agent import agent_health as enhanced_agent_health
-        from api.agent import receive_goal_compat
+        from api.agent import agent_health, receive_goal_compat
 
         # receive_goal_compat should have fallback logic
         compat_source = inspect.getsource(receive_goal_compat)
         self.assertIn("except Exception", compat_source)
         self.assertIn("fallback", compat_source.lower())
 
-        # enhanced_agent_health should have degraded status logic
-        health_source = inspect.getsource(enhanced_agent_health)
+        # agent_health should have degraded status logic
+        health_source = inspect.getsource(agent_health)
         self.assertIn("except Exception", health_source)
         self.assertIn('"status": "degraded"', health_source)
 
@@ -15105,25 +15100,24 @@ class TestBatch89AIStackIntegrationMigrations(unittest.TestCase):
 
 
 class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
-    """Test batch 90 migrations: ai_stack_integration.py final 3 endpoints (multi_agent_query, legacy_rag_search, legacy_enhanced_chat) - FINAL BATCH"""
+    """Test batch 90 migrations: ai_stack_integration.py final 2 endpoints (multi_agent_query, legacy_rag_search) - FINAL BATCH"""
 
     def test_ai_stack_integration_py_100_percent_complete(self):
-        """Test ai_stack_integration.py is 100% complete - all 17 endpoints migrated"""
+        """Test ai_stack_integration.py is 100% complete - all 16 endpoints migrated"""
         from api.ai_stack_integration import (
             ai_stack_health_check,
             analyze_development_speedup,
             analyze_documents,
         )
-        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import chat as ai_stack_chat
         from api.ai_stack_integration import (
             classify_content,
             comprehensive_research,
             extract_knowledge,
             get_system_knowledge,
         )
-        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import knowledge_search as ai_stack_knowledge_search
         from api.ai_stack_integration import (
-            legacy_enhanced_chat,
             legacy_rag_search,
             list_ai_agents,
             multi_agent_query,
@@ -15133,16 +15127,16 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             web_research,
         )
 
-        # All 17 endpoints must have @with_error_handling decorator
+        # All 16 endpoints must have @with_error_handling decorator
         all_endpoints = [
             ai_stack_health_check,
             list_ai_agents,
             rag_query,
             reformulate_query,
             analyze_documents,
-            enhanced_chat,
+            ai_stack_chat,
             extract_knowledge,
-            enhanced_knowledge_search,
+            ai_stack_knowledge_search,
             get_system_knowledge,
             comprehensive_research,
             web_research,
@@ -15151,10 +15145,9 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             classify_content,
             multi_agent_query,
             legacy_rag_search,
-            legacy_enhanced_chat,
         ]
 
-        # All 17 endpoints must have decorator
+        # All 16 endpoints must have decorator
         for endpoint in all_endpoints:
             source = inspect.getsource(endpoint)
             self.assertIn("@with_error_handling", source)
@@ -15162,22 +15155,21 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="AI_STACK"', source)
 
     def test_batch_90_progress_validation(self):
-        """Test batch 90 brings ai_stack_integration.py to 17/17 endpoints (100%)"""
+        """Test batch 90 brings ai_stack_integration.py to 16/16 endpoints (100%)"""
         from api.ai_stack_integration import (
             ai_stack_health_check,
             analyze_development_speedup,
             analyze_documents,
         )
-        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import chat as ai_stack_chat
         from api.ai_stack_integration import (
             classify_content,
             comprehensive_research,
             extract_knowledge,
             get_system_knowledge,
         )
-        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import knowledge_search as ai_stack_knowledge_search
         from api.ai_stack_integration import (
-            legacy_enhanced_chat,
             legacy_rag_search,
             list_ai_agents,
             multi_agent_query,
@@ -15194,9 +15186,9 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             rag_query,
             reformulate_query,
             analyze_documents,
-            enhanced_chat,
+            ai_stack_chat,
             extract_knowledge,
-            enhanced_knowledge_search,
+            ai_stack_knowledge_search,
             get_system_knowledge,
             comprehensive_research,
             web_research,
@@ -15205,11 +15197,10 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             classify_content,
             multi_agent_query,
             legacy_rag_search,
-            legacy_enhanced_chat,
         ]
 
-        # Verify we have exactly 17 endpoints
-        self.assertEqual(len(migrated_endpoints), 17)
+        # Verify we have exactly 16 endpoints
+        self.assertEqual(len(migrated_endpoints), 16)
 
         for endpoint in migrated_endpoints:
             source = inspect.getsource(endpoint)
@@ -15218,24 +15209,15 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="AI_STACK"', source)
 
     def test_batch_90_pattern_validation(self):
-        """Test batch 90 endpoints use correct patterns (2 Simple, 1 Mixed)"""
+        """Test batch 90 endpoints use correct patterns (1 Simple, 1 Mixed)"""
         from api.ai_stack_integration import (
-            legacy_enhanced_chat,
             legacy_rag_search,
             multi_agent_query,
         )
 
-        # Simple Pattern endpoints (should have 0 try-catch at function level)
-        simple_pattern_endpoints = [
-            ("legacy_rag_search", legacy_rag_search),
-            ("legacy_enhanced_chat", legacy_enhanced_chat),
-        ]
-
-        for name, endpoint in simple_pattern_endpoints:
-            source = inspect.getsource(endpoint)
-            # Count function-level try blocks (should be 0)
-            # Legacy endpoints are wrappers, no try-catch
-            self.assertNotIn("    try:", source, f"{name} should have no try-catch")
+        # Simple Pattern endpoint (should have 0 try-catch at function level)
+        source = inspect.getsource(legacy_rag_search)
+        self.assertNotIn("    try:", source, "legacy_rag_search should have no try-catch")
 
         # Mixed Pattern endpoint (should have inner try-catch blocks)
         source = inspect.getsource(multi_agent_query)
@@ -15286,30 +15268,9 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
         # Should call rag_query
         self.assertIn("await rag_query(request)", source)
 
-    def test_batch_90_legacy_enhanced_chat_has_decorator(self):
-        """Test legacy_enhanced_chat has @with_error_handling decorator"""
-        from api.ai_stack_integration import legacy_enhanced_chat
-
-        source = inspect.getsource(legacy_enhanced_chat)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="legacy_enhanced_chat"', source)
-        self.assertIn('error_code_prefix="AI_STACK"', source)
-
-    def test_batch_90_legacy_enhanced_chat_is_simple_wrapper(self):
-        """Test legacy_enhanced_chat is simple wrapper with no error handling (Simple Pattern)"""
-        from api.ai_stack_integration import legacy_enhanced_chat
-
-        source = inspect.getsource(legacy_enhanced_chat)
-        # Should be simple wrapper - no try-catch
-        self.assertNotIn("try:", source)
-        # Should call enhanced_chat
-        self.assertIn("await enhanced_chat(request)", source)
-
     def test_batch_90_all_endpoints_use_ai_stack_prefix(self):
         """Test all batch 90 endpoints use AI_STACK error code prefix"""
         from api.ai_stack_integration import (
-            legacy_enhanced_chat,
             legacy_rag_search,
             multi_agent_query,
         )
@@ -15317,7 +15278,6 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
         endpoints = [
             multi_agent_query,
             legacy_rag_search,
-            legacy_enhanced_chat,
         ]
 
         for endpoint in endpoints:
@@ -15326,22 +15286,12 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
 
     def test_batch_90_legacy_endpoints_are_concise(self):
         """Test batch 90 legacy endpoints are concise wrappers"""
-        from api.ai_stack_integration import legacy_enhanced_chat, legacy_rag_search
+        from api.ai_stack_integration import legacy_rag_search
 
         # Legacy endpoints should be simple wrappers (8-10 lines)
-        legacy_endpoints = [
-            ("legacy_rag_search", legacy_rag_search, 10),
-            ("legacy_enhanced_chat", legacy_enhanced_chat, 10),
-        ]
-
-        for name, endpoint, max_lines in legacy_endpoints:
-            source = inspect.getsource(endpoint)
-            line_count = len([ln for ln in source.split("\n") if ln.strip()])
-            self.assertLessEqual(
-                line_count,
-                max_lines,
-                f"{name} should be concise (≤{max_lines} lines)",
-            )
+        source = inspect.getsource(legacy_rag_search)
+        line_count = len([ln for ln in source.split("\n") if ln.strip()])
+        self.assertLessEqual(line_count, 10, "legacy_rag_search should be concise (≤10 lines)")
 
     def test_batch_90_multi_agent_query_removed_outer_exception(self):
         """Test multi_agent_query removed outer Exception with HTTPException raise"""
@@ -15356,7 +15306,6 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
     def test_batch_90_comprehensive_validation(self):
         """Test all batch 90 endpoints comprehensively"""
         from api.ai_stack_integration import (
-            legacy_enhanced_chat,
             legacy_rag_search,
             multi_agent_query,
         )
@@ -15364,7 +15313,6 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
         endpoints_info = [
             ("multi_agent_query", multi_agent_query, "Mixed"),
             ("legacy_rag_search", legacy_rag_search, "Simple"),
-            ("legacy_enhanced_chat", legacy_enhanced_chat, "Simple"),
         ]
 
         for name, endpoint, pattern in endpoints_info:
@@ -15422,16 +15370,15 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             analyze_development_speedup,
             analyze_documents,
         )
-        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import chat as ai_stack_chat
         from api.ai_stack_integration import (
             classify_content,
             comprehensive_research,
             extract_knowledge,
             get_system_knowledge,
         )
-        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import knowledge_search as ai_stack_knowledge_search
         from api.ai_stack_integration import (
-            legacy_enhanced_chat,
             legacy_rag_search,
             list_ai_agents,
             multi_agent_query,
@@ -15447,9 +15394,9 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             rag_query,
             reformulate_query,
             analyze_documents,
-            enhanced_chat,
+            ai_stack_chat,
             extract_knowledge,
-            enhanced_knowledge_search,
+            ai_stack_knowledge_search,
             get_system_knowledge,
             comprehensive_research,
             web_research,
@@ -15458,16 +15405,15 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             classify_content,
             multi_agent_query,
             legacy_rag_search,
-            legacy_enhanced_chat,
         ]
 
-        # Verify ALL 17 endpoints have the decorator
+        # Verify ALL 16 endpoints have the decorator
         for endpoint in all_endpoints:
             source = inspect.getsource(endpoint)
             self.assertIn("@with_error_handling", source)
 
         # This confirms 100% completion
-        self.assertEqual(len(all_endpoints), 17)
+        self.assertEqual(len(all_endpoints), 16)
 
 
 class TestBatch91ServiceMonitorMigrations(unittest.TestCase):
@@ -25756,15 +25702,15 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="get_system_knowledge_insights"', source)
         self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
 
-    def test_batch_153_get_enhanced_stats_simple_pattern(self):
-        """Verify get_enhanced_stats endpoint uses Simple Pattern"""
+    def test_batch_153_get_aistack_stats_simple_pattern(self):
+        """Verify get_aistack_stats endpoint uses Simple Pattern"""
         from api import knowledge_ai_stack
 
-        source = inspect.getsource(knowledge_ai_stack.get_enhanced_stats)
+        source = inspect.getsource(knowledge_ai_stack.get_aistack_stats)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="get_enhanced_stats"', source)
-        self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
+        self.assertIn('operation="get_aistack_stats"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_AI_STACK"', source)
 
     def test_batch_153_enhanced_knowledge_health_simple_pattern(self):
         """Verify enhanced_knowledge_health endpoint uses Simple Pattern"""
@@ -25787,7 +25733,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             knowledge_ai_stack.analyze_documents,
             knowledge_ai_stack.reformulate_query,
             knowledge_ai_stack.get_system_knowledge_insights,
-            knowledge_ai_stack.get_enhanced_stats,
+            knowledge_ai_stack.get_aistack_stats,
             knowledge_ai_stack.knowledge_health,
         ]
 
@@ -25810,7 +25756,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             knowledge_ai_stack.analyze_documents,
             knowledge_ai_stack.reformulate_query,
             knowledge_ai_stack.get_system_knowledge_insights,
-            knowledge_ai_stack.get_enhanced_stats,
+            knowledge_ai_stack.get_aistack_stats,
             knowledge_ai_stack.knowledge_health,
         ]
 
