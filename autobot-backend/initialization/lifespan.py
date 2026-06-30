@@ -1518,7 +1518,7 @@ async def _wire_scheduler_executor() -> None:
         orchestrator = get_orchestrator_sync()
 
         async def _orchestration_executor(workflow: ScheduledWorkflow):
-            """Adapter: ScheduledWorkflow → Orchestrator.execute_enhanced_workflow.
+            """Adapter: ScheduledWorkflow → Orchestrator.run_workflow (#10746).
 
             Routes template-based workflows to the template executor and
             non-template workflows through the full orchestration pipeline.
@@ -1537,7 +1537,7 @@ async def _wire_scheduler_executor() -> None:
                 "auto_approve": workflow.auto_approve,
                 "scheduled": True,
             }
-            result = await orchestrator.execute_enhanced_workflow(
+            result = await orchestrator.run_workflow(
                 user_request=workflow.user_message,
                 context=context,
                 auto_document=True,
