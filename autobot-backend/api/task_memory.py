@@ -3,12 +3,10 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Enhanced Memory API for AutoBot Phase 7
+Task Memory API for AutoBot Phase 7
 Provides endpoints for task execution tracking, markdown management, and memory analytics
 
-Migrated (#10572): uses MemoryManager (memory/manager.py) exclusively.
-AsyncEnhancedMemoryManager and the standalone enhanced_memory_manager module
-are no longer referenced here.
+Uses MemoryManager (memory/manager.py) exclusively (#10572).
 """
 
 import asyncio
@@ -44,7 +42,7 @@ from task_execution_tracker import get_task_tracker
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["enhanced_memory"])
+router = APIRouter(tags=["task_memory"])
 
 # Thread-safe lock for lazy initialisation of the markdown subsystem singleton
 _markdown_system_lock = asyncio.Lock()

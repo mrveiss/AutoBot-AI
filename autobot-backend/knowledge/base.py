@@ -29,7 +29,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
-from knowledge.backends import BaseCollection, get_default_client
+from knowledge.backends import BaseCollection, get_async_default_client, get_default_client
 from utils.knowledge_base_timeouts import kb_timeouts
 
 if TYPE_CHECKING:
@@ -105,6 +105,9 @@ class KnowledgeBaseCore:
         self.vector_store: ChromaVectorStore | None = None
         self.vector_index: VectorStoreIndex | None = None
         self._async_chroma_collection: "BaseCollection" | None = None
+        # Async ChromaDB client for callers that create/read sibling collections
+        # (e.g. LLC per-company KB collections) — populated during _init_vector_store.
+        self._async_chroma_client = None
         self.llama_index_configured = False
         self.embedding_model_name: str | None = None
         self.embedding_dimensions: int | None = None
@@ -428,6 +431,10 @@ class KnowledgeBaseCore:
 
             hnsw_metadata = self._build_hnsw_metadata()
             await self._create_chroma_collection(chroma_client, hnsw_metadata)
+
+            # Async client for non-blocking sibling-collection access (LLC KB, etc.).
+            # Callers reference kb._async_chroma_client.get_or_create_collection(...).
+            self._async_chroma_client = await get_async_default_client()
 
             logger.info("Skipping eager vector index creation - will create on first query")
 

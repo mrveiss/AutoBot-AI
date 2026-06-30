@@ -2,7 +2,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """
-Test script for Phase 8 Advanced Control System
+Test script for Advanced Control System
 Validates desktop streaming, takeover management, and monitoring capabilities
 """
 
@@ -64,7 +64,7 @@ async def test_desktop_streaming_manager():
         print("\n3. Testing Session Creation...")  # noqa: print
         try:
             session_info = await desktop_streaming.create_streaming_session(
-                user_id="test_user_phase8",
+                user_id="test_user_control",
                 session_config={"resolution": "800x600", "depth": 16},
             )
             print(f"✅ Session created: {session_info['session_id']}")  # noqa: print
@@ -100,7 +100,7 @@ async def test_takeover_manager():
     print("\n2. Testing Takeover Request...")  # noqa: print
     request_id = await takeover_manager.request_takeover(
         trigger=TakeoverTrigger.MANUAL_REQUEST,
-        reason="Phase 8 testing - manual takeover request",
+        reason="Control system testing - manual takeover request",
         requesting_agent="test_agent",
         affected_tasks=["test_task_1", "test_task_2"],
         priority=TaskPriority.MEDIUM,
@@ -117,7 +117,7 @@ async def test_takeover_manager():
     print("\n4. Testing Takeover Approval...")  # noqa: print
     try:
         session_id = await takeover_manager.approve_takeover(
-            request_id=request_id, human_operator="test_operator_phase8"
+            request_id=request_id, human_operator="test_operator_control"
         )
         print(f"✅ Takeover approved: {session_id}")  # noqa: print
 
@@ -135,7 +135,7 @@ async def test_takeover_manager():
         completion_success = await takeover_manager.complete_takeover_session(
             session_id=session_id,
             resolution="Test completed successfully",
-            handback_notes="Phase 8 validation completed",
+            handback_notes="Control system validation completed",
         )
         print(f"✅ Session completed: {completion_success}")  # noqa: print
 
@@ -231,9 +231,9 @@ async def test_integration():
     from task_execution_tracker import get_task_tracker
 
     async with get_task_tracker().track_task(
-        "Phase 8 Integration Test",
-        "Testing integration between Phase 8 components",
-        agent_type="phase8_test",
+        "Control System Integration Test",
+        "Testing integration between control system components",
+        agent_type="control_test",
         priority=TaskPriority.HIGH,
         inputs={"test_type": "integration", "phase": 8},
     ) as task_context:
@@ -276,7 +276,7 @@ async def test_integration():
 
 async def main():
     """Main test function"""
-    print("🚀 Phase 8: Advanced Control System Test")  # noqa: print
+    print("🚀 Advanced Control System Test")  # noqa: print
     print("=" * 60)  # noqa: print
 
     test_results = []
@@ -306,7 +306,7 @@ async def main():
 
         # Summary
         print("\n" + "=" * 60)  # noqa: print
-        print("📊 Phase 8 Test Results Summary:")  # noqa: print
+        print("📊 Control System Test Results Summary:")  # noqa: print
 
         all_passed = True
         for test_name, result in test_results:

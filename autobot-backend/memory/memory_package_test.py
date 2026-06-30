@@ -54,7 +54,7 @@ def test_1_import_verification():
 
 
 async def test_2_task_execution_logging():
-    """Test 2: Task execution history (enhanced_memory features)"""
+    """Test 2: Task execution history (task_memory features)"""
     print("\n[TEST 2] Task execution logging...")  # noqa: print
 
     with tempfile.TemporaryDirectory() as tmpdir:

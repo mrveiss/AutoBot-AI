@@ -121,7 +121,7 @@ UNIT_TEST_MAPPINGS = {
     # Direct name matches
     "api_responses": "autobot-user-backend/utils",
     "async_initializable": "autobot-user-backend/utils",
-    "enhanced_security_layer": "autobot-user-backend",
+    "security_layer": "autobot-user-backend",
     "hardware_metrics": "autobot-user-backend/utils",
     "knowledge_manager": "autobot-user-backend/agents",
     "lazy_singleton": "autobot-user-backend/utils",
@@ -146,9 +146,9 @@ UNIT_TEST_MAPPINGS = {
     "llm_interface_core": "autobot-user-backend/llm_interface_pkg",
     "memory_package": "autobot-user-backend",
     "model_optimizer_refactoring": "autobot-user-backend/utils",
-    "phase7_enhanced_memory": "autobot-user-backend",
-    "phase8_control_panel": "autobot-user-backend",
-    "phase9_multimodal_ai": "autobot-user-backend/computer_vision",
+    "memory_consolidation": "autobot-user-backend",
+    "control_panel": "autobot-user-backend",
+    "multimodal_ai": "autobot-user-backend/computer_vision",
     "queue_integration": "autobot-user-backend/services",
     "redis_consolidation": "autobot-user-backend/utils",
     "redis_thread_safety": "autobot-user-backend/utils",
@@ -381,7 +381,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    logger.info(f"\nTest Migration Script (Issue #734)")
+    logger.info("\nTest Migration Script (Issue #734)")
     logger.info(f"Mode: {'DRY RUN' if args.dry_run else 'EXECUTE'}")
     logger.info(f"Phase: {args.phase}")
 

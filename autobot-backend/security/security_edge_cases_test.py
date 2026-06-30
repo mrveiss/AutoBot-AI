@@ -57,7 +57,7 @@ class TestSecurityEdgeCases:
             },
         }
 
-        with patch("enhanced_security_layer.global_config_manager") as mock_config:
+        with patch("security_layer.global_config_manager") as mock_config:
             mock_config.get.return_value = self.security_config
             self.security = SecurityLayer()
 
@@ -372,7 +372,7 @@ class TestSecurityEdgeCases:
         ]
 
         for bypass_config in bypass_attempts:
-            with patch("enhanced_security_layer.global_config_manager") as mock_config:
+            with patch("security_layer.global_config_manager") as mock_config:
                 # Simulate config change during runtime
                 modified_config = original_config.copy()
                 modified_config.update(bypass_config)
@@ -557,7 +557,7 @@ class TestSecurityBoundaryConditions:
             "audit_log_file": self.temp_audit_file.name,
         }
 
-        with patch("enhanced_security_layer.global_config_manager") as mock_config:
+        with patch("security_layer.global_config_manager") as mock_config:
             mock_config.get.return_value = self.minimal_config
             self.security = SecurityLayer()
 
