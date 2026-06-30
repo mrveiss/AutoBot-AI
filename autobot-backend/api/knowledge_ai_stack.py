@@ -260,7 +260,7 @@ async def _run_all_search_sources(
     return results
 
 
-@router.post("/search/advanced", response_model=DataResponse[AIStackSearchData])
+@router.post("/search", response_model=DataResponse[AIStackSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search",
@@ -606,7 +606,7 @@ async def get_system_knowledge_insights(
 # ====================================================================
 
 
-@router.get("/stats/advanced", response_model=DataResponse[AIStackStatsData])
+@router.get("/stats", response_model=DataResponse[AIStackStatsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_aistack_stats",
