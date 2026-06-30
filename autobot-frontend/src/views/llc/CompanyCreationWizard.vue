@@ -452,8 +452,10 @@ async function createCompany() {
 
     logger.info('Company created successfully', { companyId: createdCompany.id })
 
-    // Redirect to company dashboard
-    await router.push('/llc/dashboard')
+    // Redirect into the new company's PM workspace (LlcCompanyLayout → backlog,
+    // boards, sprints, etc. with the sidebar) rather than the sidebar-less
+    // standalone /llc/dashboard, which left all PM features unreachable.
+    await router.push(`/llc/companies/${createdCompany.id}`)
   } catch (err: any) {
     logger.error('Failed to create company', err)
     error.value = err?.response?.data?.detail || err?.message || 'Failed to create company'
