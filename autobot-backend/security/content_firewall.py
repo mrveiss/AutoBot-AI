@@ -94,7 +94,7 @@ class ContentSource(str, Enum):
 class FirewallAction(str, Enum):
     """Action taken by the firewall."""
 
-    PASS = "pass"  # Safe — content returned as-is (with optional delimiters)
+    PASS = "pass"  # nosec B105 - firewall-action label, not a credential; safe → content returned as-is
     QUARANTINE = "quarantine"  # Suspicious — stripped content returned + flagged
     BLOCK = "block"  # High risk — content withheld; caller should abort
     ESCALATE = "escalate"  # High risk + escalation enabled — human approval requested
