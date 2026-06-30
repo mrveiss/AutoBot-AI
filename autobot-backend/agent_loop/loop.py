@@ -53,7 +53,7 @@ from events.event_types import AGENT_ABSTAINED as EVT_AGENT_ABSTAINED
 from events.event_types import APPROVAL_REQUIRED as EVT_APPROVAL_REQUIRED
 from events.event_types import BELIEF_CACHE_HIT as EVT_BELIEF_CACHE_HIT
 from events.event_types import STEERING_RECEIVED as EVT_STEERING_RECEIVED
-from events.types import create_approval_required_event, create_message_event, create_steering_event
+from events.types import create_approval_required_event, create_message_event
 from planner import PlannerModule
 from tools.parallel import ParallelToolExecutor
 

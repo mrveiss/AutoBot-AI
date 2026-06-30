@@ -14,8 +14,6 @@ Acceptance criteria:
   - _drain_steering_inbox() is non-blocking (no hang when inbox is empty).
 """
 
-import asyncio
-import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,7 +21,6 @@ import pytest
 import agent_loop.loop as _loop_module
 from agent_loop.loop import AgentLoop
 from agent_loop.types import AgentLoopConfig, LoopState, SteeringEntry, TaskContext
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -138,6 +135,7 @@ class TestDrainSteeringInbox:
         assert call_args[0][0] == "task:t-steer"
         # event type is STEERING_RECEIVED
         from events.event_types import STEERING_RECEIVED
+
         assert call_args[0][1] == STEERING_RECEIVED
         payload = call_args[0][2]
         assert payload["steering_id"] == "sid-pub"
