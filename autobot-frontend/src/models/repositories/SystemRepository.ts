@@ -285,8 +285,8 @@ export class SystemRepository extends ApiRepository {
   }
 
   async downloadLogs(): Promise<Blob> {
-    // Issue #552: Backend uses /api/logs/aggregated
-    const response = await this.get(`${getApiBase()}/logs/aggregated`)
+    // Issue #552: Backend uses /api/logs/combined (docker + file logs merged)
+    const response = await this.get(`${getApiBase()}/logs/combined`)
     return response.data as Blob
   }
 

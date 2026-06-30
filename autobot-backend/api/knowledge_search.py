@@ -572,19 +572,19 @@ async def search(request: SearchRequest, req: Request):
 
     # Path 1: Full RAG search with synthesis
     if request.enable_rag and RAG_AVAILABLE:
-        return await _consolidated_rag_search(request, kb_to_use)
+        return await _rag_search(request, kb_to_use)
 
-    # Path 2: Enhanced search with tags/filtering/advanced options
+    # Path 2: Search with tags/filtering/advanced options
     if request.tags or request.min_score > 0 or hasattr(kb_to_use, "search") or request.uses_advanced_features():
-        return await _consolidated_enhanced_search(request, kb_to_use)
+        return await _aistack_search(request, kb_to_use)
 
     # Path 3: Basic search (Issue #665: uses helper)
     return await _execute_basic_search_with_reranking(request, kb_to_use, query)
 
 
-async def _consolidated_enhanced_search(request: SearchRequest, kb_to_use) -> dict:
+async def _aistack_search(request: SearchRequest, kb_to_use) -> dict:
     """
-    Handle enhanced/advanced search path for consolidated endpoint (#555, #10666).
+    Handle advanced search path for the consolidated endpoint (#555, #10666).
 
     Uses the unified ``search()`` method with advanced params when available.
     Falls back to basic search + post-filtering for KB implementations that
@@ -622,9 +622,9 @@ async def _consolidated_enhanced_search(request: SearchRequest, kb_to_use) -> di
     )
 
 
-async def _consolidated_rag_search(request: SearchRequest, kb_to_use) -> dict:
+async def _rag_search(request: SearchRequest, kb_to_use) -> dict:
     """
-    Handle RAG-enhanced search path for consolidated endpoint (Issue #555).
+    Handle RAG search path for the consolidated endpoint (Issue #555).
 
     Performs query reformulation (if enabled), multi-query search, and RAG synthesis.
     """

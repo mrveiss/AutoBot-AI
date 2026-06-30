@@ -94,7 +94,7 @@ class ConversationContextEnhancer:
             reasoning="No context enhancement needed",
         )
 
-    def _build_enhanced_result(
+    def _build_result(
         self,
         query: str,
         enhanced_query: str,
@@ -102,7 +102,7 @@ class ConversationContextEnhancer:
         context_topics: List[str],
         word_count: int,
     ) -> Query:
-        """Build result with context enhancement applied.
+        """Build result with context enrichment applied.
 
         Args:
             query: Original user query
@@ -112,7 +112,7 @@ class ConversationContextEnhancer:
             word_count: Pre-computed word count
 
         Returns:
-            Query with enhancement details. Issue #620.
+            Query with enrichment details. Issue #620.
         """
         return Query(
             original_query=query,
@@ -151,9 +151,9 @@ class ConversationContextEnhancer:
         recent_history = conversation_history[-max_history_items:]
         context_entities = self._extract_entities(recent_history)
         context_topics = self._extract_topics(recent_history)
-        enhanced_query = self._build_enhanced_query(query, recent_history, context_entities, context_topics, word_count)
+        enhanced_query = self._build_query(query, recent_history, context_entities, context_topics, word_count)
 
-        return self._build_enhanced_result(query, enhanced_query, context_entities, context_topics, word_count)
+        return self._build_result(query, enhanced_query, context_entities, context_topics, word_count)
 
     def _needs_context_enhancement(self, query: str, word_count: int | None = None) -> bool:
         """Check if a query would benefit from context enhancement."""
@@ -214,7 +214,7 @@ class ConversationContextEnhancer:
 
         return topics[-3:]  # Last 3 topics
 
-    def _build_enhanced_query(
+    def _build_query(
         self,
         query: str,
         history: List[Dict[str, str]],
@@ -222,7 +222,7 @@ class ConversationContextEnhancer:
         topics: List[str],
         word_count: int | None = None,
     ) -> str:
-        """Build an enhanced query with context."""
+        """Build a context-enriched query string."""
         enhanced_parts = [query]
 
         # If query has pronouns and we have entities, add context
