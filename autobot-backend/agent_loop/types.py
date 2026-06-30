@@ -286,6 +286,34 @@ class AgentMessage:
 
 
 # =============================================================================
+# Steering Entry (#10543)
+# =============================================================================
+
+
+@dataclass
+class SteeringEntry:
+    """A single human steering message absorbed by the running loop (#10543).
+
+    Recorded in TaskContext so the trajectory reflects every human correction
+    and the agent's rationale references the actual guidance that caused a
+    plan amendment.
+    """
+
+    steering_id: str
+    guidance: str
+    iteration: int
+    timestamp: datetime = field(default_factory=now_utc)
+
+    def to_dict(self) -> dict:
+        return {
+            "steering_id": self.steering_id,
+            "guidance": self.guidance,
+            "iteration": self.iteration,
+            "timestamp": self.timestamp.isoformat(),
+        }
+
+
+# =============================================================================
 # Observation Fingerprint (Issue #6627)
 # =============================================================================
 
@@ -399,6 +427,8 @@ class TaskContext:
     tool_call_hashes: dict[str, int] = field(default_factory=dict)
     # Semantic stagnation detection: ordered fingerprints (#6627)
     observation_fingerprints: list[ObservationFingerprint] = field(default_factory=list)
+    # Mid-task steering messages absorbed by the loop (#10543)
+    steering_events: list["SteeringEntry"] = field(default_factory=list)
     # Belief state (MVA-1407)
     assertions: dict[str, "Assertion"] = field(default_factory=dict)
     contradictions: list["ContradictionRecord"] = field(default_factory=list)
@@ -457,6 +487,10 @@ class TaskContext:
     def add_think(self, result: ThinkResult) -> None:
         """Record a think result."""
         self.think_history.append(result)
+
+    def add_steering(self, entry: "SteeringEntry") -> None:
+        """Record a human steering message absorbed by the loop (#10543)."""
+        self.steering_events.append(entry)
 
     def get_duration_ms(self) -> float:
         """Get task duration in milliseconds."""

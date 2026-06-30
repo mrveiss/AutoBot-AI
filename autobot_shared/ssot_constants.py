@@ -127,6 +127,14 @@ GROQ_LLAMA33_70B = "llama-3.3-70b-versatile"
 GROQ_MIXTRAL_8X7B = "mixtral-8x7b-32768"
 GROQ_GEMMA2_9B = "gemma2-9b-it"
 
+# Mistral cloud API models (#10549) — https://api.mistral.ai/v1
+MISTRAL_LARGE_LATEST = "mistral-large-latest"
+MISTRAL_SMALL_LATEST = "mistral-small-latest"
+MISTRAL_MEDIUM_LATEST = "mistral-medium-latest"
+MISTRAL_CODESTRAL_LATEST = "codestral-latest"
+MISTRAL_DEVSTRAL_LATEST = "devstral-medium-latest"
+MISTRAL_NEMO = "open-mistral-nemo"
+
 DEEPSEEK_V3 = "deepseek-v3"
 DEEPSEEK_R1_API = "deepseek-r1-api"
 

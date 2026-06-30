@@ -3,7 +3,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Unified Analytics Report API (Issue #271)
+Analytics Report API (Issue #271)
 
 Provides a single endpoint that aggregates all analytics data from:
 - Code quality health score
@@ -32,7 +32,7 @@ from autobot_shared.time_utils import utc_timestamp
 
 logger = get_logger(__name__)
 # Issue #3355: prefix moved to router registry (analytics_routers.py)
-router = APIRouter(tags=["unified-analytics"])
+router = APIRouter(tags=["analytics"])
 
 
 async def fetch_quality_health() -> Dict[str, Any]:
@@ -135,14 +135,14 @@ async def fetch_performance_summary() -> Dict[str, Any]:
         return {"total_analyses": 0, "average_score": 0, "common_issues": []}
 
 
-def calculate_unified_health_score(
+def calculate_aggregated_health_score(
     quality_data: Dict[str, Any],
     charts_data: Dict[str, Any],
     debt_data: Dict[str, Any],
     performance_data: Dict[str, Any],
 ) -> float:
     """
-    Calculate unified health score from all sources.
+    Calculate aggregated health score from all analytics sources.
 
     Weights:
     - Quality score: 40%
@@ -236,14 +236,14 @@ def aggregate_categories(charts_data: Dict[str, Any]) -> Dict[str, Any]:
     return categories
 
 
-def _build_unified_report_response(
+def _build_report_response(
     health_score: float,
     quality_data: Dict[str, Any],
     charts_data: Dict[str, Any],
     debt_data: Dict[str, Any],
     performance_data: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Helper for get_unified_report. Ref: #1088.
+    """Helper for get_analytics_report. Ref: #1088.
 
     Assembles the full report dict from pre-computed analytics values.
     """
@@ -292,12 +292,12 @@ def _build_unified_report_response(
 @router.get("/report", response_model=DataResponse[AnalyticsReportingReportResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_unified_report",
+    operation="get_analytics_report",
     error_code_prefix="ANALYTICS_REPORTING",
 )
-async def get_unified_report():
+async def get_analytics_report():
     """
-    Get unified analytics report aggregating all analytics sources.
+    Get aggregated analytics report from all analytics sources.
 
     Returns comprehensive code health overview including:
     - Overall health score
@@ -317,10 +317,10 @@ async def get_unified_report():
         fetch_performance_summary(),
     )
 
-    # Calculate unified health score
-    health_score = calculate_unified_health_score(quality_data, charts_data, debt_data, performance_data)
+    # Calculate aggregated health score
+    health_score = calculate_aggregated_health_score(quality_data, charts_data, debt_data, performance_data)
 
-    response = _build_unified_report_response(health_score, quality_data, charts_data, debt_data, performance_data)
+    response = _build_report_response(health_score, quality_data, charts_data, debt_data, performance_data)
 
     return JSONResponse(content=response)
 

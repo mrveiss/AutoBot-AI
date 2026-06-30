@@ -17,7 +17,7 @@ Usage:
 
     # Get coordinator for stats/eviction
     coordinator = await get_cache_coordinator()
-    stats = coordinator.get_unified_stats()
+    stats = coordinator.get_cache_stats()
 """
 
 from typing import Callable, List, Tuple

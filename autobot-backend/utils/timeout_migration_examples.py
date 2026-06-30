@@ -444,7 +444,7 @@ class ExistingOperationMigrator:
             operation_type=OperationType.COMPREHENSIVE_TEST_SUITE,
             name="Enhanced Comprehensive Test Suite",
             description="Migrate from fixed timeout to dynamic checkpoint-based testing",
-            operation_function=self._enhanced_test_suite_operation,
+            operation_function=self._test_suite_operation,
             priority=OperationPriority.HIGH,
             estimated_items=len(list(Path(f"{PATH.PROJECT_ROOT}/tests").rglob("test_*.py"))),
             execute_immediately=False,
@@ -453,9 +453,9 @@ class ExistingOperationMigrator:
         logger.info("Migrated comprehensive test suite operation: %s", operation_id)
         return operation_id
 
-    async def _enhanced_test_suite_operation(self, context: OperationExecutionContext) -> Dict[str, Any]:
+    async def _test_suite_operation(self, context: OperationExecutionContext) -> Dict[str, Any]:
         """
-        Enhanced test suite with checkpoint/resume and parallel execution.
+        Test suite with checkpoint/resume and parallel execution.
 
         Issue #620: Extracted from migrate_comprehensive_test_suite to reduce
         function length using Extract Method pattern. Issue #620.
@@ -910,9 +910,9 @@ def _create_progress_wrapper(context: OperationExecutionContext):
 
 
 # Decorator-based migration helpers
-def _create_enhanced_operation(func, args, kwargs, progress_callback):
+def _create_operation(func, args, kwargs, progress_callback):
     """
-    Create enhanced operation callable with progress tracking.
+    Create operation callable with progress tracking.
 
     Wraps the original function to inject progress callbacks and handle
     both sync and async functions appropriately. Issue #620.
@@ -966,7 +966,7 @@ def migrate_timeout_operation(
         async def wrapper(*args, **kwargs):
             """Execute operation with enhanced progress and timeout handling."""
             progress_callback = kwargs.pop("progress_callback", None)
-            enhanced_op = _create_enhanced_operation(func, args, kwargs, progress_callback)
+            enhanced_op = _create_operation(func, args, kwargs, progress_callback)
             items = _get_estimated_items(estimated_items, args)
 
             # Execute with operation manager if available

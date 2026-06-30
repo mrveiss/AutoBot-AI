@@ -236,6 +236,7 @@ from api.schemas_agent import (
     AgentTerminalResumeResponse,
 )
 from api.schemas_system import (
+    TaskSteeringRequest,
     TerminalApproveCommandRequest,
     TerminalCreateSessionRequest,
     TerminalExecuteCommandRequest,
@@ -578,6 +579,53 @@ async def submit_tool_approval(
         request.task_id,
     )
     return {"status": "ok", "approval_id": approval_id, "approved": request.approved}
+
+
+@router.post("/tasks/{task_id}/steer")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="steer_agent_task",
+    error_code_prefix="AGENT_TERMINAL",
+)
+async def steer_agent_task(
+    task_id: str,
+    request: TaskSteeringRequest,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """Send a steering message to a running agent task without stopping it (#10543).
+
+    The guidance is queued in the loop's steering inbox and drained at the top
+    of the next ANALYZE_EVENTS phase.  The loop continues without restart;
+    the agent acknowledges the guidance in its next tool selection.
+
+    Returns 409 when no running loop owns the given task_id (stale or wrong ID).
+    Mirrors the approval-response path: publish a STEERING event so the live
+    event stream records the guidance in the task's trajectory.
+    """
+    import uuid
+
+    from events.stream_manager import RedisEventStreamManager
+    from events.types import create_steering_event
+
+    steering_id = str(uuid.uuid4())
+    event = create_steering_event(
+        steering_id=steering_id,
+        guidance=request.guidance,
+        task_id=task_id,
+    )
+    stream = RedisEventStreamManager()
+    await stream.publish(event)
+    logger.info(
+        "[API] Steering message published: task_id=%s steering_id=%s",
+        task_id,
+        steering_id,
+    )
+    return {
+        "status": "queued",
+        "task_id": task_id,
+        "steering_id": steering_id,
+        "guidance": request.guidance,
+    }
 
 
 @router.post("/sessions/{session_id}/interrupt", response_model=AgentTerminalInterruptResponse)
