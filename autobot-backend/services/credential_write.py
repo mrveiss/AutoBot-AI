@@ -104,10 +104,8 @@ def _root_key_or_none():
         return None  # envelope store not configured on this deployment
 
 
-async def mirror_credential_to_unified(
-    sqlite_id: str, owner_id: str, value: str, *, name=None, secret_type=None
-) -> None:
-    """Best-effort upsert of a credential's envelope copy. Never raises."""
+async def mirror_credential_to_vault(sqlite_id: str, owner_id: str, value: str, *, name=None, secret_type=None) -> None:
+    """Best-effort upsert of a credential's envelope vault copy. Never raises."""
     try:
         root_key = _root_key_or_none()
         if root_key is None:
@@ -121,8 +119,8 @@ async def mirror_credential_to_unified(
         logger.warning("Envelope mirror failed for credential %s (owner %s): %s", sqlite_id, owner_id, exc)
 
 
-async def delete_credential_from_unified(sqlite_id: str, owner_id: str) -> None:
-    """Best-effort delete of a credential's envelope copy by marker. Never raises.
+async def delete_credential_from_vault(sqlite_id: str, owner_id: str) -> None:
+    """Best-effort delete of a credential's envelope vault copy by marker. Never raises.
 
     Logged at ERROR (not WARNING): a swallowed delete leaves an active envelope copy of a
     credential already revoked in SQLite, which read-first would serve — see #10088 (the
