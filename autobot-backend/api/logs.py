@@ -23,12 +23,12 @@ from fastapi.responses import StreamingResponse
 
 from api.schemas_agent import LogFileMetadata
 from api.schemas_code import (
+    LogAggregatedResponse,
     LogContainerResponse,
     LogReadResponse,
     LogRecentResponse,
     LogSearchResponse,
     LogSourcesResponse,
-    LogAggregatedResponse,
 )
 from api.schemas_common import AgentMessageResponse
 from auth_middleware import check_admin_permission
