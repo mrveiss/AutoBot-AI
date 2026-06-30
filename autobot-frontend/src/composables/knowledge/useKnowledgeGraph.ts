@@ -149,7 +149,7 @@ export function useKnowledgeGraph(): UseKnowledgeGraphReturn {
       try {
         const [unifiedData, memoryData] = await Promise.all([
           apiClient.get<Record<string, unknown>>(
-            `${getApiBase()}/knowledge_base/aggregated/graph?max_facts=100&include_categories=true`,
+            `${getApiBase()}/knowledge_base/multi-source/graph?max_facts=100&include_categories=true`,
           ),
           apiClient.get<Record<string, unknown>>(
             `${getApiBase()}/memory/entities/all`,
