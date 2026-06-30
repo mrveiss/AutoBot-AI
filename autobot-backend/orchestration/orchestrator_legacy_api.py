@@ -54,7 +54,7 @@ class _DeprecatedRequestMixin:
         """Process user request.
 
         .. deprecated::
-            No live callers exist. Call execute_enhanced_workflow directly (GH#7423).
+            No live callers exist. Call run_workflow directly (GH#7423).
         """
         from autobot_shared.status_enums import Priority as TaskPriority
         from orchestrator import OrchestrationMode
@@ -65,7 +65,7 @@ class _DeprecatedRequestMixin:
             priority = TaskPriority.NORMAL
 
         warnings.warn(
-            "process_user_request is deprecated and has no live callers — use execute_enhanced_workflow directly. (GH#7423)",  # noqa: E501
+            "process_user_request is deprecated and has no live callers — use run_workflow directly. (GH#7423)",  # noqa: E501
             DeprecationWarning,
             stacklevel=2,
         )
@@ -81,7 +81,7 @@ class _DeprecatedRequestMixin:
             if mode == OrchestrationMode.SIMPLE:
                 result = await self._process_simple_request(user_message, task_id, target_llm_model, context)
             else:
-                result = await self.execute_enhanced_workflow(user_request=user_message, context=context or {})
+                result = await self.run_workflow(user_request=user_message, context=context or {})
 
             processing_time = time.time() - start_time
             self._update_success_metrics(processing_time)

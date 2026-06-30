@@ -213,8 +213,8 @@ class WorkflowTask:
         """Increment retry counter."""
         self.retry_count += 1
 
-    def get_enhanced_inputs(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Get inputs enhanced with context (forwarded into agent dispatch)."""
+    def get_inputs(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Get inputs merged with context (forwarded into agent dispatch)."""
         return {
             **self.inputs,
             "context": context,

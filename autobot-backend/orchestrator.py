@@ -15,7 +15,7 @@ implementations:
 Refactored in #5058: god-class decomposed into collaborators.
   - WorkflowRunner  (orchestration/workflow_runner.py) — execution engine (#10666 B3 moved)
   - PerformanceTracker (orchestration/performance_tracker.py) — metrics
-  - Three execution entry points unified: process_user_request → execute_enhanced_workflow
+  - Three execution entry points unified: process_user_request → run_workflow
     → create_workflow_plan + WorkflowRunner.execute_workflow
 
 Primitives extracted in #5060:
@@ -154,7 +154,7 @@ class Orchestrator(_DeprecatedRequestMixin):
             "average_response_time": 0,
         }
 
-    def _init_enhanced_components(self) -> None:
+    def _init_components(self) -> None:
         self.agent_registry: Dict[str, AgentProfile] = {}
         # GH #6820: AgentRegistry — structured profile store with capability-based lookup.
         # Runs alongside the plain-dict self.agent_registry for structured queries.
@@ -247,7 +247,7 @@ class Orchestrator(_DeprecatedRequestMixin):
     def __init__(self, config_mgr=None):
         self._init_core_components(config_mgr)
         self._init_task_state()
-        self._init_enhanced_components()
+        self._init_components()
         self._init_classification_agent()
         self._initialize_default_agents()
         self._init_strategy_components()
@@ -452,17 +452,17 @@ class Orchestrator(_DeprecatedRequestMixin):
     # _update_success_metrics, _classify_task, _select_model_for_task,
     # _process_simple_request) are inherited from _DeprecatedRequestMixin (#5060).
 
-    # ------------------------------------------------- execute_enhanced_workflow
+    # ------------------------------------------------- run_workflow
 
-    def _get_enhanced_documenter(self) -> WorkflowDocumenter:
-        if not hasattr(self, "_enh_documenter") or self._enh_documenter is None:
-            self._enh_documenter = WorkflowDocumenter(
+    def _get_documenter(self) -> WorkflowDocumenter:
+        if not hasattr(self, "_documenter") or self._documenter is None:
+            self._documenter = WorkflowDocumenter(
                 knowledge_base=self.knowledge_base,
                 llm_service=self.llm_service,
             )
-        return self._enh_documenter
+        return self._documenter
 
-    async def execute_enhanced_workflow(
+    async def run_workflow(
         self,
         user_request: str,
         context: Dict[str, Any] | None = None,
@@ -481,7 +481,7 @@ class Orchestrator(_DeprecatedRequestMixin):
         start_time = time.time()
         context = context or {}
         workflow_id = str(uuid.uuid4())
-        logger.info("Starting enhanced workflow %s: %s", workflow_id, user_request[:80])
+        logger.info("Starting workflow %s: %s", workflow_id, user_request[:80])
 
         # GH #6820: WorkflowMemory — shared KV store for cross-step coordination.
         shared_memory = WorkflowMemory(workflow_id=workflow_id)
@@ -492,7 +492,7 @@ class Orchestrator(_DeprecatedRequestMixin):
             logger.debug("WorkflowMemory init store skipped: %s", _mem_exc)
 
         if auto_document:
-            documenter = self._get_enhanced_documenter()
+            documenter = self._get_documenter()
             doc = documenter.create_workflow_doc(
                 workflow_id=workflow_id,
                 title=f"Workflow: {user_request[:50]}...",
@@ -516,14 +516,14 @@ class Orchestrator(_DeprecatedRequestMixin):
             self.workflow_metrics["average_execution_time"] = ((cur_avg * (total - 1)) + elapsed) / total
 
             if auto_document:
-                documenter = self._get_enhanced_documenter()
+                documenter = self._get_documenter()
                 await documenter.generate_workflow_documentation(workflow_id, exec_result)
                 doc = documenter.get_doc(workflow_id)
                 if doc:
                     self.workflow_documentation[workflow_id] = doc
 
             if self.knowledge_extraction_enabled:
-                documenter = self._get_enhanced_documenter()
+                documenter = self._get_documenter()
                 await documenter.extract_workflow_knowledge(workflow_id, user_request, exec_result, self.agent_registry)
 
             return {
@@ -537,9 +537,9 @@ class Orchestrator(_DeprecatedRequestMixin):
             }
 
         except Exception as e:
-            logger.error("Enhanced workflow %s failed: %s", workflow_id, e)
+            logger.error("Workflow %s failed: %s", workflow_id, e)
             if auto_document:
-                documenter = self._get_enhanced_documenter()
+                documenter = self._get_documenter()
                 await documenter.document_workflow_failure(workflow_id, str(e))
                 doc = documenter.get_doc(workflow_id)
                 if doc:
