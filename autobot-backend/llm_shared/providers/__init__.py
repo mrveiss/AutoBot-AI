@@ -13,6 +13,7 @@ Cloud API providers:
     BedrockProvider        — AWS Bedrock (Claude, Llama, Mistral, Titan, Nova, GH#9010)
     OpenAIProvider         — OpenAI GPT/o1 (OTel tracing, circuit breaker)
     GroqProvider           — Groq ultra-low-latency inference
+    MistralProvider        — Mistral Le Chat / Codestral / Devstral (#10549)
     HuggingFaceProvider    — HuggingFace Inference API
     CustomOpenAIProvider   — Any OpenAI-compatible endpoint
     OpenRouterProvider     — OpenRouter multi-provider gateway (#4341)
@@ -43,6 +44,7 @@ from .chat_template_loader import DEFAULT_TEMPLATE, render_chat_template
 from .custom_openai import CustomOpenAIProvider
 from .groq import GROQ_MODELS, GroqProvider
 from .huggingface import HuggingFaceProvider
+from .mistral import MISTRAL_MODELS, MistralProvider
 
 # Local/self-hosted providers
 from .mock_handler import LocalHandler, MockHandler
@@ -63,6 +65,8 @@ __all__ = [
     "OpenAIProvider",
     "GroqProvider",
     "GROQ_MODELS",
+    "MistralProvider",
+    "MISTRAL_MODELS",
     "HuggingFaceProvider",
     "CustomOpenAIProvider",
     "OpenRouterProvider",

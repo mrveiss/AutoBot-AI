@@ -69,6 +69,7 @@ _PROVIDER_DEFAULTS: Dict[str, Tuple[int, int]] = {
     "openai": (500, 500),
     "anthropic": (60, 60),
     "groq": (30, 30),
+    "mistral": (60, 60),
     "ollama": (600, 600),  # local, generous
     "vllm": (600, 600),  # local
     "huggingface": (30, 30),
