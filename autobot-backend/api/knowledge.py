@@ -2957,9 +2957,9 @@ router.include_router(maintenance_router)
 # These routers were previously registered separately in feature_routers.py
 # Now consolidated under the main knowledge router for cleaner organization
 
-# AI Stack RAG Integration - Advanced search, knowledge extraction, document analysis
-# Provides: /search/advanced, /search/rag, /extract, /analyze/documents, /query/reformulate,
-#           /system/insights, /stats/advanced, /health/status
+# AI Stack RAG Integration - Multi-source search, knowledge extraction, document analysis
+# Provides: /search, /search/rag, /extract, /analyze/documents, /query/reformulate,
+#           /system/insights, /stats, /health/status
 try:
     from api.knowledge_ai_stack import router as ai_stack_router
 
@@ -2976,15 +2976,15 @@ try:
 except ImportError as e:
     logging.warning("Knowledge debug router not available: %s", e)
 
-# Unified Search - Combined search across all knowledge sources
-# Provides: /unified/search, /unified/stats, /unified/context, /unified/documentation/*,
-#           /unified/graph (for KnowledgeGraph.vue visualization)
+# Multi-Source Search - Combined search across all knowledge sources
+# Provides: /multi-source/search, /multi-source/stats, /multi-source/context, /multi-source/documentation/*,
+#           /multi-source/graph (for KnowledgeGraph.vue visualization)
 try:
-    from api.knowledge_search_aggregator import router as unified_router
+    from api.knowledge_search_aggregator import router as multi_source_router
 
-    router.include_router(unified_router, tags=["knowledge-unified", "documentation"])
+    router.include_router(multi_source_router, tags=["knowledge-multi-source", "documentation"])
 except ImportError as e:
-    logging.warning("Unified knowledge search router not available: %s", e)
+    logging.warning("Multi-source knowledge search router not available: %s", e)
 
 
 # ===== KB WATCH FOLDERS (Issue #9000) =====
