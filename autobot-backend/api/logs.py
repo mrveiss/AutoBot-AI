@@ -23,12 +23,12 @@ from fastapi.responses import StreamingResponse
 
 from api.schemas_agent import LogFileMetadata
 from api.schemas_code import (
+    LogAggregatedResponse,
     LogContainerResponse,
     LogReadResponse,
     LogRecentResponse,
     LogSearchResponse,
     LogSourcesResponse,
-    LogUnifiedResponse,
 )
 from api.schemas_common import AgentMessageResponse
 from auth_middleware import check_admin_permission
@@ -101,12 +101,12 @@ CONTAINER_LOGS = {
 
 
 # Forward declaration for parse functions (defined later in file)
-def _parse_file_log_line_for_unified(line: str, source: str) -> Metadata:
+def _parse_file_log_line_for_aggregated(line: str, source: str) -> Metadata:
     """Forward declaration - actual implementation uses parse_file_log_line."""
     pass  # Replaced at module load
 
 
-def _parse_docker_log_line_for_unified(line: str, service: str) -> Metadata:
+def _parse_docker_log_line_for_aggregated(line: str, service: str) -> Metadata:
     """Forward declaration - actual implementation uses parse_docker_log_line."""
     pass  # Replaced at module load
 
@@ -724,19 +724,19 @@ def parse_docker_log_line(line: str, service: str) -> Metadata:
     return parsed
 
 
-@router.get("/unified", response_model=LogUnifiedResponse)
+@router.get("/aggregated", response_model=LogAggregatedResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_unified_logs",
+    operation="get_aggregated_logs",
     error_code_prefix="LOGS",
 )
-async def get_unified_logs(
+async def get_aggregated_logs(
     admin_check: bool = Depends(check_admin_permission),
     lines: int = Query(100, ge=1, le=1000, description="Total number of lines to return"),
     level: str | None = Query(None, description="Filter by log level"),
     sources: str | None = Query(None, description="Comma-separated list of sources"),
 ):
-    """Get unified logs from all sources, merged by timestamp.
+    """Get aggregated logs from all sources, merged by timestamp.
 
     Issue #744: Requires admin authentication.
     """
@@ -764,7 +764,7 @@ async def get_unified_logs(
         }
 
     except Exception as e:
-        logger.error("Error getting unified logs: %s", e)
+        logger.error("Error getting aggregated logs: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

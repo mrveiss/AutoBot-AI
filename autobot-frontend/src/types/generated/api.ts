@@ -30572,7 +30572,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/logs/unified": {
+    "/api/logs/aggregated": {
         parameters: {
             query?: never;
             header?: never;
@@ -30580,12 +30580,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Unified Logs
-         * @description Get unified logs from all sources, merged by timestamp.
+         * Get Aggregated Logs
+         * @description Get aggregated logs from all sources, merged by timestamp.
          *
          *     Issue #744: Requires admin authentication.
          */
-        get: operations["get_unified_logs_api_logs_unified_get"];
+        get: operations["get_aggregated_logs_api_logs_aggregated_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -77916,10 +77916,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * LogUnifiedResponse
-         * @description Response for GET /logs/unified.
+         * LogAggregatedResponse
+         * @description Response for GET /logs/aggregated.
          */
-        LogUnifiedResponse: {
+        LogAggregatedResponse: {
             /** Logs */
             logs: unknown[];
             /** Total Count */
@@ -137803,7 +137803,7 @@ export interface operations {
             };
         };
     };
-    get_unified_logs_api_logs_unified_get: {
+    get_aggregated_logs_api_logs_aggregated_get: {
         parameters: {
             query?: {
                 /** @description Total number of lines to return */
@@ -137825,7 +137825,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LogUnifiedResponse"];
+                    "application/json": components["schemas"]["LogAggregatedResponse"];
                 };
             };
             /** @description Validation Error */

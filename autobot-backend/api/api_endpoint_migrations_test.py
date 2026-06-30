@@ -26648,14 +26648,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="read_container_logs"', source)
         self.assertIn('error_code_prefix="LOGS"', source)
 
-    def test_batch_157_get_unified_logs_simple_pattern(self):
-        """Verify get_unified_logs endpoint uses Simple Pattern"""
+    def test_batch_157_get_aggregated_logs_simple_pattern(self):
+        """Verify get_aggregated_logs endpoint uses Simple Pattern"""
         from api import logs
 
-        source = inspect.getsource(logs.get_unified_logs)
+        source = inspect.getsource(logs.get_aggregated_logs)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="get_unified_logs"', source)
+        self.assertIn('operation="get_aggregated_logs"', source)
         self.assertIn('error_code_prefix="LOGS"', source)
 
     def test_batch_157_stream_log_simple_pattern(self):
@@ -26698,7 +26698,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             logs.list_logs,
             logs.read_log,
             logs.read_container_logs,
-            logs.get_unified_logs,
+            logs.get_aggregated_logs,
             logs.stream_log,
             logs.search_logs,
             logs.clear_log,
@@ -26722,7 +26722,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             logs.list_logs,
             logs.read_log,
             logs.read_container_logs,
-            logs.get_unified_logs,
+            logs.get_aggregated_logs,
             logs.stream_log,
             logs.search_logs,
             logs.clear_log,
@@ -26807,7 +26807,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Verify parse_file_log_line exists and is used
         self.assertTrue(hasattr(logs, "parse_file_log_line"))
-        unified_source = inspect.getsource(logs.get_unified_logs)
+        unified_source = inspect.getsource(logs.get_aggregated_logs)
         self.assertIn("parse_file_log_line", unified_source)
 
     def test_batch_157_migration_preserves_streaming_response(self):
@@ -26842,12 +26842,12 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("case_sensitive", search_source)
         self.assertIn("max_results", search_source)
 
-    def test_batch_157_migration_preserves_unified_log_merging(self):
-        """Verify migration preserves unified log merging by timestamp"""
+    def test_batch_157_migration_preserves_aggregated_log_merging(self):
+        """Verify migration preserves aggregated log merging by timestamp"""
         from api import logs
 
-        # Verify get_unified_logs merges logs
-        unified_source = inspect.getsource(logs.get_unified_logs)
+        # Verify get_aggregated_logs merges logs
+        unified_source = inspect.getsource(logs.get_aggregated_logs)
         self.assertIn("all_logs", unified_source)
         self.assertIn("sort", unified_source)
         self.assertIn("timestamp", unified_source)
@@ -27115,11 +27115,11 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("_cache_timestamp", metrics_source)
         self.assertIn("_cache_ttl", metrics_source)
 
-        """Verify migration preserves unified log merging by timestamp"""
+        """Verify migration preserves aggregated log merging by timestamp"""
         from api import logs
 
-        # Verify get_unified_logs merges logs
-        unified_source = inspect.getsource(logs.get_unified_logs)
+        # Verify get_aggregated_logs merges logs
+        unified_source = inspect.getsource(logs.get_aggregated_logs)
         self.assertIn("all_logs", unified_source)
         self.assertIn("sort", unified_source)
         self.assertIn("timestamp", unified_source)
@@ -28905,7 +28905,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             logs.list_logs,
             logs.read_log,
             logs.read_container_logs,
-            logs.get_unified_logs,
+            logs.get_aggregated_logs,
             logs.stream_log,
             logs.tail_log,
             logs.search_logs,
