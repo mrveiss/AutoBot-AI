@@ -32,7 +32,9 @@ async function selectCompany(company: LlcCompany): Promise<void> {
     await router.push(redirect)
     return
   }
-  await router.push({ path: '/llc/dashboard', query: { company: company.id } })
+  // Enter the company's PM workspace (LlcCompanyLayout with sidebar → backlog,
+  // boards, sprints…), not the sidebar-less standalone /llc/dashboard.
+  await router.push(`/llc/companies/${company.id}`)
 }
 
 onMounted(async () => {
