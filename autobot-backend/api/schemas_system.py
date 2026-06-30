@@ -126,7 +126,7 @@ class SystemMetricsResponse(BaseModel):
 class SystemCacheCoordinatorStatsResponse(BaseModel):
     """Response for GET /api/cache/stats.
 
-    Shape is defined by CacheCoordinator.get_unified_stats() — opaque.
+    Shape is defined by CacheCoordinator.get_cache_stats() — opaque.
     """
 
     model_config = {"extra": "allow"}

@@ -87,11 +87,11 @@ class TestCacheCoordinatorAsyncInit:
         coord = await get_cache_coordinator()
         mock_cache = _make_mock_cache("my_cache")
         coord.register(mock_cache)
-        stats = coord.get_unified_stats()
+        stats = coord.get_cache_stats()
         assert stats["registered_count"] == 1
         removed = coord.unregister("my_cache")
         assert removed is True
-        assert coord.get_unified_stats()["registered_count"] == 0
+        assert coord.get_cache_stats()["registered_count"] == 0
 
     @pytest.mark.asyncio
     async def test_pressure_threshold_loaded_from_config(self):
