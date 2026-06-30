@@ -127,3 +127,19 @@ silently swallowed. Narrowing the catch would add fragility without improving
 observability.
 
 **Grep check:** `grep -n "except Exception" autobot-backend/api/skills_governance.py`
+
+---
+
+## `FlashAttentionV2` / `TestFlashAttentionV2` — Published Algorithm Name
+
+**Pattern bypassed:** `py-duplicate-concept` rule flags `Enhanced*`/`Unified*`/`*V2` class names that shadow a base-name class. `FlashAttentionV2` and `TestFlashAttentionV2` match the `*V2` pattern but are intentional exceptions.
+
+**Reason:** "FlashAttention-2" is a published algorithm (Dao et al., 2023, NeurIPS) with an established canonical name in the ML literature. The `V2` suffix identifies the specific paper/algorithm revision, not a code-organisation era marker. Renaming to `FlashAttention` would lose the version identity and make it impossible to distinguish from the original FlashAttention algorithm.
+
+**Waiver pattern:** Any file defining `FlashAttentionV2` or `TestFlashAttentionV2` should carry an inline suppression on the class line:
+
+```python
+class FlashAttentionV2:  # canonical: ignore py-duplicate-concept — published algorithm name FlashAttention-2 (Dao et al. 2023) (#10666)
+```
+
+**Grep check:** `git grep -n "FlashAttentionV2"` should return only flash-attention implementation and test files.

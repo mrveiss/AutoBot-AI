@@ -20,7 +20,7 @@ from tools.lint.canonical.diagnostic import Diagnostic
 
 RULE_ID = "py-duplicate-concept"
 ISSUE = "#10577"
-SEVERITY = "warn"
+SEVERITY = "block"
 TARGETS = ["autobot-backend", "autobot-slm-backend", "autobot_shared"]
 DESCRIPTION = "Enhanced*/Unified* class shadows a base concept — merge into the canonical class"
 FIX_HINT = (
