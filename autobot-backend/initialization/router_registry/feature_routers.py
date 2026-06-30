@@ -350,10 +350,10 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "search",
     ),
     (
-        "api.enhanced_memory",
+        "api.task_memory",
         "/enhanced-memory",
         ["enhanced-memory"],
-        "enhanced_memory",
+        "task_memory",
     ),
     (
         "api.development_speedup",

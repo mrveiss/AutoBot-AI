@@ -41,7 +41,7 @@ class TestAutoBootSystemIntegration:
         # Note: Some may not be initialized until lifespan events
 
         expected_components = [
-            "enhanced_security_layer",  # Should always be present
+            "security_layer",  # Should always be present
         ]
 
         for component in expected_components:
@@ -200,17 +200,17 @@ class TestSystemResilience:
         # Test that API endpoints still respond even if some components fail
 
         # Try to break the security layer and see if system still responds
-        if hasattr(self.app.state, "enhanced_security_layer"):
+        if hasattr(self.app.state, "security_layer"):
             # Temporarily break audit logging
-            original_audit_file = self.app.state.enhanced_security_layer.audit_log_file
-            self.app.state.enhanced_security_layer.audit_log_file = "/invalid/path/audit.log"
+            original_audit_file = self.app.state.security_layer.audit_log_file
+            self.app.state.security_layer.audit_log_file = "/invalid/path/audit.log"
 
             # System should still respond
             response = self.client.get("/api/security/status")
             assert response.status_code == 200
 
             # Restore original path
-            self.app.state.enhanced_security_layer.audit_log_file = original_audit_file
+            self.app.state.security_layer.audit_log_file = original_audit_file
 
     def test_concurrent_request_handling(self):
         """Test system handles concurrent requests properly"""

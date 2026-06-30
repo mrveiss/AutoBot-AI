@@ -561,7 +561,7 @@ class CommandApprovalManager:
             return None, None
 
     @staticmethod
-    async def check_approval_memory_v2(
+    async def check_approval_memory(
         command: str,
         project_path: str,
         user_id: str,

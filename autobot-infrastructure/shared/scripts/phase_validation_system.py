@@ -132,7 +132,6 @@ class PhaseValidationCriteria:
             ],
             "files": [
                 "autobot-backend/security_layer.py",
-                "autobot-backend/enhanced_security_layer.py",
                 ".github/workflows/security.yml",
                 ".bandit",
             ],

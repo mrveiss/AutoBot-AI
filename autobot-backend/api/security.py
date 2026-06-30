@@ -48,38 +48,18 @@ router = APIRouter(dependencies=[Depends(check_admin_permission)])
 async def get_security_status(request: Request):
     """Get current security configuration and status"""
     try:
-        # Try to get enhanced security layer, fall back to basic security layer
-        enhanced_security = getattr(request.app.state, "enhanced_security_layer", None)
-        basic_security = getattr(request.app.state, "security_layer", None)
+        security_layer = getattr(request.app.state, "security_layer", None)
+        if not security_layer:
+            security_layer = SecurityLayer()
+            request.app.state.security_layer = security_layer
 
-        if enhanced_security:
-            pending_approvals = enhanced_security.get_pending_approvals()
-            return SecurityStatusResponse(
-                security_enabled=enhanced_security.enable_auth,
-                command_security_enabled=enhanced_security.enable_command_security,
-                docker_sandbox_enabled=enhanced_security.use_docker_sandbox,
-                pending_approvals=pending_approvals,
-            )
-        elif basic_security:
-            # Fallback to basic security layer
-            return SecurityStatusResponse(
-                security_enabled=basic_security.enable_auth,
-                command_security_enabled=False,  # Not available in basic layer
-                docker_sandbox_enabled=False,  # Not available in basic layer
-                pending_approvals=[],  # Not available in basic layer
-            )
-        else:
-            # No security layer found - initialize enhanced security layer on demand
-            enhanced_security = SecurityLayer()
-            request.app.state.enhanced_security_layer = enhanced_security
-
-            pending_approvals = enhanced_security.get_pending_approvals()
-            return SecurityStatusResponse(
-                security_enabled=enhanced_security.enable_auth,
-                command_security_enabled=enhanced_security.enable_command_security,
-                docker_sandbox_enabled=enhanced_security.use_docker_sandbox,
-                pending_approvals=pending_approvals,
-            )
+        pending_approvals = security_layer.get_pending_approvals()
+        return SecurityStatusResponse(
+            security_enabled=security_layer.enable_auth,
+            command_security_enabled=security_layer.enable_command_security,
+            docker_sandbox_enabled=security_layer.use_docker_sandbox,
+            pending_approvals=pending_approvals,
+        )
     except Exception as e:
         logger.error("Error getting security status: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -94,11 +74,11 @@ async def get_security_status(request: Request):
 async def approve_command(request: Request, approval: CommandApprovalRequest):
     """Approve or deny a pending command execution"""
     try:
-        # Get or initialize enhanced security layer
-        security_layer = getattr(request.app.state, "enhanced_security_layer", None)
+        # Get or initialize security layer
+        security_layer = getattr(request.app.state, "security_layer", None)
         if not security_layer:
             security_layer = SecurityLayer()
-            request.app.state.enhanced_security_layer = security_layer
+            request.app.state.security_layer = security_layer
 
         # Approve or deny the command
         security_layer.approve_command(approval.command_id, approval.approved)
@@ -123,11 +103,11 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
 async def get_pending_approvals(request: Request):
     """Get list of commands waiting for approval"""
     try:
-        # Get or initialize enhanced security layer
-        security_layer = getattr(request.app.state, "enhanced_security_layer", None)
+        # Get or initialize security layer
+        security_layer = getattr(request.app.state, "security_layer", None)
         if not security_layer:
             security_layer = SecurityLayer()
-            request.app.state.enhanced_security_layer = security_layer
+            request.app.state.security_layer = security_layer
         pending = security_layer.get_pending_approvals()
 
         return {"success": True, "pending_approvals": pending, "count": len(pending)}
@@ -145,11 +125,11 @@ async def get_pending_approvals(request: Request):
 async def get_command_history(request: Request, user: str = None, limit: int = 50):
     """Get command execution history from audit log"""
     try:
-        # Get or initialize enhanced security layer
-        security_layer = getattr(request.app.state, "enhanced_security_layer", None)
+        # Get or initialize security layer
+        security_layer = getattr(request.app.state, "security_layer", None)
         if not security_layer:
             security_layer = SecurityLayer()
-            request.app.state.enhanced_security_layer = security_layer
+            request.app.state.security_layer = security_layer
         history = security_layer.get_command_history(user=user, limit=limit)
 
         return {"success": True, "command_history": history, "count": len(history)}
@@ -194,11 +174,11 @@ async def _read_audit_log_file(log_file: str, limit: int) -> list:
 async def get_audit_log(request: Request, limit: int = 100):
     """Get recent audit log entries"""
     try:
-        # Get or initialize enhanced security layer
-        security_layer = getattr(request.app.state, "enhanced_security_layer", None)
+        # Get or initialize security layer
+        security_layer = getattr(request.app.state, "security_layer", None)
         if not security_layer:
             security_layer = SecurityLayer()
-            request.app.state.enhanced_security_layer = security_layer
+            request.app.state.security_layer = security_layer
 
         # Use extracted helper (Issue #315 - reduced depth)
         audit_entries = await _read_audit_log_file(security_layer.audit_log_file, limit)

@@ -155,7 +155,7 @@ class ContextCollector:
                     confidence=0.8,
                     relevance_score=0.7,
                     timestamp=self.time_provider.current_timestamp(),
-                    source="enhanced_memory_system",
+                    source="memory_system",
                     metadata={
                         "type": "decision_history",
                         "decision_type": decision_type.value,
