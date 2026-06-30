@@ -15,6 +15,7 @@ differences are ``async def`` and ``await``.
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Any, List, Sequence
 
 from autobot_shared.logging_manager import get_logger
@@ -22,6 +23,17 @@ from knowledge.backends.async_base import AsyncBaseClient, AsyncBaseCollection
 from knowledge.backends.base import Embedding, Metadata, Where, WhereDocument
 
 logger = get_logger(__name__)
+
+# ChromaDB 1.x rejects collection names containing characters outside
+# [a-zA-Z0-9._-] (e.g. the ':' the LLC layer uses in "company:<uuid>"). Map any
+# invalid character to '_' at the backend boundary so callers can keep their
+# logical naming. No-op for already-valid names (KB's own collections).
+_CHROMA_NAME_INVALID = re.compile(r"[^a-zA-Z0-9._-]")
+
+
+def _chroma_safe_name(name: str) -> str:
+    """Return a ChromaDB-valid collection name (#10743)."""
+    return _CHROMA_NAME_INVALID.sub("_", name)
 
 
 class AsyncChromaDBCollection(AsyncBaseCollection):
@@ -204,7 +216,7 @@ class AsyncChromaDBClient(AsyncBaseClient):
         if metadata:
             provenance.update(metadata)
         raw_col = await self._raw.get_or_create_collection(
-            name=name,
+            name=_chroma_safe_name(name),
             metadata=provenance,
             embedding_function=embedding_function,
         )
@@ -212,7 +224,7 @@ class AsyncChromaDBClient(AsyncBaseClient):
 
     async def get_collection(self, name: str) -> AsyncBaseCollection:
         try:
-            raw_col = await self._raw.get_collection(name=name)
+            raw_col = await self._raw.get_collection(name=_chroma_safe_name(name))
         except Exception as exc:  # ChromaDB raises its own exception type
             raise ValueError(f"no such collection: {name}") from exc
         return AsyncChromaDBCollection(raw_col)
@@ -231,7 +243,7 @@ class AsyncChromaDBClient(AsyncBaseClient):
             provenance.update(metadata)
         try:
             raw_col = await self._raw.create_collection(
-                name=name,
+                name=_chroma_safe_name(name),
                 metadata=provenance,
                 embedding_function=embedding_function,
             )
@@ -250,7 +262,7 @@ class AsyncChromaDBClient(AsyncBaseClient):
 
     async def delete_collection(self, name: str) -> None:
         try:
-            await self._raw.delete_collection(name=name)
+            await self._raw.delete_collection(name=_chroma_safe_name(name))
         except Exception as exc:
             raise ValueError(f"no such collection: {name}") from exc
 
