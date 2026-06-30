@@ -52,7 +52,7 @@ async def session(fresh_db_url):
     await engine.dispose()
 
 
-async def _seed_unified(session, marker: str, value: str):
+async def _seed_vault(session, marker: str, value: str):
     svc = EnvelopeSecretsService(root_key=_ROOT)
     secret = await svc.create(
         session,
@@ -82,10 +82,10 @@ async def test_reconcile_fixes_drift(session, tmp_path):
             # "orphan" deliberately absent from SQLite
         ],
     )
-    await _seed_unified(session, "rev", "x")
-    await _seed_unified(session, "drift", "old")
-    await _seed_unified(session, "ok", "same")
-    await _seed_unified(session, "orphan", "y")
+    await _seed_vault(session, "rev", "x")
+    await _seed_vault(session, "drift", "old")
+    await _seed_vault(session, "ok", "same")
+    await _seed_vault(session, "orphan", "y")
     await session.commit()
 
     report = await reconcile_connector_credentials(session, sqlite_path=db, fernet=_FERNET, root_key=_ROOT)
@@ -101,7 +101,7 @@ async def test_reconcile_fixes_drift(session, tmp_path):
 
 async def test_reconcile_aborts_when_sqlite_missing(session, tmp_path):
     # No SQLite file → must abort and delete NOTHING (a missing canonical store is not "all revoked").
-    await _seed_unified(session, "keep", "v")
+    await _seed_vault(session, "keep", "v")
     await session.commit()
     report = await reconcile_connector_credentials(
         session, sqlite_path=str(tmp_path / "nope.db"), fernet=_FERNET, root_key=_ROOT
@@ -116,7 +116,7 @@ async def test_reconcile_aborts_on_empty_canonical_table(session, tmp_path):
     # a populated mirror against an empty canonical store must abort, never mass-delete.
     db = str(tmp_path / "secrets.db")
     _make_db(db, [])  # table exists, zero rows
-    await _seed_unified(session, "keep", "v")
+    await _seed_vault(session, "keep", "v")
     await session.commit()
     report = await reconcile_connector_credentials(session, sqlite_path=db, fernet=_FERNET, root_key=_ROOT)
     await session.commit()
@@ -128,8 +128,8 @@ async def test_reconcile_aborts_on_total_wipe(session, tmp_path):
     # Canonical has other secrets but every mirrored copy is revoked → "delete all" is suspicious → abort.
     db = str(tmp_path / "secrets.db")
     _make_db(db, [{"id": "rev1", "active": 0, "value": "a"}, {"id": "rev2", "active": 0, "value": "b"}])
-    await _seed_unified(session, "rev1", "a")
-    await _seed_unified(session, "rev2", "b")
+    await _seed_vault(session, "rev1", "a")
+    await _seed_vault(session, "rev2", "b")
     await session.commit()
     report = await reconcile_connector_credentials(session, sqlite_path=db, fernet=_FERNET, root_key=_ROOT)
     await session.commit()

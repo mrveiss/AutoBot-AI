@@ -18,25 +18,25 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from services.credential_read import load_imported_credential
-from services.credential_write import delete_credential_from_unified, mirror_credential_to_unified
+from services.credential_write import delete_credential_from_vault, mirror_credential_to_vault
 
 logger = get_logger(__name__)
 
 # Feature flags (expand/contract cutover — #10088 Task 3c-2), both default off → behaviour
-# is byte-identical to before. READ: reads try the unified envelope store first (matching the
+# is byte-identical to before. READ: reads try the vault envelope store first (matching the
 # legacy id via the ``imported_from_sqlite`` marker) and fall back to SQLite. WRITE: every
-# write also best-effort mirrors into the unified store (SQLite stays canonical). The two are
-# independent so dual-write can be enabled first to populate the unified store, then read.
-UNIFIED_READ_ENV = "AUTOBOT_SECRETS_UNIFIED_READ"
-UNIFIED_WRITE_ENV = "AUTOBOT_SECRETS_UNIFIED_WRITE"
+# write also best-effort mirrors into the vault store (SQLite stays canonical). The two are
+# independent so dual-write can be enabled first to populate the vault store, then read.
+VAULT_READ_ENV = "AUTOBOT_SECRETS_UNIFIED_READ"
+VAULT_WRITE_ENV = "AUTOBOT_SECRETS_UNIFIED_WRITE"
 
 
-def _unified_read_enabled() -> bool:
-    return os.environ.get(UNIFIED_READ_ENV, "false").strip().lower() in ("1", "true", "yes")
+def _vault_read_enabled() -> bool:
+    return os.environ.get(VAULT_READ_ENV, "false").strip().lower() in ("1", "true", "yes")
 
 
-def _unified_write_enabled() -> bool:
-    return os.environ.get(UNIFIED_WRITE_ENV, "false").strip().lower() in ("1", "true", "yes")
+def _vault_write_enabled() -> bool:
+    return os.environ.get(VAULT_WRITE_ENV, "false").strip().lower() in ("1", "true", "yes")
 
 
 _AUTH_TYPE_TO_SECRET_TYPE: dict = {
@@ -97,8 +97,8 @@ class ConnectorCredentialStore:
                 created_by=owner_id,
             ),
         )
-        if _unified_write_enabled():
-            await mirror_credential_to_unified(result["id"], owner_id, value, name=name, secret_type=secret_type)
+        if _vault_write_enabled():
+            await mirror_credential_to_vault(result["id"], owner_id, value, name=name, secret_type=secret_type)
         return result["id"], sanitized
 
     async def load(
@@ -113,11 +113,11 @@ class ConnectorCredentialStore:
         Raises PermissionError when owner_id does not match the stored secret.
         Raises LookupError when secret_id is not found or has expired.
 
-        When the unified-read flag is on, the unified envelope store is tried first
+        When the vault-read flag is on, the vault envelope store is tried first
         (by the legacy-id marker) and the SQLite store is the fallback.
         """
         secret = None
-        if _unified_read_enabled():
+        if _vault_read_enabled():
             secret = await load_imported_credential(secret_id, owner_id)
         if secret is None:
             secret = await asyncio.get_running_loop().run_in_executor(
@@ -167,8 +167,8 @@ class ConnectorCredentialStore:
                 updated_by=owner_id,
             ),
         )
-        if _unified_write_enabled():
-            await mirror_credential_to_unified(secret_id, owner_id, new_value)
+        if _vault_write_enabled():
+            await mirror_credential_to_vault(secret_id, owner_id, new_value)
 
     async def revoke(self, secret_id: str, owner_id: str) -> None:
         """Delete the secret. Called on connector delete."""
@@ -179,8 +179,8 @@ class ConnectorCredentialStore:
                 deleted_by=owner_id,
             ),
         )
-        if _unified_write_enabled():
-            await delete_credential_from_unified(secret_id, owner_id)
+        if _vault_write_enabled():
+            await delete_credential_from_vault(secret_id, owner_id)
 
     # ------------------------------------------------------------------
     # OAuth 2.0 authorization-code tokens (ADR-007 §7 / GH#9019)
@@ -217,8 +217,8 @@ class ConnectorCredentialStore:
                 metadata={"provider": provider, "connector_id": connector_id},
             ),
         )
-        if _unified_write_enabled():
-            await mirror_credential_to_unified(
+        if _vault_write_enabled():
+            await mirror_credential_to_vault(
                 result["id"],
                 owner_id,
                 value,
@@ -275,8 +275,8 @@ class ConnectorCredentialStore:
                 updated_by=owner_id,
             ),
         )
-        if _unified_write_enabled():
-            await mirror_credential_to_unified(secret_id, owner_id, value)
+        if _vault_write_enabled():
+            await mirror_credential_to_vault(secret_id, owner_id, value)
         return creds["access_token"]
 
     # ------------------------------------------------------------------
