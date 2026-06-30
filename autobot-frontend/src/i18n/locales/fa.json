@@ -3327,7 +3327,9 @@
       "boardLabel": "Research Board",
       "statusAssessed": "Assessed {domain} — relevance: {score}",
       "statusExtracted": "Extracted content from {domain}",
-      "statusStored": "Stored result from {domain}"
+      "statusStored": "Stored result from {domain}",
+      "globalAllBoards": "Global (all boards)",
+      "errorBoardsLoad": "Could not load research boards — using all boards"
     },
     "mainCategories": {
       "populate": "Populate",

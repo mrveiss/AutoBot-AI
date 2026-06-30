@@ -159,7 +159,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ApexOptions } from 'apexcharts'
 import ApiClient from '@/utils/ApiClient'
@@ -181,8 +181,6 @@ import {
 const { t } = useI18n()
 const logger = createLogger('BenchmarkView')
 
-const DEFAULT_MODELS = ['ollama/llama3', 'ollama/mistral', 'openai/gpt-4o-mini']
-
 const { responses, selectedModels, isComparing, compare } = useMultiModelCompare()
 const { availableModelNames, fetchModels } = useAvailableModels()
 
@@ -199,11 +197,20 @@ const filterSince = ref('')
 
 const promptTypes = ['rag', 'code', 'summarization', 'reasoning', 'custom']
 
-if (selectedModels.value.length === 0) selectedModels.value = [...DEFAULT_MODELS]
-
+// #10718: build the picker from the live /api/models list (+ any already-selected
+// model) — no hardcoded seed masquerading as real availability. Before fetch
+// resolves the list is empty; the picker renders no fake models.
 const availableModels = computed<string[]>(() => {
-  const union = new Set<string>([...DEFAULT_MODELS, ...availableModelNames.value, ...selectedModels.value])
+  const union = new Set<string>([...availableModelNames.value, ...selectedModels.value])
   return Array.from(union)
+})
+
+// Seed the selection once the live list loads, but only when the user has no
+// persisted choice yet. The watcher handles the async fetch timing.
+watch(availableModelNames, (names) => {
+  if (selectedModels.value.length === 0 && names.length > 0) {
+    selectedModels.value = [...names]
+  }
 })
 
 const currentPromptType = computed(

@@ -97,23 +97,15 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import { useMultiModelCompare } from '@/composables/useMultiModelCompare'
 // GH#8990: show per-model context window in picker
 import { useAvailableModels } from '@/composables/useAvailableModels'
 
-// ---------------------------------------------------------------------------
-// Defaults — user can change via the picker
-// ---------------------------------------------------------------------------
-const DEFAULT_MODELS = [
-  'ollama/llama3',
-  'ollama/mistral',
-  'openai/gpt-4o-mini',
-]
-
 const { responses, selectedModels, isComparing, compare, reset } = useMultiModelCompare()
-const { models: llmModels, fetchModels } = useAvailableModels()
-fetchModels().catch(() => {})
+// #10718: source the model list from the live /api/models endpoint — no
+// hardcoded defaults that masquerade as real availability.
+const { models: llmModels, availableModelNames, fetchModels } = useAvailableModels()
 
 const promptText = ref('')
 
@@ -132,26 +124,24 @@ const contextWindowLabel = computed(() => {
   return map
 })
 
-// Populate defaults on first mount if localStorage is empty
-if (selectedModels.value.length === 0) {
-  selectedModels.value = [...DEFAULT_MODELS]
-}
-
-// Available models for the picker: union of defaults + any extra stored choices
-const availableModels = ref<string[]>([...DEFAULT_MODELS])
-
-// Keep availableModels in sync with selectedModels (in case user has stored extras)
-watch(
-  selectedModels,
-  (current) => {
-    for (const m of current) {
-      if (!availableModels.value.includes(m)) {
-        availableModels.value.push(m)
-      }
-    }
-  },
-  { immediate: true },
+// Picker list: live available models plus any previously-stored selections
+// (so a persisted choice stays selectable even if a provider is briefly down).
+// Before the fetch resolves this is empty — the picker renders no fake models.
+const availableModels = computed<string[]>(() =>
+  Array.from(new Set<string>([...availableModelNames.value, ...selectedModels.value])),
 )
+
+// Seed the selection from the live list once it loads, but only when the user
+// has no persisted choice yet. The watcher handles the async fetch timing.
+watch(availableModelNames, (names) => {
+  if (selectedModels.value.length === 0 && names.length > 0) {
+    selectedModels.value = [...names]
+  }
+})
+
+onMounted(() => {
+  fetchModels().catch(() => {})
+})
 
 async function onSend(): Promise<void> {
   if (!promptText.value.trim() || selectedModels.value.length === 0 || isComparing.value) return
