@@ -15545,7 +15545,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agent/goal/enhanced": {
+    "/api/agent/goal/advanced": {
         parameters: {
             query?: never;
             header?: never;
@@ -15555,13 +15555,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Execute Enhanced Goal
-         * @description Execute goal using enhanced AI Stack multi-agent coordination.
+         * Execute Goal Advanced
+         * @description Execute goal using AI Stack multi-agent coordination.
          *
          *     Issue #398: refactored.
          *     Issue #744: Requires authenticated user.
          */
-        post: operations["execute_enhanced_goal_api_agent_goal_enhanced_post"];
+        post: operations["execute_goal_advanced_api_agent_goal_advanced_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15682,7 +15682,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agent/health/enhanced": {
+    "/api/agent/health/detailed": {
         parameters: {
             query?: never;
             header?: never;
@@ -15690,10 +15690,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Enhanced Agent Health
-         * @description Enhanced health check for agent services.
+         * Agent Health Detailed
+         * @description Detailed health check for agent services.
          */
-        get: operations["enhanced_agent_health_api_agent_health_enhanced_get"];
+        get: operations["agent_health_detailed_api_agent_health_detailed_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -52157,7 +52157,7 @@ export interface components {
         };
         /**
          * AgentHealthResponse
-         * @description Response for GET /health/enhanced.
+         * @description Response for GET /health/detailed.
          */
         AgentHealthResponse: {
             /** Status */
@@ -52166,8 +52166,8 @@ export interface components {
             ai_stack_available: boolean;
             /** Multi Agent Coordination */
             multi_agent_coordination: boolean;
-            /** Enhanced Capabilities */
-            enhanced_capabilities: boolean;
+            /** Advanced Capabilities */
+            advanced_capabilities: boolean;
             /** Timestamp */
             timestamp: string;
             /** Error */
@@ -64626,14 +64626,14 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[EnhancedGoalData] */
-        DataResponse_EnhancedGoalData_: {
+        /** DataResponse[GoalData] */
+        DataResponse_GoalData_: {
             /**
              * Success
              * @default true
              */
             success: boolean;
-            data?: components["schemas"]["EnhancedGoalData"] | null;
+            data?: components["schemas"]["GoalData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -68911,10 +68911,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * EnhancedGoalData
-         * @description data payload for POST /agent/goal/enhanced.
+         * GoalData
+         * @description data payload for POST /agent/goal/advanced.
          */
-        EnhancedGoalData: {
+        GoalData: {
             /** Agents Used */
             agents_used: string[];
             /** Execution Time */
@@ -68926,8 +68926,8 @@ export interface components {
             coordination_mode: string;
             /** Priority */
             priority?: string | null;
-            /** Enhanced Context Used */
-            enhanced_context_used: boolean;
+            /** Context Used */
+            context_used: boolean;
             /** Knowledge Base Integrated */
             knowledge_base_integrated: boolean;
             /** Timestamp */
@@ -118256,7 +118256,7 @@ export interface operations {
             };
         };
     };
-    execute_enhanced_goal_api_agent_goal_enhanced_post: {
+    execute_goal_advanced_api_agent_goal_advanced_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -118265,7 +118265,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["EnhancedGoalPayload"];
+                "application/json": components["schemas"]["GoalPayload"];
             };
         };
         responses: {
@@ -118275,7 +118275,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_EnhancedGoalData_"];
+                    "application/json": components["schemas"]["DataResponse_GoalData_"];
                 };
             };
             /** @description Validation Error */
@@ -118428,7 +118428,7 @@ export interface operations {
             };
         };
     };
-    enhanced_agent_health_api_agent_health_enhanced_get: {
+    agent_health_detailed_api_agent_health_detailed_get: {
         parameters: {
             query?: never;
             header?: never;
