@@ -160,6 +160,7 @@
     "companyOs": "Company OS",
     "llcDashboard": "Dashboard",
     "llcOrgChart": "Org Chart",
+    "llcMembers": "اراکین",
     "llcGoals": "Goals",
     "llcCompanies": "Companies",
     "llcBacklog": "Backlog",
@@ -189,6 +190,38 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment runs in single_user mode, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it."
+  },
+  "llcMembers": {
+    "title": "اراکین",
+    "subtitle": "اس کمپنی سے تعلق رکھنے والے افراد اور ان کے کرداروں کا انتظام کریں۔",
+    "addMember": "رکن شامل کریں",
+    "remove": "ہٹائیں",
+    "cancel": "منسوخ کریں",
+    "loading": "اراکین لوڈ ہو رہے ہیں…",
+    "empty": "ابھی کوئی رکن نہیں۔ اس کمپنی میں پہلا رکن شامل کریں۔",
+    "noCompany": "اراکین کا انتظام کرنے کے لیے ایک کمپنی منتخب کریں۔",
+    "colName": "نام",
+    "colRole": "کردار",
+    "colActions": "اقدامات",
+    "addModalTitle": "رکن شامل کریں",
+    "userLabel": "صارف",
+    "userPlaceholder": "ایک صارف منتخب کریں…",
+    "usersLoading": "صارفین لوڈ ہو رہے ہیں…",
+    "noSelectableUsers": "شامل کرنے کے لیے کوئی صارف دستیاب نہیں۔",
+    "roleLabel": "کردار",
+    "confirmAdd": "شامل کریں",
+    "confirmRemove": "کیا {name} کو اس کمپنی سے ہٹا دیا جائے؟",
+    "loadError": "اراکین لوڈ کرنے میں ناکام۔",
+    "addError": "رکن شامل کرنے میں ناکام۔",
+    "removeError": "رکن ہٹانے میں ناکام۔",
+    "usersLoadError": "صارفین لوڈ کرنے میں ناکام۔",
+    "role": {
+      "owner": "مالک",
+      "admin": "ایڈمن",
+      "member": "رکن",
+      "guest": "مہمان",
+      "lead": "سربراہ"
+    }
   },
   "agent": {
     "registry": {
