@@ -42,12 +42,12 @@ class AgentCommandExecuteResponse(BaseModel):
 
 
 class AgentHealthResponse(BaseModel):
-    """Response for GET /health/enhanced."""
+    """Response for GET /health/detailed."""
 
     status: str
     ai_stack_available: bool
     multi_agent_coordination: bool
-    enhanced_capabilities: bool
+    advanced_capabilities: bool
     timestamp: str
     error: str | None = None
 
@@ -955,7 +955,7 @@ class AgentStatusData(BaseModel):
 
 
 class GoalExecutionResult(BaseModel):
-    """Result payload for enhanced goal execution via multi-agent coordination."""
+    """Result payload for advanced goal execution via multi-agent coordination."""
 
     model_config = {"extra": "allow"}
 
@@ -1007,12 +1007,12 @@ class AgentTaskData(BaseModel):
 
 
 class GoalData(AgentTaskData):
-    """data payload for POST /agent/goal/enhanced."""
+    """data payload for POST /agent/goal/advanced."""
 
     goal: str
     coordination_mode: str
     priority: str | None = None
-    enhanced_context_used: bool
+    context_used: bool
     knowledge_base_integrated: bool
     timestamp: str
     result: GoalExecutionResult | None = None
@@ -1060,7 +1060,7 @@ class MultiAgentQueryData(BaseModel):
 
 
 class KnowledgeSearchData(BaseModel):
-    """data payload for POST /ai-stack/knowledge/enhanced-search."""
+    """data payload for POST /ai-stack/knowledge/search."""
 
     local_kb: List[Dict[str, Any]]
     enhanced: Dict[str, Any]
@@ -1553,10 +1553,10 @@ class OrganizationStatsResponse(BaseModel):
 
 
 class GoalPayload(BaseModel):
-    """Goal payload — unified from bare and enhanced variants (#10666 B1).
+    """Goal payload — unified from bare and advanced variants (#10666 B1).
 
     The simple /goal endpoint reads only ``goal``/``use_phi2``/``user_role``.
-    The /goal/enhanced endpoint also reads the remaining optional fields.
+    The /goal/advanced endpoint also reads the remaining optional fields.
     All added fields carry defaults, so existing callers that only send
     ``goal`` remain fully backward-compatible.
     """

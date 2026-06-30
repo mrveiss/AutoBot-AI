@@ -5411,7 +5411,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/ai-stack/search/enhanced": {
+    "/api/knowledge_base/ai-stack/search/advanced": {
         parameters: {
             query?: never;
             header?: never;
@@ -5421,8 +5421,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enhanced Search
-         * @description Enhanced search combining local knowledge base with AI Stack RAG capabilities.
+         * Advanced Search
+         * @description Advanced search combining local knowledge base with AI Stack RAG capabilities.
          *
          *     Issue #281: Refactored from 144 lines to use extracted helper methods.
          *     Issue #744: Requires authenticated user.
@@ -5432,7 +5432,7 @@ export interface paths {
          *     - AI Stack RAG-enhanced retrieval
          *     - Intelligent result ranking and synthesis
          */
-        post: operations["enhanced_search_api_knowledge_base_ai_stack_search_enhanced_post"];
+        post: operations["search_api_knowledge_base_ai_stack_search_advanced_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5564,7 +5564,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/ai-stack/stats/enhanced": {
+    "/api/knowledge_base/ai-stack/stats/advanced": {
         parameters: {
             query?: never;
             header?: never;
@@ -5572,12 +5572,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Enhanced Stats
-         * @description Get enhanced knowledge base statistics including AI Stack metrics.
+         * Get Aistack Stats
+         * @description Get knowledge base statistics including AI Stack metrics.
          *
          *     Issue #744: Requires authenticated user.
          */
-        get: operations["get_enhanced_stats_api_knowledge_base_ai_stack_stats_enhanced_get"];
+        get: operations["get_aistack_stats_api_knowledge_base_ai_stack_stats_advanced_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5586,7 +5586,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/ai-stack/health/enhanced": {
+    "/api/knowledge_base/ai-stack/health/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -5594,12 +5594,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Enhanced Knowledge Health
-         * @description Enhanced health check including AI Stack connectivity.
+         * Knowledge Health
+         * @description Health check including AI Stack connectivity.
          *
          *     Issue #744: Requires authenticated user.
          */
-        get: operations["enhanced_knowledge_health_api_knowledge_base_ai_stack_health_enhanced_get"];
+        get: operations["knowledge_health_api_knowledge_base_ai_stack_health_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9271,7 +9271,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/search/enhanced": {
+    "/api/knowledge_base/search/advanced": {
         parameters: {
             query?: never;
             header?: never;
@@ -9281,8 +9281,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enhanced Search
-         * @description Enhanced search combining local knowledge base with AI Stack RAG capabilities.
+         * Advanced Search
+         * @description Advanced search combining local knowledge base with AI Stack RAG capabilities.
          *
          *     Issue #281: Refactored from 144 lines to use extracted helper methods.
          *     Issue #744: Requires authenticated user.
@@ -9292,7 +9292,7 @@ export interface paths {
          *     - AI Stack RAG-enhanced retrieval
          *     - Intelligent result ranking and synthesis
          */
-        post: operations["enhanced_search_api_knowledge_base_search_enhanced_post"];
+        post: operations["search_api_knowledge_base_search_advanced_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9424,7 +9424,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/stats/enhanced": {
+    "/api/knowledge_base/stats/advanced": {
         parameters: {
             query?: never;
             header?: never;
@@ -9432,12 +9432,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Enhanced Stats
-         * @description Get enhanced knowledge base statistics including AI Stack metrics.
+         * Get Aistack Stats
+         * @description Get knowledge base statistics including AI Stack metrics.
          *
          *     Issue #744: Requires authenticated user.
          */
-        get: operations["get_enhanced_stats_api_knowledge_base_stats_enhanced_get"];
+        get: operations["get_aistack_stats_api_knowledge_base_stats_advanced_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9446,7 +9446,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/health/enhanced": {
+    "/api/knowledge_base/health/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -9454,12 +9454,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Enhanced Knowledge Health
-         * @description Enhanced health check including AI Stack connectivity.
+         * Knowledge Health
+         * @description Health check including AI Stack connectivity.
          *
          *     Issue #744: Requires authenticated user.
          */
-        get: operations["enhanced_knowledge_health_api_knowledge_base_health_enhanced_get"];
+        get: operations["knowledge_health_api_knowledge_base_health_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -15545,7 +15545,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agent/goal/enhanced": {
+    "/api/agent/goal/advanced": {
         parameters: {
             query?: never;
             header?: never;
@@ -15555,13 +15555,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Execute Enhanced Goal
-         * @description Execute goal using enhanced AI Stack multi-agent coordination.
+         * Execute Goal Advanced
+         * @description Execute goal using AI Stack multi-agent coordination.
          *
          *     Issue #398: refactored.
          *     Issue #744: Requires authenticated user.
          */
-        post: operations["execute_enhanced_goal_api_agent_goal_enhanced_post"];
+        post: operations["execute_goal_advanced_api_agent_goal_advanced_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15682,7 +15682,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agent/health/enhanced": {
+    "/api/agent/health/detailed": {
         parameters: {
             query?: never;
             header?: never;
@@ -15690,10 +15690,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Enhanced Agent Health
-         * @description Enhanced health check for agent services.
+         * Agent Health Detailed
+         * @description Detailed health check for agent services.
          */
-        get: operations["enhanced_agent_health_api_agent_health_enhanced_get"];
+        get: operations["agent_health_detailed_api_agent_health_detailed_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -43367,7 +43367,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/ai-stack/chat/enhanced": {
+    "/api/ai-stack/chat": {
         parameters: {
             query?: never;
             header?: never;
@@ -43377,15 +43377,15 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enhanced Chat
-         * @description Enhanced chat with AI Stack integration and knowledge base support.
+         * Chat
+         * @description Chat with AI Stack integration and knowledge base support.
          *
          *     This endpoint provides intelligent conversation with access to
          *     knowledge base and advanced AI reasoning capabilities.
          *
          *     Issue #744: Requires admin authentication.
          */
-        post: operations["enhanced_chat_api_ai_stack_chat_enhanced_post"];
+        post: operations["chat_api_ai_stack_chat_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -43414,7 +43414,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/ai-stack/knowledge/enhanced-search": {
+    "/api/ai-stack/knowledge/search": {
         parameters: {
             query?: never;
             header?: never;
@@ -43424,12 +43424,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enhanced Knowledge Search
-         * @description Enhanced knowledge search combining local KB and AI Stack capabilities.
+         * Knowledge Search
+         * @description Knowledge search combining local KB and AI Stack capabilities.
          *
          *     Issue #744: Requires admin authentication.
          */
-        post: operations["enhanced_knowledge_search_api_ai_stack_knowledge_enhanced_search_post"];
+        post: operations["knowledge_search_api_ai_stack_knowledge_search_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -43611,28 +43611,6 @@ export interface paths {
          *     Issue #744: Requires admin authentication.
          */
         post: operations["legacy_rag_search_api_ai_stack_legacy_rag_search_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-stack/legacy/enhanced-chat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Legacy Enhanced Chat
-         * @description Legacy enhanced chat endpoint for backward compatibility.
-         *
-         *     Issue #744: Requires admin authentication.
-         */
-        post: operations["legacy_enhanced_chat_api_ai_stack_legacy_enhanced_chat_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -50539,17 +50517,17 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * AIStackEnhancedHealthData
-         * @description data payload for GET /health/enhanced.
+         * AIStackHealthStatusData
+         * @description data payload for GET /health/status.
          */
-        AIStackEnhancedHealthData: {
+        AIStackHealthStatusData: {
             [key: string]: unknown;
         };
         /**
-         * AIStackEnhancedSearchData
-         * @description data payload for POST /search/enhanced.
+         * AIStackSearchData
+         * @description data payload for POST /search/advanced.
          */
-        AIStackEnhancedSearchData: {
+        AIStackSearchData: {
             [key: string]: unknown;
         };
         /**
@@ -50596,10 +50574,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * AIStackEnhancedStatsData
-         * @description data payload for GET /stats/enhanced.
+         * AIStackStatsData
+         * @description data payload for GET /stats/advanced.
          */
-        AIStackEnhancedStatsData: {
+        AIStackStatsData: {
             [key: string]: unknown;
         };
         /**
@@ -52179,7 +52157,7 @@ export interface components {
         };
         /**
          * AgentHealthResponse
-         * @description Response for GET /health/enhanced.
+         * @description Response for GET /health/detailed.
          */
         AgentHealthResponse: {
             /** Status */
@@ -52188,8 +52166,8 @@ export interface components {
             ai_stack_available: boolean;
             /** Multi Agent Coordination */
             multi_agent_coordination: boolean;
-            /** Enhanced Capabilities */
-            enhanced_capabilities: boolean;
+            /** Advanced Capabilities */
+            advanced_capabilities: boolean;
             /** Timestamp */
             timestamp: string;
             /** Error */
@@ -62665,14 +62643,14 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[AIStackEnhancedHealthData] */
-        DataResponse_AIStackEnhancedHealthData_: {
+        /** DataResponse[AIStackHealthStatusData] */
+        DataResponse_AIStackHealthStatusData_: {
             /**
              * Success
              * @default true
              */
             success: boolean;
-            data?: components["schemas"]["AIStackEnhancedHealthData"] | null;
+            data?: components["schemas"]["AIStackHealthStatusData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -62680,14 +62658,14 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[AIStackEnhancedSearchData] */
-        DataResponse_AIStackEnhancedSearchData_: {
+        /** DataResponse[AIStackSearchData] */
+        DataResponse_AIStackSearchData_: {
             /**
              * Success
              * @default true
              */
             success: boolean;
-            data?: components["schemas"]["AIStackEnhancedSearchData"] | null;
+            data?: components["schemas"]["AIStackSearchData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -62695,14 +62673,14 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[AIStackEnhancedStatsData] */
-        DataResponse_AIStackEnhancedStatsData_: {
+        /** DataResponse[AIStackStatsData] */
+        DataResponse_AIStackStatsData_: {
             /**
              * Success
              * @default true
              */
             success: boolean;
-            data?: components["schemas"]["AIStackEnhancedStatsData"] | null;
+            data?: components["schemas"]["AIStackStatsData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -64648,14 +64626,14 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[EnhancedGoalData] */
-        DataResponse_EnhancedGoalData_: {
+        /** DataResponse[GoalData] */
+        DataResponse_GoalData_: {
             /**
              * Success
              * @default true
              */
             success: boolean;
-            data?: components["schemas"]["EnhancedGoalData"] | null;
+            data?: components["schemas"]["GoalData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -68918,7 +68896,7 @@ export interface components {
         };
         /**
          * EnhancedChatResult
-         * @description Data payload for POST /ai-stack/chat/enhanced and /ai-stack/legacy/enhanced-chat.
+         * @description Data payload for POST /ai-stack/chat.
          */
         EnhancedChatResult: {
             /** Message */
@@ -68933,10 +68911,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * EnhancedGoalData
-         * @description data payload for POST /agent/goal/enhanced.
+         * GoalData
+         * @description data payload for POST /agent/goal/advanced.
          */
-        EnhancedGoalData: {
+        GoalData: {
             /** Agents Used */
             agents_used: string[];
             /** Execution Time */
@@ -68948,8 +68926,8 @@ export interface components {
             coordination_mode: string;
             /** Priority */
             priority?: string | null;
-            /** Enhanced Context Used */
-            enhanced_context_used: boolean;
+            /** Context Used */
+            context_used: boolean;
             /** Knowledge Base Integrated */
             knowledge_base_integrated: boolean;
             /** Timestamp */
@@ -69012,7 +68990,7 @@ export interface components {
         };
         /**
          * EnhancedKnowledgeSearchData
-         * @description data payload for POST /ai-stack/knowledge/enhanced-search.
+         * @description data payload for POST /ai-stack/knowledge/search.
          */
         EnhancedKnowledgeSearchData: {
             /** Local Kb */
@@ -105622,7 +105600,7 @@ export interface operations {
             };
         };
     };
-    enhanced_search_api_knowledge_base_ai_stack_search_enhanced_post: {
+    search_api_knowledge_base_ai_stack_search_advanced_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -105631,7 +105609,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AIStackEnhancedSearchRequest"];
+                "application/json": components["schemas"]["AIStackSearchRequest"];
             };
         };
         responses: {
@@ -105641,7 +105619,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackEnhancedSearchData_"];
+                    "application/json": components["schemas"]["DataResponse_AIStackSearchData_"];
                 };
             };
             /** @description Validation Error */
@@ -105817,7 +105795,7 @@ export interface operations {
             };
         };
     };
-    get_enhanced_stats_api_knowledge_base_ai_stack_stats_enhanced_get: {
+    get_aistack_stats_api_knowledge_base_ai_stack_stats_advanced_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -105832,12 +105810,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackEnhancedStatsData_"];
+                    "application/json": components["schemas"]["DataResponse_AIStackStatsData_"];
                 };
             };
         };
     };
-    enhanced_knowledge_health_api_knowledge_base_ai_stack_health_enhanced_get: {
+    knowledge_health_api_knowledge_base_ai_stack_health_status_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -105852,7 +105830,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackEnhancedHealthData_"];
+                    "application/json": components["schemas"]["DataResponse_AIStackHealthStatusData_"];
                 };
             };
         };
@@ -110311,7 +110289,7 @@ export interface operations {
             };
         };
     };
-    enhanced_search_api_knowledge_base_search_enhanced_post: {
+    search_api_knowledge_base_search_advanced_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -110320,7 +110298,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AIStackEnhancedSearchRequest"];
+                "application/json": components["schemas"]["AIStackSearchRequest"];
             };
         };
         responses: {
@@ -110330,7 +110308,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackEnhancedSearchData_"];
+                    "application/json": components["schemas"]["DataResponse_AIStackSearchData_"];
                 };
             };
             /** @description Validation Error */
@@ -110506,7 +110484,7 @@ export interface operations {
             };
         };
     };
-    get_enhanced_stats_api_knowledge_base_stats_enhanced_get: {
+    get_aistack_stats_api_knowledge_base_stats_advanced_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -110521,12 +110499,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackEnhancedStatsData_"];
+                    "application/json": components["schemas"]["DataResponse_AIStackStatsData_"];
                 };
             };
         };
     };
-    enhanced_knowledge_health_api_knowledge_base_health_enhanced_get: {
+    knowledge_health_api_knowledge_base_health_status_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -110541,7 +110519,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackEnhancedHealthData_"];
+                    "application/json": components["schemas"]["DataResponse_AIStackHealthStatusData_"];
                 };
             };
         };
@@ -118278,7 +118256,7 @@ export interface operations {
             };
         };
     };
-    execute_enhanced_goal_api_agent_goal_enhanced_post: {
+    execute_goal_advanced_api_agent_goal_advanced_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -118287,7 +118265,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["EnhancedGoalPayload"];
+                "application/json": components["schemas"]["GoalPayload"];
             };
         };
         responses: {
@@ -118297,7 +118275,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_EnhancedGoalData_"];
+                    "application/json": components["schemas"]["DataResponse_GoalData_"];
                 };
             };
             /** @description Validation Error */
@@ -118450,7 +118428,7 @@ export interface operations {
             };
         };
     };
-    enhanced_agent_health_api_agent_health_enhanced_get: {
+    agent_health_detailed_api_agent_health_detailed_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -154506,7 +154484,7 @@ export interface operations {
             };
         };
     };
-    enhanced_chat_api_ai_stack_chat_enhanced_post: {
+    chat_api_ai_stack_chat_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -154515,7 +154493,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["EnhancedChatRequest"];
+                "application/json": components["schemas"]["ChatRequest"];
             };
         };
         responses: {
@@ -154525,7 +154503,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_EnhancedChatResult_"];
+                    "application/json": components["schemas"]["DataResponse_ChatResult_"];
                 };
             };
             /** @description Validation Error */
@@ -154572,7 +154550,7 @@ export interface operations {
             };
         };
     };
-    enhanced_knowledge_search_api_ai_stack_knowledge_enhanced_search_post: {
+    knowledge_search_api_ai_stack_knowledge_search_post: {
         parameters: {
             query: {
                 query: string;
@@ -154591,7 +154569,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_EnhancedKnowledgeSearchData_"];
+                    "application/json": components["schemas"]["DataResponse_KnowledgeSearchData_"];
                 };
             };
             /** @description Validation Error */
@@ -154856,38 +154834,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_RAGQueryResult_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    legacy_enhanced_chat_api_ai_stack_legacy_enhanced_chat_post: {
-        parameters: {
-            query: {
-                message: string;
-                context?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_EnhancedChatResult_"];
                 };
             };
             /** @description Validation Error */
