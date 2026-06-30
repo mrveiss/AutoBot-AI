@@ -107,7 +107,7 @@
           <label class="members-label" for="member-role-select">
             {{ t('llcMembers.roleLabel') }}
           </label>
-          <select id="member-role-select" v-model="selectedRole" class="members-select">
+          <select id="member-role-select" v-model="roleModel" class="members-select">
             <option v-for="role in MEMBERSHIP_ROLES" :key="role" :value="role">
               {{ roleLabel(role) }}
             </option>
@@ -185,6 +185,20 @@ const {
 const selectableUsers = computed(() => {
   const existing = new Set(members.value.map((m) => m.user_id))
   return users.value.filter((u) => !existing.has(u.id))
+})
+
+function isMembershipRole(value: string): value is MembershipRole {
+  return (MEMBERSHIP_ROLES as readonly string[]).includes(value)
+}
+
+// Native <select> v-model emits a plain string; this computed accepts that
+// string and narrows it back to the MembershipRole union so selectedRole (and
+// the API payload built from it) stays type-safe.
+const roleModel = computed<string>({
+  get: () => selectedRole.value,
+  set: (value) => {
+    if (isMembershipRole(value)) selectedRole.value = value
+  },
 })
 
 function roleLabel(role: string): string {
