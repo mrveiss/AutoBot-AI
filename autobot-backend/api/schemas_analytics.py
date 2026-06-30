@@ -579,7 +579,7 @@ class OptimizationQuickWinsResponse(BaseModel):
 class MaintenanceDashboardResponse(BaseModel):
     """Response for GET /maintenance/dashboard.
 
-    Shape from service.get_unified_dashboard() — opaque; extra allowed.
+    Shape from service.get_analytics_dashboard() — opaque; extra allowed.
     """
 
     model_config = {"extra": "allow"}
