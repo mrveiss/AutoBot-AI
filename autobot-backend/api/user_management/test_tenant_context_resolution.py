@@ -19,7 +19,6 @@ from fastapi import Depends, FastAPI, status
 from fastapi.testclient import TestClient
 
 from api.user_management.dependencies import (
-    _check_org_membership,
     _extract_request_org_id,
     _parse_uuid_safe,
     get_tenant_context,
