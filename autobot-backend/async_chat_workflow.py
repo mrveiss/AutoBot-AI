@@ -19,6 +19,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import TimingConstants
 from dependency_container import inject_services
+from knowledge_base_factory import get_knowledge_base
 from llm_shared.models import ChatMessage, LLMResponse  # Phase 2D #3185
 from retry_mechanism import RetryConfig, RetryStrategy, with_retry
 
@@ -148,7 +149,7 @@ class AsyncChatWorkflow:
             message_type = await self._workflow_classify(user_message, workflow_steps)
 
             # Stage 2: Knowledge search
-            knowledge_status, kb_results = await self._workflow_knowledge_search()
+            knowledge_status, kb_results = await self._workflow_knowledge_search(user_message)
 
             # Stage 3: LLM response generation
             llm_response = await self._workflow_llm_generate(user_message, llm, workflow_steps)
@@ -199,11 +200,11 @@ class AsyncChatWorkflow:
 
     async def _workflow_knowledge_search(
         self,
+        query: str,
     ) -> tuple[KnowledgeStatus, List[Dict[str, Any]]]:
-        """Search knowledge base. Issue #281: Extracted helper."""
+        """Search knowledge base using the canonical KB facade. Issue #10715."""
         await self.add_workflow_message("debug", "🔍 WORKFLOW: Searching knowledge base...", step="knowledge_search")
-        knowledge_status = KnowledgeStatus.BYPASSED  # Simplified for now
-        kb_results: List[Dict[str, Any]] = []
+        knowledge_status, kb_results = await self._execute_kb_search(query)
         await self.add_workflow_message(
             "utility",
             "📚 Knowledge base search completed",
@@ -211,6 +212,33 @@ class AsyncChatWorkflow:
             results_count=len(kb_results),
         )
         return knowledge_status, kb_results
+
+    async def _execute_kb_search(
+        self,
+        query: str,
+    ) -> tuple[KnowledgeStatus, List[Dict[str, Any]]]:
+        """Call the KB facade and map results; returns (status, results). Issue #10715."""
+        try:
+            kb = await get_knowledge_base()
+            if kb is None:
+                logger.warning("Knowledge base unavailable; skipping search for query: %.80s", query)
+                return KnowledgeStatus.MISSING, []
+            raw: List[Dict[str, Any]] = await kb.search(query=query, top_k=5)
+            if not raw:
+                return KnowledgeStatus.MISSING, []
+            results = [
+                {
+                    "content": r.get("content", ""),
+                    "source": r.get("node_id", r.get("doc_id", "")),
+                    "score": r.get("score", 0.0),
+                    "metadata": r.get("metadata", {}),
+                }
+                for r in raw
+            ]
+            return KnowledgeStatus.FOUND, results
+        except Exception as exc:
+            logger.error("Knowledge base search failed: %s", exc)
+            return KnowledgeStatus.MISSING, []
 
     async def _workflow_llm_generate(self, user_message: str, llm, workflow_steps: List[Dict[str, Any]]) -> LLMResponse:
         """Generate LLM response and log workflow step. Issue #281: Extracted helper."""
