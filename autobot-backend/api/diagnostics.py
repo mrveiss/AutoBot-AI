@@ -26,6 +26,7 @@ from api.schemas_system import (
 from api.system_health import register_singleton_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from services.causal_inference_engine import CausalInferenceEngine
 
 logger = get_logger(__name__)
@@ -34,16 +35,8 @@ logger = get_logger(__name__)
 # (#9892: the old "/api/diagnostics" prefix produced /api/api/diagnostics/*).
 router = APIRouter(prefix="/diagnostics", tags=["diagnostics"])
 
-# Singleton engine instance
-_engine: CausalInferenceEngine | None = None
-
-
-def get_engine() -> CausalInferenceEngine:
-    """Get or create singleton CausalInferenceEngine instance."""
-    global _engine
-    if _engine is None:
-        _engine = CausalInferenceEngine()
-    return _engine
+# Thread-safe singleton via lazy_singleton (#10784)
+get_engine = lazy_singleton(CausalInferenceEngine)
 
 
 # =============================================================================
