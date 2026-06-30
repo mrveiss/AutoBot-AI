@@ -6,7 +6,7 @@
 
 **Architecture:** Extend the existing 13-mixin KB architecture with a pluggable Connector Framework for external sources (file servers, databases, web crawlers), add a Source Verification workflow with autonomous/collaborative modes, and integrate the browser observation panel into the Knowledge page for live research visibility.
 
-**Tech Stack:** Python 3.12 (FastAPI), Vue 3 + TypeScript, ChromaDB, Redis, Playwright (.25), existing KnowledgeBase mixins, existing LibrarianAssistant agent.
+**Tech Stack:** Python 3.14 (FastAPI), Vue 3 + TypeScript, ChromaDB, Redis, Playwright (.25), existing KnowledgeBase mixins, existing LibrarianAssistant agent.
 
 ---
 

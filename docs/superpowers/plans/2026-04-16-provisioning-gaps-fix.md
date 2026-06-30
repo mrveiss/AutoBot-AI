@@ -6,7 +6,7 @@
 
 **Architecture:** Each fix is a targeted change to either an Ansible role file (tasks/defaults/template) or the Python validation middleware. No new abstractions introduced. All changes follow existing patterns in the files they touch.
 
-**Tech Stack:** Ansible (YAML), Jinja2 templates, Python 3.12, pytest, FastAPI TestClient
+**Tech Stack:** Ansible (YAML), Jinja2 templates, Python 3.14, pytest, FastAPI TestClient
 
 **Spec:** `docs/superpowers/specs/2026-04-16-provisioning-gaps-fix-design.md`
 

@@ -65,7 +65,7 @@ Regardless of your role, get AutoBot running in 5 minutes:
 
 ### **Prerequisites**
 - Linux/WSL2 environment
-- Python 3.12+
+- Python 3.14+
 - Ansible (for fleet deployment)
 - 16GB+ RAM recommended
 

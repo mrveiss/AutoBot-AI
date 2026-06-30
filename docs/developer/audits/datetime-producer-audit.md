@@ -71,7 +71,7 @@ Compare to `utc_timestamp()`:
 
 1. **All 55 unguarded `fromisoformat` parsers** receive a tz-naive datetime back from these timestamps — they then mis-compare against tz-aware datetimes (`TypeError: can't compare offset-naive and offset-aware datetimes`) the moment any consumer mixes the two.
 2. The 9 Z-shim parsers ARE accidentally tolerant — they handle `Z`, `+00:00`, AND naive (the shim is a no-op on naive input, then `fromisoformat` accepts it).
-3. **Python 3.12 deprecates `datetime.utcnow()`** — running tests on Py 3.12 will surface DeprecationWarnings everywhere this pattern appears. This audit's migration unblocks that upgrade.
+3. **Python 3.14 deprecates `datetime.utcnow()`** — running tests on Py 3.12 will surface DeprecationWarnings everywhere this pattern appears. This audit's migration unblocks that upgrade.
 
 ## The 3 outliers
 

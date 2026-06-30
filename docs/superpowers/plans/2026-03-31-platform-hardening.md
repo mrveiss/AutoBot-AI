@@ -6,7 +6,7 @@
 
 **Architecture:** Extends existing SSOT config, plugin SDK, extension system, and workflow executor. New `tool_sdk` package in `autobot-shared/` provides schema-validated tool contracts. Permission enforcement wires into existing `BEFORE_TOOL_EXECUTE` extension hook.
 
-**Tech Stack:** Python 3.12, FastAPI, Pydantic v2, Redis, asyncio, Vue 3 + Vite
+**Tech Stack:** Python 3.14, FastAPI, Pydantic v2, Redis, asyncio, Vue 3 + Vite
 
 **Spec:** `docs/superpowers/specs/2026-03-31-platform-hardening-design.md`
 

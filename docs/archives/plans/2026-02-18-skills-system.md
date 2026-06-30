@@ -6,7 +6,7 @@
 
 **Architecture:** Skill packages are SKILL.md (behavioral guide) + skill.py (MCP server). They live in DB as Draft/Installed/Active, promoted to disk as Builtin. Skill repos (git/local/MCP) are registered and synced. A governance layer (FULL_AUTO / SEMI_AUTO / LOCKED) gates skill activation through SLM admin approval.
 
-**Tech Stack:** Python 3.12, FastAPI, SQLAlchemy, Pydantic v2, `mcp` PyPI package, asyncio subprocesses, Vue 3 + TypeScript, existing `BaseSkill`/`SkillRegistry` (keep for builtins), Redis for pub/sub notifications.
+**Tech Stack:** Python 3.14, FastAPI, SQLAlchemy, Pydantic v2, `mcp` PyPI package, asyncio subprocesses, Vue 3 + TypeScript, existing `BaseSkill`/`SkillRegistry` (keep for builtins), Redis for pub/sub notifications.
 
 ---
 

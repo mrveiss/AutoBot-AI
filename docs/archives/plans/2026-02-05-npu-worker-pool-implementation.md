@@ -6,7 +6,7 @@
 
 **Architecture:** Extends existing `NPUWorkerClient` and `NPUTaskQueue` to support multiple workers transparently. Pool manages worker selection using priority-first + least-connections algorithm, monitors health via hybrid approach (background + on-demand), and implements conservative circuit breaker pattern.
 
-**Tech Stack:** Python 3.12+, asyncio, aiohttp, YAML config, pytest
+**Tech Stack:** Python 3.14+, asyncio, aiohttp, YAML config, pytest
 
 **Issue:** #168
 

@@ -184,11 +184,11 @@ async def analyze_documents(documents: List[Metadata], admin_check: bool = Depen
 
 
 # ====================================================================
-# Enhanced Chat Endpoints
+# Chat Endpoints
 # ====================================================================
 
 
-@router.post("/chat/enhanced", response_model=DataResponse[ChatResult])
+@router.post("/chat", response_model=DataResponse[ChatResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="chat",
@@ -261,7 +261,7 @@ async def extract_knowledge(
     return create_success_response(result, "Knowledge extraction completed successfully")
 
 
-@router.post("/knowledge/enhanced-search", response_model=DataResponse[KnowledgeSearchData])
+@router.post("/knowledge/search", response_model=DataResponse[KnowledgeSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="knowledge_search",
@@ -628,23 +628,3 @@ async def legacy_rag_search(
     """
     request = RAGQueryRequest(query=query, max_results=max_results)
     return await rag_query(request)
-
-
-@router.post("/legacy/enhanced-chat", response_model=DataResponse[ChatResult])
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="legacy_enhanced_chat",
-    error_code_prefix="AI_STACK_INTEGRATION",
-)
-async def legacy_enhanced_chat(
-    message: str,
-    context: str | None = None,
-    admin_check: bool = Depends(check_admin_permission),
-):
-    """
-    Legacy enhanced chat endpoint for backward compatibility.
-
-    Issue #744: Requires admin authentication.
-    """
-    request = ChatRequest(message=message, context=context)
-    return await chat(request)
