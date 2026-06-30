@@ -364,7 +364,11 @@ class AuthenticationMiddleware:
             "username": user_data["username"],
             "role": user_data["role"],
             "email": user_data.get("email", ""),
-            "iat": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
+            # iat MUST be a numeric (integer) Unix timestamp — PyJWT >=2.10
+            # rejects a non-integer iat on decode ("Issued At claim (iat) must
+            # be an integer"), which silently broke JWT verification (every
+            # /api/auth/me 401'd → login redirect loop) once real auth ran.
+            "iat": int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp()),
         }
 
         # Issue #684: Include org/user hierarchy in token
