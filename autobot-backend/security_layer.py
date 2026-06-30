@@ -46,9 +46,6 @@ def _resolve_audit_log_file() -> str:
 
 _AUDIT_LOG_FILE = _resolve_audit_log_file()
 
-# Performance optimization: O(1) lookup for boolean string values (Issue #326)
-BOOLEAN_TRUE_VALUES = {"true", "1", "yes"}
-
 # Performance optimization: O(1) lookup for deprecated privileged roles (Issue #326)
 DEPRECATED_PRIVILEGED_ROLES = {"god", "superuser", "root"}
 
@@ -95,8 +92,10 @@ class SecurityLayer:
         # Use centralized config manager
         self.security_config = get_config_manager().get("security_config", {})
 
-        # Check for single-user mode (development/personal use)
-        self.single_user_mode = str(config.single_user_mode).lower() in BOOLEAN_TRUE_VALUES
+        # Check for single-user mode (development/personal use).
+        # #10705: config.single_user_mode was removed by the #10666 consolidation;
+        # derive from the canonical AUTOBOT_USER_MODE string (#10636) instead.
+        self.single_user_mode = config.user_mode == "single_user"
 
         # If single-user mode is enabled, disable all authentication
         # Issue #745: Added security warning for production awareness
@@ -104,7 +103,7 @@ class SecurityLayer:
             self.enable_auth = False
             logger.warning(
                 "SECURITY: Single-user mode enabled - authentication disabled. "
-                "Set AUTOBOT_SINGLE_USER_MODE=false for production deployments."
+                "Set AUTOBOT_USER_MODE to a non-single_user value for production deployments."
             )
         else:
             # Issue #745: Default to True for production security
