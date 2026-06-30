@@ -160,6 +160,7 @@
     "companyOs": "Company OS",
     "llcDashboard": "Dashboard",
     "llcOrgChart": "Org Chart",
+    "llcMembers": "اعضا",
     "llcGoals": "Goals",
     "llcCompanies": "Companies",
     "llcBacklog": "Backlog",
@@ -189,6 +190,38 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment runs in single_user mode, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it."
+  },
+  "llcMembers": {
+    "title": "اعضا",
+    "subtitle": "افراد متعلق به این شرکت و نقش‌های آن‌ها را مدیریت کنید.",
+    "addMember": "افزودن عضو",
+    "remove": "حذف",
+    "cancel": "لغو",
+    "loading": "در حال بارگذاری اعضا…",
+    "empty": "هنوز عضوی وجود ندارد. اولین عضو را به این شرکت اضافه کنید.",
+    "noCompany": "برای مدیریت اعضا یک شرکت انتخاب کنید.",
+    "colName": "نام",
+    "colRole": "نقش",
+    "colActions": "اقدامات",
+    "addModalTitle": "افزودن عضو",
+    "userLabel": "کاربر",
+    "userPlaceholder": "یک کاربر انتخاب کنید…",
+    "usersLoading": "در حال بارگذاری کاربران…",
+    "noSelectableUsers": "کاربری برای افزودن موجود نیست.",
+    "roleLabel": "نقش",
+    "confirmAdd": "افزودن",
+    "confirmRemove": "{name} از این شرکت حذف شود؟",
+    "loadError": "بارگذاری اعضا ناموفق بود.",
+    "addError": "افزودن عضو ناموفق بود.",
+    "removeError": "حذف عضو ناموفق بود.",
+    "usersLoadError": "بارگذاری کاربران ناموفق بود.",
+    "role": {
+      "owner": "مالک",
+      "admin": "مدیر",
+      "member": "عضو",
+      "guest": "مهمان",
+      "lead": "سرپرست"
+    }
   },
   "agent": {
     "registry": {

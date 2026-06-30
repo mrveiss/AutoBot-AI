@@ -293,15 +293,15 @@ async def knowledge_search(
             logger.warning("Local KB search failed: %s", e)
             results["local_kb"] = []
 
-    # AI Stack enhanced search
+    # AI Stack search
     try:
-        enhanced_results = await ai_client.search_knowledge_enhanced(
+        aistack_results = await ai_client.search_knowledge(
             query=query, search_type=search_type, max_results=max_results
         )
-        results["enhanced"] = enhanced_results
+        results["aistack"] = aistack_results
     except AIStackError as e:
-        logger.warning("AI Stack enhanced search failed: %s", e)
-        results["enhanced"] = {}
+        logger.warning("AI Stack search failed: %s", e)
+        results["aistack"] = {}
 
     return create_success_response(results, "Enhanced knowledge search completed")
 

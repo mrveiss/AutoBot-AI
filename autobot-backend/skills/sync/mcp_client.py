@@ -22,6 +22,7 @@ import asyncio
 from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from security.content_firewall import ContentSource, get_content_firewall
 from skills.sync.mcp_transport import MCPTransport, create_transport
 from type_defs.mcp import (
     MCPPromptDefinition,
@@ -123,11 +124,20 @@ class MCPClient:
             arguments: Key/value arguments matching the tool's ``inputSchema``.
 
         Returns:
-            The raw ``result`` value from the server's JSON-RPC response.
+            The firewall-inspected ``result`` value from the server's JSON-RPC response.
         """
         params: Dict[str, Any] = {"name": name, "arguments": arguments or {}}
         result = await self._call("tools/call", params)
         logger.debug("MCPClient: tool %s returned %s", name, type(result).__name__)
+        # #10552: inspect MCP tool output through the content firewall
+        if result is not None:
+            raw_str = result if isinstance(result, str) else str(result)
+            verdict = await get_content_firewall().inspect(raw_str, source=ContentSource.MCP, context_label=name)
+            if verdict.blocked:
+                raise MCPError(
+                    code=-32603, message=f"MCP tool output blocked by content firewall (risk={verdict.risk.value})"
+                )
+            result = verdict.content if isinstance(result, str) else result
         return result
 
     # ------------------------------------------------------------------
@@ -174,10 +184,21 @@ class MCPClient:
             uri: Resource URI.
 
         Returns:
-            The raw resource content from the server response.
+            The firewall-inspected resource content from the server response.
         """
         result = await self._call("resources/read", {"uri": uri})
         logger.debug("MCPClient: read resource %s", uri)
+        # #10552: inspect MCP resource content through the content firewall
+        if result is not None:
+            raw_str = result if isinstance(result, str) else str(result)
+            verdict = await get_content_firewall().inspect(
+                raw_str, source=ContentSource.MCP, context_label=f"resource:{uri}"
+            )
+            if verdict.blocked:
+                raise MCPError(
+                    code=-32603, message=f"MCP resource blocked by content firewall (risk={verdict.risk.value})"
+                )
+            result = verdict.content if isinstance(result, str) else result
         return result
 
     # ------------------------------------------------------------------

@@ -30572,7 +30572,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/logs/aggregated": {
+    "/api/logs/combined": {
         parameters: {
             query?: never;
             header?: never;
@@ -30580,12 +30580,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Aggregated Logs
-         * @description Get aggregated logs from all sources, merged by timestamp.
+         * Get Combined Logs
+         * @description Get combined logs from docker + file sources, merged by timestamp.
          *
          *     Issue #744: Requires admin authentication.
          */
-        get: operations["get_aggregated_logs_api_logs_aggregated_get"];
+        get: operations["get_combined_logs_api_logs_combined_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -77894,10 +77894,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * LogAggregatedResponse
-         * @description Response for GET /logs/aggregated.
+         * LogCombinedResponse
+         * @description Response for GET /logs/combined (docker + file logs merged into one stream).
          */
-        LogAggregatedResponse: {
+        LogCombinedResponse: {
             /** Logs */
             logs: unknown[];
             /** Total Count */
@@ -137781,7 +137781,7 @@ export interface operations {
             };
         };
     };
-    get_aggregated_logs_api_logs_aggregated_get: {
+    get_combined_logs_api_logs_combined_get: {
         parameters: {
             query?: {
                 /** @description Total number of lines to return */
@@ -137803,7 +137803,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LogAggregatedResponse"];
+                    "application/json": components["schemas"]["LogCombinedResponse"];
                 };
             };
             /** @description Validation Error */

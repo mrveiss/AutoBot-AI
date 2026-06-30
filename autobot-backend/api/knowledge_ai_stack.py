@@ -50,7 +50,7 @@ logger = get_logger(__name__)
 # Router Configuration
 # ====================================================================
 
-router = APIRouter(tags=["knowledge-enhanced"])
+router = APIRouter(tags=["knowledge-aistack"])
 
 # ====================================================================
 # Request/Response Models
@@ -112,7 +112,7 @@ async def _search_local_knowledge_base(
         return {"results": [], "error": "Internal server error", "source": "local_kb"}
 
 
-async def _search_rag_enhanced(
+async def _search_rag(
     query: str,
     max_results: int,
     local_docs: List[Dict[str, Any]] | None = None,
@@ -125,7 +125,7 @@ async def _search_rag_enhanced(
     Args:
         query: Search query string
         max_results: Maximum results to return
-        local_docs: Optional local documents to enhance with
+        local_docs: Optional local documents to augment with
 
     Returns:
         Dictionary with RAG search results
@@ -146,13 +146,13 @@ async def _search_rag_enhanced(
         return {"results": [], "error": e.message, "source": "ai_stack_rag"}
 
 
-async def _search_enhanced_librarian(
+async def _search_librarian(
     query: str,
     search_type: str,
     max_results: int,
 ) -> Dict[str, Any]:
     """
-    Search using AI Stack enhanced librarian.
+    Search using AI Stack KB librarian.
 
     Issue #281: Extracted helper for librarian search.
 
@@ -166,17 +166,17 @@ async def _search_enhanced_librarian(
     """
     try:
         ai_client = await get_ai_stack_client()
-        enhanced_results = await ai_client.search_knowledge_enhanced(
+        librarian_results = await ai_client.search_knowledge(
             query=query,
             search_type=search_type,
             max_results=max_results,
         )
 
-        logger.info("Enhanced librarian search completed")
-        return {"results": enhanced_results, "source": "ai_stack_librarian"}
+        logger.info("Librarian search completed")
+        return {"results": librarian_results, "source": "ai_stack_librarian"}
 
     except AIStackError as e:
-        logger.warning("Enhanced librarian search failed: %s", e)
+        logger.warning("Librarian search failed: %s", e)
         return {"results": [], "error": e.message, "source": "ai_stack_librarian"}
 
 
@@ -245,13 +245,13 @@ async def _run_all_search_sources(
 
     if request_data.include_rag:
         local_docs = results.get("local_knowledge_base", {}).get("results")
-        results["rag_enhanced"] = await _search_rag_enhanced(
+        results["rag"] = await _search_rag(
             query=request_data.query,
             max_results=request_data.max_results,
             local_docs=local_docs,
         )
 
-    results["enhanced_librarian"] = await _search_enhanced_librarian(
+    results["librarian"] = await _search_librarian(
         query=request_data.query,
         search_type=request_data.search_type,
         max_results=request_data.max_results,

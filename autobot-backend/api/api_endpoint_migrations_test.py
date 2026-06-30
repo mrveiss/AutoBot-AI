@@ -26594,14 +26594,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="read_container_logs"', source)
         self.assertIn('error_code_prefix="LOGS"', source)
 
-    def test_batch_157_get_aggregated_logs_simple_pattern(self):
-        """Verify get_aggregated_logs endpoint uses Simple Pattern"""
+    def test_batch_157_get_combined_logs_simple_pattern(self):
+        """Verify get_combined_logs endpoint uses Simple Pattern"""
         from api import logs
 
-        source = inspect.getsource(logs.get_aggregated_logs)
+        source = inspect.getsource(logs.get_combined_logs)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="get_aggregated_logs"', source)
+        self.assertIn('operation="get_combined_logs"', source)
         self.assertIn('error_code_prefix="LOGS"', source)
 
     def test_batch_157_stream_log_simple_pattern(self):
@@ -26644,7 +26644,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             logs.list_logs,
             logs.read_log,
             logs.read_container_logs,
-            logs.get_aggregated_logs,
+            logs.get_combined_logs,
             logs.stream_log,
             logs.search_logs,
             logs.clear_log,
@@ -26668,7 +26668,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             logs.list_logs,
             logs.read_log,
             logs.read_container_logs,
-            logs.get_aggregated_logs,
+            logs.get_combined_logs,
             logs.stream_log,
             logs.search_logs,
             logs.clear_log,
@@ -26753,8 +26753,8 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Verify parse_file_log_line exists and is used
         self.assertTrue(hasattr(logs, "parse_file_log_line"))
-        unified_source = inspect.getsource(logs.get_aggregated_logs)
-        self.assertIn("parse_file_log_line", unified_source)
+        combined_source = inspect.getsource(logs.get_combined_logs)
+        self.assertIn("parse_file_log_line", combined_source)
 
     def test_batch_157_migration_preserves_streaming_response(self):
         """Verify migration preserves streaming response functionality"""
@@ -26788,16 +26788,16 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("case_sensitive", search_source)
         self.assertIn("max_results", search_source)
 
-    def test_batch_157_migration_preserves_aggregated_log_merging(self):
-        """Verify migration preserves aggregated log merging by timestamp"""
+    def test_batch_157_migration_preserves_combined_log_merging(self):
+        """Verify migration preserves combined log merging by timestamp"""
         from api import logs
 
-        # Verify get_aggregated_logs merges logs
-        unified_source = inspect.getsource(logs.get_aggregated_logs)
-        self.assertIn("all_logs", unified_source)
-        self.assertIn("sort", unified_source)
-        self.assertIn("timestamp", unified_source)
-        self.assertIn("source_type", unified_source)
+        # Verify get_combined_logs merges logs from docker + file sources
+        combined_source = inspect.getsource(logs.get_combined_logs)
+        self.assertIn("all_logs", combined_source)
+        self.assertIn("sort", combined_source)
+        self.assertIn("timestamp", combined_source)
+        self.assertIn("source_type", combined_source)
 
     # ==============================================
     # BATCH 158: llm_awareness.py - COMPLETE (100%)
@@ -27061,15 +27061,15 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("_cache_timestamp", metrics_source)
         self.assertIn("_cache_ttl", metrics_source)
 
-        """Verify migration preserves aggregated log merging by timestamp"""
+        """Verify migration preserves combined log merging by timestamp"""
         from api import logs
 
-        # Verify get_aggregated_logs merges logs
-        unified_source = inspect.getsource(logs.get_aggregated_logs)
-        self.assertIn("all_logs", unified_source)
-        self.assertIn("sort", unified_source)
-        self.assertIn("timestamp", unified_source)
-        self.assertIn("source_type", unified_source)
+        # Verify get_combined_logs merges logs from docker + file sources
+        combined_source = inspect.getsource(logs.get_combined_logs)
+        self.assertIn("all_logs", combined_source)
+        self.assertIn("sort", combined_source)
+        self.assertIn("timestamp", combined_source)
+        self.assertIn("source_type", combined_source)
 
         """Verify migration preserves RemoteSessionType enum"""
         from api import remote_terminal
@@ -28851,7 +28851,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             logs.list_logs,
             logs.read_log,
             logs.read_container_logs,
-            logs.get_aggregated_logs,
+            logs.get_combined_logs,
             logs.stream_log,
             logs.tail_log,
             logs.search_logs,
