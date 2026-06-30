@@ -1298,7 +1298,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced": {
+    "/api/ai-stack": {
         parameters: {
             query?: never;
             header?: never;
@@ -1308,25 +1308,25 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enhanced Chat
-         * @description Enhanced chat endpoint with AI Stack integration.
+         * AI Stack Chat
+         * @description AI Stack chat endpoint with knowledge base integration.
          *
          *     This endpoint provides intelligent conversation with:
-         *     - AI Stack enhanced reasoning capabilities
+         *     - AI Stack reasoning capabilities
          *     - Knowledge base integration
          *     - Source citations
          *     - Customizable response preferences
          *
          *     Issue #744: Requires authenticated user.
          */
-        post: operations["enhanced_chat_api_enhanced_post"];
+        post: operations["chat_ai_stack_api_ai_stack_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/stream-enhanced": {
+    "/api/stream-ai-stack": {
         parameters: {
             query?: never;
             header?: never;
@@ -1336,22 +1336,22 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Stream Enhanced Chat
-         * @description Stream enhanced chat response for real-time communication.
+         * Stream AI Stack Chat
+         * @description Stream AI Stack chat response for real-time communication.
          *
-         *     Provides real-time streaming of AI Stack enhanced responses
+         *     Provides real-time streaming of AI Stack responses
          *     with knowledge base integration.
          *
          *     Issue #744: Requires authenticated user.
          */
-        post: operations["stream_enhanced_chat_api_stream_enhanced_post"];
+        post: operations["stream_ai_stack_chat_api_stream_ai_stack_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/health-enhanced": {
+    "/api/health-ai-stack": {
         parameters: {
             query?: never;
             header?: never;
@@ -1359,12 +1359,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Enhanced Chat Health Check
-         * @description Health check for enhanced chat service including AI Stack connectivity.
+         * AI Stack Chat Health Check
+         * @description Health check for AI Stack chat service including AI Stack connectivity.
          *
          *     Issue #744: Requires authenticated user.
          */
-        get: operations["enhanced_chat_health_check_api_health_enhanced_get"];
+        get: operations["chat_health_ai_stack_api_health_ai_stack_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -30572,7 +30572,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/logs/aggregated": {
+    "/api/logs/combined": {
         parameters: {
             query?: never;
             header?: never;
@@ -30580,12 +30580,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Aggregated Logs
-         * @description Get aggregated logs from all sources, merged by timestamp.
+         * Get Combined Logs
+         * @description Get combined logs from docker + file sources, merged by timestamp.
          *
          *     Issue #744: Requires admin authentication.
          */
-        get: operations["get_aggregated_logs_api_logs_aggregated_get"];
+        get: operations["get_combined_logs_api_logs_combined_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -56011,8 +56011,8 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** Body_enhanced_chat_api_enhanced_post */
-        Body_enhanced_chat_api_enhanced_post: {
+        /** Body_chat_ai_stack_api_ai_stack_post */
+        Body_chat_ai_stack_api_ai_stack_post: {
             message?: components["schemas"]["EnhancedChatMessage"];
             preferences?: components["schemas"]["ChatPreferences"] | null;
         } & {
@@ -56120,8 +56120,8 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** Body_stream_enhanced_chat_api_stream_enhanced_post */
-        Body_stream_enhanced_chat_api_stream_enhanced_post: {
+        /** Body_stream_ai_stack_chat_api_stream_ai_stack_post */
+        Body_stream_ai_stack_chat_api_stream_ai_stack_post: {
             message?: components["schemas"]["EnhancedChatMessage"];
             preferences?: components["schemas"]["ChatPreferences"] | null;
         } & {
@@ -64596,14 +64596,14 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[EnhancedChatData] */
-        DataResponse_EnhancedChatData_: {
+        /** DataResponse[ChatData] */
+        DataResponse_ChatData_: {
             /**
              * Success
              * @default true
              */
             success: boolean;
-            data?: components["schemas"]["EnhancedChatData"] | null;
+            data?: components["schemas"]["ChatData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -64611,14 +64611,14 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[EnhancedChatResult] */
-        DataResponse_EnhancedChatResult_: {
+        /** DataResponse[ChatResult] */
+        DataResponse_ChatResult_: {
             /**
              * Success
              * @default true
              */
             success: boolean;
-            data?: components["schemas"]["EnhancedChatResult"] | null;
+            data?: components["schemas"]["ChatResult"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -68745,13 +68745,13 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * EnhancedChatData
-         * @description data payload for POST /enhanced.
+         * ChatData
+         * @description data payload for POST /ai-stack.
          *
          *     Mirrors ChatMessageData with an additional ``knowledge_sources``
-         *     field for KB-augmented enhanced chats.
+         *     field for KB-augmented AI Stack chats.
          */
-        EnhancedChatData: {
+        ChatData: {
             /** Content */
             content: string;
             /** Role */
@@ -68774,14 +68774,14 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * EnhancedChatHealthData
-         * @description Response shape for GET /health-enhanced (#6497).
+         * AiStackChatHealthData
+         * @description Response shape for GET /health-ai-stack (#6497).
          *
          *     Wire format is the model itself — no DataResponse envelope. The
          *     components map is heterogeneous (per-component status strings keyed
          *     by component name) so it is typed as Dict[str, Any].
          */
-        EnhancedChatHealthData: {
+        AiStackChatHealthData: {
             /** Status */
             status: string;
             /** Timestamp */
@@ -68895,10 +68895,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * EnhancedChatResult
+         * ChatResult
          * @description Data payload for POST /ai-stack/chat.
          */
-        EnhancedChatResult: {
+        ChatResult: {
             /** Message */
             message?: string | null;
             /** Context Used */
@@ -77894,10 +77894,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * LogAggregatedResponse
-         * @description Response for GET /logs/aggregated.
+         * LogCombinedResponse
+         * @description Response for GET /logs/combined (docker + file logs merged into one stream).
          */
-        LogAggregatedResponse: {
+        LogCombinedResponse: {
             /** Logs */
             logs: unknown[];
             /** Total Count */
@@ -100215,7 +100215,7 @@ export interface operations {
             };
         };
     };
-    enhanced_chat_api_enhanced_post: {
+    chat_ai_stack_api_ai_stack_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -100224,7 +100224,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["Body_enhanced_chat_api_enhanced_post"];
+                "application/json": components["schemas"]["Body_chat_ai_stack_api_ai_stack_post"];
             };
         };
         responses: {
@@ -100234,7 +100234,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_EnhancedChatData_"];
+                    "application/json": components["schemas"]["DataResponse_ChatData_"];
                 };
             };
             /** @description Validation Error */
@@ -100248,7 +100248,7 @@ export interface operations {
             };
         };
     };
-    stream_enhanced_chat_api_stream_enhanced_post: {
+    stream_ai_stack_chat_api_stream_ai_stack_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -100257,7 +100257,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["Body_stream_enhanced_chat_api_stream_enhanced_post"];
+                "application/json": components["schemas"]["Body_stream_ai_stack_chat_api_stream_ai_stack_post"];
             };
         };
         responses: {
@@ -100281,7 +100281,7 @@ export interface operations {
             };
         };
     };
-    enhanced_chat_health_check_api_health_enhanced_get: {
+    chat_health_ai_stack_api_health_ai_stack_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -100296,7 +100296,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnhancedChatHealthData"];
+                    "application/json": components["schemas"]["AiStackChatHealthData"];
                 };
             };
         };
@@ -137781,7 +137781,7 @@ export interface operations {
             };
         };
     };
-    get_aggregated_logs_api_logs_aggregated_get: {
+    get_combined_logs_api_logs_combined_get: {
         parameters: {
             query?: {
                 /** @description Total number of lines to return */
@@ -137803,7 +137803,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LogAggregatedResponse"];
+                    "application/json": components["schemas"]["LogCombinedResponse"];
                 };
             };
             /** @description Validation Error */

@@ -8,6 +8,7 @@ User Management API Dependencies
 FastAPI dependencies for user management endpoints.
 """
 
+import logging
 import uuid
 from typing import AsyncGenerator, Optional
 
@@ -22,6 +23,8 @@ from user_management.services import (
     TenantContext,
     UserService,
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def get_db_session() -> AsyncSession:
@@ -85,42 +88,148 @@ def get_current_user_id(
         ) from exc
 
 
-def get_tenant_context(
+def _parse_uuid_safe(value: Optional[str]) -> Optional[uuid.UUID]:
+    """Parse a string as UUID, returning None on failure (no error raised)."""
+    if not value:
+        return None
+    try:
+        return uuid.UUID(str(value))
+    except (ValueError, TypeError):
+        return None
+
+
+def _extract_request_org_id(request: Request) -> Optional[uuid.UUID]:
+    """Extract org_id from the request using precedence rules (#10750 A5).
+
+    Precedence (first non-None valid UUID wins):
+      1. ``X-Organization-Id`` request header
+      2. ``company_id`` path parameter (e.g. /companies/{company_id}/...)
+      3. ``company_id`` query parameter (?company_id=...)
+
+    Returns None if no parseable org UUID is found in any location.
+    """
+    # 1. Header takes highest priority
+    header_val = request.headers.get("X-Organization-Id")
+    parsed = _parse_uuid_safe(header_val)
+    if parsed is not None:
+        return parsed
+
+    # 2. Path param (present on routes like /companies/{company_id}/portfolios)
+    path_val = request.path_params.get("company_id") or request.path_params.get("id")
+    parsed = _parse_uuid_safe(path_val)
+    if parsed is not None:
+        return parsed
+
+    # 3. Query param (?company_id=...)
+    query_val = request.query_params.get("company_id")
+    parsed = _parse_uuid_safe(query_val)
+    if parsed is not None:
+        return parsed
+
+    return None
+
+
+async def _check_org_membership(
+    session: AsyncSession,
+    org_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> bool:
+    """Return True if *user_id* is a member of *org_id* (LLC company).
+
+    Uses a lightweight SELECT EXISTS query against ``llc_company_memberships``
+    rather than constructing the full MembershipService, to avoid DI overhead
+    and keep this dependency lean (#10750 A5).
+    """
+    from sqlalchemy import select  # local import avoids module-level circularity
+
+    from llc.models.membership import LLCCompanyMembership
+
+    result = await session.execute(
+        select(LLCCompanyMembership.id).where(
+            LLCCompanyMembership.company_id == org_id,
+            LLCCompanyMembership.user_id == user_id,
+        )
+    )
+    return result.first() is not None
+
+
+async def get_tenant_context(
     request: Request,
     current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
 ) -> TenantContext:
-    """
-    Build tenant context from current request and user.
+    """Build tenant context from current request and user (#10750 A5).
 
-    Extracts org_id and user_id from JWT claims or session.
+    Resolution precedence for ``org_id``:
+      1. ``X-Organization-Id`` request header (frontend sends the selected
+         company id here).
+      2. ``company_id`` path param or query param (many LLC routes pass it
+         directly, e.g. ``/companies/{company_id}/portfolios``).
+      3. ``org_id`` JWT claim (preserved for backward compatibility).
+
+    Security — org spoofing prevention:
+      - Platform admins (``role == "admin"`` or ``is_platform_admin == True``)
+        may supply any org_id without membership verification.
+      - All other users: if an org_id is taken from the request (sources 1 or
+        2) a membership check against ``llc_company_memberships`` is performed.
+        If the user is not a member, HTTP 403 is raised so the caller knows
+        exactly why they were rejected (not silently treated as unauthenticated).
+      - If the org_id comes only from the JWT claim (source 3) it is accepted
+        as-is, mirroring prior behaviour.
     """
-    # Extract org_id from JWT claims if present
-    org_id = None
-    user_id = None
+    user_id: Optional[uuid.UUID] = None
     is_platform_admin = False
 
-    # Check for org_id in user data (from JWT or session)
-    if "org_id" in current_user and current_user["org_id"]:
-        try:
-            org_id = uuid.UUID(current_user["org_id"])
-        except (ValueError, TypeError):
-            pass
+    # Resolve user_id from JWT
+    raw_user_id = current_user.get("user_id") or current_user.get("id") or current_user.get("sub")
+    if raw_user_id:
+        user_id = _parse_uuid_safe(str(raw_user_id))
 
-    if "user_id" in current_user and current_user["user_id"]:
-        try:
-            user_id = uuid.UUID(current_user["user_id"])
-        except (ValueError, TypeError):
-            pass
-
-    # Check for platform admin flag
-    is_platform_admin = current_user.get("is_platform_admin", False)
-
-    # For backward compatibility, check role
+    # Determine platform-admin status
+    is_platform_admin = bool(current_user.get("is_platform_admin", False))
     if current_user.get("role") == "admin":
         is_platform_admin = True
 
+    # --- org_id resolution ---
+
+    # Sources 1 & 2: from the request itself
+    request_org_id = _extract_request_org_id(request)
+
+    if request_org_id is not None:
+        if is_platform_admin:
+            # Platform admins are trusted to access any org
+            return TenantContext(
+                org_id=request_org_id,
+                user_id=user_id,
+                is_platform_admin=is_platform_admin,
+            )
+
+        # Non-admin: verify membership before accepting the request-supplied org
+        if user_id is not None:
+            is_member = await _check_org_membership(session, request_org_id, user_id)
+            if is_member:
+                return TenantContext(
+                    org_id=request_org_id,
+                    user_id=user_id,
+                    is_platform_admin=is_platform_admin,
+                )
+
+        # Supplied an org but is not a member (or has no user_id) → 403
+        logger.warning(
+            "Tenant context: user %s is not a member of org %s (requested via header/path/query)",
+            user_id,
+            request_org_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of the requested organization",
+        )
+
+    # Source 3: JWT claim fallback (existing behaviour, no extra DB check)
+    jwt_org_id = _parse_uuid_safe(current_user.get("org_id"))
+
     return TenantContext(
-        org_id=org_id,
+        org_id=jwt_org_id,
         user_id=user_id,
         is_platform_admin=is_platform_admin,
     )
@@ -137,7 +246,7 @@ def require_user_management_enabled():
     return None
 
 
-def require_org_context(
+async def require_org_context(
     context: TenantContext = Depends(get_tenant_context),
 ) -> TenantContext:
     """
@@ -153,7 +262,7 @@ def require_org_context(
     return context
 
 
-def require_platform_admin(
+async def require_platform_admin(
     context: TenantContext = Depends(get_tenant_context),
 ) -> TenantContext:
     """
