@@ -68,7 +68,7 @@ class ResponseBuilder:
         """
         Cluster search results by topic.
 
-        Issue #281: Extracted from enhanced_search_v2 for clarity.
+        Issue #281: Extracted from advanced search for clarity.
 
         Args:
             results: Search results to cluster

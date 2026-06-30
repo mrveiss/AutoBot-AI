@@ -17,8 +17,8 @@ from memory import MemoryManager
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
+    MultiModalProcessor,
     ProcessingIntent,
-    UnifiedMultiModalProcessor,
 )
 from services.config_service import ConfigService
 
@@ -105,7 +105,7 @@ class TestSystemPerformanceBenchmarks:
     @pytest.mark.asyncio
     async def test_multimodal_processor_performance(self):
         """Test multi-modal processor performance"""
-        processor = UnifiedMultiModalProcessor()
+        processor = MultiModalProcessor()
 
         # Test single processing performance
         test_input = MultiModalInput(
@@ -135,7 +135,7 @@ class TestSystemPerformanceBenchmarks:
     @pytest.mark.asyncio
     async def test_concurrent_processing_performance(self):
         """Test concurrent processing performance"""
-        processor = UnifiedMultiModalProcessor()
+        processor = MultiModalProcessor()
 
         # Create multiple test inputs
         inputs = [
@@ -253,7 +253,7 @@ class TestSystemPerformanceBenchmarks:
 
         # Test multimodal processor startup
         start_time = time.time()
-        UnifiedMultiModalProcessor()
+        MultiModalProcessor()
         processor_startup_time = (time.time() - start_time) * 1000
 
         assert processor_startup_time < 500.0, f"Multimodal processor startup too slow: {processor_startup_time}ms"
@@ -297,7 +297,7 @@ class TestSystemPerformanceBenchmarks:
 
     def test_statistics_tracking_performance(self):
         """Test performance statistics tracking overhead"""
-        processor = UnifiedMultiModalProcessor()
+        processor = MultiModalProcessor()
 
         # Create mock results for statistics
         mock_results = [
@@ -381,7 +381,7 @@ class TestScalabilityBenchmarks:
     @pytest.mark.asyncio
     async def test_multimodal_processor_scalability(self):
         """Test multi-modal processor scalability with many concurrent requests"""
-        processor = UnifiedMultiModalProcessor()
+        processor = MultiModalProcessor()
 
         # Create many test inputs
         num_inputs = 50

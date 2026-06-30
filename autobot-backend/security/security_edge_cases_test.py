@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from enhanced_security_layer import EnhancedSecurityLayer
 from secure_command_executor import CommandRisk
+from security_layer import SecurityLayer
 
 
 class TestSecurityEdgeCases:
@@ -59,7 +59,7 @@ class TestSecurityEdgeCases:
 
         with patch("enhanced_security_layer.global_config_manager") as mock_config:
             mock_config.get.return_value = self.security_config
-            self.security = EnhancedSecurityLayer()
+            self.security = SecurityLayer()
 
         # #7376: stub `command_executor.run_shell_command` so tests cannot
         # accidentally subprocess real attack payloads (`find / -perm -4000`,
@@ -74,7 +74,7 @@ class TestSecurityEdgeCases:
         # exercised at the `assess_command_risk` layer, which is in-process
         # and side-effect-free.
         # Result shape matches `SecureCommandExecutor._build_blocked_result`
-        # so downstream audit logging in `EnhancedSecurityLayer._log_command_complete`
+        # so downstream audit logging in `SecurityLayer._log_command_complete`
         # finds the keys it expects (`status`, `return_code`).
         self.security.command_executor.run_shell_command = AsyncMock(
             return_value={
@@ -379,7 +379,7 @@ class TestSecurityEdgeCases:
                 mock_config.get.return_value = modified_config
 
                 # Create new security instance
-                new_security = EnhancedSecurityLayer()
+                new_security = SecurityLayer()
 
                 # Test that dangerous commands are still properly handled
                 dangerous_command = "rm -rf /tmp/test"
@@ -559,7 +559,7 @@ class TestSecurityBoundaryConditions:
 
         with patch("enhanced_security_layer.global_config_manager") as mock_config:
             mock_config.get.return_value = self.minimal_config
-            self.security = EnhancedSecurityLayer()
+            self.security = SecurityLayer()
 
     def teardown_method(self):
         """Clean up test fixtures"""

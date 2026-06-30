@@ -18649,16 +18649,16 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertNotIn("except", source)
 
     def test_batch_110_consolidated_websocket_mixed_pattern(self):
-        """Verify consolidated_terminal_websocket uses Mixed Pattern"""
+        """Verify terminal_websocket uses Mixed Pattern"""
         from api import terminal
 
-        source = inspect.getsource(terminal.consolidated_terminal_websocket)
+        source = inspect.getsource(terminal.terminal_websocket)
         # Should have @with_error_handling decorator
         self.assertIn("@with_error_handling", source)
         # Should have category parameter
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         # Should have operation parameter
-        self.assertIn('operation="consolidated_terminal_websocket"', source)
+        self.assertIn('operation="terminal_websocket"', source)
         # Mixed Pattern - should have try-catch blocks (connection lifecycle)
         self.assertIn("try:", source)
         self.assertIn("except", source)
@@ -18680,16 +18680,16 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify canonical WebSocket endpoint has @with_error_handling decorator"""
         from api import terminal
 
-        source = inspect.getsource(terminal.consolidated_terminal_websocket)
+        source = inspect.getsource(terminal.terminal_websocket)
         self.assertIn(
             "@with_error_handling",
             source,
-            "consolidated_terminal_websocket should have @with_error_handling decorator",
+            "terminal_websocket should have @with_error_handling decorator",
         )
         self.assertIn(
             "@router.websocket",
             source,
-            "consolidated_terminal_websocket should have @router.websocket decorator",
+            "terminal_websocket should have @router.websocket decorator",
         )
 
     def test_batch_110_terminal_100_percent_milestone(self):
@@ -18736,7 +18736,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("endpoints", source_info)
 
         # Check consolidated WebSocket
-        source_ws = inspect.getsource(terminal.consolidated_terminal_websocket)
+        source_ws = inspect.getsource(terminal.terminal_websocket)
         self.assertIn("websocket.accept", source_ws)
         self.assertIn("session_manager", source_ws)
 
@@ -18744,7 +18744,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify canonical WebSocket endpoint preserves security level management"""
         from api import terminal
 
-        source = inspect.getsource(terminal.consolidated_terminal_websocket)
+        source = inspect.getsource(terminal.terminal_websocket)
         self.assertIn("SecurityLevel", source)
         self.assertIn("security_level", source)
 
@@ -23257,7 +23257,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         source = inspect.getsource(security.get_security_status)
         self.assertIn("enhanced_security_layer", source)
         self.assertIn("security_layer", source)
-        self.assertIn("EnhancedSecurityLayer()", source)
+        self.assertIn("SecurityLayer()", source)
         self.assertIn("get_pending_approvals()", source)
 
     def test_batch_137_migration_preserves_command_approval(self):

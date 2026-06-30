@@ -13,14 +13,14 @@ Package Structure:
 - formatters.py: ToolInfoFormatter class (260 lines)
 - processors.py: ResultProcessor, ToolInfoData, ResearchResultsProcessor (280 lines)
 - parsers.py: InstructionParser class (100 lines)
-- librarian.py: EnhancedKBLibrarian facade (400 lines)
+- librarian.py: KBLibrarian facade (400 lines)
 
 Total: ~1,380 lines across 6 focused modules
 Original: 1,465 lines in single god class
 """
 
 from .formatters import ToolInfoFormatter
-from .librarian import EnhancedKBLibrarian
+from .librarian import KBLibrarian
 from .parsers import InstructionParser
 from .processors import ResearchResultsProcessor, ResultProcessor, ToolInfoData
 from .text_extraction import TextExtractor
@@ -47,7 +47,7 @@ from .types import (
 
 __all__ = [
     # Main class
-    "EnhancedKBLibrarian",
+    "KBLibrarian",
     # Helper classes
     "TextExtractor",
     "ToolInfoFormatter",

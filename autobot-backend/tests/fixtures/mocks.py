@@ -8,7 +8,7 @@ Mock fixtures for AutoBot backend testing (canonical location for #6994).
 Provides mock implementations of core components for tests and the
 `__main__` demo blocks under `intelligence/`:
 
-- MockLLMInterface  - Mock for UnifiedLLMInterface (llm_multi_provider); covers
+- MockLLMInterface  - Mock for LLMInterface (llm_multi_provider); covers
                       both chat_completion() and legacy generate_response().
 - MockLLMService    - Mock matching the LLMService surface that replaced
                       LLMInterface in #3185. Returns LLMResponse-shaped
@@ -28,13 +28,13 @@ from typing import Any, Dict, List
 
 
 class MockLLMInterface:
-    """Mock for ``UnifiedLLMInterface`` (``llm_multi_provider.UnifiedLLMInterface``).
+    """Mock for ``LLMInterface`` (``llm_multi_provider.LLMInterface``).
 
-    Covers the full surface of ``UnifiedLLMInterface``: both the primary
+    Covers the full surface of ``LLMInterface``: both the primary
     ``chat_completion()`` method and the legacy ``generate_response()`` shim.
     New test code should prefer ``MockLLMService`` (which mocks the canonical
     ``LLMService.chat()`` surface); this class is retained for tests that
-    still exercise ``UnifiedLLMInterface`` directly.
+    still exercise ``LLMInterface`` directly.
     """
 
     def __init__(self, responses: Dict[str, str] | None = None):
@@ -60,20 +60,20 @@ class MockLLMInterface:
         messages: List[Dict[str, Any]],
         **kwargs: Any,
     ) -> Any:
-        """Mock primary method matching ``UnifiedLLMInterface.chat_completion``."""
+        """Mock primary method matching ``LLMInterface.chat_completion``."""
         prompt = messages[-1].get("content", "") if messages else ""
         self._call_count += 1
         self._call_history.append({"prompt": prompt, "kwargs": kwargs})
         return make_llm_response(content=self._pick_response(prompt))
 
     async def generate_response(self, prompt: str, **kwargs: Any) -> str:
-        """Legacy shim matching ``UnifiedLLMInterface.generate_response``."""
+        """Legacy shim matching ``LLMInterface.generate_response``."""
         self._call_count += 1
         self._call_history.append({"prompt": prompt, "kwargs": kwargs})
         return self._pick_response(prompt)
 
     async def initialize(self) -> None:
-        """No-op — matches ``UnifiedLLMInterface.initialize``."""
+        """No-op — matches ``LLMInterface.initialize``."""
 
     @property
     def call_count(self) -> int:

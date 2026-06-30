@@ -195,18 +195,18 @@ def list_providers() -> List[Dict[str, object]]:
 
 
 # ---------------------------------------------------------------------------
-# UnifiedLLMInterface — backward-compat wrapper backed by the plugin registry
+# LLMInterface — backward-compat wrapper backed by the plugin registry
 # ---------------------------------------------------------------------------
 
 
-class UnifiedLLMInterface:
+class LLMInterface:
     """
     Backward-compatible facade over the plugin-per-provider registry.
 
     **Deprecated** — new code should use ``LLMService`` from
     ``services.llm_service`` (the canonical post-#3185 entry point).
     This class exists solely to avoid breaking call sites that still
-    instantiate ``UnifiedLLMInterface()``; it is not the canonical
+    instantiate ``LLMInterface()``; it is not the canonical
     interface and should not be imported in new code.
     """
 
@@ -308,8 +308,7 @@ class UnifiedLLMInterface:
 # ---------------------------------------------------------------------------
 # Legacy aliases
 # ---------------------------------------------------------------------------
-LLMInterface = UnifiedLLMInterface
-get_llm_interface = lambda: UnifiedLLMInterface()  # noqa: E731
+get_llm_interface = lambda: LLMInterface()  # noqa: E731
 get_unified_llm_interface = get_llm_interface
 
 
@@ -342,8 +341,7 @@ __all__ = [
     # Convenience
     "get_provider",
     "list_providers",
-    # Unified facade (backward compat)
-    "UnifiedLLMInterface",
+    # Unified facade
     "LLMInterface",
     "get_llm_interface",
     "get_unified_llm_interface",

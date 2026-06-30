@@ -55,7 +55,7 @@ def _get_torch_nn():
     return _torch_nn, _TORCH_NN_AVAILABLE
 
 
-class UnifiedMultiModalProcessor:
+class MultiModalProcessor:
     """
     Main multi-modal processor that coordinates all modal-specific processors
     """
@@ -93,7 +93,7 @@ class UnifiedMultiModalProcessor:
         # Initialize GPU device for fusion
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.logger.info(f"UnifiedMultiModalProcessor initialized with device: {self.device}")
+        self.logger.info(f"MultiModalProcessor initialized with device: {self.device}")
         if torch.cuda.is_available():
             self.logger.info(
                 f"GPU: {torch.cuda.get_device_name(0)}, "

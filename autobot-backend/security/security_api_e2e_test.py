@@ -13,8 +13,8 @@ import sys
 # Add src directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
-from enhanced_security_layer import EnhancedSecurityLayer
 from secure_command_executor import SecureCommandExecutor
+from security_layer import SecurityLayer
 
 
 async def test_security_layer():
@@ -23,7 +23,7 @@ async def test_security_layer():
     print("=" * 60)  # noqa: print
 
     # Initialize enhanced security layer
-    security = EnhancedSecurityLayer()
+    security = SecurityLayer()
 
     print("✅ Security layer initialized")  # noqa: print
     print(f"   - Authentication enabled: {security.enable_auth}")  # noqa: print

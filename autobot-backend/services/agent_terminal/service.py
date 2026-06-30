@@ -884,7 +884,7 @@ class AgentTerminalService:
         if approved:
             # Permission v2: Store in project memory if requested
             if remember_for_project and project_path and user_id:
-                await CommandApprovalManager.store_approval_memory_v2(
+                await CommandApprovalManager.store_approval_memory(
                     command=command,
                     project_path=project_path,
                     user_id=user_id,

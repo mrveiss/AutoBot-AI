@@ -494,7 +494,7 @@ class CommandApprovalManager:
             return None
 
     @staticmethod
-    async def check_permission_rules_v2(
+    async def check_permission_rules(
         command: str,
         tool: str = "Bash",
         is_admin: bool = False,
@@ -606,7 +606,7 @@ class CommandApprovalManager:
             return False
 
     @staticmethod
-    async def store_approval_memory_v2(
+    async def store_approval_memory(
         command: str,
         project_path: str,
         user_id: str,

@@ -1148,7 +1148,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
     ) -> List[CodeSearchResult]:
         """Run NPU-accelerated semantic search (Issue #398: extracted)."""
         await self._ensure_search_engine_initialized()
-        search_results, metrics = await self.npu_search_engine.enhanced_search(
+        search_results, metrics = await self.npu_search_engine.search(
             query=query,
             similarity_top_k=max_results,
             filters={"language": language} if language else None,

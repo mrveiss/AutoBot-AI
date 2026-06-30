@@ -23,9 +23,9 @@ INSTALLATION:
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from enhanced_security_layer import EnhancedSecurityLayer
 from security.prompt_injection_detector import get_prompt_injection_detector
 from security.secure_llm_command_parser import get_secure_llm_parser
+from security_layer import SecurityLayer
 
 logger = get_logger(__name__)
 
@@ -54,7 +54,7 @@ class SecureIntelligentAgentMixin:
         self.secure_parser = get_secure_llm_parser(strict_mode=True)
 
         # Initialize enhanced security layer for command execution
-        self.security_layer = EnhancedSecurityLayer()
+        self.security_layer = SecurityLayer()
 
         logger.info("✅ Security components initialized for IntelligentAgent")
 
@@ -144,7 +144,7 @@ class SecureIntelligentAgentMixin:
         """
         Execute command with security validation (Layer 4: Execution Safeguards)
 
-        Integrates with SecureCommandExecutor and EnhancedSecurityLayer
+        Integrates with SecureCommandExecutor and SecurityLayer
 
         Args:
             command: Command to execute
@@ -188,14 +188,14 @@ PATCH_INSTRUCTIONS = """
 
    from security.prompt_injection_detector import get_prompt_injection_detector, InjectionRisk
    from security.secure_llm_command_parser import get_secure_llm_parser
-   from enhanced_security_layer import EnhancedSecurityLayer
+   from security_layer import SecurityLayer
 
 3. INITIALIZE SECURITY IN __init__ (add to IntelligentAgent.__init__):
 
    # Security components (CVE-AUTOBOT-2025-002 fix)
    self.injection_detector = get_prompt_injection_detector(strict_mode=True)
    self.secure_parser = get_secure_llm_parser(strict_mode=True)
-   self.security_layer = EnhancedSecurityLayer()
+   self.security_layer = SecurityLayer()
    logger.info("✅ Security components initialized")
 
 4. SANITIZE USER INPUT (in process_natural_language_goal method, line ~194):
