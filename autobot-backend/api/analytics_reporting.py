@@ -135,14 +135,14 @@ async def fetch_performance_summary() -> Dict[str, Any]:
         return {"total_analyses": 0, "average_score": 0, "common_issues": []}
 
 
-def calculate_aggregated_health_score(
+def calculate_composite_health_score(
     quality_data: Dict[str, Any],
     charts_data: Dict[str, Any],
     debt_data: Dict[str, Any],
     performance_data: Dict[str, Any],
 ) -> float:
     """
-    Calculate aggregated health score from all analytics sources.
+    Calculate composite health score from weighted component scores.
 
     Weights:
     - Quality score: 40%
@@ -317,8 +317,8 @@ async def get_analytics_report():
         fetch_performance_summary(),
     )
 
-    # Calculate aggregated health score
-    health_score = calculate_aggregated_health_score(quality_data, charts_data, debt_data, performance_data)
+    # Calculate composite health score from weighted component scores
+    health_score = calculate_composite_health_score(quality_data, charts_data, debt_data, performance_data)
 
     response = _build_report_response(health_score, quality_data, charts_data, debt_data, performance_data)
 

@@ -25,6 +25,7 @@ from events.types import (
     create_action_event,
     create_observation_event,
 )
+from security.content_firewall import ContentSource, get_content_firewall
 from tools.parallel.analyzer import DependencyAnalyzer
 from tools.parallel.types import ExecutionMetrics, ToolCall
 
@@ -458,6 +459,19 @@ class ParallelToolExecutor:
         result, success, error = await self._execute_tool_with_timeout(call)
         execution_time = (time.monotonic() - start_time) * 1000
         call.execution_time_ms = execution_time
+
+        # #10552: inspect tool output through the content firewall before it reaches the model
+        if success and result is not None:
+            raw_str = result if isinstance(result, str) else str(result)
+            verdict = await get_content_firewall().inspect(
+                raw_str, source=ContentSource.STDOUT, task_id=task_id, context_label=call.tool_name
+            )
+            if verdict.blocked:
+                success = False
+                error = f"Tool output blocked by content firewall (risk={verdict.risk.value})"
+                result = None
+            elif isinstance(result, str):
+                result = verdict.content
 
         # Issue #4094: build artifacts from result (synchronous, no I/O)
         artifacts = self._build_artifacts(call, capture, result)

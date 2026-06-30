@@ -98,7 +98,7 @@ class ResponseBuilder:
         ]
         return clusters, unclustered
 
-    def build_enhanced_response(
+    def build_response(
         self,
         results: List[Dict[str, Any]],
         unclustered: List[Dict[str, Any]],
@@ -116,7 +116,7 @@ class ResponseBuilder:
         offset: int,
         limit: int,
     ) -> Dict[str, Any]:
-        """Build enhanced response (Issue #398: delegates to ctx version)."""
+        """Build search response (Issue #398: delegates to ctx version)."""
         ctx = SearchResponseContext(
             results=results,
             unclustered=unclustered,
@@ -134,11 +134,11 @@ class ResponseBuilder:
             offset=offset,
             limit=limit,
         )
-        return self.build_enhanced_response_ctx(ctx)
+        return self.build_response_ctx(ctx)
 
-    def build_enhanced_response_ctx(self, ctx: SearchResponseContext) -> Dict[str, Any]:
+    def build_response_ctx(self, ctx: SearchResponseContext) -> Dict[str, Any]:
         """
-        Build the enhanced search response using context.
+        Build the search response using context.
 
         Issue #375: Refactored from 15-parameter signature to accept a single
         SearchResponseContext object.
@@ -147,7 +147,7 @@ class ResponseBuilder:
             ctx: SearchResponseContext containing all response parameters.
 
         Returns:
-            Enhanced search response dictionary
+            Search response dictionary
         """
         total_count = len(ctx.results)
         paginated_results = (
