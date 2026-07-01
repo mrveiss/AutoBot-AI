@@ -789,11 +789,14 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         knowledge_context, citations = "", []
         if self.knowledge_service and use_knowledge and not lightweight_mode:
             knowledge_context, citations = await self._retrieve_knowledge_context(message, session)
-            # Issue #3770/#10837: compress KB results when context exceeds model budget
+            # Issue #3770/#10837: compress KB results when context exceeds model budget.
+            # budget_grounded_context returns (context_str, effective_citations); rebind
+            # citations to the trimmed subset so params["citations"] only lists sources
+            # the model actually saw in the prompt (#10837 regression fix).
             if knowledge_context and citations:
                 from services.knowledge.service import budget_grounded_context
 
-                knowledge_context = await budget_grounded_context(citations, model_name=selected_model)
+                knowledge_context, citations = await budget_grounded_context(citations, model_name=selected_model)
         else:
             session.metadata["used_knowledge"] = False
 

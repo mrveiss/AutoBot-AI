@@ -336,7 +336,10 @@ class AsyncChatWorkflow:
         """
         from services.knowledge.service import budget_grounded_context
 
-        return await budget_grounded_context(kb_results, model_name=None)
+        # budget_grounded_context returns (context_str, effective_kb_results).
+        # _budget_kb_context only needs the string; discard the list (#10837).
+        context, _ = await budget_grounded_context(kb_results, model_name=None)
+        return context
 
     @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=10.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     async def _generate_llm_response(
