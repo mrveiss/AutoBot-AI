@@ -97,15 +97,15 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { ref, watch, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useMultiModelCompare } from '@/composables/useMultiModelCompare'
 // GH#8990: show per-model context window in picker
-import { useAvailableModels } from '@/composables/useAvailableModels'
+import { useModelPicker } from '@/composables/useModelPicker'
 
 const { responses, selectedModels, isComparing, compare, reset } = useMultiModelCompare()
-// #10718: source the model list from the live /api/models endpoint — no
-// hardcoded defaults that masquerade as real availability.
-const { models: llmModels, availableModelNames, fetchModels } = useAvailableModels()
+// #10755/#10718: source the model list from the live /api/models endpoint (no
+// hardcoded defaults) and seed the selection once it loads — shared wiring.
+const { models: llmModels, availableModels } = useModelPicker(selectedModels)
 
 const promptText = ref('')
 
@@ -122,25 +122,6 @@ const contextWindowLabel = computed(() => {
       : String(cw)
   }
   return map
-})
-
-// Picker list: live available models plus any previously-stored selections
-// (so a persisted choice stays selectable even if a provider is briefly down).
-// Before the fetch resolves this is empty — the picker renders no fake models.
-const availableModels = computed<string[]>(() =>
-  Array.from(new Set<string>([...availableModelNames.value, ...selectedModels.value])),
-)
-
-// Seed the selection from the live list once it loads, but only when the user
-// has no persisted choice yet. The watcher handles the async fetch timing.
-watch(availableModelNames, (names) => {
-  if (selectedModels.value.length === 0 && names.length > 0) {
-    selectedModels.value = [...names]
-  }
-})
-
-onMounted(() => {
-  fetchModels().catch(() => {})
 })
 
 async function onSend(): Promise<void> {
