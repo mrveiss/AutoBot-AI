@@ -809,6 +809,10 @@ onMounted(loadUsers)
   width: 100%;
   max-width: 480px;
   box-shadow: var(--shadow-2xl);
+  /* #10750 C2: cap height + flex column so header stays fixed and body scrolls */
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-sm {
@@ -839,6 +843,9 @@ onMounted(loadUsers)
 
 .modal-body {
   padding: var(--spacing-5);
+  /* #10750 C2: scroll long forms so footer buttons stay reachable */
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .form-group {

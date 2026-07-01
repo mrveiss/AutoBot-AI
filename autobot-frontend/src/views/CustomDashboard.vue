@@ -1049,6 +1049,8 @@ defineExpose({ stopDashboardPolling })
   padding: var(--spacing-6);
   overflow-y: auto;
   flex: 1;
+  /* #10750 C2: allow the flex child to shrink so overflow actually scrolls */
+  min-height: 0;
 }
 
 .form-group {

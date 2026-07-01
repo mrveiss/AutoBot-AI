@@ -241,6 +241,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-xl);
+  /* #10750 C2: cap height so header/tabs/footer stay fixed and body scrolls */
+  max-height: 90vh;
 }
 
 .modal-header {
@@ -305,6 +307,9 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
+  /* #10750 C2: scroll long install forms; keep chrome in view */
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .hint {

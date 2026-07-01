@@ -904,7 +904,10 @@ onMounted(loadPolicies)
   width: 100%;
   max-width: 560px;
   max-height: 90vh;
-  overflow-y: auto;
+  /* #10750 C2: keep header fixed; scroll only the form body (below) */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .modal-card-sm {
@@ -930,6 +933,9 @@ onMounted(loadPolicies)
   display: flex;
   flex-direction: column;
   gap: var(--spacing-4);
+  /* #10750 C2: single scroll region beneath the fixed header */
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .form-row {

@@ -795,8 +795,8 @@ onUnmounted(() => {
 /* ADDED: Ensure terminal works well in flex layouts */
 @media (min-width: 769px) {
   .working-terminal {
-    /* Ensure terminal adapts to container height on larger screens */
-    max-height: 100vh; /* Don't exceed viewport */
+    /* #10750 C2: adapt to the flex parent height, not the raw viewport */
+    max-height: 100%;
   }
 }
 </style>

@@ -1489,7 +1489,8 @@ export default {
 .terminal-window-standalone {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* #10750 C2: fill the flex parent (viewport - header) instead of full viewport */
+  height: 100%;
   background-color: #000;
   color: #ffffff;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;

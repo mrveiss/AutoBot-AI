@@ -360,7 +360,8 @@ onUnmounted(() => {
   padding: var(--spacing-6);
   max-width: 1400px;
   margin: 0 auto;
-  min-height: calc(100vh - 200px);
+  /* #10750 C2: fill the bounded .knowledge-content scroller instead of viewport magic */
+  min-height: 100%;
 }
 
 /* Category Selection View */

@@ -437,6 +437,11 @@ onMounted(() => {
   padding: var(--spacing-6);
   max-width: 1400px;
   margin: 0 auto;
+  /* #10750 C2: fill the bounded .knowledge-content scroller; panels scroll internally */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* ============================================
@@ -520,7 +525,9 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: var(--spacing-4);
-  min-height: 600px;
+  /* #10750 C2: take remaining height so panels resolve max-height:100% */
+  flex: 1;
+  min-height: 0;
 }
 
 /* ============================================
@@ -533,7 +540,9 @@ onMounted(() => {
   border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 200px);
+  /* #10750 C2: bounded by grid cell, not the viewport */
+  min-height: 0;
+  max-height: 100%;
   overflow: hidden;
   transition: all var(--duration-200) ease;
 }
@@ -719,7 +728,9 @@ onMounted(() => {
   border-radius: var(--radius-lg);
   padding: var(--spacing-5);
   overflow-y: auto;
-  max-height: calc(100vh - 200px);
+  /* #10750 C2: bounded by grid cell, not the viewport */
+  min-height: 0;
+  max-height: 100%;
 }
 
 .details-header {

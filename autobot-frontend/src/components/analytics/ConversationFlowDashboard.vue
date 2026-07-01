@@ -328,7 +328,7 @@ onMounted(() => {
 .conversation-flow-dashboard {
   padding: var(--spacing-6);
   background: var(--bg-primary);
-  min-height: 100vh;
+  min-height: 100%;
   color: var(--text-primary);
 }
 

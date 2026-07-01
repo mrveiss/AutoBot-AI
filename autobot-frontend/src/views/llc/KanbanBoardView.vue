@@ -308,6 +308,7 @@ onUnmounted(() => ws?.close())
   display: flex;
   gap: 0.75rem;
   flex: 1;
+  min-height: 0;
   overflow-x: auto;
   align-items: flex-start;
 }
@@ -319,7 +320,9 @@ onUnmounted(() => ws?.close())
   border: 1px solid var(--color-border, #e5e7eb);
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 160px);
+  /* #10750 C2: bounded by .board-layout height, not the viewport */
+  min-height: 0;
+  max-height: 100%;
 }
 
 .column-header {
@@ -362,6 +365,7 @@ onUnmounted(() => ws?.close())
 
 .column-cards {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 0.5rem;
   display: flex;

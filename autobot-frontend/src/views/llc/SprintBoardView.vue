@@ -360,6 +360,7 @@ onUnmounted(() => {
   display: flex;
   gap: 0.75rem;
   flex: 1;
+  min-height: 0;
   overflow-x: auto;
   align-items: flex-start;
 }
@@ -371,7 +372,9 @@ onUnmounted(() => {
   border: 1px solid var(--color-border, #e5e7eb);
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 220px);
+  /* #10750 C2: bounded by .board-columns height, not the viewport (unify w/ Kanban) */
+  min-height: 0;
+  max-height: 100%;
 }
 
 .column-header {
@@ -395,6 +398,7 @@ onUnmounted(() => {
 
 .column-cards {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 0.5rem;
   display: flex;
