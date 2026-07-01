@@ -349,7 +349,7 @@ class StandardizedAgent(BaseAgent):
         }
 
     async def health_check(self):
-        """Enhanced health check with performance metrics"""
+        """Health check with performance metrics"""
         base_health = await super().health_check()
 
         # Add performance-based health assessment

@@ -1,5 +1,5 @@
 <template>
-  <div class="enhanced-analytics-grid">
+  <div class="analytics-grid">
     <!-- System Overview -->
     <BasePanel variant="dark" size="md">
       <template #header>
@@ -154,7 +154,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 /**
- * Enhanced Analytics Grid Component
+ * Analytics Grid Component
  *
  * Dashboard cards showing system overview, communication, quality, and performance.
  * Extracted from CodebaseAnalytics.vue for better maintainability.
@@ -235,7 +235,7 @@ const getEfficiencyClass = (score: number): string => {
 
 <style scoped>
 /** Issue #704: Migrated to design tokens */
-.enhanced-analytics-grid {
+.analytics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: var(--spacing-5);
