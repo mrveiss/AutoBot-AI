@@ -22,7 +22,6 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch  # noqa: F401 — patch used via patch.object
 
-
 # ---------------------------------------------------------------------------
 # Import the real auth_middleware module, bypassing the conftest stub.
 # conftest.py guards with ``if "auth_middleware" not in sys.modules``, so we
