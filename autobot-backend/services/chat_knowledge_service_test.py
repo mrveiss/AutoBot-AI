@@ -729,3 +729,123 @@ async def test_conversation_aware_retrieve_without_enhancement(mock_rag_service,
     assert enhanced is not None
     assert enhanced.enhancement_applied is False  # No enhancement needed
     assert enhanced.original_query == enhanced.enhanced_query
+
+
+# ---------------------------------------------------------------------------
+# budget_grounded_context shared helper (#10837)
+# ---------------------------------------------------------------------------
+
+
+def _kb(content: str) -> dict:
+    return {"content": content, "source": "s", "score": 0.9, "metadata": {}}
+
+
+@pytest.mark.asyncio
+async def test_budget_grounded_context_empty_returns_empty():
+    """Empty kb_results → empty string; ContextWindowManager never instantiated."""
+    from unittest.mock import patch
+
+    from services.knowledge.service import budget_grounded_context
+
+    with patch("context_window_manager.ContextWindowManager", side_effect=AssertionError("must not init")):
+        result = await budget_grounded_context([])
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_budget_grounded_context_small_unchanged(monkeypatch):
+    """kb_results below token threshold → context returned unchanged (no compression)."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from services.knowledge.service import budget_grounded_context
+
+    mock_cwm = MagicMock()
+    mock_cwm.estimate_tokens.return_value = 10
+    mock_cwm.get_max_history_tokens.return_value = 4096
+    mock_cwm.async_should_compress = AsyncMock(return_value=False)
+    mock_cwm.config = {"models": {}}
+
+    with patch("context_window_manager.ContextWindowManager", return_value=mock_cwm):
+        result = await budget_grounded_context([_kb("short fact")], model_name=None)
+
+    assert "short fact" in result
+    assert "[Source 1]" in result
+    mock_cwm.async_should_compress.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_budget_grounded_context_oversized_compressed(monkeypatch):
+    """Oversized kb_results → compress_kb_results invoked; result rebuilt from trimmed set."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from services.knowledge.service import budget_grounded_context
+
+    kb_results = [_kb("fact A" * 500), _kb("fact B" * 500), _kb("fact C" * 500)]
+    trimmed = [kb_results[0]]
+
+    mock_cwm = MagicMock()
+    mock_cwm.estimate_tokens.side_effect = lambda text: len(text) // 4
+    mock_cwm.get_max_history_tokens.return_value = 512
+    mock_cwm.async_should_compress = AsyncMock(return_value=True)
+    mock_cwm.config = {"models": {"default": {"compression_threshold": 512}}}
+
+    mock_svc = MagicMock()
+    mock_svc.compress_kb_results = AsyncMock(return_value=trimmed)
+
+    with (
+        patch("context_window_manager.ContextWindowManager", return_value=mock_cwm),
+        patch("services.memory.compression.ContextCompressionService", return_value=mock_svc),
+    ):
+        result = await budget_grounded_context(kb_results, model_name="llama3")
+
+    mock_svc.compress_kb_results.assert_called_once()
+    assert "fact A" in result
+    assert "[Source 1]" in result
+
+
+@pytest.mark.asyncio
+async def test_budget_grounded_context_all_trimmed_returns_empty():
+    """compress_kb_results returns [] → budget_grounded_context returns empty string."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from services.knowledge.service import budget_grounded_context
+
+    mock_cwm = MagicMock()
+    mock_cwm.estimate_tokens.return_value = 99999
+    mock_cwm.get_max_history_tokens.return_value = 512
+    mock_cwm.async_should_compress = AsyncMock(return_value=True)
+    mock_cwm.config = {"models": {"default": {"compression_threshold": 512}}}
+
+    mock_svc = MagicMock()
+    mock_svc.compress_kb_results = AsyncMock(return_value=[])
+
+    with (
+        patch("context_window_manager.ContextWindowManager", return_value=mock_cwm),
+        patch("services.memory.compression.ContextCompressionService", return_value=mock_svc),
+    ):
+        result = await budget_grounded_context([_kb("huge fact" * 1000)])
+
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_budget_grounded_context_grounding_disabled_omits_instruction(monkeypatch):
+    """chat_grounding_enabled=False → grounding instruction absent; [Source N] still present."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from autobot_shared.ssot_config import config
+    from services.knowledge.service import budget_grounded_context
+
+    monkeypatch.setattr(config, "chat_grounding_enabled", False, raising=False)
+
+    mock_cwm = MagicMock()
+    mock_cwm.estimate_tokens.return_value = 5
+    mock_cwm.get_max_history_tokens.return_value = 4096
+    mock_cwm.async_should_compress = AsyncMock(return_value=False)
+    mock_cwm.config = {"models": {}}
+
+    with patch("context_window_manager.ContextWindowManager", return_value=mock_cwm):
+        result = await budget_grounded_context([_kb("some fact")])
+
+    assert "some fact" in result
+    assert "Answer the user" not in result

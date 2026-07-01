@@ -48,6 +48,62 @@ def build_grounded_context(contents: List[str]) -> str:
     return "\n".join(lines)
 
 
+async def budget_grounded_context(
+    kb_results: List[Dict[str, Any]],
+    model_name: str | None = None,
+) -> str:
+    """Estimate tokens, compress when over budget, rebuild via build_grounded_context. (#10837)
+
+    Shared by llm_handler.py and async_chat_workflow._budget_kb_context so the
+    compress+rebuild sequence is never duplicated.  Each dict in kb_results must
+    have a ``"content"`` key; dicts without content are silently skipped.
+
+    Args:
+        kb_results: Dicts with at least a ``"content"`` key (citations or raw KB dicts).
+        model_name: Active LLM model name for per-model budget tuning.  Pass the
+            selected model (llm_handler path) or None to use the YAML default
+            (async_chat_workflow path).
+
+    Returns:
+        Grounded context string — unchanged when under budget, rebuilt from
+        compressed citations when over budget, empty string when nothing remains.
+    """
+    if not kb_results:
+        return ""
+
+    from context_window_manager import ContextWindowManager
+    from services.memory.compression import ContextCompressionService
+
+    raw_context = build_grounded_context([r.get("content", "") for r in kb_results if r.get("content")])
+    if not raw_context:
+        return ""
+
+    cwm = ContextWindowManager()
+    kc_tokens = cwm.estimate_tokens(raw_context)
+    max_kb_tokens = cwm.get_max_history_tokens(model_name=model_name)
+    if not await cwm.async_should_compress(content_tokens=kc_tokens, model_name=model_name):
+        return raw_context
+
+    svc = ContextCompressionService(
+        model_thresholds={
+            name: spec.get("compression_threshold", 8192)
+            for name, spec in cwm.config.get("models", {}).items()
+            if isinstance(spec, dict)
+        }
+    )
+    trimmed = await svc.compress_kb_results(kb_results, max_tokens=max_kb_tokens)
+    if not trimmed:
+        return ""
+    compressed = build_grounded_context([r.get("content", "") for r in trimmed if r.get("content")])
+    logger.info(
+        "[#10837] KB compressed: %d → %d results (%d tokens)",
+        len(kb_results),
+        len(trimmed),
+        cwm.estimate_tokens(compressed),
+    )
+    return compressed
+
+
 # Issue #556: Standard knowledge categories for chat RAG
 KNOWLEDGE_CATEGORIES = {
     "system_knowledge": "OS commands, man pages, system configurations",

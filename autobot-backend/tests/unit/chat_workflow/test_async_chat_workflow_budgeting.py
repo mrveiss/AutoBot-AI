@@ -79,8 +79,12 @@ class TestBudgetKbContextSmallResults:
         assert "short fact" in result
         assert "[Source 1]" in result
 
-    async def test_grounding_disabled_returns_empty_string(self):
-        """(c) Grounding disabled via config.chat_grounding_enabled=False → empty string."""
+    async def test_grounding_disabled_omits_instruction_but_returns_context(self):
+        """(c) Grounding instruction omitted when chat_grounding_enabled=False.
+
+        build_grounded_context still returns the [Source N] block with content —
+        the grounding *instruction* (Answer the user…) is the only thing suppressed.
+        """
         from async_chat_workflow import AsyncChatWorkflow
 
         kb_results = [_make_kb_result("some fact")]
@@ -96,9 +100,9 @@ class TestBudgetKbContextSmallResults:
         with patch(f"{_SVC_MODULE}.config", mock_cfg), patch(_CWM_CLASS, return_value=mock_cwm):
             result = await AsyncChatWorkflow._budget_kb_context(kb_results)
 
-        # build_grounded_context returns a non-empty [Source N] block even when grounding
-        # instruction is omitted; the returned string is still valid KB context.
+        # Content is still returned; only the grounding instruction is omitted.
         assert "some fact" in result
+        assert "Answer the user" not in result
 
 
 # ---------------------------------------------------------------------------

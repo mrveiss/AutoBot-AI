@@ -789,38 +789,11 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         knowledge_context, citations = "", []
         if self.knowledge_service and use_knowledge and not lightweight_mode:
             knowledge_context, citations = await self._retrieve_knowledge_context(message, session)
-            # Issue #3770: compress KB results when context exceeds model budget
+            # Issue #3770/#10837: compress KB results when context exceeds model budget
             if knowledge_context and citations:
-                from context_window_manager import ContextWindowManager
-                from services.memory.compression import ContextCompressionService
+                from services.knowledge.service import budget_grounded_context
 
-                cwm = ContextWindowManager()
-                cwm.set_model(selected_model)
-                kc_tokens = cwm.estimate_tokens(knowledge_context)
-                max_kb_tokens = cwm.get_max_history_tokens()
-                if await cwm.async_should_compress(content_tokens=kc_tokens, model_name=selected_model):
-                    svc = ContextCompressionService(
-                        model_thresholds={
-                            name: spec.get("compression_threshold", 8192)
-                            for name, spec in cwm.config.get("models", {}).items()
-                            if isinstance(spec, dict)
-                        }
-                    )
-                    citations = await svc.compress_kb_results(citations, max_tokens=max_kb_tokens)
-                    # Rebuild knowledge context from trimmed citations via the shared
-                    # builder so the [Source N] labels + grounding instruction match
-                    # the uncompressed path (#10652, review of #10656).
-                    if citations:
-                        from services.knowledge.service import build_grounded_context
-
-                        knowledge_context = build_grounded_context([c.get("content", "") for c in citations])
-                        logger.info(
-                            "[#3770] KB compressed to %d citations (%d tokens)",
-                            len(citations),
-                            cwm.estimate_tokens(knowledge_context),
-                        )
-                    else:
-                        knowledge_context = ""
+                knowledge_context = await budget_grounded_context(citations, model_name=selected_model)
         else:
             session.metadata["used_knowledge"] = False
 

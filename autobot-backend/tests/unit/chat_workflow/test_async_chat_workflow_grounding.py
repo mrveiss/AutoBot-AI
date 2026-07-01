@@ -37,51 +37,6 @@ def _make_llm_response(content: str = "answer") -> MagicMock:
 
 
 # ---------------------------------------------------------------------------
-# _build_kb_context_string
-# ---------------------------------------------------------------------------
-
-
-class TestBuildKbContextString:
-    """Unit tests for the static _build_kb_context_string helper."""
-
-    @pytest.fixture()
-    def workflow(self):
-        from async_chat_workflow import AsyncChatWorkflow
-
-        return AsyncChatWorkflow()
-
-    def test_empty_results_returns_empty_string(self, workflow):
-        """Empty kb_results → empty string (no context injected)."""
-        assert workflow._build_kb_context_string([]) == ""
-
-    def test_results_without_content_returns_empty_string(self, workflow):
-        """Results with empty/missing content field → empty string."""
-        assert workflow._build_kb_context_string([{"content": "", "source": "x", "score": 0.5, "metadata": {}}]) == ""
-
-    def test_populated_results_contain_source_n_labels(self, workflow):
-        """Non-empty results produce [Source N] blocks via build_grounded_context."""
-        results = [
-            _make_workflow_kb_result("fact one", score=0.9),
-            _make_workflow_kb_result("fact two", score=0.8),
-        ]
-        ctx = workflow._build_kb_context_string(results)
-        assert "[Source 1]" in ctx
-        assert "[Source 2]" in ctx
-        assert "fact one" in ctx
-        assert "fact two" in ctx
-
-    def test_grounding_disabled_omits_instruction(self, workflow):
-        """When chat_grounding_enabled is False the grounding instruction is omitted."""
-        results = [_make_workflow_kb_result("fact")]
-        mock_cfg = MagicMock()
-        mock_cfg.chat_grounding_enabled = False
-        with patch(f"{_SVC_MODULE}.config", mock_cfg):
-            ctx = workflow._build_kb_context_string(results)
-        assert "KNOWLEDGE CONTEXT:" in ctx
-        assert "Answer the user" not in ctx
-
-
-# ---------------------------------------------------------------------------
 # _generate_llm_response with kb_results
 # ---------------------------------------------------------------------------
 
