@@ -1924,7 +1924,7 @@ export interface paths {
          *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
          *     so the uncached aggregator is acceptable on its own.
          */
-        get: operations["get_system_health_api_system_system_health_head"];
+        get: operations["get_system_health_api_system_system_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1947,7 +1947,7 @@ export interface paths {
          *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
          *     so the uncached aggregator is acceptable on its own.
          */
-        head: operations["get_system_health_api_system_system_health_head"];
+        head: operations["get_system_health_api_system_system_health_get"];
         patch?: never;
         trace?: never;
     };
@@ -1976,7 +1976,7 @@ export interface paths {
          *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
          *     so the uncached aggregator is acceptable on its own.
          */
-        get: operations["get_system_health_api_system_health_head"];
+        get: operations["get_system_health_api_system_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1999,7 +1999,7 @@ export interface paths {
          *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
          *     so the uncached aggregator is acceptable on its own.
          */
-        head: operations["get_system_health_api_system_health_head"];
+        head: operations["get_system_health_api_system_health_get"];
         patch?: never;
         trace?: never;
     };
@@ -58658,12 +58658,12 @@ export interface components {
          * @description data payload for GET /capabilities.
          *
          *     Some fields are absent on the fallback path when AI Stack is
-         *     unavailable (only ``enhanced_chat``, ``ai_stack_integration``,
+         *     unavailable (only ``ai_stack_chat_available``, ``ai_stack_integration``,
          *     ``knowledge_base_integration``, ``error`` are populated then).
          */
         ChatCapabilitiesData: {
-            /** Enhanced Chat */
-            enhanced_chat: boolean;
+            /** Ai Stack Chat Available */
+            ai_stack_chat_available: boolean;
             /** Ai Stack Integration */
             ai_stack_integration: boolean;
             /** Knowledge Base Integration */
@@ -60462,7 +60462,7 @@ export interface components {
             /**
              * Codebase Path
              * @description Path to codebase to index
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10746-b15
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10746-b16
              */
             codebase_path: string;
             /**
@@ -68352,8 +68352,8 @@ export interface components {
         DeveloperConfigResponse: {
             /** Enabled */
             enabled: boolean;
-            /** Enhanced Errors */
-            enhanced_errors: boolean;
+            /** Detailed Errors */
+            detailed_errors: boolean;
             /** Endpoint Suggestions */
             endpoint_suggestions: boolean;
             /** Debug Logging */
@@ -74398,7 +74398,7 @@ export interface components {
              * Source Paths
              * @description Paths to populate from
              * @default [
-             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10746-b15"
+             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10746-b16"
              *     ]
              */
             source_paths: string[];
@@ -75925,7 +75925,7 @@ export interface components {
          * @description Shape returned by POST /search (all three code paths).
          *
          *     The basic and enhanced paths use _build_search_response (keys: results,
-         *     total_results, query, mode, kb_implementation, rag_enhanced, reranking_applied).
+         *     total_results, query, mode, kb_implementation, rag_applied, reranking_applied).
          *     The RAG path additionally includes status, synthesized_response, original_query,
          *     reformulated_queries, confidence_score, etc.  extra="allow" admits all extra
          *     fields so both code paths validate without wrapping returns.
@@ -75947,10 +75947,10 @@ export interface components {
             /** Kb Implementation */
             kb_implementation?: string | null;
             /**
-             * Rag Enhanced
+             * Rag Applied
              * @default false
              */
-            rag_enhanced: boolean;
+            rag_applied: boolean;
             /**
              * Reranking Applied
              * @default false
@@ -76859,8 +76859,8 @@ export interface components {
             status: string;
             /** Original Prompt */
             original_prompt: string;
-            /** Enhanced Prompt */
-            enhanced_prompt: string;
+            /** Augmented Prompt */
+            augmented_prompt: string;
             /** Context Level */
             context_level: string;
             /** Timestamp */
@@ -82510,7 +82510,7 @@ export interface components {
             /**
              * Path
              * @description Path to analyze (defaults to project root)
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10746-b15
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10746-b16
              */
             path: string;
             /**
@@ -85126,10 +85126,10 @@ export interface components {
             /** Reformulated Queries */
             reformulated_queries?: string[];
             /**
-             * Rag Enhanced
+             * Rag Applied
              * @default false
              */
-            rag_enhanced: boolean;
+            rag_applied: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -89043,7 +89043,7 @@ export interface components {
              * Scan Paths
              * @description Paths to scan
              * @default [
-             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10746-b15"
+             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10746-b16"
              *     ]
              */
             scan_paths: string[];
@@ -94017,7 +94017,7 @@ export interface components {
             /**
              * Test Path
              * @description Path to test directory
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10746-b15/autobot-backend
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10746-b16/autobot-backend
              */
             test_path: string;
             /**
@@ -101950,7 +101950,7 @@ export interface operations {
             };
         };
     };
-    get_system_health_api_system_system_health_head: {
+    get_system_health_api_system_system_health_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -101970,7 +101970,7 @@ export interface operations {
             };
         };
     };
-    get_system_health_api_system_system_health_head: {
+    get_system_health_api_system_system_health_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -101990,7 +101990,7 @@ export interface operations {
             };
         };
     };
-    get_system_health_api_system_health_head: {
+    get_system_health_api_system_health_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -102010,7 +102010,7 @@ export interface operations {
             };
         };
     };
-    get_system_health_api_system_health_head: {
+    get_system_health_api_system_health_get: {
         parameters: {
             query?: never;
             header?: never;

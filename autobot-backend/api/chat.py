@@ -2162,7 +2162,7 @@ async def get_chat_capabilities(
         agents_info = await ai_client.list_available_agents()
 
         capabilities = {
-            "enhanced_chat": True,
+            "ai_stack_chat_available": True,
             "ai_stack_integration": True,
             "knowledge_base_integration": True,
             "source_citations": True,
@@ -2187,7 +2187,7 @@ async def get_chat_capabilities(
         # Return basic capabilities as fallback
         return create_chat_response(
             {
-                "enhanced_chat": True,
+                "ai_stack_chat_available": True,
                 "ai_stack_integration": False,
                 "knowledge_base_integration": True,
                 "error": ("Partial capabilities due to" " AI Stack unavailability"),

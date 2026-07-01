@@ -352,7 +352,7 @@ describe('SystemRepository shape handling (#5207 audit)', () => {
           chromadb: { enabled: true, path: 'data/chromadb', collection_name: 'autobot' },
           redis: { enabled: true, host: '127.0.0.1', port: 6379 }
         },
-        developer: { enabled: false, enhanced_errors: true, endpoint_suggestions: true, debug_logging: false }
+        developer: { enabled: false, detailed_errors: true, endpoint_suggestions: true, debug_logging: false }
       }
       getSpy.mockResolvedValue({ data: payload })
 

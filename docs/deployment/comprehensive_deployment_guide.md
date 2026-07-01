@@ -187,7 +187,7 @@ logging:
 developer:
   enabled: true
   debug_logging: true
-  enhanced_errors: true
+  detailed_errors: true
 ```
 
 #### 3. Start Development Services

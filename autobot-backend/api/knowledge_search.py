@@ -79,7 +79,7 @@ def _build_search_response(
     kb_implementation: str,
     *,
     message: str | None = None,
-    rag_enhanced: bool = False,
+    rag_applied: bool = False,
     rag_analysis: dict | None = None,
     reranking_applied: bool = False,
     reranking_method: str | None = None,
@@ -96,7 +96,7 @@ def _build_search_response(
         mode: Search mode used
         kb_implementation: Knowledge base class name
         message: Optional status message
-        rag_enhanced: Whether RAG enhancement was applied
+        rag_applied: Whether RAG enhancement was applied
         rag_analysis: RAG analysis data if enhanced
         reranking_applied: Whether reranking was applied
         reranking_method: Method used for reranking
@@ -115,12 +115,12 @@ def _build_search_response(
     if message:
         response["message"] = message
 
-    if rag_enhanced:
-        response["rag_enhanced"] = True
+    if rag_applied:
+        response["rag_applied"] = True
         if rag_analysis:
             response["rag_analysis"] = rag_analysis
     else:
-        response["rag_enhanced"] = False
+        response["rag_applied"] = False
 
     if reranking_applied:
         response["reranking_applied"] = True
@@ -216,9 +216,9 @@ async def _apply_rag_enhancement(query: str, results: list, kb_class_name: str) 
         return _build_search_response(
             results=results,
             query=query,
-            mode="rag_enhanced",
+            mode="rag_applied",
             kb_implementation=kb_class_name,
-            rag_enhanced=True,
+            rag_applied=True,
             rag_analysis=rag_enhancement,
         )
     except Exception as e:
@@ -251,7 +251,7 @@ def _build_no_results_response(query: str, reformulated_queries: List[str]) -> M
         "total_results": 0,
         "original_query": query,
         "reformulated_queries": (reformulated_queries[1:] if len(reformulated_queries) > 1 else []),
-        "rag_enhanced": True,
+        "rag_applied": True,
     }
 
 
@@ -398,7 +398,7 @@ async def _process_with_rag_agent(
             "reformulated_queries": (reformulated_queries[1:] if len(reformulated_queries) > 1 else []),
             "kb_implementation": kb_to_use.__class__.__name__,
             "agent_metadata": rag_result.get("metadata", {}),
-            "rag_enhanced": True,
+            "rag_applied": True,
         }
 
     except Exception as e:
@@ -411,7 +411,7 @@ async def _process_with_rag_agent(
             "original_query": original_query,
             "reformulated_queries": (reformulated_queries[1:] if len(reformulated_queries) > 1 else []),
             "error": "Internal server error",
-            "rag_enhanced": False,
+            "rag_applied": False,
         }
 
 
@@ -550,7 +550,7 @@ async def search(request: SearchRequest, req: Request):
     - **exclude_terms** / **require_terms**: Term inclusion/exclusion
     - **session_id** / **track_analytics**: Analytics correlation
 
-    **Returns:** results, total_results, query, mode, rag_enhanced,
+    **Returns:** results, total_results, query, mode, rag_applied,
     reranking_applied, synthesized_response (if enable_rag=true).
 
     Migration (#10666): /enhanced_search→tags/reranking params,
@@ -657,7 +657,7 @@ async def _rag_search(request: SearchRequest, kb_to_use) -> dict:
             "total_results": 0,
             "original_query": query,
             "reformulated_queries": (reformulated_queries[1:] if len(reformulated_queries) > 1 else []),
-            "rag_enhanced": True,
+            "rag_applied": True,
             "kb_implementation": kb_class_name,
         }
 

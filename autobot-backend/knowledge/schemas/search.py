@@ -15,7 +15,7 @@ class KnowledgeSearchResponse(BaseModel):
     """Shape returned by POST /search (all three code paths).
 
     The basic and enhanced paths use _build_search_response (keys: results,
-    total_results, query, mode, kb_implementation, rag_enhanced, reranking_applied).
+    total_results, query, mode, kb_implementation, rag_applied, reranking_applied).
     The RAG path additionally includes status, synthesized_response, original_query,
     reformulated_queries, confidence_score, etc.  extra="allow" admits all extra
     fields so both code paths validate without wrapping returns.
@@ -28,7 +28,7 @@ class KnowledgeSearchResponse(BaseModel):
     query: str | None = None
     mode: str | None = None
     kb_implementation: str | None = None
-    rag_enhanced: bool = False
+    rag_applied: bool = False
     reranking_applied: bool = False
     status: str | None = None
     synthesized_response: str | None = None
@@ -72,7 +72,7 @@ class RagSearchResponse(BaseModel):
     total_results: int = 0
     original_query: str | None = None
     reformulated_queries: List[str] = Field(default_factory=list)
-    rag_enhanced: bool = True
+    rag_applied: bool = True
     message: str | None = None
 
 
@@ -86,7 +86,7 @@ class SimilaritySearchResponse(BaseModel):
     query: str = ""
     threshold: float = 0.7
     kb_implementation: str = ""
-    rag_enhanced: bool = False
+    rag_applied: bool = False
     rag_analysis: Dict[str, Any] | None = None
 
 

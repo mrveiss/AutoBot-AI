@@ -294,7 +294,7 @@ const updateDeveloperSetting = (key: string, value: any) => {
   if (!settings.value.developer) {
     settings.value.developer = {
       enabled: false,
-      enhanced_errors: true,
+      detailed_errors: true,
       endpoint_suggestions: true,
       debug_logging: false,
       rum: {
@@ -316,7 +316,7 @@ const updateRUMSetting = (key: string, value: any) => {
   if (!settings.value.developer) {
     settings.value.developer = {
       enabled: false,
-      enhanced_errors: true,
+      detailed_errors: true,
       endpoint_suggestions: true,
       debug_logging: false,
       rum: {

@@ -474,7 +474,7 @@ class LLMInjectContextResponse(BaseModel):
 
     status: str
     original_prompt: str
-    enhanced_prompt: str
+    augmented_prompt: str
     context_level: str
     timestamp: str
 

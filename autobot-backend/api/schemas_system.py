@@ -765,7 +765,7 @@ class DeveloperConfigResponse(BaseModel):
     """Response for GET /config in developer.py."""
 
     enabled: bool
-    enhanced_errors: bool
+    detailed_errors: bool
     endpoint_suggestions: bool
     debug_logging: bool
 

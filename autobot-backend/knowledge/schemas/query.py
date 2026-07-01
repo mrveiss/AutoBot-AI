@@ -32,7 +32,7 @@ class QueryKnowledgeResponse(BaseModel):
     total_results: int = 0
     original_query: str | None = None
     reformulated_queries: List[str] = Field(default_factory=list)
-    rag_enhanced: bool = False
+    rag_applied: bool = False
 
 
 class ManPageSearchResponse(BaseModel):

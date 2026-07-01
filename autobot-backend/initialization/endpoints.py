@@ -67,7 +67,7 @@ def _build_capabilities(ai_stack_ready: bool, ai_agents_ready: bool, npu_ready: 
         "rag_enhanced_search": ai_stack_ready,
         "multi_agent_coordination": ai_agents_ready,
         "knowledge_extraction": ai_stack_ready,
-        "enhanced_chat": ai_stack_ready,
+        "ai_stack_chat_available": ai_stack_ready,
         "npu_acceleration": npu_ready,
     }
 
