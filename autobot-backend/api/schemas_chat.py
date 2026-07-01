@@ -277,11 +277,11 @@ class ChatCapabilitiesData(BaseModel):
     """data payload for GET /capabilities.
 
     Some fields are absent on the fallback path when AI Stack is
-    unavailable (only ``enhanced_chat``, ``ai_stack_integration``,
+    unavailable (only ``ai_stack_chat_available``, ``ai_stack_integration``,
     ``knowledge_base_integration``, ``error`` are populated then).
     """
 
-    enhanced_chat: bool
+    ai_stack_chat_available: bool
     ai_stack_integration: bool
     knowledge_base_integration: bool
     source_citations: bool | None = None

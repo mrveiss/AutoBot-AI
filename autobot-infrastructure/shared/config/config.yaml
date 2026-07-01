@@ -17,7 +17,7 @@ developer:
   debug_logging: true
   enabled: true
   endpoint_suggestions: true
-  enhanced_errors: true
+  detailed_errors: true
 knowledge_base:
   enabled: true
   update_frequency_days: 7

@@ -474,7 +474,7 @@ class LLMInjectContextResponse(BaseModel):
 
     status: str
     original_prompt: str
-    enhanced_prompt: str
+    augmented_prompt: str
     context_level: str
     timestamp: str
 
@@ -1063,7 +1063,7 @@ class KnowledgeSearchData(BaseModel):
     """data payload for POST /ai-stack/knowledge/search."""
 
     local_kb: List[Dict[str, Any]]
-    enhanced: Dict[str, Any]
+    rag_augmented: Dict[str, Any]
 
 
 class ComprehensiveResearchData(BaseModel):

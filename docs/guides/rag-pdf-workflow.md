@@ -591,7 +591,7 @@ Authorization: Bearer <token>
     "query": "How to configure Redis for high availability?",
     "mode": "hybrid",
     "kb_implementation": "KnowledgeBase",
-    "rag_enhanced": false,
+    "rag_applied": false,
     "reranking_applied": true,
     "reranking_method": "cross-encoder"
 }
@@ -615,7 +615,7 @@ Authorization: Bearer <token>
         "Redis Sentinel high availability setup",
         "Redis cluster failover configuration"
     ],
-    "rag_enhanced": true,
+    "rag_applied": true,
     "sources_used": ["redis-guide.pdf", "sentinel-config.pdf"]
 }
 ```

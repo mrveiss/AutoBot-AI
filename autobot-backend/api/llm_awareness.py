@@ -188,12 +188,12 @@ async def inject_awareness_context(request: PromptInjectionRequest):
             )
 
         # Inject context
-        enhanced_prompt = await awareness.inject_awareness_context(request.prompt, context_level=request.context_level)
+        augmented_prompt = await awareness.inject_awareness_context(request.prompt, context_level=request.context_level)
 
         return {
             "status": "success",
             "original_prompt": request.prompt,
-            "enhanced_prompt": enhanced_prompt,
+            "augmented_prompt": augmented_prompt,
             "context_level": request.context_level,
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }

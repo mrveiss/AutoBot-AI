@@ -153,7 +153,7 @@ Development and debugging tools:
 ```javascript
 developer: {
   enabled: true|false,
-  enhanced_errors: true|false,
+  detailed_errors: true|false,
   endpoint_suggestions: true|false,
   debug_logging: true|false
 }
