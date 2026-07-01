@@ -193,29 +193,62 @@ class ElevationWrapper:
                 "return_code": -1,
             }
 
+    def _sudo_fallback_permitted(self) -> bool:
+        """Return True only when direct-sudo fallback is safe to use.
+
+        Permitted when ANY of the following is true:
+        - AUTOBOT_ENVIRONMENT != "production"  (development / staging / etc.)
+        - CI env var is set (headless runner with NOPASSWD service account)
+        - AUTOBOT_ALLOW_UNAPPROVED_SUDO=true   (explicit operator opt-in)
+
+        The default AUTOBOT_ENVIRONMENT is "development", so new deployments
+        that forget to configure an elevation_client are still safe — they only
+        break when AUTOBOT_ENVIRONMENT=production is set without a client.
+        Issue #10799.
+        """
+        if config.environment != "production":
+            return True
+        if config.misc.ci:
+            return True
+        return bool(config.misc.allow_unapproved_sudo)
+
     async def _execute_elevated(self, command: str, session_token: str) -> Dict:
         """Execute command with elevation using session token.
 
         Primary path: delegates to ``elevation_client.execute_elevated_command``
-        when a GUI elevation client is configured (production).
+        when a GUI elevation client is configured.
 
-        Fallback path: runs ``sudo <command>`` directly when no client is
-        present.  This fallback is intentional for headless/CI environments
-        where no GUI is available, but it bypasses the GUI approval flow.
-        Security note: ensure the fallback path is not reachable in
-        multi-user deployments — configure an elevation_client instead.
+        Fallback path: runs ``sudo <command>`` directly only when
+        ``_sudo_fallback_permitted()`` returns True (dev/CI/explicit opt-in).
+        In production with no client the call is blocked and a structured
+        failure is returned — privilege escalation via misconfiguration is
+        prevented.  Issue #10799.
         """
         try:
             if self.elevation_client:
-                result = await self.elevation_client.execute_elevated_command(command, session_token)
-                return result
-            else:
-                # Fallback: direct sudo — only reached when no GUI client is configured.
-                logger.warning(
-                    "No elevation client configured; falling back to direct sudo for command: %s",
+                return await self.elevation_client.execute_elevated_command(command, session_token)
+
+            if not self._sudo_fallback_permitted():
+                logger.error(
+                    "Elevation client is not configured and unapproved sudo fallback is blocked "
+                    "in production.  Set AUTOBOT_ALLOW_UNAPPROVED_SUDO=true or configure an "
+                    "elevation_client.  Command blocked: %s",
                     command,
                 )
-                return await self._execute_normal(f"sudo {command}")
+                return {
+                    "success": False,
+                    "error": (
+                        "Elevation client not configured; direct sudo is blocked in production. "
+                        "Configure an elevation_client or set AUTOBOT_ALLOW_UNAPPROVED_SUDO=true."
+                    ),
+                    "blocked": True,
+                }
+
+            logger.warning(
+                "No elevation client configured; falling back to direct sudo for command: %s",
+                command,
+            )
+            return await self._execute_normal(f"sudo {command}")
 
         except Exception as e:
             logger.error("Elevated execution failed: %s", e)

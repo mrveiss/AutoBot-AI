@@ -1288,6 +1288,16 @@ class MiscConfig(BaseSettings):
     autoresearch_staged_eval_threshold: float = Field(default=0.0, alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_THRESHOLD")
     autoresearch_timeout: int = Field(default=0, alias="AUTOBOT_AUTORESEARCH_TIMEOUT")
     ai_stack_enabled: bool = Field(default=True, alias="AUTOBOT_AI_STACK_ENABLED")
+    allow_unapproved_sudo: bool = Field(
+        default=False,
+        alias="AUTOBOT_ALLOW_UNAPPROVED_SUDO",
+        description=(
+            "Allow direct sudo fallback in elevation_wrapper when no GUI elevation client is "
+            "configured.  Safe default is False (block).  Set to true only in headless/CI "
+            "environments with a NOPASSWD service account.  Never set in production/multi-user "
+            "deployments — configure an elevation_client instead.  Issue #10799."
+        ),
+    )
     cache_enabled: bool = Field(default=False, alias="AUTOBOT_CACHE_ENABLED")
     cache_size: int = Field(default=0, alias="AUTOBOT_CACHE_SIZE")
     cache_l1_size: int = Field(
