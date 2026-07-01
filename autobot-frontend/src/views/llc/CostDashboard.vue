@@ -4,28 +4,28 @@
 <template>
   <div class="cost-dashboard">
     <div class="dash-header">
-      <h2 class="view-title">Cost Dashboard</h2>
-      <button class="btn-export" @click="exportCsv">Export CSV</button>
+      <h2 class="view-title">{{ $t('llc.cost.title') }}</h2>
+      <button class="btn-export" @click="exportCsv">{{ $t('llc.cost.exportCsv') }}</button>
     </div>
 
-    <div v-if="!companyId" class="state-msg">Select a company to view costs.</div>
+    <div v-if="!companyId" class="state-msg">{{ $t('llc.cost.selectCompany') }}</div>
 
     <template v-else>
     <!-- Summary cards -->
     <div class="summary-cards">
       <div class="summary-card">
-        <div class="card-label">Total This Month</div>
+        <div class="card-label">{{ $t('llc.cost.totalThisMonth') }}</div>
         <div class="card-value">${{ totalThisMonth.toFixed(4) }}</div>
       </div>
       <div class="summary-card">
-        <div class="card-label">By Company</div>
+        <div class="card-label">{{ $t('llc.cost.byCompany') }}</div>
         <div class="card-value">${{ totalByCompany.toFixed(4) }}</div>
         <div class="card-sub">{{ companyId }}</div>
       </div>
       <div v-if="totalTokensThisMonth > 0" class="summary-card">
-        <div class="card-label">Total Tokens This Month</div>
+        <div class="card-label">{{ $t('llc.cost.totalTokens') }}</div>
         <div class="card-value">{{ formatTokens(totalTokensThisMonth) }}</div>
-        <div class="card-sub">{{ tokenModeAgents }} token-mode agents</div>
+        <div class="card-sub">{{ $t('llc.cost.tokenModeAgents', { count: tokenModeAgents }) }}</div>
       </div>
       <div
         v-for="agent in topAgents"
@@ -34,18 +34,18 @@
       >
         <div class="card-label">{{ agent.name }}</div>
         <div class="card-value">${{ agent.cost.toFixed(4) }}</div>
-        <div class="card-sub">top agent</div>
+        <div class="card-sub">{{ $t('llc.cost.topAgent') }}</div>
       </div>
     </div>
 
     <!-- Budget health -->
     <div v-if="budgets.length > 0" class="budget-section">
-      <h3 class="section-title">Budget Health</h3>
+      <h3 class="section-title">{{ $t('llc.cost.budgetHealth') }}</h3>
       <div class="budget-rows">
         <div v-for="b in budgets" :key="b.agent_id" class="budget-row">
           <span class="budget-agent">{{ b.agent_name ?? b.agent_id }}</span>
           <span class="mode-badge" :class="`mode-${b.budget_mode}`">
-            {{ b.budget_mode === 'tokens' ? 'Tokens' : '$' }}
+            {{ b.budget_mode === 'tokens' ? $t('llc.cost.tokensBadge') : '$' }}
           </span>
           <div class="gauge-track">
             <div
@@ -69,7 +69,7 @@
               ${{ parseFloat(b.budget_spent).toFixed(4) }} / ${{ parseFloat(b.budget_limit).toFixed(4) }}
             </template>
           </span>
-          <button class="btn-settings" title="Edit budget settings" @click="openSettings(b)">⚙</button>
+          <button class="btn-settings" :title="$t('llc.cost.editSettings')" @click="openSettings(b)">⚙</button>
         </div>
       </div>
     </div>
@@ -78,31 +78,31 @@
     <div v-if="settingsModal.visible" class="modal-overlay" @click.self="closeSettings">
       <div class="modal-box">
         <div class="modal-header">
-          <h3 class="modal-title">Budget Settings</h3>
+          <h3 class="modal-title">{{ $t('llc.cost.settingsTitle') }}</h3>
           <button class="btn-close" @click="closeSettings">✕</button>
         </div>
         <div class="modal-agent-name">{{ settingsModal.budget?.agent_name ?? settingsModal.budget?.agent_id }}</div>
 
         <div class="field-group">
-          <label class="field-label">Budget Mode</label>
+          <label class="field-label">{{ $t('llc.cost.budgetMode') }}</label>
           <div class="mode-toggle">
             <button
               :class="{ active: settingsForm.budget_mode === 'dollars' }"
               @click="settingsForm.budget_mode = 'dollars'"
             >
-              Dollar Limit
+              {{ $t('llc.cost.dollarLimit') }}
             </button>
             <button
               :class="{ active: settingsForm.budget_mode === 'tokens' }"
               @click="settingsForm.budget_mode = 'tokens'"
             >
-              Token Limit
+              {{ $t('llc.cost.tokenLimit') }}
             </button>
           </div>
         </div>
 
         <div v-if="settingsForm.budget_mode === 'dollars'" class="field-group">
-          <label class="field-label">Monthly Dollar Limit</label>
+          <label class="field-label">{{ $t('llc.cost.monthlyDollarLimit') }}</label>
           <div class="input-prefix-wrap">
             <span class="input-prefix">$</span>
             <input
@@ -116,20 +116,20 @@
         </div>
 
         <div v-else class="field-group">
-          <label class="field-label">Monthly Token Limit</label>
+          <label class="field-label">{{ $t('llc.cost.monthlyTokenLimit') }}</label>
           <input
             v-model.number="settingsForm.token_limit"
             type="number"
             step="100000"
             min="0"
             class="field-input"
-            placeholder="e.g. 1000000"
+            :placeholder="$t('llc.cost.tokenLimitPlaceholder')"
           />
-          <p class="field-hint">Recommended: 1M–5M for subscription plans, 100K for free tier</p>
+          <p class="field-hint">{{ $t('llc.cost.tokenLimitHint') }}</p>
         </div>
 
         <div class="field-group">
-          <label class="field-label">Alert Threshold: {{ settingsForm.alert_threshold_pct }}%</label>
+          <label class="field-label">{{ $t('llc.cost.alertThreshold', { pct: settingsForm.alert_threshold_pct }) }}</label>
           <input
             v-model.number="settingsForm.alert_threshold_pct"
             type="range"
@@ -143,9 +143,9 @@
         <div v-if="settingsModal.error" class="modal-error">{{ settingsModal.error }}</div>
 
         <div class="modal-actions">
-          <button class="btn-secondary" @click="closeSettings">Cancel</button>
+          <button class="btn-secondary" @click="closeSettings">{{ $t('llc.cost.cancel') }}</button>
           <button class="btn-primary" :disabled="settingsModal.saving" @click="saveBudgetSettings">
-            {{ settingsModal.saving ? 'Saving…' : 'Save' }}
+            {{ settingsModal.saving ? $t('llc.cost.saving') : $t('llc.cost.save') }}
           </button>
         </div>
       </div>
@@ -153,8 +153,8 @@
 
     <!-- Bar chart: daily spend -->
     <div class="chart-section">
-      <h3 class="section-title">Daily Spend – Last 30 Days</h3>
-      <div v-if="dailyBars.length === 0" class="state-msg">No spend data available.</div>
+      <h3 class="section-title">{{ $t('llc.cost.dailySpend') }}</h3>
+      <div v-if="dailyBars.length === 0" class="state-msg">{{ $t('llc.cost.noSpendData') }}</div>
       <div v-else class="bar-chart">
         <div
           v-for="bar in dailyBars"
@@ -171,38 +171,38 @@
     <!-- Filters -->
     <div class="table-filters">
       <select v-model="filters.agent" class="filter-select">
-        <option value="">All Agents</option>
+        <option value="">{{ $t('llc.cost.allAgents') }}</option>
         <option v-for="a in agentOptions" :key="a" :value="a">{{ a }}</option>
       </select>
       <input v-model="filters.dateFrom" type="date" class="filter-date" />
-      <span class="date-sep">to</span>
+      <span class="date-sep">{{ $t('llc.cost.to') }}</span>
       <input v-model="filters.dateTo" type="date" class="filter-date" />
     </div>
 
     <!-- Cost events table -->
     <div class="table-wrapper">
       <div v-if="costEventsUnavailable" class="state-msg">
-        Cost events endpoint not available (404).
+        {{ $t('llc.cost.costEventsUnavailable') }}
       </div>
       <table v-else class="cost-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Agent</th>
-            <th>Work Item</th>
-            <th>Model</th>
-            <th>Provider</th>
-            <th>Input Tokens</th>
-            <th>Output Tokens</th>
-            <th>Cost</th>
+            <th>{{ $t('llc.cost.colDate') }}</th>
+            <th>{{ $t('llc.cost.colAgent') }}</th>
+            <th>{{ $t('llc.cost.colWorkItem') }}</th>
+            <th>{{ $t('llc.cost.colModel') }}</th>
+            <th>{{ $t('llc.cost.colProvider') }}</th>
+            <th>{{ $t('llc.cost.colInputTokens') }}</th>
+            <th>{{ $t('llc.cost.colOutputTokens') }}</th>
+            <th>{{ $t('llc.cost.colCost') }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="isLoading">
-            <td colspan="8" class="state-msg">Loading...</td>
+            <td colspan="8" class="state-msg">{{ $t('llc.cost.loading') }}</td>
           </tr>
           <tr v-else-if="filteredEvents.length === 0">
-            <td colspan="8" class="state-msg">No cost events match filters.</td>
+            <td colspan="8" class="state-msg">{{ $t('llc.cost.noEvents') }}</td>
           </tr>
           <tr v-for="ev in filteredEvents" :key="ev.id">
             <td>{{ formatDate(ev.created_at) }}</td>
@@ -226,10 +226,12 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('CostDashboard')
 const api = useApiClient()
 const route = useRoute()
+const { t } = useI18n()
 
 const props = defineProps<{ companyId?: string }>()
 const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
@@ -427,7 +429,7 @@ async function saveBudgetSettings() {
     closeSettings()
     await fetchBudgets()
   } catch (err: unknown) {
-    settingsModal.error = (err as { message?: string })?.message ?? 'Save failed'
+    settingsModal.error = (err as { message?: string })?.message ?? t('llc.cost.saveFailed')
     logger.error('Budget settings save failed', err)
   } finally {
     settingsModal.saving = false

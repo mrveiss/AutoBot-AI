@@ -5,7 +5,7 @@
   <div class="approvals-inbox">
     <div class="inbox-header">
       <div class="header-left">
-        <h2 class="view-title">Approvals Inbox</h2>
+        <h2 class="view-title">{{ $t('llc.approvals.title') }}</h2>
         <span v-if="pendingCount > 0" class="pending-badge">{{ pendingCount }}</span>
       </div>
       <div class="header-tabs">
@@ -14,40 +14,40 @@
           :class="{ active: activeTab === 'pending' }"
           @click="activeTab = 'pending'"
         >
-          Pending
+          {{ $t('llc.approvals.tabPending') }}
         </button>
         <button
           class="tab-btn"
           :class="{ active: activeTab === 'history' }"
           @click="activeTab = 'history'"
         >
-          History
+          {{ $t('llc.approvals.tabHistory') }}
         </button>
       </div>
     </div>
 
-    <div v-if="!companyId" class="state-msg">Select a company to view approvals.</div>
+    <div v-if="!companyId" class="state-msg">{{ $t('llc.approvals.selectCompany') }}</div>
 
     <template v-else>
       <!-- Filters -->
       <div class="inbox-filters">
         <select v-model="filters.type" class="filter-select">
-          <option value="">All Types</option>
+          <option value="">{{ $t('llc.approvals.allTypes') }}</option>
           <option v-for="t in APPROVAL_TYPES" :key="t" :value="t">{{ formatType(t) }}</option>
         </select>
         <select v-if="activeTab === 'history'" v-model="filters.status" class="filter-select">
-          <option value="">All Statuses</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-          <option value="changes_requested">Changes Requested</option>
+          <option value="">{{ $t('llc.approvals.allStatuses') }}</option>
+          <option value="approved">{{ $t('llc.approvals.statusApproved') }}</option>
+          <option value="rejected">{{ $t('llc.approvals.statusRejected') }}</option>
+          <option value="changes_requested">{{ $t('llc.approvals.statusChangesRequested') }}</option>
         </select>
-        <input v-model="filters.search" class="filter-search" placeholder="Search..." type="text" />
+        <input v-model="filters.search" class="filter-search" :placeholder="$t('llc.approvals.searchPlaceholder')" type="text" />
       </div>
 
       <!-- Pending Tab -->
       <div v-if="activeTab === 'pending'" class="approval-list">
-        <div v-if="isLoading" class="state-msg">Loading...</div>
-        <div v-else-if="filteredPending.length === 0" class="state-msg">No pending approvals.</div>
+        <div v-if="isLoading" class="state-msg">{{ $t('llc.approvals.loading') }}</div>
+        <div v-else-if="filteredPending.length === 0" class="state-msg">{{ $t('llc.approvals.noPending') }}</div>
         <div
           v-for="item in filteredPending"
           :key="item.id"
@@ -55,13 +55,13 @@
         >
           <div class="card-header">
             <span class="type-badge" :class="`type-${item.type}`">{{ formatType(item.type) }}</span>
-            <span class="card-meta">Requested by: {{ item.requested_by_agent_id }}</span>
+            <span class="card-meta">{{ $t('llc.approvals.requestedBy', { id: item.requested_by_agent_id }) }}</span>
             <span class="card-meta">{{ formatDate(item.created_at) }}</span>
           </div>
 
           <div class="payload-section">
             <button class="toggle-payload" @click="togglePayload(item.id)">
-              {{ expandedPayloads.has(item.id) ? 'Hide' : 'Show' }} Payload
+              {{ expandedPayloads.has(item.id) ? $t('llc.approvals.hidePayload') : $t('llc.approvals.showPayload') }}
             </button>
             <pre v-if="expandedPayloads.has(item.id)" class="payload-json">{{ formatJson(item.payload) }}</pre>
           </div>
@@ -72,21 +72,21 @@
               :disabled="processing.has(item.id)"
               @click="decide(item.id, 'approved')"
             >
-              Approve
+              {{ $t('llc.approvals.approve') }}
             </button>
             <button
               class="btn-reject"
               :disabled="processing.has(item.id)"
               @click="openDecisionNote(item.id, 'rejected')"
             >
-              Reject
+              {{ $t('llc.approvals.reject') }}
             </button>
             <button
               class="btn-changes"
               :disabled="processing.has(item.id)"
               @click="openDecisionNote(item.id, 'changes_requested')"
             >
-              Request Changes
+              {{ $t('llc.approvals.requestChanges') }}
             </button>
           </div>
 
@@ -94,17 +94,17 @@
             <textarea
               v-model="decisionNote"
               class="note-textarea"
-              placeholder="Decision note (required)..."
+              :placeholder="$t('llc.approvals.notePlaceholder')"
               rows="3"
             />
             <div class="note-actions">
-              <button class="btn-secondary" @click="noteTarget = null">Cancel</button>
+              <button class="btn-secondary" @click="noteTarget = null">{{ $t('llc.approvals.cancel') }}</button>
               <button
                 class="btn-primary"
                 :disabled="!decisionNote.trim() || processing.has(item.id)"
                 @click="submitWithNote(item.id)"
               >
-                Confirm
+                {{ $t('llc.approvals.confirm') }}
               </button>
             </div>
           </div>
@@ -113,8 +113,8 @@
 
       <!-- History Tab -->
       <div v-if="activeTab === 'history'" class="approval-list">
-        <div v-if="isLoading" class="state-msg">Loading...</div>
-        <div v-else-if="filteredHistory.length === 0" class="state-msg">No history found.</div>
+        <div v-if="isLoading" class="state-msg">{{ $t('llc.approvals.loading') }}</div>
+        <div v-else-if="filteredHistory.length === 0" class="state-msg">{{ $t('llc.approvals.noHistory') }}</div>
         <div
           v-for="item in filteredHistory"
           :key="item.id"
@@ -123,12 +123,12 @@
           <div class="card-header">
             <span class="type-badge" :class="`type-${item.type}`">{{ formatType(item.type) }}</span>
             <span class="status-badge" :class="`status-${item.status}`">{{ formatType(item.status) }}</span>
-            <span class="card-meta">Decided by: {{ item.decided_by_agent_id ?? '—' }}</span>
+            <span class="card-meta">{{ $t('llc.approvals.decidedBy', { id: item.decided_by_agent_id ?? '—' }) }}</span>
             <span class="card-meta">{{ formatDate(item.decided_at ?? item.updated_at) }}</span>
           </div>
           <div class="payload-section">
             <button class="toggle-payload" @click="togglePayload(item.id)">
-              {{ expandedPayloads.has(item.id) ? 'Hide' : 'Show' }} Payload
+              {{ expandedPayloads.has(item.id) ? $t('llc.approvals.hidePayload') : $t('llc.approvals.showPayload') }}
             </button>
             <pre v-if="expandedPayloads.has(item.id)" class="payload-json">{{ formatJson(item.payload) }}</pre>
           </div>

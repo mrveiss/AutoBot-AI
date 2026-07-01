@@ -4,11 +4,11 @@
 <template>
   <div class="kanban-board-view">
     <div class="kanban-header">
-      <h2 class="view-title">Kanban Board</h2>
+      <h2 class="view-title">{{ $t('llc.kanban.title') }}</h2>
       <div class="header-controls">
         <label class="swimlane-toggle">
           <input type="checkbox" v-model="swimlaneEnabled" />
-          <span>Group by assignee type</span>
+          <span>{{ $t('llc.kanban.groupByAssignee') }}</span>
         </label>
       </div>
     </div>
@@ -31,7 +31,7 @@
           <span class="column-title">{{ col.title }}</span>
           <div class="column-meta">
             <span class="column-count">{{ itemsByColumn(col.id).length }}</span>
-            <span v-if="col.wip_limit" class="wip-limit" :title="`WIP limit: ${col.wip_limit}`">
+            <span v-if="col.wip_limit" class="wip-limit" :title="$t('llc.kanban.wipLimit', { limit: col.wip_limit })">
               / {{ col.wip_limit }}
             </span>
           </div>
@@ -45,7 +45,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
-              Human
+              {{ $t('llc.kanban.human') }}
             </div>
             <div class="lane-cards">
               <div
@@ -69,7 +69,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
-              Agent
+              {{ $t('llc.kanban.agent') }}
             </div>
             <div class="lane-cards">
               <div
@@ -100,7 +100,7 @@
               <KanbanCard :item="item" />
             </div>
             <div v-if="itemsByColumn(col.id).length === 0" class="column-empty">
-              Drop items here
+              {{ $t('llc.kanban.dropHere') }}
             </div>
           </div>
         </template>
@@ -123,10 +123,12 @@ import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('KanbanBoardView')
 const api = useApiClient()
 const route = useRoute()
+const { t } = useI18n()
 
 const companyId = computed(() => route.params.companyId as string)
 const boardId = computed(() => route.params.boardId as string)
@@ -249,7 +251,7 @@ const KanbanCard = defineComponent({
         h('span', { class: 'card-id' }, props.item.identifier),
         h('span', { class: `card-type type-${props.item.type}` }, props.item.type),
         props.item.linked_pr_urls?.length
-          ? h('span', { class: 'pr-badge', title: `${props.item.linked_pr_urls.length} PR(s) linked` }, '🔗')
+          ? h('span', { class: 'pr-badge', title: t('llc.kanban.prLinked', { count: props.item.linked_pr_urls.length }) }, '🔗')
           : null,
       ]),
       h('p', { class: 'card-title' }, props.item.title),

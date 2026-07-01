@@ -12,20 +12,20 @@
       </div>
       <div class="sprint-stats">
         <div class="stat">
-          <span class="stat-label">Goal</span>
-          <span class="stat-value sprint-goal">{{ sprint.goal ?? 'No goal set' }}</span>
+          <span class="stat-label">{{ $t('llc.sprint.goal') }}</span>
+          <span class="stat-value sprint-goal">{{ sprint.goal ?? $t('llc.sprint.noGoal') }}</span>
         </div>
         <div class="stat">
-          <span class="stat-label">Committed</span>
-          <span class="stat-value">{{ sprint.committed_points ?? 0 }} pts</span>
+          <span class="stat-label">{{ $t('llc.sprint.committed') }}</span>
+          <span class="stat-value">{{ $t('llc.sprint.points', { count: sprint.committed_points ?? 0 }) }}</span>
         </div>
         <div class="stat">
-          <span class="stat-label">Completed</span>
-          <span class="stat-value">{{ sprint.completed_points ?? 0 }} pts</span>
+          <span class="stat-label">{{ $t('llc.sprint.completed') }}</span>
+          <span class="stat-value">{{ $t('llc.sprint.points', { count: sprint.completed_points ?? 0 }) }}</span>
         </div>
       </div>
     </div>
-    <div v-else-if="isLoading" class="sprint-header-skeleton">Loading sprint...</div>
+    <div v-else-if="isLoading" class="sprint-header-skeleton">{{ $t('llc.sprint.loadingSprint') }}</div>
 
     <div class="board-layout">
       <!-- Columns -->
@@ -64,7 +64,7 @@
               </div>
             </div>
             <div v-if="itemsByColumn(col.id).length === 0" class="column-empty">
-              Drop items here
+              {{ $t('llc.sprint.dropHere') }}
             </div>
           </div>
         </div>
@@ -72,7 +72,7 @@
 
       <!-- Burndown sidebar -->
       <div class="burndown-sidebar">
-        <h4 class="sidebar-title">Burndown</h4>
+        <h4 class="sidebar-title">{{ $t('llc.sprint.burndown') }}</h4>
         <div v-if="burndown.length > 0" class="burndown-chart">
           <svg :viewBox="`0 0 ${CHART_W} ${CHART_H}`" class="burndown-svg">
             <!-- Ideal line -->
@@ -91,11 +91,11 @@
             />
           </svg>
           <div class="burndown-legend">
-            <span class="legend-ideal">Ideal</span>
-            <span class="legend-actual">Actual</span>
+            <span class="legend-ideal">{{ $t('llc.sprint.ideal') }}</span>
+            <span class="legend-actual">{{ $t('llc.sprint.actual') }}</span>
           </div>
         </div>
-        <div v-else class="chart-empty">No burndown data</div>
+        <div v-else class="chart-empty">{{ $t('llc.sprint.noBurndown') }}</div>
       </div>
     </div>
 

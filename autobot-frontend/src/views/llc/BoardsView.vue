@@ -9,13 +9,13 @@
 <template>
   <div class="llc-browser">
     <header class="browser-header">
-      <h2 class="browser-title">Boards</h2>
-      <span class="browser-count">{{ boards.length }} boards</span>
+      <h2 class="browser-title">{{ $t('llc.boards.title') }}</h2>
+      <span class="browser-count">{{ $t('llc.boards.count', { count: boards.length }) }}</span>
     </header>
 
-    <div v-if="loading" class="browser-state">Loading boards…</div>
+    <div v-if="loading" class="browser-state">{{ $t('llc.boards.loading') }}</div>
     <div v-else-if="!boards.length" class="browser-state">
-      No boards yet — boards are created per project (Kanban) and per sprint (Sprint).
+      {{ $t('llc.boards.empty') }}
     </div>
 
     <div v-else class="card-grid">
@@ -24,7 +24,7 @@
           <h3 class="card-name">{{ b.name }}</h3>
           <span class="status-badge" :class="`type-${b.type}`">{{ b.type }}</span>
         </div>
-        <p class="card-meta">Created {{ formatDate(b.created_at) }}</p>
+        <p class="card-meta">{{ $t('llc.boards.created', { date: formatDate(b.created_at) }) }}</p>
       </button>
     </div>
   </div>
