@@ -433,3 +433,114 @@ class TestRedisFallbacks:
         result = await d._get_historical_performance_data()
         assert result["available"] is True
         assert "api_response_times" in result
+
+
+# ---------------------------------------------------------------------------
+# Part 4: SystemHealthScore.data_available — honesty flag (#10779)
+# ---------------------------------------------------------------------------
+
+
+class TestSystemHealthScoreDataAvailable:
+    """Verify calculate_system_health_score never emits confident defaults when data is absent."""
+
+    @pytest.mark.asyncio
+    async def test_data_available_true_when_both_sources_present(self):
+        """data_available=True and scores are non-zero when utilization + performance data exist."""
+        d = _make_dashboard()
+        util = {
+            "available": True,
+            "cpu": 50.0,
+            "gpu": 40.0,
+            "npu": 30.0,
+            "memory": 60.0,
+            "storage": 50.0,
+            "network": 30.0,
+        }
+        perf = {
+            "available": True,
+            "api_response_times": [1.2, 1.3, 1.1, 1.4, 1.2],
+            "cpu_utilization": [],
+            "memory_utilization": [],
+            "service_availability": [],
+        }
+        d._get_current_utilization = AsyncMock(return_value=util)
+        d._get_historical_performance_data = AsyncMock(return_value=perf)
+
+        result = await d.calculate_system_health_score()
+
+        assert result.data_available is True
+        # performance_score must NOT be the empty-dict artifact (35.0)
+        assert result.performance_score != 35.0
+        # user_satisfaction_score must NOT be the bare default (80.0 returned when api_times=[])
+        assert result.user_satisfaction_score != 80.0 or len(perf["api_response_times"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_data_available_false_when_utilization_unavailable(self):
+        """When utilization data is unavailable, data_available=False and no fabricated 35.0 score."""
+        d = _make_dashboard()
+        d._get_current_utilization = AsyncMock(return_value={"available": False, "error": "redis_unavailable"})
+        d._get_historical_performance_data = AsyncMock(
+            return_value={"available": True, "api_response_times": [], "cpu_utilization": [], "memory_utilization": []}
+        )
+
+        result = await d.calculate_system_health_score()
+
+        assert result.data_available is False
+        # Must be 0.0, not the fabricated 35.0 from empty-dict arithmetic
+        assert result.performance_score == 0.0, f"Expected 0.0, got {result.performance_score}"
+        assert result.efficiency_score == 0.0
+
+    @pytest.mark.asyncio
+    async def test_data_available_false_when_performance_data_unavailable(self):
+        """When performance history is unavailable, data_available=False and no fabricated 80.0."""
+        d = _make_dashboard()
+        d._get_current_utilization = AsyncMock(
+            return_value={
+                "available": True,
+                "cpu": 50.0,
+                "gpu": 40.0,
+                "npu": 30.0,
+                "memory": 60.0,
+                "storage": 50.0,
+                "network": 30.0,
+            }
+        )
+        d._get_historical_performance_data = AsyncMock(return_value={"available": False, "error": "redis_unavailable"})
+
+        result = await d.calculate_system_health_score()
+
+        assert result.data_available is False
+        # Must be 0.0, not the bare 80.0 default returned when api_times is missing
+        assert result.user_satisfaction_score == 0.0, f"Expected 0.0, got {result.user_satisfaction_score}"
+
+    @pytest.mark.asyncio
+    async def test_no_fabricated_scores_when_no_redis(self):
+        """No Redis → both sources unavailable → data_available=False; no 35.0 or 80.0 defaults."""
+        d = _make_dashboard()
+        # redis_client=None: both helpers return available=False naturally
+        result = await d.calculate_system_health_score()
+
+        assert result.data_available is False
+        assert result.performance_score == 0.0, f"Got fabricated performance_score={result.performance_score}"
+        assert (
+            result.user_satisfaction_score == 0.0
+        ), f"Got fabricated user_satisfaction={result.user_satisfaction_score}"
+        assert result.efficiency_score == 0.0
+
+    @pytest.mark.asyncio
+    async def test_data_available_in_comprehensive_report_summary(self):
+        """generate_comprehensive_dashboard_report surfaces system_health_data_available in summary."""
+        d = _make_dashboard()
+        d._get_current_utilization = AsyncMock(return_value={"available": False, "error": "redis_unavailable"})
+        d._get_historical_performance_data = AsyncMock(return_value={"available": False, "error": "redis_unavailable"})
+        d._get_monthly_operations = AsyncMock(return_value=(0, False))
+        d._store_dashboard_report = AsyncMock()
+        d._generate_visual_dashboard = AsyncMock()
+        # Stub calculate_performance_improvement since it depends on performance_data
+        d._calculate_performance_improvement = AsyncMock(return_value=0.0)
+
+        report = await d.generate_comprehensive_dashboard_report()
+
+        summary = report.get("summary", {})
+        assert "system_health_data_available" in summary, "system_health_data_available must be in summary"
+        assert summary["system_health_data_available"] is False

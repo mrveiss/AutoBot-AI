@@ -88,7 +88,12 @@ _DASHBOARD_HTML_TEMPLATE = """
         <div class="metrics-grid">
             <div class="metric-card">
                 <div class="metric-title">Overall System Health</div>
+                {% if health_data_available %}
                 <div class="health-score">{{ health_score }}/100</div>
+                {% else %}
+                <div class="health-score" style="font-size:16px;color:#999">
+                Unavailable — backend metrics not yet collected</div>
+                {% endif %}
             </div>
 
             <div class="metric-card">
@@ -120,11 +125,18 @@ _DASHBOARD_HTML_TEMPLATE = """
         <div class="metrics-grid">
             <div class="metric-card">
                 <h3>System Health Breakdown</h3>
+                {% if not health_data_available %}
+                <p style="color:#999;font-style:italic">Performance, efficiency and
+                satisfaction scores unavailable (Redis metrics not yet collected)</p>
+                {% endif %}
                 <p>Availability: {{ availability_score }}/100</p>
-                <p>Performance: {{ performance_score }}/100</p>
+                <p>Performance: {{ performance_score }}/100
+                {% if not health_data_available %} (unavailable){% endif %}</p>
                 <p>Security: {{ security_score }}/100</p>
-                <p>Efficiency: {{ efficiency_score }}/100</p>
-                <p>User Satisfaction: {{ user_satisfaction_score }}/100</p>
+                <p>Efficiency: {{ efficiency_score }}/100
+                {% if not health_data_available %} (unavailable){% endif %}</p>
+                <p>User Satisfaction: {{ user_satisfaction_score }}/100
+                {% if not health_data_available %} (unavailable){% endif %}</p>
             </div>
 
             <div class="metric-card">
@@ -214,6 +226,10 @@ class SystemHealthScore:
     efficiency_score: float
     user_satisfaction_score: float
     improvement_areas: List[str]
+    # True when both utilization and historical performance sources returned real data.
+    # False when Redis was unavailable; consumers must show "unavailable" instead of
+    # presenting the zeroed sub-scores as if they were measured values (#10779).
+    data_available: bool
 
 
 # ---------------------------------------------------------------------------
@@ -811,13 +827,16 @@ class BusinessIntelligenceDashboard:
         """Calculate comprehensive system health score."""
         try:
             utilization_raw = await self._get_current_utilization()
+            utilization_available = utilization_raw.get("available", True)
             utilization_data = (
-                {k: v for k, v in utilization_raw.items() if k != "available"}
-                if utilization_raw.get("available", True)
-                else {}
+                {k: v for k, v in utilization_raw.items() if k != "available"} if utilization_available else {}
             )
 
             performance_data = await self._get_historical_performance_data()
+            performance_available = performance_data.get("available", True)
+
+            # data_available is False when ANY required source is degraded (#10779).
+            data_available = utilization_available and performance_available
 
             services_data = []
             if self.redis_client:
@@ -830,10 +849,13 @@ class BusinessIntelligenceDashboard:
                     self.logger.error("Redis error reading services data for health score: %s", e)
 
             availability_score = self._calculate_availability_score(services_data)
-            performance_score = self._calculate_performance_score(utilization_data)
-            efficiency_score = self._calculate_efficiency_score(utilization_data)
+            # Guard: avoid fabricated 35.0/80.0 defaults when source data is missing (#10779).
+            performance_score = self._calculate_performance_score(utilization_data) if utilization_available else 0.0
+            efficiency_score = self._calculate_efficiency_score(utilization_data) if utilization_available else 0.0
             security_score = 85.0
-            user_satisfaction = self._calculate_user_satisfaction_score(performance_data)
+            user_satisfaction = (
+                self._calculate_user_satisfaction_score(performance_data) if performance_available else 0.0
+            )
 
             scores = [
                 availability_score,
@@ -861,6 +883,7 @@ class BusinessIntelligenceDashboard:
                 efficiency_score=efficiency_score,
                 user_satisfaction_score=user_satisfaction,
                 improvement_areas=improvement_areas,
+                data_available=data_available,
             )
 
         except Exception as e:
@@ -874,6 +897,7 @@ class BusinessIntelligenceDashboard:
                 efficiency_score=0.0,
                 user_satisfaction_score=0.0,
                 improvement_areas=["System Health Calculation Failed"],
+                data_available=False,
             )
 
     async def generate_comprehensive_dashboard_report(self) -> Dict[str, Any]:
@@ -894,6 +918,8 @@ class BusinessIntelligenceDashboard:
                     "total_optimization_potential": sum(ca.optimization_potential_usd for ca in cost_analysis),
                     # Surfaced explicitly so consumers can show "unavailable" rather than fake numbers
                     "operations_data_available": roi_metrics.operations_data_available,
+                    # False when Redis/utilization data was unavailable during health calculation (#10779)
+                    "system_health_data_available": health_score.data_available,
                 },
                 "roi_analysis": asdict(roi_metrics),
                 "cost_efficiency": [asdict(ca) for ca in cost_analysis],
@@ -953,16 +979,19 @@ class BusinessIntelligenceDashboard:
         summary = report.get("summary", {})
         health = report.get("system_health", {})
 
-        health_score = round(health.get("overall_score", 0), 1)
-        health_color = "#28a745" if health_score >= 80 else "#ffc107" if health_score >= 60 else "#dc3545"
+        # data_available=False means scores are zeroed placeholders, not real measurements (#10779)
+        health_data_available = health.get("data_available", True)
+        health_score_raw = round(health.get("overall_score", 0), 1)
+        health_color = "#28a745" if health_score_raw >= 80 else "#ffc107" if health_score_raw >= 60 else "#dc3545"
 
         roi_percent = round(summary.get("total_roi_percent", 0), 1)
         roi_class = "roi-positive" if roi_percent > 0 else "roi-negative"
 
         return {
             "timestamp": report.get("timestamp", ""),
-            "health_score": health_score,
+            "health_score": health_score_raw,
             "health_color": health_color,
+            "health_data_available": health_data_available,
             "roi_percent": roi_percent,
             "roi_class": roi_class,
             "break_even_months": round(summary.get("break_even_months", 0), 1),
@@ -1042,6 +1071,11 @@ if __name__ == "__main__":
             logger.info("Performance: %s/100", f"{health_score.performance_score:.1f}")
             logger.info("Security: %s/100", f"{health_score.security_score:.1f}")
             logger.info("Efficiency: %s/100", f"{health_score.efficiency_score:.1f}")
+            if not health_score.data_available:
+                logger.warning(
+                    "System health score: unavailable (Redis/utilization data not collected"
+                    " — scores are zeroed, not real measurements)"
+                )
 
         elif args.generate:
             logger.info("Generating comprehensive BI dashboard...")
@@ -1056,5 +1090,7 @@ if __name__ == "__main__":
             logger.info("  Optimization Potential: $%s/month", f"{optimization_potential:.2f}")
             if not summary.get("operations_data_available", True):
                 logger.warning("  Monthly operations count: unavailable (Prometheus unreachable)")
+            if not summary.get("system_health_data_available", True):
+                logger.warning("  System health scores: unavailable (Redis/utilization data not collected)")
 
     asyncio.run(main())
