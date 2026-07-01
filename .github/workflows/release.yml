@@ -116,7 +116,21 @@ jobs:
             git commit -m "chore(release): changelog and fragments for ${VERSION}"
           fi
           git tag -a "${VERSION}" -m "Release ${VERSION}"
-          git push origin main --follow-tags
+          # Push the tag first and on its own. Tags are not branch-protected, so
+          # this always lands and guarantees the "Create GitHub Release" step
+          # below has a ref to release from (#10608).
+          git push origin "refs/tags/${VERSION}"
+          # The changelog commit targets the protected main branch via a direct
+          # bot push, which main's required status checks reject (#10608). That
+          # rejection must NOT abort the job, or the tag exists with no GitHub
+          # Release. Make the changelog push best-effort and surface it as a
+          # warning (not a silent swallow); the changelog is still published on
+          # the Release via body_path below.
+          if git push origin HEAD:main; then
+            echo "Changelog commit landed on main."
+          else
+            echo "::warning::Changelog commit push to main was rejected by branch protection (expected, #10608). Tag ${VERSION} and the GitHub Release are still created; the changelog is attached to the Release. Full fix (bypass token / changelog-PR) tracked in #10608."
+          fi
 
       - name: Create GitHub Release
         if: steps.check.outputs.release_needed == 'true'
