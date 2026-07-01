@@ -1,7 +1,7 @@
 <!-- Copyright 2025-2026 mrveiss -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- AutoBot - AI-Powered Automation Platform -->
-<!-- Issue #9890: Wire vision automation panel to /api/vision endpoints -->
+<!-- Vision automation panel — backed by /api/vision/* endpoints (wired per #9890). -->
 <script setup lang="ts">
 /**
  * VisionAutomationView — Screen analysis, element detection, OCR, and

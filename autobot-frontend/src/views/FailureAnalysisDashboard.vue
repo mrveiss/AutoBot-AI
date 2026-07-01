@@ -5,7 +5,8 @@
   SPDX-License-Identifier: Apache-2.0
 
   Failure Analysis Dashboard
-  Issue #9892: Wire causal-inference engine (analyze-failure) to the frontend.
+  Backed by the causal-inference engine via POST /api/diagnostics/analyze-failure
+  (wired per #9892).
 -->
 <template>
   <div class="failure-analysis-view">
