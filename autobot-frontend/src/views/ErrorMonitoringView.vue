@@ -5,9 +5,8 @@
   Author: mrveiss
 
   Error Monitoring Dashboard
-  Issue #9891 - Wire error-monitoring UI to backend /api/errors/* endpoints
-  Issue #9983 - Restore timeline / top-errors / summary / resolve UI on the
-                reimplemented (Prometheus + Redis) /api/errors/metrics/* endpoints
+  Backed by /api/errors/* and the /api/errors/metrics/* (Prometheus + Redis)
+  endpoints: timeline, top-errors, summary, and resolve. (Wired per #9891, #9983.)
 -->
 <template>
   <div class="error-monitoring-view">
