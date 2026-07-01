@@ -490,7 +490,7 @@ onMounted(() => {
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
   border-radius: var(--radius-md);
-  color: var(--color-danger);
+  color: var(--color-error);
   margin-bottom: var(--spacing-4);
 }
 
@@ -507,7 +507,7 @@ onMounted(() => {
 .error-alert button {
   background: none;
   border: none;
-  color: var(--color-danger);
+  color: var(--color-error);
   cursor: pointer;
   padding: var(--spacing-1);
 }

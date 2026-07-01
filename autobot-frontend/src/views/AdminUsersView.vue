@@ -535,7 +535,7 @@ onMounted(loadUsers)
 
 .page-subtitle {
   font-size: var(--text-sm);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   margin: var(--spacing-0);
 }
 
@@ -574,21 +574,21 @@ onMounted(loadUsers)
   left: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .search-input {
   width: 100%;
   padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-9);
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   box-sizing: border-box;
 }
 
 .table-section {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: var(--radius-xl);
   overflow: hidden;
 }
@@ -596,7 +596,7 @@ onMounted(loadUsers)
 .loading-state {
   padding: var(--spacing-8);
   text-align: center;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .data-table {
@@ -611,14 +611,14 @@ onMounted(loadUsers)
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   background: var(--color-surface-alt, #f9fafb);
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
 }
 
 .data-table td {
   padding: var(--spacing-3) var(--spacing-4);
-  border-bottom: 1px solid var(--color-border, #f3f4f6);
+  border-bottom: 1px solid var(--border-default, #f3f4f6);
   font-size: var(--text-sm);
 }
 
@@ -671,7 +671,7 @@ onMounted(loadUsers)
 
 .bundle-loading {
   font-size: var(--text-xs);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .bundle-user-name {
@@ -681,7 +681,7 @@ onMounted(loadUsers)
 
 .role-select {
   padding: var(--spacing-1) var(--spacing-2);
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: var(--radius-md);
   font-size: 0.8125rem;
   background: transparent;
@@ -726,7 +726,7 @@ onMounted(loadUsers)
 
 .empty-row {
   text-align: center;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   padding: 2rem !important;
 }
 
@@ -736,12 +736,12 @@ onMounted(loadUsers)
   justify-content: center;
   gap: var(--spacing-4);
   padding: var(--spacing-3);
-  border-top: 1px solid var(--color-border, #e5e7eb);
+  border-top: 1px solid var(--border-default, #e5e7eb);
 }
 
 .btn-page {
   padding: var(--spacing-1-5) var(--spacing-3);
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: var(--radius-md);
   background: transparent;
   cursor: pointer;
@@ -754,7 +754,7 @@ onMounted(loadUsers)
 
 .page-info {
   font-size: var(--text-sm);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .btn-action-primary,
@@ -778,8 +778,8 @@ onMounted(loadUsers)
 
 .btn-action-secondary {
   background: transparent;
-  border-color: var(--color-border, #d1d5db);
-  color: var(--color-text, #111827);
+  border-color: var(--border-default, #d1d5db);
+  color: var(--text-primary, #111827);
 }
 
 .btn-action-danger {
@@ -804,7 +804,7 @@ onMounted(loadUsers)
 }
 
 .modal {
-  background: var(--color-surface, #fff);
+  background: var(--bg-surface, #fff);
   border-radius: var(--radius-xl);
   width: 100%;
   max-width: 480px;
@@ -824,7 +824,7 @@ onMounted(loadUsers)
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-4) var(--spacing-5);
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
 }
 
 .modal-header h3 {
@@ -837,7 +837,7 @@ onMounted(loadUsers)
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   font-size: var(--text-sm);
 }
 
@@ -862,7 +862,7 @@ onMounted(loadUsers)
 .form-input {
   width: 100%;
   padding: var(--spacing-2) var(--spacing-3);
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   box-sizing: border-box;

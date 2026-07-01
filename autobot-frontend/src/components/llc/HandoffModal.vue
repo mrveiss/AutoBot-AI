@@ -129,7 +129,7 @@ async function submit(): Promise<void> {
 .handoff-title {
   font-size: 1.0625rem;
   font-weight: 600;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
   margin: 0;
 }
 .handoff-label {
@@ -137,7 +137,7 @@ async function submit(): Promise<void> {
   flex-direction: column;
   gap: 0.375rem;
   font-size: 0.8125rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 .handoff-select,
 .handoff-notes {
@@ -146,11 +146,11 @@ async function submit(): Promise<void> {
   border: 1px solid var(--border-default, #e5e7eb);
   border-radius: var(--radius-md, 8px);
   background: var(--bg-input, #fff);
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
 }
 .handoff-error {
   font-size: 0.8125rem;
-  color: var(--color-danger, #cb3326);
+  color: var(--color-error, #cb3326);
   margin: 0;
 }
 .handoff-actions {
@@ -174,6 +174,6 @@ async function submit(): Promise<void> {
 }
 .handoff-cancel {
   border: 1px solid var(--border-default, #e5e7eb);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 </style>

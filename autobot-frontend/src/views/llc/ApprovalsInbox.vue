@@ -299,8 +299,8 @@ onUnmounted(() => {
   height: 100%;
   padding: 1.5rem;
   gap: 1rem;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .inbox-header {
@@ -338,7 +338,7 @@ onUnmounted(() => {
 .header-tabs {
   display: flex;
   gap: 0.25rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   overflow: hidden;
 }
@@ -348,7 +348,7 @@ onUnmounted(() => {
   font-size: 0.875rem;
   border: none;
   background: transparent;
-  color: var(--color-text);
+  color: var(--text-primary);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -367,10 +367,10 @@ onUnmounted(() => {
 .filter-select,
 .filter-search {
   padding: 0.4rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
@@ -390,14 +390,14 @@ onUnmounted(() => {
 .state-msg {
   text-align: center;
   padding: 3rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .approval-card {
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
   padding: 1rem;
-  background: var(--color-surface, #fff);
+  background: var(--bg-surface, #fff);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -416,7 +416,7 @@ onUnmounted(() => {
 
 .card-meta {
   font-size: 0.8rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .type-badge,
@@ -444,15 +444,15 @@ onUnmounted(() => {
 .toggle-payload {
   font-size: 0.8rem;
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.25rem;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
   cursor: pointer;
 }
 
 .payload-json {
-  background: var(--color-surface-elevated, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated, #f9fafb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   padding: 0.75rem;
   font-size: 0.8rem;
@@ -494,16 +494,16 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  border-top: 1px solid var(--color-border, #e5e7eb);
+  border-top: 1px solid var(--border-default, #e5e7eb);
   padding-top: 0.75rem;
 }
 
 .note-textarea {
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
   font-size: 0.875rem;
   resize: vertical;
 }
@@ -532,9 +532,9 @@ onUnmounted(() => {
 
 .btn-secondary {
   padding: 0.4rem 1rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
-  border: 1px solid var(--color-border, #d1d5db);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   font-weight: 500;

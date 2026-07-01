@@ -112,7 +112,7 @@ import Icon from '@/components/ui/Icon.vue'
 
 <style scoped>
 .reasoning-trace {
-  border: 1px solid var(--color-border, #334155);
+  border: 1px solid var(--border-default, #334155);
   border-radius: var(--radius-lg);
   margin-bottom: var(--spacing-2);
   background: var(--color-bg-subtle, #0f172a);
@@ -134,13 +134,13 @@ import Icon from '@/components/ui/Icon.vue'
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--color-text-muted, #94a3b8);
+  color: var(--text-muted, #94a3b8);
   text-align: left;
   user-select: none;
 }
 
 .reasoning-trace__header:hover {
-  color: var(--color-text, #e2e8f0);
+  color: var(--text-primary, #e2e8f0);
 }
 
 .reasoning-trace__icon {
@@ -162,7 +162,7 @@ import Icon from '@/components/ui/Icon.vue'
 
 .reasoning-trace__count {
   font-size: 0.7rem;
-  background: var(--color-border, #334155);
+  background: var(--border-default, #334155);
   border-radius: var(--radius-full);
   padding: 0 0.4rem;
   line-height: 1.4rem;
@@ -175,7 +175,7 @@ import Icon from '@/components/ui/Icon.vue'
 
 /* Body */
 .reasoning-trace__body {
-  border-top: 1px solid var(--color-border, #334155);
+  border-top: 1px solid var(--border-default, #334155);
   max-height: 18rem;
   overflow-y: auto;
   padding: var(--spacing-1) var(--spacing-0);
@@ -219,7 +219,7 @@ import Icon from '@/components/ui/Icon.vue'
 }
 
 .reasoning-trace__entry-icon {
-  color: var(--color-text-muted, #94a3b8);
+  color: var(--text-muted, #94a3b8);
   width: 0.9rem;
   text-align: center;
   flex-shrink: 0;
@@ -232,19 +232,19 @@ import Icon from '@/components/ui/Icon.vue'
 }
 
 .reasoning-trace__entry-label {
-  color: var(--color-text, #e2e8f0);
+  color: var(--text-primary, #e2e8f0);
   overflow-wrap: anywhere;
 }
 
 .reasoning-trace__entry-detail {
   display: block;
-  color: var(--color-text-muted, #94a3b8);
+  color: var(--text-muted, #94a3b8);
   font-size: 0.7rem;
   overflow-wrap: anywhere;
 }
 
 .reasoning-trace__entry-duration {
-  color: var(--color-text-muted, #94a3b8);
+  color: var(--text-muted, #94a3b8);
   flex-shrink: 0;
   font-size: 0.7rem;
   margin-left: auto;

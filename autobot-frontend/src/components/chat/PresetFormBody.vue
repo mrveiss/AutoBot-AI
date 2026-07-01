@@ -269,7 +269,7 @@ async function executeDelete(id: string): Promise<void> {
   padding: var(--spacing-3) var(--spacing-4);
   margin-bottom: var(--spacing-4);
   background: var(--color-danger-subtle, #fef2f2);
-  color: var(--color-danger, #dc2626);
+  color: var(--color-error, #dc2626);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
 }
@@ -321,7 +321,7 @@ async function executeDelete(id: string): Promise<void> {
 
 .field-input[aria-invalid="true"],
 .field-textarea[aria-invalid="true"] {
-  border-color: var(--color-danger, #dc2626);
+  border-color: var(--color-error, #dc2626);
 }
 
 .field-textarea {
@@ -331,7 +331,7 @@ async function executeDelete(id: string): Promise<void> {
 
 .field-error {
   font-size: var(--text-xs);
-  color: var(--color-danger, #dc2626);
+  color: var(--color-error, #dc2626);
 }
 
 .form-actions {

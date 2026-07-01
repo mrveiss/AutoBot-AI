@@ -113,18 +113,18 @@ onMounted(loadPrograms)
 .browser-title {
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
   margin: 0;
 }
 
 .browser-count {
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .browser-state {
   padding: 2rem 0;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .card-grid {
@@ -161,13 +161,13 @@ onMounted(loadPrograms)
 .card-name {
   font-size: 1rem;
   font-weight: 600;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
   margin: 0;
 }
 
 .card-desc {
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -178,7 +178,7 @@ onMounted(loadPrograms)
 
 .card-meta {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   margin: 0;
 }
 
@@ -191,6 +191,6 @@ onMounted(loadPrograms)
   padding: 0.125rem 0.5rem;
   border-radius: 999px;
   background: var(--bg-hover, #f3f4f6);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 </style>

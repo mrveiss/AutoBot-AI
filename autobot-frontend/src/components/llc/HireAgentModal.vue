@@ -118,7 +118,7 @@ async function submit(): Promise<void> {
   margin: 0 0 1rem;
   font-size: 1.1rem;
   font-weight: 600;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
 }
 
 .hire-form {
@@ -138,7 +138,7 @@ async function submit(): Promise<void> {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .field-input {
@@ -146,13 +146,13 @@ async function submit(): Promise<void> {
   border-radius: 6px;
   border: 1px solid var(--border-default, #d1d5db);
   background: var(--bg-surface, #fff);
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
 }
 
 .form-error {
   margin: 0;
   font-size: 0.8rem;
-  color: var(--color-danger, #dc2626);
+  color: var(--color-error, #dc2626);
 }
 
 .form-actions {
@@ -173,7 +173,7 @@ async function submit(): Promise<void> {
 .btn-ghost {
   background: transparent;
   border-color: var(--border-default, #d1d5db);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .btn-primary {

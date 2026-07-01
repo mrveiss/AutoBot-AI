@@ -279,8 +279,8 @@ onUnmounted(() => ws?.close())
   height: 100%;
   padding: 1.5rem;
   gap: 1rem;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .kanban-header {
@@ -315,9 +315,9 @@ onUnmounted(() => ws?.close())
 
 .kanban-column {
   flex: 0 0 240px;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
   border-radius: 0.5rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   display: flex;
   flex-direction: column;
   /* #10750 C2: bounded by .board-layout height, not the viewport */
@@ -332,7 +332,7 @@ onUnmounted(() => ws?.close())
   padding: 0.625rem 0.875rem;
   font-weight: 600;
   font-size: 0.875rem;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem 0.5rem 0 0;
   transition: background 0.15s;
 }
@@ -360,7 +360,7 @@ onUnmounted(() => ws?.close())
 
 .wip-limit {
   font-size: 0.7rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .column-cards {
@@ -374,7 +374,7 @@ onUnmounted(() => ws?.close())
 }
 
 .swimlane {
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
   padding: 0.5rem;
 }
 
@@ -388,7 +388,7 @@ onUnmounted(() => ws?.close())
   gap: 0.375rem;
   font-size: 0.7rem;
   font-weight: 600;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.375rem;
@@ -407,7 +407,7 @@ onUnmounted(() => ws?.close())
 
 .lane-empty {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   text-align: center;
   padding: 0.5rem;
 }
@@ -421,8 +421,8 @@ onUnmounted(() => ws?.close())
 }
 
 .kanban-card-inner {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   padding: 0.5rem 0.625rem;
   display: flex;
@@ -444,7 +444,7 @@ onUnmounted(() => ws?.close())
 .card-id {
   font-family: monospace;
   font-size: 0.65rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .card-type {
@@ -502,7 +502,7 @@ onUnmounted(() => ws?.close())
 .card-pts {
   font-size: 0.65rem;
   font-weight: 600;
-  background: var(--color-surface-elevated, #f3f4f6);
+  background: var(--bg-elevated, #f3f4f6);
   padding: 0.1rem 0.35rem;
   border-radius: 0.2rem;
 }
@@ -525,8 +525,8 @@ onUnmounted(() => ws?.close())
   text-align: center;
   padding: 1.5rem 0.5rem;
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #9ca3af);
-  border: 2px dashed var(--color-border, #e5e7eb);
+  color: var(--text-secondary, #9ca3af);
+  border: 2px dashed var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   margin: 0.5rem;
 }

@@ -173,7 +173,7 @@ defineExpose({ reset })
 .multi-model-chat__picker-label {
   font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--color-text-muted, #9ca3af);
+  color: var(--text-muted, #9ca3af);
   white-space: nowrap;
 }
 
@@ -189,7 +189,7 @@ defineExpose({ reset })
   gap: var(--spacing-1, 0.25rem);
   cursor: pointer;
   font-size: 0.8125rem;
-  color: var(--color-text-primary, #e5e7eb);
+  color: var(--text-primary, #e5e7eb);
 }
 
 .multi-model-chat__model-name {
@@ -200,7 +200,7 @@ defineExpose({ reset })
 .multi-model-chat__model-ctx {
   font-size: 0.6875rem;
   font-family: ui-monospace, monospace;
-  color: var(--color-text-muted, #9ca3af);
+  color: var(--text-muted, #9ca3af);
   background: var(--color-bg-tertiary, #1a1a2e);
   border-radius: 0.25rem;
   padding: 0 0.25rem;
@@ -217,8 +217,8 @@ defineExpose({ reset })
   flex: 1;
   resize: vertical;
   background: var(--color-bg-input, #2a2a3e);
-  color: var(--color-text-primary, #e5e7eb);
-  border: 1px solid var(--color-border, #374151);
+  color: var(--text-primary, #e5e7eb);
+  border: 1px solid var(--border-default, #374151);
   border-radius: var(--radius-md, 0.375rem);
   padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
   font-size: 0.875rem;
@@ -271,7 +271,7 @@ defineExpose({ reset })
 
 .multi-model-chat__response-card {
   background: var(--color-bg-secondary, #13131f);
-  border: 1px solid var(--color-border, #374151);
+  border: 1px solid var(--border-default, #374151);
   border-radius: var(--radius-md, 0.375rem);
   overflow: hidden;
   display: flex;
@@ -288,14 +288,14 @@ defineExpose({ reset })
   justify-content: space-between;
   padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
   background: var(--color-bg-tertiary, #1a1a2e);
-  border-bottom: 1px solid var(--color-border, #374151);
+  border-bottom: 1px solid var(--border-default, #374151);
   gap: var(--spacing-2, 0.5rem);
 }
 
 .multi-model-chat__response-model {
   font-family: ui-monospace, monospace;
   font-size: 0.75rem;
-  color: var(--color-text-muted, #9ca3af);
+  color: var(--text-muted, #9ca3af);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -335,7 +335,7 @@ defineExpose({ reset })
   margin: var(--spacing-0);
   font-family: ui-monospace, monospace;
   font-size: 0.8125rem;
-  color: var(--color-text-primary, #e5e7eb);
+  color: var(--text-primary, #e5e7eb);
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.6;

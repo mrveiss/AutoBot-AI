@@ -455,22 +455,22 @@ onBeforeUnmount(() => {
   font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .gantt-select {
   padding: 0.3rem 0.5rem;
   border-radius: 6px;
-  border: 1px solid var(--color-border, #d1d5db);
-  background: var(--color-surface, #fff);
-  color: var(--color-text, #111827);
+  border: 1px solid var(--border-default, #d1d5db);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary, #111827);
 }
 
 .gantt-btn {
   padding: 0.4rem 0.8rem;
   border-radius: 6px;
-  border: 1px solid var(--color-border, #d1d5db);
-  background: var(--color-surface, #fff);
+  border: 1px solid var(--border-default, #d1d5db);
+  background: var(--bg-surface, #fff);
   cursor: pointer;
   font-size: 0.8rem;
 }
@@ -483,7 +483,7 @@ onBeforeUnmount(() => {
 .gantt-state {
   padding: 2rem;
   text-align: center;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .gantt-scroll {
@@ -491,25 +491,25 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 8px;
-  background: var(--color-surface, #fff);
+  background: var(--bg-surface, #fff);
 }
 
 .gantt-gridline {
-  stroke: var(--color-border, #e5e7eb);
+  stroke: var(--border-default, #e5e7eb);
   stroke-width: 1;
 }
 
 .gantt-axis-label {
   font-size: 10px;
-  fill: var(--color-text-secondary, #9ca3af);
+  fill: var(--text-secondary, #9ca3af);
 }
 
 .gantt-row-label {
   font-size: 10px;
   font-family: monospace;
-  fill: var(--color-text-secondary, #6b7280);
+  fill: var(--text-secondary, #6b7280);
 }
 
 .gantt-bar {
@@ -518,7 +518,7 @@ onBeforeUnmount(() => {
 }
 
 .gantt-bar--critical {
-  fill: var(--color-danger, #ef4444);
+  fill: var(--color-error, #ef4444);
 }
 
 .gantt-handle {
@@ -534,7 +534,7 @@ onBeforeUnmount(() => {
 
 .gantt-unscheduled {
   font-size: 10px;
-  fill: var(--color-text-secondary, #9ca3af);
+  fill: var(--text-secondary, #9ca3af);
   font-style: italic;
 }
 </style>

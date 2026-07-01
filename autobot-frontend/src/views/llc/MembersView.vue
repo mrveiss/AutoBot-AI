@@ -297,8 +297,8 @@ onMounted(() => {
   flex-direction: column;
   gap: 1.25rem;
   padding: 1.5rem;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .members-header {
@@ -318,18 +318,18 @@ onMounted(() => {
 .members-subtitle {
   margin: 0.25rem 0 0;
   font-size: 0.875rem;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .members-state {
   text-align: center;
   padding: 2.5rem;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .members-empty {
   text-align: center;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .members-error {
@@ -345,13 +345,13 @@ onMounted(() => {
 .members-table td {
   text-align: left;
   padding: 0.625rem 0.75rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--border-default);
   font-size: 0.875rem;
 }
 
 .members-table th {
   font-weight: 600;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-size: 0.6875rem;
@@ -382,22 +382,22 @@ onMounted(() => {
 .members-label {
   font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .members-select {
   width: 100%;
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
 .members-hint {
   margin: 0;
   font-size: 0.75rem;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 </style>

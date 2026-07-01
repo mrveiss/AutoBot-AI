@@ -253,18 +253,18 @@ onMounted(() => {
 .ceo-chat-view {
   display: flex;
   height: 100%;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   overflow: hidden;
 }
 
 .thread-sidebar {
   width: 260px;
   flex-shrink: 0;
-  border-right: 1px solid var(--color-border, #e5e7eb);
+  border-right: 1px solid var(--border-default, #e5e7eb);
   display: flex;
   flex-direction: column;
-  background: var(--color-surface, #fff);
+  background: var(--bg-surface, #fff);
 }
 
 .sidebar-header {
@@ -272,7 +272,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 1rem;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
 }
 
 .sidebar-title {
@@ -298,12 +298,12 @@ onMounted(() => {
 .thread-item {
   padding: 0.75rem 1rem;
   cursor: pointer;
-  border-bottom: 1px solid var(--color-border, #f3f4f6);
+  border-bottom: 1px solid var(--border-default, #f3f4f6);
   transition: background 0.1s;
 }
 
 .thread-item:hover {
-  background: var(--color-surface-hover, #f9fafb);
+  background: var(--bg-hover, #f9fafb);
 }
 
 .thread-item.active {
@@ -326,7 +326,7 @@ onMounted(() => {
 
 .thread-date {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   margin-top: 0.125rem;
 }
 
@@ -342,7 +342,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .chat-header {
@@ -350,8 +350,8 @@ onMounted(() => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.875rem 1.25rem;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
-  background: var(--color-surface, #fff);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-surface, #fff);
 }
 
 .chat-title {
@@ -404,9 +404,9 @@ onMounted(() => {
 }
 
 .bubble-system {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e7eb);
-  color: var(--color-text);
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-default, #e5e7eb);
+  color: var(--text-primary);
   border-bottom-left-radius: 0.25rem;
 }
 
@@ -437,17 +437,17 @@ onMounted(() => {
   display: flex;
   gap: 0.5rem;
   padding: 0.875rem 1.25rem;
-  border-top: 1px solid var(--color-border, #e5e7eb);
-  background: var(--color-surface, #fff);
+  border-top: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-surface, #fff);
 }
 
 .message-input {
   flex: 1;
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   font-size: 0.875rem;
   resize: none;
   line-height: 1.4;
@@ -473,7 +473,7 @@ onMounted(() => {
 .state-msg-sm {
   text-align: center;
   padding: 1.5rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   font-size: 0.875rem;
 }
 
@@ -488,7 +488,7 @@ onMounted(() => {
 }
 
 .modal-panel {
-  background: var(--color-surface, #fff);
+  background: var(--bg-surface, #fff);
   border-radius: 0.75rem;
   padding: 1.5rem;
   width: 100%;
@@ -513,15 +513,15 @@ onMounted(() => {
 .form-field label {
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .form-input {
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
@@ -549,9 +549,9 @@ onMounted(() => {
 
 .btn-secondary {
   padding: 0.5rem 1rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
-  border: 1px solid var(--color-border, #d1d5db);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   font-weight: 500;

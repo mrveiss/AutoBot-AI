@@ -218,7 +218,7 @@ function formatRelativeTime(dateStr: string): string {
 
 .empty-icon {
   font-size: 3rem;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   margin-bottom: 1rem;
   display: block;
 }
@@ -230,7 +230,7 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 .empty-state p {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   margin-bottom: 1.5rem;
 }
 
@@ -255,7 +255,7 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 .device-card {
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 1.25rem;
   background: var(--color-bg);
@@ -283,7 +283,7 @@ function formatRelativeTime(dateStr: string): string {
   align-items: center;
   justify-content: center;
   font-size: 1.25rem;
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .device-info {
@@ -300,12 +300,12 @@ function formatRelativeTime(dateStr: string): string {
 
 .device-platform {
   font-size: 0.875rem;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .device-meta {
   font-size: 0.875rem;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -327,7 +327,7 @@ function formatRelativeTime(dateStr: string): string {
 .spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid var(--color-border);
+  border: 3px solid var(--border-default);
   border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
@@ -337,7 +337,7 @@ function formatRelativeTime(dateStr: string): string {
 .spinner-tiny {
   width: 12px;
   height: 12px;
-  border: 2px solid var(--color-border);
+  border: 2px solid var(--border-default);
   border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
@@ -352,10 +352,10 @@ function formatRelativeTime(dateStr: string): string {
   display: flex;
   gap: 1rem;
   padding: 1rem;
-  border: 1px solid var(--color-danger);
+  border: 1px solid var(--color-error);
   border-radius: 6px;
   background: var(--color-danger-bg);
-  color: var(--color-danger);
+  color: var(--color-error);
 }
 
 .error-alert strong {
@@ -392,7 +392,7 @@ function formatRelativeTime(dateStr: string): string {
 
 .modal-header {
   padding: 1.5rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--border-default);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -409,7 +409,7 @@ function formatRelativeTime(dateStr: string): string {
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   padding: 0;
 }
 
@@ -423,7 +423,7 @@ function formatRelativeTime(dateStr: string): string {
 
 .qr-step p {
   margin: 0 0 1.5rem 0;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .qr-display {
@@ -442,7 +442,7 @@ function formatRelativeTime(dateStr: string): string {
 
 .modal-footer {
   padding: 1rem 1.5rem;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--border-default);
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
@@ -478,8 +478,8 @@ function formatRelativeTime(dateStr: string): string {
 
 .btn-secondary {
   background: var(--color-bg-secondary);
-  border-color: var(--color-border);
-  color: var(--color-text-primary);
+  border-color: var(--border-default);
+  color: var(--text-primary);
 }
 
 .btn-secondary:hover {
@@ -488,8 +488,8 @@ function formatRelativeTime(dateStr: string): string {
 
 .btn-danger {
   background: transparent;
-  border-color: var(--color-danger);
-  color: var(--color-danger);
+  border-color: var(--color-error);
+  color: var(--color-error);
 }
 
 .btn-danger:hover {
@@ -510,7 +510,7 @@ function formatRelativeTime(dateStr: string): string {
 
 .instructions-list li {
   margin: 0.5rem 0;
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 /* Info Box */

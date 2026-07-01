@@ -100,16 +100,16 @@ onMounted(load)
 .inbox-title {
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
   margin: 0;
 }
 .inbox-count {
   font-size: 0.8125rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 .inbox-state {
   padding: 2rem 0;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 .review-list {
   list-style: none;
@@ -137,16 +137,16 @@ onMounted(load)
 .review-identifier {
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 .review-title {
   flex: 1;
   font-size: 0.9375rem;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
 }
 .review-type {
   font-size: 0.6875rem;
   text-transform: uppercase;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 </style>

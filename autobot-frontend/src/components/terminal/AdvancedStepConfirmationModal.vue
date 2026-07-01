@@ -522,7 +522,7 @@ function resetEdit(): void {
   align-items: center;
   gap: var(--spacing-1, 0.25rem);
   font-size: 0.8125rem;
-  color: var(--color-danger, #ef4444);
+  color: var(--color-error, #ef4444);
   margin: var(--spacing-0);
 }
 

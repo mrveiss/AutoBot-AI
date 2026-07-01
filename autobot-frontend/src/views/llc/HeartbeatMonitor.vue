@@ -422,8 +422,8 @@ onUnmounted(() => {
   height: 100%;
   padding: 1.5rem;
   gap: 1rem;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .monitor-header {
@@ -440,18 +440,18 @@ onUnmounted(() => {
 
 .refresh-note {
   font-size: 0.8rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .state-msg {
   text-align: center;
   padding: 3rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .agent-grid-wrapper {
   overflow: auto;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
   flex: 1;
 }
@@ -466,19 +466,19 @@ onUnmounted(() => {
   padding: 0.625rem 0.75rem;
   text-align: left;
   font-weight: 600;
-  background: var(--color-surface-elevated, #f9fafb);
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated, #f9fafb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
   white-space: nowrap;
 }
 
 .agent-row {
-  border-bottom: 1px solid var(--color-border, #f3f4f6);
+  border-bottom: 1px solid var(--border-default, #f3f4f6);
   cursor: pointer;
   transition: background 0.1s;
 }
 
 .agent-row:hover {
-  background: var(--color-surface-hover, #f9fafb);
+  background: var(--bg-hover, #f9fafb);
 }
 
 .agent-grid td {
@@ -514,8 +514,8 @@ onUnmounted(() => {
 .status-failed.status-dot { background: #ef4444; }
 .status-timed_out { color: #ef4444; }
 .status-timed_out.status-dot { background: #ef4444; }
-.status-unknown { color: var(--color-text-secondary, #9ca3af); }
-.status-unknown.status-dot { background: var(--color-border, #d1d5db); }
+.status-unknown { color: var(--text-secondary, #9ca3af); }
+.status-unknown.status-dot { background: var(--border-default, #d1d5db); }
 
 .btn-trigger {
   padding: 0.3rem 0.75rem;
@@ -546,7 +546,7 @@ onUnmounted(() => {
   width: 480px;
   max-width: 100%;
   height: 100%;
-  background: var(--color-surface, #fff);
+  background: var(--bg-surface, #fff);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -557,7 +557,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
 }
 
 .drawer-header h3 {
@@ -571,7 +571,7 @@ onUnmounted(() => {
   border: none;
   font-size: 1.125rem;
   cursor: pointer;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .run-list {
@@ -584,7 +584,7 @@ onUnmounted(() => {
 }
 
 .run-item {
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   padding: 0.75rem;
   display: flex;
@@ -602,22 +602,22 @@ onUnmounted(() => {
 .run-date,
 .run-duration {
   font-size: 0.8rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .toggle-payload {
   font-size: 0.8rem;
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.25rem;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
   cursor: pointer;
   align-self: flex-start;
 }
 
 .run-context {
-  background: var(--color-surface-elevated, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated, #f9fafb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   padding: 0.75rem;
   font-size: 0.8rem;
@@ -637,16 +637,16 @@ onUnmounted(() => {
 .btn-replay,
 .btn-replay-log {
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.25rem;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
   cursor: pointer;
   font-size: 0.8rem;
 }
 
 .btn-replay:hover,
 .btn-replay-log:hover {
-  background: var(--color-surface-hover, #f3f4f6);
+  background: var(--bg-hover, #f3f4f6);
 }
 
 .btn-replay:disabled {
@@ -656,12 +656,12 @@ onUnmounted(() => {
 
 .btn-fixture {
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.25rem;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
   font-size: 0.8rem;
   text-decoration: none;
-  color: var(--color-text, #374151);
+  color: var(--text-primary, #374151);
 }
 
 .replay-panel {
@@ -699,7 +699,7 @@ onUnmounted(() => {
 }
 
 .meta-item {
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .event-browser {
@@ -717,9 +717,9 @@ onUnmounted(() => {
 
 .event-nav button {
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.25rem;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
   cursor: pointer;
   font-size: 0.8rem;
 }
@@ -730,8 +730,8 @@ onUnmounted(() => {
 }
 
 .event-detail {
-  background: var(--color-surface-elevated, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated, #f9fafb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   padding: 0.75rem;
   font-size: 0.8rem;
@@ -758,8 +758,8 @@ onUnmounted(() => {
 }
 
 .diff-content {
-  background: var(--color-surface-elevated, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated, #f9fafb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   padding: 0.75rem;
   font-size: 0.75rem;
@@ -771,6 +771,6 @@ onUnmounted(() => {
 }
 
 .diff-identical {
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 </style>

@@ -473,12 +473,12 @@ async function executeImport(): Promise<void> {
 .page-title {
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
   margin: 0 0 var(--spacing-xs);
 }
 
 .page-subtitle {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -509,8 +509,8 @@ async function executeImport(): Promise<void> {
 }
 
 .portability-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
 }
@@ -519,11 +519,11 @@ async function executeImport(): Promise<void> {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
   margin: 0 0 var(--spacing-xs);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .card-desc {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   margin: 0 0 var(--spacing-md);
 }
 
@@ -559,9 +559,9 @@ async function executeImport(): Promise<void> {
   align-items: center;
   gap: var(--spacing-xs);
   padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-surface);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;
   font-size: var(--font-size-sm);
@@ -594,14 +594,14 @@ async function executeImport(): Promise<void> {
 
 .export-hint {
   font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary, var(--color-text-secondary));
+  color: var(--color-text-tertiary, var(--text-secondary));
   margin: 0 0 var(--spacing-md);
 }
 
 /* Recent exports */
 .recent-exports {
   margin-top: var(--spacing-md);
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--border-default);
   padding-top: var(--spacing-md);
 }
 
@@ -609,7 +609,7 @@ async function executeImport(): Promise<void> {
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   margin: 0 0 var(--spacing-sm);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .export-table,
@@ -625,13 +625,13 @@ async function executeImport(): Promise<void> {
 .preview-table td {
   text-align: left;
   padding: var(--spacing-xs) var(--spacing-sm);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .export-table th,
 .preview-table th {
   font-weight: var(--font-weight-semibold);
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .download-link {
@@ -642,7 +642,7 @@ async function executeImport(): Promise<void> {
 
 /* Drop zone */
 .drop-zone {
-  border: 2px dashed var(--color-border);
+  border: 2px dashed var(--border-default);
   border-radius: var(--radius-md);
   padding: var(--spacing-xl) var(--spacing-md);
   text-align: center;
@@ -675,18 +675,18 @@ async function executeImport(): Promise<void> {
 }
 
 .drop-zone-label {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   font-size: var(--font-size-sm);
 }
 
 .btn-clear-file {
   background: none;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   padding: 2px var(--spacing-xs);
   cursor: pointer;
   font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   margin-top: var(--spacing-xs);
 }
 
@@ -699,10 +699,10 @@ async function executeImport(): Promise<void> {
 
 /* Preview panel */
 .preview-panel {
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   padding: var(--spacing-md);
-  background: var(--color-background, var(--color-surface));
+  background: var(--bg-primary, var(--bg-surface));
   margin-top: var(--spacing-md);
 }
 
@@ -752,7 +752,7 @@ async function executeImport(): Promise<void> {
 
 /* Secret mapping */
 .secret-mapping {
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--border-default);
   padding-top: var(--spacing-md);
   margin-top: var(--spacing-md);
   margin-bottom: var(--spacing-md);
@@ -760,7 +760,7 @@ async function executeImport(): Promise<void> {
 
 .secret-hint {
   font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   margin: 0 0 var(--spacing-sm);
 }
 
@@ -774,18 +774,18 @@ async function executeImport(): Promise<void> {
 .secret-label {
   font-family: var(--font-family-mono, monospace);
   font-size: var(--font-size-sm);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
   min-width: 180px;
 }
 
 .secret-input {
   flex: 1;
   padding: var(--spacing-xs) var(--spacing-sm);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
-  background: var(--color-surface);
-  color: var(--color-text-primary);
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 /* Execute */
@@ -798,7 +798,7 @@ async function executeImport(): Promise<void> {
 
 .hint-text {
   font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 /* Import result */

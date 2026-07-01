@@ -121,7 +121,7 @@
       </button>
     </div>
     <!-- AI goal input strip (MVA-1380) -->
-    <div v-if="markRegionsMode && showAiGoalInput" class="flex items-center gap-2 px-3 py-2 border-b" style="border-color: var(--color-border); background: var(--color-bg-secondary)">
+    <div v-if="markRegionsMode && showAiGoalInput" class="flex items-center gap-2 px-3 py-2 border-b" style="border-color: var(--border-default); background: var(--color-bg-secondary)">
       <input
         v-model="aiGoalText"
         type="text"
