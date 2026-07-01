@@ -216,8 +216,8 @@ def resolve_project_root() -> str:
     # Re-anchor from the hard-coded parents[4] candidate and look around it.
     candidate = Path(__file__).resolve().parents[4]
     for probe in (
-        candidate / "code_source",          # /opt/autobot/code_source
-        candidate.parent / "code_source",   # one level higher, just in case
+        candidate / "code_source",  # /opt/autobot/code_source
+        candidate.parent / "code_source",  # one level higher, just in case
     ):
         if (probe / ".git").exists():
             logger.debug("resolve_project_root: found git root via code_source probe: %s", probe)
