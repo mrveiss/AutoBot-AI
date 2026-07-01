@@ -562,6 +562,11 @@ async def search(request: SearchRequest, req: Request):
     if kb_to_use is None:
         return error_response
 
+    # Guard: KB object exists but initialization failed (#10693 wire-in)
+    if hasattr(kb_to_use, "initialized") and not kb_to_use.initialized:
+        logger.warning("search: KB instance exists but is not initialized — returning not-initialized response")
+        return _build_kb_not_initialized_response()
+
     query = request.query
     logger.info("Search: %s", request.get_log_summary())
 

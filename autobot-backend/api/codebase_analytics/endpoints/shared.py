@@ -186,6 +186,48 @@ def get_project_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
 
+def resolve_project_root() -> str:
+    """
+    Resolve the real git repository root robustly for dev and deployed layouts.
+
+    Issue #10730: In the deployed layout autobot-backend is a standalone rsync
+    dir under /opt/autobot, so ``parents[4]`` resolves to /opt/autobot which is
+    NOT a git repo.  The actual repository lives in the sibling code_source dir.
+
+    Strategy (first match wins):
+    1. Walk up from this file looking for a directory containing `.git`.
+    2. If no git repo found walking up, look for a sibling/child ``code_source``
+       directory that itself contains ``.git`` (deployed layout).
+    3. Fall back to ``parents[4]`` so dev checkouts keep working unchanged.
+
+    Returns:
+        str: Absolute path to the resolved project root.
+    """
+    current = Path(__file__).resolve()
+
+    # Walk up the directory tree looking for a .git entry
+    for parent in current.parents:
+        if (parent / ".git").exists():
+            logger.debug("resolve_project_root: found git root via walk-up: %s", parent)
+            return str(parent)
+
+    # No .git found walking up — check for deployed-layout sibling code_source
+    # The walk exhausted all parents; the last ``parent`` is the filesystem root.
+    # Re-anchor from the hard-coded parents[4] candidate and look around it.
+    candidate = Path(__file__).resolve().parents[4]
+    for probe in (
+        candidate / "code_source",          # /opt/autobot/code_source
+        candidate.parent / "code_source",   # one level higher, just in case
+    ):
+        if (probe / ".git").exists():
+            logger.debug("resolve_project_root: found git root via code_source probe: %s", probe)
+            return str(probe)
+
+    # Final fallback: original parents[4] (works in dev checkout)
+    logger.debug("resolve_project_root: falling back to parents[4]: %s", candidate)
+    return str(candidate)
+
+
 def filter_problems_by_file_existence(
     problems: list[dict],
     root_path: "Path | str | None" = None,

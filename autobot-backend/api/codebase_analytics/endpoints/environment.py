@@ -23,6 +23,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import QUALITY_MODEL
 
 from ..analyzers import normalize_hardcode_record
+from .shared import resolve_project_root
 
 logger = get_logger(__name__)
 
@@ -37,8 +38,8 @@ _env_analysis_cache_lock = asyncio.Lock()
 
 
 def _get_project_root() -> str:
-    """Get project root path (4 levels up from this file)."""
-    return str(Path(__file__).resolve().parents[4])
+    """Get project root path — delegates to shared resolver (#10730)."""
+    return resolve_project_root()
 
 
 def _validate_env_path_security(path: str, project_root: str) -> JSONResponse | None:
