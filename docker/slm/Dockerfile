@@ -8,7 +8,7 @@
 # Author: mrveiss
 
 # ---- Dependencies stage ----
-ARG PYTHON_VERSION=3.12
+ARG PYTHON_VERSION=3.14
 FROM python:${PYTHON_VERSION}-slim-bookworm AS deps
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -34,7 +34,7 @@ RUN grep -v -E "(autobot_shared|^-r )" /tmp/requirements.txt > /app/requirements
 # ---- Production stage ----
 FROM python:${PYTHON_VERSION}-slim-bookworm AS production
 # Re-declare after FROM so it is in scope for the COPY paths below.
-ARG PYTHON_VERSION=3.12
+ARG PYTHON_VERSION=3.14
 
 ENV DEBIAN_FRONTEND=noninteractive
 
