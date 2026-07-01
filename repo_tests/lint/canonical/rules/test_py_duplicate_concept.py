@@ -26,7 +26,20 @@ def test_positive_flags_enhanced_with_base():
     assert "EnhancedFoo" in diags[0].message
 
 
+def test_positive_flags_infix_and_standalone():
+    """Infix (AIStackEnhancedSearchData) + function names fire without a base."""
+    diags = _check("positive_infix.py")
+    names = {d.message.split("'")[1] for d in diags}
+    assert names == {
+        "AIStackEnhancedSearchData",
+        "KnowledgeUnifiedSearchResponse",
+        "get_consolidated_stats",
+    }
+    assert all(d.severity == "block" for d in diags)
+
+
 def test_negative_fixture_produces_no_diagnostics():
+    # Canonical names + allow-listed 'unified diff' git term -> no diagnostics.
     assert _check("negative.py") == []
 
 
