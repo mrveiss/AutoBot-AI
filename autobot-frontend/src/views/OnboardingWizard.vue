@@ -450,7 +450,7 @@ onMounted(async () => {
      100vh forced the wizard-footer (Back/Next/Apply) below the fold */
   min-height: 100%;
   padding: 2rem 1rem;
-  background: var(--color-bg-primary, #0f1117);
+  background: var(--bg-primary, #0f1117);
 }
 
 .wizard-header {
@@ -484,9 +484,9 @@ onMounted(async () => {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 2px solid var(--color-border, #2a2d3a);
+  border: 2px solid var(--border-default, #2a2d3a);
   background: transparent;
-  color: var(--color-text-muted, #94a3b8);
+  color: var(--text-muted, #94a3b8);
   font-size: 0.75rem;
   font-weight: 600;
   display: flex;
@@ -498,7 +498,7 @@ onMounted(async () => {
 .step-label {
   font-size: 0.65rem;
   font-weight: 500;
-  color: var(--color-text-muted, #94a3b8);
+  color: var(--text-muted, #94a3b8);
   white-space: nowrap;
   transition: color 0.2s;
 }
@@ -510,7 +510,7 @@ onMounted(async () => {
 }
 
 .step-item.active .step-label {
-  color: var(--color-text, #e2e8f0);
+  color: var(--text-primary, #e2e8f0);
 }
 
 .step-item.done .step-circle {
@@ -526,7 +526,7 @@ onMounted(async () => {
 .step-connector {
   width: 2rem;
   height: 2px;
-  background: var(--color-border, #2a2d3a);
+  background: var(--border-default, #2a2d3a);
   margin-bottom: 1.1rem;
   flex-shrink: 0;
 }
@@ -541,8 +541,8 @@ onMounted(async () => {
 }
 
 .wizard-card {
-  background: var(--color-bg-elevated, #1a1d27);
-  border: 1px solid var(--color-border, #2a2d3a);
+  background: var(--bg-elevated, #1a1d27);
+  border: 1px solid var(--border-default, #2a2d3a);
   border-radius: 12px;
   padding: 2rem;
   width: 100%;
@@ -560,7 +560,7 @@ onMounted(async () => {
 .wizard-step-title {
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--color-text, #e2e8f0);
+  color: var(--text-primary, #e2e8f0);
   margin-bottom: 1.5rem;
 }
 
@@ -613,7 +613,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   padding: 3rem 0;
-  color: var(--color-text-muted, #94a3b8);
+  color: var(--text-muted, #94a3b8);
 }
 
 /* Doctor sections */
@@ -624,7 +624,7 @@ onMounted(async () => {
 .section-title {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--color-text-muted, #94a3b8);
+  color: var(--text-muted, #94a3b8);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.75rem;
@@ -637,8 +637,8 @@ onMounted(async () => {
 }
 
 .metric-card {
-  background: var(--color-bg-primary, #0f1117);
-  border: 1px solid var(--color-border, #2a2d3a);
+  background: var(--bg-primary, #0f1117);
+  border: 1px solid var(--border-default, #2a2d3a);
   border-radius: 8px;
   padding: 0.75rem 1rem;
   display: flex;
@@ -647,19 +647,19 @@ onMounted(async () => {
 
 .metric-label {
   font-size: 0.75rem;
-  color: var(--color-text-muted, #94a3b8);
+  color: var(--text-muted, #94a3b8);
   margin-bottom: 0.25rem;
 }
 
 .metric-value {
   font-size: 1rem;
   font-weight: 600;
-  color: var(--color-text, #e2e8f0);
+  color: var(--text-primary, #e2e8f0);
 }
 
 .metric-sub {
   font-size: 0.75rem;
-  color: var(--color-text-muted, #94a3b8);
+  color: var(--text-muted, #94a3b8);
   margin-top: 0.125rem;
 }
 
@@ -674,11 +674,11 @@ onMounted(async () => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid var(--color-border, #2a2d3a);
+  border-bottom: 1px solid var(--border-default, #2a2d3a);
 }
 
 .service-name {
-  color: var(--color-text, #e2e8f0);
+  color: var(--text-primary, #e2e8f0);
   font-size: 0.875rem;
   min-width: 80px;
 }
@@ -730,8 +730,8 @@ onMounted(async () => {
 
 .preset-card {
   position: relative;
-  background: var(--color-bg-primary, #0f1117);
-  border: 1px solid var(--color-border, #2a2d3a);
+  background: var(--bg-primary, #0f1117);
+  border: 1px solid var(--border-default, #2a2d3a);
   border-radius: 10px;
   padding: 1rem;
   cursor: pointer;
@@ -759,12 +759,12 @@ onMounted(async () => {
 .preset-title {
   font-weight: 600;
   font-size: 0.9rem;
-  color: var(--color-text, #e2e8f0);
+  color: var(--text-primary, #e2e8f0);
 }
 
 .preset-description {
   font-size: 0.8rem;
-  color: var(--color-text-muted, #94a3b8);
+  color: var(--text-muted, #94a3b8);
   line-height: 1.5;
   margin-bottom: 0.6rem;
 }
@@ -777,11 +777,11 @@ onMounted(async () => {
 
 .tag {
   font-size: 0.7rem;
-  background: var(--color-bg-elevated, #1a1d27);
-  color: var(--color-text-muted, #94a3b8);
+  background: var(--bg-elevated, #1a1d27);
+  color: var(--text-muted, #94a3b8);
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
-  border: 1px solid var(--color-border, #2a2d3a);
+  border: 1px solid var(--border-default, #2a2d3a);
 }
 
 .tag-more {
@@ -797,8 +797,8 @@ onMounted(async () => {
 
 /* Review */
 .review-box {
-  background: var(--color-bg-primary, #0f1117);
-  border: 1px solid var(--color-border, #2a2d3a);
+  background: var(--bg-primary, #0f1117);
+  border: 1px solid var(--border-default, #2a2d3a);
   border-radius: 10px;
   padding: 1.25rem;
 }
@@ -808,7 +808,7 @@ onMounted(async () => {
   align-items: flex-start;
   gap: 1rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid var(--color-border, #2a2d3a);
+  border-bottom: 1px solid var(--border-default, #2a2d3a);
   font-size: 0.875rem;
 }
 
@@ -817,13 +817,13 @@ onMounted(async () => {
 }
 
 .review-label {
-  color: var(--color-text-muted, #94a3b8);
+  color: var(--text-muted, #94a3b8);
   min-width: 90px;
   flex-shrink: 0;
 }
 
 .review-value {
-  color: var(--color-text, #e2e8f0);
+  color: var(--text-primary, #e2e8f0);
 }
 
 /* Wizard footer */
@@ -832,7 +832,7 @@ onMounted(async () => {
   align-items: center;
   margin-top: 2rem;
   padding-top: 1.25rem;
-  border-top: 1px solid var(--color-border, #2a2d3a);
+  border-top: 1px solid var(--border-default, #2a2d3a);
   gap: 0.75rem;
 }
 
@@ -861,8 +861,8 @@ onMounted(async () => {
 
 .btn-secondary {
   background: transparent;
-  color: var(--color-text-muted, #94a3b8);
-  border: 1px solid var(--color-border, #2a2d3a);
+  color: var(--text-muted, #94a3b8);
+  border: 1px solid var(--border-default, #2a2d3a);
   border-radius: 6px;
   padding: 0.5rem 1.25rem;
   font-size: 0.875rem;
@@ -874,7 +874,7 @@ onMounted(async () => {
 
 .btn-secondary:hover:not(:disabled) {
   border-color: var(--color-accent, #6366f1);
-  color: var(--color-text, #e2e8f0);
+  color: var(--text-primary, #e2e8f0);
 }
 
 .btn-secondary:disabled {

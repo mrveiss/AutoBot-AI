@@ -79,7 +79,7 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-2);
   font-size: var(--text-sm);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .vbi-error {
@@ -97,7 +97,7 @@ onMounted(() => {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .vbi-value {
@@ -109,17 +109,17 @@ onMounted(() => {
 .vbi-bundle-name {
   font-size: var(--text-base);
   font-weight: 600;
-  color: var(--color-text, #111827);
+  color: var(--text-primary, #111827);
 }
 
 .vbi-tool-count {
   font-size: var(--text-sm);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .vbi-resolution {
   font-size: var(--text-xs);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   display: flex;
   align-items: center;
   gap: var(--spacing-1);
@@ -145,6 +145,6 @@ onMounted(() => {
 
 .vbi-res--global_env {
   background: var(--color-surface-alt, #f9fafb);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 </style>

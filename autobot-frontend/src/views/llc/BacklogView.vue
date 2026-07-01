@@ -431,8 +431,8 @@ onMounted(fetchBacklog)
   height: 100%;
   padding: 1.5rem;
   gap: 1rem;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .backlog-header {
@@ -455,7 +455,7 @@ onMounted(fetchBacklog)
 
 .item-count {
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .header-actions {
@@ -472,10 +472,10 @@ onMounted(fetchBacklog)
 .filter-select,
 .filter-search {
   padding: 0.4rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
@@ -487,7 +487,7 @@ onMounted(fetchBacklog)
 .backlog-table-wrapper {
   flex: 1;
   overflow: auto;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
 }
 
@@ -501,19 +501,19 @@ onMounted(fetchBacklog)
   padding: 0.625rem 0.75rem;
   text-align: left;
   font-weight: 600;
-  background: var(--color-surface-elevated, #f9fafb);
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated, #f9fafb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
   white-space: nowrap;
 }
 
 .backlog-row {
-  border-bottom: 1px solid var(--color-border, #f3f4f6);
+  border-bottom: 1px solid var(--border-default, #f3f4f6);
   cursor: pointer;
   transition: background 0.1s;
 }
 
 .backlog-row:hover {
-  background: var(--color-surface-hover, #f9fafb);
+  background: var(--bg-hover, #f9fafb);
 }
 
 .backlog-row.selected {
@@ -535,7 +535,7 @@ onMounted(fetchBacklog)
 .item-identifier {
   font-family: monospace;
   font-size: 0.8rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .type-badge,
@@ -588,7 +588,7 @@ onMounted(fetchBacklog)
 .loading-state {
   text-align: center;
   padding: 2rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .modal-overlay {
@@ -602,7 +602,7 @@ onMounted(fetchBacklog)
 }
 
 .modal-panel {
-  background: var(--color-surface, #fff);
+  background: var(--bg-surface, #fff);
   border-radius: 0.75rem;
   padding: 1.5rem;
   width: 100%;
@@ -629,7 +629,7 @@ onMounted(fetchBacklog)
 .form-field label {
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .form-row {
@@ -645,10 +645,10 @@ onMounted(fetchBacklog)
 .form-select,
 .form-textarea {
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
   font-size: 0.875rem;
   width: 100%;
 }
@@ -672,15 +672,15 @@ onMounted(fetchBacklog)
 .ac-header label {
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .btn-suggest {
   font-size: 0.8rem;
   padding: 0.25rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
   cursor: pointer;
 }
 
@@ -694,9 +694,9 @@ onMounted(fetchBacklog)
   flex-direction: column;
   gap: 0.375rem;
   padding: 0.5rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
 }
 
 .ac-item {
@@ -742,9 +742,9 @@ onMounted(fetchBacklog)
   align-items: center;
   gap: 0.375rem;
   padding: 0.5rem 1rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
-  border: 1px solid var(--color-border, #d1d5db);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   font-weight: 500;
@@ -753,7 +753,7 @@ onMounted(fetchBacklog)
 }
 
 .btn-secondary:hover {
-  background: var(--color-surface-hover, #f9fafb);
+  background: var(--bg-hover, #f9fafb);
 }
 
 .btn-icon {

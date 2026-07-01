@@ -172,7 +172,7 @@ onMounted(() => {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .audit-controls {
@@ -183,10 +183,10 @@ onMounted(() => {
 
 .filter-input {
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
-  background-color: var(--color-background);
-  color: var(--color-text-primary);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
   font-size: 0.875rem;
   min-width: 200px;
 }
@@ -199,10 +199,10 @@ onMounted(() => {
 .btn-refresh {
   padding: 0.5rem;
   background: none;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   cursor: pointer;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   transition: all 0.2s;
 }
 
@@ -237,7 +237,7 @@ onMounted(() => {
   justify-content: center;
   gap: 0.75rem;
   padding: 3rem;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .spinner {
@@ -269,7 +269,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   padding: 3rem;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .empty-icon {
@@ -281,7 +281,7 @@ onMounted(() => {
 
 .audit-table-container {
   overflow-x: auto;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
 }
 
@@ -292,20 +292,20 @@ onMounted(() => {
 
 .audit-table th {
   background-color: var(--color-background-secondary);
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   font-weight: 600;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 0.75rem 1rem;
   text-align: left;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .audit-table td {
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--border-default);
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
@@ -327,7 +327,7 @@ onMounted(() => {
 
 .timestamp {
   font-family: monospace;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -344,7 +344,7 @@ onMounted(() => {
 }
 
 .operation {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .status-badge {

@@ -305,7 +305,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
   gap: var(--spacing-lg, 24px);
   margin-bottom: var(--spacing-lg, 24px);
   padding-bottom: var(--spacing-md, 16px);
-  border-bottom: 1px solid var(--color-border, #333);
+  border-bottom: 1px solid var(--border-default, #333);
 }
 
 .step-dot {
@@ -326,7 +326,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--color-border, #444);
+  background: var(--border-default, #444);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -346,7 +346,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 
 .step-label {
   font-size: var(--text-xs);
-  color: var(--color-text-secondary, #999);
+  color: var(--text-secondary, #999);
 }
 
 .step-content {
@@ -354,7 +354,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 }
 
 .step-description {
-  color: var(--color-text-secondary, #999);
+  color: var(--text-secondary, #999);
   margin-bottom: var(--spacing-md, 16px);
 }
 
@@ -369,7 +369,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
   align-items: center;
   gap: var(--spacing-md, 16px);
   padding: var(--spacing-md, 16px);
-  border: 1px solid var(--color-border, #333);
+  border: 1px solid var(--border-default, #333);
   border-radius: var(--radius-md, 8px);
   cursor: pointer;
   transition: border-color var(--duration-200);
@@ -406,7 +406,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 
 .role-desc {
   font-size: 0.85rem;
-  color: var(--color-text-secondary, #999);
+  color: var(--text-secondary, #999);
 }
 
 .key-list {
@@ -416,7 +416,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 }
 
 .key-card {
-  border: 1px solid var(--color-border, #333);
+  border: 1px solid var(--border-default, #333);
   border-radius: var(--radius-md, 8px);
   overflow: hidden;
 }
@@ -440,7 +440,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 }
 
 .status-missing {
-  color: var(--color-danger, #ef4444);
+  color: var(--color-error, #ef4444);
 }
 
 .status-warning {
@@ -460,18 +460,18 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 }
 
 .key-badge.required {
-  background: var(--color-danger, #ef4444);
+  background: var(--color-error, #ef4444);
   color: #fff;
 }
 
 .key-badge.optional {
-  background: var(--color-border, #444);
-  color: var(--color-text-secondary, #999);
+  background: var(--border-default, #444);
+  color: var(--text-secondary, #999);
 }
 
 .key-role {
   font-size: 0.8rem;
-  color: var(--color-text-secondary, #999);
+  color: var(--text-secondary, #999);
 }
 
 .key-body {
@@ -481,7 +481,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 .key-desc {
   margin-bottom: var(--spacing-sm, 8px);
   font-size: 0.9rem;
-  color: var(--color-text-secondary, #999);
+  color: var(--text-secondary, #999);
 }
 
 .license-link {
@@ -510,19 +510,19 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 .key-input {
   flex: 1;
   padding: var(--spacing-sm, 8px);
-  border: 1px solid var(--color-border, #333);
+  border: 1px solid var(--border-default, #333);
   border-radius: var(--radius-sm, 4px);
   background: var(--bg-primary, #0f0f23);
-  color: var(--color-text, #e0e0e0);
+  color: var(--text-primary, #e0e0e0);
   font-family: monospace;
 }
 
 .toggle-visibility {
   padding: var(--spacing-sm, 8px);
-  border: 1px solid var(--color-border, #333);
+  border: 1px solid var(--border-default, #333);
   border-radius: var(--radius-sm, 4px);
   background: var(--bg-secondary, #1a1a2e);
-  color: var(--color-text-secondary, #999);
+  color: var(--text-secondary, #999);
   cursor: pointer;
 }
 
@@ -538,7 +538,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
   align-items: center;
   gap: var(--spacing-sm, 8px);
   padding: var(--spacing-sm, 8px) var(--spacing-md, 16px);
-  border: 1px solid var(--color-border, #333);
+  border: 1px solid var(--border-default, #333);
   border-radius: var(--radius-sm, 4px);
 }
 
@@ -550,7 +550,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 
 .summary-status {
   font-size: 0.85rem;
-  color: var(--color-text-secondary, #999);
+  color: var(--text-secondary, #999);
 }
 
 .secrets-link {
@@ -570,7 +570,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 .empty-state {
   text-align: center;
   padding: var(--spacing-xl, 32px);
-  color: var(--color-text-secondary, #999);
+  color: var(--text-secondary, #999);
 }
 
 .empty-state i {
@@ -608,7 +608,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 
 .btn-secondary {
   background: transparent;
-  border: 1px solid var(--color-border, #333);
-  color: var(--color-text, #e0e0e0);
+  border: 1px solid var(--border-default, #333);
+  color: var(--text-primary, #e0e0e0);
 }
 </style>

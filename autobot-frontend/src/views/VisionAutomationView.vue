@@ -413,13 +413,13 @@ onMounted(async () => {
 .page-title {
   font-size: 1.375rem;
   font-weight: 700;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
   margin: 0;
 }
 
 .page-subtitle {
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   margin: 0.25rem 0 0;
 }
 
@@ -431,7 +431,7 @@ onMounted(async () => {
 }
 
 .status-label {
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .session-card {
@@ -441,7 +441,7 @@ onMounted(async () => {
 .tab-nav {
   display: flex;
   gap: 0.25rem;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
   padding-bottom: 0;
   flex-wrap: wrap;
 }
@@ -453,7 +453,7 @@ onMounted(async () => {
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -462,7 +462,7 @@ onMounted(async () => {
 }
 
 .tab-btn:hover {
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
 }
 
 .tab-btn.active {
@@ -481,8 +481,8 @@ onMounted(async () => {
 }
 
 .card {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
   overflow: hidden;
 }
@@ -492,14 +492,14 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
   background: var(--color-surface-secondary, #f9fafb);
 }
 
 .card-title {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
 }
 
 .card-body {
@@ -518,10 +518,10 @@ onMounted(async () => {
   min-width: 0;
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text-primary, #111827);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary, #111827);
 }
 
 .field-input--narrow {
@@ -533,7 +533,7 @@ onMounted(async () => {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   white-space: nowrap;
 }
 
@@ -544,7 +544,7 @@ onMounted(async () => {
 
 .range-value {
   font-weight: 600;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
   min-width: 3rem;
 }
 
@@ -583,7 +583,7 @@ onMounted(async () => {
   align-items: center;
   padding: 0.5rem 1rem;
   background: var(--color-surface-secondary, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
   min-width: 5rem;
 }
@@ -596,14 +596,14 @@ onMounted(async () => {
 
 .stat-label {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   text-align: center;
 }
 
 .section-subheading {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
   margin: 0 0 0.75rem;
 }
 
@@ -625,12 +625,12 @@ onMounted(async () => {
 .data-table td {
   padding: 0.5rem 0.75rem;
   text-align: left;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
 }
 
 .data-table th {
   font-weight: 600;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   background: var(--color-surface-secondary, #f9fafb);
   font-size: 0.75rem;
   text-transform: uppercase;
@@ -640,7 +640,7 @@ onMounted(async () => {
 .cell-mono {
   font-family: monospace;
   font-size: 0.8125rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .cell-text {
@@ -682,7 +682,7 @@ onMounted(async () => {
 
 .badge-neutral {
   background: var(--color-surface-secondary, #f3f4f6);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .chip {
@@ -692,12 +692,12 @@ onMounted(async () => {
   background: var(--color-surface-secondary, #e5e7eb);
   border-radius: 0.25rem;
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #374151);
+  color: var(--text-secondary, #374151);
 }
 
 .result-summary {
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   margin: 0 0 0.75rem;
 }
 
@@ -711,7 +711,7 @@ onMounted(async () => {
 
 .ocr-region-item {
   background: var(--color-surface-secondary, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   padding: 0.5rem;
 }
@@ -722,7 +722,7 @@ onMounted(async () => {
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
 }
 
 .opportunities-list {
@@ -744,7 +744,7 @@ onMounted(async () => {
   align-items: center;
   gap: 0.5rem;
   padding: 2rem 1rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   font-size: 0.875rem;
   text-align: center;
 }

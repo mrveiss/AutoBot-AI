@@ -231,9 +231,9 @@ const downloadImage = (url: string, index: number) => {
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  border: 1px dashed var(--color-border, #e5e7eb);
+  border: 1px dashed var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--text-muted, #6b7280);
 }
 
 .placeholder-content {
@@ -262,7 +262,7 @@ const downloadImage = (url: string, index: number) => {
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
   background: var(--color-surface-2, #f3f4f6);
-  color: var(--color-text-muted, #6b7280);
+  color: var(--text-muted, #6b7280);
   font-weight: 500;
 }
 
@@ -339,7 +339,7 @@ const downloadImage = (url: string, index: number) => {
   align-items: center;
   justify-content: center;
   background: var(--color-surface-2, #f3f4f6);
-  color: var(--color-text-muted, #6b7280);
+  color: var(--text-muted, #6b7280);
   gap: 0.5rem;
   font-size: 0.875rem;
 }
@@ -349,7 +349,7 @@ const downloadImage = (url: string, index: number) => {
   align-items: flex-start;
   gap: 0.375rem;
   font-size: 0.8125rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--text-muted, #6b7280);
   font-style: italic;
   line-height: 1.4;
   margin: 0;
@@ -367,10 +367,10 @@ const downloadImage = (url: string, index: number) => {
   gap: 0.25rem;
   padding: 0.25rem 0.625rem;
   font-size: 0.75rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text, #374151);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary, #374151);
   cursor: pointer;
   transition: background 0.15s;
 }

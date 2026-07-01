@@ -476,8 +476,8 @@ onMounted(async () => {
   height: 100%;
   padding: 1.5rem;
   gap: 1.25rem;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   overflow-y: auto;
 }
 
@@ -495,9 +495,9 @@ onMounted(async () => {
 
 .btn-export {
   padding: 0.4rem 1rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
-  border: 1px solid var(--color-border, #d1d5db);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   cursor: pointer;
@@ -513,8 +513,8 @@ onMounted(async () => {
   flex: 1;
   min-width: 160px;
   padding: 1rem;
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
   display: flex;
   flex-direction: column;
@@ -523,7 +523,7 @@ onMounted(async () => {
 
 .card-label {
   font-size: 0.8rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   font-weight: 500;
 }
 
@@ -534,7 +534,7 @@ onMounted(async () => {
 
 .card-sub {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   word-break: break-all;
 }
 
@@ -546,8 +546,8 @@ onMounted(async () => {
 
 .budget-section,
 .chart-section {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
   padding: 1rem;
 }
@@ -593,7 +593,7 @@ onMounted(async () => {
 .gauge-track {
   flex: 1;
   height: 0.5rem;
-  background: var(--color-surface-elevated, #f3f4f6);
+  background: var(--bg-elevated, #f3f4f6);
   border-radius: 9999px;
   overflow: hidden;
 }
@@ -620,11 +620,11 @@ onMounted(async () => {
   min-width: 12rem;
   text-align: right;
   font-size: 0.8rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .shadow-cost {
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   font-size: 0.75rem;
   margin-left: 0.25rem;
 }
@@ -632,11 +632,11 @@ onMounted(async () => {
 .btn-settings {
   padding: 0.2rem 0.45rem;
   background: transparent;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.25rem;
   cursor: pointer;
   font-size: 0.85rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   opacity: 0.6;
   transition: opacity 0.15s;
 }
@@ -655,7 +655,7 @@ onMounted(async () => {
 }
 
 .modal-box {
-  background: var(--color-surface, #fff);
+  background: var(--bg-surface, #fff);
   border-radius: 0.75rem;
   padding: 1.5rem;
   width: 100%;
@@ -683,13 +683,13 @@ onMounted(async () => {
   border: none;
   cursor: pointer;
   font-size: 1rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   padding: 0.2rem;
 }
 
 .modal-agent-name {
   font-size: 0.85rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   margin-top: -0.5rem;
 }
 
@@ -707,7 +707,7 @@ onMounted(async () => {
 .mode-toggle {
   display: flex;
   gap: 0;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
   overflow: hidden;
 }
@@ -719,7 +719,7 @@ onMounted(async () => {
   border: none;
   cursor: pointer;
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   transition: background 0.15s, color 0.15s;
 }
 
@@ -731,25 +731,25 @@ onMounted(async () => {
 .input-prefix-wrap {
   display: flex;
   align-items: center;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
   overflow: hidden;
 }
 
 .input-prefix {
   padding: 0.45rem 0.6rem;
-  background: var(--color-surface-elevated, #f9fafb);
-  border-right: 1px solid var(--color-border, #d1d5db);
+  background: var(--bg-elevated, #f9fafb);
+  border-right: 1px solid var(--border-default, #d1d5db);
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .field-input {
   padding: 0.45rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
   font-size: 0.875rem;
   width: 100%;
 }
@@ -761,7 +761,7 @@ onMounted(async () => {
 
 .field-hint {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   margin: 0;
 }
 
@@ -804,8 +804,8 @@ onMounted(async () => {
 .btn-secondary {
   padding: 0.45rem 1rem;
   background: transparent;
-  color: var(--color-text);
-  border: 1px solid var(--color-border, #d1d5db);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   cursor: pointer;
@@ -841,7 +841,7 @@ onMounted(async () => {
 
 .bar-label {
   font-size: 0.6rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   transform: rotate(-45deg);
   transform-origin: center;
   white-space: nowrap;
@@ -857,21 +857,21 @@ onMounted(async () => {
 .filter-select,
 .filter-date {
   padding: 0.4rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
 .date-sep {
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .table-wrapper {
   overflow: auto;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
 }
 
@@ -885,14 +885,14 @@ onMounted(async () => {
   padding: 0.625rem 0.75rem;
   text-align: left;
   font-weight: 600;
-  background: var(--color-surface-elevated, #f9fafb);
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated, #f9fafb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
   white-space: nowrap;
 }
 
 .cost-table td {
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--color-border, #f3f4f6);
+  border-bottom: 1px solid var(--border-default, #f3f4f6);
 }
 
 .num-cell {
@@ -903,6 +903,6 @@ onMounted(async () => {
 .state-msg {
   text-align: center;
   padding: 2rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 </style>

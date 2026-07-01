@@ -183,6 +183,16 @@
   @apply bg-transparent text-autobot-text-primary border border-autobot-border hover:bg-autobot-bg-hover hover:text-autobot-text-primary;
 }
 
+/* Small button modifier — pairs with `btn` for compact controls. */
+@utility btn-sm {
+  @apply py-1 px-2 text-xs;
+}
+
+/* Icon-only button — square padding, centered glyph; theme-aware surface. */
+@utility btn-icon {
+  @apply inline-flex items-center justify-center p-2 rounded text-autobot-text-secondary hover:text-autobot-text-primary hover:bg-autobot-bg-hover transition-all duration-150 ease-linear;
+}
+
 @utility card {
   @apply relative flex flex-col min-w-0 wrap-break-word bg-autobot-bg-card rounded-lg shadow-xl-soft;
 }
@@ -207,8 +217,43 @@
   @apply border-0 px-3 py-3 placeholder-autobot-text-muted text-autobot-text-primary bg-autobot-bg-input rounded text-sm shadow focus:outline-none focus:ring-2 focus:ring-autobot-primary w-full ease-linear transition-all duration-150;
 }
 
+/* form-input — alias of input-field so views using either name render styled. */
+@utility form-input {
+  @apply input-field;
+}
+
+/* form-group — vertical field wrapper with label/control spacing. */
+@utility form-group {
+  @apply flex flex-col gap-1.5 mb-4;
+}
+
 @utility label {
   @apply block uppercase text-autobot-text-secondary text-xs font-bold mb-2;
+}
+
+/* ============================================================================
+ * Modal primitives — shared theme-aware overlay + dialog scaffold.
+ * Components that need bespoke layout should migrate to ui/BaseModal (C2b);
+ * these exist so referenced classes never render unstyled.
+ * ========================================================================== */
+@utility modal-overlay {
+  @apply fixed inset-0 z-modal-backdrop flex items-center justify-center p-4 bg-[var(--bg-overlay,rgba(0,0,0,0.5))];
+}
+
+@utility modal {
+  @apply relative z-modal flex flex-col w-full max-w-lg max-h-[90vh] overflow-hidden rounded-lg border border-autobot-border bg-autobot-bg-elevated text-autobot-text-primary shadow-2xl;
+}
+
+@utility modal-header {
+  @apply flex items-center justify-between px-6 py-4 border-b border-autobot-border;
+}
+
+@utility modal-body {
+  @apply flex-1 overflow-y-auto px-6 py-4;
+}
+
+@utility modal-footer {
+  @apply flex items-center justify-end gap-3 px-6 py-4 border-t border-autobot-border;
 }
 
 @layer base {

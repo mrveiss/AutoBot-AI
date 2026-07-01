@@ -1546,7 +1546,7 @@ export default {
 }
 
 .control-button.danger:hover:not(:disabled) {
-  background-color: var(--color-danger);
+  background-color: var(--color-error);
 }
 
 .terminal-status-bar {
@@ -1576,7 +1576,7 @@ export default {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: var(--color-danger);
+  background-color: var(--color-error);
 }
 
 .connection-status.connected .status-dot {
@@ -1789,7 +1789,7 @@ export default {
 }
 
 .btn-danger {
-  background-color: var(--color-danger);
+  background-color: var(--color-error);
   color: var(--text-on-error);
 }
 
@@ -1872,7 +1872,7 @@ export default {
 }
 
 .confirmation-modal.emergency {
-  border-color: var(--color-danger);
+  border-color: var(--color-error);
   box-shadow: 0 10px 30px var(--color-danger-bg);
 }
 
@@ -1962,7 +1962,7 @@ export default {
 .risk-level.critical {
   background-color: var(--color-danger-bg);
   color: var(--color-error-light);
-  border: 1px solid var(--color-danger);
+  border: 1px solid var(--color-error);
   animation: pulse-danger 2s infinite;
 }
 
@@ -2048,7 +2048,7 @@ export default {
 }
 
 .line-command.critical {
-  border-left: 3px solid var(--color-danger);
+  border-left: 3px solid var(--color-error);
   background-color: var(--color-danger-bg);
 }
 

@@ -175,7 +175,7 @@ onMounted(async () => {
   padding: 0.75rem 1rem;
   border-radius: var(--radius-md, 8px);
   background: var(--color-danger-bg, #fae5e1);
-  color: var(--color-danger, #cb3326);
+  color: var(--color-error, #cb3326);
   font-size: 0.875rem;
 }
 

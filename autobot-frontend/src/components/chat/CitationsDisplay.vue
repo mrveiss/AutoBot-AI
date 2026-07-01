@@ -384,7 +384,7 @@ const citationTitle = (citation: Citation): string => {
 
 .reliability-low {
   background: rgba(239, 68, 68, 0.15);
-  color: var(--color-danger, #ef4444);
+  color: var(--color-error, #ef4444);
 }
 
 /* Transition */

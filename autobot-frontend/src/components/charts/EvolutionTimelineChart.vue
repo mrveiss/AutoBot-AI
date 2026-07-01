@@ -119,7 +119,7 @@ const chartOptions = computed<ApexOptions>(() => ({
     horizontalAlign: 'left',
   },
   grid: {
-    borderColor: 'var(--color-border, #2d3748)',
+    borderColor: 'var(--border-default, #2d3748)',
     strokeDashArray: 4,
   },
   colors: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'],

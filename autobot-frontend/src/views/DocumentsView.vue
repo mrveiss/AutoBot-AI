@@ -316,8 +316,8 @@ function showError(msg: string) {
 .documents-view {
   display: flex;
   height: 100%;
-  background: var(--color-background, #1a1a1a);
-  color: var(--color-text, #e0e0e0);
+  background: var(--bg-primary, #1a1a1a);
+  color: var(--text-primary, #e0e0e0);
   position: relative;
   overflow: hidden;
 }
@@ -329,7 +329,7 @@ function showError(msg: string) {
   max-width: 360px;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--color-border, #333);
+  border-right: 1px solid var(--border-default, #333);
   background: var(--color-background-secondary, #222);
   overflow: hidden;
 }
@@ -339,7 +339,7 @@ function showError(msg: string) {
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-3-5) var(--spacing-4);
-  border-bottom: 1px solid var(--color-border, #333);
+  border-bottom: 1px solid var(--border-default, #333);
   flex-shrink: 0;
 }
 
@@ -360,19 +360,19 @@ function showError(msg: string) {
   gap: var(--spacing-2);
   padding: var(--spacing-6);
   text-align: center;
-  color: var(--color-text-muted, #888);
+  color: var(--text-muted, #888);
   font-size: 0.9rem;
 }
 
 .empty-icon {
   font-size: 2rem;
   margin-bottom: var(--spacing-2);
-  color: var(--color-text-muted, #555);
+  color: var(--text-muted, #555);
 }
 
 .empty-hint {
   font-size: 0.8rem;
-  color: var(--color-text-muted, #666);
+  color: var(--text-muted, #666);
 }
 
 .chat-link {
@@ -398,7 +398,7 @@ function showError(msg: string) {
   flex-direction: column;
   padding: var(--spacing-2-5) var(--spacing-4);
   cursor: pointer;
-  border-bottom: 1px solid var(--color-border, #2a2a2a);
+  border-bottom: 1px solid var(--border-default, #2a2a2a);
   gap: var(--spacing-0-5);
   position: relative;
   transition: background 0.12s;
@@ -424,7 +424,7 @@ function showError(msg: string) {
 
 .doc-meta {
   font-size: 0.72rem;
-  color: var(--color-text-muted, #888);
+  color: var(--text-muted, #888);
 }
 
 .delete-btn {
@@ -447,13 +447,13 @@ function showError(msg: string) {
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-2) var(--spacing-3);
-  border-top: 1px solid var(--color-border, #333);
+  border-top: 1px solid var(--border-default, #333);
   font-size: 0.8rem;
   flex-shrink: 0;
 }
 
 .page-info {
-  color: var(--color-text-muted, #888);
+  color: var(--text-muted, #888);
 }
 
 /* Main panel */
@@ -471,13 +471,13 @@ function showError(msg: string) {
   align-items: center;
   justify-content: center;
   gap: var(--spacing-3);
-  color: var(--color-text-muted, #888);
+  color: var(--text-muted, #888);
   font-size: 0.95rem;
 }
 
 .no-selection-icon {
   font-size: var(--text-5xl);
-  color: var(--color-text-muted, #444);
+  color: var(--text-muted, #444);
 }
 
 /* TASK 12: rich empty state */
@@ -532,7 +532,7 @@ function showError(msg: string) {
 
 .modal-card {
   background: var(--color-background-secondary, #252525);
-  border: 1px solid var(--color-border, #444);
+  border: 1px solid var(--border-default, #444);
   border-radius: var(--radius-lg);
   padding: var(--spacing-6);
   width: 360px;
@@ -548,7 +548,7 @@ function showError(msg: string) {
 .modal-body {
   margin: var(--spacing-0) var(--spacing-0) var(--spacing-5);
   font-size: 0.9rem;
-  color: var(--color-text-muted, #bbb);
+  color: var(--text-muted, #bbb);
   line-height: 1.5;
 }
 

@@ -554,7 +554,7 @@ onMounted(loadPolicies)
 
 .page-subtitle {
   font-size: var(--text-sm);
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -569,7 +569,7 @@ onMounted(loadPolicies)
   align-items: center;
   gap: var(--spacing-2);
   background: var(--color-danger-bg, #fee2e2);
-  color: var(--color-danger, #dc2626);
+  color: var(--color-error, #dc2626);
   border: 1px solid var(--color-danger-border, #fca5a5);
   border-radius: var(--radius-md);
   padding: var(--spacing-3) var(--spacing-4);
@@ -602,23 +602,23 @@ onMounted(loadPolicies)
 .filter-label {
   font-size: var(--text-xs);
   font-weight: 500;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .filter-select {
   padding: var(--spacing-2) var(--spacing-3);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background: var(--color-bg-input);
-  color: var(--color-text);
+  color: var(--text-primary);
   font-size: var(--text-sm);
   cursor: pointer;
 }
 
 .table-section {
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
@@ -627,7 +627,7 @@ onMounted(loadPolicies)
 .empty-state {
   padding: var(--spacing-12);
   text-align: center;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   font-size: var(--text-sm);
   display: flex;
   flex-direction: column;
@@ -654,7 +654,7 @@ onMounted(loadPolicies)
   padding: var(--spacing-3) var(--spacing-4);
   text-align: left;
   font-weight: 500;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -664,7 +664,7 @@ onMounted(loadPolicies)
 .data-table td {
   padding: var(--spacing-3) var(--spacing-4);
   vertical-align: middle;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--border-default);
 }
 
 .data-table tbody tr:hover {
@@ -683,7 +683,7 @@ onMounted(loadPolicies)
 
 .policy-desc {
   font-size: var(--text-xs);
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .monospace {
@@ -717,12 +717,12 @@ onMounted(loadPolicies)
 
 .badge-inactive {
   background: var(--color-bg-subtle);
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .badge-danger {
   background: var(--color-danger-bg, #fee2e2);
-  color: var(--color-danger, #dc2626);
+  color: var(--color-error, #dc2626);
 }
 
 .badge-warning {
@@ -766,8 +766,8 @@ onMounted(loadPolicies)
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-4);
   background: var(--color-bg-input);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -785,7 +785,7 @@ onMounted(loadPolicies)
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-4);
-  background: var(--color-danger, #dc2626);
+  background: var(--color-error, #dc2626);
   color: white;
   border: none;
   border-radius: var(--radius-md);
@@ -809,13 +809,13 @@ onMounted(loadPolicies)
   border: none;
   cursor: pointer;
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   transition: background 0.15s, color 0.15s;
 }
 
 .btn-icon:hover {
   background: var(--color-bg-hover);
-  color: var(--color-text);
+  color: var(--text-primary);
 }
 
 .btn-icon.btn-primary:hover {
@@ -825,12 +825,12 @@ onMounted(loadPolicies)
 
 .btn-icon.btn-danger:hover {
   background: var(--color-danger-bg, #fee2e2);
-  color: var(--color-danger, #dc2626);
+  color: var(--color-error, #dc2626);
 }
 
 /* Agent pause status section */
 .section-card {
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   padding: var(--spacing-5);
 }
@@ -850,10 +850,10 @@ onMounted(loadPolicies)
 .text-input {
   flex: 1;
   padding: var(--spacing-2) var(--spacing-3);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background: var(--color-bg-input);
-  color: var(--color-text);
+  color: var(--text-primary);
   font-size: var(--text-sm);
 }
 
@@ -879,7 +879,7 @@ onMounted(loadPolicies)
   min-width: 70px;
 }
 
-.text-danger { color: var(--color-danger, #dc2626); font-weight: 500; }
+.text-danger { color: var(--color-error, #dc2626); font-weight: 500; }
 .text-success { color: var(--color-success, #16a34a); font-weight: 500; }
 
 .mt-2 { margin-top: var(--spacing-2); }
@@ -919,7 +919,7 @@ onMounted(loadPolicies)
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-5) var(--spacing-6);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .modal-header h3 {
@@ -953,11 +953,11 @@ onMounted(loadPolicies)
 .form-label {
   font-size: var(--text-sm);
   font-weight: 500;
-  color: var(--color-text);
+  color: var(--text-primary);
 }
 
 .required {
-  color: var(--color-danger, #dc2626);
+  color: var(--color-error, #dc2626);
 }
 
 .checkbox-label {
@@ -979,13 +979,13 @@ onMounted(loadPolicies)
   justify-content: flex-end;
   gap: var(--spacing-2);
   padding-top: var(--spacing-2);
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--border-default);
 }
 
 .modal-body-text {
   padding: var(--spacing-5) var(--spacing-6);
   font-size: var(--text-sm);
-  color: var(--color-text);
+  color: var(--text-primary);
   margin: 0;
 }
 </style>

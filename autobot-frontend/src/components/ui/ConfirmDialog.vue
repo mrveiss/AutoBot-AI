@@ -138,7 +138,7 @@ watch(dialogVisible, (visible) => {
 }
 
 .confirm-btn-confirm {
-  background: var(--color-danger, var(--color-primary));
+  background: var(--color-error, var(--color-primary));
   color: var(--text-inverse, #fff);
 }
 

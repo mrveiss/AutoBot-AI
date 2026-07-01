@@ -1539,7 +1539,7 @@ onUnmounted(() => {
 }
 
 .image-gen-dialog {
-  background: var(--color-surface, #fff);
+  background: var(--bg-surface, #fff);
   border-radius: 0.75rem;
   padding: 1.5rem;
   width: 100%;
@@ -1556,26 +1556,26 @@ onUnmounted(() => {
   gap: 0.5rem;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--color-text, #111827);
+  color: var(--text-primary, #111827);
   margin: 0;
 }
 
 .image-gen-label {
   font-size: 0.8125rem;
   font-weight: 500;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--text-muted, #6b7280);
 }
 
 .image-gen-prompt {
   width: 100%;
   padding: 0.625rem 0.75rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
   font-size: 0.875rem;
   resize: none;
   font-family: inherit;
-  color: var(--color-text, #111827);
-  background: var(--color-surface, #fff);
+  color: var(--text-primary, #111827);
+  background: var(--bg-surface, #fff);
 }
 
 .image-gen-prompt:focus {
@@ -1596,7 +1596,7 @@ onUnmounted(() => {
   gap: 0.375rem;
   font-size: 0.8125rem;
   cursor: pointer;
-  color: var(--color-text, #111827);
+  color: var(--text-primary, #111827);
 }
 
 .image-gen-actions {
@@ -1608,12 +1608,12 @@ onUnmounted(() => {
 
 .image-gen-cancel {
   padding: 0.5rem 1rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
   background: transparent;
   font-size: 0.875rem;
   cursor: pointer;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--text-muted, #6b7280);
 }
 
 .image-gen-submit {

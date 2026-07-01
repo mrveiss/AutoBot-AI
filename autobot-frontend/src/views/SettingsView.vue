@@ -690,7 +690,7 @@ function onApiKeysSaved(): void {
 }
 
 .backend-check-status.status-fail {
-  color: var(--color-danger, #dc2626);
+  color: var(--color-error, #dc2626);
   background: var(--color-danger-bg, rgba(220, 38, 38, 0.1));
 }
 

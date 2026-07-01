@@ -351,15 +351,15 @@ watch(saveSuccess, (val) => {
 .field-label {
   font-size: var(--text-sm);
   font-weight: 500;
-  color: var(--color-text-primary, #e2e8f0);
+  color: var(--text-primary, #e2e8f0);
 }
 
 .field-input {
   padding: var(--spacing-2) var(--spacing-3);
-  border: 1px solid var(--color-border, #374151);
+  border: 1px solid var(--border-default, #374151);
   border-radius: var(--radius-md);
   background: var(--color-bg-secondary, #1e293b);
-  color: var(--color-text-primary, #e2e8f0);
+  color: var(--text-primary, #e2e8f0);
   font-size: var(--text-sm);
   transition: border-color var(--duration-150);
 }
@@ -375,7 +375,7 @@ watch(saveSuccess, (val) => {
 
 .field-hint {
   font-size: var(--text-xs);
-  color: var(--color-text-secondary, #94a3b8);
+  color: var(--text-secondary, #94a3b8);
 }
 
 .toggle-section {
@@ -400,7 +400,7 @@ watch(saveSuccess, (val) => {
 .toggle-text {
   font-size: var(--text-sm);
   font-weight: 500;
-  color: var(--color-text-primary, #e2e8f0);
+  color: var(--text-primary, #e2e8f0);
 }
 
 .config-fieldset {
@@ -419,7 +419,7 @@ watch(saveSuccess, (val) => {
 .section-heading {
   font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--color-text-primary, #e2e8f0);
+  color: var(--text-primary, #e2e8f0);
   margin: var(--spacing-0);
 }
 
@@ -427,7 +427,7 @@ watch(saveSuccess, (val) => {
 .routing-matrix {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--color-border, #374151);
+  border: 1px solid var(--border-default, #374151);
   border-radius: var(--radius-md);
   overflow: hidden;
   margin-top: var(--spacing-2);
@@ -439,7 +439,7 @@ watch(saveSuccess, (val) => {
 }
 
 .matrix-row:not(:last-child) {
-  border-bottom: 1px solid var(--color-border, #374151);
+  border-bottom: 1px solid var(--border-default, #374151);
 }
 
 .matrix-header {
@@ -448,7 +448,7 @@ watch(saveSuccess, (val) => {
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text-secondary, #94a3b8);
+  color: var(--text-secondary, #94a3b8);
 }
 
 .matrix-cell {
@@ -462,11 +462,11 @@ watch(saveSuccess, (val) => {
   flex: 2;
   text-align: left;
   font-weight: 500;
-  color: var(--color-text-primary, #e2e8f0);
+  color: var(--text-primary, #e2e8f0);
 }
 
 .matrix-channel-header {
-  color: var(--color-text-secondary, #94a3b8);
+  color: var(--text-secondary, #94a3b8);
 }
 
 .matrix-checkbox {
@@ -518,7 +518,7 @@ watch(saveSuccess, (val) => {
   align-items: center;
   gap: var(--spacing-2);
   font-size: var(--text-sm);
-  color: var(--color-text-secondary, #94a3b8);
+  color: var(--text-secondary, #94a3b8);
   padding: var(--spacing-3) var(--spacing-0);
 }
 

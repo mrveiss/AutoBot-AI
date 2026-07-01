@@ -267,8 +267,8 @@ onUnmounted(() => {
   height: 100%;
   padding: 1.5rem;
   gap: 1rem;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .sprint-header {
@@ -277,7 +277,7 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
 }
 
 .sprint-info {
@@ -295,7 +295,7 @@ onUnmounted(() => {
 
 .sprint-dates {
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .sprint-status-badge {
@@ -325,7 +325,7 @@ onUnmounted(() => {
 
 .stat-label {
   font-size: 0.7rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -345,7 +345,7 @@ onUnmounted(() => {
 }
 
 .sprint-header-skeleton {
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   font-size: 0.875rem;
 }
 
@@ -367,9 +367,9 @@ onUnmounted(() => {
 
 .board-column {
   flex: 0 0 260px;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
   border-radius: 0.5rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   display: flex;
   flex-direction: column;
   /* #10750 C2: bounded by .board-columns height, not the viewport (unify w/ Kanban) */
@@ -384,12 +384,12 @@ onUnmounted(() => {
   padding: 0.75rem 1rem;
   font-weight: 600;
   font-size: 0.875rem;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
 }
 
 .column-count {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 9999px;
   padding: 0 0.5rem;
   font-size: 0.75rem;
@@ -407,8 +407,8 @@ onUnmounted(() => {
 }
 
 .work-card {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   padding: 0.625rem 0.75rem;
   cursor: grab;
@@ -435,7 +435,7 @@ onUnmounted(() => {
 .card-identifier {
   font-family: monospace;
   font-size: 0.7rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .card-type-badge {
@@ -459,7 +459,7 @@ onUnmounted(() => {
   margin: 0;
   font-size: 0.8rem;
   line-height: 1.4;
-  color: var(--color-text);
+  color: var(--text-primary);
 }
 
 .card-footer {
@@ -484,7 +484,7 @@ onUnmounted(() => {
 .card-points {
   font-size: 0.7rem;
   font-weight: 600;
-  background: var(--color-surface-elevated, #f3f4f6);
+  background: var(--bg-elevated, #f3f4f6);
   padding: 0.1rem 0.4rem;
   border-radius: 0.25rem;
 }
@@ -507,16 +507,16 @@ onUnmounted(() => {
   text-align: center;
   padding: 1.5rem 0.5rem;
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #9ca3af);
-  border: 2px dashed var(--color-border, #e5e7eb);
+  color: var(--text-secondary, #9ca3af);
+  border: 2px dashed var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
 }
 
 .burndown-sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: var(--color-surface-elevated, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated, #f9fafb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
   padding: 1rem;
   display: flex;
@@ -553,7 +553,7 @@ onUnmounted(() => {
 
 .chart-empty {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   text-align: center;
   padding: 1rem 0;
 }
