@@ -13,7 +13,7 @@
 
 export { default as AnalyticsHeader } from './AnalyticsHeader.vue'
 export { default as IndexingProgress } from './IndexingProgress.vue'
-export { default as EnhancedAnalyticsGrid } from './EnhancedAnalyticsGrid.vue'
+export { default as AnalyticsGrid } from './AnalyticsGrid.vue'
 export { default as DuplicatesSection } from './DuplicatesSection.vue'
 export { default as DeclarationsSection } from './DeclarationsSection.vue'
 export { default as CodeSmellsSection } from './CodeSmellsSection.vue'
