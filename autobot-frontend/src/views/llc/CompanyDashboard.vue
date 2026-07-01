@@ -230,32 +230,32 @@ watch(lastMessage, (msg) => {
   <div class="p-4 space-y-6 max-w-7xl mx-auto">
     <!-- Header -->
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Company Dashboard</h1>
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $t('llc.dashboard.title') }}</h1>
       <button
         class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
         @click="launchCeoChat"
       >
-        CEO Chat
+        {{ $t('llc.dashboard.ceoChat') }}
       </button>
     </div>
 
     <div v-if="!companyId" class="text-center py-12 text-gray-500">
-      Select a company to view its dashboard.
+      {{ $t('llc.dashboard.selectCompany') }}
     </div>
 
     <template v-else>
       <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
         {{ error }}
-        <button class="ml-4 underline" @click="fetchDashboardData">Retry</button>
+        <button class="ml-4 underline" @click="fetchDashboardData">{{ $t('llc.dashboard.retry') }}</button>
       </div>
 
-      <div v-if="isLoading" class="text-center py-12 text-gray-500">Loading…</div>
+      <div v-if="isLoading" class="text-center py-12 text-gray-500">{{ $t('llc.dashboard.loading') }}</div>
 
       <template v-else>
         <!-- Pending Approvals -->
         <section v-if="pendingApprovals.length > 0">
           <div class="flex items-center gap-2 mb-3">
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Pending Approvals</h2>
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ $t('llc.dashboard.pendingApprovals') }}</h2>
             <span class="bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-0.5 rounded-full">
               {{ pendingApprovals.length }}
             </span>
@@ -268,13 +268,13 @@ watch(lastMessage, (msg) => {
             >
               <div>
                 <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ approval.title }}</p>
-                <p class="text-xs text-gray-500">Requested by {{ approval.requested_by }} · {{ formatTime(approval.created_at) }}</p>
+                <p class="text-xs text-gray-500">{{ $t('llc.dashboard.requestedBy', { name: approval.requested_by }) }} · {{ formatTime(approval.created_at) }}</p>
               </div>
               <button
                 class="px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
                 @click="quickApprove(approval.id)"
               >
-                Approve
+                {{ $t('llc.dashboard.approve') }}
               </button>
             </div>
           </div>
@@ -282,7 +282,7 @@ watch(lastMessage, (msg) => {
 
         <!-- Budget Gauges -->
         <section>
-          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Budget</h2>
+          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">{{ $t('llc.dashboard.budget') }}</h2>
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div
               v-for="budget in budgets"
@@ -308,7 +308,7 @@ watch(lastMessage, (msg) => {
         <!-- Agent Status Grid -->
         <section>
           <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">
-            Agents
+            {{ $t('llc.dashboard.agents') }}
             <span class="text-sm font-normal text-gray-500 ml-1">({{ agents.length }})</span>
           </h2>
           <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
@@ -331,15 +331,15 @@ watch(lastMessage, (msg) => {
 
         <!-- Live Heartbeat Runs -->
         <section>
-          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Recent Heartbeat Runs</h2>
+          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">{{ $t('llc.dashboard.recentRuns') }}</h2>
           <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
               <thead class="bg-gray-50 dark:bg-gray-900">
                 <tr>
-                  <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Agent</th>
-                  <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                  <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Started</th>
-                  <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Duration</th>
+                  <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">{{ $t('llc.dashboard.colAgent') }}</th>
+                  <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">{{ $t('llc.dashboard.colStatus') }}</th>
+                  <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">{{ $t('llc.dashboard.colStarted') }}</th>
+                  <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">{{ $t('llc.dashboard.colDuration') }}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-800">
@@ -361,7 +361,7 @@ watch(lastMessage, (msg) => {
                   <td class="px-4 py-2 text-gray-500">{{ formatDuration(run.duration_ms) }}</td>
                 </tr>
                 <tr v-if="heartbeatRuns.length === 0">
-                  <td colspan="4" class="px-4 py-4 text-center text-gray-400 text-sm">No runs yet</td>
+                  <td colspan="4" class="px-4 py-4 text-center text-gray-400 text-sm">{{ $t('llc.dashboard.noRuns') }}</td>
                 </tr>
               </tbody>
             </table>
@@ -370,7 +370,7 @@ watch(lastMessage, (msg) => {
 
         <!-- Activity Feed -->
         <section>
-          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Live Activity</h2>
+          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">{{ $t('llc.dashboard.liveActivity') }}</h2>
           <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700 max-h-72 overflow-y-auto">
             <div
               v-for="event in activityFeed"
@@ -379,12 +379,12 @@ watch(lastMessage, (msg) => {
             >
               <span class="text-xs text-gray-400 w-16 flex-shrink-0 pt-0.5">{{ formatTime(event.timestamp) }}</span>
               <div class="flex-1 min-w-0">
-                <span class="text-xs text-indigo-600 dark:text-indigo-400 font-medium mr-1">{{ event.agent_name ?? 'system' }}</span>
+                <span class="text-xs text-indigo-600 dark:text-indigo-400 font-medium mr-1">{{ event.agent_name ?? $t('llc.dashboard.system') }}</span>
                 <span class="text-sm text-gray-700 dark:text-gray-300">{{ event.summary }}</span>
               </div>
             </div>
             <div v-if="activityFeed.length === 0" class="px-4 py-4 text-center text-gray-400 text-sm">
-              Waiting for activity…
+              {{ $t('llc.dashboard.waitingActivity') }}
             </div>
           </div>
         </section>

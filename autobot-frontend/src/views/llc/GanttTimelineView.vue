@@ -10,30 +10,30 @@
 <template>
   <div class="gantt-view">
     <header class="gantt-toolbar">
-      <h2 class="gantt-title">Timeline</h2>
+      <h2 class="gantt-title">{{ $t('llc.gantt.title') }}</h2>
       <div class="gantt-controls">
         <label class="gantt-field">
-          <span class="gantt-field-label">Project</span>
+          <span class="gantt-field-label">{{ $t('llc.gantt.project') }}</span>
           <select v-model="selectedProjectId" class="gantt-select" @change="loadTimeline">
             <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </label>
         <label class="gantt-field">
-          <span class="gantt-field-label">Zoom</span>
+          <span class="gantt-field-label">{{ $t('llc.gantt.zoom') }}</span>
           <select v-model="zoom" class="gantt-select">
-            <option value="day">Day</option>
-            <option value="week">Week</option>
-            <option value="month">Month</option>
-            <option value="quarter">Quarter</option>
+            <option value="day">{{ $t('llc.gantt.zoomDay') }}</option>
+            <option value="week">{{ $t('llc.gantt.zoomWeek') }}</option>
+            <option value="month">{{ $t('llc.gantt.zoomMonth') }}</option>
+            <option value="quarter">{{ $t('llc.gantt.zoomQuarter') }}</option>
           </select>
         </label>
-        <button class="gantt-btn" :disabled="!items.length" @click="exportPng">Export PNG</button>
+        <button class="gantt-btn" :disabled="!items.length" @click="exportPng">{{ $t('llc.gantt.exportPng') }}</button>
       </div>
     </header>
 
-    <div v-if="loading" class="gantt-state">Loading timeline…</div>
-    <div v-else-if="!projects.length" class="gantt-state">No projects in this company yet.</div>
-    <div v-else-if="!items.length" class="gantt-state">This project has no work items to schedule.</div>
+    <div v-if="loading" class="gantt-state">{{ $t('llc.gantt.loading') }}</div>
+    <div v-else-if="!projects.length" class="gantt-state">{{ $t('llc.gantt.noProjects') }}</div>
+    <div v-else-if="!items.length" class="gantt-state">{{ $t('llc.gantt.noItems') }}</div>
 
     <div v-else class="gantt-scroll">
       <svg
@@ -42,7 +42,7 @@
         :width="chartWidth + LABEL_W"
         :height="chartHeight + HEADER_H"
         role="img"
-        aria-label="Project timeline Gantt chart"
+        :aria-label="$t('llc.gantt.ariaChart')"
       >
         <defs>
           <marker
@@ -124,7 +124,7 @@
             :y="rowY(idx) + BAR_H / 2 + 4"
             class="gantt-unscheduled"
           >
-            unscheduled
+            {{ $t('llc.gantt.unscheduled') }}
           </text>
         </g>
       </svg>

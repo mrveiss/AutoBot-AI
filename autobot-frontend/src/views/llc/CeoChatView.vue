@@ -6,12 +6,12 @@
     <!-- Thread sidebar -->
     <div class="thread-sidebar">
       <div class="sidebar-header">
-        <span class="sidebar-title">Threads</span>
-        <button class="btn-new-thread" @click="showNewThread = true">+ New</button>
+        <span class="sidebar-title">{{ $t('llc.ceoChat.threads') }}</span>
+        <button class="btn-new-thread" @click="showNewThread = true">{{ $t('llc.ceoChat.newThread') }}</button>
       </div>
-      <div v-if="!companyId" class="state-msg-sm">Select a company to view threads.</div>
-      <div v-else-if="threadsLoading" class="state-msg-sm">Loading...</div>
-      <div v-else-if="threads.length === 0" class="state-msg-sm">No threads yet.</div>
+      <div v-if="!companyId" class="state-msg-sm">{{ $t('llc.ceoChat.selectCompany') }}</div>
+      <div v-else-if="threadsLoading" class="state-msg-sm">{{ $t('llc.ceoChat.loading') }}</div>
+      <div v-else-if="threads.length === 0" class="state-msg-sm">{{ $t('llc.ceoChat.noThreads') }}</div>
       <div class="thread-list">
         <div
           v-for="t in threads"
@@ -32,7 +32,7 @@
     <!-- Chat window -->
     <div class="chat-window">
       <div v-if="!activeThread" class="chat-empty">
-        <p>Select a thread or create a new one.</p>
+        <p>{{ $t('llc.ceoChat.emptyState') }}</p>
       </div>
 
       <template v-else>
@@ -47,7 +47,7 @@
         </div>
 
         <div class="messages-area" ref="messagesArea">
-          <div v-if="messagesLoading" class="state-msg-sm">Loading messages...</div>
+          <div v-if="messagesLoading" class="state-msg-sm">{{ $t('llc.ceoChat.loadingMessages') }}</div>
           <template v-else>
             <div
               v-for="msg in messages"
@@ -66,7 +66,7 @@
                 <div class="message-time">{{ formatTime(msg.created_at) }}</div>
               </div>
             </div>
-            <div v-if="messages.length === 0" class="state-msg-sm">No messages yet.</div>
+            <div v-if="messages.length === 0" class="state-msg-sm">{{ $t('llc.ceoChat.noMessages') }}</div>
           </template>
         </div>
 
@@ -74,7 +74,7 @@
           <textarea
             v-model="inputText"
             class="message-input"
-            placeholder="Type a message..."
+            :placeholder="$t('llc.ceoChat.messagePlaceholder')"
             rows="2"
             @keydown.enter.exact.prevent="sendMessage"
           />
@@ -83,7 +83,7 @@
             :disabled="!inputText.trim() || sending"
             @click="sendMessage"
           >
-            {{ sending ? '...' : 'Send' }}
+            {{ sending ? '...' : $t('llc.ceoChat.send') }}
           </button>
         </div>
       </template>
@@ -92,19 +92,19 @@
     <!-- New thread modal -->
     <div v-if="showNewThread" class="modal-overlay" @click.self="showNewThread = false">
       <div class="modal-panel">
-        <h3>New Thread</h3>
+        <h3>{{ $t('llc.ceoChat.newThreadTitle') }}</h3>
         <div class="form-field">
-          <label>Title</label>
-          <input v-model="newThreadTitle" type="text" class="form-input" placeholder="Thread title..." />
+          <label>{{ $t('llc.ceoChat.titleLabel') }}</label>
+          <input v-model="newThreadTitle" type="text" class="form-input" :placeholder="$t('llc.ceoChat.titlePlaceholder')" />
         </div>
         <div class="modal-actions">
-          <button class="btn-secondary" @click="showNewThread = false">Cancel</button>
+          <button class="btn-secondary" @click="showNewThread = false">{{ $t('llc.ceoChat.cancel') }}</button>
           <button
             class="btn-primary"
             :disabled="!newThreadTitle.trim() || creatingThread"
             @click="createThread"
           >
-            {{ creatingThread ? 'Creating...' : 'Create' }}
+            {{ creatingThread ? $t('llc.ceoChat.creating') : $t('llc.ceoChat.create') }}
           </button>
         </div>
       </div>

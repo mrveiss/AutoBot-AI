@@ -4,23 +4,23 @@
 <template>
   <div class="heartbeat-monitor">
     <div class="monitor-header">
-      <h2 class="view-title">Heartbeat Monitor</h2>
-      <span class="refresh-note">Auto-refreshes every 15s</span>
+      <h2 class="view-title">{{ $t('llc.heartbeat.title') }}</h2>
+      <span class="refresh-note">{{ $t('llc.heartbeat.autoRefresh') }}</span>
     </div>
 
-    <div v-if="isLoading && agents.length === 0" class="state-msg">Loading agents...</div>
-    <div v-else-if="heartbeatAgents.length === 0" class="state-msg">No heartbeat-enabled agents found.</div>
+    <div v-if="isLoading && agents.length === 0" class="state-msg">{{ $t('llc.heartbeat.loadingAgents') }}</div>
+    <div v-else-if="heartbeatAgents.length === 0" class="state-msg">{{ $t('llc.heartbeat.noAgents') }}</div>
 
     <div v-else class="agent-grid-wrapper">
       <table class="agent-grid">
         <thead>
           <tr>
-            <th>Agent</th>
-            <th>Adapter</th>
-            <th>Last Heartbeat</th>
-            <th>Status</th>
-            <th>Run Duration</th>
-            <th>Action</th>
+            <th>{{ $t('llc.heartbeat.colAgent') }}</th>
+            <th>{{ $t('llc.heartbeat.colAdapter') }}</th>
+            <th>{{ $t('llc.heartbeat.colLastHeartbeat') }}</th>
+            <th>{{ $t('llc.heartbeat.colStatus') }}</th>
+            <th>{{ $t('llc.heartbeat.colRunDuration') }}</th>
+            <th>{{ $t('llc.heartbeat.colAction') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -36,7 +36,7 @@
             <td>
               <span class="status-dot" :class="`status-${agent.last_run_status ?? 'unknown'}`" />
               <span class="status-label" :class="`status-${agent.last_run_status ?? 'unknown'}`">
-                {{ agent.last_run_status ?? 'unknown' }}
+                {{ agent.last_run_status ?? $t('llc.heartbeat.statusUnknown') }}
               </span>
             </td>
             <td class="agent-duration">{{ formatDuration(agent.current_run_started_at) }}</td>
@@ -46,7 +46,7 @@
                 :disabled="triggering.has(agent.id)"
                 @click="triggerHeartbeat(agent)"
               >
-                {{ triggering.has(agent.id) ? 'Triggering...' : 'Trigger Now' }}
+                {{ triggering.has(agent.id) ? $t('llc.heartbeat.triggering') : $t('llc.heartbeat.triggerNow') }}
               </button>
             </td>
           </tr>
@@ -58,11 +58,11 @@
     <div v-if="selectedAgent" class="drawer-overlay" @click.self="selectedAgent = null">
       <div class="history-drawer">
         <div class="drawer-header">
-          <h3>Run History – {{ selectedAgent.name }}</h3>
+          <h3>{{ $t('llc.heartbeat.runHistoryTitle', { name: selectedAgent.name }) }}</h3>
           <button class="btn-close" @click="selectedAgent = null">✕</button>
         </div>
-        <div v-if="historyLoading" class="state-msg">Loading runs...</div>
-        <div v-else-if="runHistory.length === 0" class="state-msg">No runs found.</div>
+        <div v-if="historyLoading" class="state-msg">{{ $t('llc.heartbeat.loadingRuns') }}</div>
+        <div v-else-if="runHistory.length === 0" class="state-msg">{{ $t('llc.heartbeat.noRuns') }}</div>
         <div v-else class="run-list">
           <div v-for="run in runHistory" :key="run.id" class="run-item">
             <div class="run-meta">
@@ -75,24 +75,24 @@
             </div>
             <div class="run-actions">
               <button class="toggle-payload" @click="toggleRun(run.id)">
-                {{ expandedRuns.has(run.id) ? 'Hide' : 'Show' }} Context
+                {{ expandedRuns.has(run.id) ? $t('llc.heartbeat.hideContext') : $t('llc.heartbeat.showContext') }}
               </button>
               <button
                 class="btn-replay"
                 :disabled="replayingRuns.has(run.id)"
                 @click="triggerReplay(run)"
               >
-                {{ replayingRuns.has(run.id) ? 'Replaying...' : 'Replay' }}
+                {{ replayingRuns.has(run.id) ? $t('llc.heartbeat.replaying') : $t('llc.heartbeat.replay') }}
               </button>
               <button class="btn-replay-log" @click="openReplayPanel(run)">
-                Step-Browse
+                {{ $t('llc.heartbeat.stepBrowse') }}
               </button>
               <button
                 v-if="selectedAgent"
                 class="btn-fixture"
                 :disabled="downloadingFixture.has(run.id)"
                 @click="downloadFixture(run)"
-              >{{ downloadingFixture.has(run.id) ? 'Exporting...' : 'Export Fixture' }}</button>
+              >{{ downloadingFixture.has(run.id) ? $t('llc.heartbeat.exporting') : $t('llc.heartbeat.exportFixture') }}</button>
             </div>
             <pre v-if="expandedRuns.has(run.id)" class="run-context">{{ formatJson(run.context_snapshot) }}</pre>
           </div>
@@ -104,45 +104,45 @@
     <div v-if="replayPanelRun && selectedAgent" class="drawer-overlay" @click.self="replayPanelRun = null">
       <div class="history-drawer replay-panel">
         <div class="drawer-header">
-          <h3>Replay Log – {{ replayPanelRun.id.slice(0, 8) }}</h3>
+          <h3>{{ $t('llc.heartbeat.replayLogTitle', { id: replayPanelRun.id.slice(0, 8) }) }}</h3>
           <div class="header-actions">
             <label class="redact-label">
               <input v-model="redactPii" type="checkbox" />
-              Redact PII
+              {{ $t('llc.heartbeat.redactPii') }}
             </label>
             <button class="btn-close" @click="replayPanelRun = null">✕</button>
           </div>
         </div>
-        <div v-if="replayLogLoading" class="state-msg">Loading replay log...</div>
-        <div v-else-if="!replayLog" class="state-msg">No replay log recorded for this run yet.</div>
+        <div v-if="replayLogLoading" class="state-msg">{{ $t('llc.heartbeat.loadingReplayLog') }}</div>
+        <div v-else-if="!replayLog" class="state-msg">{{ $t('llc.heartbeat.noReplayLog') }}</div>
         <div v-else class="replay-body">
           <div class="replay-meta">
-            <span class="meta-item">Status: <strong>{{ replayLog.final_status ?? '—' }}</strong></span>
-            <span class="meta-item">Events: <strong>{{ (replayLog.recorded_events ?? []).length }}</strong></span>
+            <span class="meta-item">{{ $t('llc.heartbeat.metaStatusLabel') }} <strong>{{ replayLog.final_status ?? '—' }}</strong></span>
+            <span class="meta-item">{{ $t('llc.heartbeat.metaEventsLabel') }} <strong>{{ (replayLog.recorded_events ?? []).length }}</strong></span>
             <span v-if="replayLog.replay_of_run_id" class="meta-item">
-              Replay of: <code>{{ replayLog.replay_of_run_id.slice(0, 8) }}</code>
+              {{ $t('llc.heartbeat.metaReplayOfLabel') }} <code>{{ replayLog.replay_of_run_id.slice(0, 8) }}</code>
             </span>
           </div>
 
           <!-- Event timeline step-browser -->
           <div v-if="(replayLog.recorded_events ?? []).length > 0" class="event-browser">
             <div class="event-nav">
-              <button :disabled="eventIdx === 0" @click="eventIdx = Math.max(0, eventIdx - 1)">Prev</button>
+              <button :disabled="eventIdx === 0" @click="eventIdx = Math.max(0, eventIdx - 1)">{{ $t('llc.heartbeat.prev') }}</button>
               <span>{{ eventIdx + 1 }} / {{ replayLog.recorded_events!.length }}</span>
-              <button :disabled="eventIdx >= (replayLog.recorded_events!.length - 1)" @click="eventIdx = Math.min(replayLog.recorded_events!.length - 1, eventIdx + 1)">Next</button>
+              <button :disabled="eventIdx >= (replayLog.recorded_events!.length - 1)" @click="eventIdx = Math.min(replayLog.recorded_events!.length - 1, eventIdx + 1)">{{ $t('llc.heartbeat.next') }}</button>
             </div>
             <pre class="event-detail">{{ formatJson(replayLog.recorded_events![eventIdx]) }}</pre>
           </div>
 
           <!-- Output diff section (shown when a replay run exists) -->
           <div v-if="replayDiff" class="diff-section">
-            <h4 class="diff-title">Output Diff (original vs replay)</h4>
-            <pre class="diff-content" :class="{ 'diff-identical': replayDiff.identical }">{{ replayDiff.identical ? '(outputs are identical)' : replayDiff.diff }}</pre>
+            <h4 class="diff-title">{{ $t('llc.heartbeat.outputDiffTitle') }}</h4>
+            <pre class="diff-content" :class="{ 'diff-identical': replayDiff.identical }">{{ replayDiff.identical ? $t('llc.heartbeat.outputsIdentical') : replayDiff.diff }}</pre>
           </div>
 
           <!-- Output text -->
           <div v-if="replayLog.output_text" class="output-section">
-            <h4 class="output-title">Captured Output</h4>
+            <h4 class="output-title">{{ $t('llc.heartbeat.capturedOutput') }}</h4>
             <pre class="run-context">{{ replayLog.output_text }}</pre>
           </div>
         </div>
@@ -157,12 +157,14 @@ import { useApiClient } from '@/plugins/api'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{ companyId?: string }>()
 const companyId = computed(() => props.companyId ?? '')
 
 const logger = createLogger('HeartbeatMonitor')
 const api = useApiClient()
+const { t } = useI18n()
 
 interface Agent {
   id: string
@@ -245,7 +247,7 @@ function computeDuration(start: string, end: string) {
 }
 
 function formatJson(data?: Record<string, unknown>) {
-  if (!data) return '(empty)'
+  if (!data) return t('llc.heartbeat.emptyContext')
   try {
     return JSON.stringify(data, null, 2)
   } catch {
