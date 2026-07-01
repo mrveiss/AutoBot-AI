@@ -1245,9 +1245,7 @@ class BulkOperationsMixin:
             logger.error("Bulk category update failed: %s", e)
             return {"status": "error", "message": "Bulk operation failed"}
 
-    async def _scan_facts_for_issues(
-        self, remove_empty: bool, fix_metadata: bool
-    ) -> tuple[list[str], list[str]]:
+    async def _scan_facts_for_issues(self, remove_empty: bool, fix_metadata: bool) -> tuple[list[str], list[str]]:
         """Scan all fact keys and return (empty_fact_ids, malformed_metadata_fact_ids).
 
         Uses a single Redis pipeline pass to minimise round-trips.

@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import sys
 import types
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -51,7 +51,6 @@ _aioredis_mod = sys.modules["redis.asyncio"]
 _aioredis_mod.Redis = MagicMock  # type: ignore[attr-defined]
 
 from knowledge.bulk import BulkOperationsMixin  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Fake composed KB that drives BulkOperationsMixin without a real Redis
@@ -162,9 +161,7 @@ class TestCleanupDryRun:
 
     @pytest.mark.asyncio
     async def test_detects_malformed_metadata(self):
-        kb = _make_kb(
-            facts=[{"key": "fact:xyz", "content": "hello", "metadata_raw": "not-json!!"}]
-        )
+        kb = _make_kb(facts=[{"key": "fact:xyz", "content": "hello", "metadata_raw": "not-json!!"}])
         result = await kb.cleanup(fix_metadata=True, dry_run=True)
 
         assert result["issues_found"]["malformed_metadata"] == 1
@@ -221,9 +218,7 @@ class TestCleanupApplyFixes:
 
     @pytest.mark.asyncio
     async def test_fixes_malformed_metadata(self):
-        kb = _make_kb(
-            facts=[{"key": "fact:bad-meta", "content": "some content", "metadata_raw": "{bad json"}]
-        )
+        kb = _make_kb(facts=[{"key": "fact:bad-meta", "content": "some content", "metadata_raw": "{bad json"}])
         result = await kb.cleanup(fix_metadata=True, dry_run=False)
 
         assert any(fid == "bad-meta" for fid, _ in kb._updated)
@@ -231,9 +226,7 @@ class TestCleanupApplyFixes:
 
     @pytest.mark.asyncio
     async def test_valid_metadata_not_touched(self):
-        kb = _make_kb(
-            facts=[{"key": "fact:ok", "content": "content", "metadata_raw": json.dumps({"k": "v"})}]
-        )
+        kb = _make_kb(facts=[{"key": "fact:ok", "content": "content", "metadata_raw": json.dumps({"k": "v"})}])
         result = await kb.cleanup(fix_metadata=True, dry_run=False)
 
         assert kb._updated == []

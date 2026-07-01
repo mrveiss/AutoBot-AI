@@ -152,10 +152,14 @@ class AuthenticationMiddleware:
         key_file = self._jwt_key_file()
 
         def _derive_public(private_key) -> str:
-            return private_key.public_key().public_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PublicFormat.SubjectPublicKeyInfo,
-            ).decode("utf-8")
+            return (
+                private_key.public_key()
+                .public_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                )
+                .decode("utf-8")
+            )
 
         def _load_pem(pem: str):
             return serialization.load_pem_private_key(

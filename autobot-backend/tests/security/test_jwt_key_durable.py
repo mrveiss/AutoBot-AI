@@ -20,10 +20,7 @@ import importlib
 import os
 import sys
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, patch  # noqa: F401 — patch used via patch.object
-
-import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -36,7 +33,7 @@ import pytest
 
 def _load_real_auth_middleware():
     """Return the real auth_middleware module, side-stepping the conftest stub."""
-    _saved = sys.modules.pop("auth_middleware", None)
+    sys.modules.pop("auth_middleware", None)
     try:
         mod = importlib.import_module("auth_middleware")
         return mod
