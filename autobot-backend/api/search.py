@@ -132,7 +132,7 @@ async def semantic_search(request: NPUSearchRequest):
         total_time = (time.time() - start_time) * 1000
 
         logger.info(
-            "Enhanced search completed: '%s...' -> %d results in %.2fms using %s",
+            "Search completed: '%s...' -> %d results in %.2fms using %s",
             request.query[:50],
             len(results_data),
             total_time,
@@ -151,7 +151,7 @@ async def semantic_search(request: NPUSearchRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Enhanced search failed: %s", e)
+        logger.error("Search failed: %s", e)
         raise HTTPException(status_code=500, detail="Search failed")
 
 
