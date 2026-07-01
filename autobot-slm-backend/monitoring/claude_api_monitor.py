@@ -19,7 +19,6 @@ This module remains for backwards compatibility but will be REMOVED in v3.0.
 """
 
 import logging
-import statistics
 import threading
 import time
 from collections import defaultdict
@@ -27,6 +26,28 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List
 
 logger = logging.getLogger(__name__)
+
+# Lazy-loaded reference to the shared Prometheus query helper (#10721).
+# Set once on first call; patchable in tests without triggering ssot_config.
+_prometheus_query_instant = None
+
+
+def _get_prometheus_query_instant():
+    """Return ``query_instant`` from autobot_shared, caching after first load.
+
+    Returns ``None`` if the shared module is not importable (e.g. in CI
+    environments where ssot_config is not wired).  Callers must treat
+    ``None`` as "Prometheus unavailable → return 0.0".
+    """
+    global _prometheus_query_instant
+    if _prometheus_query_instant is None:
+        try:
+            from autobot_shared.monitoring.prometheus_query import query_instant
+
+            _prometheus_query_instant = query_instant
+        except Exception:  # ImportError or config-init failure
+            pass
+    return _prometheus_query_instant
 
 
 @dataclass
@@ -59,7 +80,7 @@ class UsageTracker:
     Tracks API usage patterns and calculates metrics
 
     DEPRECATED (Phase 5, Issue #348): All in-memory buffers removed.
-    Methods return empty/safe defaults. Use PrometheusMetricsManager.
+    ``calculate_usage_rate`` now queries Prometheus. Use PrometheusMetricsManager.
     """
 
     def __init__(self, history_limit: int = 1000):
@@ -103,62 +124,31 @@ class UsageTracker:
             if not record.success and record.error_type:
                 self.error_patterns[record.error_type] += 1
 
-    def get_recent_calls(self, minutes: int = 60) -> List[APICallRecord]:
-        """
-        Get calls from the last N minutes (thread-safe)
+    async def calculate_usage_rate(self, window_minutes: int = 60) -> float:
+        """Calculate calls per minute in the given window.
 
-        DEPRECATED (Phase 5, Issue #348): Returns empty list. Use Prometheus query.
+        Backed by Prometheus ``autobot_claude_api_requests_total`` via
+        ``increase()`` over the requested window (#10721 — replaces the
+        removed in-memory deque).  Returns 0.0 when Prometheus is
+        unreachable; never silently fabricates data.
         """
-        # REMOVED (Phase 5, Issue #348): call_history deque removed
-        return []  # Return empty list for backwards compatibility
-
-    def calculate_usage_rate(self, window_minutes: int = 60) -> float:
-        """Calculate calls per minute in the given window"""
-        recent_calls = self.get_recent_calls(window_minutes)
-        if not recent_calls:
+        query_instant = _get_prometheus_query_instant()
+        if query_instant is None:
             return 0.0
 
-        if window_minutes == 0:
-            return len(recent_calls)
-
-        return len(recent_calls) / window_minutes
-
-    def calculate_payload_trend(self, window_minutes: int = 30) -> Dict[str, float]:
-        """Calculate payload size trends"""
-        recent_calls = self.get_recent_calls(window_minutes)
-        if not recent_calls:
-            return {"average": 0, "max": 0, "trend": 0}
-
-        payload_sizes = [call.payload_size for call in recent_calls]
-
-        # Calculate trend (simple linear regression slope)
-        if len(payload_sizes) > 1:
-            x_values = list(range(len(payload_sizes)))
-            n = len(payload_sizes)
-            sum_x = sum(x_values)
-            sum_y = sum(payload_sizes)
-            sum_xy = sum(x * y for x, y in zip(x_values, payload_sizes))
-            sum_x2 = sum(x * x for x in x_values)
-
-            trend = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x)
-        else:
-            trend = 0
-
-        return {
-            "average": statistics.mean(payload_sizes),
-            "max": max(payload_sizes),
-            "min": min(payload_sizes),
-            "trend": trend,
-        }
-
-    def get_tool_usage_stats(self) -> Dict[str, Dict[str, Any]]:
-        """
-        Get usage statistics per tool (thread-safe)
-
-        DEPRECATED (Phase 5, Issue #348): Returns empty dict. Use Prometheus query.
-        """
-        # REMOVED (Phase 5, Issue #348): tool_usage tracking removed
-        return {}  # Return empty dict for backwards compatibility
+        # Clamp to 1-minute minimum so PromQL window is always valid.
+        window = f"{max(window_minutes, 1)}m"
+        promql = f"sum(increase(autobot_claude_api_requests_total[{window}]))"
+        data = await query_instant(promql)
+        if data is None or not data.get("result"):
+            return 0.0
+        try:
+            total_calls = float(data["result"][0]["value"][1])
+            if window_minutes == 0:
+                return total_calls
+            return total_calls / window_minutes
+        except (IndexError, KeyError, ValueError):
+            return 0.0
 
 
 class AlertManager:
@@ -189,10 +179,10 @@ class AlertManager:
         """Add a callback function for alerts"""
         self.alert_callbacks.append(callback)
 
-    def _check_rate_alerts(self, tracker: UsageTracker) -> UsageAlert | None:
-        """Check rate limit alerts (Issue #315: extracted helper)."""
-        rate_1min = tracker.calculate_usage_rate(1)
-        rate_60min = tracker.calculate_usage_rate(60)
+    async def _check_rate_alerts(self, tracker: UsageTracker) -> UsageAlert | None:
+        """Check rate limit alerts (#10721: async — backed by Prometheus)."""
+        rate_1min = await tracker.calculate_usage_rate(1)
+        rate_60min = await tracker.calculate_usage_rate(60)
         rates = {"rate_1min": rate_1min, "rate_60min": rate_60min}
 
         if rate_1min > 50:
@@ -211,50 +201,19 @@ class AlertManager:
             )
         return None
 
-    def _check_payload_alert(self, tracker: UsageTracker) -> UsageAlert | None:
-        """Check payload size alerts (Issue #315: extracted helper)."""
-        payload_trend = tracker.calculate_payload_trend(30)
-        if payload_trend["max"] > 25000:
-            return self._create_alert(
-                "warning",
-                f"Large payload detected: {payload_trend['max']} bytes",
-                payload_trend,
-                "Consider breaking large requests into smaller chunks",
-            )
-        return None
-
-    def _check_error_rate_alert(self, tracker: UsageTracker) -> UsageAlert | None:
-        """Check error rate alerts (Issue #315: extracted helper)."""
-        recent_calls = tracker.get_recent_calls(60)
-        if not recent_calls:
-            return None
-
-        error_rate = sum(1 for call in recent_calls if not call.success) / len(recent_calls)
-        if error_rate > 0.1:
-            return self._create_alert(
-                "critical",
-                f"High error rate: {error_rate*100:.1f}%",
-                {"error_rate": error_rate, "recent_calls": len(recent_calls)},
-                "Check for API issues or adjust request patterns",
-            )
-        return None
-
-    def check_usage_alerts(self, tracker: UsageTracker) -> List[UsageAlert]:
+    async def check_usage_alerts(self, tracker: UsageTracker) -> List[UsageAlert]:
         """Check current usage and generate alerts if needed"""
         alerts = []
 
-        # Check all alert conditions using helpers (Issue #315: reduced nesting)
-        rate_alert = self._check_rate_alerts(tracker)
+        # Rate alerts backed by Prometheus (#10721)
+        rate_alert = await self._check_rate_alerts(tracker)
         if rate_alert:
             alerts.append(rate_alert)
 
-        payload_alert = self._check_payload_alert(tracker)
-        if payload_alert:
-            alerts.append(payload_alert)
-
-        error_alert = self._check_error_rate_alert(tracker)
-        if error_alert:
-            alerts.append(error_alert)
+        # NOTE: per-call error-rate and payload alerts removed (#10721):
+        # they depended on the deque-backed get_recent_calls() which was
+        # removed in Phase 5 (#348).  Use Prometheus Alertmanager rules
+        # for autobot_claude_api_requests_total{success="false"} instead.
 
         # Process and store alerts
         current_time = time.time()
@@ -339,7 +298,7 @@ class ClaudeAPIMonitor:
 
         logger.info("ClaudeAPIMonitor initialized")
 
-    def record_api_call(
+    async def record_api_call(
         self,
         payload_size: int,
         response_size: int = 0,
@@ -376,38 +335,22 @@ class ClaudeAPIMonitor:
                 self.prometheus.record_claude_api_response_time(response_time)
 
         # Check for immediate alerts
-        alerts = self.alert_manager.check_usage_alerts(self.usage_tracker)
+        alerts = await self.alert_manager.check_usage_alerts(self.usage_tracker)
         if alerts:
             logger.info("Generated %s usage alerts", len(alerts))
 
-    def predict_rate_limit_risk(self) -> Dict[str, Any]:
+    async def predict_rate_limit_risk(self) -> Dict[str, Any]:
         """Predict the risk of hitting rate limits"""
-        current_rpm = self.usage_tracker.calculate_usage_rate(1)
-        current_rph = self.usage_tracker.calculate_usage_rate(60)
+        current_rpm = await self.usage_tracker.calculate_usage_rate(1)
+        current_rph = await self.usage_tracker.calculate_usage_rate(60)
 
         # Calculate risk scores (0-100)
         rpm_risk = min(100, (current_rpm / self.rate_limit_rpm) * 100)
         rph_risk = min(100, (current_rph / self.rate_limit_rph) * 100)
 
-        # Predict future usage based on trend
-        recent_calls = self.usage_tracker.get_recent_calls(5)  # Last 5 minutes
-        if len(recent_calls) >= 3:
-            # Simple trend calculation
-            times = [call.timestamp for call in recent_calls]
-            rates = []
-            for i in range(1, len(times)):
-                window_size = times[i] - times[i - 1]
-                if window_size > 0:
-                    rate = 60 / window_size  # Convert to per-minute rate
-                    rates.append(rate)
-
-            if rates:
-                trend = statistics.mean(rates)
-                predicted_rpm = max(0, current_rpm + (trend * 5))  # 5-minute prediction
-            else:
-                predicted_rpm = current_rpm
-        else:
-            predicted_rpm = current_rpm
+        # NOTE: per-call trend prediction removed (#10721): depended on the
+        # deque-backed get_recent_calls() removed in Phase 5 (#348).
+        predicted_rpm = current_rpm
 
         # Overall risk assessment
         max_risk = max(rpm_risk, rph_risk)
@@ -431,11 +374,11 @@ class ClaudeAPIMonitor:
             "recommendation": self._get_risk_recommendation(risk_level, max_risk),
         }
 
-    def get_comprehensive_stats(self) -> Dict[str, Any]:
+    async def get_comprehensive_stats(self) -> Dict[str, Any]:
         """Get comprehensive API usage statistics"""
         uptime = time.time() - self.start_time
 
-        # Basic stats
+        # Basic stats (in-memory counters are still maintained)
         basic_stats = {
             "monitoring_uptime": uptime,
             "total_calls": self.usage_tracker.total_calls,
@@ -444,34 +387,26 @@ class ClaudeAPIMonitor:
             "average_response_time": (self.usage_tracker.total_response_time / max(self.usage_tracker.total_calls, 1)),
         }
 
-        # Current usage
+        # Current usage (backed by Prometheus #10721)
         current_usage = {
-            "rpm_current": self.usage_tracker.calculate_usage_rate(1),
+            "rpm_current": await self.usage_tracker.calculate_usage_rate(1),
             "rpm_limit": self.rate_limit_rpm,
-            "rph_current": self.usage_tracker.calculate_usage_rate(60),
+            "rph_current": await self.usage_tracker.calculate_usage_rate(60),
             "rph_limit": self.rate_limit_rph,
         }
 
-        # Tool usage
-        tool_stats = self.usage_tracker.get_tool_usage_stats()
+        # Risk prediction (async #10721)
+        risk_prediction = await self.predict_rate_limit_risk()
 
-        # Payload analysis
-        payload_trend = self.usage_tracker.calculate_payload_trend(30)
-
-        # Risk prediction
-        risk_prediction = self.predict_rate_limit_risk()
-
-        # Recent alerts
+        # REMOVED (Phase 5, Issue #348): tool_usage — backed by get_tool_usage_stats() deque
+        # REMOVED (Phase 5, Issue #348): payload_analysis — backed by calculate_payload_trend() deque
         # REMOVED (Phase 5, Issue #348): alert_history deque removed
-        recent_alerts = []  # Return empty list for backwards compatibility
 
         return {
             "basic_stats": basic_stats,
             "current_usage": current_usage,
-            "tool_usage": tool_stats,
-            "payload_analysis": payload_trend,
             "risk_prediction": risk_prediction,
-            "recent_alerts": recent_alerts,
+            "recent_alerts": [],
             "error_patterns": dict(self.usage_tracker.error_patterns),
         }
 
@@ -488,7 +423,8 @@ class ClaudeAPIMonitor:
 
     def _check_payload_size_recommendation(self, stats: Dict[str, Any]) -> Dict[str, str] | None:
         """Check if payload size recommendation is needed. Issue #620."""
-        if stats["payload_analysis"]["average"] > self.payload_warning_size:
+        avg_payload = stats["basic_stats"]["average_payload_size"]
+        if avg_payload > self.payload_warning_size:
             return {
                 "type": "payload_size",
                 "priority": "medium",
@@ -498,39 +434,17 @@ class ClaudeAPIMonitor:
         return None
 
     def _get_tool_usage_recommendations(self, stats: Dict[str, Any]) -> List[Dict[str, str]]:
-        """Get recommendations for tools with large payloads. Issue #620."""
-        recommendations = []
-        for tool_name, tool_stats in stats["tool_usage"].items():
-            if tool_stats["avg_payload_size"] > self.payload_warning_size:
-                recommendations.append(
-                    {
-                        "type": "tool_optimization",
-                        "priority": "medium",
-                        "message": f"Tool '{tool_name}' using large payloads",
-                        "action": f"Optimize {tool_name} usage patterns",
-                    }
-                )
-        return recommendations
+        """Get recommendations for tools with large payloads. Issue #620.
 
-    def _check_error_rate_recommendation(self) -> Dict[str, str] | None:
-        """Check if error rate recommendation is needed. Issue #620."""
-        recent_calls = self.usage_tracker.get_recent_calls(60)
-        if not recent_calls:
-            return None
-        error_rate = sum(1 for call in recent_calls if not call.success) / len(recent_calls)
-        if error_rate > 0.05:  # More than 5% errors
-            return {
-                "type": "error_rate",
-                "priority": "high",
-                "message": f"High error rate: {error_rate*100:.1f}%",
-                "action": "Investigate and fix recurring API errors",
-            }
-        return None
+        Returns empty list: per-tool payload breakdown unavailable without the
+        in-memory deque removed in Phase 5 (#348 / #10721).
+        """
+        return []
 
-    def get_optimization_recommendations(self) -> List[Dict[str, str]]:
+    async def get_optimization_recommendations(self) -> List[Dict[str, str]]:
         """Get recommendations for optimizing API usage. Issue #620."""
         recommendations = []
-        stats = self.get_comprehensive_stats()
+        stats = await self.get_comprehensive_stats()
 
         rate_limit_rec = self._check_rate_limit_recommendation(stats)
         if rate_limit_rec:
@@ -542,9 +456,8 @@ class ClaudeAPIMonitor:
 
         recommendations.extend(self._get_tool_usage_recommendations(stats))
 
-        error_rec = self._check_error_rate_recommendation()
-        if error_rec:
-            recommendations.append(error_rec)
+        # NOTE: _check_error_rate_recommendation removed (#10721):
+        # depended on get_recent_calls() deque removed in Phase 5 (#348).
 
         return recommendations
 
@@ -619,7 +532,7 @@ def get_api_monitor() -> ClaudeAPIMonitor:
     return _global_monitor
 
 
-def record_api_call(payload_size: int, **kwargs):
+async def record_api_call(payload_size: int, **kwargs):
     """
     Convenience function to record an API call.
 
@@ -634,45 +547,50 @@ def record_api_call(payload_size: int, **kwargs):
         stacklevel=2,
     )
     monitor = get_api_monitor()
-    monitor.record_api_call(payload_size, **kwargs)
+    await monitor.record_api_call(payload_size, **kwargs)
 
 
-def get_usage_stats() -> Dict[str, Any]:
+async def get_usage_stats() -> Dict[str, Any]:
     """Convenience function to get usage statistics"""
     monitor = get_api_monitor()
-    return monitor.get_comprehensive_stats()
+    return await monitor.get_comprehensive_stats()
 
 
-def check_rate_limit_risk() -> Dict[str, Any]:
+async def check_rate_limit_risk() -> Dict[str, Any]:
     """Convenience function to check rate limit risk"""
     monitor = get_api_monitor()
-    return monitor.predict_rate_limit_risk()
+    return await monitor.predict_rate_limit_risk()
 
 
 # Example usage and testing
 if __name__ == "__main__":
+    import asyncio
+
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    # Example usage
-    monitor = ClaudeAPIMonitor()
 
-    # Simulate some API calls
-    for i in range(10):
-        monitor.record_api_call(
-            payload_size=1000 + i * 500,
-            response_size=2000,
-            response_time=0.5,
-            success=True,
-            tool_name="TodoWrite" if i % 3 == 0 else "Read",
-            context="test_simulation",
-        )
-        time.sleep(0.1)
+    async def _main():
+        monitor = ClaudeAPIMonitor()
 
-    # Get statistics
-    stats = monitor.get_comprehensive_stats()
-    logger.info(f"Total calls: {stats['basic_stats']['total_calls']}")
-    logger.info(f"Risk level: {stats['risk_prediction']['risk_level']}")
+        # Simulate some API calls
+        for i in range(10):
+            await monitor.record_api_call(
+                payload_size=1000 + i * 500,
+                response_size=2000,
+                response_time=0.5,
+                success=True,
+                tool_name="TodoWrite" if i % 3 == 0 else "Read",
+                context="test_simulation",
+            )
+            time.sleep(0.1)
 
-    # Get recommendations
-    recommendations = monitor.get_optimization_recommendations()
-    for rec in recommendations:
-        logger.info(f"Recommendation: {rec['message']} - {rec['action']}")
+        # Get statistics
+        stats = await monitor.get_comprehensive_stats()
+        logger.info(f"Total calls: {stats['basic_stats']['total_calls']}")
+        logger.info(f"Risk level: {stats['risk_prediction']['risk_level']}")
+
+        # Get recommendations
+        recommendations = await monitor.get_optimization_recommendations()
+        for rec in recommendations:
+            logger.info(f"Recommendation: {rec['message']} - {rec['action']}")
+
+    asyncio.run(_main())
