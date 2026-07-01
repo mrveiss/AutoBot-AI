@@ -339,6 +339,47 @@ class AsyncChatWorkflow:
             return ""
         return build_grounded_context([r["content"] for r in kb_results if r.get("content")])
 
+    @staticmethod
+    async def _budget_kb_context(kb_results: List[Dict[str, Any]]) -> str:
+        """Apply ContextWindowManager compression to kb_results before prompt injection. #10735.
+
+        Mirrors llm_handler.py lines 793-823: estimates tokens, compresses when the
+        result set exceeds the model budget, then rebuilds via build_grounded_context so
+        [Source N] labels and the grounding instruction remain consistent.
+        Returns an empty string when kb_results is empty (no-op).
+        """
+        if not kb_results:
+            return ""
+        from context_window_manager import ContextWindowManager
+        from services.memory.compression import ContextCompressionService
+
+        raw_context = build_grounded_context([r["content"] for r in kb_results if r.get("content")])
+        if not raw_context:
+            return ""
+        cwm = ContextWindowManager()
+        kc_tokens = cwm.estimate_tokens(raw_context)
+        max_kb_tokens = cwm.get_max_history_tokens()
+        if not await cwm.async_should_compress(content_tokens=kc_tokens, model_name=None):
+            return raw_context
+        svc = ContextCompressionService(
+            model_thresholds={
+                name: spec.get("compression_threshold", 8192)
+                for name, spec in cwm.config.get("models", {}).items()
+                if isinstance(spec, dict)
+            }
+        )
+        trimmed = await svc.compress_kb_results(kb_results, max_tokens=max_kb_tokens)
+        if not trimmed:
+            return ""
+        compressed = build_grounded_context([r["content"] for r in trimmed if r.get("content")])
+        logger.info(
+            "[#10735] KB compressed: %d → %d results (%d tokens)",
+            len(kb_results),
+            len(trimmed),
+            cwm.estimate_tokens(compressed),
+        )
+        return compressed
+
     @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=10.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     async def _generate_llm_response(
         self, user_message: str, llm, kb_results: List[Dict[str, Any]] | None = None
@@ -347,7 +388,8 @@ class AsyncChatWorkflow:
         base_system = (
             "You are AutoBot, an advanced autonomous AI assistant. Provide helpful, accurate, and concise responses."
         )
-        kb_context = self._build_kb_context_string(kb_results or [])
+        # #10735: budget KB context via ContextWindowManager (mirrors llm_handler.py ~L793-823)
+        kb_context = await self._budget_kb_context(kb_results or [])
         system_prompt = f"{kb_context}\n\n{base_system}" if kb_context else base_system
 
         # Prepare chat messages
