@@ -343,16 +343,18 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "cache_management",
     ),
     # NPU-accelerated search (#10666 B7: renamed from enhanced_search)
+    # Issue #10820: renamed /enhanced-search → /npu-search (era-marker removal)
     (
         "api.search",
-        "/enhanced-search",
-        ["enhanced-search"],
+        "/npu-search",
+        ["npu-search"],
         "search",
     ),
+    # Issue #10820: renamed /enhanced-memory → /task-memory (era-marker removal)
     (
         "api.task_memory",
-        "/enhanced-memory",
-        ["enhanced-memory"],
+        "/task-memory",
+        ["task-memory"],
         "task_memory",
     ),
     (

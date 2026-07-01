@@ -13,7 +13,7 @@
  * Issues #2228, #2230: Extracted from CodebaseAnalytics.vue.
  * Issue #5112: the 14x GET-fetcher boilerplate routes through
  * `useFetchEndpoint`. Every call-site opts in to source scoping with an
- * explicit `scopeToSource: true`; `/api/unified/report` is the one
+ * explicit `scopeToSource: true`; `/api/reporting/report` is the one
  * exception that stays global. Domain types live in `./analyticsTypes`.
  * Issue #5174: migrated off the deprecated `useAnalyticsEndpoint` alias
  * to the rehomed `@/composables/api/useFetchEndpoint`.
@@ -157,7 +157,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     UnifiedReportData
   >(
     {
-      path: '/api/unified/report',
+      path: '/api/reporting/report',
       scopeToSource: false, // global report — not source-scoped
       label: 'Unified report endpoint',
       pickData: (raw) => (raw.status === 'success' ? raw : null),

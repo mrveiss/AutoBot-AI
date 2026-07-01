@@ -21325,7 +21325,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/unified/report": {
+    "/api/reporting/report": {
         parameters: {
             query?: never;
             header?: never;
@@ -21353,7 +21353,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/unified/summary": {
+    "/api/reporting/summary": {
         parameters: {
             query?: never;
             header?: never;
@@ -21375,7 +21375,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/unified/trends": {
+    "/api/reporting/trends": {
         parameters: {
             query?: never;
             header?: never;
@@ -39190,7 +39190,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-search/semantic": {
+    "/api/npu-search/semantic": {
         parameters: {
             query?: never;
             header?: never;
@@ -39218,7 +39218,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-search/hardware/status": {
+    "/api/npu-search/hardware/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -39240,7 +39240,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-search/benchmark": {
+    "/api/npu-search/benchmark": {
         parameters: {
             query?: never;
             header?: never;
@@ -39262,7 +39262,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-search/optimize": {
+    "/api/npu-search/optimize": {
         parameters: {
             query?: never;
             header?: never;
@@ -39288,7 +39288,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-search/performance/analytics": {
+    "/api/npu-search/performance/analytics": {
         parameters: {
             query?: never;
             header?: never;
@@ -39311,7 +39311,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-search/test/connectivity": {
+    "/api/npu-search/test/connectivity": {
         parameters: {
             query?: never;
             header?: never;
@@ -39333,7 +39333,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/statistics": {
+    "/api/task-memory/statistics": {
         parameters: {
             query?: never;
             header?: never;
@@ -39353,7 +39353,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/tasks/history": {
+    "/api/task-memory/tasks/history": {
         parameters: {
             query?: never;
             header?: never;
@@ -39373,7 +39373,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/tasks": {
+    "/api/task-memory/tasks": {
         parameters: {
             query?: never;
             header?: never;
@@ -39393,7 +39393,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/tasks/{task_id}": {
+    "/api/task-memory/tasks/{task_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -39413,7 +39413,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/tasks/{task_id}/markdown-reference": {
+    "/api/task-memory/tasks/{task_id}/markdown-reference": {
         parameters: {
             query?: never;
             header?: never;
@@ -39433,7 +39433,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/markdown/scan": {
+    "/api/task-memory/markdown/scan": {
         parameters: {
             query?: never;
             header?: never;
@@ -39453,7 +39453,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/markdown/search": {
+    "/api/task-memory/markdown/search": {
         parameters: {
             query?: never;
             header?: never;
@@ -39473,7 +39473,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/markdown/{file_path}/references": {
+    "/api/task-memory/markdown/{file_path}/references": {
         parameters: {
             query?: never;
             header?: never;
@@ -39493,7 +39493,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/embeddings/cache-stats": {
+    "/api/task-memory/embeddings/cache-stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -39513,7 +39513,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/cleanup": {
+    "/api/task-memory/cleanup": {
         parameters: {
             query?: never;
             header?: never;
@@ -39533,7 +39533,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/active-tasks": {
+    "/api/task-memory/active-tasks": {
         parameters: {
             query?: never;
             header?: never;
