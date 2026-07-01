@@ -103,18 +103,22 @@ class EventExtractor(BaseCognifier):
         entity_map: Dict[str, Entity],
         context: PipelineContext,
     ) -> List[TemporalEvent]:
-        """Extract events from a single chunk."""
+        """Extract events from a single chunk.
+
+        Transient LLM errors are caught and return an empty list.
+        Format and parse errors are re-raised (#10645).
+        """
+        prompt = EVENT_EXTRACTION_PROMPT.format(text=chunk.content)
         try:
-            prompt = EVENT_EXTRACTION_PROMPT.format(text=chunk.content)
             response = await self.llm.chat(
                 [{"role": "user", "content": prompt}], llm_type="extraction", structured_output=True
             )
-            parsed = parse_llm_json_response(response.content)
-            raw_events = parsed if isinstance(parsed, list) else []
-            return self._convert_to_events(raw_events, chunk, entity_map, context)
         except Exception as e:
-            logger.error("Event extraction failed: %s", e)
+            logger.error("Event extraction LLM call failed (transient): %s", e)
             return []
+        parsed = parse_llm_json_response(response.content, strict=True)
+        raw_events = parsed if isinstance(parsed, list) else []
+        return self._convert_to_events(raw_events, chunk, entity_map, context)
 
     def _parse_llm_response(self, content: str) -> list:
         """

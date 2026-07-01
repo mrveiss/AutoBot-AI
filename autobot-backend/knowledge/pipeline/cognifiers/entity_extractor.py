@@ -259,18 +259,24 @@ class EntityExtractor(BaseCognifier):
         return entities
 
     async def _extract_from_chunk(self, chunk: ProcessedChunk, context: PipelineContext) -> List[Entity]:
-        """Extract entities from a single chunk."""
+        """Extract entities from a single chunk.
+
+        Transient LLM errors (network, timeout) are caught and return an empty
+        list so the pipeline can continue.  Format errors (bad prompt template →
+        KeyError) and parse errors (malformed JSON → JSONDecodeError) are
+        re-raised so they surface as bugs rather than silent empties (#10645).
+        """
+        prompt = ENTITY_EXTRACTION_PROMPT.format(text=chunk.content)
         try:
-            prompt = ENTITY_EXTRACTION_PROMPT.format(text=chunk.content)
             response = await self.llm.chat(
                 [{"role": "user", "content": prompt}], llm_type="extraction", structured_output=True
             )
-            parsed = parse_llm_json_response(response.content)
-            raw_entities = parsed if isinstance(parsed, list) else []
-            return self._convert_to_entities(raw_entities, chunk, context.document_id)
         except Exception as e:
-            logger.error("Entity extraction failed: %s", e)
+            logger.error("Entity extraction LLM call failed (transient): %s", e)
             return []
+        parsed = parse_llm_json_response(response.content, strict=True)
+        raw_entities = parsed if isinstance(parsed, list) else []
+        return self._convert_to_entities(raw_entities, chunk, context.document_id)
 
     def _convert_to_entities(
         self,

@@ -620,10 +620,34 @@ class ChatKnowledgeService:
             categories=effective_categories,
         )
 
-        # Issue #1261: Also search indexed documentation (autobot_docs)
-        doc_context = self._retrieve_documentation_context(query)
-        if doc_context:
-            context_string = doc_context + "\n\n" + context_string if context_string else doc_context
+        # Issue #1261, #10658: Search indexed documentation (autobot_docs) and
+        # label each chunk as [Source N] continuing from KB source numbering so
+        # citation indices are contiguous and the frontend can resolve them.
+        doc_results = self._retrieve_raw_doc_results(query)
+        if doc_results:
+            kb_count = len(citations)
+            doc_lines: List[str] = []
+            for offset, result in enumerate(doc_results, 1):
+                source_n = kb_count + offset
+                content = result.get("content", "").strip()
+                doc_lines.append(f"[Source {source_n}] {content}")
+                citations.append(
+                    {
+                        "id": f"doc_{offset}",
+                        "content": content,
+                        "score": result.get("score", 0.0),
+                        "source": result.get("file_path", ""),
+                        "title": result.get("section", ""),
+                        "rank": source_n,
+                        "metadata": {
+                            "doc_type": result.get("doc_type", "documentation"),
+                            "section": result.get("section", ""),
+                            "subsection": result.get("subsection", ""),
+                        },
+                    }
+                )
+            doc_block = "AUTOBOT DOCUMENTATION CONTEXT:\n" + "\n".join(doc_lines)
+            context_string = doc_block + "\n\n" + context_string if context_string else doc_block
 
         logger.info(
             "[Conversation RAG] Completed in %.3fs - %d citations, " "enhanced=%s, categories=%s, docs=%s",
@@ -631,7 +655,7 @@ class ChatKnowledgeService:
             len(citations),
             enhanced_query.enhancement_applied,
             effective_categories or "all",
-            bool(doc_context),
+            bool(doc_results),
         )
         return context_string, citations, intent_result, enhanced_query
 
@@ -676,6 +700,35 @@ class ChatKnowledgeService:
         except Exception as e:
             logger.warning("[Doc Search] Failed: %s", e)
             return ""
+
+    def _retrieve_raw_doc_results(
+        self, query: str, n_results: int = 3, score_threshold: float = 0.3
+    ) -> List[Dict[str, Any]]:
+        """Return raw doc-search results without pre-formatting (#10658).
+
+        Used by ``conversation_aware_retrieve`` to build [Source N] labels that
+        continue from the KB citation count, keeping citation indices contiguous.
+        """
+        if not self.doc_searcher:
+            return []
+        try:
+            if not self.doc_searcher.is_documentation_query(query):
+                return []
+            results = self.doc_searcher.search(
+                query=query,
+                n_results=n_results,
+                score_threshold=score_threshold,
+            )
+            if results:
+                logger.info(
+                    "[Doc Search] Retrieved %d raw documentation chunks for: '%s...'",
+                    len(results),
+                    query[:50],
+                )
+            return results
+        except Exception as e:
+            logger.warning("[Doc Search] Raw retrieval failed: %s", e)
+            return []
 
     def _search_and_format_documentation(
         self,
