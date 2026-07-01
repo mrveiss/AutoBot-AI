@@ -375,6 +375,7 @@ async def _emit_permission_denied_audit(
     permission: str,
     path: str,
     *,
+    org_id: uuid.UUID | None = None,
     ip_address: str | None = None,
     user_agent: str | None = None,
 ) -> None:
@@ -384,12 +385,13 @@ async def _emit_permission_denied_audit(
     denial is never silently lost.  A DB failure is caught, logged as an error,
     and does NOT propagate — the caller's 403 is unaffected.
     """
-    logger.warning("Permission denied: user=%s permission=%s path=%s", user_id, permission, path)
+    logger.warning("Permission denied: user=%s org=%s permission=%s path=%s", user_id, org_id, permission, path)
     try:
         async with db_session_context() as session:
             entry = AuditLog(
                 id=uuid.uuid4(),
                 user_id=user_id,
+                org_id=org_id,
                 action=AuditAction.PERMISSION_DENIED,
                 resource_type=AuditResourceType.ENDPOINT,
                 outcome="denied",
@@ -428,6 +430,7 @@ def require_permission(permission: str):
                     user_id,
                     perm_str,
                     str(request.url.path),
+                    org_id=org_id,
                     ip_address=request.client.host if request.client else None,
                     user_agent=request.headers.get("user-agent"),
                 )
@@ -460,6 +463,7 @@ def require_any_permission(permissions: List[str]):
                     user_id,
                     str(perm_strs),
                     str(request.url.path),
+                    org_id=org_id,
                     ip_address=request.client.host if request.client else None,
                     user_agent=request.headers.get("user-agent"),
                 )
@@ -492,6 +496,7 @@ def require_all_permissions(permissions: List[str]):
                     user_id,
                     str(perm_strs),
                     str(request.url.path),
+                    org_id=org_id,
                     ip_address=request.client.host if request.client else None,
                     user_agent=request.headers.get("user-agent"),
                 )
