@@ -167,3 +167,74 @@ async def test_execute_command_rejects_expired_session():
     # No client configured → falls through to "needs_elevation" error
     assert result["success"] is False
     assert result.get("needs_elevation") is True
+
+
+# ---------------------------------------------------------------------------
+# _execute_elevated: sudo fallback guard (issue #10799)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_execute_elevated_with_client_delegates():
+    """elevation_client present → execute_elevated_command is called (unchanged path)."""
+    client = MagicMock()
+    client.execute_elevated_command = AsyncMock(return_value={"success": True, "output": "done"})
+    w = ElevationWrapper(elevation_client=client)
+
+    result = await w._execute_elevated("apt-get upgrade", "tok-abc")
+
+    client.execute_elevated_command.assert_called_once_with("apt-get upgrade", "tok-abc")
+    assert result["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_execute_elevated_no_client_dev_env_permits_sudo():
+    """No client + development environment → direct sudo fallback is permitted."""
+    w = ElevationWrapper()  # no client
+
+    with patch("elevation_wrapper.config") as mock_cfg:
+        mock_cfg.environment = "development"
+        mock_cfg.misc.ci = ""
+        mock_cfg.misc.allow_unapproved_sudo = False
+        with patch.object(
+            w, "_execute_normal", new=AsyncMock(return_value={"success": True, "output": "ok"})
+        ) as mock_exec:
+            result = await w._execute_elevated("apt-get upgrade", "tok-dev")
+
+    mock_exec.assert_called_once_with("sudo apt-get upgrade")
+    assert result["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_execute_elevated_no_client_production_blocks_sudo():
+    """No client + production environment → blocked; sudo is NOT executed. Issue #10799."""
+    w = ElevationWrapper()  # no client
+
+    with patch("elevation_wrapper.config") as mock_cfg:
+        mock_cfg.environment = "production"
+        mock_cfg.misc.ci = ""
+        mock_cfg.misc.allow_unapproved_sudo = False
+        with patch.object(w, "_execute_normal", new=AsyncMock()) as mock_exec:
+            result = await w._execute_elevated("apt-get upgrade", "tok-prod")
+
+    mock_exec.assert_not_called()
+    assert result["success"] is False
+    assert result.get("blocked") is True
+
+
+@pytest.mark.asyncio
+async def test_execute_elevated_no_client_production_explicit_allow():
+    """No client + production + AUTOBOT_ALLOW_UNAPPROVED_SUDO=true → fallback permitted."""
+    w = ElevationWrapper()  # no client
+
+    with patch("elevation_wrapper.config") as mock_cfg:
+        mock_cfg.environment = "production"
+        mock_cfg.misc.ci = ""
+        mock_cfg.misc.allow_unapproved_sudo = True
+        with patch.object(
+            w, "_execute_normal", new=AsyncMock(return_value={"success": True, "output": "ok"})
+        ) as mock_exec:
+            result = await w._execute_elevated("apt-get upgrade", "tok-allow")
+
+    mock_exec.assert_called_once_with("sudo apt-get upgrade")
+    assert result["success"] is True
