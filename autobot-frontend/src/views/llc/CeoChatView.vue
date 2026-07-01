@@ -117,10 +117,14 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useI18n } from 'vue-i18n'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 
 const logger = createLogger('CeoChatView')
 const api = useApiClient()
 const route = useRoute()
+const { t } = useI18n()
+const { showToast } = useNotificationBus()
 
 const props = defineProps<{ companyId?: string }>()
 const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
@@ -218,7 +222,9 @@ async function sendMessage() {
     scrollToBottom()
   } catch (err) {
     logger.error('Failed to send message', err)
+    // Restore the message so the user can retry rather than losing it silently.
     inputText.value = body
+    showToast(t('llcBrowser.ceoChat.sendError'), 'error')
   } finally {
     sending.value = false
   }

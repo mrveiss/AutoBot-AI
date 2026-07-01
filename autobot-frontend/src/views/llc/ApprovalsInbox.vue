@@ -144,11 +144,15 @@ import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useUserStore } from '@/stores/useUserStore'
+import { useI18n } from 'vue-i18n'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 
 const logger = createLogger('ApprovalsInbox')
 const api = useApiClient()
 const route = useRoute()
 const userStore = useUserStore()
+const { t } = useI18n()
+const { showToast } = useNotificationBus()
 
 const props = defineProps<{ companyId?: string }>()
 const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
@@ -249,6 +253,7 @@ async function decide(id: string, decision: string, note?: string) {
     await fetchApprovals()
   } catch (err) {
     logger.error('Decision failed', err)
+    showToast(t('llcBrowser.approvals.decideError'), 'error')
   } finally {
     const s = new Set(processing.value)
     s.delete(id)
