@@ -254,22 +254,23 @@ The pre-commit wrapper (`scripts/hooks/pre-commit-branch-guard-wrapper`) runs `p
 
 **"It was already there" is never a reason to ignore a problem.**
 
-Every bug, inconsistency, security issue, hardcoded value, or tech debt found must be reported:
-
-- Create a GitHub issue immediately with description, severity, and location
-- Report to the user and ask for direction: fix now, fix after current task, or defer
+Every bug, inconsistency, security issue, hardcoded value, or tech debt found must be reported **AND, by default, FIXED**. "It was already there" is never a reason to leave it. File a tracking issue for visibility, then fix it — in the **same PR when it's in-scope**, or a **fast-follow PR** when larger. Do not merely file-and-move-on.
 
 **Classification:**
 
-Fix immediately WITHOUT asking:
-- Security vulnerability in code you're modifying
-- Data corruption risk, syntax error breaking tests, import error blocking changes
+Fix along the way WITHOUT asking (file a tracking issue, then fix — same PR when in-scope):
+- Any pre-existing bug in a file/module you are already modifying
+- A pre-existing defect that nullifies or undermines the change you're making (e.g. a missing `await` that makes the code you just optimized a silent no-op; a mangled list entry that disables a security check)
+- Security vulnerability, data-corruption risk, syntax/import error, swallowed exception, or other correctness bug
+- Low-risk correctness fixes with a clear root cause — always add a regression test
 
 Create issue + ASK before fixing:
-- Performance problem, code smell, missing documentation, refactoring opportunity
+- Large refactors, architecture/product decisions, or feature builds (PRD-gated) — surface with a recommendation, don't build unilaterally
+- Fixes with a wide/risky blast radius or genuinely ambiguous intended behavior
 
 Create issue + DEFER (don't ask):
-- Minor style issues, optimization opportunities, unrelated bugs
+- Genuinely unrelated bugs far from the current change
+- Speculative optimizations with no measured impact (e.g. bounded analyzer loops)
 
 **One Issue Per Session Rule:**
 When an issue is complete, wait for explicit user instruction before starting new work.

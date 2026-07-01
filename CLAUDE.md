@@ -37,7 +37,7 @@ Correctness → Speed → Maintainability. No wasted motion. No speculative work
 3. **Standardize** — ≤30-line functions; no `_v2`/`_fix` suffixes
 4. **Clarify** — confirm architecture before coding
 5. **Verify** — show evidence (test output, curl, build) before claiming done
-6. **Report** — file GitHub issues for every discovered bug, even off-task
+6. **Report & Fix** — file GitHub issues for every discovered bug, even off-task, and **fix pre-existing issues discovered along the way** (same PR when in-scope; fast-follow when larger). ASK only for large refactors / product decisions / risky blast radius. See [`CLAUDE_RULES.md`](docs/developer/CLAUDE_RULES.md) Rule 6.
 
 ---
 
