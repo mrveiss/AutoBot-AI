@@ -198,3 +198,32 @@ class TestEmitPermissionDeniedAudit:
         entry = added_entries[0]
         assert entry.ip_address is None
         assert entry.user_agent is None
+
+    @pytest.mark.asyncio
+    async def test_org_id_is_recorded_on_entry(self):
+        """org_id passed by the caller is written to the AuditLog row."""
+        user_id = uuid.uuid4()
+        org_id = uuid.uuid4()
+
+        added_entries = []
+        session = MagicMock()
+        session.add = MagicMock(side_effect=added_entries.append)
+
+        with patch.object(_rbac_mod, "db_session_context", return_value=_make_session_ctx(session)):
+            await _rbac_mod._emit_permission_denied_audit(user_id, "admin.read", "/admin", org_id=org_id)
+
+        assert len(added_entries) == 1
+        assert added_entries[0].org_id == org_id
+
+    @pytest.mark.asyncio
+    async def test_none_org_id_is_accepted(self):
+        """org_id=None (platform-level or anonymous context) must not crash the audit call."""
+        added_entries = []
+        session = MagicMock()
+        session.add = MagicMock(side_effect=added_entries.append)
+
+        with patch.object(_rbac_mod, "db_session_context", return_value=_make_session_ctx(session)):
+            await _rbac_mod._emit_permission_denied_audit(uuid.uuid4(), "users.write", "/api/users", org_id=None)
+
+        assert len(added_entries) == 1
+        assert added_entries[0].org_id is None
