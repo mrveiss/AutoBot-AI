@@ -72,9 +72,30 @@ class SemanticLLMCache:
     # Public API
     # ------------------------------------------------------------------
 
-    def generate_cache_key(self, messages, model, temperature, top_k=40, top_p=0.9):
-        """Delegate key generation to the wrapped exact cache."""
-        return self._exact.generate_cache_key(messages, model, temperature, top_k, top_p)
+    def generate_cache_key(
+        self,
+        messages,
+        model,
+        temperature,
+        top_k: int = 40,
+        top_p: float = 0.9,
+        max_tokens: int | None = None,
+        structured_output: bool = False,
+    ):
+        """Delegate key generation to the wrapped exact cache.
+
+        Signature mirrors LLMResponseCache.generate_cache_key exactly so the
+        two classes can never diverge on key dimensions (#10669).
+        """
+        return self._exact.generate_cache_key(
+            messages,
+            model,
+            temperature,
+            top_k,
+            top_p,
+            max_tokens,
+            structured_output,
+        )
 
     async def get(self, cache_key: str, prompt: str | None = None) -> Any | None:
         """

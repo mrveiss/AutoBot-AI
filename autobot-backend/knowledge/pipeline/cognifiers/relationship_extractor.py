@@ -240,19 +240,23 @@ class RelationshipExtractor(BaseCognifier):
         entities: List[Entity],
         entity_map: Dict[str, Entity],
     ) -> List[Relationship]:
-        """Extract relationships from a single chunk."""
+        """Extract relationships from a single chunk.
+
+        Transient LLM errors are caught and return an empty list.
+        Format and parse errors are re-raised (#10645).
+        """
+        entity_list = self._format_entity_list(entities, chunk)
+        prompt = RELATIONSHIP_EXTRACTION_PROMPT.format(entities=entity_list, text=chunk.content)
         try:
-            entity_list = self._format_entity_list(entities, chunk)
-            prompt = RELATIONSHIP_EXTRACTION_PROMPT.format(entities=entity_list, text=chunk.content)
             response = await self.llm.chat(
                 [{"role": "user", "content": prompt}], llm_type="extraction", structured_output=True
             )
-            parsed = parse_llm_json_response(response.content)
-            raw_rels = parsed if isinstance(parsed, list) else []
-            return self._convert_to_relationships(raw_rels, chunk, entity_map)
         except Exception as e:
-            logger.error("Relationship extraction failed: %s", e)
+            logger.error("Relationship extraction LLM call failed (transient): %s", e)
             return []
+        parsed = parse_llm_json_response(response.content, strict=True)
+        raw_rels = parsed if isinstance(parsed, list) else []
+        return self._convert_to_relationships(raw_rels, chunk, entity_map)
 
     def _parse_llm_response(self, content: str) -> list:
         """

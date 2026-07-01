@@ -21,6 +21,7 @@ def parse_llm_json_response(
     content: str,
     *,
     fallback_dict: bool = False,
+    strict: bool = False,
 ) -> List[Dict[str, Any]] | Dict[str, Any]:
     """Parse LLM response as JSON, handling markdown code fences.
 
@@ -28,6 +29,10 @@ def parse_llm_json_response(
         content: Raw LLM response text.
         fallback_dict: If True, return a dict fallback on parse failure
                        (used by summarizer). Otherwise return empty list.
+        strict: If True, re-raise ``json.JSONDecodeError`` instead of
+                returning an empty fallback — callers that must not swallow
+                parse failures (e.g. cognifier extractors) use this so
+                malformed LLM responses surface as errors (#10645).
 
     Returns:
         Parsed JSON (list or dict depending on LLM output).
@@ -41,6 +46,8 @@ def parse_llm_json_response(
         if "```" in content:
             json_str = content.split("```")[1].split("```")[0].strip()
             return json.loads(json_str)
+        if strict:
+            raise
         logger.warning("Could not parse LLM response as JSON")
         if fallback_dict:
             return {"summary": content, "key_topics": [], "key_entities": []}

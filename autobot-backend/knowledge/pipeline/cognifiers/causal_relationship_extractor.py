@@ -306,17 +306,17 @@ class CausalRelationshipExtractor(BaseCognifier):
         Returns:
             List of causal edges from chunk
         """
+        prompt = CAUSAL_EXTRACTION_PROMPT.format(text=chunk.content)
         try:
-            prompt = CAUSAL_EXTRACTION_PROMPT.format(text=chunk.content)
             response = await self.llm.chat(
                 [{"role": "user", "content": prompt}], llm_type="extraction", structured_output=True
             )
-            parsed = parse_llm_json_response(response.content)
-            raw_edges = parsed if isinstance(parsed, list) else []
-            return self._convert_to_causal_edges(raw_edges, chunk, context.document_id)
         except Exception as e:
-            logger.error("Causal extraction failed for chunk: %s", e)
+            logger.error("Causal extraction LLM call failed (transient): %s", e)
             return []
+        parsed = parse_llm_json_response(response.content, strict=True)
+        raw_edges = parsed if isinstance(parsed, list) else []
+        return self._convert_to_causal_edges(raw_edges, chunk, context.document_id)
 
     def _convert_to_causal_edges(
         self, raw_edges: List[Dict[str, Any]], chunk: ProcessedChunk, document_id

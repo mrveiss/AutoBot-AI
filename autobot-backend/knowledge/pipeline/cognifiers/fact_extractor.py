@@ -299,18 +299,22 @@ class FactExtractor(BaseCognifier):
         return facts
 
     async def _extract_from_chunk(self, chunk: ProcessedChunk, context: PipelineContext) -> List[AtomicFact]:
-        """Extract facts from a single chunk using LLM."""
+        """Extract facts from a single chunk using LLM.
+
+        Transient LLM errors are caught and return an empty list.
+        Format and parse errors are re-raised (#10645).
+        """
+        prompt = FACT_EXTRACTION_PROMPT.format(text=chunk.content[:MAX_CHUNK_CHARS])
         try:
-            prompt = FACT_EXTRACTION_PROMPT.format(text=chunk.content[:MAX_CHUNK_CHARS])
             response = await self.llm.chat(
                 [{"role": "user", "content": prompt}], llm_type="extraction", structured_output=True
             )
-            parsed = parse_llm_json_response(response.content)
-            raw_facts = parsed if isinstance(parsed, list) else []
-            return self._convert_to_facts(raw_facts, chunk, context.document_id)
         except Exception as e:
-            logger.error("Fact extraction failed for chunk %s: %s", chunk.id, e)
+            logger.error("Fact extraction LLM call failed (transient) for chunk %s: %s", chunk.id, e)
             return []
+        parsed = parse_llm_json_response(response.content, strict=True)
+        raw_facts = parsed if isinstance(parsed, list) else []
+        return self._convert_to_facts(raw_facts, chunk, context.document_id)
 
     def _convert_to_facts(
         self,
