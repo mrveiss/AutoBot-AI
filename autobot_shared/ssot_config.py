@@ -532,6 +532,15 @@ class TimeoutConfig(BaseSettings):
     a2a_task_ttl: float = Field(default=3600.0, alias="AUTOBOT_A2A_TASK_TTL_SECONDS")
 
     # ------------------------------------------------------------------ #
+    # Elevation session (seconds)                                          #
+    # ------------------------------------------------------------------ #
+
+    # How long an approved elevation session remains valid before the user
+    # must re-authenticate.  Default 900 s (15 min) matches the UI label.
+    # Override with AUTOBOT_ELEVATION_SESSION_TTL. (#10723)
+    elevation_session_ttl: int = Field(default=900, alias="AUTOBOT_ELEVATION_SESSION_TTL")
+
+    # ------------------------------------------------------------------ #
     # Skill / code validation (seconds)                                    #
     # ------------------------------------------------------------------ #
 

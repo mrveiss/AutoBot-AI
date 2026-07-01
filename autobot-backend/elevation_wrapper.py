@@ -10,11 +10,12 @@ Provides secure sudo command execution with GUI elevation dialogs
 
 import asyncio
 import re
-import subprocess  # nosec B404 - elevation wrapper requires subprocess
-from typing import Dict, Tuple
+import time
+from typing import Dict, Optional, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 
@@ -50,7 +51,9 @@ class ElevationWrapper:
     def __init__(self, elevation_client=None):
         """Initialize elevation wrapper with optional client and session management."""
         self.elevation_client = elevation_client
-        self.active_session = None
+        self.active_session: Optional[str] = None
+        # Monotonic timestamp set when a session token is granted; None when no session.
+        self.session_created_at: Optional[float] = None
         self.session_commands = {}
 
     async def _request_and_execute_elevated(
@@ -74,7 +77,7 @@ class ElevationWrapper:
             )
 
             if elevation_result.get("approved"):
-                self.active_session = elevation_result.get("session_token")
+                self._record_session(elevation_result.get("session_token"))
                 return await self._execute_elevated(clean_command, self.active_session)
             else:
                 return {
@@ -90,6 +93,11 @@ class ElevationWrapper:
                 "error": "Failed to request elevation",
                 "needs_elevation": True,
             }
+
+    def _record_session(self, session_token: Optional[str]) -> None:
+        """Store the approved session token and record the creation timestamp."""
+        self.active_session = session_token
+        self.session_created_at = time.monotonic()
 
     async def execute_command(
         self,
@@ -141,13 +149,22 @@ class ElevationWrapper:
         return False, command
 
     def _is_session_valid(self) -> bool:
-        """Check if current elevation session is still valid"""
-        if not self.active_session:
+        """Return True only when an unexpired elevation session token is held.
+
+        A session is valid when:
+        - ``active_session`` is set (a token was granted), AND
+        - the elapsed time since grant is within ``AUTOBOT_ELEVATION_SESSION_TTL``
+          seconds (default 900 s / 15 min, configurable via env).
+
+        Expired or missing sessions return False — the caller must re-request
+        elevation.  This closes the unattended-terminal privilege escalation
+        window described in issue #10723.
+        """
+        if not self.active_session or self.session_created_at is None:
             return False
 
-        # In real implementation, check session expiry
-        # For now, assume sessions are valid for 15 minutes
-        return True
+        elapsed = time.monotonic() - self.session_created_at
+        return elapsed < config.timeout.elevation_session_ttl
 
     async def _execute_normal(self, command: str) -> Dict:
         """Execute command without elevation"""
@@ -176,17 +193,27 @@ class ElevationWrapper:
             }
 
     async def _execute_elevated(self, command: str, session_token: str) -> Dict:
-        """Execute command with elevation using session token"""
+        """Execute command with elevation using session token.
 
-        # In production, this would use the elevation API
-        # For now, we'll simulate the execution
+        Primary path: delegates to ``elevation_client.execute_elevated_command``
+        when a GUI elevation client is configured (production).
+
+        Fallback path: runs ``sudo <command>`` directly when no client is
+        present.  This fallback is intentional for headless/CI environments
+        where no GUI is available, but it bypasses the GUI approval flow.
+        Security note: ensure the fallback path is not reachable in
+        multi-user deployments — configure an elevation_client instead.
+        """
         try:
-            # Call elevation API to execute command
             if self.elevation_client:
                 result = await self.elevation_client.execute_elevated_command(command, session_token)
                 return result
             else:
-                # Fallback to direct sudo (should not happen in production)
+                # Fallback: direct sudo — only reached when no GUI client is configured.
+                logger.warning(
+                    "No elevation client configured; falling back to direct sudo for command: %s",
+                    command,
+                )
                 return await self._execute_normal(f"sudo {command}")
 
         except Exception as e:
@@ -200,6 +227,7 @@ class ElevationWrapper:
     def clear_session(self):
         """Clear the current elevation session"""
         self.active_session = None
+        self.session_created_at = None
         self.session_commands.clear()
 
 
@@ -217,23 +245,3 @@ def wrap_sudo_command(command: str) -> str:
 async def execute_with_elevation(command: str, **kwargs):
     """Convenience function to execute command with elevation if needed"""
     return await get_elevation_wrapper().execute_command(command, **kwargs)
-
-
-# Monkey-patch subprocess to intercept sudo calls
-_original_popen = subprocess.Popen
-
-
-def _elevation_aware_popen(cmd, *args, **kwargs):
-    """Intercept subprocess calls and handle sudo"""
-    if isinstance(cmd, str) and "sudo" in cmd:
-        logger.warning("Direct sudo call intercepted: %s", cmd)
-        # In production, this should trigger elevation dialog
-        # For now, pass through with warning
-    elif isinstance(cmd, list) and "sudo" in cmd:
-        logger.warning("Direct sudo call intercepted: %s", " ".join(cmd))
-
-    return _original_popen(cmd, *args, **kwargs)
-
-
-# Enable interception (commented out by default)
-# subprocess.Popen = _elevation_aware_popen
