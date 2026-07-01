@@ -439,8 +439,11 @@ async def analyze_diff(
 
     Returns review findings with severity and suggestions.
     """
-    source_root = await _resolve_source_root_or_404(source_id)
-    diff_content = await get_git_diff(commit_range)
+    # source_root and diff_content have no data dependency — parallelize the I/O.
+    source_root, diff_content = await asyncio.gather(
+        _resolve_source_root_or_404(source_id),
+        get_git_diff(commit_range),
+    )
 
     if not diff_content:
         # Issue #543: Return no-data response instead of demo data
@@ -493,7 +496,6 @@ async def analyze_diff(
         if redis:
             effective_source = source_id or "default"
             redis_key = f"code_review:result:{effective_source}:{review_id}"
-            await asyncio.to_thread(redis.set, redis_key, json.dumps(result_payload), "ex", TTL_7_DAYS)
             history_entry = {
                 "id": review_id,
                 "path": result_payload["path"],
@@ -502,13 +504,17 @@ async def analyze_diff(
                 "score": score,
                 "source_id": effective_source,
             }
-            await asyncio.to_thread(
-                redis.lpush,
-                f"code_review:history:{effective_source}",
-                json.dumps(history_entry),
+            # redis.set writes to a different key than history ops — parallelize round-trips.
+            await asyncio.gather(
+                asyncio.to_thread(redis.set, redis_key, json.dumps(result_payload), "ex", TTL_7_DAYS),
+                asyncio.to_thread(redis.lpush, f"code_review:history:{effective_source}", json.dumps(history_entry)),
             )
-            await asyncio.to_thread(redis.ltrim, f"code_review:history:{effective_source}", 0, 99)
-            await asyncio.to_thread(redis.expire, f"code_review:history:{effective_source}", TTL_7_DAYS)
+            # ltrim and expire both require lpush to have created the key first;
+            # they are independent of each other so run them concurrently.
+            await asyncio.gather(
+                asyncio.to_thread(redis.ltrim, f"code_review:history:{effective_source}", 0, 99),
+                asyncio.to_thread(redis.expire, f"code_review:history:{effective_source}", TTL_7_DAYS),
+            )
             logger.info("Stored code review result %s for source %s", review_id, effective_source)
     except Exception as exc:
         logger.warning("Failed to persist code review result: %s", exc)

@@ -17,6 +17,7 @@ Related Issues: #228 (LLM-Powered Code Generation)
 """
 
 import ast
+import asyncio
 import difflib
 import hashlib
 import json
@@ -438,7 +439,10 @@ class CodeGenerationEngine:
     async def _get_redis(self):
         """Get Redis client lazily"""
         if self._redis is None:
-            self._redis = get_redis_client(async_client=True, database=RedisDatabase.MAIN)
+            # get_redis_client(async_client=True) returns a COROUTINE — must be awaited
+            # (see autobot_shared/redis_client.py landmine note). Missing await here
+            # silently broke every stats/version Redis op (AttributeError swallowed).
+            self._redis = await get_redis_client(async_client=True, database=RedisDatabase.MAIN)
         return self._redis
 
     def _get_llm_client(self):
@@ -738,15 +742,17 @@ class CodeGenerationEngine:
 
             stats_key = f"{self._stats_key}:{datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')}"
 
-            # Increment counters
-            await redis.hincrby(stats_key, f"{operation}:total", 1)
-            await redis.hincrby(stats_key, f"{operation}:{language}:total", 1)
-            await redis.hincrby(stats_key, f"{operation}:tokens", tokens)
-
+            # Increment counters — each writes a distinct hash field; safe to parallelize.
+            incr_coros = [
+                redis.hincrby(stats_key, f"{operation}:total", 1),
+                redis.hincrby(stats_key, f"{operation}:{language}:total", 1),
+                redis.hincrby(stats_key, f"{operation}:tokens", tokens),
+            ]
             if success:
-                await redis.hincrby(stats_key, f"{operation}:success", 1)
+                incr_coros.append(redis.hincrby(stats_key, f"{operation}:success", 1))
+            await asyncio.gather(*incr_coros)
 
-            # Set expiry (30 days)
+            # Set expiry AFTER hincrby has created/updated the key (ordering dependency).
             await redis.expire(stats_key, TTL_30_DAYS)
 
         except Exception as e:

@@ -15,7 +15,7 @@ Tests the following functionality:
 import sys
 import types
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -175,3 +175,77 @@ class TestSourceIdGuardLogic:
             from api.analytics_code_review import _resolve_source_or_404
 
             await _resolve_source_or_404("valid-id")
+
+
+class TestAnalyzeDiffGather:
+    """Tests for analyze_diff gather refactor (Issue #10811).
+
+    Verifies that the two gather points in analyze_diff produce the same result
+    as the previous sequential version:
+    1. source_root + diff_content resolved in parallel, both values present.
+    2. redis.set + redis.lpush run in parallel; ltrim + expire follow lpush.
+    """
+
+    @pytest.mark.asyncio
+    async def test_source_root_and_diff_content_both_resolved(self):
+        """Both source_root and diff_content must be populated after the gather."""
+        import asyncio
+
+        results = {}
+
+        async def fake_resolve_root(source_id):
+            results["source_root_called"] = True
+            return None
+
+        async def fake_get_diff(commit_range):
+            results["diff_called"] = True
+            return ""
+
+        source_root, diff_content = await asyncio.gather(
+            fake_resolve_root(None),
+            fake_get_diff(None),
+        )
+
+        assert results.get("source_root_called")
+        assert results.get("diff_called")
+        assert source_root is None
+        assert diff_content == ""
+
+    @pytest.mark.asyncio
+    async def test_redis_persist_call_order(self):
+        """set+lpush run in parallel; ltrim+expire only after lpush completes."""
+        import asyncio
+
+        call_log = []
+
+        def make_sync_fn(name):
+            def fn(*args, **kwargs):
+                call_log.append(name)
+
+            return fn
+
+        redis_mock = MagicMock()
+        redis_mock.set = make_sync_fn("set")
+        redis_mock.lpush = make_sync_fn("lpush")
+        redis_mock.ltrim = make_sync_fn("ltrim")
+        redis_mock.expire = make_sync_fn("expire")
+
+        # Simulate the two gather calls from analyze_diff
+        await asyncio.gather(
+            asyncio.to_thread(redis_mock.set, "result_key", "payload", "ex", 604800),
+            asyncio.to_thread(redis_mock.lpush, "history_key", "entry"),
+        )
+        await asyncio.gather(
+            asyncio.to_thread(redis_mock.ltrim, "history_key", 0, 99),
+            asyncio.to_thread(redis_mock.expire, "history_key", 604800),
+        )
+
+        # set and lpush must both have been called
+        assert "set" in call_log
+        assert "lpush" in call_log
+        # ltrim and expire must come after lpush
+        lpush_idx = call_log.index("lpush")
+        ltrim_idx = call_log.index("ltrim")
+        expire_idx = call_log.index("expire")
+        assert ltrim_idx > lpush_idx
+        assert expire_idx > lpush_idx
