@@ -576,7 +576,8 @@ onMounted(() => {
   top: 0;
   right: 0;
   width: 480px;
-  height: 100vh;
+  /* #10750 C2: cap height so long previews scroll internally (.preview-body) */
+  max-height: 90vh;
   background: var(--bg-elevated);
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.2);
   display: flex;

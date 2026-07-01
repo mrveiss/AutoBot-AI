@@ -184,6 +184,10 @@ function handleBackdropClick(event: MouseEvent) {
   max-width: 500px;
   width: 100%;
   border: 1px solid var(--border-color);
+  /* #10750 C2: cap height so header/actions stay fixed and body scrolls */
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-header {
@@ -211,6 +215,9 @@ function handleBackdropClick(event: MouseEvent) {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
+  /* #10750 C2: scroll long consent text; keep header/actions in view */
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .consent-intro {

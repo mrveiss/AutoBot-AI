@@ -77,7 +77,8 @@ const contactAdmin = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
+  /* #10750 C2: .view-container-centered already clamps to viewport-header */
+  min-height: 100%;
   background: var(--bg-primary);
 }
 </style>

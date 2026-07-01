@@ -758,7 +758,10 @@ onMounted(async () => {
   width: 90%;
   max-width: 600px;
   max-height: 90vh;
-  overflow: auto;
+  /* #10750 C2: keep header/footer fixed; scroll only .modal-body */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   box-shadow: var(--shadow-2xl);
 }
 
@@ -791,6 +794,9 @@ onMounted(async () => {
 
 .modal-body {
   padding: var(--spacing-5);
+  /* #10750 C2: single scroll region */
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .modal-footer {

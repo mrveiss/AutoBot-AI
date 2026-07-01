@@ -839,7 +839,7 @@ watch(selectedPeriod, () => {
 .technical-debt-dashboard {
   padding: var(--spacing-lg);
   background: var(--bg-primary);
-  min-height: 100vh;
+  min-height: 100%;
   color: var(--text-primary);
 }
 

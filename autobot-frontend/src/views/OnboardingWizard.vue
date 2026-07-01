@@ -446,7 +446,9 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 100vh;
+  /* #10750 C2: .view-container already clamps to viewport-header and scrolls;
+     100vh forced the wizard-footer (Back/Next/Apply) below the fold */
+  min-height: 100%;
   padding: 2rem 1rem;
   background: var(--color-bg-primary, #0f1117);
 }

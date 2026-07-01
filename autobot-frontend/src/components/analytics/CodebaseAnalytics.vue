@@ -954,8 +954,8 @@ onUnmounted(() => {
   padding: var(--spacing-5);
   background: var(--bg-primary);
   color: var(--text-primary);
-  min-height: 100vh;
-  overflow-y: auto;
+  /* #10750 C2: fill scrolling parent; drop inner overflow to avoid double scroll */
+  min-height: 100%;
   overflow-x: hidden;
 }
 

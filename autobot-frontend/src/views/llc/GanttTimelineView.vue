@@ -487,6 +487,9 @@ onBeforeUnmount(() => {
 }
 
 .gantt-scroll {
+  /* #10750 C2: fill remaining height of the flex-column view and scroll internally */
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   border: 1px solid var(--color-border, #e5e7eb);
   border-radius: 8px;

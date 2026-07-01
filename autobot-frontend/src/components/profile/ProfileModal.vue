@@ -384,7 +384,10 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   width: 90%;
   max-width: 600px;
   max-height: 90vh;
-  overflow-y: auto;
+  /* #10750 C2: keep header fixed; scroll only .modal-body */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   box-shadow: var(--shadow-xl);
 }
 
@@ -461,6 +464,9 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 
 .modal-body {
   padding: var(--spacing-6);
+  /* #10750 C2: single scroll region */
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .profile-section {

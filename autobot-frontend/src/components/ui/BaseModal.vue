@@ -220,7 +220,9 @@ if (import.meta.env.DEV) {
   max-width: 1200px;
 }
 
-.dialog-scrollable {
+/* #10750 C2: scroll only .dialog-content, never the whole .dialog
+   (overflow on both created a double scrollbar + header/actions scrolling away) */
+.dialog-scrollable .dialog-content {
   overflow-y: auto;
 }
 
@@ -267,7 +269,7 @@ if (import.meta.env.DEV) {
 /* Content */
 .dialog-content {
   flex: 1;
-  overflow-y: auto;
+  min-height: 0;
   padding: var(--spacing-6);
 }
 

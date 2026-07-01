@@ -1005,7 +1005,8 @@ watch(selectedPeriod, () => {
 .code-quality-dashboard {
   padding: var(--spacing-6);
   background: var(--bg-primary);
-  min-height: 100vh;
+  /* #10750 C2: fill the scrolling .analytics-router-view, not the viewport */
+  min-height: 100%;
   color: var(--text-primary);
 }
 
