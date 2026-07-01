@@ -9,8 +9,10 @@ Provides JWT-based authentication, session management, and role-based access con
 
 import datetime
 import json
+import os
 import secrets
 from datetime import timezone
+from pathlib import Path
 from typing import Dict, Tuple
 
 from fastapi import HTTPException, Request, status
@@ -114,16 +116,30 @@ class AuthenticationMiddleware:
             # Still return the secure secret even if we can't store it
             return secure_secret
 
+    @staticmethod
+    def _jwt_key_file() -> Path:
+        """Return the durable RSA private key file path.
+
+        The file lives in ``{AUTOBOT_DATA_DIR}/service-keys/jwt_rsa_private.pem``,
+        which is outside the code directory (``autobot-backend/``) and therefore
+        survives code-sync rsyncs and process restarts (#10750 E2).
+        """
+        return ssot_config.path.data_path / "service-keys" / "jwt_rsa_private.pem"
+
     def _get_rs256_keypair(self) -> Tuple[str, str, str]:
         """Load or auto-generate the RS256 keypair for signing user JWTs (#10196).
 
         Priority order:
-        1. ``AUTOBOT_JWT_PRIVATE_KEY`` env var (PEM string)
-        2. Auto-generate a 2048-bit RSA keypair, persist in security config
-           (mirrors the existing HS256 generated-secret pattern)
+        1. ``AUTOBOT_JWT_PRIVATE_KEY`` env var (PEM string) — highest precedence.
+        2. Durable key file at ``{AUTOBOT_DATA_DIR}/service-keys/jwt_rsa_private.pem``
+           — survives restarts and code-sync deploys (#10750 E2).
+        3. In-memory security config dict (``jwt_private_key_pem``) — written by
+           a previous process; migrated to the durable file on first access.
+        4. Auto-generate RSA-2048 and write to the durable file so the next
+           restart reuses the same key.
 
-        The public key is always derived from the private key so they are
-        guaranteed to be consistent even when only the private key is supplied.
+        The public key is always derived from the private key so the pair is
+        guaranteed to be consistent.
 
         Returns:
             Tuple of (pem_private_key, pem_public_key, kid).
@@ -133,48 +149,70 @@ class AuthenticationMiddleware:
         from cryptography.hazmat.primitives.asymmetric import rsa
 
         kid = ssot_config.misc.jwt_kid or "autobot-1"
+        key_file = self._jwt_key_file()
 
-        # 1. Check env var for private key
+        def _derive_public(private_key) -> str:
+            return private_key.public_key().public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            ).decode("utf-8")
+
+        def _load_pem(pem: str):
+            return serialization.load_pem_private_key(
+                pem.encode("utf-8"),
+                password=None,
+                backend=default_backend(),
+            )
+
+        def _write_key_file(pem: str) -> None:
+            """Write PEM to the durable file with mode 0600."""
+            try:
+                key_file.parent.mkdir(parents=True, exist_ok=True)
+                key_file.write_text(pem, encoding="utf-8")
+                os.chmod(key_file, 0o600)
+                logger.info("RS256 private key written to durable file %s", key_file)
+            except Exception as exc:
+                logger.error(
+                    "Failed to write RS256 key to %s: %s — key will be ephemeral this session",
+                    key_file,
+                    exc,
+                )
+
+        # Tier 1: env var
         pem_private = ssot_config.misc.jwt_private_key
         if pem_private:
             try:
-                private_key = serialization.load_pem_private_key(
-                    pem_private.encode("utf-8"),
-                    password=None,
-                    backend=default_backend(),
-                )
-                public_key = private_key.public_key()
-                pem_public = public_key.public_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                ).decode("utf-8")
+                private_key = _load_pem(pem_private)
                 logger.info("RS256 private key loaded from AUTOBOT_JWT_PRIVATE_KEY")
-                return pem_private, pem_public, kid
+                return pem_private, _derive_public(private_key), kid
             except Exception as exc:
                 logger.error("Failed to load AUTOBOT_JWT_PRIVATE_KEY: %s — will auto-generate", exc)
 
-        # 2. Check security config for a previously persisted keypair
+        # Tier 2: durable file (survives restart and code-sync deploys)
+        if key_file.exists():
+            try:
+                pem_private = key_file.read_text(encoding="utf-8")
+                private_key = _load_pem(pem_private)
+                logger.info("RS256 private key loaded from durable file %s", key_file)
+                return pem_private, _derive_public(private_key), kid
+            except Exception as exc:
+                logger.warning("Durable RS256 key file %s is invalid: %s — regenerating", key_file, exc)
+
+        # Tier 3: in-memory security config (previous process wrote it without persisting to file)
         stored_pem = self.security_config.get("jwt_private_key_pem", "")
         if stored_pem:
             try:
-                private_key = serialization.load_pem_private_key(
-                    stored_pem.encode("utf-8"),
-                    password=None,
-                    backend=default_backend(),
-                )
-                public_key = private_key.public_key()
-                pem_public = public_key.public_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                ).decode("utf-8")
-                logger.info("RS256 keypair loaded from security config (previously auto-generated)")
-                return stored_pem, pem_public, kid
+                private_key = _load_pem(stored_pem)
+                # Migrate to the durable file so the next restart reuses it
+                _write_key_file(stored_pem)
+                logger.info("RS256 keypair migrated from security config to durable file")
+                return stored_pem, _derive_public(private_key), kid
             except Exception as exc:
                 logger.warning("Stored RS256 keypair in config is invalid: %s — regenerating", exc)
 
-        # 3. Auto-generate a fresh RSA-2048 keypair and persist it
+        # Tier 4: auto-generate and persist to durable file
         logger.warning(
-            "No RS256 private key configured. Auto-generating RSA-2048 keypair. "
+            "No RS256 private key found. Auto-generating RSA-2048 keypair. "
             "Set AUTOBOT_JWT_PRIVATE_KEY to use a stable externally-managed key."
         )
         private_key = rsa.generate_private_key(
@@ -182,23 +220,14 @@ class AuthenticationMiddleware:
             key_size=2048,
             backend=default_backend(),
         )
-        public_key = private_key.public_key()
-
         pem_private = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption(),
         ).decode("utf-8")
-        pem_public = public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        ).decode("utf-8")
+        pem_public = _derive_public(private_key)
 
-        try:
-            config.set_nested("security_config.jwt_private_key_pem", pem_private)
-            logger.info("Auto-generated RS256 keypair persisted in security config")
-        except Exception as exc:
-            logger.error("Failed to persist RS256 keypair in config: %s — keypair is ephemeral", exc)
+        _write_key_file(pem_private)
 
         return pem_private, pem_public, kid
 

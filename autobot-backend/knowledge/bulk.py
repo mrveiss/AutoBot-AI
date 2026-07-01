@@ -1245,32 +1245,144 @@ class BulkOperationsMixin:
             logger.error("Bulk category update failed: %s", e)
             return {"status": "error", "message": "Bulk operation failed"}
 
-    async def cleanup(self, remove_orphaned_vectors: bool = True, verify_integrity: bool = True) -> Dict[str, Any]:
+    async def _scan_facts_for_issues(
+        self, remove_empty: bool, fix_metadata: bool
+    ) -> tuple[list[str], list[str]]:
+        """Scan all fact keys and return (empty_fact_ids, malformed_metadata_fact_ids).
+
+        Uses a single Redis pipeline pass to minimise round-trips.
         """
-        Cleanup knowledge base (remove orphaned data, verify integrity).
+        empty_ids: list[str] = []
+        malformed_ids: list[str] = []
+        if not (remove_empty or fix_metadata):
+            return empty_ids, malformed_ids
+
+        fact_keys = await self._scan_redis_keys_async("fact:*")
+        if not fact_keys:
+            return empty_ids, malformed_ids
+
+        def _pipeline_hmget(keys: list[str]) -> list:
+            pipe = self.redis_client.pipeline()
+            for k in keys:
+                pipe.hmget(k, "content", "metadata")
+            return pipe.execute()
+
+        raw_pairs = await asyncio.to_thread(_pipeline_hmget, fact_keys)
+
+        for key_str, pair in zip(fact_keys, raw_pairs):
+            fact_id = key_str.split(":")[-1]
+            content_raw = pair[0] or b""
+            if isinstance(content_raw, bytes):
+                content_raw = content_raw.decode("utf-8", errors="replace")
+            metadata_raw = pair[1] or b""
+            if isinstance(metadata_raw, bytes):
+                metadata_raw = metadata_raw.decode("utf-8", errors="replace")
+
+            if remove_empty and not content_raw.strip():
+                empty_ids.append(fact_id)
+
+            if fix_metadata and metadata_raw.strip():
+                try:
+                    json.loads(metadata_raw)
+                except (json.JSONDecodeError, ValueError):
+                    malformed_ids.append(fact_id)
+
+        return empty_ids, malformed_ids
+
+    async def _find_orphaned_tags(self) -> list[str]:
+        """Return names of tags that have zero associated facts."""
+        result = await self.list_all_tags()
+        return [t["tag"] for t in result.get("tags", []) if t.get("fact_count", 1) == 0]
+
+    async def cleanup(
+        self,
+        remove_empty: bool = True,
+        remove_orphaned_tags: bool = True,
+        fix_metadata: bool = True,
+        dry_run: bool = True,
+        # Legacy kwargs — previously accepted; kept for backward compatibility
+        remove_orphaned_vectors: bool = True,
+        verify_integrity: bool = True,
+    ) -> Dict[str, Any]:
+        """Clean up the knowledge base.
+
+        Implements the full semantics expected by ``POST /knowledge-maintenance/cleanup``
+        (#10750 E1): removes empty-content facts, orphaned tags, and repairs malformed
+        metadata JSON.  When ``dry_run=True`` only counts issues without mutating data.
 
         Args:
-            remove_orphaned_vectors: Remove vectors without Redis facts
-            verify_integrity: Verify data integrity
+            remove_empty: Delete facts whose content is blank or whitespace-only.
+            remove_orphaned_tags: Delete tag index keys that reference no facts.
+            fix_metadata: Reset malformed (non-JSON) metadata fields to ``{}``.
+            dry_run: Report counts only — do not apply any fixes.
+            remove_orphaned_vectors: Legacy kwarg, accepted but unused.
+            verify_integrity: Legacy kwarg, accepted but unused.
 
         Returns:
-            Dict with cleanup results
+            Dict matching ``CleanupKnowledgeBaseResponse`` shape.
         """
         try:
-            results = {"removed_vectors": 0, "verified_facts": 0, "errors": []}
+            empty_ids, malformed_ids = await self._scan_facts_for_issues(remove_empty, fix_metadata)
+            orphaned_tag_names = await self._find_orphaned_tags() if remove_orphaned_tags else []
 
-            # Verify stats consistency if requested
-            if verify_integrity:
-                consistency = await self._verify_stats_consistency(auto_correct=True)
-                results["stats_consistency"] = consistency
+            issues_found: Dict[str, int] = {
+                "empty_facts": len(empty_ids),
+                "orphaned_tags": len(orphaned_tag_names),
+                "malformed_metadata": len(malformed_ids),
+            }
 
-            return {"status": "success", "results": results}
+            if dry_run:
+                return {
+                    "status": "success",
+                    "dry_run": True,
+                    "issues_found": issues_found,
+                    "issues_details": {
+                        "empty_fact_ids": empty_ids[:50],
+                        "orphaned_tag_names": orphaned_tag_names[:50],
+                        "malformed_fact_ids": malformed_ids[:50],
+                    },
+                    "fixes_applied": None,
+                }
+
+            # Apply fixes using existing mixin methods
+            removed_empty = 0
+            if empty_ids:
+                bulk_result = await self.bulk_delete(empty_ids)
+                removed_empty = bulk_result.get("deleted", 0)
+
+            fixed_metadata = 0
+            for fact_id in malformed_ids:
+                r = await self.update_fact(fact_id, metadata={})
+                if r.get("status") == "success":
+                    fixed_metadata += 1
+
+            removed_tags = 0
+            for tag_name in orphaned_tag_names:
+                r = await self.delete_tag_globally(tag_name)
+                if r.get("success"):
+                    removed_tags += 1
+
+            return {
+                "status": "success",
+                "dry_run": False,
+                "issues_found": issues_found,
+                "issues_details": None,
+                "fixes_applied": {
+                    "empty_facts_removed": removed_empty,
+                    "orphaned_tags_removed": removed_tags,
+                    "metadata_fixed": fixed_metadata,
+                },
+            }
 
         except Exception as e:
             logger.error("Cleanup failed: %s", e)
-            return {"status": "error", "message": "Bulk operation failed"}
+            return {"status": "error", "message": "Cleanup operation failed"}
 
     # Method references needed from other mixins
+    async def _scan_redis_keys_async(self, pattern: str) -> List[str]:
+        """Scan Redis keys by pattern — implemented in KnowledgeBaseCore."""
+        raise NotImplementedError("Should be implemented in composed class")
+
     async def get_all_facts(self):
         """Get all facts - implemented in facts mixin"""
         raise NotImplementedError("Should be implemented in composed class")
@@ -1289,6 +1401,14 @@ class BulkOperationsMixin:
 
     async def _verify_stats_consistency(self, auto_correct: bool = True):
         """Verify stats consistency - implemented in stats mixin"""
+        raise NotImplementedError("Should be implemented in composed class")
+
+    async def list_all_tags(self) -> Dict[str, Any]:
+        """List all tags with fact counts — implemented in TagsMixin."""
+        raise NotImplementedError("Should be implemented in composed class")
+
+    async def delete_tag_globally(self, tag: str) -> Dict[str, Any]:
+        """Delete a tag from the global index — implemented in TagsMixin."""
         raise NotImplementedError("Should be implemented in composed class")
 
     # ===== BACKUP AND RESTORE OPERATIONS (Issue #419) =====
