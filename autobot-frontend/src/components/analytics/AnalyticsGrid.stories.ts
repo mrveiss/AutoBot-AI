@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { Meta } from '@storybook/vue3';
 import type { StoryObj } from '@storybook/vue3';
-import EnhancedAnalyticsGrid from './EnhancedAnalyticsGrid.vue';
+import AnalyticsGrid from './AnalyticsGrid.vue';
 
 const meta = {
-  title: 'Components/Analytics/EnhancedAnalyticsGrid',
-  component: EnhancedAnalyticsGrid,
+  title: 'Components/Analytics/AnalyticsGrid',
+  component: AnalyticsGrid,
   tags: ['autodocs'],
   argTypes: {
     realTimeEnabled: { control: 'boolean' },
@@ -15,7 +15,7 @@ const meta = {
     codeQuality: { control: 'object' },
     performanceMetrics: { control: 'object' },
   },
-} as Meta<typeof EnhancedAnalyticsGrid>;
+} as Meta<typeof AnalyticsGrid>;
 
 export default meta;
 // #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
