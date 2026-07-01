@@ -205,3 +205,41 @@ class TestTrackGenerationStatsGather:
         last_hincrby_idx = max(i for i, v in enumerate(call_order) if v == "hincrby")
         expire_idx = call_order.index("expire")
         assert expire_idx > last_hincrby_idx
+
+
+class TestGetRedisAwaitsCoroutine:
+    """Regression: _get_redis must await get_redis_client(async_client=True), which
+    returns a coroutine. A missing await silently broke every stats/version Redis op
+    (AttributeError on the coroutine, swallowed by except)."""
+
+    async def test_get_redis_returns_resolved_client_not_coroutine(self):
+        from api.analytics_code_generation import CodeGenerationEngine
+
+        engine = CodeGenerationEngine.__new__(CodeGenerationEngine)
+        engine._redis = None
+        fake_client = MagicMock(name="async_redis_client")
+        with patch(
+            "api.analytics_code_generation.get_redis_client",
+            new=AsyncMock(return_value=fake_client),
+        ) as mock_get:
+            result = await engine._get_redis()
+
+        # Must be the resolved client, never an un-awaited coroutine.
+        assert result is fake_client
+        mock_get.assert_awaited_once()
+
+    async def test_get_redis_caches_client(self):
+        from api.analytics_code_generation import CodeGenerationEngine
+
+        engine = CodeGenerationEngine.__new__(CodeGenerationEngine)
+        engine._redis = None
+        fake_client = MagicMock(name="async_redis_client")
+        with patch(
+            "api.analytics_code_generation.get_redis_client",
+            new=AsyncMock(return_value=fake_client),
+        ) as mock_get:
+            first = await engine._get_redis()
+            second = await engine._get_redis()
+
+        assert first is second is fake_client
+        mock_get.assert_awaited_once()  # cached — acquired only once

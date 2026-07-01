@@ -439,7 +439,10 @@ class CodeGenerationEngine:
     async def _get_redis(self):
         """Get Redis client lazily"""
         if self._redis is None:
-            self._redis = get_redis_client(async_client=True, database=RedisDatabase.MAIN)
+            # get_redis_client(async_client=True) returns a COROUTINE — must be awaited
+            # (see autobot_shared/redis_client.py landmine note). Missing await here
+            # silently broke every stats/version Redis op (AttributeError swallowed).
+            self._redis = await get_redis_client(async_client=True, database=RedisDatabase.MAIN)
         return self._redis
 
     def _get_llm_client(self):
