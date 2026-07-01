@@ -34,6 +34,7 @@ from constants.threshold_constants import (
     ResourceThresholds,
     TimingConstants,
 )
+from knowledge.search import map_kb_result_to_dict  # Issue #10740 shared mapper
 
 if TYPE_CHECKING:
     import torch as _torch_type  # noqa: F401
@@ -88,19 +89,6 @@ def _get_pil_image():
 
 # Default top-k for semantic search when not specified by caller. Issue #10716.
 _DEFAULT_SEMANTIC_SEARCH_TOP_K: int = 5
-
-
-def _map_kb_results(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Map raw knowledge-base search rows to the accelerator result shape. Issue #10716."""
-    return [
-        {
-            "content": r.get("content", ""),
-            "source": r.get("node_id", r.get("doc_id", "")),
-            "score": r.get("score", 0.0),
-            "metadata": r.get("metadata", {}),
-        }
-        for r in raw
-    ]
 
 
 def _get_gpu_metrics_with_pynvml() -> Dict[str, Any] | None:
@@ -850,7 +838,7 @@ class AIHardwareAccelerator:
             raw: List[Dict[str, Any]] = await kb.search(query=query, top_k=top_k)
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
-            results = _map_kb_results(raw)
+            results = [map_kb_result_to_dict(r) for r in raw]  # Issue #10740
             return {
                 "search_results": results,
                 "total_results": len(results),

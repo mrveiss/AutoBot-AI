@@ -19,6 +19,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import TimingConstants
 from dependency_container import inject_services
+from knowledge.search import map_kb_result_to_dict
 from knowledge_base_factory import get_knowledge_base
 from llm_shared.models import ChatMessage, LLMResponse  # Phase 2D #3185
 from retry_mechanism import RetryConfig, RetryStrategy, with_retry
@@ -227,15 +228,7 @@ class AsyncChatWorkflow:
             raw: List[Dict[str, Any]] = await kb.search(query=query, top_k=5)
             if not raw:
                 return KnowledgeStatus.MISSING, []
-            results = [
-                {
-                    "content": r.get("content", ""),
-                    "source": r.get("node_id", r.get("doc_id", "")),
-                    "score": r.get("score", 0.0),
-                    "metadata": r.get("metadata", {}),
-                }
-                for r in raw
-            ]
+            results = [map_kb_result_to_dict(r) for r in raw]  # Issue #10740
             return KnowledgeStatus.FOUND, results
         except Exception as exc:
             logger.error("Knowledge base search failed: %s", exc)
