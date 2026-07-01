@@ -6810,14 +6810,17 @@
         "trigger": "Extract Text",
         "regionsFound": "{count} text region(s) found",
         "noRegions": "No text regions detected",
-        "empty": "Press Extract Text to run OCR on the current screen"
+        "empty": "Press Extract Text to run OCR on the current screen",
+        "fieldConfidence": "Confiança",
+        "fieldBbox": "Limites"
       },
       "opportunities": {
         "cardTitle": "Automation Opportunities",
         "trigger": "Scan for Opportunities",
         "total": "Total Opportunities",
         "empty": "No automation opportunities found",
-        "emptyHint": "Press Scan for Opportunities to discover interactive elements"
+        "emptyHint": "Press Scan for Opportunities to discover interactive elements",
+        "fieldUntyped": "Oportunidade"
       }
     }
   },
@@ -7939,5 +7942,53 @@
     "viewAll": "View all",
     "saveHintPrefix": "Save an AI response from the",
     "saveHintSuffix": "to create a document."
+  },
+  "llcBrowser": {
+    "retry": "Tentar novamente",
+    "cancel": "Cancelar",
+    "createAction": "Criar",
+    "nameLabel": "Nome",
+    "namePlaceholder": "Nome",
+    "descriptionLabel": "Descrição (opcional)",
+    "descriptionPlaceholder": "Adicione uma breve descrição",
+    "portfolios": {
+      "title": "Portfólios",
+      "count": "{count} portfólios",
+      "loading": "Carregando portfólios…",
+      "empty": "Ainda não há portfólios.",
+      "loadError": "Falha ao carregar os portfólios.",
+      "create": "Novo portfólio",
+      "createTitle": "Criar portfólio",
+      "createError": "Falha ao criar o portfólio."
+    },
+    "programs": {
+      "title": "Programas",
+      "count": "{count} programas",
+      "loading": "Carregando programas…",
+      "empty": "Ainda não há programas.",
+      "loadError": "Falha ao carregar os programas.",
+      "create": "Novo programa",
+      "createTitle": "Criar programa",
+      "createError": "Falha ao criar o programa."
+    },
+    "projects": {
+      "title": "Projetos",
+      "count": "{count} projetos",
+      "loading": "Carregando projetos…",
+      "empty": "Ainda não há projetos.",
+      "loadError": "Falha ao carregar os projetos.",
+      "create": "Novo projeto",
+      "createTitle": "Criar projeto",
+      "createError": "Falha ao criar o projeto."
+    },
+    "approvals": {
+      "decideError": "Falha ao registrar sua decisão. Tente novamente."
+    },
+    "ceoChat": {
+      "sendError": "Falha ao enviar sua mensagem. Ela foi restaurada para que você possa tentar novamente."
+    },
+    "timeline": {
+      "rescheduleError": "Falha ao salvar o novo cronograma. A alteração foi revertida."
+    }
   }
 }

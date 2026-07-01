@@ -6810,14 +6810,17 @@
         "trigger": "Extract Text",
         "regionsFound": "{count} text region(s) found",
         "noRegions": "No text regions detected",
-        "empty": "Press Extract Text to run OCR on the current screen"
+        "empty": "Press Extract Text to run OCR on the current screen",
+        "fieldConfidence": "Pewność",
+        "fieldBbox": "Granice"
       },
       "opportunities": {
         "cardTitle": "Automation Opportunities",
         "trigger": "Scan for Opportunities",
         "total": "Total Opportunities",
         "empty": "No automation opportunities found",
-        "emptyHint": "Press Scan for Opportunities to discover interactive elements"
+        "emptyHint": "Press Scan for Opportunities to discover interactive elements",
+        "fieldUntyped": "Możliwość"
       }
     }
   },
@@ -7939,5 +7942,53 @@
     "viewAll": "View all",
     "saveHintPrefix": "Save an AI response from the",
     "saveHintSuffix": "to create a document."
+  },
+  "llcBrowser": {
+    "retry": "Spróbuj ponownie",
+    "cancel": "Anuluj",
+    "createAction": "Utwórz",
+    "nameLabel": "Nazwa",
+    "namePlaceholder": "Nazwa",
+    "descriptionLabel": "Opis (opcjonalnie)",
+    "descriptionPlaceholder": "Dodaj krótki opis",
+    "portfolios": {
+      "title": "Portfele",
+      "count": "{count} portfeli",
+      "loading": "Ładowanie portfeli…",
+      "empty": "Brak portfeli.",
+      "loadError": "Nie udało się załadować portfeli.",
+      "create": "Nowy portfel",
+      "createTitle": "Utwórz portfel",
+      "createError": "Nie udało się utworzyć portfela."
+    },
+    "programs": {
+      "title": "Programy",
+      "count": "{count} programów",
+      "loading": "Ładowanie programów…",
+      "empty": "Brak programów.",
+      "loadError": "Nie udało się załadować programów.",
+      "create": "Nowy program",
+      "createTitle": "Utwórz program",
+      "createError": "Nie udało się utworzyć programu."
+    },
+    "projects": {
+      "title": "Projekty",
+      "count": "{count} projektów",
+      "loading": "Ładowanie projektów…",
+      "empty": "Brak projektów.",
+      "loadError": "Nie udało się załadować projektów.",
+      "create": "Nowy projekt",
+      "createTitle": "Utwórz projekt",
+      "createError": "Nie udało się utworzyć projektu."
+    },
+    "approvals": {
+      "decideError": "Nie udało się zapisać Twojej decyzji. Spróbuj ponownie."
+    },
+    "ceoChat": {
+      "sendError": "Nie udało się wysłać wiadomości. Została przywrócona, aby można było spróbować ponownie."
+    },
+    "timeline": {
+      "rescheduleError": "Nie udało się zapisać nowego harmonogramu. Zmiana została cofnięta."
+    }
   }
 }

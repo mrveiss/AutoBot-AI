@@ -137,10 +137,14 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useI18n } from 'vue-i18n'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 
 const logger = createLogger('GanttTimelineView')
 const api = useApiClient()
 const route = useRoute()
+const { t } = useI18n()
+const { showToast } = useNotificationBus()
 
 const LABEL_W = 120
 const HEADER_H = 32
@@ -340,6 +344,7 @@ async function onDragEnd() {
     })
   } catch (err) {
     logger.error('Failed to persist reschedule', err)
+    showToast(t('llcBrowser.timeline.rescheduleError'), 'error')
     await loadTimeline()
   }
 }

@@ -68,6 +68,33 @@ async function handleFetchOpportunities(): Promise<void> {
   await fetchOpportunities(sessionId.value || undefined)
 }
 
+// --- Structured field accessors -------------------------------------------
+// OCR text regions and automation opportunities are loosely-typed dicts
+// (backend returns bare JSON). These helpers safely pull the fields we render
+// instead of dumping raw JSON at the user (#10750 C3).
+function fieldString(obj: Record<string, unknown>, key: string): string {
+  const v = obj[key]
+  return typeof v === 'string' ? v : ''
+}
+
+function fieldNumber(obj: Record<string, unknown>, key: string): number | null {
+  const v = obj[key]
+  return typeof v === 'number' ? v : null
+}
+
+function formatBbox(obj: Record<string, unknown>): string {
+  const bbox = obj.bbox
+  if (!bbox || typeof bbox !== 'object') return ''
+  const b = bbox as Record<string, unknown>
+  const num = (k: string): number => (typeof b[k] === 'number' ? (b[k] as number) : 0)
+  return `${Math.round(num('x'))}, ${Math.round(num('y'))} · ${Math.round(num('width'))}×${Math.round(num('height'))}`
+}
+
+function asPercent(value: number): number {
+  // Confidence is a 0..1 fraction; render as a whole-number percentage.
+  return Math.round(value * 100)
+}
+
 onMounted(async () => {
   await fetchStatus()
 })
@@ -330,7 +357,18 @@ onMounted(async () => {
                 :key="idx"
                 class="ocr-region-item"
               >
-                <pre class="region-pre">{{ JSON.stringify(region, null, 2) }}</pre>
+                <p v-if="fieldString(region, 'text')" class="region-text">
+                  {{ fieldString(region, 'text') }}
+                </p>
+                <div class="region-meta">
+                  <span v-if="fieldNumber(region, 'confidence') !== null" class="region-chip">
+                    {{ t('vision.visionAutomation.ocr.fieldConfidence') }}:
+                    {{ asPercent(fieldNumber(region, 'confidence') as number) }}%
+                  </span>
+                  <span v-if="formatBbox(region)" class="region-chip">
+                    {{ t('vision.visionAutomation.ocr.fieldBbox') }}: {{ formatBbox(region) }}
+                  </span>
+                </div>
               </div>
             </div>
             <div v-else class="empty-state">
@@ -375,7 +413,17 @@ onMounted(async () => {
                 :key="idx"
                 class="opportunity-item card"
               >
-                <pre class="region-pre">{{ JSON.stringify(opp, null, 2) }}</pre>
+                <div class="opportunity-head">
+                  <span class="opportunity-type">
+                    {{ fieldString(opp, 'type') || t('vision.visionAutomation.opportunities.fieldUntyped') }}
+                  </span>
+                  <span v-if="fieldNumber(opp, 'confidence') !== null" class="opportunity-confidence">
+                    {{ asPercent(fieldNumber(opp, 'confidence') as number) }}%
+                  </span>
+                </div>
+                <p v-if="fieldString(opp, 'description')" class="opportunity-desc">
+                  {{ fieldString(opp, 'description') }}
+                </p>
               </div>
             </div>
             <div v-else class="empty-state">
@@ -716,13 +764,54 @@ onMounted(async () => {
   padding: 0.5rem;
 }
 
-.region-pre {
-  font-family: monospace;
-  font-size: 0.8125rem;
-  white-space: pre-wrap;
+.region-text {
+  margin: 0 0 0.375rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
   word-break: break-word;
-  margin: 0;
-  color: var(--text-primary, #111827);
+}
+
+.region-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.region-chip {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+}
+
+.opportunity-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.opportunity-type {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.opportunity-confidence {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+}
+
+.opportunity-desc {
+  margin: 0.375rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
 }
 
 .opportunities-list {

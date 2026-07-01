@@ -6810,14 +6810,17 @@
         "trigger": "Extract Text",
         "regionsFound": "{count} text region(s) found",
         "noRegions": "No text regions detected",
-        "empty": "Press Extract Text to run OCR on the current screen"
+        "empty": "Press Extract Text to run OCR on the current screen",
+        "fieldConfidence": "Confianza",
+        "fieldBbox": "Límites"
       },
       "opportunities": {
         "cardTitle": "Automation Opportunities",
         "trigger": "Scan for Opportunities",
         "total": "Total Opportunities",
         "empty": "No automation opportunities found",
-        "emptyHint": "Press Scan for Opportunities to discover interactive elements"
+        "emptyHint": "Press Scan for Opportunities to discover interactive elements",
+        "fieldUntyped": "Oportunidad"
       }
     }
   },
@@ -7939,5 +7942,53 @@
     "viewAll": "View all",
     "saveHintPrefix": "Save an AI response from the",
     "saveHintSuffix": "to create a document."
+  },
+  "llcBrowser": {
+    "retry": "Reintentar",
+    "cancel": "Cancelar",
+    "createAction": "Crear",
+    "nameLabel": "Nombre",
+    "namePlaceholder": "Nombre",
+    "descriptionLabel": "Descripción (opcional)",
+    "descriptionPlaceholder": "Añade una breve descripción",
+    "portfolios": {
+      "title": "Carteras",
+      "count": "{count} carteras",
+      "loading": "Cargando carteras…",
+      "empty": "Aún no hay carteras.",
+      "loadError": "No se pudieron cargar las carteras.",
+      "create": "Nueva cartera",
+      "createTitle": "Crear cartera",
+      "createError": "No se pudo crear la cartera."
+    },
+    "programs": {
+      "title": "Programas",
+      "count": "{count} programas",
+      "loading": "Cargando programas…",
+      "empty": "Aún no hay programas.",
+      "loadError": "No se pudieron cargar los programas.",
+      "create": "Nuevo programa",
+      "createTitle": "Crear programa",
+      "createError": "No se pudo crear el programa."
+    },
+    "projects": {
+      "title": "Proyectos",
+      "count": "{count} proyectos",
+      "loading": "Cargando proyectos…",
+      "empty": "Aún no hay proyectos.",
+      "loadError": "No se pudieron cargar los proyectos.",
+      "create": "Nuevo proyecto",
+      "createTitle": "Crear proyecto",
+      "createError": "No se pudo crear el proyecto."
+    },
+    "approvals": {
+      "decideError": "No se pudo registrar tu decisión. Inténtalo de nuevo."
+    },
+    "ceoChat": {
+      "sendError": "No se pudo enviar tu mensaje. Se ha restaurado para que puedas reintentarlo."
+    },
+    "timeline": {
+      "rescheduleError": "No se pudo guardar la nueva planificación. El cambio se revirtió."
+    }
   }
 }

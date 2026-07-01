@@ -6810,14 +6810,17 @@
         "trigger": "Extract Text",
         "regionsFound": "{count} text region(s) found",
         "noRegions": "No text regions detected",
-        "empty": "Press Extract Text to run OCR on the current screen"
+        "empty": "Press Extract Text to run OCR on the current screen",
+        "fieldConfidence": "Confiance",
+        "fieldBbox": "Limites"
       },
       "opportunities": {
         "cardTitle": "Automation Opportunities",
         "trigger": "Scan for Opportunities",
         "total": "Total Opportunities",
         "empty": "No automation opportunities found",
-        "emptyHint": "Press Scan for Opportunities to discover interactive elements"
+        "emptyHint": "Press Scan for Opportunities to discover interactive elements",
+        "fieldUntyped": "Opportunité"
       }
     }
   },
@@ -7939,5 +7942,53 @@
     "viewAll": "View all",
     "saveHintPrefix": "Save an AI response from the",
     "saveHintSuffix": "to create a document."
+  },
+  "llcBrowser": {
+    "retry": "Réessayer",
+    "cancel": "Annuler",
+    "createAction": "Créer",
+    "nameLabel": "Nom",
+    "namePlaceholder": "Nom",
+    "descriptionLabel": "Description (facultatif)",
+    "descriptionPlaceholder": "Ajouter une brève description",
+    "portfolios": {
+      "title": "Portefeuilles",
+      "count": "{count} portefeuilles",
+      "loading": "Chargement des portefeuilles…",
+      "empty": "Aucun portefeuille pour le moment.",
+      "loadError": "Échec du chargement des portefeuilles.",
+      "create": "Nouveau portefeuille",
+      "createTitle": "Créer un portefeuille",
+      "createError": "Échec de la création du portefeuille."
+    },
+    "programs": {
+      "title": "Programmes",
+      "count": "{count} programmes",
+      "loading": "Chargement des programmes…",
+      "empty": "Aucun programme pour le moment.",
+      "loadError": "Échec du chargement des programmes.",
+      "create": "Nouveau programme",
+      "createTitle": "Créer un programme",
+      "createError": "Échec de la création du programme."
+    },
+    "projects": {
+      "title": "Projets",
+      "count": "{count} projets",
+      "loading": "Chargement des projets…",
+      "empty": "Aucun projet pour le moment.",
+      "loadError": "Échec du chargement des projets.",
+      "create": "Nouveau projet",
+      "createTitle": "Créer un projet",
+      "createError": "Échec de la création du projet."
+    },
+    "approvals": {
+      "decideError": "Échec de l'enregistrement de votre décision. Veuillez réessayer."
+    },
+    "ceoChat": {
+      "sendError": "Échec de l'envoi de votre message. Il a été restauré pour que vous puissiez réessayer."
+    },
+    "timeline": {
+      "rescheduleError": "Échec de l'enregistrement du nouveau planning. La modification a été annulée."
+    }
   }
 }
