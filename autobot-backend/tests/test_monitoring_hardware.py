@@ -44,13 +44,13 @@ FALLBACK_NPU = {"available": False, "error": "Detection failed"}
 
 
 class TestGetGpuStatus:
-    """Unit tests for HardwareMonitorStub.get_gpu_status."""
+    """Unit tests for LocalHardwareMonitor.get_gpu_status."""
 
     async def test_proxies_detected_gpu(self):
         """When GPU is detected the response includes available=True + real fields."""
-        from api.monitoring_hardware import HardwareMonitorStub
+        from api.monitoring_hardware import LocalHardwareMonitor
 
-        stub = HardwareMonitorStub()
+        stub = LocalHardwareMonitor()
         with patch("api.monitoring_hardware._detect_gpu_sync", return_value=GPU_DETECTED):
             result = await stub.get_gpu_status()
 
@@ -60,9 +60,9 @@ class TestGetGpuStatus:
 
     async def test_proxies_absent_gpu(self):
         """When no GPU is detected available=False is returned cleanly."""
-        from api.monitoring_hardware import HardwareMonitorStub
+        from api.monitoring_hardware import LocalHardwareMonitor
 
-        stub = HardwareMonitorStub()
+        stub = LocalHardwareMonitor()
         with patch("api.monitoring_hardware._detect_gpu_sync", return_value=GPU_ABSENT):
             result = await stub.get_gpu_status()
 
@@ -71,9 +71,9 @@ class TestGetGpuStatus:
 
     async def test_never_raises_on_detection_error(self):
         """get_gpu_status must never propagate an exception from _detect_gpu_sync."""
-        from api.monitoring_hardware import HardwareMonitorStub
+        from api.monitoring_hardware import LocalHardwareMonitor
 
-        stub = HardwareMonitorStub()
+        stub = LocalHardwareMonitor()
         with patch("api.monitoring_hardware._detect_gpu_sync", side_effect=RuntimeError("boom")):
             try:
                 result = await stub.get_gpu_status()
@@ -85,9 +85,9 @@ class TestGetGpuStatus:
 
     async def test_available_key_always_present(self):
         """'available' key must exist whether GPU is present or absent."""
-        from api.monitoring_hardware import HardwareMonitorStub
+        from api.monitoring_hardware import LocalHardwareMonitor
 
-        stub = HardwareMonitorStub()
+        stub = LocalHardwareMonitor()
         for payload in (GPU_DETECTED, GPU_ABSENT, FALLBACK_GPU):
             with patch("api.monitoring_hardware._detect_gpu_sync", return_value=payload):
                 result = await stub.get_gpu_status()
@@ -100,13 +100,13 @@ class TestGetGpuStatus:
 
 
 class TestGetNpuStatus:
-    """Unit tests for HardwareMonitorStub.get_npu_status."""
+    """Unit tests for LocalHardwareMonitor.get_npu_status."""
 
     async def test_proxies_detected_npu(self):
         """When NPU is detected the response includes available=True + real fields."""
-        from api.monitoring_hardware import HardwareMonitorStub
+        from api.monitoring_hardware import LocalHardwareMonitor
 
-        stub = HardwareMonitorStub()
+        stub = LocalHardwareMonitor()
         with patch("api.monitoring_hardware._detect_npu_sync", return_value=NPU_DETECTED):
             result = await stub.get_npu_status()
 
@@ -116,9 +116,9 @@ class TestGetNpuStatus:
 
     async def test_proxies_absent_npu(self):
         """When no NPU is detected available=False is returned cleanly."""
-        from api.monitoring_hardware import HardwareMonitorStub
+        from api.monitoring_hardware import LocalHardwareMonitor
 
-        stub = HardwareMonitorStub()
+        stub = LocalHardwareMonitor()
         with patch("api.monitoring_hardware._detect_npu_sync", return_value=NPU_ABSENT):
             result = await stub.get_npu_status()
 
@@ -127,9 +127,9 @@ class TestGetNpuStatus:
 
     async def test_never_raises_on_detection_error(self):
         """get_npu_status must never propagate an exception from _detect_npu_sync."""
-        from api.monitoring_hardware import HardwareMonitorStub
+        from api.monitoring_hardware import LocalHardwareMonitor
 
-        stub = HardwareMonitorStub()
+        stub = LocalHardwareMonitor()
         with patch("api.monitoring_hardware._detect_npu_sync", side_effect=RuntimeError("boom")):
             try:
                 result = await stub.get_npu_status()
@@ -139,9 +139,9 @@ class TestGetNpuStatus:
 
     async def test_available_key_always_present(self):
         """'available' key must exist whether NPU is present or absent."""
-        from api.monitoring_hardware import HardwareMonitorStub
+        from api.monitoring_hardware import LocalHardwareMonitor
 
-        stub = HardwareMonitorStub()
+        stub = LocalHardwareMonitor()
         for payload in (NPU_DETECTED, NPU_ABSENT, FALLBACK_NPU):
             with patch("api.monitoring_hardware._detect_npu_sync", return_value=payload):
                 result = await stub.get_npu_status()

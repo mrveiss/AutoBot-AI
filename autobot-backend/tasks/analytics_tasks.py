@@ -342,11 +342,11 @@ def run_dashboard_analysis(self) -> dict:
             _get_realtime_metrics,
             _handle_task_exception,
             analytics_controller,
-            hardware_monitor,
+            local_hardware_monitor,
         )
 
         results = await asyncio.gather(
-            hardware_monitor.get_system_health(),
+            local_hardware_monitor.get_system_health(),
             analytics_controller.collect_performance_metrics(),
             analytics_controller.analyze_communication_patterns(),
             analytics_controller.get_usage_statistics(),

@@ -27,7 +27,7 @@ from fastapi import (
 from fastapi.responses import JSONResponse, StreamingResponse
 
 # Hardware monitor moved to monitoring_hardware.py (Issue #213)
-from api.monitoring_hardware import hardware_monitor
+from api.monitoring_hardware import local_hardware_monitor
 
 # Import monitoring utility functions
 from api.monitoring_utils import (
@@ -1181,7 +1181,7 @@ async def get_hardware_npu_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Get NPU hardware status. Issue #729: infrastructure monitoring on SLM server."""
-    return await hardware_monitor.get_npu_status()
+    return await local_hardware_monitor.get_npu_status()
 
 
 @router.get("/hardware/gpu", response_model=dict)
@@ -1194,7 +1194,7 @@ async def get_hardware_gpu_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Get GPU hardware status. Issue #729: infrastructure monitoring on SLM server."""
-    return await hardware_monitor.get_gpu_status()
+    return await local_hardware_monitor.get_gpu_status()
 
 
 @router.get("/hardware/system", response_model=dict)
@@ -1207,7 +1207,7 @@ async def get_hardware_system_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Get system resource metrics (CPU, memory, disk)."""
-    return await hardware_monitor.get_system_resources()
+    return await local_hardware_monitor.get_system_resources()
 
 
 # External API status endpoints — extracted from monitoring_compat.py (Issue #1283)
