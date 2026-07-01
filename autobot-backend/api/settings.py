@@ -962,10 +962,13 @@ async def update_hardware_priority(
     operation="get_telemetry_settings",
     error_code_prefix="SETTINGS",
 )
-async def get_telemetry_settings(
-    current_user: dict = Depends(get_current_user),
-):
+async def get_telemetry_settings():
     """Get current telemetry settings (Issue #9035).
+
+    Public: returns only global, non-sensitive telemetry config (enabled flags +
+    first-run-prompt state). Checked at app load before auth is established, so
+    gating it behind get_current_user caused spurious 401s (#10750 A13). The
+    consent-changing POST /telemetry remains authenticated.
 
     Returns telemetry opt-in/opt-out status and whether the first-run
     prompt has been shown.
