@@ -23,7 +23,6 @@ from knowledge.search import map_kb_result_to_dict
 from knowledge_base_factory import get_knowledge_base
 from llm_shared.models import ChatMessage, LLMResponse  # Phase 2D #3185
 from retry_mechanism import RetryConfig, RetryStrategy, with_retry
-from services.knowledge.service import build_grounded_context  # #10656 shared helper
 
 logger = get_logger(__name__)
 
@@ -328,57 +327,19 @@ class AsyncChatWorkflow:
             return MessageType.GENERAL_QUERY
 
     @staticmethod
-    def _build_kb_context_string(kb_results: List[Dict[str, Any]]) -> str:
-        """Return grounded KB context string from raw result dicts, or empty string. #10732.
-
-        Delegates to build_grounded_context (services/knowledge/service.py, #10656)
-        which gates on config.chat_grounding_enabled and formats [Source N] blocks.
-        Called from _generate_llm_response to prepend KB context to the system prompt.
-        """
-        if not kb_results:
-            return ""
-        return build_grounded_context([r["content"] for r in kb_results if r.get("content")])
-
-    @staticmethod
     async def _budget_kb_context(kb_results: List[Dict[str, Any]]) -> str:
-        """Apply ContextWindowManager compression to kb_results before prompt injection. #10735.
+        """Budget KB context via ContextWindowManager (#10735/#10837).
 
-        Mirrors llm_handler.py lines 793-823: estimates tokens, compresses when the
-        result set exceeds the model budget, then rebuilds via build_grounded_context so
-        [Source N] labels and the grounding instruction remain consistent.
-        Returns an empty string when kb_results is empty (no-op).
+        Delegates to the shared budget_grounded_context helper
+        (services/knowledge/service.py) with model_name=None so the YAML default
+        model budget applies.  Returns empty string when kb_results is empty.
         """
-        if not kb_results:
-            return ""
-        from context_window_manager import ContextWindowManager
-        from services.memory.compression import ContextCompressionService
+        from services.knowledge.service import budget_grounded_context
 
-        raw_context = build_grounded_context([r["content"] for r in kb_results if r.get("content")])
-        if not raw_context:
-            return ""
-        cwm = ContextWindowManager()
-        kc_tokens = cwm.estimate_tokens(raw_context)
-        max_kb_tokens = cwm.get_max_history_tokens()
-        if not await cwm.async_should_compress(content_tokens=kc_tokens, model_name=None):
-            return raw_context
-        svc = ContextCompressionService(
-            model_thresholds={
-                name: spec.get("compression_threshold", 8192)
-                for name, spec in cwm.config.get("models", {}).items()
-                if isinstance(spec, dict)
-            }
-        )
-        trimmed = await svc.compress_kb_results(kb_results, max_tokens=max_kb_tokens)
-        if not trimmed:
-            return ""
-        compressed = build_grounded_context([r["content"] for r in trimmed if r.get("content")])
-        logger.info(
-            "[#10735] KB compressed: %d → %d results (%d tokens)",
-            len(kb_results),
-            len(trimmed),
-            cwm.estimate_tokens(compressed),
-        )
-        return compressed
+        # budget_grounded_context returns (context_str, effective_kb_results).
+        # _budget_kb_context only needs the string; discard the list (#10837).
+        context, _ = await budget_grounded_context(kb_results, model_name=None)
+        return context
 
     @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=10.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     async def _generate_llm_response(

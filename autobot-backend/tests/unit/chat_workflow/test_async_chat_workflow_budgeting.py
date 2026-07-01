@@ -9,11 +9,20 @@ Issue #10735: _budget_kb_context must apply ContextWindowManager compression
 before injecting KB results into the system prompt, mirroring llm_handler.py
 lines 793-823.
 
+Issue #10837 regression: budget_grounded_context now returns (str, list[dict]).
+  - compressed path → second element is the TRIMMED subset (not the full input)
+  - under-budget path → second element is the FULL original list
+  - empty input → ("", [])
+_budget_kb_context discards the list (only the string is needed by async path).
+
 Scenarios:
   (a) small kb_results (below threshold) → context returned unchanged (no truncation)
   (b) oversized kb_results (above threshold) → compress_kb_results invoked; context bounded
   (c) grounding disabled → _budget_kb_context returns empty string (no injection)
   (d) empty kb_results → empty string, no manager instantiated
+  (e) regression: budget_grounded_context returns trimmed citations on compression path
+  (f) regression: budget_grounded_context returns full list on under-budget path
+  (g) regression: budget_grounded_context returns [] on empty input
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -79,8 +88,12 @@ class TestBudgetKbContextSmallResults:
         assert "short fact" in result
         assert "[Source 1]" in result
 
-    async def test_grounding_disabled_returns_empty_string(self):
-        """(c) Grounding disabled via config.chat_grounding_enabled=False → empty string."""
+    async def test_grounding_disabled_omits_instruction_but_returns_context(self):
+        """(c) Grounding instruction omitted when chat_grounding_enabled=False.
+
+        build_grounded_context still returns the [Source N] block with content —
+        the grounding *instruction* (Answer the user…) is the only thing suppressed.
+        """
         from async_chat_workflow import AsyncChatWorkflow
 
         kb_results = [_make_kb_result("some fact")]
@@ -96,9 +109,9 @@ class TestBudgetKbContextSmallResults:
         with patch(f"{_SVC_MODULE}.config", mock_cfg), patch(_CWM_CLASS, return_value=mock_cwm):
             result = await AsyncChatWorkflow._budget_kb_context(kb_results)
 
-        # build_grounded_context returns a non-empty [Source N] block even when grounding
-        # instruction is omitted; the returned string is still valid KB context.
+        # Content is still returned; only the grounding instruction is omitted.
         assert "some fact" in result
+        assert "Answer the user" not in result
 
 
 # ---------------------------------------------------------------------------
@@ -229,3 +242,106 @@ class TestGenerateLlmResponseUsesBudget:
         system_msg = next(m for m in call_messages if m.role == "system")
         assert "[Source" not in system_msg.content
         assert "KNOWLEDGE CONTEXT" not in system_msg.content
+
+
+# ---------------------------------------------------------------------------
+# budget_grounded_context return-shape regression tests (#10837)
+# ---------------------------------------------------------------------------
+
+
+class TestBudgetGroundedContextReturnShape:
+    """budget_grounded_context must return (str, list[dict]) in all paths.
+
+    Regression guard: before #10837 fix the function returned only str, causing
+    llm_handler to emit untrimmed citations (sources the model never saw).
+    """
+
+    async def test_empty_input_returns_empty_tuple(self):
+        """(g) Empty kb_results → ("", [])."""
+        from services.knowledge.service import budget_grounded_context
+
+        result = await budget_grounded_context([])
+        assert result == ("", [])
+
+    async def test_under_budget_returns_full_input_list(self):
+        """(f) Under-budget path → second element equals the original kb_results list."""
+        from services.knowledge.service import budget_grounded_context
+
+        kb_results = [_make_kb_result("fact one"), _make_kb_result("fact two")]
+
+        mock_cwm = MagicMock()
+        mock_cwm.estimate_tokens.return_value = 10
+        mock_cwm.get_max_history_tokens.return_value = 4096
+        mock_cwm.async_should_compress = AsyncMock(return_value=False)
+        mock_cwm.config = {"models": {}}
+
+        with patch(_CWM_CLASS, return_value=mock_cwm):
+            context, effective = await budget_grounded_context(kb_results)
+
+        # Context is non-empty and covers both facts
+        assert "fact one" in context
+        assert "fact two" in context
+        # Effective citations list is the FULL original list (no trimming occurred)
+        assert effective is kb_results
+        assert len(effective) == 2
+
+    async def test_compressed_path_returns_trimmed_subset(self):
+        """(e) Oversized → second element is the trimmed subset, shorter than input.
+
+        This is the regression guard: llm_handler must rebind citations to the
+        trimmed list so the UI only shows sources that were in the prompt.
+        """
+        from services.knowledge.service import budget_grounded_context
+
+        kb_results = [
+            _make_kb_result("fact A" * 500, score=0.9),
+            _make_kb_result("fact B" * 500, score=0.7),
+            _make_kb_result("fact C" * 500, score=0.5),
+        ]
+        trimmed = [kb_results[0]]  # compression keeps only the highest-score result
+
+        mock_cwm = MagicMock()
+        mock_cwm.estimate_tokens.side_effect = lambda text: len(text) // 4
+        mock_cwm.get_max_history_tokens.return_value = 512
+        mock_cwm.async_should_compress = AsyncMock(return_value=True)
+        mock_cwm.config = {"models": {"default": {"compression_threshold": 512}}}
+
+        mock_svc = MagicMock()
+        mock_svc.compress_kb_results = AsyncMock(return_value=trimmed)
+
+        with (
+            patch(_CWM_CLASS, return_value=mock_cwm),
+            patch(_COMP_CLASS, return_value=mock_svc),
+        ):
+            context, effective = await budget_grounded_context(kb_results)
+
+        # Context rebuilt from the trimmed subset only
+        assert "fact A" in context
+        assert "[Source 1]" in context
+        # Effective citations list is SHORTER than the input — only the trimmed subset
+        assert effective is trimmed
+        assert len(effective) < len(kb_results)
+        assert len(effective) == 1
+
+    async def test_all_trimmed_returns_empty_tuple(self):
+        """compress_kb_results returns [] → ("", [])."""
+        from services.knowledge.service import budget_grounded_context
+
+        kb_results = [_make_kb_result("huge fact" * 2000)]
+
+        mock_cwm = MagicMock()
+        mock_cwm.estimate_tokens.return_value = 99999
+        mock_cwm.get_max_history_tokens.return_value = 512
+        mock_cwm.async_should_compress = AsyncMock(return_value=True)
+        mock_cwm.config = {"models": {"default": {"compression_threshold": 512}}}
+
+        mock_svc = MagicMock()
+        mock_svc.compress_kb_results = AsyncMock(return_value=[])
+
+        with (
+            patch(_CWM_CLASS, return_value=mock_cwm),
+            patch(_COMP_CLASS, return_value=mock_svc),
+        ):
+            result = await budget_grounded_context(kb_results)
+
+        assert result == ("", [])
