@@ -14,7 +14,7 @@ Tests the following functionality:
 import sys
 import types
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -124,3 +124,84 @@ class TestSourceIdGuardLogic:
             from api.analytics_code_generation import _resolve_source_or_404
 
             await _resolve_source_or_404("gen-project-id")
+
+
+class TestTrackGenerationStatsGather:
+    """Tests for _track_generation_stats gather refactor (Issue #10811).
+
+    Verifies that the gathered hincrby calls produce identical results to the
+    previous sequential version: all four hash fields are written and expire is
+    set exactly once, in order.
+    """
+
+    @pytest.mark.asyncio
+    async def test_gather_calls_all_hincrby_fields_on_success(self):
+        """All four hincrby fields plus expire must be called when success=True."""
+        from api.analytics_code_generation import CodeGenerationEngine
+
+        redis_mock = AsyncMock()
+        redis_mock.hincrby = AsyncMock(return_value=1)
+        redis_mock.expire = AsyncMock(return_value=True)
+
+        engine = CodeGenerationEngine.__new__(CodeGenerationEngine)
+        engine._redis = redis_mock
+        engine._stats_key = "autobot:code_generation:stats"
+
+        await engine._track_generation_stats("generate", "python", 100, True)
+
+        called_fields = [call.args[1] for call in redis_mock.hincrby.call_args_list]
+        assert "generate:total" in called_fields
+        assert "generate:python:total" in called_fields
+        assert "generate:tokens" in called_fields
+        assert "generate:success" in called_fields
+        assert redis_mock.expire.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_gather_omits_success_field_on_failure(self):
+        """When success=False the success field must NOT be incremented."""
+        from api.analytics_code_generation import CodeGenerationEngine
+
+        redis_mock = AsyncMock()
+        redis_mock.hincrby = AsyncMock(return_value=1)
+        redis_mock.expire = AsyncMock(return_value=True)
+
+        engine = CodeGenerationEngine.__new__(CodeGenerationEngine)
+        engine._redis = redis_mock
+        engine._stats_key = "autobot:code_generation:stats"
+
+        await engine._track_generation_stats("generate", "typescript", 50, False)
+
+        called_fields = [call.args[1] for call in redis_mock.hincrby.call_args_list]
+        assert "generate:success" not in called_fields
+        assert "generate:total" in called_fields
+
+    @pytest.mark.asyncio
+    async def test_expire_called_after_hincrby(self):
+        """expire must be called exactly once, after the gather completes."""
+        from api.analytics_code_generation import CodeGenerationEngine
+
+        call_order = []
+
+        async def track_hincrby(*args, **kwargs):
+            call_order.append("hincrby")
+            return 1
+
+        async def track_expire(*args, **kwargs):
+            call_order.append("expire")
+            return True
+
+        redis_mock = MagicMock()
+        redis_mock.hincrby = track_hincrby
+        redis_mock.expire = track_expire
+
+        engine = CodeGenerationEngine.__new__(CodeGenerationEngine)
+        engine._redis = redis_mock
+        engine._stats_key = "autobot:code_generation:stats"
+
+        await engine._track_generation_stats("refactor", "python", 200, True)
+
+        assert "expire" in call_order
+        # expire must come after all hincrby calls
+        last_hincrby_idx = max(i for i, v in enumerate(call_order) if v == "hincrby")
+        expire_idx = call_order.index("expire")
+        assert expire_idx > last_hincrby_idx
