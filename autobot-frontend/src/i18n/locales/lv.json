@@ -6810,14 +6810,17 @@
         "trigger": "Extract Text",
         "regionsFound": "{count} text region(s) found",
         "noRegions": "No text regions detected",
-        "empty": "Press Extract Text to run OCR on the current screen"
+        "empty": "Press Extract Text to run OCR on the current screen",
+        "fieldConfidence": "Pārliecība",
+        "fieldBbox": "Robežas"
       },
       "opportunities": {
         "cardTitle": "Automation Opportunities",
         "trigger": "Scan for Opportunities",
         "total": "Total Opportunities",
         "empty": "No automation opportunities found",
-        "emptyHint": "Press Scan for Opportunities to discover interactive elements"
+        "emptyHint": "Press Scan for Opportunities to discover interactive elements",
+        "fieldUntyped": "Iespēja"
       }
     }
   },
@@ -7939,5 +7942,53 @@
     "viewAll": "View all",
     "saveHintPrefix": "Save an AI response from the",
     "saveHintSuffix": "to create a document."
+  },
+  "llcBrowser": {
+    "retry": "Mēģināt vēlreiz",
+    "cancel": "Atcelt",
+    "createAction": "Izveidot",
+    "nameLabel": "Nosaukums",
+    "namePlaceholder": "Nosaukums",
+    "descriptionLabel": "Apraksts (neobligāts)",
+    "descriptionPlaceholder": "Pievienojiet īsu aprakstu",
+    "portfolios": {
+      "title": "Portfeļi",
+      "count": "{count} portfeļi",
+      "loading": "Ielādē portfeļus…",
+      "empty": "Vēl nav portfeļu.",
+      "loadError": "Neizdevās ielādēt portfeļus.",
+      "create": "Jauns portfelis",
+      "createTitle": "Izveidot portfeli",
+      "createError": "Neizdevās izveidot portfeli."
+    },
+    "programs": {
+      "title": "Programmas",
+      "count": "{count} programmas",
+      "loading": "Ielādē programmas…",
+      "empty": "Vēl nav programmu.",
+      "loadError": "Neizdevās ielādēt programmas.",
+      "create": "Jauna programma",
+      "createTitle": "Izveidot programmu",
+      "createError": "Neizdevās izveidot programmu."
+    },
+    "projects": {
+      "title": "Projekti",
+      "count": "{count} projekti",
+      "loading": "Ielādē projektus…",
+      "empty": "Vēl nav projektu.",
+      "loadError": "Neizdevās ielādēt projektus.",
+      "create": "Jauns projekts",
+      "createTitle": "Izveidot projektu",
+      "createError": "Neizdevās izveidot projektu."
+    },
+    "approvals": {
+      "decideError": "Neizdevās saglabāt jūsu lēmumu. Lūdzu, mēģiniet vēlreiz."
+    },
+    "ceoChat": {
+      "sendError": "Neizdevās nosūtīt jūsu ziņojumu. Tas ir atjaunots, lai jūs varētu mēģināt vēlreiz."
+    },
+    "timeline": {
+      "rescheduleError": "Neizdevās saglabāt jauno grafiku. Izmaiņas tika atceltas."
+    }
   }
 }

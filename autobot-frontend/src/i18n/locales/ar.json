@@ -6810,14 +6810,17 @@
         "trigger": "Extract Text",
         "regionsFound": "{count} text region(s) found",
         "noRegions": "No text regions detected",
-        "empty": "Press Extract Text to run OCR on the current screen"
+        "empty": "Press Extract Text to run OCR on the current screen",
+        "fieldConfidence": "Confidence",
+        "fieldBbox": "Bounds"
       },
       "opportunities": {
         "cardTitle": "Automation Opportunities",
         "trigger": "Scan for Opportunities",
         "total": "Total Opportunities",
         "empty": "No automation opportunities found",
-        "emptyHint": "Press Scan for Opportunities to discover interactive elements"
+        "emptyHint": "Press Scan for Opportunities to discover interactive elements",
+        "fieldUntyped": "Opportunity"
       }
     }
   },
@@ -7939,5 +7942,53 @@
     "viewAll": "View all",
     "saveHintPrefix": "Save an AI response from the",
     "saveHintSuffix": "to create a document."
+  },
+  "llcBrowser": {
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "createAction": "Create",
+    "nameLabel": "Name",
+    "namePlaceholder": "Name",
+    "descriptionLabel": "Description (optional)",
+    "descriptionPlaceholder": "Add a short description",
+    "portfolios": {
+      "title": "Portfolios",
+      "count": "{count} portfolios",
+      "loading": "Loading portfolios…",
+      "empty": "No portfolios yet.",
+      "loadError": "Failed to load portfolios.",
+      "create": "New Portfolio",
+      "createTitle": "Create Portfolio",
+      "createError": "Failed to create portfolio."
+    },
+    "programs": {
+      "title": "Programs",
+      "count": "{count} programs",
+      "loading": "Loading programs…",
+      "empty": "No programs yet.",
+      "loadError": "Failed to load programs.",
+      "create": "New Program",
+      "createTitle": "Create Program",
+      "createError": "Failed to create program."
+    },
+    "projects": {
+      "title": "Projects",
+      "count": "{count} projects",
+      "loading": "Loading projects…",
+      "empty": "No projects yet.",
+      "loadError": "Failed to load projects.",
+      "create": "New Project",
+      "createTitle": "Create Project",
+      "createError": "Failed to create project."
+    },
+    "approvals": {
+      "decideError": "Failed to record your decision. Please try again."
+    },
+    "ceoChat": {
+      "sendError": "Failed to send your message. It has been restored so you can retry."
+    },
+    "timeline": {
+      "rescheduleError": "Failed to save the new schedule. The change was reverted."
+    }
   }
 }

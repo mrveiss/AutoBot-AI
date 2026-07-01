@@ -6810,14 +6810,17 @@
         "trigger": "Extract Text",
         "regionsFound": "{count} text region(s) found",
         "noRegions": "No text regions detected",
-        "empty": "Press Extract Text to run OCR on the current screen"
+        "empty": "Press Extract Text to run OCR on the current screen",
+        "fieldConfidence": "Konfidenz",
+        "fieldBbox": "Begrenzung"
       },
       "opportunities": {
         "cardTitle": "Automation Opportunities",
         "trigger": "Scan for Opportunities",
         "total": "Total Opportunities",
         "empty": "No automation opportunities found",
-        "emptyHint": "Press Scan for Opportunities to discover interactive elements"
+        "emptyHint": "Press Scan for Opportunities to discover interactive elements",
+        "fieldUntyped": "Gelegenheit"
       }
     }
   },
@@ -7939,5 +7942,53 @@
     "viewAll": "View all",
     "saveHintPrefix": "Save an AI response from the",
     "saveHintSuffix": "to create a document."
+  },
+  "llcBrowser": {
+    "retry": "Erneut versuchen",
+    "cancel": "Abbrechen",
+    "createAction": "Erstellen",
+    "nameLabel": "Name",
+    "namePlaceholder": "Name",
+    "descriptionLabel": "Beschreibung (optional)",
+    "descriptionPlaceholder": "Kurze Beschreibung hinzufügen",
+    "portfolios": {
+      "title": "Portfolios",
+      "count": "{count} Portfolios",
+      "loading": "Portfolios werden geladen…",
+      "empty": "Noch keine Portfolios.",
+      "loadError": "Portfolios konnten nicht geladen werden.",
+      "create": "Neues Portfolio",
+      "createTitle": "Portfolio erstellen",
+      "createError": "Portfolio konnte nicht erstellt werden."
+    },
+    "programs": {
+      "title": "Programme",
+      "count": "{count} Programme",
+      "loading": "Programme werden geladen…",
+      "empty": "Noch keine Programme.",
+      "loadError": "Programme konnten nicht geladen werden.",
+      "create": "Neues Programm",
+      "createTitle": "Programm erstellen",
+      "createError": "Programm konnte nicht erstellt werden."
+    },
+    "projects": {
+      "title": "Projekte",
+      "count": "{count} Projekte",
+      "loading": "Projekte werden geladen…",
+      "empty": "Noch keine Projekte.",
+      "loadError": "Projekte konnten nicht geladen werden.",
+      "create": "Neues Projekt",
+      "createTitle": "Projekt erstellen",
+      "createError": "Projekt konnte nicht erstellt werden."
+    },
+    "approvals": {
+      "decideError": "Ihre Entscheidung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut."
+    },
+    "ceoChat": {
+      "sendError": "Ihre Nachricht konnte nicht gesendet werden. Sie wurde wiederhergestellt, damit Sie es erneut versuchen können."
+    },
+    "timeline": {
+      "rescheduleError": "Der neue Zeitplan konnte nicht gespeichert werden. Die Änderung wurde rückgängig gemacht."
+    }
   }
 }
