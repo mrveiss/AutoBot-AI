@@ -17,6 +17,7 @@ import asyncio
 import hashlib
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
 from celery_app import celery_app
@@ -112,9 +113,9 @@ def run_import_tree_analysis(self) -> dict:
             _build_module_to_file_mapping,
             _build_summary,
         )
-        from api.codebase_analytics.endpoints.shared import get_project_root
+        from api.codebase_analytics.endpoints.shared import resolve_project_root
 
-        project_root = get_project_root()
+        project_root = Path(resolve_project_root())
         excluded = {"__pycache__", "node_modules", ".venv", "venv", ".env", "archive", "dist", "build"}
         python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
         python_files = [f for f in python_files if not any(ex in f.parts for ex in excluded)]
@@ -148,12 +149,12 @@ def run_duplicate_analysis(self) -> dict:
     async def _work():
         from api.codebase_analytics.endpoints.duplicates import (
             _build_timeout_response,
-            _get_project_root,
             _process_and_cache_analysis,
             _run_duplicate_analysis,
         )
+        from api.codebase_analytics.endpoints.shared import resolve_project_root
 
-        project_root = _get_project_root()
+        project_root = resolve_project_root()
         analysis = await _run_duplicate_analysis(project_root, 0.5, False)
         if analysis is None:
             return _build_timeout_response()

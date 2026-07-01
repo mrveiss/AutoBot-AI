@@ -32,6 +32,7 @@ from utils.io_executor import get_analytics_executor
 
 from ..duplicate_detector import DuplicateCodeDetector, detect_duplicates_async
 from ..storage import get_code_collection
+from .shared import resolve_project_root
 
 logger = get_logger(__name__)
 
@@ -45,8 +46,8 @@ _duplicate_cache: dict[str, dict] = {}
 
 
 def _get_project_root() -> str:
-    """Get project root path (4 levels up from this file)."""
-    return str(Path(__file__).resolve().parents[4])
+    """Get project root path — delegates to shared resolver (#10730)."""
+    return resolve_project_root()
 
 
 async def _run_semantic_analysis(project_root: str, min_similarity: float):
@@ -509,7 +510,7 @@ async def detect_config_duplicates_endpoint(
     Returns:
         JSONResponse with duplicate detection results
     """
-    project_root = Path(__file__).resolve().parents[4]
+    project_root = Path(resolve_project_root())
     if source_id:
         try:
             from api.codebase_analytics.source_storage import get_source
