@@ -113,7 +113,7 @@
 
     - name: Check backend health
       uri:
-        url: "https://{{ ansible_host }}:{{ backend_https_port }}/api/health"
+        url: "http://127.0.0.1:8001/api/health"
         validate_certs: false
         status_code: [200, 404]
         timeout: 10

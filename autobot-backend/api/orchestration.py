@@ -288,6 +288,8 @@ async def recommend_agents(
             },
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Agent recommendation error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to get recommendations")
