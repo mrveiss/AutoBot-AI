@@ -1924,7 +1924,7 @@ export interface paths {
          *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
          *     so the uncached aggregator is acceptable on its own.
          */
-        get: operations["get_system_health_api_system_system_health_get"];
+        get: operations["get_system_health_api_system_system_health_head"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1947,7 +1947,7 @@ export interface paths {
          *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
          *     so the uncached aggregator is acceptable on its own.
          */
-        head: operations["get_system_health_api_system_system_health_get"];
+        head: operations["get_system_health_api_system_system_health_head"];
         patch?: never;
         trace?: never;
     };
@@ -1976,7 +1976,7 @@ export interface paths {
          *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
          *     so the uncached aggregator is acceptable on its own.
          */
-        get: operations["get_system_health_api_system_health_get"];
+        get: operations["get_system_health_api_system_health_head"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1999,7 +1999,7 @@ export interface paths {
          *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
          *     so the uncached aggregator is acceptable on its own.
          */
-        head: operations["get_system_health_api_system_health_get"];
+        head: operations["get_system_health_api_system_health_head"];
         patch?: never;
         trace?: never;
     };
@@ -75887,8 +75887,8 @@ export interface components {
             local_kb: {
                 [key: string]: unknown;
             }[];
-            /** Enhanced */
-            enhanced: {
+            /** Rag Augmented */
+            rag_augmented: {
                 [key: string]: unknown;
             };
         } & {
@@ -101950,7 +101950,7 @@ export interface operations {
             };
         };
     };
-    get_system_health_api_system_system_health_get: {
+    get_system_health_api_system_system_health_head: {
         parameters: {
             query?: never;
             header?: never;
@@ -101970,7 +101970,7 @@ export interface operations {
             };
         };
     };
-    get_system_health_api_system_system_health_get: {
+    get_system_health_api_system_system_health_head: {
         parameters: {
             query?: never;
             header?: never;
@@ -101990,7 +101990,7 @@ export interface operations {
             };
         };
     };
-    get_system_health_api_system_health_get: {
+    get_system_health_api_system_health_head: {
         parameters: {
             query?: never;
             header?: never;
@@ -102010,7 +102010,7 @@ export interface operations {
             };
         };
     };
-    get_system_health_api_system_health_get: {
+    get_system_health_api_system_health_head: {
         parameters: {
             query?: never;
             header?: never;
