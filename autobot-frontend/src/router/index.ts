@@ -1175,6 +1175,13 @@ export const routes: RouteRecordRaw[] = [
       { path: 'heartbeat', name: 'llc-heartbeat', component: () => import('@/views/llc/HeartbeatMonitor.vue'), props: true, meta: { title: 'Heartbeat Monitor', requiresAuth: true } },
       { path: 'ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true } },
       { path: 'members', name: 'llc-members', component: () => import('@/views/llc/MembersView.vue'), props: true, meta: { title: 'Members', requiresAuth: true } },
+      // GH#10750 (B3): in-layout variants of the formerly top-level dashboard/
+      // goals/org-chart views so the LlcSidebar stays mounted on navigation.
+      // The views resolve the active company from :companyId via
+      // useLlcCompanyContext (param -> ?company= fallback for back-compat).
+      { path: 'dashboard', name: 'llc-company-dashboard', component: () => import('@/views/llc/CompanyDashboard.vue'), props: true, meta: { title: 'Company Dashboard', requiresAuth: true } },
+      { path: 'goals', name: 'llc-company-goals', component: () => import('@/views/llc/GoalTree.vue'), props: true, meta: { title: 'Goal Tree', requiresAuth: true } },
+      { path: 'org-chart', name: 'llc-company-org-chart', component: () => import('@/views/llc/OrgChart.vue'), props: true, meta: { title: 'Org Chart', requiresAuth: true } },
     ],
   },
   // Issue #9044: Transcriber — audio/video transcription module

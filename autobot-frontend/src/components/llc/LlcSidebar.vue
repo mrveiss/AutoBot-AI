@@ -6,9 +6,10 @@
   GH#9627: Contextual LLC sidebar — navigation spine for company-scoped views.
 
   Rendered by LlcCompanyLayout inside /llc/companies/:companyId/… routes.
-  Links only routes that exist in router/index.ts:
-    - Dashboard / Goals / Org Chart are query-scoped (?company=) views (#9861)
-    - Backlog / Approvals / Costs / CEO Chat / Heartbeat are :companyId-scoped
+  Every link targets a :companyId-scoped child route so the layout — and this
+  sidebar — stays mounted on navigation (#10750 B3). Dashboard / Goals /
+  Org Chart resolve the active company from :companyId (via
+  useLlcCompanyContext, which still falls back to ?company= for back-compat).
   Sprint & Kanban boards need a :boardId and are reached via the Backlog.
 -->
 <script setup lang="ts">
@@ -35,16 +36,16 @@ interface SidebarLink {
 const links = computed<SidebarLink[]>(() => {
   const id = companyId.value
   return [
-    // Query-scoped views (resolve company via ?company= — see #9861)
-    { labelKey: 'nav.llcDashboard', to: { path: '/llc/dashboard', query: { company: id } } },
-    // Company-scoped views (/llc/companies/:companyId/…)
+    // All views are company-scoped (/llc/companies/:companyId/…) so the
+    // LlcCompanyLayout — and therefore this sidebar — stays mounted (#10750 B3).
+    { labelKey: 'nav.llcDashboard', to: { path: `/llc/companies/${id}/dashboard` } },
     { labelKey: 'nav.llcBacklog', to: { path: `/llc/companies/${id}/backlog` } },
     { labelKey: 'nav.llcBoards', to: { path: `/llc/companies/${id}/boards` } },
     { labelKey: 'nav.llcReviewInbox', to: { path: `/llc/companies/${id}/reviews` } },
     { labelKey: 'nav.llcPortfolios', to: { path: `/llc/companies/${id}/portfolios` } },
     { labelKey: 'nav.llcTimeline', to: { path: `/llc/companies/${id}/timeline` } },
-    { labelKey: 'nav.llcGoals', to: { path: '/llc/goals', query: { company: id } } },
-    { labelKey: 'nav.llcOrgChart', to: { path: '/llc/org-chart', query: { company: id } } },
+    { labelKey: 'nav.llcGoals', to: { path: `/llc/companies/${id}/goals` } },
+    { labelKey: 'nav.llcOrgChart', to: { path: `/llc/companies/${id}/org-chart` } },
     { labelKey: 'nav.llcMembers', to: { path: `/llc/companies/${id}/members` } },
     { labelKey: 'nav.llcApprovals', to: { path: `/llc/companies/${id}/approvals` } },
     { labelKey: 'nav.llcCosts', to: { path: `/llc/companies/${id}/costs` } },
@@ -54,6 +55,8 @@ const links = computed<SidebarLink[]>(() => {
 })
 
 function isActive(link: SidebarLink): boolean {
+  // All links are now plain company-scoped paths (#10750 B3); compare the
+  // resolved route path only (query no longer participates in scoping).
   return route.path === link.to.path
 }
 
