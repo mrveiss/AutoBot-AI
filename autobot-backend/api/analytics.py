@@ -64,7 +64,7 @@ from tasks.analytics_tasks import run_dashboard_analysis
 from utils.celery_task_status import celery_result_to_status, store_latest_task_id
 
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
-from .monitoring_hardware import hardware_monitor
+from .monitoring_hardware import local_hardware_monitor
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["analytics"])
@@ -133,7 +133,7 @@ async def get_dashboard_overview(current_user: Dict = Depends(get_current_user))
     timestamp = datetime.now(tz=timezone.utc).isoformat()
 
     results = await asyncio.gather(
-        hardware_monitor.get_system_health(),
+        local_hardware_monitor.get_system_health(),
         analytics_controller.collect_performance_metrics(),
         analytics_controller.analyze_communication_patterns(),
         analytics_controller.get_usage_statistics(),
@@ -189,7 +189,7 @@ async def _check_service(client, service_name: str, service_url: str) -> Tuple[s
 def _check_resource_alerts(system_resources: Dict) -> List[Dict[str, Any]]:
     """Generate resource alerts based on thresholds (Issue #398: extracted).
 
-    Issue #596: Fixed key names to match hardware_monitor.get_system_resources() output.
+    Issue #596: Fixed key names to match local_hardware_monitor.get_system_resources() output.
     - CPU key: usage_percent (not percent_overall)
     - Memory key: usage_percent (not percent)
     """
@@ -229,7 +229,7 @@ def _check_resource_alerts(system_resources: Dict) -> List[Dict[str, Any]]:
 )
 async def get_detailed_system_health(current_user: Dict = Depends(get_current_user)):
     """Get detailed system health with enhanced analytics (Issue #398: refactored)."""
-    base_health = await hardware_monitor.get_system_health()
+    base_health = await local_hardware_monitor.get_system_health()
 
     detailed_health = {
         "base_health": base_health,
@@ -270,7 +270,7 @@ async def get_detailed_system_health(current_user: Dict = Depends(get_current_us
         detailed_health["service_connectivity"]["redis"] = "checked_via_redis"
 
     # Resource alerts using helper (Issue #430: await async)
-    system_resources = await hardware_monitor.get_system_resources()
+    system_resources = await local_hardware_monitor.get_system_resources()
     detailed_health["resource_alerts"] = _check_resource_alerts(system_resources)
 
     return detailed_health
@@ -431,7 +431,7 @@ async def _collect_realtime_metrics_data() -> Dict[str, Any]:
     # Issue #619: Parallelize independent metrics collection
     current_metrics, system_resources = await asyncio.gather(
         analytics_controller.metrics_collector.collect_all_metrics(),
-        hardware_monitor.get_system_resources(),
+        local_hardware_monitor.get_system_resources(),
     )
 
     realtime_data: Dict[str, Any] = {
@@ -454,7 +454,7 @@ async def _collect_realtime_metrics_data() -> Dict[str, Any]:
                 if parse_utc_iso(call["timestamp"]) > datetime.now(tz=timezone.utc) - timedelta(minutes=1)
             ]
         ),
-        # Issue #596: Fixed key names to match hardware_monitor.get_system_resources() output
+        # Issue #596: Fixed key names to match local_hardware_monitor.get_system_resources() output
         "performance_snapshot": {
             "cpu_percent": system_resources.get("cpu", {}).get("usage_percent", 0),
             "memory_percent": system_resources.get("memory", {}).get("usage_percent", 0),

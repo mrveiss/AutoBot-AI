@@ -72,13 +72,17 @@ def _detect_npu_sync() -> Dict[str, Any]:
         return {"available": False, "error": "Detection failed"}
 
 
-class HardwareMonitorStub:
+class LocalHardwareMonitor:
     """
     Hardware monitor providing local GPU/NPU detection for analytics dashboards.
 
     Issue #729: Fleet infrastructure monitoring lives in the SLM server.
-    Issue #10717: get_gpu_status / get_npu_status now detect real local hardware
-    via HardwareAccelerationManager instead of returning a hardcoded stub.
+    Issue #10717: get_gpu_status / get_npu_status detect real local hardware
+    via HardwareAccelerationManager (nvidia-smi / rocm-smi / lspci / OpenVINO).
+
+    Distinct from utils/hardware_metrics.HardwarePerformanceMonitor, which
+    collects continuous perf-dashboard metrics (GPU utilisation, buffers, alerts).
+    This class answers point-in-time availability queries for analytics endpoints.
     """
 
     async def get_system_health(self) -> Dict[str, Any]:
@@ -160,5 +164,8 @@ class HardwareMonitorStub:
             return {"available": False, "error": "Detection failed"}
 
 
-# Global singleton instance for backward compatibility
-hardware_monitor = HardwareMonitorStub()
+# Singleton for this node's point-in-time hardware availability queries.
+# Named local_hardware_monitor to distinguish from
+# utils/hardware_metrics.hardware_monitor (HardwarePerformanceMonitor),
+# which handles continuous perf-dashboard collection.
+local_hardware_monitor = LocalHardwareMonitor()
