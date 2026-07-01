@@ -120,7 +120,7 @@ curl -sk -X POST "$BACKEND/api/knowledge_base/search" \
 ```
 
 For hybrid scoring, graph RAG, and the full vectorization pipeline, see
-[Section 5](#5-enhanced-search-with-hybrid-scoring) and [Section 7](#7-graph-rag-advanced).
+[Section 5](#5-npu-search-with-hybrid-scoring) and [Section 7](#7-graph-rag-advanced).
 
 ---
 
@@ -141,7 +141,7 @@ AutoBot API endpoints and backend modules.
 2. [Ingesting PDF Documents](#2-ingesting-pdf-documents)
 3. [Knowledge API Endpoint Reference](#3-knowledge-api-endpoint-reference)
 4. [RAG-Enhanced Chat Flow](#4-rag-enhanced-chat-flow)
-5. [Enhanced Search with Hybrid Scoring](#5-enhanced-search-with-hybrid-scoring)
+5. [NPU Search with Hybrid Scoring](#5-npu-search-with-hybrid-scoring)
 6. [Document Vectorization Pipeline](#6-document-vectorization-pipeline)
 7. [Graph RAG (Advanced)](#7-graph-rag-advanced)
 8. [Natural Language Search](#8-natural-language-search)
@@ -204,7 +204,7 @@ ChromaDB Storage       Cross-Encoder Reranking
 | **Advanced RAG Optimizer** | `advanced_rag_optimizer.py` | Hybrid search, multi-stage reranking, query expansion, result diversification, GPU-accelerated embeddings |
 | **Graph RAG Service** | `services/graph_rag_service.py` | `GraphRAGService` composing `RAGService` + `AutoBotMemoryGraph` for relationship-aware retrieval |
 | **Graph RAG API** | `api/graph_rag.py` | REST endpoints at `/api/graph-rag` for graph-aware search, health, metrics |
-| **Enhanced Search** | `api/enhanced_search.py` | NPU-accelerated semantic search at `/api/enhanced-search` |
+| **NPU Search** | `api/search.py` | NPU-accelerated semantic search at `/api/npu-search` |
 | **Natural Language Search** | `api/natural_language_search.py` | Intent-classified code search at `/api/natural-language-search/nl-search` |
 | **RAG Config** | `services/rag_config.py` | `RAGConfig` dataclass loaded from `config/complete.yaml` under `knowledge.rag` |
 | **Knowledge Factory** | `knowledge_factory.py` | Singleton factory breaking circular imports between `api/knowledge.py` and `app_factory.py` |
@@ -942,7 +942,7 @@ async def simple_rag_chat(query: str, auth_token: str) -> str:
 
 ---
 
-## 5. Enhanced Search with Hybrid Scoring
+## 5. NPU Search with Hybrid Scoring
 
 AutoBot provides multiple search strategies that can be combined for optimal retrieval
 quality. The consolidated `/api/knowledge_base/search` endpoint supports all modes.
@@ -973,7 +973,7 @@ for more accurate relevance ranking.
 
 ### NPU-Accelerated Search
 
-The enhanced search endpoint (`/api/enhanced-search/semantic`) provides hardware-accelerated
+The NPU search endpoint (`/api/npu-search/semantic`) provides hardware-accelerated
 search with automatic device selection:
 
 ```python
@@ -1001,7 +1001,7 @@ async def npu_enhanced_search(
 
     async with aiohttp.ClientSession(connector=connector) as session:
         resp = await session.post(
-            f"{BACKEND_URL}/api/enhanced-search/semantic",
+            f"{BACKEND_URL}/api/npu-search/semantic",
             json={
                 "query": query,
                 "similarity_top_k": top_k,
@@ -1746,7 +1746,7 @@ curl -sk https://<backend-ip>:8443/api/knowledge_base/stats \
   -H "Authorization: Bearer <token>" | python3 -m json.tool
 
 # Verify NPU availability for embeddings
-curl -sk https://<backend-ip>:8443/api/enhanced-search/hardware/status \
+curl -sk https://<backend-ip>:8443/api/npu-search/hardware/status \
   -H "Authorization: Bearer <token>" | python3 -m json.tool
 ```
 
@@ -1789,13 +1789,13 @@ curl -sk "https://<backend-ip>:8443/api/knowledge_base/entries?limit=5" \
 
 ```bash
 # Run a benchmark
-curl -sk https://<backend-ip>:8443/api/enhanced-search/benchmark \
+curl -sk https://<backend-ip>:8443/api/npu-search/benchmark \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"test_queries": ["test query"], "iterations": 3}' | python3 -m json.tool
 
 # Check performance analytics
-curl -sk https://<backend-ip>:8443/api/enhanced-search/performance/analytics \
+curl -sk https://<backend-ip>:8443/api/npu-search/performance/analytics \
   -H "Authorization: Bearer <token>" | python3 -m json.tool
 ```
 

@@ -18,3 +18,9 @@ def search_multi_source():
 @router.get("/advanced-stats")
 def advanced_stats():
     """Domain adjective, not an era-marker synonym-swap — allowed."""
+
+
+# include_router with descriptive / domain-adjective prefixes — not flagged.
+def setup_routes(app):
+    app.include_router(router, prefix="/reporting")
+    app.include_router(router, prefix="/advanced-stats")
