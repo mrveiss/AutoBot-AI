@@ -1924,7 +1924,7 @@ export interface paths {
          *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
          *     so the uncached aggregator is acceptable on its own.
          */
-        get: operations["get_system_health_api_system_system_health_head"];
+        get: operations["get_system_health_alias"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1947,7 +1947,7 @@ export interface paths {
          *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
          *     so the uncached aggregator is acceptable on its own.
          */
-        head: operations["get_system_health_api_system_system_health_head"];
+        head: operations["head_system_health_alias"];
         patch?: never;
         trace?: never;
     };
@@ -1976,7 +1976,7 @@ export interface paths {
          *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
          *     so the uncached aggregator is acceptable on its own.
          */
-        get: operations["get_system_health_api_system_health_head"];
+        get: operations["get_system_health"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1999,7 +1999,7 @@ export interface paths {
          *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
          *     so the uncached aggregator is acceptable on its own.
          */
-        head: operations["get_system_health_api_system_health_head"];
+        head: operations["head_system_health"];
         patch?: never;
         trace?: never;
     };
@@ -2744,6 +2744,11 @@ export interface paths {
         /**
          * Get Telemetry Settings
          * @description Get current telemetry settings (Issue #9035).
+         *
+         *     Public: returns only global, non-sensitive telemetry config (enabled flags +
+         *     first-run-prompt state). Checked at app load before auth is established, so
+         *     gating it behind get_current_user caused spurious 401s (#10750 A13). The
+         *     consent-changing POST /telemetry remains authenticated.
          *
          *     Returns telemetry opt-in/opt-out status and whether the first-run
          *     prompt has been shown.
@@ -34138,6 +34143,10 @@ export interface paths {
          * Get Version
          * @description Get application version and system information
          *
+         *     Public: returns only version/build/environment/services_count/name (no
+         *     sensitive data). Called at app load before auth, so requiring admin caused
+         *     spurious 401s (#10750 A13).
+         *
          *     Issue #744: Requires admin authentication.
          */
         get: operations["get_version_api_services_version_get"];
@@ -60462,7 +60471,7 @@ export interface components {
             /**
              * Codebase Path
              * @description Path to codebase to index
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10746-b16
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10776
              */
             codebase_path: string;
             /**
@@ -74398,7 +74407,7 @@ export interface components {
              * Source Paths
              * @description Paths to populate from
              * @default [
-             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10746-b16"
+             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10776"
              *     ]
              */
             source_paths: string[];
@@ -82510,7 +82519,7 @@ export interface components {
             /**
              * Path
              * @description Path to analyze (defaults to project root)
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10746-b16
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10776
              */
             path: string;
             /**
@@ -89043,7 +89052,7 @@ export interface components {
              * Scan Paths
              * @description Paths to scan
              * @default [
-             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10746-b16"
+             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10776"
              *     ]
              */
             scan_paths: string[];
@@ -94017,7 +94026,7 @@ export interface components {
             /**
              * Test Path
              * @description Path to test directory
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10746-b16/autobot-backend
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10776/autobot-backend
              */
             test_path: string;
             /**
@@ -101950,7 +101959,7 @@ export interface operations {
             };
         };
     };
-    get_system_health_api_system_system_health_head: {
+    get_system_health_alias: {
         parameters: {
             query?: never;
             header?: never;
@@ -101970,7 +101979,7 @@ export interface operations {
             };
         };
     };
-    get_system_health_api_system_system_health_head: {
+    head_system_health_alias: {
         parameters: {
             query?: never;
             header?: never;
@@ -101990,7 +101999,7 @@ export interface operations {
             };
         };
     };
-    get_system_health_api_system_health_head: {
+    get_system_health: {
         parameters: {
             query?: never;
             header?: never;
@@ -102010,7 +102019,7 @@ export interface operations {
             };
         };
     };
-    get_system_health_api_system_health_head: {
+    head_system_health: {
         parameters: {
             query?: never;
             header?: never;

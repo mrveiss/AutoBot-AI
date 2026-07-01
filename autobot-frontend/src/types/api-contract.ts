@@ -272,18 +272,6 @@ export type TestCategoriesResponse = components['schemas']['TestCategoriesRespon
 /** `POST /search` response. */
 export type KnowledgeSearchResponse = components['schemas']['KnowledgeSearchResponse']
 
-/** `POST /search/enhanced` response. */
-export type EnhancedSearchResponse = components['schemas']['EnhancedSearchResponse']
-
-/** `POST /search/rag` response. */
-export type RagSearchResponse = components['schemas']['RagSearchResponse']
-
-/** `POST /search/similarity` response. */
-export type SimilaritySearchResponse = components['schemas']['SimilaritySearchResponse']
-
-/** `POST /search/enhanced/v2` response. */
-export type EnhancedSearchV2Response = components['schemas']['EnhancedSearchV2Response']
-
 /** `GET /search/analytics` response. */
 export type SearchAnalyticsResponse = components['schemas']['SearchAnalyticsResponse']
 

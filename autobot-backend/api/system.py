@@ -262,10 +262,24 @@ async def get_frontend_config(admin_check: bool = Depends(check_admin_permission
 
 # #10502: include HEAD so the frontend ServiceDiscovery liveness probe
 # (HEAD /api/system/health) resolves instead of 405 → false "backend offline".
-@router.api_route("/health", methods=["GET", "HEAD"], response_model=SystemHealthResponse)
-@router.api_route(
-    "/system/health", methods=["GET", "HEAD"], response_model=SystemHealthResponse
-)  # Frontend compatibility alias
+# #10776: split GET/HEAD into single-method routes with distinct explicit
+# operation_ids. A single api_route carrying both methods makes FastAPI reuse
+# ONE unique_id for both operations, producing a colliding operationId that
+# openapi-typescript emits twice (duplicate identifier → vue-tsc-baseline red).
+@router.api_route("/health", methods=["GET"], response_model=SystemHealthResponse, operation_id="get_system_health")
+@router.api_route("/health", methods=["HEAD"], response_model=SystemHealthResponse, operation_id="head_system_health")
+@router.api_route(  # Frontend compatibility alias
+    "/system/health",
+    methods=["GET"],
+    response_model=SystemHealthResponse,
+    operation_id="get_system_health_alias",
+)
+@router.api_route(  # Frontend compatibility alias
+    "/system/health",
+    methods=["HEAD"],
+    response_model=SystemHealthResponse,
+    operation_id="head_system_health_alias",
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_health",
