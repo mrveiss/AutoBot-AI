@@ -159,14 +159,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ApexOptions } from 'apexcharts'
 import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useMultiModelCompare } from '@/composables/useMultiModelCompare'
-import { useAvailableModels } from '@/composables/useAvailableModels'
+import { useModelPicker } from '@/composables/useModelPicker'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import {
   type BenchmarkResultRow,
@@ -182,7 +182,8 @@ const { t } = useI18n()
 const logger = createLogger('BenchmarkView')
 
 const { responses, selectedModels, isComparing, compare } = useMultiModelCompare()
-const { availableModelNames, fetchModels } = useAvailableModels()
+// #10755/#10718: shared live-model picker wiring (fetch-on-mount + seeding).
+const { availableModels } = useModelPicker(selectedModels)
 
 const promptText = ref('')
 const selectedPromptSetId = ref('')
@@ -196,22 +197,6 @@ const filterPromptType = ref('')
 const filterSince = ref('')
 
 const promptTypes = ['rag', 'code', 'summarization', 'reasoning', 'custom']
-
-// #10718: build the picker from the live /api/models list (+ any already-selected
-// model) — no hardcoded seed masquerading as real availability. Before fetch
-// resolves the list is empty; the picker renders no fake models.
-const availableModels = computed<string[]>(() => {
-  const union = new Set<string>([...availableModelNames.value, ...selectedModels.value])
-  return Array.from(union)
-})
-
-// Seed the selection once the live list loads, but only when the user has no
-// persisted choice yet. The watcher handles the async fetch timing.
-watch(availableModelNames, (names) => {
-  if (selectedModels.value.length === 0 && names.length > 0) {
-    selectedModels.value = [...names]
-  }
-})
 
 const currentPromptType = computed(
   () => promptSets.value.find((s) => s.id === selectedPromptSetId.value)?.promptType ?? 'custom',
@@ -347,7 +332,6 @@ function formatDate(iso: string): string {
 }
 
 onMounted(() => {
-  fetchModels().catch(() => {})
   loadPromptSets()
   loadHistory()
 })
