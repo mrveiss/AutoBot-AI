@@ -138,18 +138,17 @@
       </div>
 
       <!-- Cleanup Modal -->
-      <div v-if="showCleanupModal" class="modal-overlay" @click="showCleanupModal = false">
-        <div class="modal-content" @click.stop>
-          <div class="modal-header">
-            <h3>
-              <Icon name="trash" />
-              {{ $t('views.auditLogs.cleanupTitle') }}
-            </h3>
-            <button class="modal-close" @click="showCleanupModal = false">
-              <Icon name="times" />
-            </button>
-          </div>
-          <div class="modal-body">
+      <BaseModal
+        v-model="showCleanupModal"
+        :title="$t('views.auditLogs.cleanupTitle')"
+        size="sm"
+      >
+        <template #title>
+          <span class="cleanup-title">
+            <Icon name="trash" />
+            {{ $t('views.auditLogs.cleanupTitle') }}
+          </span>
+        </template>
             <div class="warning-banner">
               <Icon name="exclamation-triangle" />
               <span>{{ $t('views.auditLogs.cleanupWarning') }}</span>
@@ -171,22 +170,20 @@
                 {{ $t('views.auditLogs.cleanupConfirm') }}
               </label>
             </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn-action-secondary" @click="showCleanupModal = false">
-              {{ $t('views.auditLogs.cancel') }}
-            </button>
-            <button
-              class="btn-action-danger"
-              :disabled="!cleanupConfirmed"
-              @click="performCleanup"
-            >
-              <Icon name="trash" />
-              {{ $t('views.auditLogs.deleteOldLogs') }}
-            </button>
-          </div>
-        </div>
-      </div>
+        <template #actions>
+          <button class="btn-action-secondary" @click="showCleanupModal = false">
+            {{ $t('views.auditLogs.cancel') }}
+          </button>
+          <button
+            class="btn-action-danger"
+            :disabled="!cleanupConfirmed"
+            @click="performCleanup"
+          >
+            <Icon name="trash" />
+            {{ $t('views.auditLogs.deleteOldLogs') }}
+          </button>
+        </template>
+      </BaseModal>
   </div>
 </template>
 
@@ -196,6 +193,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuditState } from '@/composables/useAuditApi'
 import AuditStatistics from '@/components/audit/AuditStatistics.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import AuditFilters from '@/components/audit/AuditFilters.vue'
 import AuditLogTable from '@/components/audit/AuditLogTable.vue'
 import AuditTimeline from '@/components/audit/AuditTimeline.vue'
@@ -488,60 +486,11 @@ async function performCleanup() {
 }
 
 /* Cleanup Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-  padding: var(--spacing-4);
-}
-
-.modal-content {
-  background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
-  max-width: 500px;
-  width: 100%;
-  overflow: hidden;
-  box-shadow: var(--shadow-2xl);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-5);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.modal-header h3 {
-  margin: var(--spacing-0);
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
+.cleanup-title {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
   color: var(--color-error);
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: var(--text-lg);
-  cursor: pointer;
-  padding: var(--spacing-1);
-}
-
-.modal-close:hover {
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: var(--spacing-5);
 }
 
 .warning-banner {
@@ -598,14 +547,6 @@ async function performCleanup() {
   width: 18px;
   height: 18px;
   accent-color: var(--color-primary);
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-3);
-  padding: var(--spacing-5);
-  border-top: 1px solid var(--border-default);
 }
 
 @media (max-width: 768px) {
