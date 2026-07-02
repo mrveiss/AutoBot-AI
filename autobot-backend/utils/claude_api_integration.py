@@ -4,14 +4,24 @@
 # Author: mrveiss
 """
 Claude API Integration with Intelligent Request Batching
-Integrates the batching system with AutoBot's existing Claude API infrastructure
+
+Canonical optimization module for AutoBot's Claude/LLM request path.
+Provides rate limiting, payload optimization, intelligent batching,
+graceful degradation, TodoWrite optimization, and tool pattern analysis.
+
+Supersedes the now-retired claude_api_optimization_suite.py (#10796).
+Wire-in point: initialization/lifespan._init_claude_api_integration()
+is called during Phase 2 startup; get_autobot_claude_adapter() is the
+production singleton used by LLMService and other callers.
 """
 
 from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
@@ -21,6 +31,7 @@ from constants.threshold_constants import RetryConfig, TimingConstants
 from utils.async_initializable import AsyncInitializable
 
 from .conversation_rate_limiter import ConversationRateLimiter
+from .graceful_degradation import GracefulDegradationManager
 from .payload_optimizer import PayloadOptimizer
 from .request_batcher import (
     BatchableRequest,
@@ -28,12 +39,28 @@ from .request_batcher import (
     RequestPriority,
     create_batcher,
 )
-
-# Import our components
-
+from .todowrite_optimizer import get_todowrite_optimizer
+from .tool_pattern_analyzer import get_tool_pattern_analyzer
 
 logger = get_logger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Optimization mode (folded from retired claude_api_optimization_suite, #10796)
+# ---------------------------------------------------------------------------
+
+class OptimizationMode(Enum):
+    """Optimization modes that drive automatic rate-limit reconfiguration."""
+
+    CONSERVATIVE = "conservative"   # Light touch; 60 req/min, 2500/hour
+    BALANCED = "balanced"           # Default; 50 req/min, 2000/hour
+    AGGRESSIVE = "aggressive"       # High-frequency; 30 req/min, 1500/hour
+    EMERGENCY = "emergency"         # Recovery; 15 req/min, 800/hour
+
+
+# ---------------------------------------------------------------------------
+# Configuration dataclasses
+# ---------------------------------------------------------------------------
 
 @dataclass
 class ClaudeAPIConfig:
@@ -47,10 +74,47 @@ class ClaudeAPIConfig:
     fallback_to_individual: bool = True
     max_retries: int = RetryConfig.DEFAULT_RETRIES
     base_delay: float = 1.0
+    # Optimization-mode and optional component toggles (folded from suite, #10796)
+    mode: OptimizationMode = OptimizationMode.BALANCED
+    enable_graceful_degradation: bool = True
+    enable_todowrite_optimization: bool = True
+    enable_pattern_analysis: bool = True
+    todowrite_consolidation_window: int = 30
+    todowrite_similarity_threshold: float = 0.8
+    pattern_analysis_interval: int = 300
 
+
+@dataclass
+class OptimizationMetrics:
+    """Snapshot metrics for optimization performance (folded from suite, #10796)."""
+
+    total_requests: int = 0
+    batched_requests: int = 0
+    individual_requests: int = 0
+    failed_requests: int = 0
+    rate_limit_hits: int = 0
+    payload_optimizations: int = 0
+    average_response_time: float = 0.0
+    conversation_crashes_prevented: int = 0
+    fallback_count: int = 0
+    last_reset_time: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
+
+
+# Rate-limit ceilings per mode (folded from suite's _MODE_RATE_LIMITS, #10796)
+_MODE_RATE_LIMITS: Dict[OptimizationMode, tuple[int, int]] = {
+    OptimizationMode.CONSERVATIVE: (60, 2500),
+    OptimizationMode.BALANCED: (50, 2000),
+    OptimizationMode.AGGRESSIVE: (30, 1500),
+    OptimizationMode.EMERGENCY: (15, 800),
+}
+
+
+# ---------------------------------------------------------------------------
+# Core batch-manager
+# ---------------------------------------------------------------------------
 
 class ClaudeAPIBatchManager:
-    """Manages Claude API calls with intelligent batching and optimization"""
+    """Manages Claude API calls with intelligent batching and optimization."""
 
     def __init__(self, config: ClaudeAPIConfig = None):
         """Initialize batch manager with configuration and tracking state."""
@@ -61,29 +125,39 @@ class ClaudeAPIBatchManager:
         self.rate_limiter = ConversationRateLimiter() if self.config.enable_rate_limiting else None
         self.payload_optimizer = PayloadOptimizer() if self.config.enable_payload_optimization else None
 
+        # Optional components (folded from suite, #10796)
+        self.degradation_manager = (
+            GracefulDegradationManager({}) if self.config.enable_graceful_degradation else None
+        )
+        self.todowrite_optimizer = (
+            get_todowrite_optimizer(
+                {
+                    "consolidation_window": self.config.todowrite_consolidation_window,
+                    "similarity_threshold": self.config.todowrite_similarity_threshold,
+                }
+            )
+            if self.config.enable_todowrite_optimization
+            else None
+        )
+        self.pattern_analyzer = (
+            get_tool_pattern_analyzer({"analysis_window": self.config.pattern_analysis_interval})
+            if self.config.enable_pattern_analysis
+            else None
+        )
+
         # Lock for thread-safe access to shared state
         self._lock = asyncio.Lock()
 
-        # State tracking
+        # State
         self.is_running = False
-        self.request_count = 0
-        self.batch_count = 0
-        self.fallback_count = 0
+        self.current_mode = self.config.mode
+        self._background_tasks: List[asyncio.Task] = []
 
-        # Performance metrics
-        self.metrics = {
-            "total_requests": 0,
-            "batched_requests": 0,
-            "individual_requests": 0,
-            "failed_requests": 0,
-            "average_response_time": 0.0,
-            "batch_efficiency": 0.0,
-            "rate_limit_hits": 0,
-            "payload_optimizations": 0,
-        }
+        # Flat metrics store
+        self._metrics = OptimizationMetrics()
 
     async def start(self):
-        """Start the batch manager"""
+        """Start the batch manager and optional background analysis tasks."""
         if self.is_running:
             return
 
@@ -93,13 +167,27 @@ class ClaudeAPIBatchManager:
                 time_window=self.config.time_window,
             )
 
+        if self.config.enable_pattern_analysis and self.pattern_analyzer:
+            task = asyncio.create_task(self._background_pattern_analysis())
+            self._background_tasks.append(task)
+
         self.is_running = True
-        logger.info("Claude API Batch Manager started")
+        logger.info(
+            "Claude API Batch Manager started in %s mode",
+            self.current_mode.value,
+        )
 
     async def stop(self):
-        """Stop the batch manager"""
+        """Stop the batch manager and cancel background tasks."""
         if not self.is_running:
             return
+
+        for task in self._background_tasks:
+            if not task.done():
+                task.cancel()
+        if self._background_tasks:
+            await asyncio.gather(*self._background_tasks, return_exceptions=True)
+        self._background_tasks.clear()
 
         if self.batcher:
             await self.batcher.stop()
@@ -108,10 +196,14 @@ class ClaudeAPIBatchManager:
         self.is_running = False
         logger.info("Claude API Batch Manager stopped")
 
-    async def _increment_metric(self, metric_name: str) -> None:
-        """Thread-safely increment a metric (Issue #315: extracted)."""
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    async def _increment_metric(self, field_name: str) -> None:
+        """Thread-safely increment a named metric field."""
         async with self._lock:
-            self.metrics[metric_name] += 1
+            setattr(self._metrics, field_name, getattr(self._metrics, field_name) + 1)
 
     async def _try_batched_request(
         self,
@@ -121,11 +213,7 @@ class ClaudeAPIBatchManager:
         timeout: float,
         metadata: Dict[str, Any],
     ) -> str | None:
-        """Try to process request with batching (Issue #315: extracted).
-
-        Returns:
-            Response string if successful, None if batching failed and fallback needed
-        """
+        """Try to process request with batching; return None to signal fallback needed."""
         try:
             response = await self._process_with_batching(content, priority, context_type, timeout, metadata)
             await self._increment_metric("batched_requests")
@@ -134,7 +222,7 @@ class ClaudeAPIBatchManager:
             logger.warning("Batching failed, falling back to individual: %s", e)
             if not self.config.fallback_to_individual:
                 raise
-            return None  # Signal to use fallback
+            return None
 
     async def _process_with_fallback(
         self,
@@ -144,60 +232,47 @@ class ClaudeAPIBatchManager:
         timeout: float,
         metadata: Dict[str, Any],
     ) -> str:
-        """Process request with batching or fallback (Issue #315: extracted).
-
-        Returns:
-            Response string
-        """
-        # Try batching if appropriate
+        """Process request with batching or individual fallback."""
         if self.config.enable_batching and self.batcher and self._should_batch_request(priority, context_type):
             response = await self._try_batched_request(content, priority, context_type, timeout, metadata)
             if response is not None:
                 return response
-
-            # Fallback to individual processing
+            # Fallback to individual
             response = await self._process_individual_request(content, timeout)
             await self._increment_metric("individual_requests")
             async with self._lock:
-                self.fallback_count += 1
+                self._metrics.fallback_count += 1
             return response
 
-        # Process individually (no batching)
         response = await self._process_individual_request(content, timeout)
         await self._increment_metric("individual_requests")
         return response
 
     async def _check_and_apply_rate_limit(self) -> bool:
-        """Check rate limit and update metrics if exceeded (Issue #315: extracted).
-
-        Returns:
-            True if request can proceed, False if rate limited
-        """
+        """Return True if request can proceed; False if rate-limited."""
         if not self.rate_limiter:
             return True
-
-        if await self._check_rate_limit():
+        if self.rate_limiter.can_make_request():
             return True
-
         await self._increment_metric("rate_limit_hits")
+        async with self._lock:
+            self._metrics.conversation_crashes_prevented += 1
         return False
 
     async def _optimize_payload_if_enabled(self, content: str) -> str:
-        """Optimize payload if optimizer is enabled (Issue #315: extracted).
-
-        Returns:
-            Optimized content string
-        """
+        """Return payload-optimized content string when optimizer is enabled."""
         if not self.payload_optimizer:
             return content
-
         optimization_result = self.payload_optimizer.optimize_payload(content)
         if not optimization_result.optimized:
             return content
-
         await self._increment_metric("payload_optimizations")
-        logger.debug(f"Payload optimized: {optimization_result.size_reduction}% reduction")
+        logger.debug("Payload optimized: %s%% reduction", optimization_result.size_reduction)
         return optimization_result.optimized_content
+
+    # ------------------------------------------------------------------
+    # Public request API
+    # ------------------------------------------------------------------
 
     async def submit_request(
         self,
@@ -207,10 +282,7 @@ class ClaudeAPIBatchManager:
         timeout: float = _ssot_config.timeout.default_request,
         metadata: Dict[str, Any] = None,
     ) -> str:
-        """Submit a request for processing with batching optimization (thread-safe).
-
-        Issue #315: Refactored to use helper methods for reduced nesting depth.
-        """
+        """Submit a request for processing with batching optimization (thread-safe)."""
         if not self.is_running:
             await self.start()
 
@@ -218,23 +290,33 @@ class ClaudeAPIBatchManager:
         await self._increment_metric("total_requests")
 
         try:
-            # Apply rate limiting (uses helper)
             if not await self._check_and_apply_rate_limit():
+                # Attempt graceful degradation before hard-failing
+                if self.degradation_manager:
+                    fallback = await self.degradation_manager.handle_request(
+                        content, {"type": context_type}
+                    )
+                    if fallback.success:
+                        return str(fallback.response)
                 raise Exception("Rate limit exceeded")
 
-            # Optimize payload if enabled (uses helper)
             optimized_content = await self._optimize_payload_if_enabled(content)
 
-            # Process request with batching or fallback (uses helper)
             response = await self._process_with_fallback(
                 optimized_content, priority, context_type, timeout, metadata or {}
             )
 
-            # Update metrics
             response_time = time.time() - start_time
             await self._update_response_time_metric(response_time)
 
-            # Record successful request for rate limiter
+            if self.pattern_analyzer:
+                self.pattern_analyzer.record_tool_call(
+                    tool_name=context_type,
+                    parameters={"content_len": len(content)},
+                    response_time=response_time,
+                    success=True,
+                )
+
             if self.rate_limiter:
                 self.rate_limiter.record_request(len(content))
 
@@ -242,23 +324,42 @@ class ClaudeAPIBatchManager:
 
         except Exception as e:
             await self._increment_metric("failed_requests")
+            if self.pattern_analyzer:
+                self.pattern_analyzer.record_tool_call(
+                    tool_name=context_type,
+                    parameters={"content_len": len(content)},
+                    response_time=time.time() - start_time,
+                    success=False,
+                    error_message=str(e),
+                )
             logger.error("Request failed: %s", e)
             raise
 
-    async def _check_rate_limit(self) -> bool:
-        """Check if request can proceed based on rate limits"""
-        if not self.rate_limiter:
-            return True
+    async def submit_todowrite(self, todos: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Optimize and submit a TodoWrite batch (folded from suite, #10796)."""
+        if self.todowrite_optimizer:
+            count = 0
+            for todo in todos:
+                ok = self.todowrite_optimizer.add_todo_for_optimization(
+                    content=todo.get("content", ""),
+                    status=todo.get("status", "pending"),
+                    active_form=todo.get("activeForm", ""),
+                    priority=todo.get("priority", 5),
+                )
+                if ok:
+                    count += 1
+            if count:
+                return {"status": "optimized", "todos_queued": count}
 
-        return self.rate_limiter.can_make_request()
+        # Fallback: submit as plain text
+        content = "\n".join(t.get("content", "") for t in todos)
+        await self.submit_request(content, context_type="todowrite")
+        return {"status": "submitted", "todos_queued": len(todos)}
 
     def _should_batch_request(self, priority: RequestPriority, context_type: str) -> bool:
-        """Determine if request should be batched"""
-        # Critical requests should not be batched
+        """Return True when request type is suitable for batching."""
         if priority == RequestPriority.CRITICAL:
             return False
-
-        # Some context types benefit more from batching
         batchable_contexts = {
             "code_analysis",
             "file_operations",
@@ -266,7 +367,6 @@ class ClaudeAPIBatchManager:
             "general_questions",
             "debug_operations",
         }
-
         return context_type in batchable_contexts
 
     async def _process_with_batching(
@@ -277,126 +377,169 @@ class ClaudeAPIBatchManager:
         timeout: float,
         metadata: Dict[str, Any],
     ) -> str:
-        """Process request using the batching system"""
+        """Process request using the batching system."""
         request = BatchableRequest(
-            id="",  # Auto-generated
+            id="",
             content=content,
             priority=priority,
             context_type=context_type,
             timeout=timeout,
             metadata=metadata or {},
         )
-
         request_id = await self.batcher.add_request(request)
         result = await self.batcher.get_result(request_id, timeout)
-
         if result is None:
             raise Exception("Timeout waiting for batched request result")
-
         return result
 
     async def _process_individual_request(self, content: str, timeout: float) -> str:
-        """Process request individually (fallback method)"""
-        # This is where you would integrate with your actual Claude API client
-        # For now, simulating the API call
-
-        await asyncio.sleep(TimingConstants.DEBOUNCE_INTERVAL_S)  # Simulate API delay
-
-        # Mock response - replace with actual Claude API integration
-        response = f"Mock response to: {content[:50]}..."
-
-        return response
+        """Process request individually (integration point for real Claude API client)."""
+        await asyncio.sleep(TimingConstants.DEBOUNCE_INTERVAL_S)
+        return f"Mock response to: {content[:50]}..."
 
     async def _update_response_time_metric(self, response_time: float):
-        """Update average response time metric (thread-safe)"""
+        """Update rolling-average response time metric (thread-safe)."""
         async with self._lock:
-            current_avg = self.metrics["average_response_time"]
-            total_requests = self.metrics["total_requests"]
+            total = self._metrics.total_requests
+            cur = self._metrics.average_response_time
+            self._metrics.average_response_time = (
+                response_time if total <= 1 else (cur * (total - 1) + response_time) / total
+            )
 
-            if total_requests == 1:
-                self.metrics["average_response_time"] = response_time
-            else:
-                # Rolling average
-                self.metrics["average_response_time"] = (
-                    current_avg * (total_requests - 1) + response_time
-                ) / total_requests
+    # ------------------------------------------------------------------
+    # Mode management (folded from suite, #10796)
+    # ------------------------------------------------------------------
 
-    async def submit_multiple_requests(self, requests: List[Dict[str, Any]], parallel: bool = True) -> List[str]:
-        """Submit multiple requests efficiently"""
-        if parallel:
-            # Submit all requests in parallel
-            tasks = []
-            for req in requests:
-                task = self.submit_request(
-                    content=req["content"],
-                    priority=req.get("priority", RequestPriority.NORMAL),
-                    context_type=req.get("context_type", "general"),
-                    timeout=req.get("timeout", 30.0),
-                    metadata=req.get("metadata", {}),
-                )
-                tasks.append(task)
+    async def set_mode(self, mode: OptimizationMode) -> None:
+        """Dynamically switch optimization mode and reconfigure rate limits."""
+        async with self._lock:
+            if mode == self.current_mode:
+                return
+            self.current_mode = mode
 
-            return await asyncio.gather(*tasks, return_exceptions=False)
-        else:
-            # Submit requests sequentially
-            results = []
-            for req in requests:
-                result = await self.submit_request(
-                    content=req["content"],
-                    priority=req.get("priority", RequestPriority.NORMAL),
-                    context_type=req.get("context_type", "general"),
-                    timeout=req.get("timeout", 30.0),
-                    metadata=req.get("metadata", {}),
-                )
-                results.append(result)
+        if self.rate_limiter and mode in _MODE_RATE_LIMITS:
+            per_minute, per_hour = _MODE_RATE_LIMITS[mode]
+            self.rate_limiter.requests_per_minute = per_minute
+            self.rate_limiter.requests_per_hour = per_hour
 
-            return results
+        logger.info("Optimization mode set to %s", mode.value)
+
+    # ------------------------------------------------------------------
+    # Metrics and status
+    # ------------------------------------------------------------------
 
     async def get_metrics(self) -> Dict[str, Any]:
-        """Get comprehensive metrics (thread-safe, returns snapshot)"""
+        """Return a thread-safe snapshot of all metrics."""
         async with self._lock:
-            # Copy metrics under lock
-            metrics_copy = dict(self.metrics)
-            fallback = self.fallback_count
-            running = self.is_running
+            m = self._metrics
+            return {
+                "total_requests": m.total_requests,
+                "batched_requests": m.batched_requests,
+                "individual_requests": m.individual_requests,
+                "failed_requests": m.failed_requests,
+                "rate_limit_hits": m.rate_limit_hits,
+                "payload_optimizations": m.payload_optimizations,
+                "average_response_time": m.average_response_time,
+                "conversation_crashes_prevented": m.conversation_crashes_prevented,
+                "fallback_count": m.fallback_count,
+                "batch_efficiency": (
+                    (m.batched_requests / max(1, m.total_requests)) * 100
+                ),
+                "is_running": self.is_running,
+                "current_mode": self.current_mode.value,
+            }
 
-        batch_efficiency = 0.0
-        if metrics_copy["total_requests"] > 0:
-            batched_ratio = metrics_copy["batched_requests"] / metrics_copy["total_requests"]
-            batch_efficiency = batched_ratio * 100
+    async def get_optimization_status(self) -> Dict[str, Any]:
+        """Return combined metrics with component health status."""
+        metrics = await self.get_metrics()
 
-        batcher_stats = {}
+        component_status: Dict[str, Any] = {}
+        if self.rate_limiter:
+            component_status["rate_limiter"] = self.rate_limiter.get_usage_statistics()
+        if self.todowrite_optimizer:
+            component_status["todowrite_optimizer"] = self.todowrite_optimizer.get_optimization_stats()
+        if self.pattern_analyzer:
+            component_status["pattern_analyzer"] = self.pattern_analyzer.get_analysis_results()
         if self.batcher:
-            batcher_stats = await self.batcher.get_statistics()
+            component_status["batcher"] = await self.batcher.get_statistics()
 
         return {
-            **metrics_copy,
-            "batch_efficiency": batch_efficiency,
-            "fallback_count": fallback,
-            "is_running": running,
-            "batcher_stats": batcher_stats,
-            "rate_limiter_stats": (self.rate_limiter.get_usage_statistics() if self.rate_limiter else {}),
+            "metrics": metrics,
+            "component_status": component_status,
+            "config": {
+                "batching_enabled": self.config.enable_batching,
+                "rate_limiting_enabled": self.config.enable_rate_limiting,
+                "payload_optimization_enabled": self.config.enable_payload_optimization,
+                "graceful_degradation_enabled": self.config.enable_graceful_degradation,
+                "todowrite_optimization_enabled": self.config.enable_todowrite_optimization,
+                "pattern_analysis_enabled": self.config.enable_pattern_analysis,
+            },
         }
 
     async def reset_metrics(self):
-        """Reset all metrics (thread-safe)"""
+        """Reset all metrics (thread-safe)."""
         async with self._lock:
-            self.metrics = {
-                "total_requests": 0,
-                "batched_requests": 0,
-                "individual_requests": 0,
-                "failed_requests": 0,
-                "average_response_time": 0.0,
-                "batch_efficiency": 0.0,
-                "rate_limit_hits": 0,
-                "payload_optimizations": 0,
-            }
-            self.fallback_count = 0
+            self._metrics = OptimizationMetrics()
         logger.info("Metrics reset")
 
+    # ------------------------------------------------------------------
+    # Background tasks (folded from suite, #10796)
+    # ------------------------------------------------------------------
+
+    async def _background_pattern_analysis(self):
+        """Periodic background task that checks for critical optimization opportunities."""
+        while self.is_running:
+            try:
+                await asyncio.sleep(self.config.pattern_analysis_interval)
+                if not self.pattern_analyzer:
+                    continue
+                self.pattern_analyzer.get_analysis_results(force_refresh=True)
+                recommendations = self.pattern_analyzer.get_optimization_recommendations()
+                critical = [r for r in recommendations if r.get("priority_score", 0) > 0.8]
+                if len(critical) > 3:
+                    await self.set_mode(OptimizationMode.AGGRESSIVE)
+            except Exception as e:
+                logger.error("Background pattern analysis error: %s", e)
+                await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)
+
+    # ------------------------------------------------------------------
+    # Batch operations
+    # ------------------------------------------------------------------
+
+    async def submit_multiple_requests(self, requests: List[Dict[str, Any]], parallel: bool = True) -> List[str]:
+        """Submit multiple requests efficiently."""
+        if parallel:
+            tasks = [
+                self.submit_request(
+                    content=req["content"],
+                    priority=req.get("priority", RequestPriority.NORMAL),
+                    context_type=req.get("context_type", "general"),
+                    timeout=req.get("timeout", 30.0),
+                    metadata=req.get("metadata", {}),
+                )
+                for req in requests
+            ]
+            return await asyncio.gather(*tasks, return_exceptions=False)
+
+        results = []
+        for req in requests:
+            result = await self.submit_request(
+                content=req["content"],
+                priority=req.get("priority", RequestPriority.NORMAL),
+                context_type=req.get("context_type", "general"),
+                timeout=req.get("timeout", 30.0),
+                metadata=req.get("metadata", {}),
+            )
+            results.append(result)
+        return results
+
+
+# ---------------------------------------------------------------------------
+# Context manager wrapper
+# ---------------------------------------------------------------------------
 
 class ClaudeAPIContextManager:
-    """Context manager for Claude API batch processing"""
+    """Async context manager for Claude API batch processing."""
 
     def __init__(self, config: ClaudeAPIConfig = None):
         """Initialize context manager with optional configuration."""
@@ -412,11 +555,12 @@ class ClaudeAPIContextManager:
         await self.manager.stop()
 
 
-# Convenience functions for easy integration
-async def create_claude_api_manager(
-    config: ClaudeAPIConfig = None,
-) -> ClaudeAPIBatchManager:
-    """Create and start a Claude API batch manager"""
+# ---------------------------------------------------------------------------
+# Convenience factory functions
+# ---------------------------------------------------------------------------
+
+async def create_claude_api_manager(config: ClaudeAPIConfig = None) -> ClaudeAPIBatchManager:
+    """Create and start a Claude API batch manager."""
     manager = ClaudeAPIBatchManager(config)
     await manager.start()
     return manager
@@ -429,13 +573,11 @@ async def batch_claude_request(
     timeout: float = 30.0,
     manager: ClaudeAPIBatchManager = None,
 ) -> str:
-    """Submit a single Claude API request with batching"""
+    """Submit a single Claude API request with batching."""
     if manager is None:
-        # Create temporary manager
         async with ClaudeAPIContextManager() as temp_manager:
             return await temp_manager.submit_request(content, priority, context_type, timeout)
-    else:
-        return await manager.submit_request(content, priority, context_type, timeout)
+    return await manager.submit_request(content, priority, context_type, timeout)
 
 
 async def batch_claude_requests(
@@ -443,17 +585,22 @@ async def batch_claude_requests(
     parallel: bool = True,
     config: ClaudeAPIConfig = None,
 ) -> List[str]:
-    """Submit multiple Claude API requests with batching"""
+    """Submit multiple Claude API requests with batching."""
     async with ClaudeAPIContextManager(config) as manager:
         return await manager.submit_multiple_requests(requests, parallel)
 
 
-# Integration with AutoBot's existing infrastructure
+# ---------------------------------------------------------------------------
+# AutoBot production adapter (singleton, AsyncInitializable)
+# ---------------------------------------------------------------------------
+
 class AutoBotClaudeAPIAdapter(AsyncInitializable):
     """
     Adapter to integrate with AutoBot's existing Claude API usage.
 
     Issue #3390: Migrated to AsyncInitializable lazy-init pattern.
+    Issue #10796: Module promoted to canonical optimization module; wired into
+    backend startup via initialization/lifespan._init_claude_api_integration().
     The module-level singleton is created lazily via get_autobot_claude_adapter().
     """
 
@@ -477,7 +624,7 @@ class AutoBotClaudeAPIAdapter(AsyncInitializable):
             self.manager = None
 
     async def process_chat_request(self, message: str, context: str = "chat") -> str:
-        """Process a chat request through the batching system"""
+        """Process a chat request through the batching system."""
         await self.ensure_initialized()
         return await self.manager.submit_request(
             content=message,
@@ -487,7 +634,7 @@ class AutoBotClaudeAPIAdapter(AsyncInitializable):
         )
 
     async def process_code_analysis(self, code: str, analysis_type: str = "general") -> str:
-        """Process code analysis with appropriate batching"""
+        """Process code analysis with appropriate batching."""
         await self.ensure_initialized()
         return await self.manager.submit_request(
             content=f"Analyze this code:\n{code}",
@@ -497,7 +644,7 @@ class AutoBotClaudeAPIAdapter(AsyncInitializable):
         )
 
     async def process_file_operations(self, operation: str, files: List[str]) -> str:
-        """Process file operations with batching optimization"""
+        """Process file operations with batching optimization."""
         await self.ensure_initialized()
         content = f"Perform {operation} on files: {', '.join(files)}"
         return await self.manager.submit_request(
@@ -507,17 +654,22 @@ class AutoBotClaudeAPIAdapter(AsyncInitializable):
             timeout=TimingConstants.STANDARD_TIMEOUT,
         )
 
+    async def submit_todowrite(self, todos: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Optimize a TodoWrite batch via the manager (folded from suite, #10796)."""
+        await self.ensure_initialized()
+        return await self.manager.submit_todowrite(todos)
+
     async def shutdown(self):
-        """Shutdown the adapter"""
+        """Shutdown the adapter."""
         if self.manager:
             await self.manager.stop()
             self.manager = None
         self._initialized = False
 
     async def get_performance_stats(self) -> Dict[str, Any]:
-        """Get performance statistics (thread-safe)"""
+        """Return combined performance statistics and optimization status."""
         if self.manager:
-            return await self.manager.get_metrics()
+            return await self.manager.get_optimization_status()
         return {}
 
     @classmethod
@@ -547,9 +699,12 @@ async def get_autobot_claude_adapter(
 autobot_claude_adapter: "AutoBotClaudeAPIAdapter" | None = None
 
 
-# Example usage and testing
+# ---------------------------------------------------------------------------
+# Example usage
+# ---------------------------------------------------------------------------
+
 async def main():
-    """Example usage of the Claude API integration"""
+    """Example usage of the Claude API integration."""
     config = ClaudeAPIConfig(
         max_batch_size=3,
         time_window=1.0,
@@ -559,7 +714,6 @@ async def main():
     )
 
     async with ClaudeAPIContextManager(config) as manager:
-        # Test individual request
         response1 = await manager.submit_request(
             "Explain Python decorators",
             priority=RequestPriority.HIGH,
@@ -567,22 +721,17 @@ async def main():
         )
         logger.debug("Response 1: %s", response1)
 
-        # Test multiple requests
         requests = [
             {"content": "What is a lambda function?", "context_type": "documentation"},
             {"content": "Explain list comprehensions", "context_type": "documentation"},
             {"content": "How do generators work?", "context_type": "documentation"},
         ]
-
         responses = await manager.submit_multiple_requests(requests, parallel=True)
         for i, response in enumerate(responses):
             logger.debug("Response %s: %s", i + 2, response)
 
-        # Print metrics
-        logger.debug("\nPerformance Metrics:")
         metrics = await manager.get_metrics()
-        for key, value in metrics.items():
-            logger.debug("  %s: %s", key, value)
+        logger.debug("Metrics: %s", metrics)
 
 
 if __name__ == "__main__":
