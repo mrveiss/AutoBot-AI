@@ -1,0 +1,94 @@
+/*
+ * Copyright 2025-2026 mrveiss
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @autobot/ui — SEMANTIC TOKEN CONTRACT
+ * ------------------------------------------------------------------
+ * This file defines the token NAMES that every shared component consumes.
+ * It is the interface between the shared kit and each consuming app.
+ *
+ * RULES
+ *   1. Shared components reference ONLY these `--aui-*` variables — never a
+ *      literal color, radius, or shadow. This is what lets one component wear
+ *      each app's identity.
+ *   2. Each app IMPLEMENTS this contract by re-declaring these variables with
+ *      its OWN values (see README: "Implementing the contract"). The main user
+ *      GUI maps its palette; the SLM control plane maps its distinct palette.
+ *      Colors are deliberately NOT shared — only the names are.
+ *   3. The values below are neutral FALLBACKS so the kit renders unthemed in
+ *      isolation (Storybook, tests). Apps override them; they are not a brand.
+ *   4. Namespaced `--aui-` to avoid colliding with either app's existing
+ *      `--color-*` / design-token variables.
+ */
+
+:root {
+  /* ---- Color: brand / interactive ------------------------------------ */
+  --aui-color-primary: #4f46e5;          /* app overrides with its own accent */
+  --aui-color-primary-hover: #4338ca;
+  --aui-color-primary-active: #3730a3;
+  --aui-color-primary-contrast: #ffffff; /* text/icon on a primary surface   */
+
+  /* ---- Color: neutrals / chrome -------------------------------------- */
+  --aui-color-surface: #ffffff;          /* component background              */
+  --aui-color-surface-raised: #f8fafc;   /* hover / elevated rows            */
+  --aui-color-surface-sunken: #f1f5f9;   /* wells, disabled fills            */
+  --aui-color-border: #e2e8f0;
+  --aui-color-border-strong: #cbd5e1;
+  --aui-color-text: #0f172a;
+  --aui-color-text-muted: #64748b;
+  --aui-color-text-inverse: #f8fafc;
+
+  /* ---- Color: status ------------------------------------------------- */
+  --aui-color-success: #16a34a;
+  --aui-color-success-contrast: #ffffff;
+  --aui-color-warning: #d97706;
+  --aui-color-warning-contrast: #ffffff;
+  --aui-color-danger: #dc2626;
+  --aui-color-danger-contrast: #ffffff;
+  --aui-color-info: #0284c7;
+  --aui-color-info-contrast: #ffffff;
+
+  /* ---- Focus --------------------------------------------------------- */
+  --aui-color-focus-ring: color-mix(in srgb, var(--aui-color-primary) 45%, transparent);
+  --aui-focus-ring-width: 3px;
+
+  /* ---- Radius -------------------------------------------------------- */
+  --aui-radius-sm: 0.25rem;
+  --aui-radius-md: 0.5rem;
+  --aui-radius-lg: 0.75rem;
+  --aui-radius-full: 9999px;
+
+  /* ---- Elevation ----------------------------------------------------- */
+  --aui-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --aui-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --aui-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+  /* ---- Typography ---------------------------------------------------- */
+  --aui-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --aui-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --aui-text-xs: 0.75rem;
+  --aui-text-sm: 0.875rem;
+  --aui-text-base: 1rem;
+  --aui-text-lg: 1.125rem;
+  --aui-font-weight-medium: 500;
+  --aui-font-weight-semibold: 600;
+
+  /* ---- Spacing (control padding scale) ------------------------------- */
+  --aui-space-1: 0.25rem;
+  --aui-space-2: 0.5rem;
+  --aui-space-3: 0.75rem;
+  --aui-space-4: 1rem;
+  --aui-space-5: 1.25rem;
+  --aui-space-6: 1.5rem;
+
+  /* ---- Motion (components must honor prefers-reduced-motion) ---------- */
+  --aui-transition-fast: 120ms ease;
+  --aui-transition: 180ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --aui-transition-fast: 0ms;
+    --aui-transition: 0ms;
+  }
+}
