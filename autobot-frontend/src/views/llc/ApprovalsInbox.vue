@@ -333,7 +333,7 @@ onUnmounted(() => {
   min-width: 1.5rem;
   height: 1.5rem;
   padding: 0 0.4rem;
-  background: #ef4444;
+  background: var(--color-error);
   color: white;
   font-size: 0.75rem;
   font-weight: 700;
@@ -484,9 +484,9 @@ onUnmounted(() => {
   transition: opacity 0.15s;
 }
 
-.btn-approve { background: #10b981; color: white; }
-.btn-reject { background: #ef4444; color: white; }
-.btn-changes { background: #f59e0b; color: white; }
+.btn-approve { background: var(--color-success); color: white; }
+.btn-reject { background: var(--color-error); color: white; }
+.btn-changes { background: var(--color-warning); color: white; }
 
 .btn-approve:disabled,
 .btn-reject:disabled,

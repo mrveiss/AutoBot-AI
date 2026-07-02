@@ -602,13 +602,13 @@ onMounted(async () => {
 
 .gauge-fill {
   height: 100%;
-  background: #10b981;
+  background: var(--color-success);
   border-radius: 9999px;
   transition: width 0.3s;
 }
 
-.gauge-warn { background: #f59e0b; }
-.gauge-over { background: #ef4444; }
+.gauge-warn { background: var(--color-warning); }
+.gauge-over { background: var(--color-error); }
 
 .gauge-label {
   min-width: 3.5rem;
@@ -616,7 +616,7 @@ onMounted(async () => {
   font-size: 0.8rem;
 }
 
-.text-warn { color: #f59e0b; font-weight: 600; }
+.text-warn { color: var(--color-warning); font-weight: 600; }
 
 .budget-amounts {
   min-width: 12rem;
@@ -774,9 +774,9 @@ onMounted(async () => {
 
 .modal-error {
   font-size: 0.825rem;
-  color: #ef4444;
+  color: var(--color-error);
   padding: 0.5rem 0.75rem;
-  background: #fef2f2;
+  background: var(--color-error-bg);
   border-radius: 0.375rem;
 }
 
