@@ -63,7 +63,7 @@ const colorMap: Record<string, string> = {
   green: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   yellow: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
   purple: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  gray: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
+  gray: 'bg-autobot-bg-tertiary text-autobot-text-primary',
 }
 
 function getColorClasses(color: string): string {
@@ -253,7 +253,7 @@ onMounted(async () => {
                 <span
                   v-for="task in agent.tasks.slice(0, 3)"
                   :key="task"
-                  class="inline-block px-1.5 py-0.5 text-[10px] rounded bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                  class="inline-block px-1.5 py-0.5 text-[10px] rounded bg-autobot-bg-tertiary text-autobot-text-secondary"
                 >
                   {{ task }}
                 </span>
@@ -336,7 +336,7 @@ onMounted(async () => {
                 <span
                   v-for="tool in agent.tools.slice(0, 4)"
                   :key="tool"
-                  class="inline-block px-1.5 py-0.5 text-[10px] rounded bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                  class="inline-block px-1.5 py-0.5 text-[10px] rounded bg-autobot-bg-tertiary text-autobot-text-secondary"
                 >
                   {{ tool }}
                 </span>
@@ -380,7 +380,7 @@ onMounted(async () => {
               </span>
               <h3 class="text-lg font-semibold text-primary">{{ selectedAgent.name }}</h3>
             </div>
-            <div v-else class="h-6 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+            <div v-else class="h-6 w-48 bg-autobot-bg-tertiary rounded animate-pulse"></div>
             <button
               @click="closeDetailModal"
               class="text-secondary hover:text-primary"
@@ -403,7 +403,7 @@ onMounted(async () => {
                   {{ selectedAgent.category }}
                 </span>
                 <span v-for="tool in selectedAgent.tools" :key="tool"
-                  class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                  class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-autobot-bg-tertiary text-autobot-text-secondary"
                 >
                   {{ tool }}
                 </span>
@@ -412,7 +412,7 @@ onMounted(async () => {
               <!-- System Prompt -->
               <div class="mt-4">
                 <h4 class="text-sm font-medium text-primary mb-2">{{ $t('agent.registry.systemPrompt') }}</h4>
-                <pre class="text-xs text-secondary bg-gray-50 dark:bg-gray-800 rounded p-4 overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">{{ selectedAgent.system_prompt }}</pre>
+                <pre class="text-xs text-secondary bg-autobot-bg-surface rounded p-4 overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">{{ selectedAgent.system_prompt }}</pre>
               </div>
             </div>
           </div>

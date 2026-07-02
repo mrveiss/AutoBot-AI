@@ -1284,7 +1284,7 @@ onMounted(async () => {
 }
 
 .summary-content {
-  @apply mt-2 pt-2 border-t border-blue-200 text-sm text-gray-700;
+  @apply mt-2 pt-2 border-t border-blue-200 text-sm text-autobot-text-secondary;
 }
 
 /* ============================================
@@ -1444,7 +1444,7 @@ onMounted(async () => {
 
 /* TERMINAL OUTPUT MESSAGES - Always-dark (intentional terminal aesthetic) */
 .message-wrapper.type-terminal_output {
-  @apply bg-gray-900 text-gray-100;
+  @apply bg-autobot-bg-primary text-autobot-text-primary;
   border-color: rgba(16, 185, 129, 0.5);
 }
 
@@ -1457,7 +1457,7 @@ onMounted(async () => {
 }
 
 .message-wrapper.type-terminal_output .message-time {
-  @apply text-gray-400;
+  @apply text-autobot-text-muted;
 }
 
 .message-wrapper.type-terminal_output .message-text {
@@ -1466,7 +1466,7 @@ onMounted(async () => {
 }
 
 .message-wrapper.type-terminal_output .message-content {
-  @apply text-gray-100;
+  @apply text-autobot-text-primary;
 }
 
 /* COMMAND APPROVAL REQUEST - Warning theme-aware */

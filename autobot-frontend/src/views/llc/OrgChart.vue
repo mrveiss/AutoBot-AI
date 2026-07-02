@@ -84,7 +84,7 @@ onMounted(fetchTree)
 <template>
   <div class="p-4 max-w-7xl mx-auto">
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ t('llc.orgChart.title') }}</h1>
+      <h1 class="text-2xl font-bold text-autobot-text-primary">{{ t('llc.orgChart.title') }}</h1>
       <button
         v-if="companyId"
         class="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700"
@@ -106,9 +106,9 @@ onMounted(fetchTree)
       <button class="ml-4 underline" @click="fetchTree">{{ t('llc.orgChart.retry') }}</button>
     </div>
 
-    <div v-if="isLoading" class="text-center py-12 text-gray-500">{{ t('llc.orgChart.loading') }}</div>
+    <div v-if="isLoading" class="text-center py-12 text-autobot-text-muted">{{ t('llc.orgChart.loading') }}</div>
 
-    <div v-else-if="tree.length === 0 && !error" class="text-center py-12 text-gray-400">{{ t('llc.orgChart.empty') }}</div>
+    <div v-else-if="tree.length === 0 && !error" class="text-center py-12 text-autobot-text-muted">{{ t('llc.orgChart.empty') }}</div>
 
     <div v-else class="overflow-x-auto">
       <div class="min-w-max flex gap-6 items-start">
@@ -126,11 +126,11 @@ onMounted(fetchTree)
     <transition name="slide">
       <div
         v-if="drawerOpen && selectedNode"
-        class="fixed inset-y-0 right-0 w-80 bg-white dark:bg-gray-900 shadow-2xl border-l border-gray-200 dark:border-gray-700 z-50 flex flex-col"
+        class="fixed inset-y-0 right-0 w-80 bg-autobot-bg-card shadow-2xl border-l border-autobot-border z-50 flex flex-col"
       >
-        <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ t('llc.orgChart.agentDetail') }}</h2>
-          <button class="text-gray-400 hover:text-gray-600" @click="closeDrawer">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-autobot-border">
+          <h2 class="text-lg font-semibold text-autobot-text-primary">{{ t('llc.orgChart.agentDetail') }}</h2>
+          <button class="text-autobot-text-muted hover:text-autobot-text-secondary" @click="closeDrawer">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -145,37 +145,37 @@ onMounted(fetchTree)
               {{ selectedNode.name.charAt(0).toUpperCase() }}
             </div>
             <div>
-              <p class="font-semibold text-gray-900 dark:text-gray-100">{{ selectedNode.name }}</p>
-              <p class="text-sm text-gray-500">{{ selectedNode.title }}</p>
+              <p class="font-semibold text-autobot-text-primary">{{ selectedNode.name }}</p>
+              <p class="text-sm text-autobot-text-muted">{{ selectedNode.title }}</p>
             </div>
           </div>
 
           <dl class="space-y-2 text-sm">
             <div class="flex justify-between">
-              <dt class="text-gray-500">{{ t('llc.orgChart.adapter') }}</dt>
-              <dd class="text-gray-900 dark:text-gray-100 font-medium">{{ selectedNode.adapter_type }}</dd>
+              <dt class="text-autobot-text-muted">{{ t('llc.orgChart.adapter') }}</dt>
+              <dd class="text-autobot-text-primary font-medium">{{ selectedNode.adapter_type }}</dd>
             </div>
             <div class="flex justify-between">
-              <dt class="text-gray-500">{{ t('llc.orgChart.type') }}</dt>
-              <dd class="text-gray-900 dark:text-gray-100">{{ selectedNode.is_human ? t('llc.orgChart.human') : t('llc.orgChart.aiAgent') }}</dd>
+              <dt class="text-autobot-text-muted">{{ t('llc.orgChart.type') }}</dt>
+              <dd class="text-autobot-text-primary">{{ selectedNode.is_human ? t('llc.orgChart.human') : t('llc.orgChart.aiAgent') }}</dd>
             </div>
             <div class="flex justify-between">
-              <dt class="text-gray-500">{{ t('llc.orgChart.lastHeartbeat') }}</dt>
-              <dd class="text-gray-900 dark:text-gray-100">{{ formatTime(selectedNode.last_heartbeat) }}</dd>
+              <dt class="text-autobot-text-muted">{{ t('llc.orgChart.lastHeartbeat') }}</dt>
+              <dd class="text-autobot-text-primary">{{ formatTime(selectedNode.last_heartbeat) }}</dd>
             </div>
             <div class="flex justify-between">
-              <dt class="text-gray-500">{{ t('llc.orgChart.budget') }}</dt>
-              <dd class="text-gray-900 dark:text-gray-100">
+              <dt class="text-autobot-text-muted">{{ t('llc.orgChart.budget') }}</dt>
+              <dd class="text-autobot-text-primary">
                 {{ selectedNode.budget_spent }} / {{ selectedNode.budget_total }}
               </dd>
             </div>
             <div class="flex justify-between">
-              <dt class="text-gray-500">{{ t('llc.orgChart.assignedItems') }}</dt>
-              <dd class="text-gray-900 dark:text-gray-100">{{ selectedNode.assigned_item_count }}</dd>
+              <dt class="text-autobot-text-muted">{{ t('llc.orgChart.assignedItems') }}</dt>
+              <dd class="text-autobot-text-primary">{{ selectedNode.assigned_item_count }}</dd>
             </div>
           </dl>
         </div>
-        <div class="px-5 py-4 border-t border-gray-200 dark:border-gray-700">
+        <div class="px-5 py-4 border-t border-autobot-border">
           <button
             class="w-full py-2 rounded-lg text-sm font-medium transition-colors"
             :class="selectedNode.status === 'paused'

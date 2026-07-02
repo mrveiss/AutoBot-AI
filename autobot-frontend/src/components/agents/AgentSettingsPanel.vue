@@ -256,7 +256,7 @@ onMounted(() => {
             >
               <span
                 :class="[
-                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-autobot-bg-card shadow ring-0 transition duration-200 ease-in-out',
                   settings.memory.enabled ? 'translate-x-5' : 'translate-x-0'
                 ]"
               />
@@ -359,7 +359,7 @@ onMounted(() => {
               >
                 <span
                   :class="[
-                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-autobot-bg-card shadow ring-0 transition duration-200 ease-in-out',
                     settings.execution.parallelExecution ? 'translate-x-5' : 'translate-x-0'
                   ]"
                 />
@@ -382,7 +382,7 @@ onMounted(() => {
               >
                 <span
                   :class="[
-                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-autobot-bg-card shadow ring-0 transition duration-200 ease-in-out',
                     settings.execution.priorityQueue ? 'translate-x-5' : 'translate-x-0'
                   ]"
                 />

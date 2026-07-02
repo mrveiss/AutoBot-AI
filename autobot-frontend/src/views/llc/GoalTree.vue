@@ -93,7 +93,7 @@ const itemStatusColor = (status: string) => {
   if (status === 'done') return 'text-green-600'
   if (status === 'in_progress') return 'text-blue-600'
   if (status === 'blocked') return 'text-red-500'
-  return 'text-gray-500'
+  return 'text-autobot-text-muted'
 }
 
 onMounted(fetchGoals)
@@ -101,16 +101,16 @@ onMounted(fetchGoals)
 
 <template>
   <div class="p-4 max-w-5xl mx-auto">
-    <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">{{ t('llc.goals.title') }}</h1>
+    <h1 class="text-2xl font-bold text-autobot-text-primary mb-6">{{ t('llc.goals.title') }}</h1>
 
     <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm mb-4">
       {{ error }}
       <button class="ml-4 underline" @click="fetchGoals">{{ t('llc.goals.retry') }}</button>
     </div>
 
-    <div v-if="isLoading" class="text-center py-12 text-gray-500">{{ t('llc.goals.loading') }}</div>
+    <div v-if="isLoading" class="text-center py-12 text-autobot-text-muted">{{ t('llc.goals.loading') }}</div>
 
-    <div v-else-if="goals.length === 0 && !error" class="text-center py-12 text-gray-400">{{ t('llc.goals.empty') }}</div>
+    <div v-else-if="goals.length === 0 && !error" class="text-center py-12 text-autobot-text-muted">{{ t('llc.goals.empty') }}</div>
 
     <div v-else class="space-y-1">
       <GoalTreeNode
@@ -128,27 +128,27 @@ onMounted(fetchGoals)
     <transition name="fade">
       <div
         v-if="selectedGoal"
-        class="mt-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4"
+        class="mt-6 bg-autobot-bg-card rounded-lg border border-autobot-border p-4"
       >
         <div class="flex items-center justify-between mb-3">
-          <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+          <h2 class="text-base font-semibold text-autobot-text-primary">
             {{ t('llc.goals.linkedItemsFor') }} <span class="text-indigo-600">{{ selectedGoal.title }}</span>
           </h2>
-          <button class="text-gray-400 hover:text-gray-600 text-sm" @click="selectedGoal = null">✕</button>
+          <button class="text-autobot-text-muted hover:text-autobot-text-secondary text-sm" @click="selectedGoal = null">✕</button>
         </div>
 
-        <div v-if="selectedGoal.loading_items" class="text-sm text-gray-400">{{ t('llc.goals.loadingItems') }}</div>
-        <div v-else-if="!selectedGoal.linked_items || selectedGoal.linked_items.length === 0" class="text-sm text-gray-400">
+        <div v-if="selectedGoal.loading_items" class="text-sm text-autobot-text-muted">{{ t('llc.goals.loadingItems') }}</div>
+        <div v-else-if="!selectedGoal.linked_items || selectedGoal.linked_items.length === 0" class="text-sm text-autobot-text-muted">
           {{ t('llc.goals.noLinkedItems') }}
         </div>
         <ul v-else class="space-y-1">
           <li
             v-for="item in selectedGoal.linked_items"
             :key="item.id"
-            class="flex items-center justify-between text-sm py-1 border-b border-gray-100 dark:border-gray-700 last:border-0"
+            class="flex items-center justify-between text-sm py-1 border-b border-autobot-border-subtle last:border-0"
           >
-            <span class="text-gray-800 dark:text-gray-200">
-              <span class="text-xs text-gray-400 mr-1">{{ item.identifier }}</span>
+            <span class="text-autobot-text-primary">
+              <span class="text-xs text-autobot-text-muted mr-1">{{ item.identifier }}</span>
               {{ item.title }}
             </span>
             <span class="text-xs font-medium" :class="itemStatusColor(item.status)">{{ item.status }}</span>

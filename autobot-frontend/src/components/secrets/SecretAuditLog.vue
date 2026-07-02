@@ -195,7 +195,7 @@ const getActionStyle = (action: SecretAction): { color: string; icon: string } =
     case 'delete':
       return { color: 'text-red-400 bg-red-400/10', icon: 'trash' }
     default:
-      return { color: 'text-gray-400 bg-gray-400/10', icon: 'info-circle' }
+      return { color: 'text-autobot-text-muted bg-gray-400/10', icon: 'info-circle' }
   }
 }
 
@@ -221,10 +221,10 @@ const prevPage = async () => {
 </script>
 
 <template>
-  <div class="secret-audit-log h-full flex flex-col bg-gray-800 rounded-lg">
+  <div class="secret-audit-log h-full flex flex-col bg-autobot-bg-secondary rounded-lg">
     <!-- Header -->
-    <div class="px-4 py-3 border-b border-gray-700">
-      <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
+    <div class="px-4 py-3 border-b border-autobot-border-strong">
+      <h3 class="text-lg font-semibold text-autobot-text-primary flex items-center gap-2">
         <i class="bi bi-clipboard-data" />
         {{ $t('secrets.auditLog.title') }}
       </h3>
@@ -233,7 +233,7 @@ const prevPage = async () => {
       <div class="mt-3 flex items-center gap-2">
         <select
           v-model="filterAction"
-          class="px-3 py-1.5 text-xs bg-gray-700 border border-gray-600 rounded text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          class="px-3 py-1.5 text-xs bg-autobot-bg-secondary border border-autobot-border-strong rounded text-autobot-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="all">{{ $t('secrets.auditLog.allActions') }}</option>
           <option value="access">{{ $t('secrets.auditLog.access') }}</option>
@@ -247,7 +247,7 @@ const prevPage = async () => {
         </select>
         <select
           v-model="filterUser"
-          class="px-3 py-1.5 text-xs bg-gray-700 border border-gray-600 rounded text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          class="px-3 py-1.5 text-xs bg-autobot-bg-secondary border border-autobot-border-strong rounded text-autobot-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="all">{{ $t('secrets.auditLog.allUsers') }}</option>
           <option v-for="user in uniqueUsers" :key="user.id" :value="user.id">
@@ -266,7 +266,7 @@ const prevPage = async () => {
         <div class="inline-block">
           <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
         </div>
-        <div class="mt-2 text-sm text-gray-400">{{ $t('common.loading') }}</div>
+        <div class="mt-2 text-sm text-autobot-text-muted">{{ $t('common.loading') }}</div>
       </div>
     </div>
 
@@ -296,7 +296,7 @@ const prevPage = async () => {
         <div
           v-for="entry in filteredLog"
           :key="entry.id"
-          class="flex items-start gap-3 p-3 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors"
+          class="flex items-start gap-3 p-3 bg-autobot-bg-secondary/50 rounded-lg hover:bg-autobot-bg-hover transition-colors"
         >
           <!-- Icon -->
           <div
@@ -312,24 +312,24 @@ const prevPage = async () => {
           <div class="flex-1 min-w-0">
             <div class="flex items-start justify-between gap-2 mb-1">
               <div class="flex-1">
-                <div class="text-sm font-medium text-gray-200">
+                <div class="text-sm font-medium text-autobot-text-primary">
                   {{ entry.secretName }}
                 </div>
-                <div class="text-xs text-gray-400">
+                <div class="text-xs text-autobot-text-muted">
                   <span class="capitalize">{{ entry.action }}</span> {{ $t('secrets.auditLog.by') }}
                   <span class="font-medium">{{ entry.username }}</span>
                 </div>
               </div>
-              <span class="text-xs text-gray-500 flex-shrink-0">
+              <span class="text-xs text-autobot-text-muted flex-shrink-0">
                 {{ formatTime(entry.timestamp) }}
               </span>
             </div>
 
             <!-- Metadata -->
-            <div v-if="entry.metadata && Object.keys(entry.metadata).length > 0" class="text-xs text-gray-500 mt-1">
+            <div v-if="entry.metadata && Object.keys(entry.metadata).length > 0" class="text-xs text-autobot-text-muted mt-1">
               <details class="cursor-pointer">
-                <summary class="hover:text-gray-400">{{ $t('secrets.auditLog.details') }}</summary>
-                <pre class="mt-1 p-2 bg-gray-800 rounded text-xs overflow-x-auto">{{ JSON.stringify(entry.metadata, null, 2) }}</pre>
+                <summary class="hover:text-autobot-text-muted">{{ $t('secrets.auditLog.details') }}</summary>
+                <pre class="mt-1 p-2 bg-autobot-bg-secondary rounded text-xs overflow-x-auto">{{ JSON.stringify(entry.metadata, null, 2) }}</pre>
               </details>
             </div>
           </div>
@@ -339,11 +339,11 @@ const prevPage = async () => {
       <!-- Empty state -->
       <div
         v-if="filteredLog.length === 0"
-        class="flex flex-col items-center justify-center py-12 text-gray-500"
+        class="flex flex-col items-center justify-center py-12 text-autobot-text-muted"
       >
         <i class="bi bi-clipboard-data text-4xl mb-3" />
         <div class="text-sm font-medium mb-1">{{ $t('secrets.auditLog.noEntries') }}</div>
-        <div class="text-xs text-gray-600">
+        <div class="text-xs text-autobot-text-secondary">
           {{ $t('secrets.auditLog.noEntriesHint') }}
         </div>
       </div>
@@ -352,9 +352,9 @@ const prevPage = async () => {
     <!-- Pagination Controls -->
     <div
       v-if="!auditApi.loading.value && !auditApi.error.value && auditApi.entries.value.length > 0"
-      class="px-4 py-3 border-t border-gray-700 flex items-center justify-between"
+      class="px-4 py-3 border-t border-autobot-border-strong flex items-center justify-between"
     >
-      <div class="text-xs text-gray-400">
+      <div class="text-xs text-autobot-text-muted">
         {{ $t('common.page') }}: {{ currentPage + 1 }}
         <span v-if="auditApi.hasMore.value"> ({{ $t('common.hasMore') }})</span>
       </div>
@@ -362,14 +362,14 @@ const prevPage = async () => {
         <button
           :disabled="currentPage === 0"
           @click="prevPage"
-          class="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed border border-gray-600 rounded text-gray-300 transition-colors"
+          class="px-3 py-1.5 text-xs bg-autobot-bg-secondary hover:bg-autobot-bg-hover disabled:opacity-50 disabled:cursor-not-allowed border border-autobot-border-strong rounded text-autobot-text-muted transition-colors"
         >
           {{ $t('common.previous') }}
         </button>
         <button
           :disabled="!auditApi.hasMore.value"
           @click="nextPage"
-          class="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed border border-gray-600 rounded text-gray-300 transition-colors"
+          class="px-3 py-1.5 text-xs bg-autobot-bg-secondary hover:bg-autobot-bg-hover disabled:opacity-50 disabled:cursor-not-allowed border border-autobot-border-strong rounded text-autobot-text-muted transition-colors"
         >
           {{ $t('common.next') }}
         </button>
