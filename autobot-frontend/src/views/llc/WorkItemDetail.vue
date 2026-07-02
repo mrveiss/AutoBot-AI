@@ -11,7 +11,7 @@
           <span class="type-badge" :class="`type-${item.type}`">{{ item.type }}</span>
           <span class="status-badge" :class="`status-${item.status}`">{{ item.status.replace('_', ' ') }}</span>
         </div>
-        <button class="close-btn" @click="$emit('close')" aria-label="Close">
+        <button class="close-btn" @click="$emit('close')" :aria-label="$t('common.close')">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="close-icon">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -43,11 +43,11 @@
       <!-- Meta row -->
       <div class="meta-row">
         <div class="meta-field">
-          <span class="meta-label">Priority</span>
+          <span class="meta-label">{{ $t('llc.workItem.priority') }}</span>
           <span class="priority-badge" :class="`priority-${localItem.priority}`">{{ localItem.priority }}</span>
         </div>
         <div class="meta-field">
-          <span class="meta-label">Assignee</span>
+          <span class="meta-label">{{ $t('llc.workItem.assignee') }}</span>
           <div class="assignee-row">
             <span v-if="localItem.assignee_name" class="assignee-chip">{{ localItem.assignee_name }}</span>
             <span v-else class="meta-empty">{{ $t('nav.llcUnassigned') }}</span>
@@ -74,11 +74,11 @@
           </div>
         </div>
         <div class="meta-field">
-          <span class="meta-label">Points</span>
+          <span class="meta-label">{{ $t('llc.workItem.points') }}</span>
           <span>{{ localItem.story_points ?? '—' }}</span>
         </div>
         <div class="meta-field" v-if="localItem.labels?.length">
-          <span class="meta-label">Labels</span>
+          <span class="meta-label">{{ $t('llc.workItem.labels') }}</span>
           <div class="label-chips">
             <span v-for="l in localItem.labels" :key="l" class="label-chip">{{ l }}</span>
           </div>
@@ -117,10 +117,10 @@
         <!-- Details tab -->
         <template v-if="activeTab === 'details'">
           <div class="detail-section">
-            <label class="section-label">Description</label>
+            <label class="section-label">{{ $t('llc.workItem.description') }}</label>
             <div v-if="!editingDesc" class="description-text" @dblclick="startEditDesc">
               <span v-if="localItem.description">{{ localItem.description }}</span>
-              <span v-else class="meta-empty">No description. Double-click to add.</span>
+              <span v-else class="meta-empty">{{ $t('llc.workItem.noDescription') }}</span>
             </div>
             <textarea
               v-else
@@ -133,7 +133,7 @@
           </div>
 
           <div class="detail-section">
-            <label class="section-label">Acceptance Criteria</label>
+            <label class="section-label">{{ $t('llc.workItem.acceptanceCriteria') }}</label>
             <div class="ac-list">
               <label
                 v-for="(ac, i) in localItem.acceptance_criteria"
@@ -144,7 +144,7 @@
                 <span :class="{ 'ac-done': checkedAC[i] }">{{ ac }}</span>
               </label>
               <div v-if="!localItem.acceptance_criteria?.length" class="meta-empty">
-                No acceptance criteria defined.
+                {{ $t('llc.workItem.noAcceptanceCriteria') }}
               </div>
             </div>
           </div>
@@ -159,13 +159,13 @@
                 <div class="author-meta">
                   <span class="author-name">{{ c.author_name }}</span>
                   <span class="comment-time">{{ formatTime(c.created_at) }}</span>
-                  <span v-if="c.author_type === 'agent'" class="agent-chip">agent</span>
+                  <span v-if="c.author_type === 'agent'" class="agent-chip">{{ $t('llc.workItem.agentChip') }}</span>
                 </div>
               </div>
               <div class="comment-body" v-html="renderMarkdown(c.body)" />
             </div>
             <div v-if="comments.length === 0 && !isLoadingComments" class="meta-empty">
-              No comments yet.
+              {{ $t('llc.workItem.noComments') }}
             </div>
           </div>
           <div class="comment-input-row">
@@ -173,10 +173,10 @@
               v-model="newComment"
               class="comment-textarea"
               rows="3"
-              placeholder="Write a comment..."
+              :placeholder="$t('llc.workItem.commentPlaceholder')"
             />
             <button class="btn-primary" :disabled="!newComment.trim() || isPosting" @click="postComment">
-              {{ isPosting ? 'Posting...' : 'Post' }}
+              {{ isPosting ? $t('llc.workItem.posting') : $t('llc.workItem.post') }}
             </button>
           </div>
         </template>
@@ -190,10 +190,10 @@
                 <span class="artifact-name">{{ a.name }}</span>
                 <span class="artifact-type-label">{{ a.type }}</span>
               </div>
-              <a :href="a.url" target="_blank" class="artifact-link" rel="noopener">View</a>
+              <a :href="a.url" target="_blank" class="artifact-link" rel="noopener">{{ $t('llc.workItem.viewArtifact') }}</a>
             </div>
             <div v-if="artifacts.length === 0 && !isLoadingArtifacts" class="meta-empty">
-              No artifacts attached.
+              {{ $t('llc.workItem.noArtifacts') }}
             </div>
           </div>
         </template>
@@ -207,7 +207,7 @@
               <span class="activity-text">{{ evt.description }}</span>
             </div>
             <div v-if="activity.length === 0 && !isLoadingActivity" class="meta-empty">
-              No activity recorded.
+              {{ $t('llc.workItem.noActivity') }}
             </div>
           </div>
         </template>
@@ -215,8 +215,8 @@
         <!-- Handoff Brief tab -->
         <template v-if="activeTab === 'handoff'">
           <div v-if="handoffBrief" class="handoff-brief" v-html="renderMarkdown(handoffBrief)" />
-          <div v-else-if="!isLoadingHandoff" class="meta-empty">No handoff brief available.</div>
-          <div v-if="isLoadingHandoff" class="meta-empty">Loading brief...</div>
+          <div v-else-if="!isLoadingHandoff" class="meta-empty">{{ $t('llc.workItem.noHandoffBrief') }}</div>
+          <div v-if="isLoadingHandoff" class="meta-empty">{{ $t('llc.workItem.loadingBrief') }}</div>
         </template>
       </div>
     </div>
@@ -235,6 +235,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import HandoffModal from '@/components/llc/HandoffModal.vue'
@@ -242,6 +243,7 @@ import { useCompanyPeople } from '@/composables/llc/useCompanyPeople'
 
 const logger = createLogger('WorkItemDetail')
 const api = useApiClient()
+const { t } = useI18n()
 
 import type { WorkItem } from './workItemTypes'
 
@@ -282,13 +284,13 @@ const emit = defineEmits<{
   updated: [WorkItem]
 }>()
 
-const TABS = [
-  { key: 'details', label: 'Details' },
-  { key: 'comments', label: 'Comments' },
-  { key: 'artifacts', label: 'Artifacts' },
-  { key: 'activity', label: 'Activity' },
-  { key: 'handoff', label: 'Handoff Brief' },
-]
+const TABS = computed(() => [
+  { key: 'details', label: t('llc.workItem.tabDetails') },
+  { key: 'comments', label: t('llc.workItem.tabComments') },
+  { key: 'artifacts', label: t('llc.workItem.tabArtifacts') },
+  { key: 'activity', label: t('llc.workItem.tabActivity') },
+  { key: 'handoff', label: t('llc.workItem.tabHandoff') },
+])
 
 const activeTab = ref('details')
 const localItem = ref<WorkItem>({ ...props.item })
@@ -341,23 +343,23 @@ async function onAssignSelect(value: string) {
   }
 }
 
-const STATUS_TRANSITIONS: Record<string, { key: string; label: string }[]> = {
-  backlog: [{ key: 'ready', label: 'Mark Ready' }],
-  ready: [{ key: 'in_progress', label: 'Start' }, { key: 'backlog', label: 'Back to Backlog' }],
-  in_progress: [{ key: 'in_review', label: 'Submit for Review' }, { key: 'blocked', label: 'Mark Blocked' }],
-  in_review: [{ key: 'done', label: 'Approve / Done' }, { key: 'in_progress', label: 'Request Changes' }],
-  blocked: [{ key: 'in_progress', label: 'Unblock' }],
+const statusTransitions = computed<Record<string, { key: string; label: string }[]>>(() => ({
+  backlog: [{ key: 'ready', label: t('llc.workItem.markReady') }],
+  ready: [{ key: 'in_progress', label: t('llc.workItem.start') }, { key: 'backlog', label: t('llc.workItem.backToBacklog') }],
+  in_progress: [{ key: 'in_review', label: t('llc.workItem.submitForReview') }, { key: 'blocked', label: t('llc.workItem.markBlocked') }],
+  in_review: [{ key: 'done', label: t('llc.workItem.approveDone') }, { key: 'in_progress', label: t('llc.workItem.requestChanges') }],
+  blocked: [{ key: 'in_progress', label: t('llc.workItem.unblock') }],
   done: [],
   cancelled: [],
-}
+}))
 
 const availableActions = computed(() => {
-  const transitions = (STATUS_TRANSITIONS[localItem.value.status] ?? []).map(t => ({ ...t, type: 'transition' }))
+  const transitions = (statusTransitions.value[localItem.value.status] ?? []).map(tr => ({ ...tr, type: 'transition' }))
   const extras: { key: string; label: string; type: string }[] = []
   if (!['done', 'cancelled'].includes(localItem.value.status)) {
-    extras.push({ key: 'claim', label: 'Claim', type: 'action' })
-    extras.push({ key: 'handoff_human', label: 'Handoff to Human', type: 'action' })
-    extras.push({ key: 'handoff_agent', label: 'Handoff to Agent', type: 'action' })
+    extras.push({ key: 'claim', label: t('llc.workItem.claim'), type: 'action' })
+    extras.push({ key: 'handoff_human', label: t('llc.workItem.handoffToHuman'), type: 'action' })
+    extras.push({ key: 'handoff_agent', label: t('llc.workItem.handoffToAgent'), type: 'action' })
   }
   return [...transitions, ...extras]
 })

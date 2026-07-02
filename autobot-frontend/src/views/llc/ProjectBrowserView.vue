@@ -44,20 +44,20 @@
         </div>
         <p v-if="p.description" class="card-desc">{{ p.description }}</p>
         <div class="card-stats">
-          <span class="stat">{{ p.open_work_item_count }} open</span>
-          <span class="stat">{{ p.active_sprint_name || 'No active sprint' }}</span>
+          <span class="stat">{{ t('llcBrowser.openCount', { count: p.open_work_item_count }) }}</span>
+          <span class="stat">{{ p.active_sprint_name || t('llcBrowser.noActiveSprint') }}</span>
         </div>
         <div v-if="velocityFor(p.id).length >= 2" class="card-velocity">
-          <span class="velocity-label">Velocity</span>
-          <Sparkline :points="velocityFor(p.id)" :aria-label="`Velocity for ${p.name}`" />
+          <span class="velocity-label">{{ t('llcBrowser.velocity') }}</span>
+          <Sparkline :points="velocityFor(p.id)" :aria-label="t('llcBrowser.velocityAria', { name: p.name })" />
         </div>
-        <p class="card-meta">Target {{ formatDate(p.target_date) }}</p>
+        <p class="card-meta">{{ t('llcBrowser.target', { date: formatDate(p.target_date) }) }}</p>
         <div class="card-actions">
           <RouterLink class="action-link" :to="`/llc/companies/${companyId}/backlog`">
-            Backlog
+            {{ t('llcBrowser.backlogLink') }}
           </RouterLink>
           <RouterLink class="action-link" :to="`/llc/companies/${companyId}/timeline`">
-            Timeline
+            {{ t('llcBrowser.timelineLink') }}
           </RouterLink>
         </div>
       </article>

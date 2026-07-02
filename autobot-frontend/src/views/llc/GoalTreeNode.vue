@@ -3,6 +3,8 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import { useI18n } from 'vue-i18n'
+
 export interface Goal {
   id: string
   title: string
@@ -19,6 +21,7 @@ export interface Goal {
 
 defineProps<{ goal: Goal; depth?: number; selectedId: string | null }>()
 const emit = defineEmits<{ toggle: [goal: Goal]; select: [goal: Goal] }>()
+const { t } = useI18n()
 
 const levelBadgeClass = (level?: string) => {
   if (level === 'company') return 'bg-purple-100 text-purple-700'
@@ -64,7 +67,7 @@ const statusBadgeClass = (status: string) => {
         {{ goal.status }}
       </span>
       <span v-if="goal.linked_item_count > 0" class="text-xs bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">
-        {{ goal.linked_item_count }} items
+        {{ t('llc.goals.itemCount', { count: goal.linked_item_count }) }}
       </span>
     </div>
 

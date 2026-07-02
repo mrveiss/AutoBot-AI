@@ -123,11 +123,11 @@
                 step="10"
                 :placeholder="$t('llc.wizard.step2.monthlyBudgetPlaceholder')"
               />
-              <span class="budget-unit">/month</span>
+              <span class="budget-unit">{{ $t('llc.wizard.perMonth') }}</span>
             </div>
             <span v-if="selectedTemplate?.estimated_monthly_cost_cents" class="form-hint">
               {{ $t('llc.wizard.step2.estimatedCost') }}:
-              ${{ (selectedTemplate.estimated_monthly_cost_cents / 100).toFixed(0) }}/mo
+              ${{ (selectedTemplate.estimated_monthly_cost_cents / 100).toFixed(0) }}{{ $t('llc.wizard.perMonthShort') }}
             </span>
           </div>
 
@@ -202,7 +202,7 @@
               </div>
               <div class="summary-item">
                 <dt>{{ $t('llc.wizard.step2.monthlyBudget') }}</dt>
-                <dd>${{ budgetDollars }}/month</dd>
+                <dd>${{ budgetDollars }}{{ $t('llc.wizard.perMonth') }}</dd>
               </div>
               <div class="summary-item">
                 <dt>{{ $t('llc.wizard.step2.brandColor') }}</dt>
@@ -241,19 +241,19 @@
               <dl class="summary-list">
                 <div v-if="selectedTemplate.agents?.length" class="summary-item">
                   <dt>{{ $t('llc.wizard.step3.agents') }}</dt>
-                  <dd>{{ selectedTemplate.agents.length }} agents</dd>
+                  <dd>{{ $t('llc.wizard.agentsUnit', { count: selectedTemplate.agents.length }) }}</dd>
                 </div>
                 <div v-if="selectedTemplate.goals?.length" class="summary-item">
                   <dt>{{ $t('llc.wizard.step3.goals') }}</dt>
-                  <dd>{{ selectedTemplate.goals.length }} goals</dd>
+                  <dd>{{ $t('llc.wizard.goalsUnit', { count: selectedTemplate.goals.length }) }}</dd>
                 </div>
                 <div v-if="selectedTemplate.work_items?.length" class="summary-item">
                   <dt>{{ $t('llc.wizard.step3.workItems') }}</dt>
-                  <dd>{{ selectedTemplate.work_items.length }} work items</dd>
+                  <dd>{{ $t('llc.wizard.workItemsUnit', { count: selectedTemplate.work_items.length }) }}</dd>
                 </div>
                 <div v-if="selectedTemplate.kb_collections?.length" class="summary-item">
                   <dt>{{ $t('llc.wizard.step3.kbCollections') }}</dt>
-                  <dd>{{ selectedTemplate.kb_collections.length }} KB collections</dd>
+                  <dd>{{ $t('llc.wizard.kbCollectionsUnit', { count: selectedTemplate.kb_collections.length }) }}</dd>
                 </div>
               </dl>
             </div>
@@ -307,6 +307,7 @@
 
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useCompanyTemplates, type CompanyTemplate, type TemplateCategory } from '@/composables/llc/useCompanyTemplates'
@@ -316,13 +317,14 @@ import Icon from '@/components/ui/Icon.vue'
 const logger = createLogger('CompanyCreationWizard')
 const router = useRouter()
 const api = useApiClient()
+const { t } = useI18n()
 const { importTemplate } = useCompanyTemplates()
 
-const STEPS = [
-  { n: 1, label: 'Choose Template' },
-  { n: 2, label: 'Configure' },
-  { n: 3, label: 'Review' },
-]
+const STEPS = computed(() => [
+  { n: 1, label: t('llc.wizard.steps.chooseTemplate') },
+  { n: 2, label: t('llc.wizard.steps.configure') },
+  { n: 3, label: t('llc.wizard.steps.review') },
+])
 
 const step = ref(1)
 const useTemplate = ref(false)
@@ -458,7 +460,7 @@ async function createCompany() {
     await router.push(`/llc/companies/${createdCompany.id}`)
   } catch (err: any) {
     logger.error('Failed to create company', err)
-    error.value = err?.response?.data?.detail || err?.message || 'Failed to create company'
+    error.value = err?.response?.data?.detail || err?.message || t('llc.wizard.createFailed')
   } finally {
     loading.value = false
   }

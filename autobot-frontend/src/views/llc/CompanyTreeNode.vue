@@ -3,6 +3,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import { useI18n } from 'vue-i18n'
 import { companyStatusColor } from '@/composables/llc/llcStatus'
 
 export interface CompanyNode {
@@ -19,6 +20,7 @@ export interface CompanyNode {
 
 defineProps<{ node: CompanyNode; depth?: number }>()
 const emit = defineEmits<{ toggle: [node: CompanyNode]; navigate: [node: CompanyNode] }>()
+const { t } = useI18n()
 
 const budgetPercent = (node: CompanyNode) =>
   node.budget_total > 0 ? Math.min(100, Math.round((node.budget_spent / node.budget_total) * 100)) : 0
@@ -59,7 +61,7 @@ const budgetBarColor = (node: CompanyNode) => {
         <span class="text-xs text-gray-400 w-8 text-right">{{ budgetPercent(node) }}%</span>
       </div>
 
-      <span v-if="node.agent_count != null" class="text-xs text-gray-500">{{ node.agent_count }} agents</span>
+      <span v-if="node.agent_count != null" class="text-xs text-gray-500">{{ t('llc.companyTree.agentCount', { count: node.agent_count }) }}</span>
       <svg class="w-4 h-4 text-gray-300 group-hover:text-indigo-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
       </svg>

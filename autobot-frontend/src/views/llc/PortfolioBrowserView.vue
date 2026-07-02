@@ -50,8 +50,8 @@
         </div>
         <p v-if="p.description" class="card-desc">{{ p.description }}</p>
         <p class="card-meta">
-          {{ p.program_count }} {{ p.program_count === 1 ? 'program' : 'programs' }}
-          · Created {{ formatDate(p.created_at) }}
+          {{ t('llcBrowser.programUnit', { count: p.program_count }, p.program_count) }}
+          · {{ t('llcBrowser.createdOn', { date: formatDate(p.created_at) }) }}
         </p>
       </button>
     </div>

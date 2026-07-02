@@ -49,7 +49,7 @@
           <span class="status-badge" :class="`status-${p.status}`">{{ p.status }}</span>
         </div>
         <p v-if="p.description" class="card-desc">{{ p.description }}</p>
-        <p class="card-meta">{{ p.project_count }} {{ p.project_count === 1 ? 'project' : 'projects' }}</p>
+        <p class="card-meta">{{ t('llcBrowser.projectUnit', { count: p.project_count }, p.project_count) }}</p>
       </button>
     </div>
 
