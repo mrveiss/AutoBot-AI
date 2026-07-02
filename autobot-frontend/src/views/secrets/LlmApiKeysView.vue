@@ -109,59 +109,64 @@
     </div>
 
     <!-- Issue Key Modal -->
-    <div v-if="showIssueModal" class="modal-overlay" @click.self="showIssueModal = false">
-      <div class="modal-content w-full max-w-lg">
-        <h2 class="text-lg font-semibold mb-4">{{ t('llmKeys.issueKey') }}</h2>
-        <form @submit.prevent="handleIssue">
-          <div class="space-y-4">
-            <div>
-              <label class="form-label">{{ t('llmKeys.form.teamId') }} *</label>
-              <input v-model="form.team_id" class="form-input" required />
-            </div>
-            <div>
-              <label class="form-label">{{ t('llmKeys.form.label') }}</label>
-              <input v-model="form.label" class="form-input" />
-            </div>
-            <div>
-              <label class="form-label">{{ t('llmKeys.form.budget') }}</label>
-              <input v-model.number="form.monthly_budget_usd" type="number" step="0.01" min="0" class="form-input" />
-              <p class="text-xs text-autobot-text-muted mt-1">{{ t('llmKeys.form.budgetHint') }}</p>
-            </div>
-            <div>
-              <label class="form-label">{{ t('llmKeys.form.models') }}</label>
-              <input v-model="form.allowed_models_raw" class="form-input" placeholder='["gpt-4", "claude-*"]' />
-              <p class="text-xs text-autobot-text-muted mt-1">{{ t('llmKeys.form.modelsHint') }}</p>
-            </div>
-            <div>
-              <label class="form-label">{{ t('llmKeys.form.expiresAt') }}</label>
-              <input v-model="form.expires_at_str" type="date" class="form-input" />
-            </div>
+    <BaseModal
+      v-model="showIssueModal"
+      :title="t('llmKeys.issueKey')"
+      size="md"
+    >
+      <form @submit.prevent="handleIssue">
+        <div class="space-y-4">
+          <div>
+            <label class="form-label">{{ t('llmKeys.form.teamId') }} *</label>
+            <input v-model="form.team_id" class="form-input" required />
           </div>
-          <div class="flex justify-end gap-3 mt-6">
-            <button type="button" class="btn-secondary" @click="showIssueModal = false">
-              {{ t('common.cancel') }}
-            </button>
-            <button type="submit" class="btn-primary" :disabled="issuing">
-              {{ issuing ? t('common.saving') : t('llmKeys.issueKey') }}
-            </button>
+          <div>
+            <label class="form-label">{{ t('llmKeys.form.label') }}</label>
+            <input v-model="form.label" class="form-input" />
           </div>
-        </form>
-      </div>
-    </div>
+          <div>
+            <label class="form-label">{{ t('llmKeys.form.budget') }}</label>
+            <input v-model.number="form.monthly_budget_usd" type="number" step="0.01" min="0" class="form-input" />
+            <p class="text-xs text-autobot-text-muted mt-1">{{ t('llmKeys.form.budgetHint') }}</p>
+          </div>
+          <div>
+            <label class="form-label">{{ t('llmKeys.form.models') }}</label>
+            <input v-model="form.allowed_models_raw" class="form-input" placeholder='["gpt-4", "claude-*"]' />
+            <p class="text-xs text-autobot-text-muted mt-1">{{ t('llmKeys.form.modelsHint') }}</p>
+          </div>
+          <div>
+            <label class="form-label">{{ t('llmKeys.form.expiresAt') }}</label>
+            <input v-model="form.expires_at_str" type="date" class="form-input" />
+          </div>
+        </div>
+        <!-- hidden submit keeps Enter-to-submit working inside the form -->
+        <button type="submit" class="sr-only" tabindex="-1" aria-hidden="true"></button>
+      </form>
+      <template #actions>
+        <button type="button" class="btn-secondary" @click="showIssueModal = false">
+          {{ t('common.cancel') }}
+        </button>
+        <button type="button" class="btn-primary" :disabled="issuing" @click="handleIssue">
+          {{ issuing ? t('common.saving') : t('llmKeys.issueKey') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Revoke Confirmation Modal -->
-    <div v-if="revokeKeyId" class="modal-overlay" @click.self="revokeKeyId = ''">
-      <div class="modal-content w-full max-w-sm">
-        <h2 class="text-lg font-semibold mb-2">{{ t('llmKeys.revokeConfirm.title') }}</h2>
-        <p class="text-sm text-autobot-text-secondary mb-4">
-          {{ t('llmKeys.revokeConfirm.body', { id: revokeKeyId }) }}
-        </p>
-        <div class="flex justify-end gap-3">
-          <button class="btn-secondary" @click="revokeKeyId = ''">{{ t('common.cancel') }}</button>
-          <button class="btn-danger" @click="handleRevoke">{{ t('llmKeys.revoke') }}</button>
-        </div>
-      </div>
-    </div>
+    <BaseModal
+      :model-value="!!revokeKeyId"
+      :title="t('llmKeys.revokeConfirm.title')"
+      size="sm"
+      @close="revokeKeyId = ''"
+    >
+      <p class="text-sm text-autobot-text-secondary">
+        {{ t('llmKeys.revokeConfirm.body', { id: revokeKeyId }) }}
+      </p>
+      <template #actions>
+        <button class="btn-secondary" @click="revokeKeyId = ''">{{ t('common.cancel') }}</button>
+        <button class="btn-danger" @click="handleRevoke">{{ t('llmKeys.revoke') }}</button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -171,6 +176,7 @@ import { useI18n } from 'vue-i18n'
 import { getBackendUrl } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 const { t } = useI18n()
 const logger = createLogger('LlmApiKeysView')
