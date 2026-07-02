@@ -1747,6 +1747,20 @@ class CostModelConfig(BaseSettings):
         description="Target network utilisation percent for efficiency scoring.",
     )
 
+    # Issue #10778: link capacity used to convert bytes/s → utilisation %.
+    # Set to 0 (default) to suppress percentage conversion and expose raw bytes/s
+    # as an honest "unavailable" signal rather than fabricating a number.
+    # Example: 1 Gbit/s Ethernet = 1000; 100 Mbit/s = 100.
+    network_link_capacity_mbps: float = Field(
+        default=0.0,
+        alias="AUTOBOT_COST_NETWORK_LINK_CAPACITY_MBPS",
+        description=(
+            "Network link capacity in Mbit/s used to derive utilisation % from psutil "
+            "bytes/s counters. Set to 0 (default) when capacity is unknown; the dashboard "
+            "will report bytes/s and mark the % as unavailable rather than fabricating a value."
+        ),
+    )
+
 
 class TelemetryConfig(BaseSettings):
     """

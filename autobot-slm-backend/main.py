@@ -69,7 +69,7 @@ from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
 from api.voice_proxy import router as voice_proxy_router
 from config import settings
-from middleware import SecurityHeadersMiddleware
+from middleware import ApiRequestCounterMiddleware, SecurityHeadersMiddleware
 from services.a2a_card_fetcher import start_card_refresh_task
 from services.auth import require_service_management
 from services.compose_fleet import (
@@ -551,6 +551,9 @@ app.add_middleware(
 # Issue #2858 — explicit CSRF mitigation + security headers.
 # Registered after CORSMiddleware so CORS headers are already present.
 app.add_middleware(SecurityHeadersMiddleware)
+# Issue #10778 — HTTP API request counter for BI dashboard monthly operations.
+# Registered last so the route is already matched when the counter reads it.
+app.add_middleware(ApiRequestCounterMiddleware)
 
 # Routers intentionally left open (no service.management gate):
 #   health_router   — liveness/readiness probes; must be reachable without credentials

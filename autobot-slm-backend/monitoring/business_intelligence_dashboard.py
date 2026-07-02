@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 import matplotlib
+import psutil
 
 matplotlib.use("Agg")  # Non-interactive backend
 import numpy as np
@@ -240,6 +241,8 @@ class SystemHealthScore:
 _PROMQL_LLM_REQUESTS_30D = "increase(autobot_llm_requests_total[30d])"
 # PromQL: 30-day increase in knowledge-base search requests (all types/collections)
 _PROMQL_KB_SEARCHES_30D = "increase(autobot_knowledge_search_requests_total[30d])"
+# PromQL: 30-day increase in generic HTTP API requests (Issue #10778)
+_PROMQL_API_REQUESTS_30D = "increase(autobot_api_requests_total[30d])"
 
 
 async def _sum_prometheus_increase(promql: str) -> Optional[float]:
@@ -258,6 +261,52 @@ async def _sum_prometheus_increase(promql: str) -> Optional[float]:
     except (KeyError, ValueError, TypeError) as exc:
         logger.warning("Could not parse Prometheus result for %r: %s", promql, exc)
         return None
+
+
+# ---------------------------------------------------------------------------
+# Network utilisation helpers (Issue #10778)
+# ---------------------------------------------------------------------------
+
+# Short delta interval for the two psutil samples (seconds).
+# 0.25 s is short enough not to block the event loop noticeably yet long
+# enough to produce stable byte counts on modern NICs.
+_NET_SAMPLE_INTERVAL_S: float = 0.25
+
+
+def _sample_net_bytes_per_sec() -> float:
+    """Return total network throughput in bytes/s across all interfaces.
+
+    Runs two ``psutil.net_io_counters()`` samples separated by
+    ``_NET_SAMPLE_INTERVAL_S`` seconds (blocking).  Must be called via
+    ``asyncio.to_thread`` from async code.
+    """
+    import time  # noqa: PLC0415 — stdlib, imported here to keep module-level imports clean
+
+    before = psutil.net_io_counters()
+    time.sleep(_NET_SAMPLE_INTERVAL_S)
+    after = psutil.net_io_counters()
+    delta_bytes = (after.bytes_sent + after.bytes_recv) - (before.bytes_sent + before.bytes_recv)
+    return max(delta_bytes / _NET_SAMPLE_INTERVAL_S, 0.0)
+
+
+async def _get_network_utilization_percent() -> Optional[float]:
+    """Return network utilisation as a percentage of configured link capacity.
+
+    Uses ``asyncio.to_thread`` so the blocking psutil sampling does not stall
+    the event loop.
+
+    Returns:
+        A float in [0, 100] when ``AUTOBOT_COST_NETWORK_LINK_CAPACITY_MBPS``
+        is configured and > 0.  Returns None when capacity is unknown — callers
+        must treat None as "unavailable" and must not fabricate a number.
+    """
+    capacity_mbps = _cfg.cost_model.network_link_capacity_mbps
+    if capacity_mbps <= 0:
+        return None  # capacity unknown; refuse to fabricate a percentage
+
+    bytes_per_sec = await asyncio.to_thread(_sample_net_bytes_per_sec)
+    capacity_bytes_per_sec = capacity_mbps * 125_000  # 1 Mbit/s = 125 000 B/s
+    return min(bytes_per_sec / capacity_bytes_per_sec * 100.0, 100.0)
 
 
 class BusinessIntelligenceDashboard:
@@ -341,23 +390,32 @@ class BusinessIntelligenceDashboard:
     async def _get_monthly_operations(self) -> tuple:
         """Query real 30-day operation counts from Prometheus.
 
+        Sources (all queried in parallel; any available source contributes):
+        - autobot_llm_requests_total        — LLM inference requests
+        - autobot_knowledge_search_requests_total — knowledge-base searches
+        - autobot_api_requests_total        — generic HTTP API requests (#10778)
+
         Returns:
             Tuple of (total_monthly_operations: int, data_available: bool).
-            data_available=False means Prometheus was unreachable; the caller
-            must NOT present the returned count as real data in that case.
+            data_available=False means all Prometheus queries were unreachable;
+            the caller must NOT present the returned count as real data in that case.
         """
-        llm_count = await _sum_prometheus_increase(_PROMQL_LLM_REQUESTS_30D)
-        kb_count = await _sum_prometheus_increase(_PROMQL_KB_SEARCHES_30D)
+        llm_count, kb_count, api_count = await asyncio.gather(
+            _sum_prometheus_increase(_PROMQL_LLM_REQUESTS_30D),
+            _sum_prometheus_increase(_PROMQL_KB_SEARCHES_30D),
+            _sum_prometheus_increase(_PROMQL_API_REQUESTS_30D),
+        )
 
-        if llm_count is None and kb_count is None:
+        if llm_count is None and kb_count is None and api_count is None:
             self.logger.warning(
                 "Prometheus unreachable — monthly operation count unavailable (#10720). "
-                "Deploy a Prometheus scrape target for autobot_llm_requests_total and "
-                "autobot_knowledge_search_requests_total to get real usage data."
+                "Deploy a Prometheus scrape target for autobot_llm_requests_total, "
+                "autobot_knowledge_search_requests_total, and "
+                "autobot_api_requests_total to get real usage data."
             )
             return 0, False
 
-        total = int((llm_count or 0) + (kb_count or 0))
+        total = int((llm_count or 0) + (kb_count or 0) + (api_count or 0))
         return total, True
 
     async def calculate_roi_metrics(self) -> ROIMetrics:
@@ -610,7 +668,11 @@ class BusinessIntelligenceDashboard:
             ),  # Issue #380
             "gpu": (system.get("gpu_utilization", 0) if system.get("gpu_utilization") is not None else 0),
             "npu": (system.get("npu_utilization", 0) if system.get("npu_utilization") is not None else 0),
-            "network": 30.0,  # Actual network utilisation is not yet scraped; marked as estimate
+            # Issue #10778: real network utilisation via psutil delta sample.
+            # _get_network_utilization_percent returns None when link capacity is
+            # not configured; fall back to 0 so cost-efficiency scoring is honest
+            # rather than fabricating a number.
+            "network": (await _get_network_utilization_percent()) or 0.0,
         }
 
     async def generate_performance_predictions(self) -> List[PerformancePrediction]:

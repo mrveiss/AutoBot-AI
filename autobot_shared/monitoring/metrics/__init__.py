@@ -31,6 +31,8 @@ Package Structure:
 - mcp_worker.py: MCP worker lifecycle metrics (Issue #4109)
 """
 
+# Issue #10778: HTTP API request counter
+from .api_requests import ApiRequestsMetricsRecorder
 from .base import BaseMetricsRecorder
 
 # Phase 4 (#7590): Chat SSOT observability recorder
@@ -64,6 +66,8 @@ from .workflow import WorkflowMetricsRecorder
 
 __all__ = [
     "BaseMetricsRecorder",
+    # Issue #10778: HTTP API request counter
+    "ApiRequestsMetricsRecorder",
     # Phase 4 (#7590): Chat SSOT observability
     "ChatMetricsRecorder",
     "WorkflowMetricsRecorder",

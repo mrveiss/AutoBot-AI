@@ -115,6 +115,8 @@ class _StubCostModel:
     memory_baseline_efficiency = 80.0
     storage_baseline_efficiency = 60.0
     network_baseline_efficiency = 40.0
+    # Issue #10778: link capacity 0 = unknown → no fabricated network %
+    network_link_capacity_mbps = 0.0
 
 
 class _StubConfig:
@@ -240,7 +242,10 @@ class TestMonthlyOperations:
 
     @pytest.mark.asyncio
     async def test_get_monthly_operations_both_sources_available(self):
-        """_get_monthly_operations combines LLM + KB counts when both Prometheus series exist."""
+        """_get_monthly_operations combines LLM + KB + API counts when all Prometheus series exist.
+
+        Issue #10778: a third source (autobot_api_requests_total) is now included.
+        """
         llm_data = {
             "resultType": "vector",
             "result": [{"metric": {}, "value": [0, "1000"]}],
@@ -249,21 +254,25 @@ class TestMonthlyOperations:
             "resultType": "vector",
             "result": [{"metric": {}, "value": [0, "500"]}],
         }
-
-        call_count = 0
+        api_data = {
+            "resultType": "vector",
+            "result": [{"metric": {}, "value": [0, "250"]}],
+        }
 
         async def _mock_query(promql):
-            nonlocal call_count
-            call_count += 1
             if "llm" in promql:
                 return llm_data
-            return kb_data
+            if "knowledge" in promql:
+                return kb_data
+            if "api_requests" in promql:
+                return api_data
+            return None
 
         with patch.object(_bid_mod, "query_instant", side_effect=_mock_query):
             total, available = await dash._get_monthly_operations()
 
         assert available is True
-        assert total == 1500
+        assert total == 1750  # 1000 + 500 + 250
 
     @pytest.mark.asyncio
     async def test_get_monthly_operations_both_unavailable(self):
