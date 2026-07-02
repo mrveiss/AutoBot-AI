@@ -42,8 +42,8 @@ opentelemetry-instrumentation-aiohttp-client>=0.64b0
 
 # FAISS - Vector Similarity Search (Issue #387, #856)
 # Provides efficient vector similarity search operations
-# Using CPU version for Python 3.12 compatibility (GPU version requires conda)
-# For GPU acceleration: conda install -c conda-forge faiss-gpu (Python 3.12)
+# Using CPU version for Python 3.14 compatibility (GPU version requires conda)
+# For GPU acceleration: conda install -c conda-forge faiss-gpu (Python 3.14)
 faiss-cpu>=1.14.3
 aiosqlite>=0.22.1
 
