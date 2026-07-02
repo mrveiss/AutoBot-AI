@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from api import (
     agents_router,
@@ -637,6 +638,31 @@ async def root():
         "status": "running",
         "docs": "/api/docs" if settings.debug else "disabled",
     }
+
+
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_registry_metrics() -> Response:
+    """Expose the shared Prometheus registry in text-exposition format (#10851).
+
+    Serves the canonical scrape path for Prometheus.  No authentication is
+    applied — scrapes originate from internal infrastructure (Prometheus server
+    on the same host/network) and must not be blocked by JWT middleware.
+
+    Collision avoidance: all existing metrics-adjacent routes live under the
+    ``/api`` prefix (``/api/metrics`` SystemMetrics, ``/api/metrics/prometheus``
+    DB-derived text, ``/api/metrics/fleet``, ``/api/metrics/node/{id}``, etc.).
+    This top-level ``/metrics`` path is reserved for the standard Prometheus
+    scrape target and does not overlap with any mounted router.
+
+    Import is deferred to avoid circular-import risk at module load time
+    (mirrors the lazy-import pattern used by ApiRequestCounterMiddleware,
+    Issue #10778).
+    """
+    from prometheus_client import CONTENT_TYPE_LATEST  # noqa: PLC0415
+
+    from monitoring.prometheus_metrics import get_metrics_manager  # noqa: PLC0415
+
+    return Response(content=get_metrics_manager().get_metrics(), media_type=CONTENT_TYPE_LATEST)
 
 
 if __name__ == "__main__":
