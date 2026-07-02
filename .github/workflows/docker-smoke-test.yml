@@ -164,7 +164,12 @@ jobs:
 
       - name: Collect logs on failure
         if: failure()
-        run: docker compose --env-file docker/.env.docker logs > failure-logs.txt
+        run: |
+          # Print inline (diagnosable without downloading the artifact) AND keep the
+          # artifact. Grouped so it collapses in the UI. (#10706)
+          echo "::group::docker compose logs (backend / slm / frontend)"
+          docker compose --env-file docker/.env.docker logs --no-color | tee failure-logs.txt
+          echo "::endgroup::"
 
       - name: Upload failure logs
         if: failure()
