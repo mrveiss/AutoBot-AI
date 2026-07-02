@@ -1,129 +1,126 @@
 <template>
-  <transition name="modal-fade">
-    <div v-if="show" class="modal-overlay" @click.self="$emit('close')">
-      <div class="modal-container">
-        <!-- Header -->
-        <div class="modal-header">
-          <div class="header-content">
-            <Icon name="cubes" />
-            <h3>{{ $t('knowledge.vectorization.progressTitle') }}</h3>
-          </div>
-          <button class="close-btn" @click="$emit('close')">
-            <Icon name="times" />
-          </button>
+  <BaseModal
+    :model-value="show"
+    :title="$t('knowledge.vectorization.progressTitle')"
+    size="md"
+    @close="$emit('close')"
+  >
+    <template #title>
+      <span class="header-content">
+        <Icon name="cubes" />
+        {{ $t('knowledge.vectorization.progressTitle') }}
+      </span>
+    </template>
+
+    <!-- Overall Progress Summary -->
+    <div class="progress-summary">
+      <div class="summary-stats">
+        <div class="stat-item">
+          <span class="stat-value">{{ totalDocuments }}</span>
+          <span class="stat-label">{{ $t('knowledge.vectorization.total') }}</span>
         </div>
-
-        <!-- Overall Progress Summary -->
-        <div class="progress-summary">
-          <div class="summary-stats">
-            <div class="stat-item">
-              <span class="stat-value">{{ totalDocuments }}</span>
-              <span class="stat-label">{{ $t('knowledge.vectorization.total') }}</span>
-            </div>
-            <div class="stat-item stat-completed">
-              <span class="stat-value">{{ completedCount }}</span>
-              <span class="stat-label">{{ $t('knowledge.vectorization.completed') }}</span>
-            </div>
-            <div class="stat-item stat-pending">
-              <span class="stat-value">{{ pendingCount }}</span>
-              <span class="stat-label">{{ $t('knowledge.vectorization.inProgress') }}</span>
-            </div>
-            <div class="stat-item stat-failed">
-              <span class="stat-value">{{ failedCount }}</span>
-              <span class="stat-label">{{ $t('knowledge.vectorization.failed') }}</span>
-            </div>
-          </div>
-
-          <!-- Overall progress bar -->
-          <div class="overall-progress">
-            <div class="progress-bar">
-              <div
-                class="progress-fill"
-                :style="{ width: `${overallProgress}%` }"
-              ></div>
-            </div>
-            <span class="progress-text">{{ Math.round(overallProgress) }}%</span>
-          </div>
+        <div class="stat-item stat-completed">
+          <span class="stat-value">{{ completedCount }}</span>
+          <span class="stat-label">{{ $t('knowledge.vectorization.completed') }}</span>
         </div>
-
-        <!-- Document List -->
-        <div class="document-list">
-          <EmptyState
-            v-if="documentList.length === 0"
-            icon="inbox"
-            :message="$t('knowledge.vectorization.noDocuments')"
-          />
-
-          <div
-            v-for="doc in documentList"
-            :key="doc.documentId"
-            class="document-item"
-            :class="`status-${doc.status}`"
-          >
-            <!-- Document info -->
-            <div class="document-info">
-              <div class="status-icon">
-                <i
-                  :class="{
-                    'check-circle': doc.status === 'vectorized',
-                    'fas fa-spinner fa-spin': doc.status === 'pending',
-                    'times-circle': doc.status === 'failed',
-                    'question-circle': doc.status === 'unknown'
-                  }"
-                ></i>
-              </div>
-              <div class="document-details">
-                <span class="document-name">{{ doc.name || doc.documentId }}</span>
-                <span v-if="doc.error" class="error-message">{{ doc.error }}</span>
-              </div>
-            </div>
-
-            <!-- Progress bar for pending documents -->
-            <div v-if="doc.status === 'pending' && doc.progress !== undefined" class="document-progress">
-              <div class="mini-progress-bar">
-                <div
-                  class="mini-progress-fill"
-                  :style="{ width: `${doc.progress}%` }"
-                ></div>
-              </div>
-              <span class="progress-percentage">{{ Math.round(doc.progress) }}%</span>
-            </div>
-
-            <!-- Status badge -->
-            <VectorizationStatusBadge :status="doc.status" :show-label="true" />
-          </div>
+        <div class="stat-item stat-pending">
+          <span class="stat-value">{{ pendingCount }}</span>
+          <span class="stat-label">{{ $t('knowledge.vectorization.inProgress') }}</span>
         </div>
-
-        <!-- Actions -->
-        <div class="modal-actions">
-          <button
-            v-if="hasFailedDocuments"
-            class="action-btn retry-btn"
-            @click="$emit('retry-failed')"
-          >
-            <Icon name="redo" />
-            {{ $t('knowledge.vectorization.retryFailed') }}
-          </button>
-          <button
-            v-if="allCompleted"
-            class="action-btn close-btn-action"
-            @click="$emit('close')"
-          >
-            <Icon name="check" />
-            {{ $t('knowledge.vectorization.done') }}
-          </button>
-          <button
-            v-else
-            class="action-btn cancel-btn"
-            @click="$emit('cancel')"
-          >
-            <Icon name="stop" />
-            {{ $t('knowledge.vectorization.cancelButton') }}
-          </button>
+        <div class="stat-item stat-failed">
+          <span class="stat-value">{{ failedCount }}</span>
+          <span class="stat-label">{{ $t('knowledge.vectorization.failed') }}</span>
         </div>
       </div>
+
+      <!-- Overall progress bar -->
+      <div class="overall-progress">
+        <div class="progress-bar">
+          <div
+            class="progress-fill"
+            :style="{ width: `${overallProgress}%` }"
+          ></div>
+        </div>
+        <span class="progress-text">{{ Math.round(overallProgress) }}%</span>
+      </div>
     </div>
-  </transition>
+
+    <!-- Document List -->
+    <div class="document-list">
+      <EmptyState
+        v-if="documentList.length === 0"
+        icon="inbox"
+        :message="$t('knowledge.vectorization.noDocuments')"
+      />
+
+      <div
+        v-for="doc in documentList"
+        :key="doc.documentId"
+        class="document-item"
+        :class="`status-${doc.status}`"
+      >
+        <!-- Document info -->
+        <div class="document-info">
+          <div class="status-icon">
+            <i
+              :class="{
+                'check-circle': doc.status === 'vectorized',
+                'fas fa-spinner fa-spin': doc.status === 'pending',
+                'times-circle': doc.status === 'failed',
+                'question-circle': doc.status === 'unknown'
+              }"
+            ></i>
+          </div>
+          <div class="document-details">
+            <span class="document-name">{{ doc.name || doc.documentId }}</span>
+            <span v-if="doc.error" class="error-message">{{ doc.error }}</span>
+          </div>
+        </div>
+
+        <!-- Progress bar for pending documents -->
+        <div v-if="doc.status === 'pending' && doc.progress !== undefined" class="document-progress">
+          <div class="mini-progress-bar">
+            <div
+              class="mini-progress-fill"
+              :style="{ width: `${doc.progress}%` }"
+            ></div>
+          </div>
+          <span class="progress-percentage">{{ Math.round(doc.progress) }}%</span>
+        </div>
+
+        <!-- Status badge -->
+        <VectorizationStatusBadge :status="doc.status" :show-label="true" />
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <template #actions>
+      <button
+        v-if="hasFailedDocuments"
+        class="action-btn retry-btn"
+        @click="$emit('retry-failed')"
+      >
+        <Icon name="redo" />
+        {{ $t('knowledge.vectorization.retryFailed') }}
+      </button>
+      <button
+        v-if="allCompleted"
+        class="action-btn close-btn-action"
+        @click="$emit('close')"
+      >
+        <Icon name="check" />
+        {{ $t('knowledge.vectorization.done') }}
+      </button>
+      <button
+        v-else
+        class="action-btn cancel-btn"
+        @click="$emit('cancel')"
+      >
+        <Icon name="stop" />
+        {{ $t('knowledge.vectorization.cancelButton') }}
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
@@ -131,6 +128,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import VectorizationStatusBadge from './VectorizationStatusBadge.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 interface DocumentState {
   documentId: string
@@ -191,41 +189,6 @@ const allCompleted = computed(() => {
 
 <style scoped>
 /* Issue #704: Migrated to CSS design tokens */
-/* Modal overlay */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--bg-overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-  padding: var(--spacing-4);
-}
-
-.modal-container {
-  background: var(--bg-card);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
-  max-width: 700px;
-  width: 100%;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Header */
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-6);
-  border-bottom: 2px solid var(--border-default);
-}
-
 .header-content {
   display: flex;
   align-items: center;
@@ -237,34 +200,9 @@ const allCompleted = computed(() => {
   color: var(--color-primary);
 }
 
-.modal-header h3 {
-  font-size: var(--text-xl);
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: var(--spacing-0);
-}
-
-.close-btn {
-  width: 2rem;
-  height: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-tertiary);
-  border: none;
-  border-radius: var(--radius-md);
-  color: var(--text-tertiary);
-  cursor: pointer;
-  transition: all var(--duration-200);
-}
-
-.close-btn:hover {
-  background: var(--border-default);
-  color: var(--text-secondary);
-}
-
 /* Progress Summary */
 .progress-summary {
+  margin: calc(-1 * var(--spacing-6)) calc(-1 * var(--spacing-6)) var(--spacing-6);
   padding: var(--spacing-6);
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-default);
@@ -344,9 +282,7 @@ const allCompleted = computed(() => {
 
 /* Document List */
 .document-list {
-  flex: 1;
   overflow-y: auto;
-  padding: var(--spacing-4);
   max-height: 400px;
 }
 
@@ -464,16 +400,6 @@ const allCompleted = computed(() => {
   min-width: 3rem;
 }
 
-/* Modal Actions */
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-3);
-  padding: var(--spacing-6);
-  border-top: 2px solid var(--border-default);
-  background: var(--bg-secondary);
-}
-
 .action-btn {
   display: flex;
   align-items: center;
@@ -537,27 +463,5 @@ const allCompleted = computed(() => {
 
 .document-list::-webkit-scrollbar-thumb:hover {
   background: var(--border-secondary);
-}
-
-/* Modal animations */
-.modal-fade-enter-active,
-.modal-fade-leave-active {
-  transition: opacity var(--duration-300) var(--ease-out);
-}
-
-.modal-fade-enter-active .modal-container,
-.modal-fade-leave-active .modal-container {
-  transition: transform var(--duration-300) var(--ease-out), opacity var(--duration-300) var(--ease-out);
-}
-
-.modal-fade-enter-from,
-.modal-fade-leave-to {
-  opacity: 0;
-}
-
-.modal-fade-enter-from .modal-container,
-.modal-fade-leave-to .modal-container {
-  transform: scale(0.9);
-  opacity: 0;
 }
 </style>

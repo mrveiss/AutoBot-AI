@@ -196,15 +196,13 @@
     </div>
 
     <!-- Intent Detail Modal -->
-    <div v-if="selectedIntent" class="modal-overlay" @click="selectedIntent = null">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ selectedIntent.intent_name }}</h3>
-          <button @click="selectedIntent = null" class="close-btn">
-            <Icon name="times" />
-          </button>
-        </div>
-        <div class="modal-body">
+    <BaseModal
+      :model-value="!!selectedIntent"
+      :title="selectedIntent?.intent_name ?? ''"
+      size="sm"
+      @close="selectedIntent = null"
+    >
+      <template v-if="selectedIntent">
           <div class="detail-grid">
             <div class="detail-item">
               <span class="label">{{ $t('analytics.conversationFlow.intentId') }}</span>
@@ -233,9 +231,8 @@
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+      </template>
+    </BaseModal>
 
     <!-- Loading State -->
     <div v-if="isLoading && !analysisResult" class="loading-state">
@@ -262,6 +259,7 @@
  * Issue #704: Migrated to design tokens for centralized theming
  */
 import Icon from '@/components/ui/Icon.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import { ref, onMounted, computed } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import {
@@ -802,56 +800,6 @@ onMounted(() => {
 .empty-state-full h3 {
   margin: 0 0 var(--spacing-2);
   color: var(--text-secondary);
-}
-
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay-backdrop);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-content {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  width: 90%;
-  max-width: 500px;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-4) var(--spacing-5);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.modal-header h3 {
-  margin: var(--spacing-0);
-  color: var(--text-primary);
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: var(--text-xl);
-  cursor: pointer;
-}
-
-.close-btn:hover {
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: var(--spacing-5);
 }
 
 .detail-grid {
