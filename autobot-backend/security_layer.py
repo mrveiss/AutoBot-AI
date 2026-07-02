@@ -83,8 +83,8 @@ class SecurityLayer:
     """Security layer with RBAC, audit logging, and command execution controls.
 
     Combines role-based access control, authentication, and secure command execution
-    in a single cohesive class. Single-user mode disables authentication for
-    development/personal use. Multi-user mode enables authentication by default.
+    in a single cohesive class. Authentication is always derived from security_config;
+    there is no single-user bypass (#10713, #10636).
     """
 
     def __init__(self):
@@ -92,24 +92,12 @@ class SecurityLayer:
         # Use centralized config manager
         self.security_config = get_config_manager().get("security_config", {})
 
-        # Check for single-user mode (development/personal use).
-        # #10705: config.single_user_mode was removed by the #10666 consolidation;
-        # derive from the canonical AUTOBOT_USER_MODE string (#10636) instead.
-        self.single_user_mode = config.user_mode == "single_user"
-
-        # If single-user mode is enabled, disable all authentication
-        # Issue #745: Added security warning for production awareness
-        if self.single_user_mode:
-            self.enable_auth = False
-            logger.warning(
-                "SECURITY: Single-user mode enabled - authentication disabled. "
-                "Set AUTOBOT_USER_MODE to a non-single_user value for production deployments."
-            )
-        else:
-            # Issue #745: Default to True for production security
-            # Authentication should be enabled unless explicitly disabled
-            self.enable_auth = self.security_config.get("enable_auth", True)
-            logger.info("Multi-user mode - authentication enabled by default")
+        # Issue #745: Default to True for production security.
+        # Authentication is always enabled unless explicitly disabled in security_config.
+        # single_user auth-disable branch removed per #10713 (originally retired by #10636,
+        # accidentally revived by #10666, now permanently retired).
+        self.enable_auth = self.security_config.get("enable_auth", True)
+        logger.info("Authentication enabled: %s", self.enable_auth)
 
         self.audit_log_file = self.security_config.get("audit_log_file") or _AUDIT_LOG_FILE
         self.roles = self.security_config.get("roles", {})

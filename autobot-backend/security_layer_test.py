@@ -33,7 +33,6 @@ class TestSecurityLayer:
             patch("security_layer.get_config_manager") as mock_get_cm,
             patch("security_layer.config") as mock_ssot_config,
         ):
-            mock_ssot_config.single_user_mode = "false"
             mock_ssot_config.audit_log_file = self.temp_audit_file.name
             mock_config = mock_get_cm.return_value
             mock_config.get.return_value = {
@@ -76,7 +75,6 @@ class TestSecurityLayer:
             patch("security_layer.get_config_manager") as mock_get_cm,
             patch("security_layer.config") as mock_ssot_config,
         ):
-            mock_ssot_config.single_user_mode = "false"
             mock_ssot_config.audit_log_file = ""
             mock_config = mock_get_cm.return_value
             mock_config.get.return_value = {
@@ -473,7 +471,6 @@ class TestSecurityLayerIntegration:
             patch("security_layer.get_config_manager") as mock_get_cm,
             patch("security_layer.config") as mock_ssot_config,
         ):
-            mock_ssot_config.single_user_mode = "false"
             mock_ssot_config.audit_log_file = ""
             mock_config = mock_get_cm.return_value
             mock_config.get.return_value = {
