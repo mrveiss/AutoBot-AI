@@ -27,15 +27,18 @@ _slm_root = Path(__file__).parent.parent
 sys.path.insert(0, str(_slm_root))
 
 # ---------------------------------------------------------------------------
-# Stub monitoring.prometheus_metrics BEFORE importing the middleware so the
-# module-level `from monitoring.prometheus_metrics import get_metrics_manager`
-# in api_request_counter.py resolves without the full manager.
+# Stub monitoring.prometheus_metrics so the middleware's LAZY runtime import
+# `from monitoring.prometheus_metrics import get_metrics_manager` (inside
+# _record_request) resolves without the full manager; patch it there per-test.
 # ---------------------------------------------------------------------------
 _fake_prom_metrics = types.ModuleType("monitoring.prometheus_metrics")
 _stub_get_metrics_manager = MagicMock()
 _fake_prom_metrics.get_metrics_manager = _stub_get_metrics_manager
 sys.modules["monitoring.prometheus_metrics"] = _fake_prom_metrics
 sys.modules.setdefault("monitoring", types.ModuleType("monitoring"))
+# Expose as an attribute too so patch("monitoring.prometheus_metrics.…") resolves
+# (mock.patch uses getattr on the package, not sys.modules).
+sys.modules["monitoring"].prometheus_metrics = _fake_prom_metrics
 
 # ---------------------------------------------------------------------------
 # Stub autobot_shared before loading the shared recorder.
@@ -190,7 +193,7 @@ class TestApiRequestCounterMiddleware:
         client, manager = _make_fastapi_client(recorder)
 
         with patch(
-            "middleware.api_request_counter.get_metrics_manager",
+            "monitoring.prometheus_metrics.get_metrics_manager",
             return_value=manager,
         ):
             response = client.get("/api/health")
@@ -205,7 +208,7 @@ class TestApiRequestCounterMiddleware:
         client, manager = _make_fastapi_client(recorder)
 
         with patch(
-            "middleware.api_request_counter.get_metrics_manager",
+            "monitoring.prometheus_metrics.get_metrics_manager",
             return_value=manager,
         ):
             client.get("/api/items/abc123")
@@ -223,7 +226,7 @@ class TestApiRequestCounterMiddleware:
         client, manager = _make_fastapi_client(recorder)
 
         with patch(
-            "middleware.api_request_counter.get_metrics_manager",
+            "monitoring.prometheus_metrics.get_metrics_manager",
             return_value=manager,
         ):
             client.get("/api/missing")
@@ -248,7 +251,7 @@ class TestApiRequestCounterMiddleware:
         client = TestClient(app, raise_server_exceptions=True)
 
         with patch(
-            "middleware.api_request_counter.get_metrics_manager",
+            "monitoring.prometheus_metrics.get_metrics_manager",
             return_value=broken_manager,
         ):
             response = client.get("/api/health")

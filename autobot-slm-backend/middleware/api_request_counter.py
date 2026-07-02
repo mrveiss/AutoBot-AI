@@ -29,8 +29,6 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
-from monitoring.prometheus_metrics import get_metrics_manager
-
 logger = logging.getLogger(__name__)
 
 
@@ -52,6 +50,11 @@ class ApiRequestCounterMiddleware(BaseHTTPMiddleware):
 
 def _record_request(request: Request, status_code: int) -> None:
     """Increment the counter; resolve the route template if available."""
+    # Lazy import: importing monitoring.prometheus_metrics at module load pulls the
+    # whole `monitoring` package (→ constants.path_constants), which isn't on the
+    # container sys.path when middleware is registered at startup. Defer to runtime.
+    from monitoring.prometheus_metrics import get_metrics_manager
+
     manager = get_metrics_manager()
     recorder = manager._api_requests  # type: ignore[attr-defined]
     route = request.scope.get("route")
