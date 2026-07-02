@@ -49,18 +49,20 @@ logger = get_logger(__name__)
 # Optimization mode (folded from retired claude_api_optimization_suite, #10796)
 # ---------------------------------------------------------------------------
 
+
 class OptimizationMode(Enum):
     """Optimization modes that drive automatic rate-limit reconfiguration."""
 
-    CONSERVATIVE = "conservative"   # Light touch; 60 req/min, 2500/hour
-    BALANCED = "balanced"           # Default; 50 req/min, 2000/hour
-    AGGRESSIVE = "aggressive"       # High-frequency; 30 req/min, 1500/hour
-    EMERGENCY = "emergency"         # Recovery; 15 req/min, 800/hour
+    CONSERVATIVE = "conservative"  # Light touch; 60 req/min, 2500/hour
+    BALANCED = "balanced"  # Default; 50 req/min, 2000/hour
+    AGGRESSIVE = "aggressive"  # High-frequency; 30 req/min, 1500/hour
+    EMERGENCY = "emergency"  # Recovery; 15 req/min, 800/hour
 
 
 # ---------------------------------------------------------------------------
 # Configuration dataclasses
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ClaudeAPIConfig:
@@ -113,6 +115,7 @@ _MODE_RATE_LIMITS: Dict[OptimizationMode, tuple[int, int]] = {
 # Core batch-manager
 # ---------------------------------------------------------------------------
 
+
 class ClaudeAPIBatchManager:
     """Manages Claude API calls with intelligent batching and optimization."""
 
@@ -126,9 +129,7 @@ class ClaudeAPIBatchManager:
         self.payload_optimizer = PayloadOptimizer() if self.config.enable_payload_optimization else None
 
         # Optional components (folded from suite, #10796)
-        self.degradation_manager = (
-            GracefulDegradationManager({}) if self.config.enable_graceful_degradation else None
-        )
+        self.degradation_manager = GracefulDegradationManager({}) if self.config.enable_graceful_degradation else None
         self.todowrite_optimizer = (
             get_todowrite_optimizer(
                 {
@@ -293,9 +294,7 @@ class ClaudeAPIBatchManager:
             if not await self._check_and_apply_rate_limit():
                 # Attempt graceful degradation before hard-failing
                 if self.degradation_manager:
-                    fallback = await self.degradation_manager.handle_request(
-                        content, {"type": context_type}
-                    )
+                    fallback = await self.degradation_manager.handle_request(content, {"type": context_type})
                     if fallback.success:
                         return str(fallback.response)
                 raise Exception("Rate limit exceeded")
@@ -442,9 +441,7 @@ class ClaudeAPIBatchManager:
                 "average_response_time": m.average_response_time,
                 "conversation_crashes_prevented": m.conversation_crashes_prevented,
                 "fallback_count": m.fallback_count,
-                "batch_efficiency": (
-                    (m.batched_requests / max(1, m.total_requests)) * 100
-                ),
+                "batch_efficiency": ((m.batched_requests / max(1, m.total_requests)) * 100),
                 "is_running": self.is_running,
                 "current_mode": self.current_mode.value,
             }
@@ -538,6 +535,7 @@ class ClaudeAPIBatchManager:
 # Context manager wrapper
 # ---------------------------------------------------------------------------
 
+
 class ClaudeAPIContextManager:
     """Async context manager for Claude API batch processing."""
 
@@ -558,6 +556,7 @@ class ClaudeAPIContextManager:
 # ---------------------------------------------------------------------------
 # Convenience factory functions
 # ---------------------------------------------------------------------------
+
 
 async def create_claude_api_manager(config: ClaudeAPIConfig = None) -> ClaudeAPIBatchManager:
     """Create and start a Claude API batch manager."""
@@ -593,6 +592,7 @@ async def batch_claude_requests(
 # ---------------------------------------------------------------------------
 # AutoBot production adapter (singleton, AsyncInitializable)
 # ---------------------------------------------------------------------------
+
 
 class AutoBotClaudeAPIAdapter(AsyncInitializable):
     """
@@ -702,6 +702,7 @@ autobot_claude_adapter: "AutoBotClaudeAPIAdapter" | None = None
 # ---------------------------------------------------------------------------
 # Example usage
 # ---------------------------------------------------------------------------
+
 
 async def main():
     """Example usage of the Claude API integration."""
