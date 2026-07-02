@@ -86,7 +86,7 @@ watch(isPaired, (paired) => {
           <p class="text-sm text-autobot-text-secondary">{{ $t('mobile.pairing.instructionsDetail') }}</p>
         </div>
 
-        <div class="flex justify-center bg-white p-4 rounded-lg border border-autobot-border">
+        <div class="flex justify-center bg-autobot-bg-card p-4 rounded-lg border border-autobot-border">
           <img
             :src="qrDataUrl"
             :alt="$t('mobile.pairing.instructions')"

@@ -616,15 +616,15 @@ onUnmounted(() => {
 
 /* Terminal body with dark theme */
 .terminal-body {
-  @apply flex-1 flex flex-col bg-gray-900 overflow-hidden;
+  @apply flex-1 flex flex-col bg-autobot-bg-primary overflow-hidden;
 }
 
 .terminal-status {
-  @apply px-4 py-2 bg-gray-800 text-gray-300 text-sm flex items-center gap-2 border-b border-gray-700;
+  @apply px-4 py-2 bg-autobot-bg-secondary text-autobot-text-muted text-sm flex items-center gap-2 border-b border-autobot-border-strong;
 }
 
 .terminal-output {
-  @apply flex-1 p-4 bg-gray-900 text-green-400 overflow-y-auto text-sm leading-relaxed min-h-0;
+  @apply flex-1 p-4 bg-autobot-bg-primary text-green-400 overflow-y-auto text-sm leading-relaxed min-h-0;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 }
 
@@ -637,15 +637,15 @@ onUnmounted(() => {
 }
 
 .terminal-output::-webkit-scrollbar-track {
-  @apply bg-gray-800;
+  @apply bg-autobot-bg-secondary;
 }
 
 .terminal-output::-webkit-scrollbar-thumb {
-  @apply bg-gray-600 rounded;
+  @apply bg-autobot-bg-tertiary rounded;
 }
 
 .terminal-output::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-500;
+  @apply bg-autobot-bg-tertiary;
 }
 
 .terminal-line {
@@ -720,7 +720,7 @@ onUnmounted(() => {
 }
 
 .line-prefix {
-  @apply text-gray-500 select-none mr-2;
+  @apply text-autobot-text-muted select-none mr-2;
 }
 
 .command {
@@ -745,7 +745,7 @@ onUnmounted(() => {
 }
 
 .terminal-prompt {
-  @apply flex items-center mt-2 pt-2 border-t border-gray-700;
+  @apply flex items-center mt-2 pt-2 border-t border-autobot-border-strong;
 }
 
 .prompt {
@@ -759,7 +759,7 @@ onUnmounted(() => {
 }
 
 .command-input::placeholder {
-  @apply text-gray-500;
+  @apply text-autobot-text-muted;
 }
 
 .command-input:disabled {

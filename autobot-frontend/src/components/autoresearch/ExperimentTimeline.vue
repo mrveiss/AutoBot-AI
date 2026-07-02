@@ -44,14 +44,14 @@ function getApproval(experimentId: string) {
 
 <template>
   <div class="space-y-3">
-    <div v-if="sortedExperiments.length === 0" class="py-8 text-center text-neutral-500">
+    <div v-if="sortedExperiments.length === 0" class="py-8 text-center text-autobot-text-muted">
       No experiments yet
     </div>
 
     <div
       v-for="exp in sortedExperiments"
       :key="exp.id"
-      class="rounded-lg border border-neutral-200 p-4 dark:border-neutral-700"
+      class="rounded-lg border border-autobot-border p-4"
     >
       <div class="mb-2 flex items-center justify-between">
         <div class="flex items-center gap-2">
@@ -61,14 +61,14 @@ function getApproval(experimentId: string) {
           ></span>
           <span class="text-sm font-medium capitalize">{{ exp.state }}</span>
         </div>
-        <span class="text-xs text-neutral-500">{{ formatTime(exp.created_at) }}</span>
+        <span class="text-xs text-autobot-text-muted">{{ formatTime(exp.created_at) }}</span>
       </div>
 
-      <p class="mb-2 text-sm text-neutral-700 dark:text-neutral-300">
+      <p class="mb-2 text-sm text-autobot-text-secondary">
         {{ exp.hypothesis || 'No hypothesis' }}
       </p>
 
-      <div v-if="exp.result" class="flex gap-4 text-xs text-neutral-500">
+      <div v-if="exp.result" class="flex gap-4 text-xs text-autobot-text-muted">
         <span v-if="exp.result.val_bpb != null">
           val_bpb: <span class="font-mono">{{ exp.result.val_bpb.toFixed(4) }}</span>
         </span>

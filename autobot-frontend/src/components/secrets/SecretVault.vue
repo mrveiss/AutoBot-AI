@@ -148,7 +148,7 @@ const getScopeBadge = (scope: string): { color: string; label: string } => {
     case 'shared':
       return { color: 'bg-purple-500/20 text-purple-400', label: t('secrets.vault.scopeShared') }
     default:
-      return { color: 'bg-gray-500/20 text-gray-400', label: scope }
+      return { color: 'bg-gray-500/20 text-autobot-text-muted', label: scope }
   }
 }
 
@@ -244,7 +244,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="secret-vault h-full flex flex-col bg-gray-800 rounded-lg">
+  <div class="secret-vault h-full flex flex-col bg-autobot-bg-secondary rounded-lg">
     <!-- Error/Success Messages -->
     <div v-if="error" class="px-4 py-2 bg-red-900/50 text-red-300 text-sm border-b border-red-700">
       <i class="bi bi-exclamation-circle mr-2" />
@@ -256,9 +256,9 @@ onMounted(() => {
     </div>
 
     <!-- Header -->
-    <div class="px-4 py-3 border-b border-gray-700">
+    <div class="px-4 py-3 border-b border-autobot-border-strong">
       <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-semibold text-gray-200">
+        <h3 class="text-lg font-semibold text-autobot-text-primary">
           <i class="bi bi-shield-lock mr-2" />
           {{ $t('secrets.vault.title') }}
         </h3>
@@ -277,12 +277,12 @@ onMounted(() => {
       <div class="space-y-2">
         <!-- Search -->
         <div class="relative">
-          <i class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <i class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-autobot-text-muted" />
           <input
             v-model="searchQuery"
             type="text"
             :placeholder="$t('secrets.vault.searchPlaceholder')"
-            class="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            class="w-full pl-10 pr-4 py-2 bg-autobot-bg-secondary border border-autobot-border-strong rounded-lg text-autobot-text-primary placeholder-autobot-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           >
         </div>
 
@@ -295,7 +295,7 @@ onMounted(() => {
               'px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors',
               filterType === option.value
                 ? 'bg-blue-500 text-white'
-                : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                : 'bg-autobot-bg-secondary text-autobot-text-muted hover:bg-autobot-bg-hover'
             ]"
             @click="filterType = option.value"
           >
@@ -308,23 +308,23 @@ onMounted(() => {
     <!-- Secret list with virtual scrolling -->
     <div ref="containerRef" class="flex-1 overflow-y-auto custom-scrollbar relative">
       <!-- Loading state -->
-      <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center bg-gray-800/50">
+      <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center bg-autobot-bg-secondary/50">
         <div class="flex flex-col items-center gap-3">
           <div class="animate-spin">
             <i class="bi bi-hourglass text-2xl text-blue-400" />
           </div>
-          <div class="text-sm text-gray-400">{{ $t('secrets.vault.loading') }}</div>
+          <div class="text-sm text-autobot-text-muted">{{ $t('secrets.vault.loading') }}</div>
         </div>
       </div>
 
       <!-- Empty state -->
       <div
         v-else-if="allSecrets.length === 0"
-        class="absolute inset-0 flex flex-col items-center justify-center text-gray-500"
+        class="absolute inset-0 flex flex-col items-center justify-center text-autobot-text-muted"
       >
         <i class="bi bi-shield-lock text-4xl mb-3" />
         <div class="text-sm font-medium mb-1">{{ $t('secrets.vault.noSecrets') }}</div>
-        <div class="text-xs text-gray-600">
+        <div class="text-xs text-autobot-text-secondary">
           {{ searchQuery ? $t('secrets.vault.noSecretsSearch') : $t('secrets.vault.noSecretsHint') }}
         </div>
       </div>
@@ -335,17 +335,17 @@ onMounted(() => {
           <div
             v-for="virtualItem in visibleItems"
             :key="virtualItem.data.id"
-            class="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition-colors border border-gray-600"
+            class="bg-autobot-bg-secondary/50 rounded-lg p-4 hover:bg-autobot-bg-hover transition-colors border border-autobot-border-strong"
             :style="{ transform: `translateY(${virtualItem.offset}px)` }"
           >
           <!-- Header -->
           <div class="flex items-start justify-between mb-3">
             <div class="flex items-start gap-3 flex-1 min-w-0">
-              <div class="w-10 h-10 rounded-lg bg-gray-600 flex items-center justify-center text-lg flex-shrink-0">
-                <i :class="`bi bi-${getTypeIcon(virtualItem.data.type)}`" class="text-gray-300" />
+              <div class="w-10 h-10 rounded-lg bg-autobot-bg-tertiary flex items-center justify-center text-lg flex-shrink-0">
+                <i :class="`bi bi-${getTypeIcon(virtualItem.data.type)}`" class="text-autobot-text-muted" />
               </div>
               <div class="flex-1 min-w-0">
-                <h4 class="text-sm font-medium text-gray-200 truncate">
+                <h4 class="text-sm font-medium text-autobot-text-primary truncate">
                   {{ virtualItem.data.name }}
                 </h4>
                 <div class="flex items-center gap-2 mt-1 flex-wrap">
@@ -357,7 +357,7 @@ onMounted(() => {
                   >
                     {{ getScopeBadge(virtualItem.data.scope).label }}
                   </span>
-                  <span class="text-xs text-gray-500">
+                  <span class="text-xs text-autobot-text-muted">
                     {{ virtualItem.data.type }}
                   </span>
                 </div>
@@ -372,10 +372,10 @@ onMounted(() => {
                 :type="revealedSecrets.has(virtualItem.data.id) ? 'text' : 'password'"
                 :value="virtualItem.data.value || '••••••••'"
                 readonly
-                class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-xs text-gray-300 font-mono"
+                class="w-full px-3 py-2 bg-autobot-bg-secondary border border-autobot-border-strong rounded text-xs text-autobot-text-muted font-mono"
               >
               <button
-                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-autobot-text-muted hover:text-autobot-text-primary transition-colors"
                 :aria-label="revealedSecrets.has(virtualItem.data.id) ? $t('secrets.vault.hideSecret') : $t('secrets.vault.revealSecret')"
                 @click="toggleReveal(virtualItem.data.id)"
               >
@@ -385,7 +385,7 @@ onMounted(() => {
           </div>
 
           <!-- Metadata -->
-          <div class="flex items-center gap-4 text-xs text-gray-500 mb-3">
+          <div class="flex items-center gap-4 text-xs text-autobot-text-muted mb-3">
             <span v-if="virtualItem.data.created_at">
               <i class="bi bi-calendar mr-1" />
               {{ $t('secrets.vault.created', { date: formatDate(virtualItem.data.created_at) }) }}
@@ -397,14 +397,14 @@ onMounted(() => {
           </div>
 
           <!-- Description if available -->
-          <div v-if="virtualItem.data.description" class="text-xs text-gray-400 mb-3">
+          <div v-if="virtualItem.data.description" class="text-xs text-autobot-text-muted mb-3">
             {{ virtualItem.data.description }}
           </div>
 
           <!-- Actions -->
           <div class="flex items-center gap-2 flex-wrap">
             <button
-              class="px-3 py-1.5 text-xs rounded bg-gray-600 hover:bg-gray-500 text-gray-200 transition-colors flex items-center gap-1 disabled:opacity-50"
+              class="px-3 py-1.5 text-xs rounded bg-autobot-bg-tertiary hover:bg-autobot-bg-hover text-autobot-text-primary transition-colors flex items-center gap-1 disabled:opacity-50"
               :aria-label="$t('secrets.vault.copyAriaLabel')"
               :disabled="isLoading"
               @click="copySecret(virtualItem.data)"

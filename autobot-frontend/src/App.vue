@@ -19,8 +19,8 @@
               :title="getSystemStatusTooltip()"
               :aria-label="getSystemStatusAriaLabel()"
             >
-              <div class="relative w-8 h-8 bg-white rounded flex items-center justify-center">
-                <span class="text-slate-800 font-bold text-sm font-mono">AB</span>
+              <div class="relative w-8 h-8 bg-autobot-bg-card rounded flex items-center justify-center">
+                <span class="text-autobot-text-primary font-bold text-sm font-mono">AB</span>
                 <!-- System status indicator dot -->
                 <div
                   :class="{

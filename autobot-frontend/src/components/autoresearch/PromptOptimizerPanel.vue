@@ -42,20 +42,20 @@ function submitScore(variantId: string) {
     <!-- Start/Cancel controls -->
     <div v-if="!session" class="mb-4 flex items-end gap-3">
       <div>
-        <label class="mb-1 block text-xs text-neutral-500">Target Agent</label>
+        <label class="mb-1 block text-xs text-autobot-text-muted">Target Agent</label>
         <input
           v-model="agentName"
-          class="rounded-md border px-3 py-1.5 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+          class="rounded-md border px-3 py-1.5 text-sm"
         />
       </div>
       <div>
-        <label class="mb-1 block text-xs text-neutral-500">Max Rounds</label>
+        <label class="mb-1 block text-xs text-autobot-text-muted">Max Rounds</label>
         <input
           v-model.number="maxRounds"
           type="number"
           min="1"
           max="10"
-          class="w-20 rounded-md border px-3 py-1.5 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+          class="w-20 rounded-md border px-3 py-1.5 text-sm"
         />
       </div>
       <button
@@ -71,7 +71,7 @@ function submitScore(variantId: string) {
         <span class="text-sm">
           Status: <span class="font-medium capitalize">{{ session.status }}</span>
         </span>
-        <span class="text-sm text-neutral-500">
+        <span class="text-sm text-autobot-text-muted">
           Round {{ session.rounds_completed }}/{{ session.max_rounds }}
         </span>
         <button
@@ -92,13 +92,13 @@ function submitScore(variantId: string) {
       <div
         v-for="variant in variants"
         :key="variant.id"
-        class="rounded-md border p-3 text-sm dark:border-neutral-700"
+        class="rounded-md border p-3 text-sm"
       >
         <div class="mb-1 flex items-center justify-between">
-          <span class="font-mono text-xs text-neutral-500">{{ variant.id.slice(0, 8) }}</span>
+          <span class="font-mono text-xs text-autobot-text-muted">{{ variant.id.slice(0, 8) }}</span>
           <span class="font-medium">Score: {{ variant.final_score.toFixed(3) }}</span>
         </div>
-        <p class="mb-2 text-neutral-600 dark:text-neutral-400">
+        <p class="mb-2 text-autobot-text-secondary">
           {{ variant.prompt_text.slice(0, 200) }}{{ variant.prompt_text.length > 200 ? '...' : '' }}
         </p>
 
@@ -109,12 +109,12 @@ function submitScore(variantId: string) {
             type="number"
             min="0"
             max="10"
-            class="w-16 rounded border px-2 py-1 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+            class="w-16 rounded border px-2 py-1 text-sm"
           />
           <input
             v-model="reviewComment"
             placeholder="Comment..."
-            class="flex-1 rounded border px-2 py-1 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+            class="flex-1 rounded border px-2 py-1 text-sm"
           />
           <button
             class="rounded bg-green-600 px-3 py-1 text-sm text-white"

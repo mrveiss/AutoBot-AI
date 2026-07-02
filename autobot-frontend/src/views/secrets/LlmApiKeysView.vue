@@ -1,7 +1,7 @@
 <template>
   <div class="p-6 max-w-7xl mx-auto">
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+      <h1 class="text-2xl font-bold text-autobot-text-primary">
         {{ t('llmKeys.title') }}
       </h1>
       <button
@@ -24,16 +24,16 @@
         {{ t('llmKeys.rawKeyWarning') }}
       </p>
       <div class="flex items-center gap-2">
-        <code class="flex-1 text-sm font-mono bg-white dark:bg-gray-800 px-2 py-1 rounded border">{{ newRawKey }}</code>
+        <code class="flex-1 text-sm font-mono bg-autobot-bg-card px-2 py-1 rounded border">{{ newRawKey }}</code>
         <button class="btn-secondary text-xs" @click="copyRawKey">{{ t('common.copy') }}</button>
       </div>
       <button class="mt-2 text-xs text-yellow-600 underline" @click="newRawKey = ''">{{ t('common.dismiss') }}</button>
     </div>
 
     <!-- Keys table -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-x-auto">
+    <div class="bg-autobot-bg-card rounded-lg shadow overflow-x-auto">
       <table class="w-full text-sm">
-        <thead class="bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 uppercase text-xs">
+        <thead class="bg-autobot-bg-surface text-autobot-text-muted uppercase text-xs">
           <tr>
             <th class="px-4 py-3 text-left">{{ t('llmKeys.col.prefix') }}</th>
             <th class="px-4 py-3 text-left">{{ t('llmKeys.col.team') }}</th>
@@ -46,21 +46,21 @@
             <th class="px-4 py-3 text-left">{{ t('common.actions') }}</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+        <tbody class="divide-y divide-autobot-border">
           <tr v-if="loading">
-            <td colspan="9" class="px-4 py-8 text-center text-gray-400">{{ t('common.loading') }}</td>
+            <td colspan="9" class="px-4 py-8 text-center text-autobot-text-muted">{{ t('common.loading') }}</td>
           </tr>
           <tr v-else-if="keys.length === 0">
-            <td colspan="9" class="px-4 py-8 text-center text-gray-400">{{ t('llmKeys.empty') }}</td>
+            <td colspan="9" class="px-4 py-8 text-center text-autobot-text-muted">{{ t('llmKeys.empty') }}</td>
           </tr>
           <tr
             v-for="key in keys"
             :key="key.key_id"
-            class="hover:bg-gray-50 dark:hover:bg-gray-750"
+            class="hover:bg-autobot-bg-hover"
           >
             <td class="px-4 py-3 font-mono text-xs">{{ key.key_prefix }}</td>
             <td class="px-4 py-3">{{ key.team_id }}</td>
-            <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ key.label || '—' }}</td>
+            <td class="px-4 py-3 text-autobot-text-secondary">{{ key.label || '—' }}</td>
             <td class="px-4 py-3 text-right">
               {{ key.monthly_budget_usd > 0 ? '$' + key.monthly_budget_usd.toFixed(2) : t('llmKeys.unlimited') }}
             </td>
@@ -82,7 +82,7 @@
                 {{ key.revoked ? t('llmKeys.status.revoked') : t('llmKeys.status.active') }}
               </span>
             </td>
-            <td class="px-4 py-3 text-xs text-gray-500">
+            <td class="px-4 py-3 text-xs text-autobot-text-muted">
               {{ key.expires_at ? new Date(key.expires_at * 1000).toLocaleDateString() : '—' }}
             </td>
             <td class="px-4 py-3">
@@ -125,12 +125,12 @@
             <div>
               <label class="form-label">{{ t('llmKeys.form.budget') }}</label>
               <input v-model.number="form.monthly_budget_usd" type="number" step="0.01" min="0" class="form-input" />
-              <p class="text-xs text-gray-500 mt-1">{{ t('llmKeys.form.budgetHint') }}</p>
+              <p class="text-xs text-autobot-text-muted mt-1">{{ t('llmKeys.form.budgetHint') }}</p>
             </div>
             <div>
               <label class="form-label">{{ t('llmKeys.form.models') }}</label>
               <input v-model="form.allowed_models_raw" class="form-input" placeholder='["gpt-4", "claude-*"]' />
-              <p class="text-xs text-gray-500 mt-1">{{ t('llmKeys.form.modelsHint') }}</p>
+              <p class="text-xs text-autobot-text-muted mt-1">{{ t('llmKeys.form.modelsHint') }}</p>
             </div>
             <div>
               <label class="form-label">{{ t('llmKeys.form.expiresAt') }}</label>
@@ -153,7 +153,7 @@
     <div v-if="revokeKeyId" class="modal-overlay" @click.self="revokeKeyId = ''">
       <div class="modal-content w-full max-w-sm">
         <h2 class="text-lg font-semibold mb-2">{{ t('llmKeys.revokeConfirm.title') }}</h2>
-        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+        <p class="text-sm text-autobot-text-secondary mb-4">
           {{ t('llmKeys.revokeConfirm.body', { id: revokeKeyId }) }}
         </p>
         <div class="flex justify-end gap-3">
@@ -203,7 +203,7 @@ const form = reactive({
 })
 
 function spendClass(key: KeyRow): string {
-  if (key.monthly_budget_usd <= 0) return 'text-gray-700 dark:text-gray-300'
+  if (key.monthly_budget_usd <= 0) return 'text-autobot-text-secondary'
   const ratio = key.spend_usd_this_month / key.monthly_budget_usd
   if (ratio >= 0.9) return 'text-red-600 font-semibold'
   if (ratio >= 0.7) return 'text-yellow-600 font-semibold'

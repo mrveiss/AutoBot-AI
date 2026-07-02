@@ -26,12 +26,12 @@ const { t } = useI18n()
 const levelBadgeClass = (level?: string) => {
   if (level === 'company') return 'bg-purple-100 text-purple-700'
   if (level === 'team') return 'bg-blue-100 text-blue-700'
-  return 'bg-gray-100 text-gray-600'
+  return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
 }
 
 const statusBadgeClass = (status: string) => {
   if (status === 'active') return 'bg-green-100 text-green-700'
-  if (status === 'done') return 'bg-gray-100 text-gray-500'
+  if (status === 'done') return 'bg-autobot-bg-tertiary text-autobot-text-muted'
   if (status === 'paused') return 'bg-yellow-100 text-yellow-700'
   return 'bg-red-100 text-red-600'
 }
@@ -43,13 +43,13 @@ const statusBadgeClass = (status: string) => {
       class="flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer transition-colors"
       :class="selectedId === goal.id
         ? 'bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700'
-        : 'hover:bg-gray-50 dark:hover:bg-gray-800'"
+        : 'hover:bg-autobot-bg-hover'"
       :style="{ paddingLeft: `${(depth ?? 0) * 20 + 12}px` }"
       @click="emit('select', goal)"
     >
       <button
         v-if="goal.children.length > 0"
-        class="w-4 h-4 flex items-center justify-center text-gray-400 hover:text-gray-600 flex-shrink-0"
+        class="w-4 h-4 flex items-center justify-center text-autobot-text-muted hover:text-autobot-text-secondary flex-shrink-0"
         @click.stop="emit('toggle', goal)"
       >
         <svg class="w-3 h-3 transition-transform" :class="goal.expanded ? 'rotate-90' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -61,8 +61,8 @@ const statusBadgeClass = (status: string) => {
       <span class="text-xs font-semibold px-1.5 py-0.5 rounded" :class="levelBadgeClass(goal.level)">
         {{ goal.level }}
       </span>
-      <span class="flex-1 text-sm font-medium text-gray-900 dark:text-gray-100">{{ goal.title }}</span>
-      <span v-if="goal.owner" class="text-xs text-gray-400">{{ goal.owner }}</span>
+      <span class="flex-1 text-sm font-medium text-autobot-text-primary">{{ goal.title }}</span>
+      <span v-if="goal.owner" class="text-xs text-autobot-text-muted">{{ goal.owner }}</span>
       <span class="text-xs px-1.5 py-0.5 rounded" :class="statusBadgeClass(goal.status)">
         {{ goal.status }}
       </span>

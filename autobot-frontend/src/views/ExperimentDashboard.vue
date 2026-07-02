@@ -69,28 +69,28 @@ async function handleReject(sessionId: string, experimentId: string) {
 
     <!-- Stats Header -->
     <div v-if="stats" class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      <div class="rounded-lg border p-4 dark:border-neutral-700">
+      <div class="rounded-lg border p-4">
         <div class="text-2xl font-bold">{{ stats.total_experiments }}</div>
-        <div class="text-sm text-neutral-500">Total Experiments</div>
+        <div class="text-sm text-autobot-text-muted">Total Experiments</div>
       </div>
-      <div class="rounded-lg border p-4 dark:border-neutral-700">
+      <div class="rounded-lg border p-4">
         <div class="text-2xl font-bold text-emerald-600">{{ stats.kept }}</div>
-        <div class="text-sm text-neutral-500">Kept</div>
+        <div class="text-sm text-autobot-text-muted">Kept</div>
       </div>
-      <div class="rounded-lg border p-4 dark:border-neutral-700">
+      <div class="rounded-lg border p-4">
         <div class="text-2xl font-bold text-orange-600">{{ stats.discarded }}</div>
-        <div class="text-sm text-neutral-500">Discarded</div>
+        <div class="text-sm text-autobot-text-muted">Discarded</div>
       </div>
-      <div class="rounded-lg border p-4 dark:border-neutral-700">
+      <div class="rounded-lg border p-4">
         <div class="text-2xl font-bold font-mono">
           {{ stats.best_val_bpb?.toFixed(4) ?? '---' }}
         </div>
-        <div class="text-sm text-neutral-500">Best val_bpb</div>
+        <div class="text-sm text-autobot-text-muted">Best val_bpb</div>
       </div>
     </div>
 
     <!-- Loading indicator -->
-    <div v-if="loading" class="py-4 text-center text-neutral-500">
+    <div v-if="loading" class="py-4 text-center text-autobot-text-muted">
       Loading experiments...
     </div>
 
