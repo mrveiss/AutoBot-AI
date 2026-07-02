@@ -145,6 +145,7 @@ all:
         # NPU Worker-specific configuration
         npu_worker_port: 8081
         openvino_device: "AUTO"  # Auto-detect NPU > GPU > CPU
+        # Python 3.11 pinned: OpenVINO/NPU runtime has no 3.14 wheels (do not bump with the rest of the fleet)
         python_version: "3.11"
         worker_threads: 2
         inference_optimization: true

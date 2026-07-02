@@ -318,6 +318,7 @@
   become: true
 
   tasks:
+    # Python 3.11 pinned: OpenVINO/NPU runtime has no 3.14 wheels (do not bump with the rest of the fleet)
     - name: Install Python dependencies for NPU Worker
       apt:
         name:
