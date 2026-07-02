@@ -13,3 +13,10 @@
 
 export { default as BaseButton } from './src/components/BaseButton.vue'
 export type { ButtonVariant, ButtonSize } from './src/components/BaseButton.vue'
+
+export { default as BaseBadge } from './src/components/BaseBadge.vue'
+export type { BadgeVariant, BadgeSize } from './src/components/BaseBadge.vue'
+
+export { default as BaseCard } from './src/components/BaseCard.vue'
+
+export { default as EmptyState } from './src/components/EmptyState.vue'
