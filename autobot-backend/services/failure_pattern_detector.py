@@ -243,7 +243,9 @@ class FailurePatternDetector(AsyncRedisClientMixin):
         try:
             redis = await self._get_redis()
 
-            pattern_hashes = await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT) or set()
+            pattern_hashes = (
+                await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT) or set()
+            )
 
             if not pattern_hashes:
                 return {
@@ -302,7 +304,9 @@ class FailurePatternDetector(AsyncRedisClientMixin):
         """
         try:
             redis = await self._get_redis()
-            pattern_hashes = await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT) or set()
+            pattern_hashes = (
+                await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT) or set()
+            )
 
             patterns: List[FailurePattern] = []
 
@@ -327,7 +331,9 @@ class FailurePatternDetector(AsyncRedisClientMixin):
         """Clear all learned patterns (for testing or reset)."""
         try:
             redis = await self._get_redis()
-            pattern_hashes = await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT) or set()
+            pattern_hashes = (
+                await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT) or set()
+            )
 
             for pattern_hash in pattern_hashes:
                 pattern_key = f"{PATTERN_KEY_PREFIX}{pattern_hash}"
