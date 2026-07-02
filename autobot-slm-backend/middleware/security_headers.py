@@ -78,10 +78,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                     request.method,
                     request.url.path,
                 )
-                return JSONResponse(
+                rejection = JSONResponse(
                     status_code=401,
                     content={"detail": "Authorization header required"},
                 )
+                _add_security_headers(rejection)
+                return rejection
 
         response = await call_next(request)
         _add_security_headers(response)
