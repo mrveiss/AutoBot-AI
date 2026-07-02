@@ -108,7 +108,7 @@ async def _write_audit(
     """Append an audit row for this rotation event (best-effort).
 
     Reuses the canonical ``create_audit_log`` helper so the row matches the
-    ``audit_logs`` schema (``log_id``/``user_id``/``extra_data`` — there is no
+    ``slm_node_audit_logs`` schema (``log_id``/``user_id``/``extra_data`` — there is no
     ``actor_id``/``details`` column). A failure here never aborts the rotation.
     """
     try:
