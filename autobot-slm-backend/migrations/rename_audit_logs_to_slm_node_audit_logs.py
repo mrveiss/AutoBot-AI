@@ -84,8 +84,7 @@ def migrate(db_url: str) -> None:
             old_pk = _audit_pk_type(cur, _OLD_NAME)
             if old_pk is None:
                 logger.info(
-                    "Table '%s' not found on this database — skipping rename "
-                    "(fresh install or already migrated)",
+                    "Table '%s' not found on this database — skipping rename " "(fresh install or already migrated)",
                     _OLD_NAME,
                 )
                 return
@@ -111,12 +110,8 @@ def migrate(db_url: str) -> None:
                 (f"{_OLD_NAME}_id_seq",),
             )
             if cur.fetchone():
-                cur.execute(
-                    f"ALTER SEQUENCE {_OLD_NAME}_id_seq RENAME TO {_NEW_NAME}_id_seq"
-                )
-                logger.info(
-                    "Renamed sequence '%s_id_seq' -> '%s_id_seq'", _OLD_NAME, _NEW_NAME
-                )
+                cur.execute(f"ALTER SEQUENCE {_OLD_NAME}_id_seq RENAME TO {_NEW_NAME}_id_seq")
+                logger.info("Renamed sequence '%s_id_seq' -> '%s_id_seq'", _OLD_NAME, _NEW_NAME)
 
         conn.commit()
         logger.info("Migration rename_audit_logs_to_slm_node_audit_logs completed")
@@ -136,16 +131,13 @@ def downgrade(db_url: str) -> None:
         with conn.cursor() as cur:
             new_pk = _audit_pk_type(cur, _NEW_NAME)
             if new_pk is None:
-                logger.info(
-                    "Table '%s' not found — nothing to downgrade", _NEW_NAME
-                )
+                logger.info("Table '%s' not found — nothing to downgrade", _NEW_NAME)
                 return
 
             old_pk = _audit_pk_type(cur, _OLD_NAME)
             if old_pk is not None:
                 logger.warning(
-                    "Table '%s' already exists — refusing to downgrade to avoid "
-                    "clobbering it",
+                    "Table '%s' already exists — refusing to downgrade to avoid " "clobbering it",
                     _OLD_NAME,
                 )
                 return
@@ -161,12 +153,8 @@ def downgrade(db_url: str) -> None:
                 (f"{_NEW_NAME}_id_seq",),
             )
             if cur.fetchone():
-                cur.execute(
-                    f"ALTER SEQUENCE {_NEW_NAME}_id_seq RENAME TO {_OLD_NAME}_id_seq"
-                )
-                logger.info(
-                    "Renamed sequence '%s_id_seq' -> '%s_id_seq'", _NEW_NAME, _OLD_NAME
-                )
+                cur.execute(f"ALTER SEQUENCE {_NEW_NAME}_id_seq RENAME TO {_OLD_NAME}_id_seq")
+                logger.info("Renamed sequence '%s_id_seq' -> '%s_id_seq'", _NEW_NAME, _OLD_NAME)
 
         conn.commit()
         logger.info("Downgrade rename_audit_logs_to_slm_node_audit_logs completed")
