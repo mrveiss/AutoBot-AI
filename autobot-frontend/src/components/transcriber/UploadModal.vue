@@ -5,6 +5,7 @@ import { ref } from 'vue'
 import { useTranscriberApi } from '@/composables/transcriber/useTranscriberApi'
 import type { Recording } from '@/composables/transcriber/useTranscriberApi'
 import { createLogger } from '@/utils/debugUtils'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 const logger = createLogger('UploadModal')
 const props = defineProps<{ projectId: number; open: boolean }>()
@@ -39,37 +40,35 @@ async function upload() {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="modal-overlay" @click.self="emit('close')">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>Upload Recording</h3>
-          <button class="btn-icon" @click="emit('close')">✕</button>
-        </div>
-        <div
-          class="drop-zone"
-          :class="{ 'drop-zone-active': dragover }"
-          @dragover.prevent="dragover = true"
-          @dragleave="dragover = false"
-          @drop.prevent="onDrop"
-          @click="($refs.fileInput as HTMLInputElement).click()"
-        >
-          <input
-            ref="fileInput"
-            type="file"
-            :accept="ACCEPT"
-            class="hidden"
-            @change="file = ($event.target as HTMLInputElement).files?.[0] ?? null"
-          />
-          <span v-if="file">{{ file.name }}</span>
-          <span v-else>Drag audio file here or click to browse</span>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-primary" @click="upload" :disabled="!file || uploading">
-            {{ uploading ? 'Uploading…' : 'Upload & Process' }}
-          </button>
-        </div>
-      </div>
+  <BaseModal
+    :model-value="open"
+    title="Upload Recording"
+    size="sm"
+    @close="emit('close')"
+  >
+    <div
+      class="drop-zone"
+      :class="{ 'drop-zone-active': dragover }"
+      @dragover.prevent="dragover = true"
+      @dragleave="dragover = false"
+      @drop.prevent="onDrop"
+      @click="($refs.fileInput as HTMLInputElement).click()"
+    >
+      <input
+        ref="fileInput"
+        type="file"
+        :accept="ACCEPT"
+        class="hidden"
+        @change="file = ($event.target as HTMLInputElement).files?.[0] ?? null"
+      />
+      <span v-if="file">{{ file.name }}</span>
+      <span v-else>Drag audio file here or click to browse</span>
     </div>
-  </Teleport>
+
+    <template #actions>
+      <button class="btn btn-primary" @click="upload" :disabled="!file || uploading">
+        {{ uploading ? 'Uploading…' : 'Upload & Process' }}
+      </button>
+    </template>
+  </BaseModal>
 </template>

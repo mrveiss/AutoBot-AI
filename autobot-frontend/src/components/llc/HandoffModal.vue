@@ -7,52 +7,53 @@
     to_human → POST /work-items/{id}/handoff/to-human  (FR-HYBRID-05/02)
 -->
 <template>
-  <div class="handoff-overlay" @click.self="emit('close')">
-    <div class="handoff-modal" role="dialog" aria-modal="true">
-      <h3 class="handoff-title">
-        {{ direction === 'to_agent' ? $t('nav.llcHandoffToAgent') : $t('nav.llcHandoffToHuman') }}
-      </h3>
+  <BaseModal
+    :model-value="true"
+    :title="modalTitle"
+    size="sm"
+    @close="emit('close')"
+  >
+    <label class="handoff-label">
+      {{ direction === 'to_agent' ? $t('nav.llcSelectAgent') : $t('nav.llcSelectReviewer') }}
+      <select v-model="targetId" class="handoff-select">
+        <option value="" disabled>—</option>
+        <template v-if="direction === 'to_agent'">
+          <option v-for="a in people.agents.value" :key="a.id" :value="a.id">{{ a.name }}</option>
+        </template>
+        <template v-else>
+          <option v-for="h in people.humans.value" :key="h.user_id" :value="h.user_id">
+            {{ h.name }} ({{ h.role }})
+          </option>
+        </template>
+      </select>
+    </label>
 
-      <label class="handoff-label">
-        {{ direction === 'to_agent' ? $t('nav.llcSelectAgent') : $t('nav.llcSelectReviewer') }}
-        <select v-model="targetId" class="handoff-select">
-          <option value="" disabled>—</option>
-          <template v-if="direction === 'to_agent'">
-            <option v-for="a in people.agents.value" :key="a.id" :value="a.id">{{ a.name }}</option>
-          </template>
-          <template v-else>
-            <option v-for="h in people.humans.value" :key="h.user_id" :value="h.user_id">
-              {{ h.name }} ({{ h.role }})
-            </option>
-          </template>
-        </select>
-      </label>
+    <label class="handoff-label">
+      {{ $t('nav.llcHandoffNotes') }}
+      <textarea v-model="notes" class="handoff-notes" rows="4" :placeholder="$t('nav.llcHandoffNotesPlaceholder')" />
+    </label>
 
-      <label class="handoff-label">
-        {{ $t('nav.llcHandoffNotes') }}
-        <textarea v-model="notes" class="handoff-notes" rows="4" :placeholder="$t('nav.llcHandoffNotesPlaceholder')" />
-      </label>
+    <p v-if="error" class="handoff-error">{{ error }}</p>
 
-      <p v-if="error" class="handoff-error">{{ error }}</p>
-
-      <div class="handoff-actions">
-        <button class="handoff-cancel" :disabled="isSubmitting" @click="emit('close')">
-          {{ $t('common.cancel') }}
-        </button>
-        <button class="handoff-confirm" :disabled="!targetId || isSubmitting" @click="submit">
-          {{ isSubmitting ? $t('common.loading') : $t('nav.llcHandoffConfirm') }}
-        </button>
-      </div>
-    </div>
-  </div>
+    <template #actions>
+      <button class="handoff-cancel" :disabled="isSubmitting" @click="emit('close')">
+        {{ $t('common.cancel') }}
+      </button>
+      <button class="handoff-confirm" :disabled="!targetId || isSubmitting" @click="submit">
+        {{ isSubmitting ? $t('common.loading') : $t('nav.llcHandoffConfirm') }}
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
 import { useCompanyPeople } from '@/composables/llc/useCompanyPeople'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 const props = defineProps<{
   workItemId: string
@@ -64,6 +65,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{ close: []; done: [] }>()
 
+const { t } = useI18n()
 const api = useApiClient()
 const userStore = useUserStore()
 const logger = createLogger('HandoffModal')
@@ -73,6 +75,10 @@ const targetId = ref('')
 const notes = ref('')
 const isSubmitting = ref(false)
 const error = ref<string | null>(null)
+
+const modalTitle = computed(() =>
+  props.direction === 'to_agent' ? t('nav.llcHandoffToAgent') : t('nav.llcHandoffToHuman')
+)
 
 onMounted(() => void people.load())
 
@@ -108,36 +114,13 @@ async function submit(): Promise<void> {
 </script>
 
 <style scoped>
-.handoff-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-}
-.handoff-modal {
-  width: min(28rem, 92vw);
-  background: var(--bg-surface, #fff);
-  border-radius: var(--radius-lg, 12px);
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
-}
-.handoff-title {
-  font-size: 1.0625rem;
-  font-weight: 600;
-  color: var(--text-primary, #111827);
-  margin: 0;
-}
 .handoff-label {
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
   font-size: 0.8125rem;
   color: var(--text-secondary, #6b7280);
+  margin-bottom: 0.875rem;
 }
 .handoff-select,
 .handoff-notes {
@@ -152,11 +135,6 @@ async function submit(): Promise<void> {
   font-size: 0.8125rem;
   color: var(--color-error, #cb3326);
   margin: 0;
-}
-.handoff-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
 }
 .handoff-cancel,
 .handoff-confirm {

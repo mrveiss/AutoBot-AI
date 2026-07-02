@@ -4,70 +4,62 @@
 <!-- Issue #566 - Code Intelligence Dashboard -->
 
 <template>
-  <Teleport to="body">
-    <div v-if="show" class="modal-overlay" @click.self="$emit('close')">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>{{ $t('analytics.findings.fileScan.title') }}</h3>
-          <button class="close-btn" @click="$emit('close')">
-            <Icon name="times" />
-          </button>
-        </div>
+  <BaseModal
+    :model-value="show"
+    :title="$t('analytics.findings.fileScan.title')"
+    size="sm"
+    @close="$emit('close')"
+  >
+    <div class="form-group">
+      <label>{{ $t('analytics.findings.fileScan.filePathLabel') }}</label>
+      <input
+        v-model="filePath"
+        type="text"
+        :placeholder="$t('analytics.findings.fileScan.filePathPlaceholder')"
+        class="file-input"
+        :class="{ error: pathError }"
+      />
+      <span v-if="pathError" class="error-text">{{ pathError }}</span>
+    </div>
 
-        <div class="modal-body">
-          <div class="form-group">
-            <label>{{ $t('analytics.findings.fileScan.filePathLabel') }}</label>
-            <input
-              v-model="filePath"
-              type="text"
-              :placeholder="$t('analytics.findings.fileScan.filePathPlaceholder')"
-              class="file-input"
-              :class="{ error: pathError }"
-            />
-            <span v-if="pathError" class="error-text">{{ pathError }}</span>
-          </div>
-
-          <div class="form-group">
-            <label>{{ $t('analytics.findings.fileScan.scanTypesLabel') }}</label>
-            <div class="checkbox-group">
-              <label class="checkbox-label">
-                <input type="checkbox" v-model="scanTypes.security" />
-                <span>{{ $t('analytics.findings.fileScan.security') }}</span>
-              </label>
-              <label class="checkbox-label">
-                <input type="checkbox" v-model="scanTypes.performance" />
-                <span>{{ $t('analytics.findings.fileScan.performance') }}</span>
-              </label>
-              <label class="checkbox-label">
-                <input type="checkbox" v-model="scanTypes.redis" />
-                <span>{{ $t('analytics.findings.fileScan.redis') }}</span>
-              </label>
-            </div>
-          </div>
-
-          <p class="note">{{ $t('analytics.findings.fileScan.pythonOnlyNote') }}</p>
-        </div>
-
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="$emit('close')">{{ $t('analytics.findings.fileScan.cancel') }}</button>
-          <button
-            class="btn-primary"
-            @click="handleScan"
-            :disabled="!canScan || scanning"
-          >
-            <span v-if="scanning" class="spinner-small"></span>
-            {{ scanning ? $t('analytics.findings.fileScan.scanning') : $t('analytics.findings.fileScan.scanFile') }}
-          </button>
-        </div>
+    <div class="form-group">
+      <label>{{ $t('analytics.findings.fileScan.scanTypesLabel') }}</label>
+      <div class="checkbox-group">
+        <label class="checkbox-label">
+          <input type="checkbox" v-model="scanTypes.security" />
+          <span>{{ $t('analytics.findings.fileScan.security') }}</span>
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" v-model="scanTypes.performance" />
+          <span>{{ $t('analytics.findings.fileScan.performance') }}</span>
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" v-model="scanTypes.redis" />
+          <span>{{ $t('analytics.findings.fileScan.redis') }}</span>
+        </label>
       </div>
     </div>
-  </Teleport>
+
+    <p class="note">{{ $t('analytics.findings.fileScan.pythonOnlyNote') }}</p>
+
+    <template #actions>
+      <button class="btn-secondary" @click="$emit('close')">{{ $t('analytics.findings.fileScan.cancel') }}</button>
+      <button
+        class="btn-primary"
+        @click="handleScan"
+        :disabled="!canScan || scanning"
+      >
+        <span v-if="scanning" class="spinner-small"></span>
+        {{ scanning ? $t('analytics.findings.fileScan.scanning') : $t('analytics.findings.fileScan.scanFile') }}
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
-import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 const { t } = useI18n()
 
@@ -109,56 +101,6 @@ async function handleScan() {
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-content {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 480px;
-  box-shadow: var(--shadow-xl);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-4);
-  border-bottom: 1px solid var(--border-primary);
-}
-
-.modal-header h3 {
-  margin: var(--spacing-0);
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: var(--spacing-1);
-}
-
-.close-btn:hover {
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: var(--spacing-4);
-}
-
 .form-group {
   margin-bottom: var(--spacing-4);
 }
@@ -207,14 +149,6 @@ async function handleScan() {
   color: var(--text-tertiary);
   font-size: var(--text-sm);
   margin: var(--spacing-0);
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-2);
-  padding: var(--spacing-4);
-  border-top: 1px solid var(--border-primary);
 }
 
 .btn-secondary {
