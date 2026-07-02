@@ -759,9 +759,15 @@ class PolicyStatus(str, enum.Enum):
 
 
 class AuditLog(Base):
-    """Audit log for tracking all user actions and system events."""
+    """SLM node/system audit log (integer-PK).
 
-    __tablename__ = "audit_logs"
+    Records SLM control-plane actions (node management, service control,
+    deployments, security events) on the main SLM database. Distinct from the
+    UUID/org-aware ``user_management.models.audit.AuditLog``, which owns the
+    ``audit_logs`` table on the ``slm_users`` database (#10764).
+    """
+
+    __tablename__ = "slm_node_audit_logs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     log_id = Column(String(64), unique=True, nullable=False, index=True)

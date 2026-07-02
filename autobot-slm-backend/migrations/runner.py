@@ -63,6 +63,9 @@ MIGRATIONS = [
     "add_failure_reason_to_fleet_sync_jobs",
     # Issue #5385: convert all TIMESTAMP columns to TIMESTAMPTZ (UTC-aware)
     "migrate_timestamps_to_timestamptz",
+    # Issue #10764: rename the integer-PK SLM node audit table off 'audit_logs'
+    # so the UUID/org-aware user_management model is the sole owner of that name.
+    "rename_audit_logs_to_slm_node_audit_logs",
 ]
 
 

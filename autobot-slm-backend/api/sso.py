@@ -133,7 +133,7 @@ async def get_providers_health(
 ) -> list[SSOProviderHealthResponse]:
     """Return per-provider health summary (failed-auth counts + last-success).
 
-    Aggregates audit_logs rows with category='sso', action='login' over the
+    Aggregates slm_node_audit_logs rows with category='sso', action='login' over the
     past SSO_HEALTH_WINDOW_DAYS days. Guarded by SECURITY_MANAGE permission.
     """
     context = TenantContext(is_platform_admin=True)
