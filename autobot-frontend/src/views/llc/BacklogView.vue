@@ -5,22 +5,22 @@
   <div class="llc-backlog-view">
     <div class="backlog-header">
       <div class="header-left">
-        <h2 class="view-title">Backlog</h2>
-        <span class="item-count">{{ filteredItems.length }} items</span>
+        <h2 class="view-title">{{ t('llc.backlog.title') }}</h2>
+        <span class="item-count">{{ t('llc.backlog.itemCount', { count: filteredItems.length }) }}</span>
       </div>
       <div class="header-actions">
         <button class="btn-primary" @click="showCreateForm = true">
           <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
-          Create Work Item
+          {{ t('llc.backlog.createWorkItem') }}
         </button>
         <button
           v-if="selectedIds.size > 0"
           class="btn-secondary"
           @click="showBulkAssign = true"
         >
-          Assign Sprint ({{ selectedIds.size }})
+          {{ t('llc.backlog.assignSprint', { count: selectedIds.size }) }}
         </button>
       </div>
     </div>
@@ -28,22 +28,22 @@
     <!-- Filters -->
     <div class="backlog-filters">
       <select v-model="filters.type" class="filter-select">
-        <option value="">All Types</option>
-        <option v-for="t in WORK_ITEM_TYPES" :key="t.value" :value="t.value">{{ t.label }}</option>
+        <option value="">{{ t('llc.backlog.allTypes') }}</option>
+        <option v-for="wt in WORK_ITEM_TYPES" :key="wt.value" :value="wt.value">{{ wt.label }}</option>
       </select>
       <select v-model="filters.status" class="filter-select">
-        <option value="">All Statuses</option>
-        <option value="backlog">Backlog</option>
-        <option value="ready">Ready</option>
+        <option value="">{{ t('llc.backlog.allStatuses') }}</option>
+        <option value="backlog">{{ t('llc.backlog.statusBacklog') }}</option>
+        <option value="ready">{{ t('llc.backlog.statusReady') }}</option>
       </select>
       <select v-model="filters.priority" class="filter-select">
-        <option value="">All Priorities</option>
+        <option value="">{{ t('llc.backlog.allPriorities') }}</option>
         <option v-for="p in PRIORITIES" :key="p.value" :value="p.value">{{ p.label }}</option>
       </select>
       <input
         v-model="filters.search"
         class="filter-search"
-        placeholder="Search work items..."
+        :placeholder="t('llc.backlog.searchPlaceholder')"
         type="text"
       />
     </div>
@@ -61,13 +61,13 @@
                 @change="toggleSelectAll"
               />
             </th>
-            <th class="col-id">ID</th>
-            <th class="col-type">Type</th>
-            <th class="col-title">Title</th>
-            <th class="col-priority">Priority</th>
-            <th class="col-points">Points</th>
-            <th class="col-assignee">Assignee</th>
-            <th class="col-sprint">Sprint</th>
+            <th class="col-id">{{ t('llc.backlog.colId') }}</th>
+            <th class="col-type">{{ t('llc.backlog.colType') }}</th>
+            <th class="col-title">{{ t('llc.backlog.colTitle') }}</th>
+            <th class="col-priority">{{ t('llc.backlog.colPriority') }}</th>
+            <th class="col-points">{{ t('llc.backlog.colPoints') }}</th>
+            <th class="col-assignee">{{ t('llc.backlog.colAssignee') }}</th>
+            <th class="col-sprint">{{ t('llc.backlog.colSprint') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -109,15 +109,15 @@
               <span v-else class="assignee-empty">—</span>
             </td>
             <td class="col-sprint">
-              <span v-if="item.sprint_id" class="sprint-tag">Sprint {{ item.sprint_id.slice(0, 8) }}</span>
+              <span v-if="item.sprint_id" class="sprint-tag">{{ t('llc.backlog.sprintTag', { id: item.sprint_id.slice(0, 8) }) }}</span>
               <span v-else class="sprint-empty">—</span>
             </td>
           </tr>
           <tr v-if="filteredItems.length === 0 && !isLoading">
-            <td colspan="8" class="empty-state">No items match the current filters.</td>
+            <td colspan="8" class="empty-state">{{ t('llc.backlog.noMatch') }}</td>
           </tr>
           <tr v-if="isLoading">
-            <td colspan="8" class="loading-state">Loading...</td>
+            <td colspan="8" class="loading-state">{{ t('llc.backlog.loading') }}</td>
           </tr>
         </tbody>
       </table>
@@ -126,45 +126,45 @@
     <!-- AC Suggester create form -->
     <div v-if="showCreateForm" class="modal-overlay" @click.self="showCreateForm = false">
       <div class="modal-panel">
-        <h3>Create Work Item</h3>
+        <h3>{{ t('llc.backlog.createTitle') }}</h3>
         <div class="form-field">
-          <label>Title</label>
-          <input v-model="newItem.title" type="text" class="form-input" placeholder="Work item title" />
+          <label>{{ t('llc.backlog.fieldTitle') }}</label>
+          <input v-model="newItem.title" type="text" class="form-input" :placeholder="t('llc.backlog.titlePlaceholder')" />
         </div>
         <div class="form-row">
           <div class="form-field">
-            <label>Type</label>
+            <label>{{ t('llc.backlog.fieldType') }}</label>
             <select v-model="newItem.type" class="form-select">
-              <option v-for="t in WORK_ITEM_TYPES" :key="t.value" :value="t.value">{{ t.label }}</option>
+              <option v-for="wt in WORK_ITEM_TYPES" :key="wt.value" :value="wt.value">{{ wt.label }}</option>
             </select>
           </div>
           <div class="form-field">
-            <label>Priority</label>
+            <label>{{ t('llc.backlog.fieldPriority') }}</label>
             <select v-model="newItem.priority" class="form-select">
               <option v-for="p in PRIORITIES" :key="p.value" :value="p.value">{{ p.label }}</option>
             </select>
           </div>
           <div class="form-field">
-            <label>Story Points</label>
+            <label>{{ t('llc.backlog.fieldStoryPoints') }}</label>
             <input v-model.number="newItem.story_points" type="number" class="form-input" min="0" />
           </div>
         </div>
         <div class="form-field">
-          <label>Description</label>
+          <label>{{ t('llc.backlog.fieldDescription') }}</label>
           <textarea v-model="newItem.description" class="form-textarea" rows="4" />
         </div>
 
         <!-- AC Suggester -->
         <div class="ac-suggester">
           <div class="ac-header">
-            <label>Acceptance Criteria</label>
+            <label>{{ t('llc.backlog.acceptanceCriteria') }}</label>
             <button
               class="btn-suggest"
               :disabled="!newItem.title || isSuggestingAC"
               @click="suggestAC"
             >
-              <span v-if="isSuggestingAC">Suggesting...</span>
-              <span v-else>✨ Suggest ACs</span>
+              <span v-if="isSuggestingAC">{{ t('llc.backlog.suggesting') }}</span>
+              <span v-else>✨ {{ t('llc.backlog.suggestAcs') }}</span>
             </button>
           </div>
           <div v-if="suggestedACs.length > 0" class="suggested-acs">
@@ -180,9 +180,9 @@
         </div>
 
         <div class="modal-actions">
-          <button class="btn-secondary" @click="showCreateForm = false">Cancel</button>
+          <button class="btn-secondary" @click="showCreateForm = false">{{ t('common.cancel') }}</button>
           <button class="btn-primary" :disabled="!newItem.title || isCreating" @click="createItem">
-            {{ isCreating ? 'Creating...' : 'Create' }}
+            {{ isCreating ? t('llc.backlog.creating') : t('common.create') }}
           </button>
         </div>
       </div>
@@ -191,16 +191,16 @@
     <!-- Bulk sprint assign drawer -->
     <div v-if="showBulkAssign" class="modal-overlay" @click.self="showBulkAssign = false">
       <div class="modal-panel">
-        <h3>Assign to Sprint</h3>
-        <p>{{ selectedIds.size }} items selected</p>
+        <h3>{{ t('llc.backlog.assignToSprint') }}</h3>
+        <p>{{ t('llc.backlog.itemsSelected', { count: selectedIds.size }) }}</p>
         <div class="form-field">
-          <label>Sprint ID</label>
-          <input v-model="bulkSprintId" type="text" class="form-input" placeholder="Sprint UUID" />
+          <label>{{ t('llc.backlog.sprintId') }}</label>
+          <input v-model="bulkSprintId" type="text" class="form-input" :placeholder="t('llc.backlog.sprintIdPlaceholder')" />
         </div>
         <div class="modal-actions">
-          <button class="btn-secondary" @click="showBulkAssign = false">Cancel</button>
+          <button class="btn-secondary" @click="showBulkAssign = false">{{ t('common.cancel') }}</button>
           <button class="btn-primary" :disabled="!bulkSprintId || isBulkAssigning" @click="bulkAssign">
-            {{ isBulkAssigning ? 'Assigning...' : 'Assign' }}
+            {{ isBulkAssigning ? t('llc.backlog.assigning') : t('llc.backlog.assign') }}
           </button>
         </div>
       </div>
@@ -219,6 +219,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
@@ -226,6 +227,7 @@ import WorkItemDetail from './WorkItemDetail.vue'
 const logger = createLogger('BacklogView')
 const api = useApiClient()
 const route = useRoute()
+const { t } = useI18n()
 
 const companyId = computed(() => route.params.companyId as string)
 

@@ -4,6 +4,7 @@
 // Author: mrveiss
 
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
@@ -13,6 +14,7 @@ import type { Goal } from './GoalTreeNode.vue'
 
 const logger = createLogger('GoalTree')
 const api = useApiClient()
+const { t } = useI18n()
 const { resolveCompanyId } = useLlcCompanyContext()
 
 const goals = ref<Goal[]>([])
@@ -99,16 +101,16 @@ onMounted(fetchGoals)
 
 <template>
   <div class="p-4 max-w-5xl mx-auto">
-    <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Goal Tree</h1>
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">{{ t('llc.goals.title') }}</h1>
 
     <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm mb-4">
       {{ error }}
-      <button class="ml-4 underline" @click="fetchGoals">Retry</button>
+      <button class="ml-4 underline" @click="fetchGoals">{{ t('llc.goals.retry') }}</button>
     </div>
 
-    <div v-if="isLoading" class="text-center py-12 text-gray-500">Loading…</div>
+    <div v-if="isLoading" class="text-center py-12 text-gray-500">{{ t('llc.goals.loading') }}</div>
 
-    <div v-else-if="goals.length === 0 && !error" class="text-center py-12 text-gray-400">No goals found.</div>
+    <div v-else-if="goals.length === 0 && !error" class="text-center py-12 text-gray-400">{{ t('llc.goals.empty') }}</div>
 
     <div v-else class="space-y-1">
       <GoalTreeNode
@@ -130,14 +132,14 @@ onMounted(fetchGoals)
       >
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">
-            Linked items for: <span class="text-indigo-600">{{ selectedGoal.title }}</span>
+            {{ t('llc.goals.linkedItemsFor') }} <span class="text-indigo-600">{{ selectedGoal.title }}</span>
           </h2>
           <button class="text-gray-400 hover:text-gray-600 text-sm" @click="selectedGoal = null">✕</button>
         </div>
 
-        <div v-if="selectedGoal.loading_items" class="text-sm text-gray-400">Loading items…</div>
+        <div v-if="selectedGoal.loading_items" class="text-sm text-gray-400">{{ t('llc.goals.loadingItems') }}</div>
         <div v-else-if="!selectedGoal.linked_items || selectedGoal.linked_items.length === 0" class="text-sm text-gray-400">
-          No linked work items.
+          {{ t('llc.goals.noLinkedItems') }}
         </div>
         <ul v-else class="space-y-1">
           <li

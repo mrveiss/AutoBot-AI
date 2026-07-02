@@ -41,6 +41,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
@@ -50,6 +51,7 @@ import type { WorkItem } from './workItemTypes'
 
 const route = useRoute()
 const api = useApiClient()
+const { t } = useI18n()
 const userStore = useUserStore()
 const logger = createLogger('ReviewInboxView')
 
@@ -58,7 +60,10 @@ const items = ref<WorkItem[]>([])
 const loading = ref(false)
 const detailItem = ref<WorkItem | null>(null)
 
-const breadcrumb = computed<BreadcrumbItem[]>(() => [{ label: 'Company OS' }, { label: 'My Reviews' }])
+const breadcrumb = computed<BreadcrumbItem[]>(() => [
+  { label: t('llc.reviewInbox.breadcrumbCompanyOs') },
+  { label: t('llc.reviewInbox.breadcrumbMyReviews') },
+])
 
 async function load(): Promise<void> {
   const uid = userStore.currentUser?.id

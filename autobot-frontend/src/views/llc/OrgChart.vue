@@ -6,6 +6,7 @@
 import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useI18n } from 'vue-i18n'
 import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
 import OrgTreeNode from './OrgTreeNode.vue'
 import type { OrgNode } from './OrgTreeNode.vue'
@@ -13,6 +14,7 @@ import HireAgentModal from '@/components/llc/HireAgentModal.vue'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
+const { t } = useI18n()
 const { companyId, resolveCompanyId } = useLlcCompanyContext()
 
 const tree = ref<OrgNode[]>([])
@@ -72,7 +74,7 @@ function closeDrawer() {
 }
 
 function formatTime(ts: string | null): string {
-  if (!ts) return 'Never'
+  if (!ts) return t('llc.orgChart.never')
   return new Date(ts).toLocaleString()
 }
 
@@ -82,13 +84,13 @@ onMounted(fetchTree)
 <template>
   <div class="p-4 max-w-7xl mx-auto">
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Org Chart</h1>
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ t('llc.orgChart.title') }}</h1>
       <button
         v-if="companyId"
         class="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700"
         @click="showHire = true"
       >
-        Hire Agent
+        {{ t('llc.orgChart.hireAgent') }}
       </button>
     </div>
 
@@ -101,12 +103,12 @@ onMounted(fetchTree)
 
     <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm mb-4">
       {{ error }}
-      <button class="ml-4 underline" @click="fetchTree">Retry</button>
+      <button class="ml-4 underline" @click="fetchTree">{{ t('llc.orgChart.retry') }}</button>
     </div>
 
-    <div v-if="isLoading" class="text-center py-12 text-gray-500">Loading…</div>
+    <div v-if="isLoading" class="text-center py-12 text-gray-500">{{ t('llc.orgChart.loading') }}</div>
 
-    <div v-else-if="tree.length === 0 && !error" class="text-center py-12 text-gray-400">No agents found.</div>
+    <div v-else-if="tree.length === 0 && !error" class="text-center py-12 text-gray-400">{{ t('llc.orgChart.empty') }}</div>
 
     <div v-else class="overflow-x-auto">
       <div class="min-w-max flex gap-6 items-start">
@@ -127,7 +129,7 @@ onMounted(fetchTree)
         class="fixed inset-y-0 right-0 w-80 bg-white dark:bg-gray-900 shadow-2xl border-l border-gray-200 dark:border-gray-700 z-50 flex flex-col"
       >
         <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Agent Detail</h2>
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ t('llc.orgChart.agentDetail') }}</h2>
           <button class="text-gray-400 hover:text-gray-600" @click="closeDrawer">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -150,25 +152,25 @@ onMounted(fetchTree)
 
           <dl class="space-y-2 text-sm">
             <div class="flex justify-between">
-              <dt class="text-gray-500">Adapter</dt>
+              <dt class="text-gray-500">{{ t('llc.orgChart.adapter') }}</dt>
               <dd class="text-gray-900 dark:text-gray-100 font-medium">{{ selectedNode.adapter_type }}</dd>
             </div>
             <div class="flex justify-between">
-              <dt class="text-gray-500">Type</dt>
-              <dd class="text-gray-900 dark:text-gray-100">{{ selectedNode.is_human ? 'Human' : 'AI Agent' }}</dd>
+              <dt class="text-gray-500">{{ t('llc.orgChart.type') }}</dt>
+              <dd class="text-gray-900 dark:text-gray-100">{{ selectedNode.is_human ? t('llc.orgChart.human') : t('llc.orgChart.aiAgent') }}</dd>
             </div>
             <div class="flex justify-between">
-              <dt class="text-gray-500">Last Heartbeat</dt>
+              <dt class="text-gray-500">{{ t('llc.orgChart.lastHeartbeat') }}</dt>
               <dd class="text-gray-900 dark:text-gray-100">{{ formatTime(selectedNode.last_heartbeat) }}</dd>
             </div>
             <div class="flex justify-between">
-              <dt class="text-gray-500">Budget</dt>
+              <dt class="text-gray-500">{{ t('llc.orgChart.budget') }}</dt>
               <dd class="text-gray-900 dark:text-gray-100">
                 {{ selectedNode.budget_spent }} / {{ selectedNode.budget_total }}
               </dd>
             </div>
             <div class="flex justify-between">
-              <dt class="text-gray-500">Assigned Items</dt>
+              <dt class="text-gray-500">{{ t('llc.orgChart.assignedItems') }}</dt>
               <dd class="text-gray-900 dark:text-gray-100">{{ selectedNode.assigned_item_count }}</dd>
             </div>
           </dl>
@@ -181,7 +183,7 @@ onMounted(fetchTree)
               : 'bg-amber-500 text-white hover:bg-amber-600'"
             @click="toggleAgentPause(selectedNode)"
           >
-            {{ selectedNode.status === 'paused' ? 'Resume Agent' : 'Pause Agent' }}
+            {{ selectedNode.status === 'paused' ? t('llc.orgChart.resumeAgent') : t('llc.orgChart.pauseAgent') }}
           </button>
         </div>
       </div>

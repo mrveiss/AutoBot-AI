@@ -4,6 +4,7 @@
 // Author: mrveiss
 
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useRouter } from 'vue-router'
@@ -14,6 +15,7 @@ import type { CompanyNode } from './CompanyTreeNode.vue'
 const logger = createLogger('SubCompanyTree')
 const api = useApiClient()
 const router = useRouter()
+const { t } = useI18n()
 
 const tree = ref<CompanyNode[]>([])
 const isLoading = ref(false)
@@ -82,16 +84,16 @@ onMounted(fetchTree)
 
 <template>
   <div class="p-4 max-w-5xl mx-auto">
-    <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Company Hierarchy</h1>
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">{{ t('llc.companyTree.title') }}</h1>
 
     <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm mb-4">
       {{ error }}
-      <button class="ml-4 underline" @click="fetchTree">Retry</button>
+      <button class="ml-4 underline" @click="fetchTree">{{ t('llc.companyTree.retry') }}</button>
     </div>
 
-    <div v-if="isLoading" class="text-center py-12 text-gray-500">Loading…</div>
+    <div v-if="isLoading" class="text-center py-12 text-gray-500">{{ t('llc.companyTree.loading') }}</div>
 
-    <div v-else-if="tree.length === 0 && !error" class="text-center py-12 text-gray-400">No companies found.</div>
+    <div v-else-if="tree.length === 0 && !error" class="text-center py-12 text-gray-400">{{ t('llc.companyTree.empty') }}</div>
 
     <div v-else class="space-y-2">
       <CompanyTreeNode
