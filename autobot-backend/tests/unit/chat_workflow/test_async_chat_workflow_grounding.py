@@ -76,12 +76,12 @@ class TestGenerateLlmResponseGrounding:
         assert "KNOWLEDGE CONTEXT" not in system_msg.content
 
     async def test_no_kb_context_when_grounding_disabled(self, workflow):
-        """(c) Grounding disabled via config → KB context not injected."""
+        """(c) Citation instruction disabled via config → instruction omitted."""
         kb_results = [_make_workflow_kb_result("grounding fact")]
         mock_llm = MagicMock()
         mock_llm.chat_completion = AsyncMock(return_value=_make_llm_response())
         mock_cfg = MagicMock()
-        mock_cfg.chat_grounding_enabled = False
+        mock_cfg.chat_citation_instruction_enabled = False
 
         with patch(f"{_SVC_MODULE}.config", mock_cfg):
             await workflow._generate_llm_response("question", mock_llm, kb_results)

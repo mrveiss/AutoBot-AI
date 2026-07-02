@@ -182,10 +182,10 @@ def test_format_knowledge_context_empty(mock_rag_service) -> None:
 def test_format_knowledge_context_includes_grounding_instruction(
     mock_rag_service, sample_search_results, monkeypatch
 ) -> None:
-    """#10652: grounding instruction is prepended when the flag is on."""
+    """#10652: citation instruction is prepended when the flag is on."""
     from autobot_shared.ssot_config import config
 
-    monkeypatch.setattr(config, "chat_grounding_enabled", True, raising=False)
+    monkeypatch.setattr(config, "chat_citation_instruction_enabled", True, raising=False)
     service = ChatKnowledgeService(mock_rag_service)
     context = service.format_knowledge_context(sample_search_results[:1])
     assert "[Source N]" in context  # instruction tells the model how to cite
@@ -198,7 +198,7 @@ def test_format_knowledge_context_grounding_can_be_disabled(
     """#10652: instruction omitted when flag off; source labels stay."""
     from autobot_shared.ssot_config import config
 
-    monkeypatch.setattr(config, "chat_grounding_enabled", False, raising=False)
+    monkeypatch.setattr(config, "chat_citation_instruction_enabled", False, raising=False)
     service = ChatKnowledgeService(mock_rag_service)
     context = service.format_knowledge_context(sample_search_results[:1])
     assert "say you don't know" not in context
@@ -206,11 +206,11 @@ def test_format_knowledge_context_grounding_can_be_disabled(
 
 
 def test_build_grounded_context_shared_builder(monkeypatch) -> None:
-    """#10652: the shared builder (reused by the compression path) labels + grounds."""
+    """#10652: the shared builder (reused by the compression path) labels + cites."""
     from autobot_shared.ssot_config import config
     from services.knowledge.service import build_grounded_context
 
-    monkeypatch.setattr(config, "chat_grounding_enabled", True, raising=False)
+    monkeypatch.setattr(config, "chat_citation_instruction_enabled", True, raising=False)
     ctx = build_grounded_context(["fact one", "fact two"])
     assert "[Source 1] fact one" in ctx
     assert "[Source 2] fact two" in ctx
@@ -830,13 +830,13 @@ async def test_budget_grounded_context_all_trimmed_returns_empty():
 
 @pytest.mark.asyncio
 async def test_budget_grounded_context_grounding_disabled_omits_instruction(monkeypatch):
-    """chat_grounding_enabled=False → grounding instruction absent; [Source N] still present."""
+    """chat_citation_instruction_enabled=False → citation instruction absent; [Source N] still present."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
     from autobot_shared.ssot_config import config
     from services.knowledge.service import budget_grounded_context
 
-    monkeypatch.setattr(config, "chat_grounding_enabled", False, raising=False)
+    monkeypatch.setattr(config, "chat_citation_instruction_enabled", False, raising=False)
 
     mock_cwm = MagicMock()
     mock_cwm.estimate_tokens.return_value = 5
@@ -845,7 +845,7 @@ async def test_budget_grounded_context_grounding_disabled_omits_instruction(monk
     mock_cwm.config = {"models": {}}
 
     with patch("context_window_manager.ContextWindowManager", return_value=mock_cwm):
-        result = await budget_grounded_context([_kb("some fact")])
+        ctx, _kb_list = await budget_grounded_context([_kb("some fact")])
 
-    assert "some fact" in result
-    assert "Answer the user" not in result
+    assert "some fact" in ctx
+    assert "Answer the user" not in ctx
