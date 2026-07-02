@@ -748,7 +748,7 @@ async def test_budget_grounded_context_empty_returns_empty():
     from services.knowledge.service import budget_grounded_context
 
     with patch("context_window_manager.ContextWindowManager", side_effect=AssertionError("must not init")):
-        result = await budget_grounded_context([])
+        result, _trimmed = await budget_grounded_context([])
     assert result == ""
 
 
@@ -766,7 +766,7 @@ async def test_budget_grounded_context_small_unchanged(monkeypatch):
     mock_cwm.config = {"models": {}}
 
     with patch("context_window_manager.ContextWindowManager", return_value=mock_cwm):
-        result = await budget_grounded_context([_kb("short fact")], model_name=None)
+        result, _trimmed = await budget_grounded_context([_kb("short fact")], model_name=None)
 
     assert "short fact" in result
     assert "[Source 1]" in result
@@ -796,7 +796,7 @@ async def test_budget_grounded_context_oversized_compressed(monkeypatch):
         patch("context_window_manager.ContextWindowManager", return_value=mock_cwm),
         patch("services.memory.compression.ContextCompressionService", return_value=mock_svc),
     ):
-        result = await budget_grounded_context(kb_results, model_name="llama3")
+        result, _trimmed = await budget_grounded_context(kb_results, model_name="llama3")
 
     mock_svc.compress_kb_results.assert_called_once()
     assert "fact A" in result
@@ -823,7 +823,7 @@ async def test_budget_grounded_context_all_trimmed_returns_empty():
         patch("context_window_manager.ContextWindowManager", return_value=mock_cwm),
         patch("services.memory.compression.ContextCompressionService", return_value=mock_svc),
     ):
-        result = await budget_grounded_context([_kb("huge fact" * 1000)])
+        result, _trimmed = await budget_grounded_context([_kb("huge fact" * 1000)])
 
     assert result == ""
 
