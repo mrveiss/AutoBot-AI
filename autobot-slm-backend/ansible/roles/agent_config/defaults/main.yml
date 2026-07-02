@@ -6,7 +6,7 @@
 # agent_config role - Default variables
 
 # Python configuration
-python_version: "3.12"
+python_version: "3.14"
 use_pyenv: false
 venv_dir: "/opt/autobot/venv"
 requirements_file: "requirements.txt"

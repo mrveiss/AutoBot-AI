@@ -223,7 +223,7 @@
     state: absent
   when:
     - slm_requirements_stat.stat.exists
-    - _venv_py_version.rc != 0 or _venv_py_version.stdout != '3.12'
+    - _venv_py_version.rc != 0 or _venv_py_version.stdout != '3.14'
   tags: ['slm', 'backend']
 
 # #7052: also detect partially-corrupted venv (correct python version but
@@ -237,7 +237,7 @@
   when:
     - slm_requirements_stat.stat.exists
     - _venv_py_version.rc == 0
-    - _venv_py_version.stdout == '3.12'
+    - _venv_py_version.stdout == '3.14'
   tags: ['slm', 'backend']
 
 - name: "SLM | Remove broken venv when health check failed (#7052)"

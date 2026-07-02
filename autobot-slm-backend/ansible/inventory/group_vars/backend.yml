@@ -74,7 +74,7 @@ security:
 backend:
   # Python and FastAPI configuration
   python:
-    version: "3.12"
+    version: "3.14"
     pip_version: "latest"
     virtual_env: "{{ autobot.base_dir }}/backend/venv"
     packages_file: "{{ autobot.base_dir }}/requirements.txt"

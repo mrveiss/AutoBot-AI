@@ -116,7 +116,7 @@ all:
         terminal_port: 7681
         novnc_port: 6080
         vnc_port: 5900
-        python_version: "3.12"
+        python_version: "3.14"
         fastapi_workers: 4
         log_level: "INFO"
 

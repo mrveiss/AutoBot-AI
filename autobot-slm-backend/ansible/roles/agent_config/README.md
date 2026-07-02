@@ -27,7 +27,7 @@ Ansible role for configuring AutoBot agents with Python environment, AI/ML frame
 service_user: autobot          # Service account
 service_group: autobot         # Service group
 project_root: /opt/autobot     # Installation directory
-python_version: "3.12"         # Python version to install (deadsnakes PPA)
+python_version: "3.14"         # Python version to install (deadsnakes PPA)
 agent_role: general            # Agent role (general, ai_stack, browser, etc.)
 agent_port: 8090               # Agent API port
 ```
