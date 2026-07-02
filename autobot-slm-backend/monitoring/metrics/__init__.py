@@ -10,6 +10,7 @@ Extracted from PrometheusMetricsManager as part of Issue #394.
 Extended with PerformanceMetricsRecorder as part of Issue #469.
 Extended with KnowledgeBase, LLMProvider, WebSocket, Redis recorders (Issue #470).
 Extended with FrontendMetricsRecorder for RUM metrics (Issue #476).
+Extended with ApiRequestsMetricsRecorder for HTTP request counting (Issue #10778).
 
 Package Structure:
 - base.py: Base recorder class with shared functionality
@@ -25,8 +26,11 @@ Package Structure:
 - websocket.py: WebSocket connection metrics (Issue #470)
 - redis.py: Redis operation metrics (Issue #470)
 - frontend.py: Frontend RUM metrics (Issue #476)
+- api_requests.py: HTTP API request counter (Issue #10778)
 """
 
+# Issue #10778: HTTP API request counter
+from .api_requests import ApiRequestsMetricsRecorder
 from .base import BaseMetricsRecorder
 from .claude_api import ClaudeAPIMetricsRecorder
 
@@ -47,6 +51,8 @@ from .workflow import WorkflowMetricsRecorder
 
 __all__ = [
     "BaseMetricsRecorder",
+    # Issue #10778: HTTP API request counter
+    "ApiRequestsMetricsRecorder",
     "WorkflowMetricsRecorder",
     "GitHubMetricsRecorder",
     "TaskMetricsRecorder",
