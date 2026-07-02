@@ -1483,6 +1483,30 @@ async def _init_backup_scheduler(app: FastAPI) -> None:
         app.state.backup_scheduler = None
 
 
+async def _init_claude_api_integration(app: FastAPI) -> None:
+    """Initialize the canonical Claude API optimization adapter (#10796).
+
+    Starts ClaudeAPIBatchManager (rate limiting, payload optimization, intelligent
+    batching, graceful degradation, TodoWrite optimization, tool pattern analysis)
+    and stores the singleton on app.state so routes and services can import it via
+    ``get_autobot_claude_adapter()``.  NON-CRITICAL: failures are logged and never
+    block startup.
+    """
+    logger.info("[100%%] Claude API Integration: Initializing...")
+    try:
+        from utils.claude_api_integration import get_autobot_claude_adapter
+
+        adapter = await get_autobot_claude_adapter()
+        app.state.claude_api_adapter = adapter
+        logger.info(
+            "[100%%] Claude API Integration: Ready (mode=%s)",
+            adapter.manager.current_mode.value if adapter.manager else "unknown",
+        )
+    except Exception as exc:
+        logger.warning("Claude API integration initialization failed (non-critical): %s", exc)
+        app.state.claude_api_adapter = None
+
+
 async def _start_autonomous_loop(app: FastAPI) -> None:
     """Start the autonomous RAG/synthesis improvement loop background task (Issue #4680).
 
@@ -1778,6 +1802,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_plugin_manager(app)
         await _init_backup_scheduler(app)
         await _init_llm_key_rotation_scheduler(app)
+        await _init_claude_api_integration(app)
         await _start_autonomous_loop(app)
         await _start_community_clustering_loop(app)
         await _start_llc_notification_router(app)
@@ -1982,6 +2007,15 @@ async def cleanup_services(app: FastAPI):
             logger.info("✅ Isolated MCP bridge workers shutdown")
         except Exception as mcp_err:
             logger.warning("Isolated MCP bridge shutdown failed: %s", mcp_err)
+
+        # #10796: Shutdown Claude API integration adapter
+        try:
+            claude_adapter = getattr(app.state, "claude_api_adapter", None)
+            if claude_adapter is not None:
+                await claude_adapter.shutdown()
+                logger.info("Claude API integration adapter shutdown")
+        except Exception as _ca_err:
+            logger.warning("Claude API adapter shutdown failed: %s", _ca_err)
 
         # GH#9012: Flush LangFuse / LangSmith observer buffers before exit
         try:
