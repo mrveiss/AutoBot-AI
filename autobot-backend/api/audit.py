@@ -187,7 +187,9 @@ async def get_audit_statistics(request: Request, admin_check: bool = Depends(che
             success=True,
             statistics=stats,
             vm_info={
-                "vm_source": audit_logger.vm_source,
+                # display_host resolves a routable host when vm_source is a
+                # bind-all/loopback address (e.g. 0.0.0.0 in prod) — #10502 #11.
+                "vm_source": audit_logger.display_host,
                 "vm_name": audit_logger.vm_name,
             },
         )
