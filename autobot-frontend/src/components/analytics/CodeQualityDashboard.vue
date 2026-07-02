@@ -392,13 +392,13 @@
     </template>
 
     <!-- Drill-Down Modal -->
-    <div v-if="drillDownCategory" class="modal-overlay" @click.self="drillDownCategory = null">
-      <div class="modal-content drill-down-modal">
-        <div class="modal-header">
-          <h3>{{ formatCategoryName(drillDownCategory) }} - {{ $t('analytics.codeQuality.detailedView') }}</h3>
-          <button class="btn-close" @click="drillDownCategory = null">×</button>
-        </div>
-        <div class="modal-body">
+    <BaseModal
+      :model-value="!!drillDownCategory"
+      :title="drillDownCategory ? `${formatCategoryName(drillDownCategory)} - ${$t('analytics.codeQuality.detailedView')}` : ''"
+      size="md"
+      @close="drillDownCategory = null"
+    >
+      <template v-if="drillDownCategory">
           <div class="drill-down-summary">
             <div class="summary-card">
               <span class="card-value">{{ drillDownData.total_files }}</span>
@@ -437,17 +437,17 @@
               </tbody>
             </table>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="drillDownCategory = null">{{ $t('analytics.codeQuality.close') }}</button>
-        </div>
-      </div>
-    </div>
+      </template>
+      <template #actions>
+        <button class="btn-secondary" @click="drillDownCategory = null">{{ $t('analytics.codeQuality.close') }}</button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
+import BaseModal from '@/components/ui/BaseModal.vue';
 import { useRoute } from 'vue-router';
 import { createLogger } from '@/utils/debugUtils';
 import { getCssVar } from '@/composables/useCssVars';
@@ -1742,65 +1742,6 @@ watch(selectedPeriod, () => {
   color: var(--text-muted);
 }
 
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--overlay-backdrop);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-content {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  width: 90%;
-  max-width: 700px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-4) var(--spacing-6);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.modal-header h3 {
-  margin: var(--spacing-0);
-  font-size: var(--text-lg);
-  color: var(--text-primary);
-}
-
-.btn-close {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-size: var(--text-2xl);
-  cursor: pointer;
-}
-
-.btn-close:hover {
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: var(--spacing-6);
-}
-
 .drill-down-summary {
   display: flex;
   gap: var(--spacing-4);
@@ -1886,13 +1827,6 @@ watch(selectedPeriod, () => {
 .top-issue {
   color: var(--text-muted);
   font-size: var(--text-xs);
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding: var(--spacing-4) var(--spacing-6);
-  border-top: 1px solid var(--border-subtle);
 }
 
 .btn-secondary {
