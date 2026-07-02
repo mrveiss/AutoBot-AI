@@ -89,16 +89,16 @@ class TestBudgetKbContextSmallResults:
         assert "[Source 1]" in result
 
     async def test_grounding_disabled_omits_instruction_but_returns_context(self):
-        """(c) Grounding instruction omitted when chat_grounding_enabled=False.
+        """(c) Citation instruction omitted when chat_citation_instruction_enabled=False.
 
         build_grounded_context still returns the [Source N] block with content —
-        the grounding *instruction* (Answer the user…) is the only thing suppressed.
+        the citation *instruction* (Answer the user…) is the only thing suppressed.
         """
         from async_chat_workflow import AsyncChatWorkflow
 
         kb_results = [_make_kb_result("some fact")]
         mock_cfg = MagicMock()
-        mock_cfg.chat_grounding_enabled = False
+        mock_cfg.chat_citation_instruction_enabled = False
 
         mock_cwm = MagicMock()
         mock_cwm.estimate_tokens.return_value = 5

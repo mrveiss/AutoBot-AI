@@ -22,8 +22,9 @@ from .doc_searcher import DocumentationSearcher, get_documentation_searcher
 from .intent_detector import get_query_intent_detector
 from .types import Query, QueryIntentResult, QueryKnowledgeIntent
 
-# #10652: prepended to the KB context to ground chat answers in cited sources.
-GROUNDING_INSTRUCTION = (
+# #10652, #10736: prepended to the KB context to instruct the model to cite sources.
+# Controlled by chat_citation_instruction_enabled (AUTOBOT_CHAT_CITATION_INSTRUCTION).
+CITATION_INSTRUCTION = (
     "Answer the user's question using the knowledge sources below. Cite the sources "
     "you rely on inline as [Source N]. If the sources do not contain the answer, say "
     "you don't know rather than guessing."
@@ -40,8 +41,8 @@ def build_grounded_context(contents: List[str]) -> str:
     if not contents:
         return ""
     lines: List[str] = []
-    if config.chat_grounding_enabled:
-        lines.append(GROUNDING_INSTRUCTION)
+    if config.chat_citation_instruction_enabled:
+        lines.append(CITATION_INSTRUCTION)
     lines.append("KNOWLEDGE CONTEXT:")
     for i, content in enumerate(contents, 1):
         lines.append(f"[Source {i}] {content.strip()}")
