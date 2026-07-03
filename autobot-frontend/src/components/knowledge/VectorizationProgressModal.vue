@@ -128,7 +128,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import VectorizationStatusBadge from './VectorizationStatusBadge.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 
 interface DocumentState {
   documentId: string

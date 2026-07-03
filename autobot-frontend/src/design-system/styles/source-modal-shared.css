@@ -5,8 +5,8 @@
  *
  * Shared scoped styles for the analytics source modals (#10300, part of #9859).
  * Body/form rule blocks shared by AddSourceModal.vue and ShareSourceModal.vue.
- * #10750 C2b: the modal chrome (overlay/dialog/header/footer/close/fade) now
- * lives in ui/BaseModal.vue; only the in-body form styles remain here.
+ * #10750 C2b/C2c: the modal chrome (overlay/dialog/header/footer/close/fade)
+ * now lives in @autobot/ui BaseModal; only the in-body form styles remain here.
  */
 
 /* Form Groups */

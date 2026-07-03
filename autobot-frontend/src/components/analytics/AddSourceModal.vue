@@ -190,7 +190,7 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchSourceSecrets, saveCodeSource } from '@/composables/analytics/useSourceRegistry'

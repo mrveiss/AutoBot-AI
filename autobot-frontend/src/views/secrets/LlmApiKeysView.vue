@@ -176,7 +176,7 @@ import { useI18n } from 'vue-i18n'
 import { getBackendUrl } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 
 const { t } = useI18n()
 const logger = createLogger('LlmApiKeysView')

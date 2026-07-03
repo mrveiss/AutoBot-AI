@@ -16,7 +16,7 @@
 </template>
 
 <script setup lang="ts">
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import PresetFormBody from '@/components/chat/PresetFormBody.vue'
 
 defineProps<{

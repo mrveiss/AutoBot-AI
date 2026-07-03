@@ -447,7 +447,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
-import BaseModal from '@/components/ui/BaseModal.vue';
+import { BaseModal } from '@autobot/ui'
 import { useRoute } from 'vue-router';
 import { createLogger } from '@/utils/debugUtils';
 import { getCssVar } from '@/composables/useCssVars';

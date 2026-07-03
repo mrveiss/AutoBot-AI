@@ -240,7 +240,7 @@ import { createLogger } from '@/utils/debugUtils'
 import BaseButton from '@/components/base/BaseButton.vue'
 
 const logger = createLogger('TerminalModals')
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 
 interface ProcessInfo {
   pid: number
