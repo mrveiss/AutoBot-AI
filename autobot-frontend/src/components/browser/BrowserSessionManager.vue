@@ -185,44 +185,34 @@
     </div>
 
     <!-- Create Session Modal -->
-    <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 class="text-lg font-semibold">{{ $t('browser.sessionManager.createBrowserSession') }}</h3>
-          <button @click="showCreateModal = false" class="text-autobot-text-muted hover:text-autobot-text-secondary">
-            <Icon name="times" />
-          </button>
-        </div>
-
-        <div class="modal-body">
-          <div class="form-group">
-            <label class="form-label">{{ $t('browser.sessionManager.startingUrl') }}</label>
-            <input
-              v-model="newSession.url"
-              type="url"
-              class="form-input"
-              placeholder="https://example.com"
-            />
-          </div>
-
-
-        </div>
-
-        <div class="modal-footer">
-          <BaseButton variant="outline-solid" @click="showCreateModal = false">
-            {{ $t('browser.sessionManager.cancel') }}
-          </BaseButton>
-          <BaseButton
-            variant="primary"
-            @click="createNewSession"
-            :disabled="!isFormValid"
-          >
-            <Icon name="plus" class="mr-1" />
-            {{ $t('browser.sessionManager.createSession') }}
-          </BaseButton>
-        </div>
+    <BaseModal
+      v-model="showCreateModal"
+      :title="$t('browser.sessionManager.createBrowserSession')"
+      size="sm"
+    >
+      <div class="form-group">
+        <label class="form-label">{{ $t('browser.sessionManager.startingUrl') }}</label>
+        <input
+          v-model="newSession.url"
+          type="url"
+          class="form-input"
+          placeholder="https://example.com"
+        />
       </div>
-    </div>
+      <template #actions>
+        <BaseButton variant="outline-solid" @click="showCreateModal = false">
+          {{ $t('browser.sessionManager.cancel') }}
+        </BaseButton>
+        <BaseButton
+          variant="primary"
+          @click="createNewSession"
+          :disabled="!isFormValid"
+        >
+          <Icon name="plus" class="mr-1" />
+          {{ $t('browser.sessionManager.createSession') }}
+        </BaseButton>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -232,6 +222,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBrowserAutomation } from '@/composables/useBrowserAutomation'
 import BaseButton from '@/components/base/BaseButton.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import Icon from '@/components/ui/Icon.vue'
@@ -244,6 +235,7 @@ export default {
   name: 'BrowserSessionManager',
   components: {
     BaseButton,
+    BaseModal,
     StatusBadge,
     EmptyState,
     Icon
@@ -615,46 +607,6 @@ export default {
 .action-btn:hover {
   background: var(--bg-surface);
   color: var(--text-primary);
-}
-
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-  padding: var(--spacing-4);
-}
-
-.modal-content {
-  background: var(--bg-surface);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 500px;
-  box-shadow: var(--shadow-2xl);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-5);
-  border-bottom: 1px solid var(--border-light);
-}
-
-.modal-body {
-  padding: var(--spacing-5);
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-3);
-  padding: var(--spacing-5);
-  border-top: 1px solid var(--border-light);
 }
 
 .form-group {

@@ -1,16 +1,16 @@
 <template>
-  <div v-if="isOpen" class="modal-overlay" @click.self="closeDialog">
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3 class="modal-title">
-          <Icon name="share-alt" /> {{ $t('knowledge.share.title', { name: factTitle }) }}
-        </h3>
-        <button class="close-button" @click="closeDialog" :aria-label="$t('knowledge.share.closeAriaLabel')">
-          <Icon name="times" />
-        </button>
-      </div>
+  <BaseModal
+    :model-value="isOpen"
+    :title="$t('knowledge.share.title', { name: factTitle })"
+    size="md"
+    @close="closeDialog"
+  >
+    <template #title>
+      <span class="modal-title-inner">
+        <Icon name="share-alt" /> {{ $t('knowledge.share.title', { name: factTitle }) }}
+      </span>
+    </template>
 
-      <div class="modal-body">
         <!-- Search for users/groups -->
         <div class="search-section">
           <label for="share-search">{{ $t('knowledge.share.shareWith') }}</label>
@@ -94,9 +94,8 @@
             </div>
           </div>
         </div>
-      </div>
 
-      <div class="modal-footer">
+    <template #actions>
         <button class="btn btn-secondary" @click="closeDialog">
           {{ $t('knowledge.share.cancel') }}
         </button>
@@ -109,13 +108,13 @@
           <Icon name="save" />
           {{ saving ? $t('knowledge.share.saving') : $t('knowledge.share.saveChanges') }}
         </button>
-      </div>
-    </div>
-  </div>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiService } from '@/services/api'
@@ -356,70 +355,10 @@ const closeDialog = () => {
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+.modal-title-inner {
   display: flex;
   align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-dialog {
-  background: var(--bg-card);
-  border-radius: var(--radius-lg);
-  width: 90%;
-  max-width: 600px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-xl);
-}
-
-.modal-header {
-  padding: var(--spacing-6);
-  border-bottom: 1px solid var(--border-default);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-title {
-  margin: var(--spacing-0);
-  font-size: var(--text-xl);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.close-button {
-  background: none;
-  border: none;
-  font-size: var(--text-2xl);
-  cursor: pointer;
-  color: var(--text-muted);
-  padding: var(--spacing-0);
-  width: 2rem;
-  height: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-default);
-  transition: background-color var(--duration-200);
-}
-
-.close-button:hover {
-  background-color: var(--bg-secondary);
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: var(--spacing-6);
-  overflow-y: auto;
-  flex: 1;
+  gap: var(--spacing-2);
 }
 
 .search-section {
@@ -598,14 +537,6 @@ const closeDialog = () => {
 
 .remove-button:hover {
   background-color: #fee2e2;
-}
-
-.modal-footer {
-  padding: var(--spacing-6);
-  border-top: 1px solid var(--border-default);
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-3);
 }
 
 .btn {
