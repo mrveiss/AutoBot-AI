@@ -1,5 +1,8 @@
 [tool.black]
 line-length = 120
+# Stays py312 (NOT py314): the NPU/OpenVINO worker runs Python 3.11, and py314
+# target makes black emit PEP 758 unparenthesized `except A, B:` which is a
+# SyntaxError on 3.11 shared code. Bump only when the worker leaves 3.11 (#10877).
 target-version = ["py312"]
 
 [tool.isort]
@@ -9,7 +12,7 @@ src_paths = ["autobot-backend", "autobot_shared", "autobot-slm-backend"]
 known_first_party = ["autobot_shared"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 ignore_missing_imports = true
 # Exclude test files — loose typing in tests is expected; this baseline
 # mirrors the pre-existing state tracked in GH#7105.
