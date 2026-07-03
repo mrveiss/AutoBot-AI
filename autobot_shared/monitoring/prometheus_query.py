@@ -146,6 +146,12 @@ async def list_metric_names() -> List[str]:
                 return []
             body = await resp.json()
             if body.get("status") != "success":
+                # #10726: was silent; now observable so callers know metric names are stale.
+                logger.warning(
+                    "Prometheus label-values non-success: status=%r error=%r",
+                    body.get("status"),
+                    body.get("error"),
+                )
                 return []
             return body.get("data", [])
     except aiohttp.ClientError as exc:

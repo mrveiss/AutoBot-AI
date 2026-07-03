@@ -869,11 +869,13 @@ if __name__ == "__main__":
             yaml.safe_dump(cfg, f, indent=2)
 
     async def test_voice_interface():
-        """Test voice interface with speech recognition and TTS demos."""
-        # Test function placeholder - VoiceInterface initialization removed
-        # to avoid unused variable warning
-        pass  # Placeholder function
+        """Test voice interface with speech recognition and TTS demos.
 
+        #10726: This function is only reachable via `python voice_interface.py` (the
+        `if __name__ == "__main__"` guard below). It has ZERO production callers.
+        All real VoiceInterface calls are commented out pending a real test fixture;
+        the live logger.info lines below serve as breadcrumbs only.
+        """
         logger.info("\n--- Testing Speech Recognition (speak into mic) ---")
         # result = await vi.listen_and_convert_to_text()
         # if result["status"] == "success":
