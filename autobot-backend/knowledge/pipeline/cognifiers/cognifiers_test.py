@@ -681,7 +681,7 @@ class TestContextGeneratorEnabled:
         ctx.chunks[0].content
         result = await cog.process(ctx)
 
-        assert result.chunks[0].content == f"ctx sentence\n\nchunk text 0"
+        assert result.chunks[0].content == "ctx sentence\n\nchunk text 0"
 
 
 # ---------------------------------------------------------------------------
