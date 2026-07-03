@@ -32,12 +32,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, List
+from typing import Any, Callable, List
 
 from autobot_shared.logging_manager import get_logger
-
-if TYPE_CHECKING:
-    import torch  # noqa: F401 — used by deferred (string) annotations
 
 logger = get_logger(__name__)
 
