@@ -9,11 +9,11 @@ Selects and applies the best available attention backend for a given model
 and hardware environment, routing first on architecture family and then on
 available library tiers.
 
-Architecture-family dispatch (Issue #7350)
+Architecture-family dispatch (Issue #7350, kernels wired in Issue #10724)
   transformer      — tiered flash/sdpa/eager path (BetterTransformer → SDPA → Vanilla)
-  state_space      — SSM recurrent kernel stub (NOT_APPLICABLE until kernel is wired)
-  linear_attention — linear-attn kernel stub (NOT_APPLICABLE until kernel is wired)
-  hybrid           — mixed dispatch stub (NOT_APPLICABLE until per-layer routing is wired)
+  state_space      — SSM_SCAN: Mamba-style selective scan (ssm_kernels.SSMScanKernel)
+  linear_attention — LINEAR_ATTN: O(L) feature-map linear attention
+  hybrid           — HYBRID: Jamba-style per-layer routing (ssm_kernels.HybridRouter)
 
 The dispatch table (ARCH_DISPATCH_TABLE) is data-driven: adding a new architecture
 family requires only an entry in the table and a handler method.  select_backend()
@@ -80,21 +80,43 @@ def _import_better_transformer() -> Any:
 
 
 class AttentionBackend(str, Enum):
-    """Available attention backend tiers.
+    """Available sequence-mixer backend tiers.
 
     Values reflect capability tiers from highest (fastest) to lowest (most
     compatible).  The string values are stable identifiers safe for logging
     and serialisation.
 
-    NOT_APPLICABLE is returned for non-transformer architectures (state-space,
-    linear-attention, hybrid) where attention-backend selection is meaningless.
-    Issue #7350.
+    Transformer tiers (BETTER_TRANSFORMER / SDPA / VANILLA) select an
+    attention implementation.  Non-attention families select a concrete kernel
+    from :mod:`ssm_kernels`:
+      SSM_SCAN    — Mamba-style selective scan (state-space models).
+      LINEAR_ATTN — feature-map linear attention (O(L)).
+      HYBRID      — Jamba-style per-layer routing (attention + SSM).
+
+    NOT_APPLICABLE remains only as a genuine fallback for an architecture
+    family that has no registered kernel.  Issue #7350, Issue #10724.
     """
 
     BETTER_TRANSFORMER = "better_transformer"
     SDPA = "sdpa"
     VANILLA = "vanilla"
+    SSM_SCAN = "ssm_scan"
+    LINEAR_ATTN = "linear_attn"
+    HYBRID = "hybrid"
     NOT_APPLICABLE = "not_applicable"
+
+
+# Backends dispatched to ssm_kernels rather than a HuggingFace attention
+# transform.  apply_backend() leaves the loaded model object untouched for
+# these (the kernel consumes tensors, not the model wrapper).  Issue #10724.
+_NON_ATTENTION_BACKENDS = frozenset(
+    {
+        AttentionBackend.SSM_SCAN,
+        AttentionBackend.LINEAR_ATTN,
+        AttentionBackend.HYBRID,
+        AttentionBackend.NOT_APPLICABLE,
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -224,8 +246,10 @@ class AttentionBackendSelector:
     def apply_backend(self, model: Any, backend: AttentionBackend) -> Any:
         """Apply *backend* to *model*, falling through on any failure.
 
-        For ``NOT_APPLICABLE`` (non-transformer architectures) the model is
-        returned unchanged without any warning.  Issue #7350.
+        Non-attention backends (``SSM_SCAN``, ``LINEAR_ATTN``, ``HYBRID``) and
+        ``NOT_APPLICABLE`` return the model unchanged: they run through the
+        dedicated kernels in :mod:`ssm_kernels`, not a HuggingFace attention
+        transform.  Issue #7350, Issue #10724.
 
         Each transformer tier is attempted.  If it raises, GPU memory is freed
         and the next tier is tried.  This mirrors the tier priority from
@@ -240,7 +264,7 @@ class AttentionBackendSelector:
             The model, potentially transformed in-place or replaced by a
             BetterTransformer-wrapped copy.
         """
-        if backend == AttentionBackend.NOT_APPLICABLE:
+        if backend in _NON_ATTENTION_BACKENDS:
             return model
 
         if backend == AttentionBackend.BETTER_TRANSFORMER:
@@ -304,40 +328,40 @@ class AttentionBackendSelector:
         return AttentionBackend.VANILLA
 
     def _handle_ssm(self, model_config: ModelConfig) -> AttentionBackend:
-        """State-space / Mamba: SSM recurrent kernel stub.
+        """State-space / Mamba: route to the SSM selective-scan kernel.
 
-        Returns NOT_APPLICABLE — SSM models use recurrent scan kernels, not
-        scaled-dot-product attention.  FlashAttention must not be invoked.
-        Wire to the actual kernel once available.
+        SSM models use a recurrent scan (``ssm_kernels.SSMScanKernel``), not
+        scaled-dot-product attention — FlashAttention must not be invoked.
+        Issue #10724.
         """
         logger.debug(
-            "SSM recurrent kernel stub: NOT_APPLICABLE for %s (kernel not yet wired)",
+            "SSM selective-scan kernel selected for %s",
             model_config.model_name or model_config.model_type or "(unknown)",
         )
-        return AttentionBackend.NOT_APPLICABLE
+        return AttentionBackend.SSM_SCAN
 
     def _handle_linear_attention(self, model_config: ModelConfig) -> AttentionBackend:
-        """Linear-attention: linear-attn kernel stub.
+        """Linear-attention: route to the O(L) feature-map linear-attn kernel.
 
-        Returns NOT_APPLICABLE until the linear-attn kernel is wired.
+        Selects ``ssm_kernels.LinearAttentionKernel``.  Issue #10724.
         """
         logger.debug(
-            "Linear-attn kernel stub: NOT_APPLICABLE for %s (kernel not yet wired)",
+            "Linear-attention kernel selected for %s",
             model_config.model_name or model_config.model_type or "(unknown)",
         )
-        return AttentionBackend.NOT_APPLICABLE
+        return AttentionBackend.LINEAR_ATTN
 
     def _handle_hybrid(self, model_config: ModelConfig) -> AttentionBackend:
-        """Hybrid (Jamba-style): mixed dispatch stub.
+        """Hybrid (Jamba-style): route to the per-layer hybrid dispatcher.
 
-        Attention layers → transformer path; SSM layers → SSM path.
-        Returns NOT_APPLICABLE until per-layer routing is wired.
+        Attention layers → transformer path; SSM layers → SSM scan kernel,
+        coordinated by ``ssm_kernels.HybridRouter``.  Issue #10724.
         """
         logger.debug(
-            "Hybrid dispatch stub: NOT_APPLICABLE for %s (per-layer routing not yet wired)",
+            "Hybrid per-layer routing selected for %s",
             model_config.model_name or model_config.model_type or "(unknown)",
         )
-        return AttentionBackend.NOT_APPLICABLE
+        return AttentionBackend.HYBRID
 
     # ------------------------------------------------------------------
     # Private helpers
