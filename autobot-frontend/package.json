@@ -47,6 +47,7 @@
   },
   "dependencies": {
     "@autobot/terminal": "file:../autobot-plugins/terminal",
+    "@autobot/ui": "file:../libs/autobot-ui",
     "@autobot/vnc": "file:../autobot-plugins/vnc",
     "@fontsource/inter": "^5.2.8",
     "@fortawesome/fontawesome-free": "^7.3.0",
