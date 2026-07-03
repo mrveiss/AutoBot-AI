@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
@@ -438,8 +438,10 @@ class AsyncChromaClient:
         return result
 
 
-# Module-level client cache for singleton pattern
-_async_client_cache: Dict[str, AsyncChromaClient] = {}
+# Module-level client cache for singleton pattern.
+# Key: (endpoint_or_path, allow_reset, anonymized_telemetry) — #10625 folds the
+# settings into the key so a different-settings request builds the right client.
+_async_client_cache: Dict[Tuple[str, bool, bool], AsyncChromaClient] = {}
 
 
 async def get_async_chromadb_client(
