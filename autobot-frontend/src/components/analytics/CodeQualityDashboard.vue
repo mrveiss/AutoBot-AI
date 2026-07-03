@@ -1005,8 +1005,11 @@ watch(selectedPeriod, () => {
 .code-quality-dashboard {
   padding: var(--spacing-6);
   background: var(--bg-primary);
-  /* #10750 C2: fill the scrolling .analytics-router-view, not the viewport */
+  /* #10750 C2: fill the scrolling .analytics-router-view, not the viewport.
+     #10750: flex column so the data grid grows to absorb vertical slack. */
   min-height: 100%;
+  display: flex;
+  flex-direction: column;
   color: var(--text-primary);
 }
 
@@ -1341,8 +1344,25 @@ watch(selectedPeriod, () => {
 .content-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
   gap: var(--spacing-6);
   margin-bottom: var(--spacing-6);
+  /* #10750: primary data region — grow to fill remaining height. */
+  flex: 1;
+  min-height: 0;
+}
+
+/* #10750: the pattern/complexity panels grow; their content scrolls internally. */
+.content-grid .panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.content-grid .panel-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 @media (max-width: 1200px) {

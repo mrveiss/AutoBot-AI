@@ -605,6 +605,9 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-6);
+  /* #10750: fill the scrolling .analytics-router-view; the issues grid grows
+     to absorb vertical slack instead of leaving dead space below. */
+  min-height: 100%;
 }
 
 /* Path Selection */
@@ -723,7 +726,25 @@ onMounted(() => {
 .content-grid {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
+  grid-auto-rows: 1fr;
   gap: var(--spacing-6);
+  /* #10750: primary data region — grow to fill remaining height. */
+  flex: 1;
+  min-height: 0;
+}
+
+/* #10750: issues panel is the grower; its list scrolls internally instead of
+   the shared fixed 400px cap. */
+.content-grid .panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.content-grid .panel-content {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
 }
 
 /* Category Tabs */

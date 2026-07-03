@@ -326,7 +326,11 @@ onMounted(() => {
 .conversation-flow-dashboard {
   padding: var(--spacing-6);
   background: var(--bg-primary);
+  /* #10750: min-h-full flex column — parent .analytics-router-view is the
+     scroll container; the data grid grows to absorb vertical slack. */
   min-height: 100%;
+  display: flex;
+  flex-direction: column;
   color: var(--text-primary);
 }
 
@@ -470,7 +474,11 @@ onMounted(() => {
 .content-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
   gap: var(--spacing-6);
+  /* #10750: grow to fill the vertical slack; panels scroll internally. */
+  flex: 1;
+  min-height: 0;
 }
 
 .panel {
@@ -478,6 +486,9 @@ onMounted(() => {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .panel-header {
@@ -509,7 +520,9 @@ onMounted(() => {
 
 .panel-content {
   padding: var(--spacing-4);
-  max-height: 400px;
+  /* #10750: fill the panel and scroll internally rather than a fixed cap. */
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
