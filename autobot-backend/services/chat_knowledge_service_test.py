@@ -463,7 +463,7 @@ async def test_smart_retrieve_knowledge_retrieves_for_questions(mock_rag_service
     )
 
     assert "KNOWLEDGE CONTEXT:" in context
-    assert len(citations) == 2  # Only 2 above default threshold
+    assert len(citations) == 3  # All 3 above default threshold (0.3): rerank 0.92, 0.82, 0.58
     assert intent.intent == QueryKnowledgeIntent.KNOWLEDGE_QUERY
     assert intent.should_use_knowledge is True
 

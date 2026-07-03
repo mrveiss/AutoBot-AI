@@ -10,7 +10,7 @@ Issue #1075: Test coverage for knowledge pipeline cognifiers.
 
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -372,7 +372,7 @@ class TestEventExtractorTemporal:
     def test_today(self, event_extractor):
         result = event_extractor._parse_temporal("today")
         assert result is not None
-        assert result.date() == datetime.now().date()
+        assert result.date() == datetime.now(tz=timezone.utc).date()
 
     def test_yesterday(self, event_extractor):
         result = event_extractor._parse_temporal("yesterday")
@@ -533,13 +533,20 @@ class TestSummarizerEntityResolution:
 # ---------------------------------------------------------------------------
 
 
-def _make_context(n_chunks=2, doc_id="doc-1"):
+def _make_context(n_chunks=2, doc_id=None):
     from knowledge.pipeline.base import PipelineContext
     from knowledge.pipeline.models.chunk import ProcessedChunk
 
-    ctx = PipelineContext(document_id=doc_id)
+    document_id = doc_id or uuid4()
+    ctx = PipelineContext()
+    ctx.document_id = document_id
     for i in range(n_chunks):
-        chunk = ProcessedChunk(content=f"chunk text {i}", metadata={})
+        chunk = ProcessedChunk(
+            content=f"chunk text {i}",
+            document_id=document_id,
+            chunk_index=i,
+            metadata={},
+        )
         ctx.chunks.append(chunk)
     return ctx
 
@@ -571,7 +578,10 @@ class TestContextGeneratorDisabled:
         assert result.chunks == []
 
 
-@patch.dict("os.environ", {"CONTEXT_ENABLED": "true"})
+# config.context_enabled is a bool read once at import from CONTEXT_ENABLED;
+# patch the attribute on the singleton (env-patching is too late for the
+# already-imported config) so is_enabled() sees the flag (#10644).
+@patch("knowledge.pipeline.cognifiers.context_generator.config.context_enabled", True)
 class TestContextGeneratorEnabled:
     """ContextGeneratorCognifier enriches chunks when CONTEXT_ENABLED=true."""
 
@@ -598,7 +608,7 @@ class TestContextGeneratorEnabled:
         cog.llm = MagicMock()
         summary_resp = self._mock_llm_response("Doc summary.")
         chunk_resp = self._mock_llm_response("Chunk context.")
-        cog.llm.chat_completion = AsyncMock(side_effect=[summary_resp, chunk_resp, chunk_resp])
+        cog.llm.chat = AsyncMock(side_effect=[summary_resp, chunk_resp, chunk_resp])
 
         ctx = _make_context(n_chunks=2)
         result = await cog.process(ctx)
@@ -622,12 +632,12 @@ class TestContextGeneratorEnabled:
         cog = ContextGeneratorCognifier()
         cog.llm = MagicMock()
         chunk_resp = self._mock_llm_response("ctx")
-        cog.llm.chat_completion = AsyncMock(return_value=chunk_resp)
+        cog.llm.chat = AsyncMock(return_value=chunk_resp)
 
         ctx = _make_context(n_chunks=2)
         await cog.process(ctx)
 
-        assert cog.llm.chat_completion.call_count == 2
+        assert cog.llm.chat.call_count == 2
 
     @pytest.mark.asyncio
     @patch("knowledge.pipeline.cognifiers.context_generator.get_redis_client")
@@ -639,7 +649,7 @@ class TestContextGeneratorEnabled:
         mock_get_redis.return_value = self._mock_redis()
         cog = ContextGeneratorCognifier()
         cog.llm = MagicMock()
-        cog.llm.chat_completion = AsyncMock(side_effect=RuntimeError("LLM down"))
+        cog.llm.chat = AsyncMock(side_effect=RuntimeError("LLM down"))
 
         ctx = _make_context(n_chunks=1)
         result = await cog.process(ctx)
@@ -657,7 +667,7 @@ class TestContextGeneratorEnabled:
         mock_get_redis.return_value = self._mock_redis()
         cog = ContextGeneratorCognifier()
         cog.llm = MagicMock()
-        cog.llm.chat_completion = AsyncMock(
+        cog.llm.chat = AsyncMock(
             side_effect=[
                 self._mock_llm_response("doc summary"),
                 self._mock_llm_response("ctx sentence"),

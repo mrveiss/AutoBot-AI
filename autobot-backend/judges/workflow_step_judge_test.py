@@ -6,6 +6,8 @@ Tests for WorkflowStepJudge
 Tests workflow step evaluation, approval logic, and integration with workflow systems.
 """
 
+import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -87,7 +89,7 @@ class TestWorkflowStepJudge:
             "improvement_suggestions": [],
         }
 
-        judge.llm_interface.chat_completion.return_value = mock_response
+        judge.llm_interface.chat.return_value = SimpleNamespace(content=json.dumps(mock_response))
 
         # Test evaluation
         result = await judge.evaluate_workflow_step(sample_step_data, sample_workflow_context, sample_user_context)
@@ -99,7 +101,7 @@ class TestWorkflowStepJudge:
         assert len(result.criterion_scores) == 2
 
         # Verify LLM interface was called
-        judge.llm_interface.chat_completion.assert_called_once()
+        judge.llm_interface.chat.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_evaluate_risky_step(self, judge, sample_workflow_context, sample_user_context):
@@ -132,7 +134,7 @@ class TestWorkflowStepJudge:
             ],
         }
 
-        judge.llm_interface.chat_completion.return_value = mock_response
+        judge.llm_interface.chat.return_value = SimpleNamespace(content=json.dumps(mock_response))
 
         result = await judge.evaluate_workflow_step(risky_step_data, sample_workflow_context, sample_user_context)
 
@@ -170,7 +172,7 @@ class TestWorkflowStepJudge:
             "improvement_suggestions": [],
         }
 
-        judge.llm_interface.chat_completion.return_value = mock_response
+        judge.llm_interface.chat.return_value = SimpleNamespace(content=json.dumps(mock_response))
 
         should_approve, reason = await judge.should_approve_step(
             sample_step_data, sample_workflow_context, sample_user_context
@@ -217,7 +219,7 @@ class TestWorkflowStepJudge:
             ],
         }
 
-        judge.llm_interface.chat_completion.return_value = mock_response
+        judge.llm_interface.chat.return_value = SimpleNamespace(content=json.dumps(mock_response))
 
         should_approve, reason = await judge.should_approve_step(
             unsafe_step_data, sample_workflow_context, sample_user_context
@@ -242,7 +244,7 @@ class TestWorkflowStepJudge:
             ],
         }
 
-        judge.llm_interface.chat_completion.return_value = mock_response
+        judge.llm_interface.chat.return_value = SimpleNamespace(content=json.dumps(mock_response))
 
         suggestions = await judge.suggest_improvements(sample_step_data, sample_workflow_context, sample_user_context)
 
@@ -305,9 +307,9 @@ class TestWorkflowStepJudge:
             ]
             result = responses[call_count[0]]
             call_count[0] += 1
-            return result
+            return SimpleNamespace(content=json.dumps(result))
 
-        judge.llm_interface.chat_completion.side_effect = mock_response_generator
+        judge.llm_interface.chat.side_effect = mock_response_generator
 
         comparison = await judge.compare_alternatives(
             primary_step, alternatives, sample_workflow_context, sample_user_context
@@ -322,7 +324,7 @@ class TestWorkflowStepJudge:
         self, judge, sample_step_data, sample_workflow_context, sample_user_context
     ):
         """Test that LLM errors fail open — approve with warning (#1464)"""
-        judge.llm_interface.chat_completion.side_effect = Exception("LLM API error")
+        judge.llm_interface.chat.side_effect = Exception("LLM API error")
 
         should_approve, reason = await judge.should_approve_step(
             sample_step_data, sample_workflow_context, sample_user_context
@@ -353,7 +355,7 @@ class TestWorkflowStepJudge:
             "improvement_suggestions": [],
         }
 
-        judge.llm_interface.chat_completion.return_value = mock_response
+        judge.llm_interface.chat.return_value = SimpleNamespace(content=json.dumps(mock_response))
 
         # Evaluate step
         await judge.evaluate_workflow_step(sample_step_data, sample_workflow_context, sample_user_context)

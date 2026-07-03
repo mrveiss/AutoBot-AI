@@ -158,15 +158,15 @@ class TestLLMExtractionWithMocks:
 
         # Mock LLM response
         mock_response = MagicMock()
-        mock_response.content = """{
+        mock_response.content = """[{
             "source_name": "cache_ttl",
             "target_name": "query_latency",
             "effect_type": "REDUCES",
             "condition": "when cache is enabled",
             "evidence_text": "Shorter TTLs reduce latency.",
             "confidence": 0.95
-        }"""
-        extractor.llm.chat_completion = AsyncMock(return_value=mock_response)
+        }]"""
+        extractor.llm.chat = AsyncMock(return_value=mock_response)
 
         chunk = _make_chunk("Shorter TTLs reduce latency.")
         ctx = _make_context()
@@ -187,15 +187,15 @@ class TestLLMExtractionWithMocks:
         extractor = CausalRelationshipExtractor(mode="llm", min_confidence=0.8)
 
         mock_response = MagicMock()
-        mock_response.content = """{
+        mock_response.content = """[{
             "source_name": "cache_size",
             "target_name": "memory",
             "effect_type": "AMPLIFIES",
             "condition": "",
             "evidence_text": "Cache size might affect memory.",
             "confidence": 0.6
-        }"""
-        extractor.llm.chat_completion = AsyncMock(return_value=mock_response)
+        }]"""
+        extractor.llm.chat = AsyncMock(return_value=mock_response)
 
         chunk = _make_chunk("Cache size might affect memory.")
         ctx = _make_context()
@@ -211,15 +211,15 @@ class TestLLMExtractionWithMocks:
         extractor = CausalRelationshipExtractor(mode="llm")
 
         mock_response = MagicMock()
-        mock_response.content = """{
+        mock_response.content = """[{
             "source_name": "request_rate",
             "target_name": "cpu_usage",
             "effect_type": "AMPLIFIES",
             "condition": "when processing is single-threaded",
             "evidence_text": "Request rate amplifies CPU usage when processing is single-threaded.",
             "confidence": 0.9
-        }"""
-        extractor.llm.chat_completion = AsyncMock(return_value=mock_response)
+        }]"""
+        extractor.llm.chat = AsyncMock(return_value=mock_response)
 
         chunk = _make_chunk("Request rate amplifies CPU usage when processing is single-threaded.")
         ctx = _make_context()
@@ -237,7 +237,7 @@ class TestLLMExtractionWithMocks:
 
         mock_response = MagicMock()
         mock_response.content = "Not valid JSON"
-        extractor.llm.chat_completion = AsyncMock(return_value=mock_response)
+        extractor.llm.chat = AsyncMock(return_value=mock_response)
 
         chunk = _make_chunk("Some text")
         ctx = _make_context()
@@ -271,7 +271,7 @@ class TestLLMExtractionWithMocks:
                 "confidence": 0.85
             }
         ]"""
-        extractor.llm.chat_completion = AsyncMock(return_value=mock_response)
+        extractor.llm.chat = AsyncMock(return_value=mock_response)
 
         chunk = _make_chunk("Complex scenario text")
         ctx = _make_context()
@@ -444,7 +444,7 @@ class TestEdgeCases:
         extractor = CausalRelationshipExtractor(mode="llm")
 
         # Mock LLM to raise exception
-        extractor.llm.chat_completion = AsyncMock(side_effect=RuntimeError("LLM error"))
+        extractor.llm.chat = AsyncMock(side_effect=RuntimeError("LLM error"))
 
         chunk = _make_chunk("Some text")
         ctx = _make_context()
