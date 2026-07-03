@@ -24,7 +24,7 @@ import json
 import pickle  # nosec B403 — reading ChromaDB internal pickle files only
 import sqlite3
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
@@ -49,7 +49,9 @@ _CHROMADB_PORT = _ssot_config.port.chromadb
 
 # Module-level client cache (singleton per key) — mirrors _async_client_cache so
 # the sync client isn't rebuilt, and legacy migrations re-run, on every call (#10601).
-_sync_client_cache: Dict[str, Any] = {}
+# Key: (endpoint_or_path, allow_reset, anonymized_telemetry) — #10625 folds the
+# settings into the key so a different-settings request builds the right client.
+_sync_client_cache: Dict[Tuple[str, bool, bool], Any] = {}
 
 # Module exports
 __all__ = [
