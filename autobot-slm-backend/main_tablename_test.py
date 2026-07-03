@@ -74,8 +74,7 @@ class TestCheckTablenameCollisions:
             check_tablename_collisions(slm_meta, um_meta)
 
         assert any(
-            "roles" in r.message and r.levelno >= logging.WARNING
-            for r in caplog.records
+            "roles" in r.message and r.levelno >= logging.WARNING for r in caplog.records
         ), f"Expected WARNING mentioning 'roles', got: {[r.message for r in caplog.records]}"
 
     def test_mixed_allowlisted_and_unallowlisted_raises_for_unallowlisted(self):
