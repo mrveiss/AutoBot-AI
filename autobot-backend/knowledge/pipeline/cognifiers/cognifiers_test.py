@@ -8,6 +8,7 @@ Unit tests for cognifier _parse_llm_response and conversion logic.
 Issue #1075: Test coverage for knowledge pipeline cognifiers.
 """
 
+import contextlib
 import json
 import sys
 from datetime import datetime, timezone
@@ -17,29 +18,60 @@ from uuid import uuid4
 
 import pytest
 
-# Mock llm_shared before importing cognifiers
-_mock_llm = ModuleType("llm_shared")
-_mock_llm.LLMInterface = MagicMock
-sys.modules["llm_shared"] = _mock_llm
 
-# Mock autobot_shared.redis_client before importing cognifiers
-_mock_shared = ModuleType("autobot_shared")
-_mock_redis_mod = ModuleType("autobot_shared.redis_client")
-_mock_redis_mod.get_redis_client = MagicMock()
-sys.modules["autobot_shared"] = _mock_shared
-sys.modules["autobot_shared.redis_client"] = _mock_redis_mod
+@contextlib.contextmanager
+def _stubbed_import_modules():
+    """Install lightweight ``sys.modules`` stubs only while importing cognifiers.
 
-from knowledge.pipeline.cognifiers.entity_extractor import EntityExtractor  # noqa: E402
-from knowledge.pipeline.cognifiers.event_extractor import EventExtractor  # noqa: E402
-from knowledge.pipeline.cognifiers.relationship_extractor import (  # noqa: E402
-    SYMMETRIC_RELATIONS,
-    RelationshipExtractor,
-)
-from knowledge.pipeline.cognifiers.summarizer import (  # noqa: E402
-    HierarchicalSummarizer,
-)
-from knowledge.pipeline.models.chunk import ProcessedChunk  # noqa: E402
-from knowledge.pipeline.models.entity import Entity  # noqa: E402
+    ``llm_shared`` and ``autobot_shared.redis_client`` pull heavy runtime deps at
+    import time, so they are stubbed before the cognifier modules load.  These stubs
+    previously lived at module top level and leaked process-wide — when this file was
+    collected in the same pytest run as ``services/chat_knowledge_service_test.py`` the
+    leaked ``autobot_shared.redis_client`` stub lacked ``get_async_redis_client`` and
+    broke that module's import (#10879).  Scope them to the import window and restore
+    whatever the parent conftest installed on exit.
+
+    Only the ``autobot_shared.redis_client`` submodule is stubbed — never the
+    ``autobot_shared`` package itself — so sibling imports like
+    ``autobot_shared.logging_manager`` keep resolving through the real package.
+    """
+    saved = {name: sys.modules.get(name) for name in ("llm_shared", "autobot_shared.redis_client")}
+
+    _mock_llm = ModuleType("llm_shared")
+    _mock_llm.LLMInterface = MagicMock
+    sys.modules["llm_shared"] = _mock_llm
+
+    _mock_redis_mod = ModuleType("autobot_shared.redis_client")
+    _mock_redis_mod.get_redis_client = MagicMock()
+
+    async def _get_async_redis_client_stub(*_a, **_k):
+        return None
+
+    _mock_redis_mod.get_async_redis_client = _get_async_redis_client_stub
+    sys.modules["autobot_shared.redis_client"] = _mock_redis_mod
+
+    try:
+        yield
+    finally:
+        for name, original in saved.items():
+            if original is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = original
+
+
+with _stubbed_import_modules():
+    from knowledge.pipeline.cognifiers.entity_extractor import EntityExtractor
+    from knowledge.pipeline.cognifiers.event_extractor import EventExtractor
+    from knowledge.pipeline.cognifiers.relationship_extractor import (
+        SYMMETRIC_RELATIONS,
+        RelationshipExtractor,
+    )
+    from knowledge.pipeline.cognifiers.summarizer import (
+        HierarchicalSummarizer,
+    )
+    from knowledge.pipeline.models.chunk import ProcessedChunk
+    from knowledge.pipeline.models.entity import Entity
 
 # --- Fixtures ---
 
