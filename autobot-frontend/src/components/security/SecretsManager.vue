@@ -796,7 +796,7 @@ import { useDebounce } from '@/composables/useDebounce';
 import { useSecretsAuditApi } from '@/composables/security/useSecretsAuditApi';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
-import BaseModal from '@/components/ui/BaseModal.vue';
+import { BaseModal } from '@autobot/ui'
 import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n();

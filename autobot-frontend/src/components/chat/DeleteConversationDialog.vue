@@ -266,7 +266,7 @@ import type { FileStats } from '@/composables/useConversationFiles'
 import type { SessionFact } from '@/models/repositories/ChatRepository'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { useBatchSelection } from '@/composables/useBatchSelection'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 
 const { t } = useI18n()
 

@@ -158,7 +158,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, reactive } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { EnforcementMode } from '@/utils/FeatureFlagsApiClient';
-import BaseModal from '@/components/ui/BaseModal.vue';
+import { BaseModal } from '@autobot/ui'
 
 const { t } = useI18n();
 

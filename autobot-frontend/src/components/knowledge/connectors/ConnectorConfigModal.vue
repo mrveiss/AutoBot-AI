@@ -15,7 +15,7 @@ import type {
   ConnectorType
 } from '@/types/knowledgeBase'
 import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import BaseButton from '@/components/base/BaseButton.vue'
 import ConnectorOAuthButton from '@/components/knowledge/connectors/ConnectorOAuthButton.vue'
 import { createLogger } from '@/utils/debugUtils'

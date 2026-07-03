@@ -108,7 +108,7 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { shareCodeSource } from '@/composables/analytics/useSourceRegistry'

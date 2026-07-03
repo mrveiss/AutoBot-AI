@@ -1,0 +1,93 @@
+/* Copyright 2025-2026 mrveiss
+   SPDX-License-Identifier: Apache-2.0
+
+   @autobot/ui token adapter — main user GUI identity.
+
+   Maps every semantic token in the kit's contract (libs/autobot-ui/src/tokens/
+   contract.css, all `--aui-*`) onto this app's own design tokens (defined in
+   src/assets/css/design-tokens.css + per-theme overrides in
+   src/assets/css/themes/*.css). Same names, this app's values → the shared
+   components (BaseModal, BaseButton, …) render in the user GUI's identity.
+
+   Every value is a var() reference to an app token — no hardcoded colors — so
+   this adapter auto-adapts across the ember / dark / light themes at runtime.
+
+   Load order (see main.ts): import '@autobot/ui/tokens' (neutral fallbacks)
+   BEFORE this file (app overrides), and this file AFTER the app's own theme CSS
+   so the app tokens it references are already defined. */
+
+:root {
+  /* ---- Color: brand / interactive ------------------------------------ */
+  --aui-color-primary: var(--color-primary);
+  --aui-color-primary-hover: var(--color-primary-hover);
+  --aui-color-primary-active: var(--color-primary-active);
+  --aui-color-primary-contrast: var(--text-on-primary);
+
+  /* ---- Color: neutrals / chrome -------------------------------------- */
+  --aui-color-surface: var(--bg-surface);
+  --aui-color-surface-raised: var(--bg-elevated);
+  --aui-color-surface-sunken: var(--bg-tertiary);
+  --aui-color-border: var(--border-default);
+  --aui-color-border-strong: var(--border-strong);
+  --aui-color-text: var(--text-primary);
+  --aui-color-text-muted: var(--text-muted);
+  --aui-color-text-inverse: var(--text-inverse);
+
+  /* ---- Color: status ------------------------------------------------- */
+  --aui-color-success: var(--color-success);
+  --aui-color-success-contrast: var(--text-on-success);
+  --aui-color-warning: var(--color-warning);
+  --aui-color-warning-contrast: var(--text-on-warning);
+  --aui-color-danger: var(--color-error);
+  --aui-color-danger-contrast: var(--text-on-error);
+  --aui-color-info: var(--color-info);
+  --aui-color-info-contrast: var(--text-on-primary);
+
+  /* ---- Overlay (modal backdrop) --------------------------------------
+     App's canonical dark scrim (rgba(0,0,0,0.5), theme-aware). Note: the app
+     also references an undefined `--bg-overlay-dark` in a few components — see
+     the fix in design-tokens.css that aliases it to this same value. */
+  --aui-color-overlay: var(--bg-overlay);
+
+  /* ---- Focus --------------------------------------------------------- */
+  --aui-color-focus-ring: var(--border-focus);
+  --aui-focus-ring-width: 3px;
+
+  /* ---- Radius -------------------------------------------------------- */
+  --aui-radius-sm: var(--radius-sm);
+  --aui-radius-md: var(--radius-md);
+  --aui-radius-lg: var(--radius-lg);
+  --aui-radius-full: var(--radius-full);
+
+  /* ---- Elevation ----------------------------------------------------- */
+  --aui-shadow-sm: var(--shadow-sm);
+  --aui-shadow-md: var(--shadow-md);
+  --aui-shadow-lg: var(--shadow-lg);
+  --aui-shadow-xl: var(--shadow-2xl);
+
+  /* ---- Typography ---------------------------------------------------- */
+  --aui-font-sans: var(--font-sans);
+  --aui-font-mono: var(--font-mono);
+  --aui-text-xs: var(--text-xs);
+  --aui-text-sm: var(--text-sm);
+  --aui-text-base: var(--text-base);
+  --aui-text-lg: var(--text-lg);
+  --aui-text-xl: var(--text-xl);
+  --aui-font-weight-medium: var(--font-medium);
+  --aui-font-weight-semibold: var(--font-semibold);
+
+  /* ---- Spacing (control padding scale) ------------------------------- */
+  --aui-space-1: var(--spacing-1);
+  --aui-space-2: var(--spacing-2);
+  --aui-space-3: var(--spacing-3);
+  --aui-space-4: var(--spacing-4);
+  --aui-space-5: var(--spacing-5);
+  --aui-space-6: var(--spacing-6);
+
+  /* ---- Z-index ------------------------------------------------------- */
+  --aui-z-modal: var(--z-modal);
+
+  /* ---- Motion -------------------------------------------------------- */
+  --aui-transition-fast: var(--duration-200) var(--ease-in-out);
+  --aui-transition: var(--duration-300) var(--ease-in-out);
+}
