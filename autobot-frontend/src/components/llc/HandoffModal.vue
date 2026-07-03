@@ -53,7 +53,7 @@ import { useApiClient } from '@/plugins/api'
 import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
 import { useCompanyPeople } from '@/composables/llc/useCompanyPeople'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 
 const props = defineProps<{
   workItemId: string

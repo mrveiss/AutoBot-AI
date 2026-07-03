@@ -175,7 +175,7 @@ import { formatDate, formatCategoryName, formatFileSize } from '@/utils/formatHe
 import KnowledgeBrowser from './KnowledgeBrowser.vue'
 import DocumentChangeFeed from './DocumentChangeFeed.vue'
 import CategoryEditModal from './modals/CategoryEditModal.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'

@@ -345,7 +345,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useNotificationBus } from '@/composables/useNotificationBus'

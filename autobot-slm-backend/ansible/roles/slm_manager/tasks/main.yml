@@ -442,6 +442,22 @@
     delete: true
   tags: ['slm', 'frontend']
 
+# Sync libs/ so the @autobot/ui shared kit file: dep resolves (#10750 C2c).
+# autobot-frontend package.json declares "@autobot/ui": "file:../libs/autobot-ui";
+# npm install symlinks node_modules/@autobot/ui → ../../../libs/autobot-ui at
+# install time — if the target is absent the symlink dangles and Vite's rolldown
+# bundler fails to resolve the import at build time (same failure mode as MVA-893).
+- name: "SLM | Sync libs (shared @autobot/ui kit) from code_source (#10750 C2c)"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/libs/"
+    dest: "{{ slm_base_dir }}/libs/"
+    rsync_opts:
+      - "--exclude=node_modules"
+      - "--exclude=dist"
+      - "--exclude=.git"
+    delete: true
+  tags: ['slm', 'frontend']
+
 - name: "SLM | Check if package.json exists"
   ansible.builtin.stat:
     path: "{{ slm_frontend_dir }}/package.json"

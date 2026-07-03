@@ -5,7 +5,7 @@ import { ref } from 'vue'
 import { useTranscriberApi } from '@/composables/transcriber/useTranscriberApi'
 import type { Recording } from '@/composables/transcriber/useTranscriberApi'
 import { createLogger } from '@/utils/debugUtils'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 
 const logger = createLogger('UploadModal')
 const props = defineProps<{ projectId: number; open: boolean }>()

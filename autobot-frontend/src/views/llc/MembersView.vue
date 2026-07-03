@@ -142,7 +142,7 @@ import { useCollaborationInvite } from '@/composables/collaboration/useCollabora
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseCard from '@/components/base/BaseCard.vue'
 import BaseBadge from '@/components/base/BaseBadge.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import ErrorBanner from '@/components/base/ErrorBanner.vue'
 
 // Backend MembershipRole enum (autobot-backend/llc/models/enums.py).

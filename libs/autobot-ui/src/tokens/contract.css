@@ -48,6 +48,9 @@
   --aui-color-info: #0284c7;
   --aui-color-info-contrast: #ffffff;
 
+  /* ---- Color: overlay (modal/dialog backdrop scrim) ------------------ */
+  --aui-color-overlay: rgb(0 0 0 / 0.5);
+
   /* ---- Focus --------------------------------------------------------- */
   --aui-color-focus-ring: color-mix(in srgb, var(--aui-color-primary) 45%, transparent);
   --aui-focus-ring-width: 3px;
@@ -62,6 +65,7 @@
   --aui-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --aui-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --aui-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --aui-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
 
   /* ---- Typography ---------------------------------------------------- */
   --aui-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -70,6 +74,7 @@
   --aui-text-sm: 0.875rem;
   --aui-text-base: 1rem;
   --aui-text-lg: 1.125rem;
+  --aui-text-xl: 1.25rem;
   --aui-font-weight-medium: 500;
   --aui-font-weight-semibold: 600;
 
@@ -80,6 +85,9 @@
   --aui-space-4: 1rem;
   --aui-space-5: 1.25rem;
   --aui-space-6: 1.5rem;
+
+  /* ---- Layering ------------------------------------------------------ */
+  --aui-z-modal: 1000;
 
   /* ---- Motion (components must honor prefers-reduced-motion) ---------- */
   --aui-transition-fast: 120ms ease;
