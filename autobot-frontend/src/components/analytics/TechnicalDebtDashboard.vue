@@ -373,13 +373,13 @@
     </div>
 
     <!-- Item Details Modal -->
-    <div v-if="selectedItem" class="modal-overlay" @click.self="selectedItem = null">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>{{ $t('analytics.technicalDebt.debtItemDetails') }}</h3>
-          <button class="btn-close" @click="selectedItem = null">×</button>
-        </div>
-        <div class="modal-body">
+    <BaseModal
+      :model-value="!!selectedItem"
+      :title="$t('analytics.technicalDebt.debtItemDetails')"
+      size="sm"
+      @close="selectedItem = null"
+    >
+      <template v-if="selectedItem">
           <div class="detail-row">
             <span class="detail-label">{{ $t('analytics.technicalDebt.file') }}:</span>
             <span class="detail-value file-path">{{ selectedItem.file_path }}</span>
@@ -422,18 +422,18 @@
             <span class="detail-label">{{ $t('analytics.technicalDebt.suggestedFix') }}:</span>
             <pre class="suggested-fix">{{ selectedItem.suggested_fix }}</pre>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="selectedItem = null">{{ $t('analytics.technicalDebt.close') }}</button>
-          <button class="btn-primary" @click="navigateToFile(selectedItem)">{{ $t('analytics.technicalDebt.openInEditor') }}</button>
-        </div>
-      </div>
-    </div>
+      </template>
+      <template #actions>
+        <button class="btn-secondary" @click="selectedItem = null">{{ $t('analytics.technicalDebt.close') }}</button>
+        <button v-if="selectedItem" class="btn-primary" @click="navigateToFile(selectedItem)">{{ $t('analytics.technicalDebt.openInEditor') }}</button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
+import BaseModal from '@/components/ui/BaseModal.vue'
 import { createLogger } from '@/utils/debugUtils';
 import { getCssVar } from '@/composables/useCssVars'
 import {
@@ -1719,66 +1719,6 @@ watch(selectedPeriod, () => {
   color: var(--text-tertiary);
 }
 
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--overlay-backdrop);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-content {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.modal-header h3 {
-  margin: var(--spacing-0);
-  font-size: var(--text-lg);
-  color: var(--text-primary);
-}
-
-.btn-close {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--text-tertiary);
-  font-size: var(--text-xl);
-  cursor: pointer;
-  transition: color var(--duration-150);
-}
-
-.btn-close:hover {
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: var(--spacing-lg);
-}
-
 .detail-row {
   display: flex;
   gap: var(--spacing-md);
@@ -1818,14 +1758,6 @@ watch(selectedPeriod, () => {
   overflow-x: auto;
   white-space: pre-wrap;
   margin-top: var(--spacing-sm);
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-top: 1px solid var(--border-subtle);
 }
 
 .btn-secondary {

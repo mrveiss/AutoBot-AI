@@ -8,70 +8,65 @@ Issue #9035: Operator-controlled local usage metrics (never transmitted)
 -->
 
 <template>
-  <Teleport to="body">
-    <div v-if="isVisible" class="modal-overlay" @click="handleBackdropClick">
-      <div class="modal-container" role="dialog" aria-labelledby="consent-title" aria-modal="true">
-        <div class="modal-header">
-          <h2 id="consent-title" class="modal-title">
-            <Icon name="shield-alt" aria-hidden="true" />
-            Local Usage Metrics
-          </h2>
-        </div>
+  <BaseModal
+    v-model="isVisible"
+    title="Local Usage Metrics"
+    size="sm"
+    :show-close="false"
+    :close-on-overlay="false"
+  >
+    <div class="modal-body">
+      <p class="consent-intro">
+        AutoBot can record <strong>anonymous operational metrics</strong> locally to power your
+        own monitoring dashboards. This data stays on your infrastructure and is
+        <strong>never sent to anyone</strong>.
+      </p>
 
-        <div class="modal-body">
-          <p class="consent-intro">
-            AutoBot can record <strong>anonymous operational metrics</strong> locally to power your
-            own monitoring dashboards. This data stays on your infrastructure and is
-            <strong>never sent to anyone</strong>.
-          </p>
-
-          <div class="data-summary">
-            <h3 class="summary-title">
-              <Icon name="chart-line" aria-hidden="true" />
-              What's recorded locally:
-            </h3>
-            <ul class="data-list">
-              <li>API endpoint usage and response times</li>
-              <li>Voice session duration and token counts</li>
-              <li>Feature usage patterns</li>
-            </ul>
-          </div>
-
-          <div class="privacy-note">
-            <Icon name="lock" aria-hidden="true" />
-            <span>
-              <strong>Never recorded:</strong> personal data, code content, or chat messages.
-            </span>
-          </div>
-
-          <p class="consent-footer">
-            You can change this preference anytime in <strong>Settings → Privacy</strong>.
-          </p>
-        </div>
-
-        <div class="modal-actions">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            @click="handleDecline"
-            :disabled="isProcessing"
-          >
-            <Icon name="times" aria-hidden="true" />
-            Keep Off
-          </button>
-          <button
-            type="button"
-            class="btn btn-primary"
-            @click="handleAccept"
-            :disabled="isProcessing"
-          >
-            <Icon name="check" aria-hidden="true" />
-            {{ isProcessing ? 'Saving...' : 'Enable' }}
-          </button>
-        </div>
+      <div class="data-summary">
+        <h3 class="summary-title">
+          <Icon name="chart-line" aria-hidden="true" />
+          What's recorded locally:
+        </h3>
+        <ul class="data-list">
+          <li>API endpoint usage and response times</li>
+          <li>Voice session duration and token counts</li>
+          <li>Feature usage patterns</li>
+        </ul>
       </div>
+
+      <div class="privacy-note">
+        <Icon name="lock" aria-hidden="true" />
+        <span>
+          <strong>Never recorded:</strong> personal data, code content, or chat messages.
+        </span>
+      </div>
+
+      <p class="consent-footer">
+        You can change this preference anytime in <strong>Settings → Privacy</strong>.
+      </p>
     </div>
-  </Teleport>
+
+    <template #actions>
+      <button
+        type="button"
+        class="btn btn-secondary"
+        @click="handleDecline"
+        :disabled="isProcessing"
+      >
+        <Icon name="times" aria-hidden="true" />
+        Keep Off
+      </button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        @click="handleAccept"
+        :disabled="isProcessing"
+      >
+        <Icon name="check" aria-hidden="true" />
+        {{ isProcessing ? 'Saving...' : 'Enable' }}
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
@@ -79,6 +74,7 @@ import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import Icon from '@/components/ui/Icon.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 const logger = createLogger('TelemetryConsentModal')
 const api = useApiClient()
@@ -153,71 +149,13 @@ async function updateConsent(enabled: boolean) {
     isProcessing.value = false
   }
 }
-
-function handleBackdropClick(event: MouseEvent) {
-  // Don't close on backdrop click - user must make a choice
-  if (event.target === event.currentTarget) {
-    return
-  }
-}
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: var(--spacing-lg);
-}
-
-.modal-container {
-  background: var(--bg-primary);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-  max-width: 500px;
-  width: 100%;
-  border: 1px solid var(--border-color);
-  /* #10750 C2: cap height so header/actions stay fixed and body scrolls */
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
-  padding: var(--spacing-lg);
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-}
-
-.modal-title {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  font-size: var(--font-size-xl);
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.modal-title i {
-  color: var(--color-primary);
-}
-
 .modal-body {
-  padding: var(--spacing-lg);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
-  /* #10750 C2: scroll long consent text; keep header/actions in view */
-  overflow-y: auto;
-  min-height: 0;
 }
 
 .consent-intro {
@@ -283,15 +221,6 @@ function handleBackdropClick(event: MouseEvent) {
   color: var(--text-secondary);
   text-align: center;
   margin: var(--spacing-sm) 0 0 0;
-}
-
-.modal-actions {
-  display: flex;
-  gap: var(--spacing-md);
-  padding: var(--spacing-lg);
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  justify-content: flex-end;
 }
 
 .btn {

@@ -148,104 +148,91 @@
     </div>
 
     <!-- Create User Modal -->
-    <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>Add User</h3>
-          <button
-            class="btn-close"
-            @click="showCreateModal = false"
-            :aria-label="$t('common.close')"
-            :title="$t('common.close')"
-            type="button"
-          ><Icon name="times" /></button>
+    <BaseModal
+      v-model="showCreateModal"
+      title="Add User"
+      size="sm"
+    >
+      <form @submit.prevent="createUser">
+        <div class="form-group">
+          <label>Email</label>
+          <input v-model="newUser.email" type="email" class="form-input" required />
         </div>
-        <form class="modal-body" @submit.prevent="createUser">
-          <div class="form-group">
-            <label>Email</label>
-            <input v-model="newUser.email" type="email" class="form-input" required />
-          </div>
-          <div class="form-group">
-            <label>Username</label>
-            <input v-model="newUser.username" type="text" class="form-input" required minlength="3" />
-          </div>
-          <div class="form-group">
-            <label>Password</label>
-            <input v-model="newUser.password" type="password" class="form-input" required minlength="8" />
-          </div>
-          <div class="form-group">
-            <label>Display Name</label>
-            <input v-model="newUser.display_name" type="text" class="form-input" />
-          </div>
-          <div v-if="createError" class="error-inline">{{ createError }}</div>
-          <div class="modal-footer">
-            <button type="button" class="btn-action-secondary" @click="showCreateModal = false">Cancel</button>
-            <button type="submit" class="btn-action-primary" :disabled="creating">
-              <Icon v-if="creating" name="sync-alt" :spin="true" />
-              Create User
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div class="form-group">
+          <label>Username</label>
+          <input v-model="newUser.username" type="text" class="form-input" required minlength="3" />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input v-model="newUser.password" type="password" class="form-input" required minlength="8" />
+        </div>
+        <div class="form-group">
+          <label>Display Name</label>
+          <input v-model="newUser.display_name" type="text" class="form-input" />
+        </div>
+        <div v-if="createError" class="error-inline">{{ createError }}</div>
+        <!-- hidden submit keeps Enter-to-submit working inside the form -->
+        <button type="submit" class="sr-only" tabindex="-1" aria-hidden="true"></button>
+      </form>
+      <template #actions>
+        <button type="button" class="btn-action-secondary" @click="showCreateModal = false">Cancel</button>
+        <button type="button" class="btn-action-primary" :disabled="creating" @click="createUser">
+          <Icon v-if="creating" name="sync-alt" :spin="true" />
+          Create User
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Assign Voice Bundle Modal -->
-    <div v-if="bundleTarget" class="modal-overlay" @click.self="closeBundleModal">
-      <div class="modal modal-sm">
-        <div class="modal-header">
-          <h3>Assign Voice Bundle</h3>
-          <button
-            class="btn-close"
-            @click="closeBundleModal"
-            :aria-label="$t('common.close')"
-            type="button"
-          ><Icon name="times" /></button>
+    <BaseModal
+      :model-value="!!bundleTarget"
+      title="Assign Voice Bundle"
+      size="sm"
+      @close="closeBundleModal"
+    >
+      <template v-if="bundleTarget">
+        <p class="bundle-user-name">
+          User: <strong>{{ bundleTarget.username }}</strong>
+        </p>
+        <div class="form-group">
+          <label>Voice Bundle</label>
+          <select v-model="newBundleName" class="form-input" :disabled="bundleModalLoading">
+            <option :value="null">— Use role default —</option>
+            <option v-for="name in VOICE_BUNDLE_NAMES" :key="name" :value="name">
+              {{ VOICE_BUNDLE_LABELS[name] }}
+            </option>
+          </select>
         </div>
-        <div class="modal-body">
-          <p class="bundle-user-name">
-            User: <strong>{{ bundleTarget.username }}</strong>
-          </p>
-          <div class="form-group">
-            <label>Voice Bundle</label>
-            <select v-model="newBundleName" class="form-input" :disabled="bundleModalLoading">
-              <option :value="null">— Use role default —</option>
-              <option v-for="name in VOICE_BUNDLE_NAMES" :key="name" :value="name">
-                {{ VOICE_BUNDLE_LABELS[name] }}
-              </option>
-            </select>
-          </div>
-          <div v-if="bundleError" class="error-inline">{{ bundleError }}</div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-action-secondary" @click="closeBundleModal">Cancel</button>
-          <button
-            type="button"
-            class="btn-action-primary"
-            :disabled="bundleSaving || bundleModalLoading"
-            @click="doAssignBundle"
-          >
-            <Icon v-if="bundleSaving || bundleModalLoading" name="sync-alt" :spin="true" />
-            Save
-          </button>
-        </div>
-      </div>
-    </div>
+        <div v-if="bundleError" class="error-inline">{{ bundleError }}</div>
+      </template>
+      <template #actions>
+        <button type="button" class="btn-action-secondary" @click="closeBundleModal">Cancel</button>
+        <button
+          type="button"
+          class="btn-action-primary"
+          :disabled="bundleSaving || bundleModalLoading"
+          @click="doAssignBundle"
+        >
+          <Icon v-if="bundleSaving || bundleModalLoading" name="sync-alt" :spin="true" />
+          Save
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Delete Confirm Modal -->
-    <div v-if="deleteTarget" class="modal-overlay" @click.self="deleteTarget = null">
-      <div class="modal modal-sm">
-        <div class="modal-header">
-          <h3>Delete User</h3>
-        </div>
-        <div class="modal-body">
-          <p>Delete <strong>{{ deleteTarget.username }}</strong>? This cannot be undone.</p>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-action-secondary" @click="deleteTarget = null">Cancel</button>
-          <button class="btn-action-danger" @click="deleteUser">Delete</button>
-        </div>
-      </div>
-    </div>
+    <BaseModal
+      :model-value="!!deleteTarget"
+      title="Delete User"
+      size="sm"
+      :show-close="false"
+      @close="deleteTarget = null"
+    >
+      <p v-if="deleteTarget">Delete <strong>{{ deleteTarget.username }}</strong>? This cannot be undone.</p>
+      <template #actions>
+        <button class="btn-action-secondary" @click="deleteTarget = null">Cancel</button>
+        <button class="btn-action-danger" @click="deleteUser">Delete</button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -255,6 +242,7 @@ import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import Icon from '@/components/ui/Icon.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import {
   useAdminVoiceBundle,
   VOICE_BUNDLE_NAMES,
@@ -793,61 +781,6 @@ onMounted(loadUsers)
   cursor: not-allowed;
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal {
-  background: var(--bg-surface, #fff);
-  border-radius: var(--radius-xl);
-  width: 100%;
-  max-width: 480px;
-  box-shadow: var(--shadow-2xl);
-  /* #10750 C2: cap height + flex column so header stays fixed and body scrolls */
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-sm {
-  max-width: 360px;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-4) var(--spacing-5);
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
-}
-
-.modal-header h3 {
-  margin: var(--spacing-0);
-  font-size: var(--text-base);
-  font-weight: 600;
-}
-
-.btn-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-secondary, #6b7280);
-  font-size: var(--text-sm);
-}
-
-.modal-body {
-  padding: var(--spacing-5);
-  /* #10750 C2: scroll long forms so footer buttons stay reachable */
-  overflow-y: auto;
-  min-height: 0;
-}
-
 .form-group {
   margin-bottom: var(--spacing-4);
 }
@@ -874,10 +807,4 @@ onMounted(loadUsers)
   margin-top: var(--spacing-2);
 }
 
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-2);
-  padding-top: var(--spacing-4);
-}
 </style>

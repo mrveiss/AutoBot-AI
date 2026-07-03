@@ -1,30 +1,17 @@
 <template>
-  <Teleport to="body">
-    <Transition name="modal-fade">
-      <div v-if="visible" class="modal-overlay" @click.self="$emit('close')">
-        <div
-          ref="dialogRef"
-          class="modal-dialog"
-          role="dialog"
-          aria-modal="true"
-          :aria-label="$t('analytics.sources.shareSource')"
-          tabindex="-1"
-          @keydown="onFocusTrapKeydown"
-          @keydown.escape="$emit('close')"
-        >
-          <!-- Header -->
-          <div class="modal-header">
-            <h3>
-              <Icon name="share-alt" />
-              {{ $t('analytics.sources.shareSource') }}
-            </h3>
-            <button class="close-btn" @click="$emit('close')" :aria-label="$t('analytics.sources.form.close')">
-              <Icon name="times" />
-            </button>
-          </div>
+  <BaseModal
+    :model-value="visible"
+    :title="$t('analytics.sources.shareSource')"
+    size="sm"
+    @close="$emit('close')"
+  >
+    <template #title>
+      <span class="modal-title-inner">
+        <Icon name="share-alt" />
+        {{ $t('analytics.sources.shareSource') }}
+      </span>
+    </template>
 
-          <!-- Body -->
-          <div class="modal-body">
             <!-- Source info -->
             <div v-if="source" class="source-info-bar">
               <i :class="source.source_type === 'github' ? 'github' : 'folder'"></i>
@@ -93,25 +80,20 @@
               <Icon name="exclamation-triangle" />
               {{ submitError }}
             </div>
-          </div>
 
-          <!-- Footer -->
-          <div class="modal-footer">
-            <button class="btn-cancel" @click="$emit('close')" type="button">{{ $t('analytics.sources.form.cancel') }}</button>
-            <button
-              class="btn-submit"
-              @click="handleSubmit"
-              :disabled="submitting || !source"
-              type="button"
-            >
-              <i :class="submitting ? 'fas fa-spinner fa-spin' : 'save'"></i>
-              {{ submitting ? $t('analytics.sources.form.saving') : $t('analytics.sources.share.updateAccess') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
+    <template #actions>
+      <button class="btn-cancel" @click="$emit('close')" type="button">{{ $t('analytics.sources.form.cancel') }}</button>
+      <button
+        class="btn-submit"
+        @click="handleSubmit"
+        :disabled="submitting || !source"
+        type="button"
+      >
+        <i :class="submitting ? 'fas fa-spinner fa-spin' : 'save'"></i>
+        {{ submitting ? $t('analytics.sources.form.saving') : $t('analytics.sources.share.updateAccess') }}
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
@@ -126,12 +108,9 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, watch, toRef } from 'vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useFocusTrap } from '@/composables/useFocusTrap'
-import { useFocusRestore } from '@/composables/useFocusRestore'
-import { useInitialFocus } from '@/composables/useInitialFocus'
-import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import { shareCodeSource } from '@/composables/analytics/useSourceRegistry'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -155,13 +134,6 @@ const emit = defineEmits<{
   (e: 'saved', source: CodeSource): void
   (e: 'close'): void
 }>()
-
-const dialogRef = ref<HTMLElement | null>(null)
-const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
-useFocusRestore(toRef(props, 'visible'))
-useBodyScrollLock(toRef(props, 'visible'))
-const { focusFirst } = useInitialFocus(dialogRef)
-watch(() => props.visible, (open) => { if (open) focusFirst() }, { immediate: true })
 
 // ---- Constants ------------------------------------------------------------
 
@@ -254,30 +226,13 @@ watch(() => props.source, (source) => {
 <style scoped>
 /* Issue #1133: Share Source Modal */
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--bg-overlay-dark);
-  z-index: var(--z-popover);
+.modal-title-inner {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: var(--spacing-4);
+  gap: var(--spacing-2);
 }
 
-.modal-dialog {
-  background: var(--bg-primary);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-2xl);
-  width: 100%;
-  max-width: 480px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.modal-header h3 i {
+.modal-title-inner i {
   color: var(--color-success);
 }
 

@@ -6,56 +6,58 @@
   adapter-type selector. Posts to POST /api/llc/companies/{id}/agent-hires.
 -->
 <template>
-  <div class="modal-overlay" @click.self="emit('close')">
-    <div class="modal-card" role="dialog" aria-modal="true" aria-label="Hire agent">
-      <h3 class="modal-title">Hire Agent</h3>
+  <BaseModal
+    :model-value="true"
+    title="Hire Agent"
+    size="sm"
+    @close="emit('close')"
+  >
+    <form class="hire-form" @submit.prevent="submit">
+      <label class="field">
+        <span class="field-label">Agent name</span>
+        <input v-model="agentName" type="text" required class="field-input" placeholder="e.g. Builder-1" />
+      </label>
 
-      <form class="hire-form" @submit.prevent="submit">
-        <label class="field">
-          <span class="field-label">Agent name</span>
-          <input v-model="agentName" type="text" required class="field-input" placeholder="e.g. Builder-1" />
-        </label>
+      <label class="field">
+        <span class="field-label">Model</span>
+        <select v-model="model" class="field-input">
+          <option value="claude-sonnet-4-6">Sonnet (default)</option>
+          <option value="claude-haiku-4-5-20251001">Haiku (assistant)</option>
+        </select>
+      </label>
 
-        <label class="field">
-          <span class="field-label">Model</span>
-          <select v-model="model" class="field-input">
-            <option value="claude-sonnet-4-6">Sonnet (default)</option>
-            <option value="claude-haiku-4-5-20251001">Haiku (assistant)</option>
-          </select>
-        </label>
+      <label class="field">
+        <span class="field-label">Org role</span>
+        <select v-model="orgRole" class="field-input">
+          <option value="worker">Worker</option>
+          <option value="specialist">Specialist</option>
+          <option value="coordinator">Coordinator</option>
+          <option value="manager">Manager</option>
+        </select>
+      </label>
 
-        <label class="field">
-          <span class="field-label">Org role</span>
-          <select v-model="orgRole" class="field-input">
-            <option value="worker">Worker</option>
-            <option value="specialist">Specialist</option>
-            <option value="coordinator">Coordinator</option>
-            <option value="manager">Manager</option>
-          </select>
-        </label>
+      <label class="field">
+        <span class="field-label">Adapter</span>
+        <AdapterTypeSelect v-model="adapterType" />
+      </label>
 
-        <label class="field">
-          <span class="field-label">Adapter</span>
-          <AdapterTypeSelect v-model="adapterType" />
-        </label>
+      <p v-if="error" class="form-error">{{ error }}</p>
+    </form>
 
-        <p v-if="error" class="form-error">{{ error }}</p>
-
-        <div class="form-actions">
-          <button type="button" class="btn btn-ghost" @click="emit('close')">Cancel</button>
-          <button type="submit" class="btn btn-primary" :disabled="submitting || !agentName">
-            {{ submitting ? 'Hiring…' : 'Hire' }}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+    <template #actions>
+      <button type="button" class="btn btn-ghost" @click="emit('close')">Cancel</button>
+      <button type="submit" class="btn btn-primary" :disabled="submitting || !agentName" @click="submit">
+        {{ submitting ? 'Hiring…' : 'Hire' }}
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import AdapterTypeSelect from './AdapterTypeSelect.vue'
 
 const props = defineProps<{ companyId: string }>()
@@ -96,31 +98,6 @@ async function submit(): Promise<void> {
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-}
-
-.modal-card {
-  width: min(28rem, 92vw);
-  background: var(--bg-surface, #fff);
-  border-radius: 10px;
-  padding: 1.5rem;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
-}
-
-.modal-title {
-  margin: 0 0 1rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--text-primary, #111827);
-}
-
 .hire-form {
   display: flex;
   flex-direction: column;
@@ -153,13 +130,6 @@ async function submit(): Promise<void> {
   margin: 0;
   font-size: 0.8rem;
   color: var(--color-error, #dc2626);
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
 }
 
 .btn {

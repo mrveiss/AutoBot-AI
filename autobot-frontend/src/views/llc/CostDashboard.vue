@@ -75,12 +75,12 @@
     </div>
 
     <!-- Budget settings modal -->
-    <div v-if="settingsModal.visible" class="modal-overlay" @click.self="closeSettings">
-      <div class="modal-box">
-        <div class="modal-header">
-          <h3 class="modal-title">{{ $t('llc.cost.settingsTitle') }}</h3>
-          <button class="btn-close" @click="closeSettings">✕</button>
-        </div>
+    <BaseModal
+      :model-value="settingsModal.visible"
+      :title="$t('llc.cost.settingsTitle')"
+      size="sm"
+      @close="closeSettings"
+    >
         <div class="modal-agent-name">{{ settingsModal.budget?.agent_name ?? settingsModal.budget?.agent_id }}</div>
 
         <div class="field-group">
@@ -142,14 +142,13 @@
 
         <div v-if="settingsModal.error" class="modal-error">{{ settingsModal.error }}</div>
 
-        <div class="modal-actions">
+        <template #actions>
           <button class="btn-secondary" @click="closeSettings">{{ $t('llc.cost.cancel') }}</button>
           <button class="btn-primary" :disabled="settingsModal.saving" @click="saveBudgetSettings">
             {{ settingsModal.saving ? $t('llc.cost.saving') : $t('llc.cost.save') }}
           </button>
-        </div>
-      </div>
-    </div>
+        </template>
+    </BaseModal>
 
     <!-- Bar chart: daily spend -->
     <div class="chart-section">
@@ -226,6 +225,7 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('CostDashboard')
@@ -646,49 +646,6 @@ onMounted(async () => {
 .btn-settings:hover { opacity: 1; }
 
 /* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.modal-box {
-  background: var(--bg-surface, #fff);
-  border-radius: 0.75rem;
-  padding: 1.5rem;
-  width: 100%;
-  max-width: 26rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.modal-title {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.btn-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1rem;
-  color: var(--text-secondary, #6b7280);
-  padding: 0.2rem;
-}
-
 .modal-agent-name {
   font-size: 0.85rem;
   color: var(--text-secondary, #6b7280);
@@ -778,13 +735,6 @@ onMounted(async () => {
   padding: 0.5rem 0.75rem;
   background: var(--color-error-bg);
   border-radius: 0.375rem;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 0.25rem;
 }
 
 .btn-primary {

@@ -24,7 +24,7 @@
         >
           <!-- Header -->
           <div class="dialog-header">
-            <h3 :id="titleId">{{ title }}</h3>
+            <h3 :id="titleId"><slot name="title">{{ title }}</slot></h3>
             <button
               v-if="showClose"
               class="close-btn"
@@ -94,6 +94,11 @@ const logger = createLogger('BaseModal')
  *   </template>
  * </BaseModal>
  * ```
+ *
+ * Slots:
+ * - default: modal body content
+ * - actions: footer action buttons
+ * - title: optional rich header content (icon + text); falls back to the `title` prop
  */
 
 interface Props {

@@ -90,25 +90,26 @@
     </div>
 
     <!-- New thread modal -->
-    <div v-if="showNewThread" class="modal-overlay" @click.self="showNewThread = false">
-      <div class="modal-panel">
-        <h3>{{ $t('llc.ceoChat.newThreadTitle') }}</h3>
-        <div class="form-field">
-          <label>{{ $t('llc.ceoChat.titleLabel') }}</label>
-          <input v-model="newThreadTitle" type="text" class="form-input" :placeholder="$t('llc.ceoChat.titlePlaceholder')" />
-        </div>
-        <div class="modal-actions">
-          <button class="btn-secondary" @click="showNewThread = false">{{ $t('llc.ceoChat.cancel') }}</button>
-          <button
-            class="btn-primary"
-            :disabled="!newThreadTitle.trim() || creatingThread"
-            @click="createThread"
-          >
-            {{ creatingThread ? $t('llc.ceoChat.creating') : $t('llc.ceoChat.create') }}
-          </button>
-        </div>
+    <BaseModal
+      v-model="showNewThread"
+      :title="$t('llc.ceoChat.newThreadTitle')"
+      size="sm"
+    >
+      <div class="form-field">
+        <label>{{ $t('llc.ceoChat.titleLabel') }}</label>
+        <input v-model="newThreadTitle" type="text" class="form-input" :placeholder="$t('llc.ceoChat.titlePlaceholder')" />
       </div>
-    </div>
+      <template #actions>
+        <button class="btn-secondary" @click="showNewThread = false">{{ $t('llc.ceoChat.cancel') }}</button>
+        <button
+          class="btn-primary"
+          :disabled="!newThreadTitle.trim() || creatingThread"
+          @click="createThread"
+        >
+          {{ creatingThread ? $t('llc.ceoChat.creating') : $t('llc.ceoChat.create') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -119,6 +120,7 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 import { useNotificationBus } from '@/composables/useNotificationBus'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 const logger = createLogger('CeoChatView')
 const api = useApiClient()
@@ -483,33 +485,6 @@ onMounted(() => {
   font-size: 0.875rem;
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-}
-
-.modal-panel {
-  background: var(--bg-surface, #fff);
-  border-radius: 0.75rem;
-  padding: 1.5rem;
-  width: 100%;
-  max-width: 420px;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.modal-panel h3 {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-}
-
 .form-field {
   display: flex;
   flex-direction: column;
@@ -529,12 +504,6 @@ onMounted(() => {
   background: var(--bg-surface, #fff);
   color: var(--text-primary);
   font-size: 0.875rem;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
 }
 
 .btn-primary {

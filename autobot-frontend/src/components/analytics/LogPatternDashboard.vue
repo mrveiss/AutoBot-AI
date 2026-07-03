@@ -171,15 +171,13 @@
     </div>
 
     <!-- Pattern Details Modal -->
-    <div v-if="selectedPattern" class="modal-overlay" @click="selectedPattern = null">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ $t('analytics.logPatterns.patternDetails', { id: selectedPattern.pattern_id }) }}</h3>
-          <button @click="selectedPattern = null" class="close-btn">
-            <Icon name="times" />
-          </button>
-        </div>
-        <div class="modal-body">
+    <BaseModal
+      :model-value="!!selectedPattern"
+      :title="selectedPattern ? $t('analytics.logPatterns.patternDetails', { id: selectedPattern.pattern_id }) : ''"
+      size="md"
+      @close="selectedPattern = null"
+    >
+      <template v-if="selectedPattern">
           <div class="detail-section">
             <h4>{{ $t('analytics.logPatterns.patternTemplate') }}</h4>
             <pre class="pattern-code">{{ selectedPattern.pattern_template }}</pre>
@@ -210,9 +208,8 @@
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+      </template>
+    </BaseModal>
 
     <!-- Loading State -->
     <div v-if="isAnalyzing && !miningResult" class="loading-overlay">
@@ -227,6 +224,7 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -827,56 +825,6 @@ onUnmounted(() => {
 
 .empty-state p {
   margin: var(--spacing-0);
-}
-
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay-backdrop);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-content {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  width: 90%;
-  max-width: 700px;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-4) var(--spacing-5);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.modal-header h3 {
-  margin: var(--spacing-0);
-  color: var(--text-primary);
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: var(--text-xl);
-  cursor: pointer;
-}
-
-.close-btn:hover {
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: var(--spacing-5);
 }
 
 .detail-section {

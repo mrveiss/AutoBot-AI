@@ -308,13 +308,12 @@
     </div>
 
     <!-- Patterns Modal -->
-    <div v-if="showPatterns" class="modal-overlay" @click.self="showPatterns = false">
-      <div class="modal patterns-modal">
-        <div class="modal-header">
-          <h3>{{ $t('analytics.performanceAnalysis.performancePatterns') }}</h3>
-          <button class="close-btn" @click="showPatterns = false">×</button>
-        </div>
-        <div class="modal-content">
+    <BaseModal
+      :model-value="showPatterns"
+      :title="$t('analytics.performanceAnalysis.performancePatterns')"
+      size="md"
+      @close="showPatterns = false"
+    >
           <div
             v-for="cat in patternCategories"
             :key="cat"
@@ -345,14 +344,13 @@
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+    </BaseModal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import { useI18n } from 'vue-i18n'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import api from '@/services/api'
