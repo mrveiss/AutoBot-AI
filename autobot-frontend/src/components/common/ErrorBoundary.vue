@@ -45,7 +45,7 @@
       </div>
     </div>
   </div>
-  <div v-else>
+  <div v-else class="h-full">
     <slot />
   </div>
 </template>
