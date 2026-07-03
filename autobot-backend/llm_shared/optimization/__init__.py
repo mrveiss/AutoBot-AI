@@ -20,6 +20,7 @@ from . import (  # noqa: E402,F401  # intentional re-export
     hf_quantizer,
     meta_eviction,
     model_inspector,
+    ssm_kernels,
     token_optimizer,
 )
 from .attention_backend import AttentionBackend as ModelAttentionBackend
@@ -82,6 +83,16 @@ from .meta_eviction import (
     get_gpu_memory_allocated,
 )
 from .model_inspector import ModelInfo, clear_cache, inspect_model
+from .ssm_kernels import (
+    HybridLayerPlan,
+    HybridRouter,
+    LayerKind,
+    LinearAttentionConfig,
+    LinearAttentionKernel,
+    SSMConfig,
+    SSMScanKernel,
+    elu_feature_map,
+)
 from .pipeline import LayerInferencePipeline, PipelineConfig, PreparedPipeline
 from .profiler import INFERENCE_STAGES, LayeredProfiler
 from .prompt_compressor import CompressionConfig, CompressionResult, PromptCompressor
@@ -182,4 +193,13 @@ __all__ = [
     "ModelInfo",
     "inspect_model",
     "clear_cache",
+    # SSM / Linear / Hybrid kernels (Issue #10724)
+    "SSMScanKernel",
+    "SSMConfig",
+    "LinearAttentionKernel",
+    "LinearAttentionConfig",
+    "HybridRouter",
+    "HybridLayerPlan",
+    "LayerKind",
+    "elu_feature_map",
 ]
