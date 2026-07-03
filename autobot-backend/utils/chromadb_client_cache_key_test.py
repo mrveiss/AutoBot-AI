@@ -34,16 +34,14 @@ def _stub_chromadb():
 def local_chroma(tmp_path):
     """Force the local PersistentClient branch with migrations + chromadb stubbed."""
     fake = _stub_chromadb()
-    with patch.dict(sys.modules, {"chromadb": fake, "chromadb.config": fake.config}), patch.object(
-        sync_mod, "_CHROMADB_HOST", ""
-    ), patch.object(async_mod, "_CHROMADB_HOST", ""), patch.object(
-        sync_mod, "_migrate_legacy_collection_configs"
-    ), patch.object(
-        sync_mod, "_fix_segment_hnsw_space"
-    ), patch.object(
-        sync_mod, "_fix_seq_id_blob_type"
-    ), patch.object(
-        sync_mod, "_fix_hnsw_pickle_format"
+    with (
+        patch.dict(sys.modules, {"chromadb": fake, "chromadb.config": fake.config}),
+        patch.object(sync_mod, "_CHROMADB_HOST", ""),
+        patch.object(async_mod, "_CHROMADB_HOST", ""),
+        patch.object(sync_mod, "_migrate_legacy_collection_configs"),
+        patch.object(sync_mod, "_fix_segment_hnsw_space"),
+        patch.object(sync_mod, "_fix_seq_id_blob_type"),
+        patch.object(sync_mod, "_fix_hnsw_pickle_format"),
     ):
         sync_mod._sync_client_cache.clear()
         async_mod._async_client_cache.clear()
