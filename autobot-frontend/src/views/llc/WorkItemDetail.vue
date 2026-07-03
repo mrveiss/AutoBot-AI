@@ -8,7 +8,7 @@
       <div class="drawer-header">
         <div class="header-left">
           <span class="item-identifier">{{ item.identifier }}</span>
-          <span class="type-badge" :class="`type-${item.type}`">{{ item.type }}</span>
+          <span class="type-badge" :class="`type-${item.type}`">{{ workItemTypeLabel(item.type) }}</span>
           <span class="status-badge" :class="`status-${item.status}`">{{ item.status.replace('_', ' ') }}</span>
         </div>
         <button class="close-btn" @click="$emit('close')" :aria-label="$t('common.close')">
@@ -240,10 +240,12 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import HandoffModal from '@/components/llc/HandoffModal.vue'
 import { useCompanyPeople } from '@/composables/llc/useCompanyPeople'
+import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
 
 const logger = createLogger('WorkItemDetail')
 const api = useApiClient()
 const { t } = useI18n()
+const { workItemTypeLabel } = useWorkItemLabels()
 
 import type { WorkItem } from './workItemTypes'
 
