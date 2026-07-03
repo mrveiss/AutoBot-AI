@@ -83,16 +83,6 @@ from .meta_eviction import (
     get_gpu_memory_allocated,
 )
 from .model_inspector import ModelInfo, clear_cache, inspect_model
-from .ssm_kernels import (
-    HybridLayerPlan,
-    HybridRouter,
-    LayerKind,
-    LinearAttentionConfig,
-    LinearAttentionKernel,
-    SSMConfig,
-    SSMScanKernel,
-    elu_feature_map,
-)
 from .pipeline import LayerInferencePipeline, PipelineConfig, PreparedPipeline
 from .profiler import INFERENCE_STAGES, LayeredProfiler
 from .prompt_compressor import CompressionConfig, CompressionResult, PromptCompressor
@@ -102,6 +92,16 @@ from .router import (
     OptimizationConfig,
     OptimizationRouter,
     get_optimization_router,
+)
+from .ssm_kernels import (
+    HybridLayerPlan,
+    HybridRouter,
+    LayerKind,
+    LinearAttentionConfig,
+    LinearAttentionKernel,
+    SSMConfig,
+    SSMScanKernel,
+    elu_feature_map,
 )
 from .token_optimizer import (
     TokenOptimizer,

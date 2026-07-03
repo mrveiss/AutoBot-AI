@@ -203,9 +203,7 @@ class TestHybridRouterDispatch:
     """Routing decisions — attention layers vs SSM layers (no torch needed)."""
 
     def _plan(self):
-        return HybridLayerPlan(
-            layer_kinds=[LayerKind.ATTENTION, LayerKind.SSM, LayerKind.ATTENTION]
-        )
+        return HybridLayerPlan(layer_kinds=[LayerKind.ATTENTION, LayerKind.SSM, LayerKind.ATTENTION])
 
     def test_attention_layer_calls_attention_fn(self):
         """Attention layers must route through the caller-supplied attention_fn."""
@@ -237,9 +235,7 @@ class TestHybridRouterDispatch:
             raise AssertionError("attention_fn must not be called for SSM layers")
 
         router = HybridRouter(self._plan(), attention_fn=attn, ssm_kernel=spy)
-        out = router.dispatch_layer(
-            1, hidden="H1", ssm_params={"a": 1, "b": 2, "c": 3, "delta": 4}
-        )
+        out = router.dispatch_layer(1, hidden="H1", ssm_params={"a": 1, "b": 2, "c": 3, "delta": 4})
         assert out == "SSM_OUT"
         assert spy.called
 
