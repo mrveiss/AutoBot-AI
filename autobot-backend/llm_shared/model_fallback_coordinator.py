@@ -28,6 +28,7 @@ import os
 from typing import TYPE_CHECKING, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 
 from .fallback_chain import get_fallback_chain_manager
 from .models import LLMRequest, LLMResponse
@@ -234,15 +235,7 @@ class ModelFallbackCoordinator:
 # Singleton
 # ---------------------------------------------------------------------------
 
-_coordinator: ModelFallbackCoordinator | None = None
-
-
-def get_fallback_coordinator() -> ModelFallbackCoordinator:
-    """Return the process-level ModelFallbackCoordinator singleton."""
-    global _coordinator
-    if _coordinator is None:
-        _coordinator = ModelFallbackCoordinator()
-    return _coordinator
+get_fallback_coordinator = lazy_singleton(ModelFallbackCoordinator)
 
 
 __all__ = ["ModelFallbackCoordinator", "get_fallback_coordinator"]
