@@ -119,6 +119,11 @@
   --bg-hover: rgba(255, 255, 255, 0.05);
   --bg-active: rgba(255, 255, 255, 0.1);
   --bg-overlay: rgba(0, 0, 0, 0.5);
+  /* Alias for the dark scrim used by dialog/modal backdrops. Several
+     components referenced --bg-overlay-dark, which was never defined
+     (backdrops rendered transparent); define it as the standard dark
+     overlay. */
+  --bg-overlay-dark: var(--bg-overlay);
   --overlay-backdrop: rgba(0, 0, 0, 0.8);
 
   /* Semi-transparent backgrounds (for overlays) */

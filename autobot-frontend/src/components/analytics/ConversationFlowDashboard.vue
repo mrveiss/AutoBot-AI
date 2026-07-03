@@ -259,7 +259,7 @@
  * Issue #704: Migrated to design tokens for centralized theming
  */
 import Icon from '@/components/ui/Icon.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import { ref, onMounted, computed } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import {

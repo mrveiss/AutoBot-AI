@@ -20,3 +20,6 @@ export type { BadgeVariant, BadgeSize } from './src/components/BaseBadge.vue'
 export { default as BaseCard } from './src/components/BaseCard.vue'
 
 export { default as EmptyState } from './src/components/EmptyState.vue'
+
+export { default as BaseModal } from './src/components/BaseModal.vue'
+export type { ModalSize } from './src/components/BaseModal.vue'

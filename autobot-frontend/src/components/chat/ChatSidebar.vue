@@ -420,7 +420,7 @@ import { getApiBase } from '@/config/ssot-config'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 

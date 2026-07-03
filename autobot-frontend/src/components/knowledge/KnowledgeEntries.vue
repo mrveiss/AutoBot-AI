@@ -459,7 +459,7 @@ import { useVirtualScroll } from '@/composables/useVirtualScroll'
 import { useBatchSelection } from '@/composables/useBatchSelection'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import { useModal } from '@/composables/useModal'
 import { createLogger } from '@/utils/debugUtils'
 

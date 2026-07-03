@@ -108,7 +108,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { createLogger } from '@/utils/debugUtils'
 

@@ -148,7 +148,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import { getBackendUrl } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 

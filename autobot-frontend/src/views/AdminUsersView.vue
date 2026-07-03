@@ -242,7 +242,7 @@ import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import Icon from '@/components/ui/Icon.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import {
   useAdminVoiceBundle,
   VOICE_BUNDLE_NAMES,

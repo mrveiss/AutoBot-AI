@@ -57,7 +57,7 @@
 import { ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import AdapterTypeSelect from './AdapterTypeSelect.vue'
 
 const props = defineProps<{ companyId: string }>()

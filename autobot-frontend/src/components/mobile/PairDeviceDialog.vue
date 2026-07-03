@@ -4,7 +4,7 @@
 // Author: mrveiss
 
 import { watch } from 'vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { usePairingQR } from '@/composables/usePairingQR'
 import { createLogger } from '@/utils/debugUtils'
