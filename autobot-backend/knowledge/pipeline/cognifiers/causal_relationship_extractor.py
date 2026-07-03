@@ -311,10 +311,13 @@ class CausalRelationshipExtractor(BaseCognifier):
             response = await self.llm.chat(
                 [{"role": "user", "content": prompt}], llm_type="extraction", structured_output=True
             )
+            # #10645: parse strictly so malformed JSON surfaces as an error
+            # rather than being silently coerced; a bad response for one chunk
+            # must not crash the whole document pipeline, so log + skip it.
+            parsed = parse_llm_json_response(response.content, strict=True)
         except Exception as e:
-            logger.error("Causal extraction LLM call failed (transient): %s", e)
+            logger.error("Causal extraction failed for chunk (skipping): %s", e)
             return []
-        parsed = parse_llm_json_response(response.content, strict=True)
         raw_edges = parsed if isinstance(parsed, list) else []
         return self._convert_to_causal_edges(raw_edges, chunk, context.document_id)
 

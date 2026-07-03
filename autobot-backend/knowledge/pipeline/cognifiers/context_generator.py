@@ -116,4 +116,7 @@ class ContextGeneratorCognifier(BaseCognifier):
 
     @staticmethod
     def is_enabled() -> bool:
-        return config.context_enabled.lower() == "true"
+        # config.context_enabled is a bool (CONTEXT_ENABLED via ssot_config);
+        # #7437 left a stale ``.lower()`` string check here. Read the bool
+        # directly so the cognifier actually activates when enabled (#10644).
+        return bool(config.context_enabled)
