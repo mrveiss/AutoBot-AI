@@ -1,0 +1,51 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# Enforces the "no commit trailers" policy — mrveiss is sole author. Fails a PR
+# whose commits carry Co-authored-by / "Generated with [Claude ...]" / the
+# cross-project Paperclip identity in the message body. Runs on a GitHub-hosted
+# runner so it never occupies the single self-hosted CI runner.
+name: No Commit Trailers
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  check-trailers:
+    name: No commit trailers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan PR commits for banned trailers
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          echo "Scanning commits ${BASE_SHA}..${HEAD_SHA}"
+          pattern='^[[:space:]]*Co-authored-by:|Generated with \[?Claude|noreply@paperclip'
+          bad=()
+          while IFS= read -r sha; do
+            [ -z "${sha}" ] && continue
+            if git log -1 --format='%B' "${sha}" | grep -iqE "${pattern}"; then
+              bad+=("${sha} $(git log -1 --format='%s' "${sha}")")
+            fi
+          done < <(git rev-list "${BASE_SHA}..${HEAD_SHA}")
+
+          if [ "${#bad[@]}" -gt 0 ]; then
+            echo "::error::Commit trailers are not allowed (mrveiss is sole author)."
+            printf 'Offending commit: %s\n' "${bad[@]}"
+            echo "Strip them and force-push, e.g.:"
+            echo "  FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --msg-filter \\"
+            echo "    'grep -viE \"^[[:space:]]*Co-authored-by:|Generated with \\[?Claude|noreply@paperclip\"' \\"
+            echo "    ${BASE_SHA}..HEAD && git push --force-with-lease"
+            exit 1
+          fi
+          echo "No banned commit trailers found."

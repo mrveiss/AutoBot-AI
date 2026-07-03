@@ -839,7 +839,11 @@ watch(selectedPeriod, () => {
 .technical-debt-dashboard {
   padding: var(--spacing-lg);
   background: var(--bg-primary);
+  /* #10750: min-h-full flex column — parent .analytics-router-view scrolls;
+     the debt inventory table grows to fill the vertical slack. */
   min-height: 100%;
+  display: flex;
+  flex-direction: column;
   color: var(--text-primary);
 }
 
@@ -1508,7 +1512,18 @@ watch(selectedPeriod, () => {
 
 /* Table Panel */
 .table-panel {
-  margin-bottom: var(--spacing-lg);
+  /* #10750: primary data widget — grow to absorb remaining vertical space. */
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.table-panel .panel-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .table-filters {
@@ -1542,7 +1557,10 @@ watch(selectedPeriod, () => {
 }
 
 .debt-table-container {
-  overflow-x: auto;
+  /* #10750: internal scroll so the table fills its grown panel. */
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .debt-table {

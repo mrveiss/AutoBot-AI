@@ -93,12 +93,12 @@
               <span class="item-identifier">{{ item.identifier }}</span>
             </td>
             <td class="col-type">
-              <span class="type-badge" :class="`type-${item.type}`">{{ item.type }}</span>
+              <span class="type-badge" :class="`type-${item.type}`">{{ workItemTypeLabel(item.type) }}</span>
             </td>
             <td class="col-title">{{ item.title }}</td>
             <td class="col-priority">
               <span class="priority-badge" :class="`priority-${item.priority}`">
-                {{ item.priority }}
+                {{ priorityLabel(item.priority) }}
               </span>
             </td>
             <td class="col-points">{{ item.story_points ?? '—' }}</td>
@@ -220,6 +220,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
@@ -228,6 +229,7 @@ const logger = createLogger('BacklogView')
 const api = useApiClient()
 const route = useRoute()
 const { t } = useI18n()
+const { workItemTypeLabel, priorityLabel } = useWorkItemLabels()
 
 const companyId = computed(() => route.params.companyId as string)
 

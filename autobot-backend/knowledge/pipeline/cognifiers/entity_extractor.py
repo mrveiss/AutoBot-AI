@@ -15,7 +15,7 @@ from typing import Any, Dict, List
 from uuid import UUID
 
 from autobot_shared.logging_manager import get_logger
-from knowledge.pipeline.base import BaseCognifier, PipelineContext
+from knowledge.pipeline.base import BaseCognifier, CognifyError, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity, EntityType
@@ -242,13 +242,24 @@ class EntityExtractor(BaseCognifier):
         return context
 
     async def _llm_process(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[Entity]:
-        """Run LLM-based extraction over all chunks in batches."""
+        """Run LLM-based extraction over all chunks in batches.
+
+        Raises CognifyError if all chunks yield zero entities, which signals a
+        systematically broken prompt or LLM config rather than isolated transients
+        (#10645 — total-extraction failure must not be a silent empty graph).
+        """
         all_entities: List[Entity] = []
         for i in range(0, len(chunks), self.batch_size):
             batch = chunks[i : i + self.batch_size]
             batch_entities = await self._process_batch(batch, context)
             all_entities.extend(batch_entities)
-        return self._merge_entities(all_entities)
+        merged = self._merge_entities(all_entities)
+        if chunks and not merged:
+            raise CognifyError(
+                f"Entity extraction yielded 0 entities across all {len(chunks)} chunk(s) — "
+                "check prompt template and LLM connectivity (#10645)"
+            )
+        return merged
 
     async def _process_batch(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[Entity]:
         """Process a batch of chunks."""

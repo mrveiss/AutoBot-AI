@@ -8131,6 +8131,30 @@
     "reviewInbox": {
       "breadcrumbCompanyOs": "Company OS",
       "breadcrumbMyReviews": "Mis revisiones"
+    },
+    "enums": {
+      "workItemType": {
+        "epic": "Épica",
+        "feature": "Función",
+        "pbi": "PBI",
+        "task": "Tarea",
+        "bug": "Error",
+        "spike": "Spike",
+        "subtask": "Subtarea",
+        "risk": "Riesgo"
+      },
+      "priority": {
+        "critical": "Crítica",
+        "high": "Alta",
+        "medium": "Media",
+        "low": "Baja"
+      },
+      "sprintStatus": {
+        "planning": "Planificación",
+        "active": "Activo",
+        "review": "Revisión",
+        "closed": "Cerrado"
+      }
     }
   },
   "code": {

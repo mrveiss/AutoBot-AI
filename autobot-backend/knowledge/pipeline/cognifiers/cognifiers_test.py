@@ -615,7 +615,10 @@ class TestContextGeneratorDisabled:
 # already-imported config) so is_enabled() sees the flag (#10644).
 @patch("knowledge.pipeline.cognifiers.context_generator.config.context_enabled", True)
 class TestContextGeneratorEnabled:
-    """ContextGeneratorCognifier enriches chunks when CONTEXT_ENABLED=true."""
+    """ContextGeneratorCognifier enriches chunks when CONTEXT_ENABLED=true.
+
+    Patches is_enabled() directly so the config singleton doesn't need reload.
+    """
 
     def _mock_redis(self, cached=None):
         mock_r = MagicMock()
@@ -707,7 +710,97 @@ class TestContextGeneratorEnabled:
         )
 
         ctx = _make_context(n_chunks=1)
-        original = ctx.chunks[0].content
+        ctx.chunks[0].content
         result = await cog.process(ctx)
 
-        assert result.chunks[0].content == f"ctx sentence\n\n{original}"
+        assert result.chunks[0].content == "ctx sentence\n\nchunk text 0"
+
+
+# ---------------------------------------------------------------------------
+# Issue #10645: cognifier fails loud on prompt-format / total-extraction failure
+# ---------------------------------------------------------------------------
+
+
+class TestEntityExtractorFailLoud:
+    """EntityExtractor raises CognifyError on total-extraction failure (#10645).
+
+    A broken prompt or total LLM outage must not silently return an empty graph.
+    """
+
+    @pytest.mark.asyncio
+    async def test_all_chunks_fail_raises_cognify_error(self, entity_extractor):
+        """All chunks returning [] triggers CognifyError, not a silent empty list."""
+        from knowledge.pipeline.base import CognifyError, PipelineContext
+
+        # Simulate LLM always failing transiently — each chunk returns []
+        entity_extractor.llm = MagicMock()
+        entity_extractor.llm.chat = AsyncMock(side_effect=RuntimeError("network error"))
+
+        ctx = PipelineContext()
+        ctx.document_id = uuid4()
+        ctx.chunks = [
+            ProcessedChunk(content="chunk A", document_id=ctx.document_id, chunk_index=0),
+            ProcessedChunk(content="chunk B", document_id=ctx.document_id, chunk_index=1),
+        ]
+
+        with pytest.raises(CognifyError, match="0 entities"):
+            await entity_extractor.process(ctx)
+
+    @pytest.mark.asyncio
+    async def test_malformed_prompt_missing_key_propagates(self, entity_extractor):
+        """A KeyError from prompt .format() propagates rather than being swallowed (#10645)."""
+        import knowledge.pipeline.cognifiers.entity_extractor as ee_mod
+        from knowledge.pipeline.base import PipelineContext
+
+        original_prompt = ee_mod.ENTITY_EXTRACTION_PROMPT
+        # Inject a broken prompt that references a missing key
+        ee_mod.ENTITY_EXTRACTION_PROMPT = "Missing: {nonexistent_key}\nText: {text}"
+        try:
+            chunk = ProcessedChunk(content="some text", document_id=uuid4(), chunk_index=0)
+            ctx = PipelineContext()
+            ctx.document_id = chunk.document_id
+            # KeyError from .format() must propagate, not be caught silently
+            with pytest.raises(KeyError):
+                await entity_extractor._extract_from_chunk(chunk, ctx)
+        finally:
+            ee_mod.ENTITY_EXTRACTION_PROMPT = original_prompt
+
+    @pytest.mark.asyncio
+    async def test_parse_error_propagates_from_extract_from_chunk(self, entity_extractor):
+        """A malformed (non-JSON) LLM response raises JSONDecodeError via strict=True (#10645)."""
+        import json
+
+        from knowledge.pipeline.base import PipelineContext
+
+        resp = MagicMock()
+        resp.content = "not valid json at all {{"
+        entity_extractor.llm = MagicMock()
+        entity_extractor.llm.chat = AsyncMock(return_value=resp)
+
+        chunk = ProcessedChunk(content="test text", document_id=uuid4(), chunk_index=0)
+        ctx = PipelineContext()
+        ctx.document_id = chunk.document_id
+
+        with pytest.raises(json.JSONDecodeError):
+            await entity_extractor._extract_from_chunk(chunk, ctx)
+
+    @pytest.mark.asyncio
+    async def test_partial_chunk_failure_does_not_raise(self, entity_extractor):
+        """Only SOME chunks failing (transient) is OK as long as total is non-zero."""
+        from knowledge.pipeline.base import PipelineContext
+
+        good_resp = MagicMock()
+        good_resp.content = '[{"name": "Python", "type": "TECHNOLOGY", "confidence": 0.9}]'
+        bad_exc = RuntimeError("timeout")
+        entity_extractor.llm = MagicMock()
+        entity_extractor.llm.chat = AsyncMock(side_effect=[bad_exc, good_resp])
+
+        ctx = PipelineContext()
+        ctx.document_id = uuid4()
+        ctx.chunks = [
+            ProcessedChunk(content="chunk A", document_id=ctx.document_id, chunk_index=0),
+            ProcessedChunk(content="chunk B", document_id=ctx.document_id, chunk_index=1),
+        ]
+        # Should complete without raising — partial failure is recoverable
+        result = await entity_extractor.process(ctx)
+        assert len(result.entities) >= 1
