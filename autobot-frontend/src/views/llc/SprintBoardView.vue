@@ -8,7 +8,7 @@
       <div class="sprint-info">
         <h2 class="sprint-title">{{ sprint.name }}</h2>
         <span class="sprint-dates">{{ formatDate(sprint.start_date) }} – {{ formatDate(sprint.end_date) }}</span>
-        <span class="sprint-status-badge" :class="`status-${sprint.status}`">{{ sprint.status }}</span>
+        <span class="sprint-status-badge" :class="`status-${sprint.status}`">{{ sprintStatusLabel(sprint.status) }}</span>
       </div>
       <div class="sprint-stats">
         <div class="stat">
@@ -52,11 +52,11 @@
             >
               <div class="card-header">
                 <span class="card-identifier">{{ item.identifier }}</span>
-                <span class="card-type-badge" :class="`type-${item.type}`">{{ item.type }}</span>
+                <span class="card-type-badge" :class="`type-${item.type}`">{{ workItemTypeLabel(item.type) }}</span>
               </div>
               <p class="card-title">{{ item.title }}</p>
               <div class="card-footer">
-                <span class="priority-dot" :class="`priority-${item.priority}`" :title="item.priority" />
+                <span class="priority-dot" :class="`priority-${item.priority}`" :title="priorityLabel(item.priority)" />
                 <span v-if="item.story_points" class="card-points">{{ item.story_points }}</span>
                 <span v-if="item.assignee_name" class="card-assignee" :title="item.assignee_name">
                   {{ initials(item.assignee_name) }}
@@ -114,11 +114,13 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
 import WorkItemDetail from './WorkItemDetail.vue'
 
 const logger = createLogger('SprintBoardView')
 const api = useApiClient()
 const route = useRoute()
+const { workItemTypeLabel, priorityLabel, sprintStatusLabel } = useWorkItemLabels()
 
 const companyId = computed(() => route.params.companyId as string)
 const boardId = computed(() => route.params.boardId as string)

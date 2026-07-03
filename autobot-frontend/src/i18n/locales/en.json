@@ -8120,6 +8120,30 @@
     "reviewInbox": {
       "breadcrumbCompanyOs": "Company OS",
       "breadcrumbMyReviews": "My Reviews"
+    },
+    "enums": {
+      "workItemType": {
+        "epic": "Epic",
+        "feature": "Feature",
+        "pbi": "PBI",
+        "task": "Task",
+        "bug": "Bug",
+        "spike": "Spike",
+        "subtask": "Subtask",
+        "risk": "Risk"
+      },
+      "priority": {
+        "critical": "Critical",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "sprintStatus": {
+        "planning": "Planning",
+        "active": "Active",
+        "review": "Review",
+        "closed": "Closed"
+      }
     }
   },
   "mobile": {
