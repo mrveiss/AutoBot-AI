@@ -84,4 +84,4 @@ notes: |
   RAG optimizer, ChromaDB). During init uvicorn binds the socket but workers
   don't accept connections — nginx returns 504 until ready.
   Never restart unless essential.
-  Python runtime: deadsnakes PPA python3.12 venv at /opt/autobot/autobot-backend/venv (Issue #1898)
+  Python runtime: deadsnakes PPA python3.14 venv at /opt/autobot/autobot-backend/venv (Issue #1898)
