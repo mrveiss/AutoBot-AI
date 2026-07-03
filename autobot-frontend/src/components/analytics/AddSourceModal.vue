@@ -1,30 +1,17 @@
 <template>
-  <Teleport to="body">
-    <Transition name="modal-fade">
-      <div v-if="visible" class="modal-overlay" @click.self="handleClose">
-        <div
-          ref="dialogRef"
-          class="modal-dialog"
-          role="dialog"
-          aria-modal="true"
-          :aria-label="isEditMode ? $t('analytics.sources.editSource') : $t('analytics.sources.addCodeSource')"
-          tabindex="-1"
-          @keydown="onFocusTrapKeydown"
-          @keydown.escape="handleClose"
-        >
-          <!-- Header -->
-          <div class="modal-header">
-            <h3>
-              <Icon :name="isEditMode ? 'edit' : 'plus-circle'" />
-              {{ isEditMode ? $t('analytics.sources.editSource') : $t('analytics.sources.addCodeSource') }}
-            </h3>
-            <button class="close-btn" @click="handleClose" :aria-label="$t('analytics.sources.form.close')">
-              <Icon name="times" />
-            </button>
-          </div>
+  <BaseModal
+    :model-value="visible"
+    :title="isEditMode ? $t('analytics.sources.editSource') : $t('analytics.sources.addCodeSource')"
+    size="sm"
+    @close="handleClose"
+  >
+    <template #title>
+      <span class="modal-title-inner">
+        <Icon :name="isEditMode ? 'edit' : 'plus-circle'" />
+        {{ isEditMode ? $t('analytics.sources.editSource') : $t('analytics.sources.addCodeSource') }}
+      </span>
+    </template>
 
-          <!-- Body -->
-          <div class="modal-body">
             <!-- Name -->
             <div class="form-group">
               <label class="form-label" for="source-name">{{ $t('analytics.sources.form.name') }} <span class="required">*</span></label>
@@ -174,26 +161,21 @@
               <Icon name="exclamation-triangle" />
               {{ submitError }}
             </div>
-          </div>
 
-          <!-- Footer -->
-          <div class="modal-footer">
-            <button class="btn-cancel" @click="handleClose" type="button">{{ $t('analytics.sources.form.cancel') }}</button>
-            <button
-              class="btn-submit"
-              @click="handleSubmit"
-              :disabled="submitting"
-              type="button"
-            >
-              <i v-if="submitting" class="fas fa-spinner fa-spin"></i>
-              <Icon v-else :name="isEditMode ? 'save' : 'plus'" />
-              {{ submitting ? $t('analytics.sources.form.saving') : (isEditMode ? $t('analytics.sources.form.saveChanges') : $t('analytics.sources.addSource')) }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
+    <template #actions>
+      <button class="btn-cancel" @click="handleClose" type="button">{{ $t('analytics.sources.form.cancel') }}</button>
+      <button
+        class="btn-submit"
+        @click="handleSubmit"
+        :disabled="submitting"
+        type="button"
+      >
+        <i v-if="submitting" class="fas fa-spinner fa-spin"></i>
+        <Icon v-else :name="isEditMode ? 'save' : 'plus'" />
+        {{ submitting ? $t('analytics.sources.form.saving') : (isEditMode ? $t('analytics.sources.form.saveChanges') : $t('analytics.sources.addSource')) }}
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
@@ -208,12 +190,9 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, watch, onMounted, toRef } from 'vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useFocusTrap } from '@/composables/useFocusTrap'
-import { useFocusRestore } from '@/composables/useFocusRestore'
-import { useInitialFocus } from '@/composables/useInitialFocus'
-import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 import { fetchSourceSecrets, saveCodeSource } from '@/composables/analytics/useSourceRegistry'
 import type { RegistrySecret } from '@/composables/analytics/useSourceRegistry'
 import { createLogger } from '@/utils/debugUtils'
@@ -246,13 +225,6 @@ const emit = defineEmits<{
   (e: 'saved', source: CodeSource): void
   (e: 'close'): void
 }>()
-
-const dialogRef = ref<HTMLElement | null>(null)
-const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
-useFocusRestore(toRef(props, 'visible'))
-useBodyScrollLock(toRef(props, 'visible'))
-const { focusFirst } = useInitialFocus(dialogRef)
-watch(() => props.visible, (open) => { if (open) focusFirst() }, { immediate: true })
 
 // ---- Constants ------------------------------------------------------------
 
@@ -422,30 +394,13 @@ onMounted(() => {
 <style scoped>
 /* Issue #1133: Add Source Modal */
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--bg-overlay-dark);
-  z-index: var(--z-popover);
+.modal-title-inner {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: var(--spacing-4);
+  gap: var(--spacing-2);
 }
 
-.modal-dialog {
-  background: var(--bg-primary);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-2xl);
-  width: 100%;
-  max-width: 540px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.modal-header h3 i {
+.modal-title-inner i {
   color: var(--color-info);
 }
 

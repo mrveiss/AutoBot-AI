@@ -4,59 +4,10 @@
  * Author: mrveiss
  *
  * Shared scoped styles for the analytics source modals (#10300, part of #9859).
- * Byte-identical rule blocks extracted from AddSourceModal.vue and
- * ShareSourceModal.vue. Selectors here are disjoint from each component's
- * remaining scoped rules, so inclusion via `<style scoped src>` is
- * order-independent and produces output identical to inlining.
+ * Body/form rule blocks shared by AddSourceModal.vue and ShareSourceModal.vue.
+ * #10750 C2b: the modal chrome (overlay/dialog/header/footer/close/fade) now
+ * lives in ui/BaseModal.vue; only the in-body form styles remain here.
  */
-
-/* Header */
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-5) var(--spacing-6);
-  border-bottom: 1px solid var(--border-default);
-  flex-shrink: 0;
-}
-
-.modal-header h3 {
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
-  margin: var(--spacing-0);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2-5);
-}
-
-.close-btn {
-  width: 2rem;
-  height: 2rem;
-  border: none;
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.close-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-/* Body */
-.modal-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--spacing-6);
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-5);
-}
 
 /* Form Groups */
 .form-group {
@@ -148,16 +99,6 @@
   color: var(--color-error);
 }
 
-/* Footer */
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-3);
-  padding: var(--spacing-5) var(--spacing-6);
-  border-top: 1px solid var(--border-default);
-  flex-shrink: 0;
-}
-
 .btn-cancel {
   padding: var(--spacing-2-5) var(--spacing-5);
   background: var(--bg-tertiary);
@@ -178,25 +119,4 @@
 .btn-submit:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-/* Transitions */
-.modal-fade-enter-active,
-.modal-fade-leave-active {
-  transition: opacity var(--duration-300);
-}
-
-.modal-fade-enter-active .modal-dialog,
-.modal-fade-leave-active .modal-dialog {
-  transition: all var(--duration-300);
-}
-
-.modal-fade-enter-from,
-.modal-fade-leave-to {
-  opacity: 0;
-}
-
-.modal-fade-enter-from .modal-dialog,
-.modal-fade-leave-to .modal-dialog {
-  transform: scale(0.95);
 }
