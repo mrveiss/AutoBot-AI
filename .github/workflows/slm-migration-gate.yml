@@ -78,7 +78,7 @@ jobs:
           python -m pip install \
             psycopg2-binary \
             pydantic pydantic-settings \
-            pytest
+            pytest "pytest-asyncio>=0.24"
 
       - name: Create slm and slm_users databases
         # runner.py targets the 'slm' database (DATABASE_URL).
