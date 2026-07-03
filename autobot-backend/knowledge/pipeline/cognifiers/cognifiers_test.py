@@ -678,7 +678,7 @@ class TestContextGeneratorEnabled:
         )
 
         ctx = _make_context(n_chunks=1)
-        original = ctx.chunks[0].content
+        ctx.chunks[0].content
         result = await cog.process(ctx)
 
         assert result.chunks[0].content == f"ctx sentence\n\nchunk text 0"
@@ -718,7 +718,6 @@ class TestEntityExtractorFailLoud:
     async def test_malformed_prompt_missing_key_propagates(self, entity_extractor):
         """A KeyError from prompt .format() propagates rather than being swallowed (#10645)."""
         import knowledge.pipeline.cognifiers.entity_extractor as ee_mod
-
         from knowledge.pipeline.base import PipelineContext
 
         original_prompt = ee_mod.ENTITY_EXTRACTION_PROMPT
