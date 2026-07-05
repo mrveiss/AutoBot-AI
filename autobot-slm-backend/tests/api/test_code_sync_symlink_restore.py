@@ -117,6 +117,7 @@ def test_get_deploy_base_honours_env_var(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("AUTOBOT_BASE_DIR", str(tmp_path))
     # Force ssot_config to be unavailable so we test the os.environ fallback path.
     import sys as _sys
+
     saved = _sys.modules.pop("autobot_shared.ssot_config", None)
     try:
         result = _get_deploy_base()
