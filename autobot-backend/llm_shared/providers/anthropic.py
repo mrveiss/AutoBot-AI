@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -68,6 +68,17 @@ _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 def _strip_think_blocks(text: str) -> str:
     """Remove ``<think>…</think>`` wrapper blocks from *text*."""
     return _THINK_BLOCK_RE.sub("", text).strip()
+
+
+def _extract_think_tag_content(text: str) -> Optional[str]:
+    """Return the concatenated inner text of all ``<think>…</think>`` blocks, or None."""
+    matches = _THINK_BLOCK_RE.findall(text)
+    if not matches:
+        return None
+    # findall returns the full match including tags; strip the wrapper.
+    inner_re = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
+    parts = inner_re.findall(text)
+    return "\n".join(p.strip() for p in parts if p.strip()) or None
 
 
 def _build_api_kwargs(
@@ -119,17 +130,47 @@ def _extract_text_content(response_content: list, preserve_reasoning: bool) -> s
     When *preserve_reasoning* is False (default) ``<think>…</think>`` wrapper
     blocks written by the model are stripped before returning.
     """
-    parts: List[str] = []
+    text, _ = _extract_content_pair(response_content, preserve_reasoning)
+    return text
+
+
+def _extract_content_pair(
+    response_content: list, preserve_reasoning: bool
+) -> tuple[str, Optional[str]]:
+    """
+    Extract ``(content, reasoning_content)`` from an Anthropic response block list.
+
+    *content* has thinking blocks removed (or ``<think>`` tags stripped unless
+    *preserve_reasoning* is True).  *reasoning_content* contains the captured
+    reasoning text from native ``thinking`` blocks and ``<think>`` tags, or
+    ``None`` if none were present.
+    """
+    reasoning_parts: List[str] = []
+    text_parts: List[str] = []
+
     for block in response_content:
         block_type = getattr(block, "type", None)
         if block_type == "thinking":
+            thinking_text = getattr(block, "thinking", None) or getattr(block, "text", None)
+            if thinking_text:
+                reasoning_parts.append(thinking_text.strip())
             continue
         text = getattr(block, "text", None)
         if text:
-            parts.append(text)
+            text_parts.append(text)
 
-    joined = "\n".join(parts)
-    return joined if preserve_reasoning else _strip_think_blocks(joined)
+    joined = "\n".join(text_parts)
+    if preserve_reasoning:
+        content = joined
+    else:
+        # Capture any <think> tags from the text blocks before stripping them.
+        tag_reasoning = _extract_think_tag_content(joined)
+        if tag_reasoning:
+            reasoning_parts.append(tag_reasoning)
+        content = _strip_think_blocks(joined)
+
+    reasoning_content: Optional[str] = "\n".join(reasoning_parts) if reasoning_parts else None
+    return content, reasoning_content
 
 
 class AnthropicProvider(BaseProvider):
@@ -250,7 +291,7 @@ class AnthropicProvider(BaseProvider):
             call_kwargs = sorted_for_cache(call_kwargs)
 
             response = await client.messages.create(**call_kwargs)
-            content = _extract_text_content(response.content, preserve_reasoning)
+            content, reasoning_content = _extract_content_pair(response.content, preserve_reasoning)
             total_tokens = response.usage.input_tokens + response.usage.output_tokens
             processing_time = time.time() - start
 
@@ -292,6 +333,7 @@ class AnthropicProvider(BaseProvider):
                     api_kwargs_applied=call_kwargs,
                     total_tokens=total_tokens,
                 ),
+                reasoning_content=reasoning_content,
             )
         except Exception as exc:
             self._total_errors += 1
@@ -351,6 +393,8 @@ __all__ = [
     "AnthropicProvider",
     "_ANTHROPIC_MODELS",
     "_build_api_kwargs",
+    "_extract_content_pair",
     "_extract_text_content",
+    "_extract_think_tag_content",
     "_strip_think_blocks",
 ]
