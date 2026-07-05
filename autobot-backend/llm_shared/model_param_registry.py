@@ -28,13 +28,15 @@ Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 
 from __future__ import annotations
 
-from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+
+# Canonical architecture-family enum (#10892 — single source of truth).
+from .types import ArchitectureFamily
 
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
@@ -58,22 +60,13 @@ _FALLBACK_KWARGS: Dict[str, Any] = {
 # ---------------------------------------------------------------------------
 # Architecture family
 # ---------------------------------------------------------------------------
-
-
-class ArchitectureFamily(str, Enum):
-    """Model architecture families (GH#7347).
-
-    Used by NPU dispatch and tiered routing to select the correct inference
-    backend.  New families can be added here without any code change — just
-    add the value to the YAML entry for the model.
-    """
-
-    TRANSFORMER = "transformer"
-    SSM = "ssm"
-    LINEAR_ATTENTION = "linear_attention"
-    HYBRID = "hybrid"
-    MOE = "moe"
-
+#
+# ``ArchitectureFamily`` is imported from ``llm_shared.types`` (#10892 — the
+# single canonical definition).  It is re-exported below so existing
+# ``from llm_shared.model_param_registry import ArchitectureFamily`` importers
+# keep working.  NPU dispatch and tiered routing select the inference backend
+# from the model's ``architecture_family`` string value; new families can be
+# added to the enum + the YAML entry with no other code change.
 
 # model_type strings found in HuggingFace config.json → ArchitectureFamily
 _MODEL_TYPE_MAP: Dict[str, str] = {
