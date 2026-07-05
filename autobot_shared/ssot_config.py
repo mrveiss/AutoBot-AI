@@ -1577,7 +1577,7 @@ class MiscConfig(BaseSettings):
     nous_api_base_url: str = Field(default="", alias="NOUS_API_BASE_URL")
     nous_api_key: str = Field(default="", alias="NOUS_API_KEY")
     nous_default_model: str = Field(default="", alias="NOUS_DEFAULT_MODEL")
-    ollama_host: str = Field(default="", alias="OLLAMA_HOST")
+    ollama_host: str = Field(default="127.0.0.1", alias="OLLAMA_HOST")
     ollama_url: str = Field(default="", alias="OLLAMA_URL")  # type: ignore[no-redef]  # GH#7105
     openai_api_base_url: str = Field(default="", alias="OPENAI_API_BASE_URL")
     openrouter_api_base_url: str = Field(default="", alias="OPENROUTER_API_BASE_URL")
