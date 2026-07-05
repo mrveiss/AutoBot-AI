@@ -46,6 +46,7 @@ async def test_ok_when_all_sources_have_live_backend():
     ch = await probe_content_reach(None)
     assert ch.status == "ok"
     assert ch.data["live"] == {"web_search": ["a"]}
+    assert ch.data["sources"] == {"web_search": ["a"]}
 
 
 @pytest.mark.asyncio
@@ -55,3 +56,12 @@ async def test_degraded_when_some_source_dead():
     reg.register_chain(ContentSourceChain("youtube", SourceType.YOUTUBE, [_B("b", False)]))
     ch = await probe_content_reach(None)
     assert ch.status == "degraded"
+
+
+@pytest.mark.asyncio
+async def test_down_when_all_sources_dead():
+    reg = get_content_source_registry()
+    reg.register_chain(ContentSourceChain("web_search", SourceType.WEB_SEARCH, [_B("a", False)]))
+    reg.register_chain(ContentSourceChain("youtube", SourceType.YOUTUBE, [_B("b", False)]))
+    ch = await probe_content_reach(None)
+    assert ch.status == "down"
