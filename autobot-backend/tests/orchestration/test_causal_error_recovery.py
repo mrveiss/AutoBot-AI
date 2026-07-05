@@ -13,25 +13,73 @@ Tests recovery recommendations for various error scenarios:
 - Pattern learning and feedback loop
 
 Issue #2154.
+
+Note (#10870): autobot-backend/conftest.py stubs the heavy causal/agent_loop/
+code_intelligence import chain (``orchestration.causal_error_recovery`` &co.) as
+MagicMocks so the lightweight, types-only orchestration tests can collect without
+the full backend stack.  This suite, however, exercises the *real* recovery logic
+(action scoring, leaf-vs-downstream classification, pattern feedback), so it must
+load the genuine modules.  We swap the stubs for the real implementations at import
+time and restore the stubs on teardown so sibling test modules that rely on them are
+unaffected — the same isolation contract used by ``tests/agent_loop/conftest.py``.
 """
 
+import sys
 from unittest.mock import MagicMock
 
 import pytest
 
-from orchestration.causal_error_analyzer import (
+# ---------------------------------------------------------------------------
+# Real-module loading (#10870).
+#
+# The parent conftest replaces the causal/agent_loop/code_intelligence packages
+# with MagicMock package stubs.  Awaiting the stubbed ``recommend_recovery`` raised
+# "object MagicMock can't be used in 'await' expression".  Drop the stubs, import the
+# real modules, then restore the exact objects we displaced so process-shared state is
+# left untouched for other test files.
+# ---------------------------------------------------------------------------
+_STUBBED_PREFIXES = ("orchestration", "agent_loop", "tools.parallel", "code_intelligence")
+_SAVED_STUBS: dict[str, object] = {
+    name: mod
+    for name, mod in list(sys.modules.items())
+    if name == "orchestration"
+    or name.startswith(tuple(f"{p}." for p in _STUBBED_PREFIXES))
+    or name in _STUBBED_PREFIXES
+}
+
+for _name in _SAVED_STUBS:
+    sys.modules.pop(_name, None)
+
+from orchestration.causal_error_analyzer import (  # noqa: E402
     CausalErrorAnalysis,
     CausalErrorAnalyzer,
 )
-from orchestration.causal_error_recovery import (
+from orchestration.causal_error_recovery import (  # noqa: E402
     CausalErrorRecovery,
     RecoveryAction,
     RecoveryPlan,
 )
-from services.failure_pattern_detector import (
+from services.failure_pattern_detector import (  # noqa: E402
     FailurePattern,
     FailurePatternDetector,
 )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_conftest_stubs():
+    """Restore the parent-conftest MagicMock stubs after this module's tests.
+
+    Keeps the real modules loaded for the duration of this file, then puts the
+    original stub objects back so sibling type-only orchestration tests (which
+    depend on the stubbed import chain) see the state they expect.
+    """
+    yield
+    for _name in list(sys.modules):
+        if _name == "orchestration" or _name.startswith(tuple(f"{_p}." for _p in _STUBBED_PREFIXES)):
+            sys.modules.pop(_name, None)
+    for _name, _mod in _SAVED_STUBS.items():
+        sys.modules[_name] = _mod  # type: ignore[assignment]
+
 
 # =============================================================================
 # Test CausalErrorRecovery
