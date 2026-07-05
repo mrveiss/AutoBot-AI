@@ -225,6 +225,7 @@ See Also:
 - docs/architecture/TERMINAL_ARCHITECTURE_DIAGRAM.md - System architecture
 """
 
+import asyncio
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -815,6 +816,8 @@ from datetime import datetime, timezone
 # In-memory store for pending host selection requests
 # In production, this would use Redis for persistence
 _pending_host_selections: Dict[str, Dict] = {}
+# Issue #10783 C: guard all check-then-act and iterate-while-mutate sequences
+_pending_host_selections_lock = asyncio.Lock()
 
 
 @router.post("/host-selection/request", response_model=AgentTerminalHostSelectionRequestResponse)
@@ -847,20 +850,21 @@ async def request_host_selection(
     request_id = str(uuid.uuid4())
 
     # Create pending selection request
-    _pending_host_selections[request_id] = {
-        "request_id": request_id,
-        "agent_session_id": request.agent_session_id,
-        "command": request.command,
-        "purpose": request.purpose,
-        "preferred_host_id": request.preferred_host_id,
-        "allow_auto_select": request.allow_auto_select,
-        "status": "pending_selection",
-        "selected_host_id": None,
-        "selected_host_name": None,
-        "connection_info": None,
-        "created_at": datetime.now(tz=timezone.utc).isoformat(),
-        "updated_at": None,
-    }
+    async with _pending_host_selections_lock:
+        _pending_host_selections[request_id] = {
+            "request_id": request_id,
+            "agent_session_id": request.agent_session_id,
+            "command": request.command,
+            "purpose": request.purpose,
+            "preferred_host_id": request.preferred_host_id,
+            "allow_auto_select": request.allow_auto_select,
+            "status": "pending_selection",
+            "selected_host_id": None,
+            "selected_host_name": None,
+            "connection_info": None,
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
+            "updated_at": None,
+        }
 
     logger.info(f"Host selection requested: {request_id}")
 
@@ -892,10 +896,10 @@ async def get_host_selection(
     - status: "pending_selection", "selected", or "cancelled"
     - If selected: includes host details and connection info
     """
-    if request_id not in _pending_host_selections:
-        raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
-
-    selection = _pending_host_selections[request_id]
+    async with _pending_host_selections_lock:
+        if request_id not in _pending_host_selections:
+            raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
+        selection = dict(_pending_host_selections[request_id])
 
     return {
         "request_id": selection["request_id"],
@@ -940,28 +944,30 @@ async def submit_host_selection(
         username: SSH username
         remember_choice: Whether to use this host for future SSH commands
     """
-    if request_id not in _pending_host_selections:
-        raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
+    async with _pending_host_selections_lock:
+        if request_id not in _pending_host_selections:
+            raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
 
-    selection = _pending_host_selections[request_id]
+        selection = _pending_host_selections[request_id]
 
-    if selection["status"] != "pending_selection":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Host selection request {request_id} is not pending (status: {selection['status']})",
-        )
+        if selection["status"] != "pending_selection":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Host selection request {request_id} is not pending (status: {selection['status']})",
+            )
 
-    # Update selection with user's choice
-    selection["status"] = "selected"
-    selection["selected_host_id"] = host_id
-    selection["selected_host_name"] = host_name
-    selection["connection_info"] = {
-        "host": host,
-        "ssh_port": ssh_port,
-        "username": username,
-    }
-    selection["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
-    selection["remember_choice"] = remember_choice
+        # Update selection with user's choice
+        selection["status"] = "selected"
+        selection["selected_host_id"] = host_id
+        selection["selected_host_name"] = host_name
+        selection["connection_info"] = {
+            "host": host,
+            "ssh_port": ssh_port,
+            "username": username,
+        }
+        selection["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
+        selection["remember_choice"] = remember_choice
+        connection_info = dict(selection["connection_info"])
 
     logger.info(f"Host selected for request {request_id}: {host_name} ({username}@{host}:{ssh_port})")
 
@@ -970,7 +976,7 @@ async def submit_host_selection(
         "request_id": request_id,
         "selected_host_id": host_id,
         "selected_host_name": host_name,
-        "connection_info": selection["connection_info"],
+        "connection_info": connection_info,
     }
 
 
@@ -991,20 +997,21 @@ async def cancel_host_selection(
 
     Called by frontend when user closes the dialog without selecting.
     """
-    if request_id not in _pending_host_selections:
-        raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
+    async with _pending_host_selections_lock:
+        if request_id not in _pending_host_selections:
+            raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
 
-    selection = _pending_host_selections[request_id]
+        selection = _pending_host_selections[request_id]
 
-    if selection["status"] != "pending_selection":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Host selection request {request_id} is not pending (status: {selection['status']})",
-        )
+        if selection["status"] != "pending_selection":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Host selection request {request_id} is not pending (status: {selection['status']})",
+            )
 
-    # Mark as cancelled
-    selection["status"] = "cancelled"
-    selection["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
+        # Mark as cancelled
+        selection["status"] = "cancelled"
+        selection["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 
     logger.info(f"Host selection cancelled for request {request_id}")
 
@@ -1030,16 +1037,17 @@ async def list_pending_host_selections(
 
     Frontend uses this to show any pending selection dialogs on page load.
     """
-    pending = [
-        {
-            "request_id": s["request_id"],
-            "command": s["command"],
-            "purpose": s["purpose"],
-            "created_at": s["created_at"],
-        }
-        for s in _pending_host_selections.values()
-        if s["status"] == "pending_selection"
-    ]
+    async with _pending_host_selections_lock:
+        pending = [
+            {
+                "request_id": s["request_id"],
+                "command": s["command"],
+                "purpose": s["purpose"],
+                "created_at": s["created_at"],
+            }
+            for s in _pending_host_selections.values()
+            if s["status"] == "pending_selection"
+        ]
 
     return {
         "status": "success",
