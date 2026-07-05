@@ -1658,12 +1658,14 @@ class AlertThresholdRequest(BaseModel):
 
 
 class RumEvent(BaseModel):
+    model_config = {"populate_by_name": True}
+
     type: str
     timestamp: str
     sessionId: str
     url: str
     userAgent: str
-    data: Metadata = {}
+    data: Metadata = Field(default_factory=dict)
 
 
 class RumConfig(BaseModel):
