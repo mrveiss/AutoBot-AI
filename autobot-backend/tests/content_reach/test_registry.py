@@ -4,6 +4,7 @@
 # Author: mrveiss
 import pytest
 
+from circuit_breaker import CircuitBreakerOpenError
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
 from content_reach.chain import ContentSourceChain
 from content_reach.registry import ContentSourceRegistry
@@ -27,6 +28,8 @@ class StubBackend(ContentBackend):
             raise BackendError("nope")
         if self._mode == "fail_result":
             return ContentResult.failure(self.source_type, "empty")
+        if self._mode == "cb_open":
+            raise CircuitBreakerOpenError("stub", 1, 0.0)
         return ContentResult(
             success=True,
             source_type=self.source_type,
@@ -65,6 +68,18 @@ async def test_falls_through_exception_then_result_failure():
     boom, empty, good = StubBackend("a", mode="fail_exc"), StubBackend("b", mode="fail_result"), StubBackend("c")
     res = await _registry(boom, empty, good).fetch("web_search", ContentRequest(query="q"))
     assert res.success and res.backend_used == "c"
+    assert boom.fetch_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_circuit_open_advances_without_cache_evict():
+    cb, good = StubBackend("a", mode="cb_open"), StubBackend("b")
+    reg = _registry(cb, good)
+    res = await reg.fetch("web_search", ContentRequest(query="q"))
+    assert res.success and res.backend_used == "b"
+    assert cb.fetch_calls == 1  # it was attempted
+    # CB-open is transient: the failed backend's probe cache entry is NOT evicted
+    assert "a" in reg._probe_cache
 
 
 @pytest.mark.asyncio

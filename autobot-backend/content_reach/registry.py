@@ -95,7 +95,7 @@ class ContentSourceRegistry:
             if result.success:
                 track_source(
                     chain.source_type,
-                    result.text[:500],
+                    (result.text or "")[:500],
                     reliability=result.reliability,
                     metadata={
                         "backend": backend.name,
