@@ -129,7 +129,7 @@ class ClaudeAPIBatchManager:
         self.payload_optimizer = PayloadOptimizer() if self.config.enable_payload_optimization else None
 
         # Optional components (folded from suite, #10796)
-        self.degradation_manager = GracefulDegradationManager({}) if self.config.enable_graceful_degradation else None
+        self.degradation_manager = GracefulDegradationManager() if self.config.enable_graceful_degradation else None
         self.todowrite_optimizer = (
             get_todowrite_optimizer(
                 {
