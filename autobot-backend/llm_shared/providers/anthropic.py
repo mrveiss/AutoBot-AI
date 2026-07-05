@@ -35,6 +35,26 @@ import time
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+
+# ---------------------------------------------------------------------------
+# Adapter helpers — lazy so tests that don't boot the full app still work.
+# ---------------------------------------------------------------------------
+
+
+def _get_adapter_sync():
+    """Return the live AutoBotClaudeAPIAdapter singleton without awaiting init.
+
+    Returns None if the module has not been imported yet or the instance is
+    absent.  Callers must handle None gracefully (fail-safe path).
+    """
+    try:
+        from utils.claude_api_integration import AutoBotClaudeAPIAdapter
+
+        return AutoBotClaudeAPIAdapter._instance
+    except Exception:
+        return None
+
+
 from autobot_shared.ssot_config import config
 from constants.model_constants import (
     ANTHROPIC_CLAUDE3_OPUS_DATED,
@@ -277,10 +297,36 @@ class AnthropicProvider(BaseProvider):
 
         Supports extended thinking when ``request.metadata["api_kwargs"]``
         contains a ``thinking`` key.
+
+        Issue #10849: outbound payload is routed through the AutoBotClaudeAPIAdapter
+        pre-send pipeline (rate-limit check, payload optimization, metric recording)
+        before being dispatched to the Anthropic API.  The adapter is accessed via
+        its module-level singleton; when absent the call proceeds unchanged (fail-safe).
         """
         self._total_requests += 1
         start = time.time()
         model = request.model_name or self._get_setting("default_model", ANTHROPIC_CLAUDE_SONNET4_6)
+
+        # --- Adapter pre-send: rate-limit + payload optimization (#10849) ----------
+        # Serialize the user-visible content for the adapter pipeline.
+        # The adapter operates on the text content; the full structured payload
+        # (tools, extra_headers, etc.) flows unchanged to the Anthropic SDK.
+        _adapter = _get_adapter_sync()
+        _context_type: str = request.llm_type.value if hasattr(request.llm_type, "value") else "general"
+        if _adapter is not None and _adapter.is_initialized:
+            try:
+                _raw_content = " ".join(m.get("content", "") for m in request.messages if isinstance(m, dict))
+                await _adapter.optimize_for_send(
+                    content=_raw_content,
+                    context_type=_context_type,
+                )
+            except Exception as _adapt_err:
+                logger.debug(
+                    "Claude adapter pre-send optimization skipped (fail-safe): %s",
+                    _adapt_err,
+                )
+        # --------------------------------------------------------------------------
+
         try:
             client = self._ensure_client()
             kwargs, extra_headers, preserve_reasoning = self._build_request_kwargs(model, request)
@@ -319,7 +365,7 @@ class AnthropicProvider(BaseProvider):
                 if thinking_tokens is not None and thinking_tokens > 0:
                     usage_dict["thinking_tokens"] = thinking_tokens
 
-            return LLMResponse(
+            llm_response = LLMResponse(
                 content=content,
                 model=response.model,
                 provider=self.provider_name,
@@ -335,14 +381,42 @@ class AnthropicProvider(BaseProvider):
                 ),
                 reasoning_content=reasoning_content,
             )
+            # --- Adapter post-send: metric recording (#10849) ---------------------
+            if _adapter is not None and _adapter.is_initialized:
+                try:
+                    _raw_len = sum(len(m.get("content", "")) for m in request.messages if isinstance(m, dict))
+                    await _adapter.record_send_result(
+                        context_type=_context_type,
+                        content_len=_raw_len,
+                        response_time=processing_time,
+                        success=True,
+                    )
+                except Exception as _rec_err:
+                    logger.debug("Claude adapter post-send record skipped: %s", _rec_err)
+            # ----------------------------------------------------------------------
+            return llm_response
         except Exception as exc:
             self._total_errors += 1
             logger.error("Anthropic chat_completion error: %s", exc)
+            processing_time = time.time() - start
+            # --- Adapter post-send: error metric recording (#10849) ---------------
+            if _adapter is not None and _adapter.is_initialized:
+                try:
+                    await _adapter.record_send_result(
+                        context_type=_context_type,
+                        content_len=sum(len(m.get("content", "")) for m in request.messages if isinstance(m, dict)),
+                        response_time=processing_time,
+                        success=False,
+                        error_message=str(exc),
+                    )
+                except Exception as _rec_err:
+                    logger.debug("Claude adapter post-send error record skipped: %s", _rec_err)
+            # ----------------------------------------------------------------------
             return LLMResponse(
                 content="",
                 model=model,
                 provider=self.provider_name,
-                processing_time=time.time() - start,
+                processing_time=processing_time,
                 request_id=request.request_id,
                 error=str(exc),
             )
@@ -352,9 +426,34 @@ class AnthropicProvider(BaseProvider):
 
         Supports extended thinking when ``request.metadata["api_kwargs"]``
         contains a ``thinking`` key.  Thinking blocks are not yielded.
+
+        Issue #10849: applies adapter pre-send optimization (rate-limit check,
+        payload optimization) before streaming begins.  Post-send metric recording
+        is not applied per-chunk; the adapter records the stream open as a single
+        individual request.  Streaming cannot be routed through submit_request()
+        which is non-streaming by design.
         """
         self._total_requests += 1
         model = request.model_name or self._get_setting("default_model", ANTHROPIC_CLAUDE_SONNET4_6)
+
+        # --- Adapter pre-send: rate-limit + payload optimization (#10849) ----------
+        _stream_adapter = _get_adapter_sync()
+        _stream_context_type = request.llm_type.value if hasattr(request.llm_type, "value") else "general"
+        if _stream_adapter is not None and _stream_adapter.is_initialized:
+            try:
+                _stream_raw = " ".join(m.get("content", "") for m in request.messages if isinstance(m, dict))
+                await _stream_adapter.optimize_for_send(
+                    content=_stream_raw,
+                    context_type=_stream_context_type,
+                )
+            except Exception as _sadapt_err:
+                logger.debug(
+                    "Claude adapter stream pre-send optimization skipped (fail-safe): %s",
+                    _sadapt_err,
+                )
+        # --------------------------------------------------------------------------
+
+        _stream_start = time.time()
         try:
             client = self._ensure_client()
             kwargs, extra_headers, _preserve = self._build_request_kwargs(model, request)
@@ -367,6 +466,19 @@ class AnthropicProvider(BaseProvider):
             async with client.messages.stream(**call_kwargs) as stream:
                 async for text in stream.text_stream:
                     yield text
+
+            # --- Adapter post-send: success metric (#10849) -----------------------
+            if _stream_adapter is not None and _stream_adapter.is_initialized:
+                try:
+                    await _stream_adapter.record_send_result(
+                        context_type=_stream_context_type,
+                        content_len=sum(len(m.get("content", "")) for m in request.messages if isinstance(m, dict)),
+                        response_time=time.time() - _stream_start,
+                        success=True,
+                    )
+                except Exception as _srec_err:
+                    logger.debug("Claude adapter stream post-send record skipped: %s", _srec_err)
+            # ----------------------------------------------------------------------
         except Exception as exc:
             self._total_errors += 1
             logger.error("Anthropic stream_completion error: %s", exc)

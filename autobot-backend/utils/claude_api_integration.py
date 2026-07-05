@@ -250,10 +250,19 @@ class ClaudeAPIBatchManager:
         return response
 
     async def _check_and_apply_rate_limit(self) -> bool:
-        """Return True if request can proceed; False if rate-limited."""
+        """Return True if request can proceed; False if rate-limited.
+
+        ``ConversationRateLimiter.can_make_request()`` returns a Dict; the
+        ``can_proceed`` key governs whether the request may proceed (#10849).
+        """
         if not self.rate_limiter:
             return True
-        if self.rate_limiter.can_make_request():
+        result = self.rate_limiter.can_make_request()
+        if isinstance(result, dict):
+            can_proceed = bool(result.get("can_proceed", True))
+        else:
+            can_proceed = bool(result)
+        if can_proceed:
             return True
         await self._increment_metric("rate_limit_hits")
         async with self._lock:
@@ -658,6 +667,78 @@ class AutoBotClaudeAPIAdapter(AsyncInitializable):
         """Optimize a TodoWrite batch via the manager (folded from suite, #10796)."""
         await self.ensure_initialized()
         return await self.manager.submit_todowrite(todos)
+
+    async def optimize_for_send(
+        self,
+        content: str,
+        context_type: str = "general",
+    ) -> str:
+        """Apply rate-limit check and payload optimization before an outbound send.
+
+        Called by provider implementations (e.g. AnthropicProvider) before
+        dispatching to the upstream API.  Returns the (possibly optimized)
+        content string.  When rate-limited and graceful degradation is not
+        available, logs a warning and returns the original content so the
+        caller's normal send path proceeds (fail-safe, not fail-closed).
+
+        Issue #10849: wires live outbound Claude requests through the adapter's
+        optimization pipeline (rate-limiter, payload optimizer, metric recording).
+        """
+        await self.ensure_initialized()
+        if not self.manager or not self.manager.is_running:
+            return content
+        await self.manager._increment_metric("total_requests")
+        if not await self.manager._check_and_apply_rate_limit():
+            if self.manager.degradation_manager:
+                try:
+                    fallback = await self.manager.degradation_manager.handle_request(content, {"type": context_type})
+                    if fallback.success:
+                        logger.debug(
+                            "Claude adapter: graceful degradation applied for context=%s",
+                            context_type,
+                        )
+                except Exception as _deg_err:
+                    logger.debug("Degradation manager error (ignored): %s", _deg_err)
+            logger.warning(
+                "Claude adapter: rate limit exceeded for context=%s; " "proceeding with original payload (fail-safe)",
+                context_type,
+            )
+            return content
+        optimized = await self.manager._optimize_payload_if_enabled(content)
+        if self.manager.rate_limiter:
+            self.manager.rate_limiter.record_request(len(content))
+        return optimized
+
+    async def record_send_result(
+        self,
+        context_type: str,
+        content_len: int,
+        response_time: float,
+        success: bool,
+        error_message: str = "",
+    ) -> None:
+        """Record post-send metrics and pattern analysis for an outbound call.
+
+        Called by provider implementations after the upstream API responds.
+        Issue #10849: feeds live send results into the adapter's metrics and
+        the tool-pattern analyzer so optimization recommendations reflect real
+        traffic.
+        """
+        if not self.manager or not self.manager.is_running:
+            return
+        if success:
+            await self.manager._increment_metric("individual_requests")
+            await self.manager._update_response_time_metric(response_time)
+        else:
+            await self.manager._increment_metric("failed_requests")
+        if self.manager.pattern_analyzer:
+            self.manager.pattern_analyzer.record_tool_call(
+                tool_name=context_type,
+                parameters={"content_len": content_len},
+                response_time=response_time,
+                success=success,
+                error_message=error_message if not success else "",
+            )
 
     async def shutdown(self):
         """Shutdown the adapter."""
