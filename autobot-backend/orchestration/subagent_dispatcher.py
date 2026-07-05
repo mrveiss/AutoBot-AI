@@ -10,10 +10,9 @@ orchestration.subagent_dispatcher (issue #10666 B3).
 
 import asyncio
 import json
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List
-
-import threading
 
 from autobot_shared.logging_manager import get_logger
 from orchestration.primitives import bounded_gather
