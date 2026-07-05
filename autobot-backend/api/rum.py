@@ -49,7 +49,7 @@ logger = get_logger(__name__)
 
 # RUM configuration storage
 rum_config = {
-    "enabled": False,
+    "enabled": True,
     "error_tracking": True,
     "performance_monitoring": True,
     "interaction_tracking": False,
@@ -229,7 +229,7 @@ async def log_rum_event(event: RumEvent):
                 return {"status": "disabled", "message": "RUM monitoring is disabled"}
 
             # Convert event to dictionary for processing
-            event_data = event.dict()
+            event_data = event.model_dump()
             event_data["server_timestamp"] = datetime.now(tz=timezone.utc).isoformat()
 
             # Store event in memory (in production, this would go to Redis/DB)
