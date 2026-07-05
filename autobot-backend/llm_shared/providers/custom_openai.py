@@ -136,6 +136,9 @@ class CustomOpenAIProvider(BaseProvider):
                     except Exception:
                         args = {}
                     tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, arguments=args))
+            # #10582: capture reasoning_content from providers that surface it
+            # (DeepSeek-R1, QwQ, SGLang, and similar OpenAI-compat servers).
+            reasoning_content: str | None = getattr(choice.message, "reasoning_content", None) or None
             return LLMResponse(
                 content=choice.message.content or "",
                 model=api_model,
@@ -154,6 +157,7 @@ class CustomOpenAIProvider(BaseProvider):
                     api_kwargs_applied=params,
                     total_tokens=total_tokens,
                 ),
+                reasoning_content=reasoning_content,
             )
         except Exception as exc:
             self._total_errors += 1
