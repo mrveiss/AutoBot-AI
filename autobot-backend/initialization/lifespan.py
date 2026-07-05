@@ -102,7 +102,7 @@ async def _init_cache_coordinator() -> None:
 
         cache_count = await register_all_caches()
         logger.info(
-            "✅ [ 55%] Cache: %d caches registered for coordinated management",
+            "✅ [ 55%%] Cache: %d caches registered for coordinated management",
             cache_count,
         )
     except Exception as cache_error:
@@ -596,14 +596,14 @@ async def _warmup_npu_connection(app: FastAPI) -> None:
         if result["status"] == "success":
             npu_ready = True
             logger.info(
-                "✅ [ 82%] NPU Warmup: Connection ready (%.1fms, %d dimensions)",
+                "✅ [ 82%%] NPU Warmup: Connection ready (%.1fms, %d dimensions)",
                 result.get("warmup_time_ms", 0),
                 result.get("embedding_dimensions", 0),
             )
         elif result["status"] == "npu_unavailable":
             logger.info("🔄 [ 82%] NPU Warmup: NPU unavailable, using fallback embeddings")
         else:
-            logger.warning("⚠️ [ 82%] NPU Warmup: %s", result.get("message", "Unknown status"))
+            logger.warning("⚠️ [ 82%%] NPU Warmup: %s", result.get("message", "Unknown status"))
 
     except Exception as warmup_error:
         logger.warning("NPU warmup failed: %s", warmup_error)
@@ -727,7 +727,7 @@ async def _auto_index_documentation():
         if not indexer.needs_indexing():
             stats = await indexer.get_stats()
             logger.info(
-                "✅ [ 85%] Doc Index: Collection has %d vectors, skipping",
+                "✅ [ 85%%] Doc Index: Collection has %d vectors, skipping",
                 stats.get("count", 0),
             )
             return
@@ -758,7 +758,7 @@ async def _init_log_forwarding():
             success = forwarder.start()
             if success:
                 logger.info(
-                    "✅ [ 86%] Log Forwarding: Started with %d destination(s)",
+                    "✅ [ 86%%] Log Forwarding: Started with %d destination(s)",
                     len(forwarder.destinations),
                 )
             else:
@@ -1104,7 +1104,7 @@ async def _init_slm_client():
             )
 
         await init_slm_client(slm_url, slm_token)
-        logger.info("✅ [ 89%] SLM Client: Connected to SLM server at %s", slm_url)
+        logger.info("✅ [ 89%%] SLM Client: Connected to SLM server at %s", slm_url)
         from services.slm.deployment_bridge import init_orchestrator
         from services.slm_client import get_slm_client as _get_slm_client
 
@@ -1177,7 +1177,7 @@ async def _init_background_llm_sync(app: FastAPI):
                     if agents_info.get("agents"):
                         app.state.ai_stack_agents = agents_info
                         logger.info(
-                            "✅ [ 90%] AI Stack: %d agents registered from %s",
+                            "✅ [ 90%%] AI Stack: %d agents registered from %s",
                             len(agents_info["agents"]),
                             agents_info.get("source", "ai_stack"),
                         )
