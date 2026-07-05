@@ -22,6 +22,72 @@ Two-phase research skill: first understand the source, then compare against Auto
 
 **Comments** after the primary input provide steering context for both phases.
 
+## Capability Tiers
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ research                                                      │
+├─────────────────────────────────────────────────────────────┤
+│ STANDALONE   (always works, zero config)                     │
+│   • Analyze a given URL, GitHub repo, or local file          │
+│   • web-fetch degradation: Jina Reader → wget → httpx        │
+├─────────────────────────────────────────────────────────────┤
+│ SUPERCHARGED (unlocks when you connect a provider)           │
+│   • SEARXNG_INSTANCE_URL    → topic search (no URL given)    │
+│   • BRAVE_SEARCH_API_KEY    → topic search + preferred       │
+│                               ranking, SearXNG as fallback   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**STANDALONE — always works, zero config**
+
+- Analyze any explicitly-supplied source: a URL (fetched via the `web-fetch`
+  skill, which itself degrades Jina Reader → `wget` → `httpx`), a GitHub repo,
+  or a local file path.
+- Full Phase 1 / Phase 2 comparison against the AutoBot codebase.
+
+**SUPERCHARGED — unlocks per connected provider**
+
+Topic search (a plain-text query with no URL) needs a configured web-search
+provider. The runtime registry
+([`autobot-backend/agent_loop/search/registry.py`](../../../autobot-backend/agent_loop/search/registry.py))
+is credential-gated and degrades in this order:
+
+| Connect this | Unlocks |
+|--------------|---------|
+| `SEARXNG_INSTANCE_URL` | Topic search via a self-hosted SearXNG instance. |
+| `BRAVE_SEARCH_API_KEY` | Topic search via Brave (preferred when both are set); SearXNG becomes the fallback. |
+| *(neither set)* | Topic search returns no results — the skill still works on any directly-supplied URL/repo/file. |
+
+The registry never errors on a missing provider: an unconfigured or unreachable
+provider degrades to the next one, and an empty chain returns `[]` (no results)
+rather than failing.
+
+## Output Contract
+
+Regardless of tier, topic-search research follows a fixed **Summary → findings →
+verdict** shape so results are comparable across runs:
+
+```
+## Research: <query or source>
+
+**Summary:** one-to-three sentence answer.
+
+### Findings
+
+| # | Source | Provider/Tier | Key point |
+|---|--------|---------------|-----------|
+| 1 | <title / url> | brave | searxng | direct-url | ... |
+| 2 | ...    | ...           | ...       |
+
+**Verdict:** the bottom-line conclusion, with the confidence level and any
+caveat (e.g. "no web-search provider configured — direct sources only").
+```
+
+Phase 1 (Source Analysis) and Phase 2 (AutoBot Comparison) keep their existing
+section structures below; the contract above governs the topic-search entry
+point specifically.
+
 ## Phase 1 — Understand Source
 
 Fetch and analyze the input. Produce this structure:
