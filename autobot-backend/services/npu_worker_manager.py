@@ -784,7 +784,7 @@ class NPUWorkerManager(AsyncInitializable):
 
         try:
             key = f"npu:worker:{worker_id}:status"
-            value = status.json()
+            value = status.model_dump_json()
 
             # Store with TTL (2x health check interval)
             ttl = self._load_balancing_config.health_check_interval * 2
@@ -857,7 +857,7 @@ class NPUWorkerManager(AsyncInitializable):
         try:
             key = f"npu:worker:{worker_id}:metrics"
             ttl = self._load_balancing_config.health_check_interval * 2
-            await self.redis_client.setex(key, ttl, metrics.json())
+            await self.redis_client.setex(key, ttl, metrics.model_dump_json())
         except Exception as e:
             logger.error("Failed to store worker metrics in Redis: %s", e)
 
