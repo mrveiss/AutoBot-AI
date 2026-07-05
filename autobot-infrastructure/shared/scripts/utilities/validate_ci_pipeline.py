@@ -30,7 +30,6 @@ def validate_workflow():
 
         # Check required top-level keys (handle YAML parsing quirk with 'on')
         required_keys = ["name", "jobs"]
-        trigger_key = "on" if "on" in workflow else True  # YAML parses 'on:' as True sometimes
 
         for key in required_keys:
             if key in workflow:
@@ -78,7 +77,7 @@ def validate_workflow():
 
         print("\n🎯 Pipeline Features:")
         features = [
-            "Python 3.12 testing",
+            "Python 3.14 testing",
             "Security testing with bandit",
             "Code quality checks (black, isort, flake8)",
             "Unit and integration tests",

@@ -8,6 +8,7 @@ Unit tests for RelationshipExtractor NLP-mode additions.
 Issue #2026: Dual-mode relationship extraction — LLM + NLP.
 """
 
+import contextlib
 import sys
 from types import ModuleType
 from unittest.mock import MagicMock
@@ -15,24 +16,54 @@ from uuid import uuid4
 
 import pytest
 
-# Mock llm_shared before importing cognifiers
-_mock_llm = ModuleType("llm_shared")
-_mock_llm.LLMInterface = MagicMock
-sys.modules["llm_shared"] = _mock_llm
 
-# Mock autobot_shared before importing cognifiers
-_mock_shared = ModuleType("autobot_shared")
-_mock_redis_mod = ModuleType("autobot_shared.redis_client")
-_mock_redis_mod.get_redis_client = MagicMock()
-sys.modules["autobot_shared"] = _mock_shared
-sys.modules["autobot_shared.redis_client"] = _mock_redis_mod
+@contextlib.contextmanager
+def _stubbed_import_modules():
+    """Install lightweight ``sys.modules`` stubs only while importing cognifiers.
 
-from knowledge.pipeline.cognifiers.relationship_extractor import (  # noqa: E402
-    NLP_KEYWORD_PATTERNS,
-    RelationshipExtractor,
-)
-from knowledge.pipeline.models.chunk import ProcessedChunk  # noqa: E402
-from knowledge.pipeline.models.entity import Entity  # noqa: E402
+    ``llm_shared`` and ``autobot_shared.redis_client`` pull heavy runtime deps at
+    import time, so they are stubbed before the cognifier module loads.  These stubs
+    previously lived at module top level and leaked process-wide — the leaked
+    ``autobot_shared.redis_client`` stub lacked ``get_async_redis_client`` and broke
+    ``services/chat_knowledge_service_test.py`` when co-collected (#10879).  Scope them
+    to the import window and restore whatever the parent conftest installed on exit.
+
+    Only the ``autobot_shared.redis_client`` submodule is stubbed — never the
+    ``autobot_shared`` package itself — so sibling imports like
+    ``autobot_shared.logging_manager`` keep resolving through the real package.
+    """
+    saved = {name: sys.modules.get(name) for name in ("llm_shared", "autobot_shared.redis_client")}
+
+    _mock_llm = ModuleType("llm_shared")
+    _mock_llm.LLMInterface = MagicMock
+    sys.modules["llm_shared"] = _mock_llm
+
+    _mock_redis_mod = ModuleType("autobot_shared.redis_client")
+    _mock_redis_mod.get_redis_client = MagicMock()
+
+    async def _get_async_redis_client_stub(*_a, **_k):
+        return None
+
+    _mock_redis_mod.get_async_redis_client = _get_async_redis_client_stub
+    sys.modules["autobot_shared.redis_client"] = _mock_redis_mod
+
+    try:
+        yield
+    finally:
+        for name, original in saved.items():
+            if original is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = original
+
+
+with _stubbed_import_modules():
+    from knowledge.pipeline.cognifiers.relationship_extractor import (
+        NLP_KEYWORD_PATTERNS,
+        RelationshipExtractor,
+    )
+    from knowledge.pipeline.models.chunk import ProcessedChunk
+    from knowledge.pipeline.models.entity import Entity
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -163,27 +194,34 @@ class TestKeywordPatternCreatesTypedRelationship:
 
 
 class TestAutoSelectsNlpForLargeInput:
-    """Issue #2026: auto mode switches to NLP when total chars exceed threshold."""
+    """Issue #2052: auto mode switches to NLP when the chunk count exceeds the threshold.
+
+    ``nlp_threshold`` is a *chunk count*, not a character count — RelationshipExtractor
+    uses the same unit as EntityExtractor so both extractors pick the same mode for the
+    same input (see ``RelationshipExtractor._select_mode``).  These cases were originally
+    written for the superseded #2026 char-count semantics; #10880 realigns them with the
+    chunk-count contract the code actually implements.
+    """
 
     def test_auto_selects_nlp_above_threshold(self):
-        extractor = RelationshipExtractor(mode="auto", nlp_threshold=10)
-        chunk = _chunk("A" * 20)  # 20 chars > threshold 10
+        extractor = RelationshipExtractor(mode="auto", nlp_threshold=5)
+        chunks = [_chunk(f"chunk {i}") for i in range(10)]  # 10 chunks > threshold 5
 
-        mode = extractor._select_mode([chunk])
+        mode = extractor._select_mode(chunks)
 
         assert mode == "nlp"
 
     def test_auto_selects_llm_below_threshold(self):
         extractor = RelationshipExtractor(mode="auto", nlp_threshold=500)
-        chunk = _chunk("Short chunk.")
+        chunks = [_chunk("Short chunk.")]  # 1 chunk < threshold 500
 
-        mode = extractor._select_mode([chunk])
+        mode = extractor._select_mode(chunks)
 
         assert mode == "llm"
 
     def test_auto_selects_nlp_multi_chunk_cumulative(self):
-        extractor = RelationshipExtractor(mode="auto", nlp_threshold=50)
-        chunks = [_chunk("A" * 30), _chunk("B" * 30)]  # 60 total > 50
+        extractor = RelationshipExtractor(mode="auto", nlp_threshold=2)
+        chunks = [_chunk("A"), _chunk("B"), _chunk("C")]  # 3 chunks > threshold 2
 
         mode = extractor._select_mode(chunks)
 
@@ -193,7 +231,8 @@ class TestAutoSelectsNlpForLargeInput:
         extractor = RelationshipExtractor(mode="nlp", nlp_threshold=500)
         chunk = _chunk("Tiny.")
 
-        # _select_mode would return "llm" for tiny input, but mode is forced
+        # _select_mode would return "llm" for a single chunk (1 < 500), but the
+        # explicit mode is what process() honours regardless of _select_mode.
         assert extractor.mode == "nlp"
         assert extractor._select_mode([chunk]) == "llm"
 
