@@ -142,6 +142,7 @@ class RumAgent {
     verySlowApiCall: number
     timeoutThreshold: number
   }
+  private rumEventEndpoint: string
   // Issue #476: Prometheus metrics export configuration
   private prometheusEnabled: boolean
   private prometheusEndpoint: string
@@ -172,6 +173,7 @@ class RumAgent {
       timeoutThreshold: 30000 // ms
     }
 
+    this.rumEventEndpoint = getApiBase() + '/rum/event'
     // Issue #476: Initialize Prometheus metrics export
     this.prometheusEnabled = localStorage.getItem('rum_prometheus_enabled') !== 'false'
     this.prometheusEndpoint = getApiBase() + '/rum/metrics'
@@ -380,6 +382,10 @@ class RumAgent {
     }
 
     this.metrics.errors.push(error)
+
+    // #10938: Send structured event to /api/rum/event so the per-event rum.log
+    // captures it. errorData is nested under `data` as the backend formatter expects.
+    this.sendRumEvent(type, errorData)
 
     // Issue #476: Queue for Prometheus reporting
     if (this.prometheusEnabled) {
@@ -649,6 +655,27 @@ class RumAgent {
         // Metrics will be collected in next batch
       })
     }
+  }
+
+  // #10938: Post a structured RumEvent to /api/rum/event so rum.log captures it.
+  // errorData fields go into the nested `data` field the backend formatter expects.
+  private sendRumEvent(type: string, errorData: Record<string, any>): void {
+    const payload = {
+      type,
+      timestamp: new Date().toISOString(),
+      sessionId: this.sessionId,
+      url: window.location.href,
+      userAgent: navigator.userAgent,
+      data: errorData
+    }
+    fetch(this.rumEventEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true
+    }).catch(() => {
+      // Silently ignore — never disrupt the user experience for telemetry
+    })
   }
 
   // Issue #476: Enable/disable Prometheus reporting
