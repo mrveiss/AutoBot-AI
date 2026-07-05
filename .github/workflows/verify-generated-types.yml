@@ -1,0 +1,102 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Generated Types Freshness Gate (GH#10817)
+# autobot-frontend/src/types/generated/api.ts is generated from the backend
+# OpenAPI schema (`npm run gen:types`). Nothing gated its freshness, so it
+# silently drifted: #10746 hand-found 12 dead Enhanced* schemas and #10776
+# cleaned dead aliases, both because a stale api.ts still type-checks.
+#
+# This job regenerates api.ts from the authoritative backend schema
+# (app.openapi(), same recipe as the API wiring audit) using the pinned
+# openapi-typescript, then `git diff --exit-code`. If it drifts, the diff is
+# non-empty and this gate goes red — run `npm run gen:types` against a running
+# backend and commit the result.
+#
+# Runs on GitHub-hosted ubuntu-latest (not the self-hosted runner) so it adds
+# no load to the single self-hosted runner.
+
+name: Verify Generated Types
+
+on:
+  push:
+    branches: [ main, Dev_new_gui ]
+    paths: &paths
+      - 'autobot-backend/**/*.py'
+      - 'autobot-frontend/src/types/generated/api.ts'
+      - 'autobot-frontend/package.json'
+      - 'autobot-frontend/package-lock.json'
+      - 'scripts/audit_api_wiring.py'
+      - 'requirements*.txt'
+      - '.github/workflows/verify-generated-types.yml'
+  pull_request:
+    branches: [ main, Dev_new_gui ]
+    paths: *paths
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify-generated-types:
+    name: verify-generated-types
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements-ci.txt --prefer-binary
+
+      - name: Dump authoritative OpenAPI schema
+        run: |
+          set -o pipefail
+          export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
+          mkdir -p data logs static config
+          if ! python scripts/audit_api_wiring.py --dump-openapi openapi.raw.json; then
+            echo "::error::Backend app.openapi() build failed — cannot verify generated types."
+            echo "This usually means the backend does not import cleanly in CI (see startup-import-smoke)."
+            exit 1
+          fi
+          # Strip the audit-only x-websocket-paths extension so the schema matches
+          # exactly what the live server serves to `npm run gen:types`.
+          python -c "import json; s=json.load(open('openapi.raw.json')); s.pop('x-websocket-paths', None); json.dump(s, open('openapi.json','w'))"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: autobot-frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: autobot-frontend
+        run: npm ci
+
+      - name: Regenerate api.ts from authoritative schema
+        working-directory: autobot-frontend
+        run: npx --no-install openapi-typescript ../openapi.json -o src/types/generated/api.ts --additional-properties
+
+      - name: Fail if generated types drifted
+        run: |
+          if ! git diff --exit-code autobot-frontend/src/types/generated/api.ts; then
+            echo "::error::autobot-frontend/src/types/generated/api.ts is stale."
+            echo "The backend OpenAPI schema changed but the committed generated types were not updated."
+            echo "Fix: run 'npm run gen:types' against a running backend and commit src/types/generated/api.ts."
+            exit 1
+          fi
+          echo "Generated types are fresh."
