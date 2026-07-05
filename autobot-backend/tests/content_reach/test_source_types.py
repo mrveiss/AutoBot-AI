@@ -9,12 +9,15 @@ import pytest
 from source_attribution import Source, SourceReliability, SourceType
 
 
-@pytest.mark.parametrize("member,value", [
-    ("YOUTUBE", "youtube"),
-    ("REDDIT", "reddit"),
-    ("WEB_PAGE", "web_page"),
-    ("SOCIAL", "social"),
-])
+@pytest.mark.parametrize(
+    "member,value",
+    [
+        ("YOUTUBE", "youtube"),
+        ("REDDIT", "reddit"),
+        ("WEB_PAGE", "web_page"),
+        ("SOCIAL", "social"),
+    ],
+)
 def test_new_source_types_exist(member, value):
     assert SourceType[member].value == value
 
