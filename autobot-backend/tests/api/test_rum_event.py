@@ -19,7 +19,6 @@ from pydantic import ValidationError
 
 from api.schemas_analytics import RumEvent
 
-
 # ---------------------------------------------------------------------------
 # RumEvent schema validation
 # ---------------------------------------------------------------------------
