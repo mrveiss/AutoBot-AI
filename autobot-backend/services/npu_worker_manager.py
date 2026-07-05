@@ -816,7 +816,7 @@ class NPUWorkerManager(AsyncInitializable):
             p95_values = []
             for key in keys:
                 key_str = key.decode() if isinstance(key, bytes) else key
-                model_id = key_str[len(prefix):]
+                model_id = key_str[len(prefix) :]
                 p95 = await self._get_pulse_p95_latency(worker_id, model_id)
                 if p95 is not None:
                     p95_values.append(p95)

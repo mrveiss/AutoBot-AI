@@ -120,9 +120,7 @@ async def test_worker_added_event_published_at_add_worker():
         published_calls.append((channel, event_type, payload))
 
     # Stub collaborators so add_worker() reaches _emit_worker_event
-    mgr.test_worker_connection = AsyncMock(
-        return_value=MagicMock(success=True, error_message=None)
-    )
+    mgr.test_worker_connection = AsyncMock(return_value=MagicMock(success=True, error_message=None))
     mgr._check_worker_health = AsyncMock()
     mgr._save_workers_to_config = AsyncMock()
     mgr.get_worker = AsyncMock(return_value=worker_details)
@@ -171,17 +169,13 @@ async def test_worker_status_changed_event_published_at_store_and_emit_status():
         )
 
     event_types = [et for _, et, _ in published_calls]
-    assert "npu.worker.status.changed" in event_types, (
-        f"npu.worker.status.changed not published; got {event_types}"
-    )
+    assert "npu.worker.status.changed" in event_types, f"npu.worker.status.changed not published; got {event_types}"
 
     status_payload = next(p for _, et, p in published_calls if et == "npu.worker.status.changed")
     assert status_payload["event"] == "worker.status.changed"
     assert status_payload["worker_id"] == _WORKER_ID
     # worker.status.changed is now in _WORKER_FULL_DATA_EVENTS (#10602 6.4)
-    assert "worker" in status_payload, (
-        "Full worker dict must be present in npu.worker.status.changed payload"
-    )
+    assert "worker" in status_payload, "Full worker dict must be present in npu.worker.status.changed payload"
 
 
 @pytest.mark.asyncio
@@ -242,19 +236,15 @@ async def test_worker_metrics_updated_event_published_at_heartbeat():
         await mgr.update_worker_status_from_heartbeat(heartbeat)
 
     event_types = [et for _, et, _ in published_calls]
-    assert "npu.worker.metrics.updated" in event_types, (
-        f"npu.worker.metrics.updated not published; got {event_types}"
-    )
+    assert "npu.worker.metrics.updated" in event_types, f"npu.worker.metrics.updated not published; got {event_types}"
 
-    metrics_payload = next(
-        p for _, et, p in published_calls if et == "npu.worker.metrics.updated"
-    )
+    metrics_payload = next(p for _, et, p in published_calls if et == "npu.worker.metrics.updated")
     assert metrics_payload["event"] == "worker.metrics.updated"
     assert metrics_payload["worker_id"] == _WORKER_ID
     # The WS subscriber reads data["metrics"] (#10602 6.4)
-    assert "metrics" in metrics_payload["data"], (
-        "metrics key must be present in data payload of npu.worker.metrics.updated"
-    )
+    assert (
+        "metrics" in metrics_payload["data"]
+    ), "metrics key must be present in data payload of npu.worker.metrics.updated"
     assert metrics_payload["data"]["metrics"]["avg_response_time_ms"] == 123.4
 
 
@@ -277,9 +267,7 @@ async def test_build_worker_metrics_nonzero_avg_response_time_when_pulse_data_ex
 
     result = await mgr._build_worker_metrics(_WORKER_ID, status)
 
-    assert result.avg_response_time_ms == 250.0, (
-        f"Expected 250.0 ms, got {result.avg_response_time_ms}"
-    )
+    assert result.avg_response_time_ms == 250.0, f"Expected 250.0 ms, got {result.avg_response_time_ms}"
     assert result.id == _WORKER_ID
     assert result.success_rate > 0.0
 
