@@ -654,6 +654,36 @@ class SkillTracesResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# skills/bundles.py schemas  (Issue #10540)
+# ---------------------------------------------------------------------------
+
+
+class SkillBundleResponse(BaseModel):
+    """A single role-curated skill bundle returned by GET /skills/bundles."""
+
+    id: str
+    name: str
+    description: str
+    member_skill_ids: List[str]
+
+
+class SkillBundlesListResponse(BaseModel):
+    """Response for GET /skills/bundles (Issue #10540)."""
+
+    bundles: List[SkillBundleResponse]
+    total: int
+
+
+class SkillBundleInstallResponse(BaseModel):
+    """Response for POST /skills/bundles/{bundle_id}/enable (Issue #10540)."""
+
+    bundle_id: str
+    enabled: List[str]
+    skipped: List[str]
+    failed: Dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
 # structured_thinking_mcp.py schemas  (Issue #5912)
 # ---------------------------------------------------------------------------
 
