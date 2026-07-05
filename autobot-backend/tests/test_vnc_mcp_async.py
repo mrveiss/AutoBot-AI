@@ -94,6 +94,14 @@ def _install_stubs() -> dict:
     # so it does NOT require api to be a real importable package.
     _stub("api")
 
+    # api.vnc_manager — stub _run_xdotool_cmd so that the lazy imports inside
+    # desktop_mouse_click_mcp / desktop_keyboard_type_mcp / desktop_special_key_mcp
+    # resolve without needing the real module (which has its own heavy deps).
+    def _run_xdotool_cmd(args, timeout=5):  # pragma: no cover
+        return {"status": "success", "message": "Action completed"}
+
+    _stub("api.vnc_manager", _run_xdotool_cmd=_run_xdotool_cmd)
+
     # api.schemas_system — exact names imported by vnc_mcp.py lines 28-45
     _schema_attrs = {
         n: MagicMock
@@ -295,3 +303,62 @@ class TestSubprocessDispatchedViaToThread:
         kw = calls[1].kwargs
         assert kw.get("env") == {"DISPLAY": ":1"}
         assert kw.get("timeout") == 5
+
+
+class TestXdotoolMcpDispatchedViaToThread:
+    """
+    Verify desktop_mouse_click_mcp, desktop_keyboard_type_mcp, and
+    desktop_special_key_mcp dispatch _run_xdotool_cmd via asyncio.to_thread
+    (#10783 Category B fix).
+    """
+
+    @pytest.mark.asyncio
+    async def test_mouse_click_dispatches_via_to_thread(self, vnc_mcp_module):
+        """desktop_mouse_click_mcp wraps _run_xdotool_cmd in asyncio.to_thread."""
+        fake_result = {"status": "success", "message": "Action completed"}
+        request_mock = MagicMock()
+        request_mock.x = 100
+        request_mock.y = 200
+        request_mock.button = "left"
+
+        with patch("asyncio.to_thread", new_callable=AsyncMock, return_value=fake_result) as mock_tt:
+            result = await vnc_mcp_module.desktop_mouse_click_mcp(request_mock)
+
+        assert mock_tt.called, "asyncio.to_thread was never called in desktop_mouse_click_mcp"
+        assert result["success"] is True
+        first_positional = mock_tt.call_args_list[0].args
+        # First arg to to_thread must be the sync _run_xdotool_cmd function
+        assert callable(first_positional[0]), "First arg to asyncio.to_thread must be callable (_run_xdotool_cmd)"
+        assert first_positional[0].__name__ == "_run_xdotool_cmd"
+
+    @pytest.mark.asyncio
+    async def test_keyboard_type_dispatches_via_to_thread(self, vnc_mcp_module):
+        """desktop_keyboard_type_mcp wraps _run_xdotool_cmd in asyncio.to_thread."""
+        fake_result = {"status": "success", "message": "Action completed"}
+        request_mock = MagicMock()
+        request_mock.text = "hello world"
+
+        with patch("asyncio.to_thread", new_callable=AsyncMock, return_value=fake_result) as mock_tt:
+            result = await vnc_mcp_module.desktop_keyboard_type_mcp(request_mock)
+
+        assert mock_tt.called, "asyncio.to_thread was never called in desktop_keyboard_type_mcp"
+        assert result["success"] is True
+        first_positional = mock_tt.call_args_list[0].args
+        assert callable(first_positional[0]), "First arg to asyncio.to_thread must be callable (_run_xdotool_cmd)"
+        assert first_positional[0].__name__ == "_run_xdotool_cmd"
+
+    @pytest.mark.asyncio
+    async def test_special_key_dispatches_via_to_thread(self, vnc_mcp_module):
+        """desktop_special_key_mcp wraps _run_xdotool_cmd in asyncio.to_thread."""
+        fake_result = {"status": "success", "message": "Action completed"}
+        request_mock = MagicMock()
+        request_mock.key = "Return"
+
+        with patch("asyncio.to_thread", new_callable=AsyncMock, return_value=fake_result) as mock_tt:
+            result = await vnc_mcp_module.desktop_special_key_mcp(request_mock)
+
+        assert mock_tt.called, "asyncio.to_thread was never called in desktop_special_key_mcp"
+        assert result["success"] is True
+        first_positional = mock_tt.call_args_list[0].args
+        assert callable(first_positional[0]), "First arg to asyncio.to_thread must be callable (_run_xdotool_cmd)"
+        assert first_positional[0].__name__ == "_run_xdotool_cmd"
