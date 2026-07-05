@@ -266,16 +266,19 @@
 
 - name: Create backend directories
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ item.path }}"
     state: directory
-    mode: "0755"
+    mode: "{{ item.mode }}"
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
   loop:
-    - "{{ backend_install_dir }}"
-    - "{{ backend_log_dir }}"
-    - "{{ backend_data_dir }}"
-    - "{{ backend_data_dir }}/conversation_files"
+    - {path: "{{ backend_install_dir }}", mode: "0755"}
+    - {path: "{{ backend_log_dir }}", mode: "0755"}
+    - {path: "{{ backend_data_dir }}", mode: "0755"}
+    - {path: "{{ backend_data_dir }}/conversation_files", mode: "0755"}
+    # #10911: service-keys holds the durable RSA JWT keypair; 0700 so only the
+    # backend user can read the private key.
+    - {path: "{{ backend_data_dir }}/service-keys", mode: "0700"}
 
 - name: Sync autobot-backend code from code_source
   ansible.posix.synchronize:

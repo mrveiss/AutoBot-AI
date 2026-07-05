@@ -881,6 +881,46 @@ async def _restart_component_services(component: str, steps: List[str]) -> None:
             steps.append(f"restart {service}: error: {exc}")
 
 
+# Canonical base path for all deployed components (#10912).
+_AUTOBOT_DEPLOY_BASE = "/opt/autobot"
+
+# Python backend components that embed an autobot_shared symlink (#10912).
+_BACKEND_COMPONENTS = frozenset(_COMPONENT_PIP_PATHS.keys())
+
+
+async def _ensure_autobot_shared_symlink(component: str, steps: List[str]) -> None:
+    """Restore /opt/autobot/<component>/autobot_shared → /opt/autobot/autobot_shared (#10912).
+
+    The deploy rsync uses --delete, which removes the symlink because it is not
+    present in the code_source tree. Without it the backend process crashes on
+    import with ModuleNotFoundError. This helper recreates the symlink so the
+    component restarts cleanly.
+
+    Only acts on Python backend components (autobot-backend, autobot-slm-backend).
+    Non-fatal: errors are logged and a step note is appended, but the sync is not
+    aborted — a missing symlink is survivable until the next restart.
+    """
+    if component not in _BACKEND_COMPONENTS:
+        return
+    shared_target = Path(_AUTOBOT_DEPLOY_BASE) / "autobot_shared"
+    if not shared_target.exists():
+        steps.append(f"symlink: {shared_target} not found — skipped")
+        return
+    link_path = Path(_AUTOBOT_DEPLOY_BASE) / component / "autobot_shared"
+    try:
+        if link_path.is_symlink() and link_path.resolve() == shared_target.resolve():
+            steps.append(f"symlink: {link_path} already correct")
+            return
+        if link_path.is_symlink() or link_path.exists():
+            link_path.unlink()
+        link_path.symlink_to(shared_target)
+        logger.info("drift resolve: restored autobot_shared symlink for %s", component)
+        steps.append(f"symlink: {link_path} -> {shared_target} (restored)")
+    except Exception as exc:
+        logger.error("drift resolve: symlink restore failed for %s: %s", component, exc)
+        steps.append(f"symlink: restore failed for {component}: {exc}")
+
+
 async def _run_post_sync_steps(
     component: str,
     source_dir: str,
@@ -894,9 +934,10 @@ async def _run_post_sync_steps(
     post-rsync to reflect what the operator sees after the sync.
 
     Component routing:
-      - Python backend (autobot-backend, autobot-slm-backend): pip install + restart
+      - Python backend (autobot-backend, autobot-slm-backend): pip install +
+        symlink restore (#10912) + restart
       - Frontend (autobot-frontend, autobot-slm-frontend): npm ci + build + nginx reload
-      - autobot_shared: pure library — no service or build step, no-op
+      - autobot_shared: restore BOTH backends' symlinks (#10912) + restart dependents
     """
     steps: List[str] = []
 
@@ -908,6 +949,9 @@ async def _run_post_sync_steps(
 
     if component in _COMPONENT_PIP_PATHS:
         await _install_pip_deps_for_component(component, steps)
+        # Restore symlink BEFORE restart so the process imports the correct shared
+        # code the moment it starts (#10912).
+        await _ensure_autobot_shared_symlink(component, steps)
         await _restart_component_services(component, steps)
     elif component in _COMPONENT_FRONTEND_DIRS:
         await _build_npm_frontend_for_component(component, steps)
@@ -915,6 +959,9 @@ async def _run_post_sync_steps(
     elif component in _COMPONENT_SERVICES:
         # Library component (autobot_shared): no build step, but every service
         # that imports it must restart so the new shared code is loaded (#10248).
+        # Restore both backends' symlinks first so services start cleanly (#10912).
+        for backend in sorted(_BACKEND_COMPONENTS):
+            await _ensure_autobot_shared_symlink(backend, steps)
         await _restart_component_services(component, steps)
     else:
         steps.append(f"post-sync: no service or build step for {component}")
