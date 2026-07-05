@@ -157,6 +157,7 @@ __all__ = [
     "get_connection_info",
     "test_redis_connection",
     "close_all_redis_connections",
+    "reset_async_redis_pools",
     "redis_context",
     # Async convenience operations (consolidated from redis_pool.py)
     "redis_get",
@@ -425,6 +426,21 @@ def test_redis_connection(database: str = "main") -> bool:
 async def close_all_redis_connections() -> None:
     """Close all Redis connections."""
     await _get_connection_manager().close_all()
+
+
+def reset_async_redis_pools() -> None:
+    """Discard stale async pools so the next call creates them in the current loop.
+
+    Call this from synchronous code immediately before entering a new event loop
+    (e.g. at the top of ``_run_async_in_loop`` or in a Celery
+    ``worker_process_init`` signal handler) so that async Redis clients are never
+    re-used across event-loop boundaries.
+
+    Sync pools are unaffected — they are loop-independent.
+
+    Issue #10936.
+    """
+    _get_connection_manager().reset_async_pools()
 
 
 # =============================================================================

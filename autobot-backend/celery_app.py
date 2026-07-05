@@ -16,6 +16,7 @@ from pathlib import Path
 
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import worker_process_init
 
 from autobot_shared.logging_manager import get_logger as _get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
@@ -287,3 +288,30 @@ except ImportError:
     pass  # pywebpush not installed — push notifications disabled
 except Exception:
     logger.warning("Push notification hook registration failed (GH#4459)", exc_info=True)
+
+
+# Issue #10936: Reset async Redis pool state in each forked worker process.
+#
+# The singleton RedisConnectionManager is created before the prefork pool forks.
+# After fork the child process inherits _async_pools populated from the parent's
+# event loop (which no longer exists in the child).  Any async Redis call that
+# tries to reuse those pools gets connections tied to the dead parent loop,
+# causing get_async_client() to catch the error and return None — the
+# AttributeError: 'NoneType' object has no attribute 'zrangebyscore' symptom.
+#
+# worker_process_init fires once inside each forked worker process, before any
+# task executes, making it the correct hook for this one-time reset.  The reset
+# is synchronous (no event loop required) and idempotent.
+@worker_process_init.connect
+def _reset_async_redis_pools_on_worker_init(sender=None, **kwargs):
+    """Clear inherited async Redis pools so each worker gets its own."""
+    try:
+        from autobot_shared.redis_client import reset_async_redis_pools
+
+        reset_async_redis_pools()
+        logger.info("worker_process_init: async Redis pools reset for new worker process (#10936)")
+    except Exception:
+        logger.warning(
+            "worker_process_init: async Redis pool reset failed (worker will still start)",
+            exc_info=True,
+        )

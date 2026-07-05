@@ -214,7 +214,17 @@ def reindex_knowledge_base(self) -> Metadata:
 
 
 def _run_async_in_loop(coro):
-    """Run async coroutine in a new event loop (helper for Celery tasks)."""
+    """Run async coroutine in a new event loop (helper for Celery tasks).
+
+    Resets stale async Redis pools before entering the loop so each task
+    invocation gets fresh pool connections bound to its own event loop.
+    Without this, pools created in a previous loop survive in the singleton
+    but their internal connections reference a closed loop, causing
+    get_async_redis_client() to catch the error and return None (#10936).
+    """
+    from autobot_shared.redis_client import reset_async_redis_pools
+
+    reset_async_redis_pools()
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:

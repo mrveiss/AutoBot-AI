@@ -156,9 +156,13 @@ class ModelConfig:
 # register a new family — select_backend() needs no modification.
 ARCH_DISPATCH_TABLE: dict[ArchitectureFamily, str] = {
     ArchitectureFamily.TRANSFORMER: "_handle_transformer",
+    # State-space family has two live serialized spellings (#10892); both route
+    # to the SSM selective-scan handler.
     ArchitectureFamily.STATE_SPACE: "_handle_ssm",
+    ArchitectureFamily.SSM: "_handle_ssm",
     ArchitectureFamily.LINEAR_ATTENTION: "_handle_linear_attention",
     ArchitectureFamily.HYBRID: "_handle_hybrid",
+    ArchitectureFamily.MOE: "_handle_transformer",
 }
 
 
