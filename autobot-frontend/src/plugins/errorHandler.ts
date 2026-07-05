@@ -12,6 +12,18 @@ import { createLogger } from '@/utils/debugUtils'
 // Create scoped logger for errorHandler
 const logger = createLogger('errorHandler')
 
+// Telemetry endpoints (RUM) must be excluded from error tracking/notification.
+// Otherwise a failing telemetry POST is itself tracked as an error, which POSTs
+// again — an infinite feedback loop that floods the console with thousands of
+// "/api/rum/event 502" errors (#10956).
+const isTelemetryUrl = (url: unknown): boolean =>
+  typeof url === 'string' && url.includes('/rum/')
+
+// Connectivity failures (backend restart, brief network drop) reject one fetch
+// per in-flight request. Collapse the console error / RUM event / toast to at
+// most one per this window so a transient outage can't spam the console.
+const NETWORK_ERROR_THROTTLE_MS = 10000
+
 interface ErrorNotification {
   id: string
   message: string
@@ -25,6 +37,8 @@ class GlobalErrorHandler {
   private notifications: ErrorNotification[] = []
   private listeners: Set<(notifications: ErrorNotification[]) => void> = new Set()
   private maxNotifications = 5
+  // Timestamp of the last surfaced connectivity failure — see NETWORK_ERROR_THROTTLE_MS.
+  private lastNetworkErrorAt = 0
 
   constructor() {
     this.setupGlobalHandlers()
@@ -103,6 +117,12 @@ class GlobalErrorHandler {
               ? args[0].href
               : (args[0] as Request)?.url
 
+          // Never track/log/notify failures of the telemetry endpoint itself —
+          // doing so re-POSTs telemetry and forms an infinite loop (#10956).
+          if (isTelemetryUrl(requestUrl)) {
+            return response
+          }
+
           // Track HTTP errors
           rumAgent.trackError('http_error', {
             status: response.status,
@@ -149,38 +169,52 @@ class GlobalErrorHandler {
 
         return response
       } catch (error) {
-        // Don't log expected health check failures or AbortError
-        // (AbortError fires legitimately when components abort in-flight
-        // requests on unmount or rapid navigation — not a real failure).
-        const isHealthCheck = typeof args[0] === 'string' && args[0].includes('/health')
-        const isAbortError =
-          (error instanceof DOMException && error.name === 'AbortError') ||
-          (error as Error)?.name === 'AbortError'
-        if (!isHealthCheck && !isAbortError) {
-          logger.error('Fetch error:', error)
-        }
-
-        // Track network errors
+        const err = error as Error
         const requestUrl = typeof args[0] === 'string'
           ? args[0]
           : args[0] instanceof URL
             ? args[0].href
             : (args[0] as Request)?.url
 
-        rumAgent.trackError('network_error', {
-          message: (error as Error).message,
-          stack: (error as Error).stack,
-          url: requestUrl,
-          source: 'fetch_interceptor'
-        })
+        // AbortError fires legitimately when components abort in-flight requests
+        // on unmount / rapid navigation. Fully benign: never log, track, or
+        // notify — just re-throw so the caller's own handling runs.
+        const isAbortError =
+          (error instanceof DOMException && error.name === 'AbortError') ||
+          err?.name === 'AbortError'
+        // Telemetry failures must not generate more telemetry (#10956 loop).
+        if (isAbortError || isTelemetryUrl(requestUrl)) {
+          throw error
+        }
 
-        // Only show notification for non-health check failures
-        if (!isHealthCheck) {
+        const isHealthCheck = typeof requestUrl === 'string' && requestUrl.includes('/health')
+        // Collapse repeated connectivity failures (backend restart, network
+        // drop) so a transient outage can't spam thousands of console
+        // errors / RUM events / toasts (#10956).
+        const now = Date.now()
+        const throttled = now - this.lastNetworkErrorAt < NETWORK_ERROR_THROTTLE_MS
+        this.lastNetworkErrorAt = now
+
+        if (!isHealthCheck && !throttled) {
+          logger.error('Fetch error:', error)
+        }
+
+        if (!throttled) {
+          rumAgent.trackError('network_error', {
+            message: err.message,
+            stack: err.stack,
+            url: requestUrl,
+            source: 'fetch_interceptor'
+          })
+        }
+
+        // Only show notification for non-health-check, non-throttled failures
+        if (!isHealthCheck && !throttled) {
           this.addNotification({
             message: 'Network connection failed. Please check your internet connection.',
             type: 'error',
             dismissible: true,
-            stack: (error as Error).stack
+            stack: err.stack
           })
         }
 
