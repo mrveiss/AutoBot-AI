@@ -30,7 +30,11 @@ class ContentSourceChain:
         env_key = f"AUTOBOT_CONTENT_CHAIN_{self.source.upper()}"
         spec = os.environ.get(env_key, "").strip()
         if not spec:
-            return self
+            return ContentSourceChain(
+                source=self.source,
+                source_type=self.source_type,
+                backends=list(self.backends),
+            )
 
         wanted = [n.strip() for n in spec.split(",") if n.strip()]
         by_name = {b.name: b for b in self.backends}

@@ -46,3 +46,11 @@ def test_reorder_promotes_named_backends(monkeypatch):
 def test_reorder_ignores_unknown_names(monkeypatch):
     monkeypatch.setenv("AUTOBOT_CONTENT_CHAIN_WEB_SEARCH", "nope,jina")
     assert _chain().reordered().backend_names() == ["jina", "ddgs", "browser"]
+
+
+def test_reorder_noop_returns_new_instance(monkeypatch):
+    monkeypatch.delenv("AUTOBOT_CONTENT_CHAIN_WEB_SEARCH", raising=False)
+    original = _chain()
+    result = original.reordered()
+    assert result is not original
+    assert result.backend_names() == original.backend_names()
