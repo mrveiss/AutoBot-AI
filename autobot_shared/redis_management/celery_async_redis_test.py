@@ -29,7 +29,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from autobot_shared.redis_management.connection_manager import RedisConnectionManager
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
