@@ -38,7 +38,10 @@ from utils.async_initializable import AsyncInitializable
 logger = get_logger(__name__)
 
 # Issue #380: Module-level frozenset for worker events that include full data
-_WORKER_FULL_DATA_EVENTS = frozenset({"worker.added", "worker.updated", "worker.metrics.updated"})
+# worker.status.changed added so WS subscriber receives the full worker dict (#10602 6.4)
+_WORKER_FULL_DATA_EVENTS = frozenset(
+    {"worker.added", "worker.updated", "worker.status.changed", "worker.metrics.updated"}
+)
 
 # GH#6739: Pulse-probe canary config path
 _PULSE_CANARIES_CONFIG = Path("config/npu_pulse_canaries.yaml")
@@ -790,25 +793,60 @@ class NPUWorkerManager(AsyncInitializable):
         except Exception as e:
             logger.error("Failed to store worker status in Redis: %s", e)
 
-    def _build_worker_metrics(self, worker_id: str, status: NPUWorkerStatus) -> NPUWorkerMetrics:
-        """Derive per-worker metrics from heartbeat-reported counters (#10697).
+    async def _aggregate_avg_response_time_ms(self, worker_id: str) -> float:
+        """Return mean of per-model p95 pulse latencies (in ms) for *worker_id* (#10698).
 
-        success_rate is computed from the heartbeat's task counters. Caveats
-        (refinements tracked as follow-ups): requests_per_minute is a lifetime
-        average (completed/uptime), not a recent/windowed rate; peak_load is the
-        current load sample at heartbeat time, not a true max-observed; and
-        avg_response_time_ms needs per-worker latency aggregation (#10698) so is
-        left at its default.
+        Scans all ``npu:worker:{worker_id}:pulse_latency:*`` keys to discover
+        which models have latency data, then averages their p95 values.  The
+        mean-of-p95s semantics represent "typical worst-case response time
+        across all models this worker serves", which aligns with the metric's
+        purpose as a health indicator in the dashboard.
+
+        Returns 0.0 when no pulse data exists (e.g. worker is fresh or Redis
+        is unavailable) — the field's documented default.
+        """
+        if not self.redis_client:
+            return 0.0
+        try:
+            prefix = f"npu:worker:{worker_id}:pulse_latency:"
+            pattern = f"{prefix}*"
+            keys = await self.redis_client.keys(pattern)
+            if not keys:
+                return 0.0
+            p95_values = []
+            for key in keys:
+                key_str = key.decode() if isinstance(key, bytes) else key
+                model_id = key_str[len(prefix):]
+                p95 = await self._get_pulse_p95_latency(worker_id, model_id)
+                if p95 is not None:
+                    p95_values.append(p95)
+            if not p95_values:
+                return 0.0
+            mean_s = sum(p95_values) / len(p95_values)
+            return round(mean_s * 1000.0, 2)
+        except Exception as exc:
+            logger.debug("Failed to aggregate avg_response_time_ms for %s: %s", worker_id, exc)
+            return 0.0
+
+    async def _build_worker_metrics(self, worker_id: str, status: NPUWorkerStatus) -> NPUWorkerMetrics:
+        """Derive per-worker metrics from heartbeat-reported counters (#10697, #10698).
+
+        success_rate is computed from the heartbeat's task counters.
+        requests_per_minute is a lifetime average (completed/uptime).
+        peak_load is the current load sample at heartbeat time.
+        avg_response_time_ms is the mean of per-model pulse p95 latencies (#10698).
         """
         completed = getattr(status, "total_tasks_completed", 0) or 0
         failed = getattr(status, "total_tasks_failed", 0) or 0
         total = completed + failed
         uptime = getattr(status, "uptime_seconds", 0) or 0
+        avg_rt_ms = await self._aggregate_avg_response_time_ms(worker_id)
         return NPUWorkerMetrics(
             id=worker_id,
             success_rate=round(completed / total * 100.0, 2) if total else 100.0,
             requests_per_minute=round(completed / (uptime / 60.0), 2) if uptime else 0.0,
             peak_load=getattr(status, "current_load", 0) or 0,
+            avg_response_time_ms=avg_rt_ms,
         )
 
     async def _store_worker_metrics(self, worker_id: str, metrics: NPUWorkerMetrics) -> None:
@@ -826,7 +864,7 @@ class NPUWorkerManager(AsyncInitializable):
     async def _emit_worker_event(self, event_type: str, worker_details: NPUWorkerDetails) -> None:
         """Emit worker event via event_manager (Issue #372 - refactored)"""
         try:
-            event_data = {
+            event_data: dict = {
                 "event": event_type,
                 "worker_id": worker_details.config.id,
                 "data": {
@@ -836,12 +874,18 @@ class NPUWorkerManager(AsyncInitializable):
                 },
             }
 
+            # Add serialised metrics to data payload so the WS
+            # subscriber (worker.metrics.updated handler) can read
+            # data["metrics"] directly (#10602 6.4).
+            if event_type == "worker.metrics.updated" and worker_details.metrics:
+                event_data["data"]["metrics"] = worker_details.metrics.model_dump(mode="json")
+
             # Add full worker data for certain events (Issue #372, #380)
             if event_type in _WORKER_FULL_DATA_EVENTS:
                 event_data["worker"] = worker_details.to_event_dict()
 
             await publish_event("global", f"npu.{event_type}", event_data, persist=PersistStrategy.NONE)
-            logger.debug(f"Emitted event {event_type} for worker {worker_details.config.id}")
+            logger.debug("Emitted event %s for worker %s", event_type, worker_details.config.id)
 
         except Exception as e:
             logger.error("Failed to emit worker event: %s", e, exc_info=True)
@@ -983,10 +1027,10 @@ class NPUWorkerManager(AsyncInitializable):
 
         # Store in Redis
         await self._store_worker_status(worker_id, status)
-        # #10697: produce per-worker metrics from the heartbeat counters so the
-        # npu.worker.metrics.updated subscribers (live UI, cache invalidation)
-        # actually receive data — previously there was no producer at all.
-        await self._store_worker_metrics(worker_id, self._build_worker_metrics(worker_id, status))
+        # #10697, #10698: produce per-worker metrics (including avg_response_time_ms
+        # from pulse p95 aggregation) so npu.worker.metrics.updated subscribers
+        # (live UI, cache invalidation) receive accurate data.
+        await self._store_worker_metrics(worker_id, await self._build_worker_metrics(worker_id, status))
 
         # Emit status + metrics events if worker exists
         if worker_id in self._workers:
