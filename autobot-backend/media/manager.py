@@ -11,6 +11,7 @@
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from media.audio.pipeline import AudioPipeline
 from media.core.pipeline import MediaPipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
@@ -130,8 +131,9 @@ class MediaPipelineManager:
         logger.info("All pipeline metrics reset")
 
 
-# Singleton instance for global access
-_manager_instance: MediaPipelineManager | None = None
+# Issue #10916: lazy_singleton provides double-checked locking so concurrent
+# callers cannot each create a separate MediaPipelineManager instance.
+_get_media_pipeline_manager_singleton = lazy_singleton(MediaPipelineManager)
 
 
 def get_media_pipeline_manager() -> MediaPipelineManager:
@@ -141,7 +143,4 @@ def get_media_pipeline_manager() -> MediaPipelineManager:
     Returns:
         MediaPipelineManager singleton
     """
-    global _manager_instance
-    if _manager_instance is None:
-        _manager_instance = MediaPipelineManager()
-    return _manager_instance
+    return _get_media_pipeline_manager_singleton()
