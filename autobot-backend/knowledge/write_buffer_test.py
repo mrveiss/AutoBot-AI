@@ -19,7 +19,6 @@ import pytest
 
 from knowledge.write_buffer import BufferedWrite, VectorWriteBuffer, make_chromadb_flush_fn
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
