@@ -664,6 +664,19 @@
     databases:
       - "{{ backend_postgres_db | default('autobot_users') }}"
     postgresql_listen_addresses: "localhost"
+    # #10636: On a collapsed single-box deploy this instance already hosts the
+    # SLM (slm_app) whose creds live in the DEFAULT db-credentials.env. Writing
+    # the backend's AUTOBOT_DB_* creds into that same file would overwrite the
+    # SLM's SLM_DB_* entries — the SLM systemd unit's EnvironmentFile then loads
+    # nothing and the SLM loses DB access. Give the backend its OWN creds file so
+    # both coexist; the SLM's file is never touched. On multi-VM fleets this is
+    # a separate instance/host, so a distinct filename is harmless there too.
+    postgresql_credentials_file: "autobot-db-credentials.env"
+    # #10636: The postgresql role's pg_hba render is additive (it discovers every
+    # existing login role first — see roles/postgresql/tasks/configure.yml — so
+    # slm_app's rules survive), and this second run must ONLY reload, never
+    # restart, the shared instance. postgresql.conf renders identically on both
+    # runs (both pass listen_addresses=localhost), so no restart is triggered.
   when: (backend_user_mode | default('single_company')) != 'single_user'
   tags: ['backend', 'postgresql']
 
@@ -744,11 +757,31 @@
   no_log: true
   tags: ['backend', 'config']
 
+# #10636: db_password is set in-memory by the postgresql include above when it
+# runs in this play. On a tag-filtered re-run that skips that include (or when
+# the DB was provisioned by a separate playbook), read the backend's OWN creds
+# file — autobot-db-credentials.env, never the SLM's db-credentials.env — so the
+# .env still renders a valid AUTOBOT_POSTGRES_PASSWORD without clobbering the SLM.
+- name: "Backend | Read AUTOBOT_DB_PASSWORD from backend creds file (fallback, #10636)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_DB_PASSWORD=\K.*'
+      /etc/autobot/autobot-db-credentials.env 2>/dev/null || true
+  register: _backend_db_password_file
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when: db_password is not defined
+  tags: ['backend', 'config']
+
 - name: "Backend | Set full-user-management .env facts (#10636)"
   ansible.builtin.set_fact:
     autobot_internal_api_key: "{{ _backend_internal_api_key.stdout | default('') | trim }}"
     autobot_admin_password: "{{ _backend_admin_password.stdout | default('') | trim }}"
-    backend_postgres_password: "{{ db_password | default(backend_postgres_password | default('')) }}"
+    backend_postgres_password: >-
+      {{ db_password
+         | default(_backend_db_password_file.stdout | default('') | trim, true)
+         | default(backend_postgres_password | default(''), true) }}
   no_log: true
   tags: ['backend', 'config']
 
