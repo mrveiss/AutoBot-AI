@@ -154,9 +154,7 @@ def _extract_text_content(response_content: list, preserve_reasoning: bool) -> s
     return text
 
 
-def _extract_content_pair(
-    response_content: list, preserve_reasoning: bool
-) -> tuple[str, Optional[str]]:
+def _extract_content_pair(response_content: list, preserve_reasoning: bool) -> tuple[str, Optional[str]]:
     """
     Extract ``(content, reasoning_content)`` from an Anthropic response block list.
 
