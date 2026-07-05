@@ -42,6 +42,7 @@ from enum import Enum
 from typing import Any, ClassVar, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from llm_shared.types import ArchitectureFamily
 
 logger = get_logger(__name__)
@@ -455,24 +456,20 @@ def _free_memory() -> None:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_selector: AttentionBackendSelector | None = None
+_get_selector = lazy_singleton(AttentionBackendSelector)
 
 
 def get_attention_backend_selector() -> AttentionBackendSelector:
     """Return the module-level :class:`AttentionBackendSelector` singleton.
 
-    Creates the instance on first call; thread-safe for read-only use after
-    initial creation.
+    Creates the instance on first call; thread-safe via double-checked lock.
 
     Issue #1951.
 
     Returns:
         The singleton :class:`AttentionBackendSelector`.
     """
-    global _selector  # noqa: PLW0603
-    if _selector is None:
-        _selector = AttentionBackendSelector()
-    return _selector
+    return _get_selector()
 
 
 __all__ = [

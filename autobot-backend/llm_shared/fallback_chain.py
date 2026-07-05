@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
 
@@ -224,15 +225,7 @@ class FallbackChainManager:
 
 
 # Global singleton instance
-_fallback_manager: Optional[FallbackChainManager] = None
-
-
-def get_fallback_chain_manager() -> FallbackChainManager:
-    """Get the global fallback chain manager (lazy singleton)."""
-    global _fallback_manager
-    if _fallback_manager is None:
-        _fallback_manager = FallbackChainManager()
-    return _fallback_manager
+get_fallback_chain_manager = lazy_singleton(FallbackChainManager)
 
 
 __all__ = ["FallbackChain", "FallbackChainManager", "get_fallback_chain_manager"]

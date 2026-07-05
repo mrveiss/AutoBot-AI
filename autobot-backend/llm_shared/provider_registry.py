@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -497,7 +498,7 @@ class ProviderRegistry:
 # ---------------------------------------------------------------------------
 
 _registry_instance: ProviderRegistry | None = None
-_registry_lock = asyncio.Lock()
+_registry_lock = threading.Lock()  # sync function — threading.Lock, not asyncio.Lock
 
 
 def get_provider_registry() -> ProviderRegistry:
@@ -510,8 +511,10 @@ def get_provider_registry() -> ProviderRegistry:
     """
     global _registry_instance
     if _registry_instance is None:
-        _registry_instance = ProviderRegistry()
-        _populate_default_providers(_registry_instance)
+        with _registry_lock:
+            if _registry_instance is None:
+                _registry_instance = ProviderRegistry()
+                _populate_default_providers(_registry_instance)
     return _registry_instance
 
 
