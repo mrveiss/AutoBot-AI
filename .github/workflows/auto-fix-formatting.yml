@@ -72,8 +72,6 @@ jobs:
 
           Applied Black, isort, and autoflake to match code-quality checks.
           Triggered by workflow auto-fix-formatting.yml.
-
-          Co-Authored-By: Paperclip <noreply@paperclip.ing>
           EOF
           )"
             git push
