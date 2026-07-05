@@ -1133,6 +1133,39 @@ class RedisConnectionManager:
 
         return self._manager_stats
 
+    def reset_async_pools(self) -> None:
+        """Discard stale async pools and replace the async lock with a fresh one.
+
+        Must be called from synchronous code (before entering a new event loop)
+        whenever the previous event loop that owned the async pools has been
+        closed.  This happens in two scenarios:
+
+        1. Celery prefork: the parent process creates the singleton before
+           forking; after fork the child process inherits a stale ``_async_lock``
+           whose internal waiters reference the parent's (now-dead) event loop.
+
+        2. ``_run_async_in_loop`` callers: each call creates a fresh event loop,
+           runs a coroutine, then closes the loop.  Any async pool that was
+           created during that loop is now stale; the next call must start from
+           a clean slate.
+
+        Sync pools are unaffected — they use a threading.Lock and are
+        loop-independent.
+
+        Issue #10936.
+        """
+        stale_pools = list(self._async_pools.values())
+        self._async_pools.clear()
+        # Replace the lock so _ensure_async_pool_exists works in the new loop.
+        self._async_lock = asyncio.Lock()
+        # Best-effort disconnect; ignore errors because the backing loop is gone.
+        for pool in stale_pools:
+            try:
+                pool.disconnect()
+            except Exception:
+                pass
+        logger.debug("reset_async_pools: cleared %d stale async pool(s)", len(stale_pools))
+
     async def close_all(self) -> None:
         """Close all connections and cleanup background tasks."""
         if self._cleanup_task and not self._cleanup_task.done():
