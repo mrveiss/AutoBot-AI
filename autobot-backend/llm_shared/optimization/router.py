@@ -16,6 +16,7 @@ from enum import Enum
 from typing import Any, Dict, Set
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.ttl_constants import TTL_5_MINUTES
 
 from ..types import ProviderType
@@ -307,24 +308,7 @@ class OptimizationRouter:
         )
 
 
-# Global router instance (lazy initialization)
-_optimization_router: OptimizationRouter = None
-
-
-def get_optimization_router(config: OptimizationConfig = None) -> OptimizationRouter:
-    """
-    Get or create the global optimization router instance.
-
-    Args:
-        config: Optional configuration (only used on first call)
-
-    Returns:
-        OptimizationRouter singleton instance
-    """
-    global _optimization_router
-    if _optimization_router is None:
-        _optimization_router = OptimizationRouter(config)
-    return _optimization_router
+get_optimization_router = lazy_singleton(OptimizationRouter)
 
 
 __all__ = [

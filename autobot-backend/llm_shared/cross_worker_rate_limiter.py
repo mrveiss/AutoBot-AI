@@ -58,6 +58,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator, Dict, Optional, Tuple
 
 from autobot_shared.env_utils import env_int
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -243,12 +244,4 @@ class LLMCrossWorkerRateLimiter:
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_limiter: Optional[LLMCrossWorkerRateLimiter] = None
-
-
-def get_llm_rate_limiter() -> LLMCrossWorkerRateLimiter:
-    """Return the shared LLM rate limiter singleton."""
-    global _limiter
-    if _limiter is None:
-        _limiter = LLMCrossWorkerRateLimiter()
-    return _limiter
+get_llm_rate_limiter = lazy_singleton(LLMCrossWorkerRateLimiter)
