@@ -1154,17 +1154,17 @@ class RedisConnectionManager:
 
         Issue #10936.
         """
-        stale_pools = list(self._async_pools.values())
+        stale_count = len(self._async_pools)
         self._async_pools.clear()
         # Replace the lock so _ensure_async_pool_exists works in the new loop.
         self._async_lock = asyncio.Lock()
-        # Best-effort disconnect; ignore errors because the backing loop is gone.
-        for pool in stale_pools:
-            try:
-                pool.disconnect()
-            except Exception:
-                pass
-        logger.debug("reset_async_pools: cleared %d stale async pool(s)", len(stale_pools))
+        # Do NOT call pool.disconnect() here: this is a SYNC method invoked at a
+        # loop boundary where the backing event loop is already closed, so the
+        # async ConnectionPool.disconnect() coroutine could neither be awaited nor
+        # run (it would just leak as an un-awaited coroutine). Dropping the
+        # references lets GC reclaim the stale pools; their connections were bound
+        # to the now-dead loop and cannot be closed without it.
+        logger.debug("reset_async_pools: cleared %d stale async pool(s)", stale_count)
 
     async def close_all(self) -> None:
         """Close all connections and cleanup background tasks."""
