@@ -10,6 +10,7 @@ orchestration.subagent_dispatcher (issue #10666 B3).
 
 import asyncio
 import json
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List
 
@@ -230,12 +231,17 @@ class SubagentDispatcher:
             return result_text
 
 
+# Issue #10916: _orchestrator_lock + double-checked pattern prevents two
+# threads from each constructing a SubagentDispatcher concurrently.
 _orchestrator_instance: SubagentDispatcher | None = None
+_orchestrator_lock = threading.Lock()
 
 
 def get_subagent_dispatcher(max_parallel: int = 10) -> SubagentDispatcher:
-    """Get or create global dispatcher instance."""
-    global _orchestrator_instance
+    """Get or create global dispatcher instance (thread-safe)."""
+    global _orchestrator_instance  # noqa: PLW0603
     if _orchestrator_instance is None:
-        _orchestrator_instance = SubagentDispatcher(max_parallel=max_parallel)
+        with _orchestrator_lock:
+            if _orchestrator_instance is None:
+                _orchestrator_instance = SubagentDispatcher(max_parallel=max_parallel)
     return _orchestrator_instance
