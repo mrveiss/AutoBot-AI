@@ -16,6 +16,7 @@ from pathlib import Path
 
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import worker_process_init
 
 from autobot_shared.logging_manager import get_logger as _get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
@@ -301,7 +302,7 @@ except Exception:
 # worker_process_init fires once inside each forked worker process, before any
 # task executes, making it the correct hook for this one-time reset.  The reset
 # is synchronous (no event loop required) and idempotent.
-@celery_app.signals.worker_process_init.connect
+@worker_process_init.connect
 def _reset_async_redis_pools_on_worker_init(sender=None, **kwargs):
     """Clear inherited async Redis pools so each worker gets its own."""
     try:
