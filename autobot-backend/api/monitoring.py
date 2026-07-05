@@ -307,27 +307,40 @@ class MonitoringWebSocketManager:
         self.active_connections: List[WebSocket] = []
         self.update_task: asyncio.Task | None = None
         self.update_interval = 2.0  # Send updates every 2 seconds
+        # Issue #10924: asyncio.Lock serialises the append+check+create_task
+        # sequence so two concurrent connects cannot both see len==1 and each
+        # spawn a duplicate update task.  disconnect() uses the same lock for
+        # the remove+check+cancel sequence to avoid a TOCTOU there too.
+        self._connect_lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket):
         """Accept WebSocket connection and start periodic update task if first."""
         await websocket.accept()
-        self.active_connections.append(websocket)
-        logger.info(f"WebSocket connected. Active connections: {len(self.active_connections)}")
+        async with self._connect_lock:
+            self.active_connections.append(websocket)
+            logger.info(
+                "WebSocket connected. Active connections: %d",
+                len(self.active_connections),
+            )
+            # Start update task if this is the first connection.
+            # Guarded inside the lock so two concurrent connects cannot both
+            # observe len==1 and each call create_task().
+            if len(self.active_connections) == 1 and not self.update_task:
+                self.update_task = asyncio.create_task(self._send_periodic_updates())
 
-        # Start update task if this is the first connection
-        if len(self.active_connections) == 1 and not self.update_task:
-            self.update_task = asyncio.create_task(self._send_periodic_updates())
-
-    def disconnect(self, websocket: WebSocket):
+    async def disconnect(self, websocket: WebSocket):
         """Remove WebSocket connection and cancel update task if last."""
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-        logger.info(f"WebSocket disconnected. Active connections: {len(self.active_connections)}")
-
-        # Stop update task if no connections
-        if len(self.active_connections) == 0 and self.update_task:
-            self.update_task.cancel()
-            self.update_task = None
+        async with self._connect_lock:
+            if websocket in self.active_connections:
+                self.active_connections.remove(websocket)
+            logger.info(
+                "WebSocket disconnected. Active connections: %d",
+                len(self.active_connections),
+            )
+            # Stop update task if no connections remain.
+            if len(self.active_connections) == 0 and self.update_task:
+                self.update_task.cancel()
+                self.update_task = None
 
     async def broadcast_update(self, data: Metadata):
         """Broadcast update to all connected clients"""
@@ -344,9 +357,9 @@ class MonitoringWebSocketManager:
                 logger.warning("Failed to send WebSocket message: %s", e)
                 disconnected.append(connection)
 
-        # Remove disconnected connections
+        # Remove disconnected connections (disconnect is now async — Issue #10924)
         for connection in disconnected:
-            self.disconnect(connection)
+            await self.disconnect(connection)
 
     async def _send_periodic_updates(self):
         """Send periodic performance updates to connected clients"""
@@ -1133,10 +1146,10 @@ async def realtime_monitoring_websocket(websocket: WebSocket):
                 logger.debug("Invalid JSON in monitoring WebSocket: %s", e)
 
     except WebSocketDisconnect:
-        ws_manager.disconnect(websocket)
+        await ws_manager.disconnect(websocket)
     except Exception as e:
         logger.error("WebSocket error: %s", e)
-        ws_manager.disconnect(websocket)
+        await ws_manager.disconnect(websocket)
 
 
 # Helper functions

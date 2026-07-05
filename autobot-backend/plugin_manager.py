@@ -11,6 +11,7 @@ Issue #730 - Plugin SDK for extensible tool architecture.
 """
 
 import json
+import threading
 from pathlib import Path
 from typing import Dict, List
 
@@ -35,24 +36,29 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
-# Global plugin loader instance
+# Global plugin loader instance.
+# Issue #10916: _plugin_loader_lock + double-checked pattern prevents two
+# threads from each constructing a PluginLoader (which scans the filesystem).
 _plugin_loader: PluginLoader | None = None
+_plugin_loader_lock = threading.Lock()
 
 
 def get_plugin_loader() -> PluginLoader:
-    """Get or create plugin loader instance."""
-    global _plugin_loader
+    """Get or create plugin loader instance (thread-safe)."""
+    global _plugin_loader  # noqa: PLW0603
     if _plugin_loader is None:
-        # Define plugin directories using SSOT config (#3397)
-        plugins_root = config.path.plugins_path
-        plugin_dirs = [
-            plugins_root / "core-plugins",
-            plugins_root / "community-plugins",
-            # Development fallback
-            Path("plugins/core-plugins"),
-            Path("plugins/community-plugins"),
-        ]
-        _plugin_loader = PluginLoader(plugin_dirs)
+        with _plugin_loader_lock:
+            if _plugin_loader is None:
+                # Define plugin directories using SSOT config (#3397)
+                plugins_root = config.path.plugins_path
+                plugin_dirs = [
+                    plugins_root / "core-plugins",
+                    plugins_root / "community-plugins",
+                    # Development fallback
+                    Path("plugins/core-plugins"),
+                    Path("plugins/community-plugins"),
+                ]
+                _plugin_loader = PluginLoader(plugin_dirs)
     return _plugin_loader
 
 

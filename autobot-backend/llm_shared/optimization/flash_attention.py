@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Tuple
 
+import threading
+
 from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
@@ -30,16 +32,21 @@ logger = get_logger(__name__)
 
 # Issue #3009: Lazy-load torch on first use so importing this module does not
 # require torch to be installed (NPU/GPU subsystem is feature-flagged).
+# Issue #10916: double-checked lock prevents two threads from both racing past
+# the None check and importing torch concurrently.
 _torch: Any = None
+_torch_lock = threading.Lock()
 
 
 def _get_torch() -> Any:
-    """Return the torch module, importing it on first call."""
+    """Return the torch module, importing it on first call (thread-safe)."""
     global _torch  # noqa: PLW0603
     if _torch is None:
-        import torch
+        with _torch_lock:
+            if _torch is None:
+                import torch
 
-        _torch = torch
+                _torch = torch
     return _torch
 
 
@@ -190,14 +197,19 @@ def _build_repeat_kv_fn():
 
 # Issue #3009: repeat_kv is built lazily on first use so that importing this
 # module does not trigger a torch import at startup.
+# Issue #10916: double-checked lock prevents concurrent threads from each
+# calling _build_repeat_kv_fn() and compiling the JIT function multiple times.
 _repeat_kv_fn = None
+_repeat_kv_fn_lock = threading.Lock()
 
 
 def repeat_kv(kv: Any, n_rep: int) -> Any:
     """Expand KV heads for GQA — thin wrapper around the JIT-compiled version."""
     global _repeat_kv_fn  # noqa: PLW0603
     if _repeat_kv_fn is None:
-        _repeat_kv_fn = _build_repeat_kv_fn()
+        with _repeat_kv_fn_lock:
+            if _repeat_kv_fn is None:
+                _repeat_kv_fn = _build_repeat_kv_fn()
     return _repeat_kv_fn(kv, n_rep)
 
 
