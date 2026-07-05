@@ -460,7 +460,9 @@ async def desktop_mouse_click_mcp(request: DesktopMouseClickRequest) -> Metadata
     button_map = {"left": "1", "middle": "2", "right": "3"}
     button_num = button_map.get(request.button, "1")
 
-    result = _run_xdotool_cmd(["mousemove", str(request.x), str(request.y), "click", button_num])
+    result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, validated by _run_xdotool_cmd
+        _run_xdotool_cmd, ["mousemove", str(request.x), str(request.y), "click", button_num]
+    )
 
     return {
         "success": result["status"] == "success",
@@ -484,7 +486,9 @@ async def desktop_keyboard_type_mcp(request: DesktopKeyboardTypeRequest) -> Meta
     """
     from api.vnc_manager import _run_xdotool_cmd
 
-    result = _run_xdotool_cmd(["type", "--", request.text])
+    result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, validated by _run_xdotool_cmd
+        _run_xdotool_cmd, ["type", "--", request.text]
+    )
 
     return {
         "success": result["status"] == "success",
@@ -507,7 +511,9 @@ async def desktop_special_key_mcp(request: DesktopSpecialKeyRequest) -> Metadata
     """
     from api.vnc_manager import _run_xdotool_cmd
 
-    result = _run_xdotool_cmd(["key", request.key])
+    result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, validated by _run_xdotool_cmd
+        _run_xdotool_cmd, ["key", request.key]
+    )
 
     return {
         "success": result["status"] == "success",
