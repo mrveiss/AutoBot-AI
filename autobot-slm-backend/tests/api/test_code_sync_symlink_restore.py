@@ -78,10 +78,10 @@ from api.code_sync import (  # noqa: E402
     _run_post_sync_steps,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
+
 
 def _run(coro):
     return asyncio.get_event_loop().run_until_complete(coro)
@@ -90,6 +90,7 @@ def _run(coro):
 # ---------------------------------------------------------------------------
 # _BACKEND_COMPONENTS covers exactly the pip-backend components
 # ---------------------------------------------------------------------------
+
 
 def test_backend_components_match_pip_paths() -> None:
     """_BACKEND_COMPONENTS must equal the pip-backend set so no component is missed."""
@@ -105,6 +106,7 @@ def test_backend_components_are_pip_backends() -> None:
 # _ensure_autobot_shared_symlink — filesystem-level behaviour
 # ---------------------------------------------------------------------------
 
+
 def test_symlink_created_when_missing(tmp_path) -> None:
     """Symlink is created when the link path does not yet exist."""
     shared_target = tmp_path / "autobot_shared"
@@ -114,9 +116,7 @@ def test_symlink_created_when_missing(tmp_path) -> None:
     link_path = tmp_path / component / "autobot_shared"
 
     steps: list = []
-    with __import__("unittest.mock", fromlist=["patch"]).patch(
-        "api.code_sync._AUTOBOT_DEPLOY_BASE", str(tmp_path)
-    ):
+    with __import__("unittest.mock", fromlist=["patch"]).patch("api.code_sync._AUTOBOT_DEPLOY_BASE", str(tmp_path)):
         _run(_ensure_autobot_shared_symlink(component, steps))
 
     assert link_path.is_symlink()
@@ -193,6 +193,7 @@ def test_skipped_when_shared_target_missing(tmp_path) -> None:
 # _run_post_sync_steps — pip backend path calls symlink restore before restart
 # ---------------------------------------------------------------------------
 
+
 def test_pip_backend_emits_symlink_step(tmp_path) -> None:
     """Symlink step is emitted for pip backend components via _run_post_sync_steps."""
     from unittest.mock import patch
@@ -214,19 +215,18 @@ def test_pip_backend_emits_symlink_step(tmp_path) -> None:
             patch("api.code_sync._install_pip_deps_for_component", AsyncMock()),
             patch("api.code_sync._restart_component_services", AsyncMock()),
         ):
-            _, steps = _run(
-                _run_post_sync_steps(component, f"/src/{component}", f"/opt/autobot/{component}")
-            )
+            _, steps = _run(_run_post_sync_steps(component, f"/src/{component}", f"/opt/autobot/{component}"))
             steps_collected.extend(steps)
 
-        assert any(f"symlink-called:{component}" in s for s in steps_collected), (
-            f"No symlink call for {component}: {steps_collected}"
-        )
+        assert any(
+            f"symlink-called:{component}" in s for s in steps_collected
+        ), f"No symlink call for {component}: {steps_collected}"
 
 
 # ---------------------------------------------------------------------------
 # _run_post_sync_steps — autobot_shared path restores BOTH backends' symlinks
 # ---------------------------------------------------------------------------
+
 
 def test_autobot_shared_component_restores_both_backends(tmp_path) -> None:
     """When syncing autobot_shared, _ensure_autobot_shared_symlink called for each backend."""
@@ -251,6 +251,4 @@ def test_autobot_shared_component_restores_both_backends(tmp_path) -> None:
             )
         )
 
-    assert set(called_for) == _BACKEND_COMPONENTS, (
-        f"Expected symlinks for {_BACKEND_COMPONENTS}, got {set(called_for)}"
-    )
+    assert set(called_for) == _BACKEND_COMPONENTS, f"Expected symlinks for {_BACKEND_COMPONENTS}, got {set(called_for)}"
