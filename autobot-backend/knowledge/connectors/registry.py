@@ -37,6 +37,22 @@ from knowledge.connectors.models import ConnectorConfig
 
 logger = get_logger(__name__)
 
+# Issue #10539: Category → connector type list.
+# Maps a logical capability category (lowercase, normalised) to the list of
+# registered connector type strings that satisfy it.  Only connector types
+# that are actually implemented in this codebase are listed here.
+CATEGORY_MAP: Dict[str, List[str]] = {
+    "cloud storage": ["gdrive", "onedrive", "nextcloud"],
+    "source control": ["gitlab", "gitea"],
+    "wiki": ["notion"],
+    "knowledge base": ["notion", "file_server", "web_crawler"],
+    "file system": ["file_server"],
+    "database": ["database"],
+    "web": ["web_crawler"],
+    "audio": ["audio"],
+    "external": ["external_adapter"],
+}
+
 
 class ConnectorRegistry:
     """Class-level registry for connector types and running instances."""
@@ -162,6 +178,44 @@ class ConnectorRegistry:
     def list_types(cls) -> List[str]:
         """Return all registered connector type strings."""
         return list(cls._connectors.keys())
+
+    @classmethod
+    def resolve_by_category(cls, category: str) -> List[object]:
+        """Return live instances whose connector type belongs to *category*.
+
+        Issue #10539: Category resolution lets skills/workflows request a
+        capability (e.g. "cloud storage", "source control") rather than naming
+        a specific vendor connector.  Only instances that are already
+        registered (i.e. configured and started via ``add_instance``) are
+        returned — unconfigured connector types are silently excluded.
+
+        The lookup is case-insensitive and strips surrounding whitespace so
+        callers may pass ``"Cloud Storage"`` or ``"cloud storage"`` equally.
+
+        Args:
+            category: A category label from ``CATEGORY_MAP`` (case-insensitive).
+
+        Returns:
+            List of live connector instances matching the category; empty list
+            if the category is unknown or no matching instance is configured.
+        """
+        key = category.strip().lower()
+        type_ids = CATEGORY_MAP.get(key, [])
+        if not type_ids:
+            logger.debug("resolve_by_category: unknown category %r", category)
+            return []
+        matched = [
+            instance
+            for instance in cls._instances.values()
+            if getattr(getattr(instance, "config", None), "connector_type", None) in type_ids
+        ]
+        logger.debug(
+            "resolve_by_category(%r): types=%r matched=%d instance(s)",
+            category,
+            type_ids,
+            len(matched),
+        )
+        return matched
 
     @classmethod
     def registered_types(cls) -> Mapping[str, Type["AbstractConnector"]]:
