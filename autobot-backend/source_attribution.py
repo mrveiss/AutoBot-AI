@@ -33,6 +33,10 @@ class SourceType(Enum):
     DOCUMENTATION = "documentation"
     API_RESPONSE = "api_response"
     FILE_CONTENT = "file_content"
+    YOUTUBE = "youtube"  # #10932 content reach
+    REDDIT = "reddit"  # #10932 content reach
+    WEB_PAGE = "web_page"  # #10932 content reach
+    SOCIAL = "social"  # #10932 content reach
 
 
 class SourceReliability(Enum):
@@ -78,6 +82,10 @@ class Source:
             SourceType.DOCUMENTATION: "📖",
             SourceType.API_RESPONSE: "🔌",
             SourceType.FILE_CONTENT: "📄",
+            SourceType.YOUTUBE: "📺",
+            SourceType.REDDIT: "👽",
+            SourceType.WEB_PAGE: "🌐",
+            SourceType.SOCIAL: "💬",
         }
 
         icon = source_icon.get(self.type, "📋")
