@@ -881,20 +881,39 @@ async def _restart_component_services(component: str, steps: List[str]) -> None:
             steps.append(f"restart {service}: error: {exc}")
 
 
-# Canonical base path for all deployed components (#10912).
-_AUTOBOT_DEPLOY_BASE = "/opt/autobot"
-
 # Python backend components that embed an autobot_shared symlink (#10912).
 _BACKEND_COMPONENTS = frozenset(_COMPONENT_PIP_PATHS.keys())
 
 
+def _get_deploy_base() -> Path:
+    """Return the installation base directory from config (AUTOBOT_BASE_DIR, default /opt/autobot).
+
+    Reads the value at call time so that tests can monkeypatch the environment
+    variable or the config object without needing to patch a module-level string.
+    Avoids importing autobot_shared.ssot_config at module load (bootstrap safety).
+    """
+    try:
+        from autobot_shared.ssot_config import get_config as _get_config
+
+        return Path(_get_config().path.base_dir)
+    except Exception:
+        # ssot_config unavailable at bootstrap — fall back to the env var directly.
+        import os
+
+        return Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
+
+
 async def _ensure_autobot_shared_symlink(component: str, steps: List[str]) -> None:
-    """Restore /opt/autobot/<component>/autobot_shared → /opt/autobot/autobot_shared (#10912).
+    """Restore <AUTOBOT_BASE_DIR>/<component>/autobot_shared → <AUTOBOT_BASE_DIR>/autobot_shared (#10912).
 
     The deploy rsync uses --delete, which removes the symlink because it is not
     present in the code_source tree. Without it the backend process crashes on
     import with ModuleNotFoundError. This helper recreates the symlink so the
     component restarts cleanly.
+
+    The base directory is read from AUTOBOT_BASE_DIR via PathConfig so that
+    non-standard deployments (e.g. AUTOBOT_BASE_DIR=/srv/autobot) work without
+    any code change (#10912 follow-up).
 
     Only acts on Python backend components (autobot-backend, autobot-slm-backend).
     Non-fatal: errors are logged and a step note is appended, but the sync is not
@@ -902,11 +921,12 @@ async def _ensure_autobot_shared_symlink(component: str, steps: List[str]) -> No
     """
     if component not in _BACKEND_COMPONENTS:
         return
-    shared_target = Path(_AUTOBOT_DEPLOY_BASE) / "autobot_shared"
+    base = _get_deploy_base()
+    shared_target = base / "autobot_shared"
     if not shared_target.exists():
         steps.append(f"symlink: {shared_target} not found — skipped")
         return
-    link_path = Path(_AUTOBOT_DEPLOY_BASE) / component / "autobot_shared"
+    link_path = base / component / "autobot_shared"
     try:
         if link_path.is_symlink() and link_path.resolve() == shared_target.resolve():
             steps.append(f"symlink: {link_path} already correct")

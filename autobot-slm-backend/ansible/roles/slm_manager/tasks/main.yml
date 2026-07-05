@@ -278,6 +278,44 @@
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
 
+# Issue #10912: The drift/resolve sync removes the autobot_shared symlink
+# inside the SLM backend directory because the symlink is not present in the
+# code_source tree.  Without it the restarted process dies with
+# ModuleNotFoundError.  Ensure the symlink exists after every sync so that
+# code-sync restores are self-correcting even without Ansible.
+#
+# Step 1: Stat the embedded path to distinguish a real directory (must be
+# removed before a symlink can be created) from an existing symlink.
+- name: "SLM | Stat embedded autobot_shared path in SLM backend dir (#10912)"
+  ansible.builtin.stat:
+    path: "{{ slm_backend_dir }}/autobot_shared"
+  register: _slm_embedded_shared_stat
+  tags: ['slm', 'backend']
+
+# Step 2: Remove a stale real directory — ansible.builtin.file state:link
+# cannot replace a non-empty directory even with force: true.
+- name: "SLM | Remove stale embedded autobot_shared real-dir in SLM backend if present (#10912)"
+  ansible.builtin.file:
+    path: "{{ slm_backend_dir }}/autobot_shared"
+    state: absent
+  when:
+    - _slm_embedded_shared_stat.stat.exists
+    - not _slm_embedded_shared_stat.stat.islnk
+  tags: ['slm', 'backend']
+
+# Step 3: Create (or update) the symlink.  force: true replaces a wrong symlink.
+# Uses slm_shared_dir (= {{ slm_base_dir }}/autobot_shared) so the base is
+# governed by slm_base_dir — no hardcoded /opt/autobot path (#10912).
+- name: "SLM | Symlink embedded autobot_shared to canonical SLM copy (#10912)"
+  ansible.builtin.file:
+    src: "{{ slm_shared_dir }}"
+    dest: "{{ slm_backend_dir }}/autobot_shared"
+    state: link
+    force: true
+    owner: "{{ slm_user }}"
+    group: "{{ slm_group }}"
+  tags: ['slm', 'backend']
+
 - name: "SLM | Install autobot_shared in venv (editable)"
   ansible.builtin.command:
     cmd: "{{ slm_backend_dir }}/venv/bin/pip install -e {{ slm_base_dir }}/autobot_shared"
