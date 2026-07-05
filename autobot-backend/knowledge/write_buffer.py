@@ -109,7 +109,19 @@ class VectorWriteBuffer:
         document: str,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Buffer a vector write. If the buffer is full, flush immediately."""
+        """Buffer a vector write. If the buffer is full, flush immediately.
+
+        Issue #10941: Reject entries with empty/None embeddings — they cause
+        IndexError in chroma normalize_insert_record_set and contaminate the
+        entire flush batch, silently dropping all valid vectors alongside them.
+        """
+        if not embedding:
+            logger.warning(
+                "VectorWriteBuffer.write: dropping id=%r — embedding is empty/None "
+                "(embedding generation failed upstream); vector will NOT be stored",
+                id,
+            )
+            return
         async with self._lock:
             self._buffer[id] = BufferedWrite(
                 id=id,
@@ -171,10 +183,32 @@ def make_chromadb_flush_fn(vector_store: Any) -> Callable[[List[BufferedWrite]],
     Uses vector_store.add(nodes) to preserve LlamaIndex internal metadata fields
     (_node_content, _node_type, ref_doc_id) needed for NodeWithScore reconstruction.
     Direct collection.upsert() bypasses these fields — Issue #8401.
+
+    Issue #10941: Filters out entries with empty/None embeddings before calling
+    vector_store.add so a single failed embedding cannot raise IndexError inside
+    chroma normalize_insert_record_set and drop the entire flush batch.
     """
 
     async def _flush(batch: List[BufferedWrite]) -> None:
         from llama_index.core.schema import TextNode
+
+        valid: List[BufferedWrite] = []
+        for e in batch:
+            if e.embedding:
+                valid.append(e)
+            else:
+                logger.warning(
+                    "make_chromadb_flush_fn: skipping id=%r — embedding is empty/None; "
+                    "vector will NOT be stored in ChromaDB",
+                    e.id,
+                )
+
+        if not valid:
+            logger.warning(
+                "make_chromadb_flush_fn: all %d entries had empty embeddings — skipping vector_store.add",
+                len(batch),
+            )
+            return
 
         nodes = [
             TextNode(
@@ -183,7 +217,7 @@ def make_chromadb_flush_fn(vector_store: Any) -> Callable[[List[BufferedWrite]],
                 embedding=e.embedding,
                 metadata=e.metadata,
             )
-            for e in batch
+            for e in valid
         ]
         await asyncio.to_thread(vector_store.add, nodes)
 
