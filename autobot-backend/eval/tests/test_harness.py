@@ -149,7 +149,7 @@ def test_worse_prompt_candidate_end_to_end(tmp_path):
         )
 
     replayer = TrajectoryReplayer(evaluator=_scorer(0.9))
-    report = asyncio.get_event_loop().run_until_complete(replayer.run([_golden()], worse_prompt_candidate))
+    report = asyncio.run(replayer.run([_golden()], worse_prompt_candidate))
 
     assert report.has_regressions
     out = tmp_path / "report.json"
