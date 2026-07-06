@@ -368,14 +368,21 @@ function withSourceIdParams(params: Record<string, unknown> = {}): Record<string
   return { ...params, source_id: id }
 }
 
+// Issue #638: /patterns/preferences returns a map keyed by pattern id,
+// distinct from the Pattern[] list returned by /patterns.
+interface PatternPreferencesResponse {
+  data?: PatternPreferencesResponse
+  patterns?: Record<string, { enabled: boolean }>
+}
+
 // Issue #701: Type for API response with data property
 interface ApiDataResponse {
-  data?: any
+  data?: ApiDataResponse
   issues?: ReviewIssue[]
   reviews?: ReviewHistory[]
   patterns?: Pattern[]
   path?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 // Types
@@ -697,8 +704,8 @@ function savePatternPrefs(): void {
 async function applyPatternPrefs(): Promise<void> {
   // Issue #638: Load preferences from backend first, fallback to localStorage
   try {
-    const response = await api.get<ApiDataResponse>(`${getApiBase()}/code-review/patterns/preferences`);
-    const prefs = (response as ApiDataResponse).patterns || (response as ApiDataResponse).data?.patterns;
+    const response = await api.get<PatternPreferencesResponse>(`${getApiBase()}/code-review/patterns/preferences`);
+    const prefs = (response as PatternPreferencesResponse).patterns || (response as PatternPreferencesResponse).data?.patterns;
 
     if (prefs) {
       // Apply backend preferences
@@ -733,7 +740,7 @@ async function togglePattern(pattern: Pattern): Promise<void> {
   const newState = !pattern.enabled;
 
   try {
-    await api.post<any>(`${getApiBase()}/code-review/patterns/toggle`, {
+    await api.post<unknown>(`${getApiBase()}/code-review/patterns/toggle`, {
       pattern_id: pattern.id,
       enabled: newState
     });
@@ -751,7 +758,7 @@ async function togglePattern(pattern: Pattern): Promise<void> {
 
 async function markResolved(issue: ReviewIssue) {
   try {
-    await api.post<any>(`${getApiBase()}/code-review/feedback`, {
+    await api.post<unknown>(`${getApiBase()}/code-review/feedback`, {
       issue_id: issue.id,
       feedback: 'resolved'
     })
@@ -766,7 +773,7 @@ async function markResolved(issue: ReviewIssue) {
 
 async function markFalsePositive(issue: ReviewIssue) {
   try {
-    await api.post<any>(`${getApiBase()}/code-review/feedback`, {
+    await api.post<unknown>(`${getApiBase()}/code-review/feedback`, {
       issue_id: issue.id,
       feedback: 'false_positive'
     })
