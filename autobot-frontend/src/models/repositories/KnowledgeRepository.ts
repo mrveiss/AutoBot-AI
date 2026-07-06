@@ -282,7 +282,7 @@ export class KnowledgeRepository extends ApiRepository {
 
   // Legacy add text method
   // Issue #552: Fixed path - backend uses /api/knowledge_base/add_text
-  async addKnowledge(content: string, metadata: Record<string, any> = {}): Promise<any> {
+  async addKnowledge(content: string, metadata: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
     const response = await this.post<Record<string, unknown>>(`${getApiBase()}/knowledge_base/add_text`, {
       content,
       metadata
@@ -489,7 +489,7 @@ export class KnowledgeRepository extends ApiRepository {
     const response = await this.get<{ results: BackendSearchResult[] }>(`${getApiBase()}/knowledge_base/documents/${documentId}/similar?limit=${limit}`)
 
     // Transform results to match SearchResult format
-    const results = (response.data as any).results || response.data || []
+    const results = ((response.data as { results?: BackendSearchResult[] }).results || response.data || []) as BackendSearchResult[]
     return results.map((result: BackendSearchResult) => ({
       document: {
         id: result.metadata?.fact_id || result.node_id,
@@ -513,7 +513,7 @@ export class KnowledgeRepository extends ApiRepository {
   async getSearchSuggestions(query: string, limit: number = 8): Promise<string[]> {
     try {
       const response = await this.get<string[]>(`${getApiBase()}/knowledge_base/suggestions?query=${encodeURIComponent(query)}&limit=${limit}`)
-      return (response.data as any) || []
+      return response.data || []
     } catch {
       // Return empty array if suggestions endpoint not available
       return []
