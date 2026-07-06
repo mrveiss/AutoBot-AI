@@ -11,8 +11,8 @@ const meta = {
 } as Meta<typeof ScreenCaptureViewer>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 const sampleAnalysisResult = {
   confidence_score: 0.87,

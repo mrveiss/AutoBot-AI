@@ -26,8 +26,8 @@ const meta = {
 } as Meta<typeof Terminal>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 // NOTE: Terminal uses WebSocket for real-time connection.  In Storybook it will
 // render in a disconnected state since there is no backend available.  All

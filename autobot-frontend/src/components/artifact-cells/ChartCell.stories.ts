@@ -136,7 +136,7 @@ export const Empty: Story = {
 
 export const WithError: Story = {
   args: {
-    richPayload: invalidSpec as any,
+    richPayload: invalidSpec,
     title: 'Error State Chart'
   }
 }

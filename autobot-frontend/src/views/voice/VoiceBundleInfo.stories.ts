@@ -18,8 +18,8 @@ import { VOICE_BUNDLE_STATE_KEY } from '@/composables/useVoiceBundle'
 import type { UserBundleInfo, VoiceBundleInjectedState } from '@/composables/useVoiceBundle'
 import { ref, provide } from 'vue'
 
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>
 
 const meta: Meta = {
   title: 'Views/Voice/VoiceBundleInfo',

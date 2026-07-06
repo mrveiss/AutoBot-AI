@@ -48,8 +48,8 @@ const meta = {
 } as Meta<typeof WorkflowAutomation>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 // NOTE: WorkflowAutomation is a renderless orchestration component — its
 // template contains only a placeholder comment.  All state is managed via

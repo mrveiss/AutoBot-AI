@@ -15,14 +15,14 @@ const meta = {
 } as Meta<typeof MarketplaceSourcesModal>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 export const Open: Story = {
   args: {
     open: true,
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { MarketplaceSourcesModal },
     setup() {
       return { args };
@@ -44,7 +44,7 @@ export const Closed: Story = {
   args: {
     open: false,
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { MarketplaceSourcesModal },
     setup() {
       return { args };

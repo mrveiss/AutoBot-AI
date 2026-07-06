@@ -24,8 +24,8 @@ const meta = {
 } as Meta<typeof AccessMetrics>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 const sampleMetrics = {
   total_violations: 47,

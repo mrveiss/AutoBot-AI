@@ -45,8 +45,8 @@ const meta = {
 } as Meta<typeof PopoutChromiumBrowser>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = import('@storybook/vue3').StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = import('@storybook/vue3').StoryObj<Record<string, unknown>>;
 
 /**
  * Manual browser mode — sessionId = "manual-browser" shows the empty state with a
@@ -59,7 +59,7 @@ export const ManualBrowserMode: Story = {
     canResize: true,
     autoPopout: false,
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { PopoutChromiumBrowser },
     setup() { return { args } },
     template: `<div style="height:600px"><PopoutChromiumBrowser v-bind="args" @close="() => {}" /></div>`,
@@ -77,7 +77,7 @@ export const ActiveSession: Story = {
     canResize: true,
     autoPopout: false,
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { PopoutChromiumBrowser },
     setup() { return { args } },
     template: `<div style="height:600px"><PopoutChromiumBrowser v-bind="args" @close="() => {}" /></div>`,
@@ -94,7 +94,7 @@ export const SecureUrl: Story = {
     canResize: true,
     autoPopout: false,
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { PopoutChromiumBrowser },
     setup() { return { args } },
     template: `<div style="height:600px"><PopoutChromiumBrowser v-bind="args" @close="() => {}" /></div>`,
@@ -111,7 +111,7 @@ export const NonResizable: Story = {
     canResize: false,
     autoPopout: false,
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { PopoutChromiumBrowser },
     setup() { return { args } },
     template: `<div style="height:500px;width:800px"><PopoutChromiumBrowser v-bind="args" @close="() => {}" /></div>`,
@@ -129,7 +129,7 @@ export const CompactEmbedded: Story = {
     canResize: false,
     autoPopout: false,
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { PopoutChromiumBrowser },
     setup() { return { args } },
     template: `<div style="height:400px;width:640px"><PopoutChromiumBrowser v-bind="args" @close="() => {}" /></div>`,
