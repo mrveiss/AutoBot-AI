@@ -224,6 +224,15 @@ class LLMConfig(BaseSettings):
         ),
     )
 
+    # Knowledge-ingestion cognifier batching (#10598). When True, extraction
+    # cognifiers pack multiple chunks into ONE structured LLM call (index-keyed)
+    # instead of one call per chunk — a pure token/round-trip win, with an
+    # automatic per-chunk fallback that keeps correctness. Default on.
+    cognifier_multichunk_batching: bool = Field(default=True, alias="AUTOBOT_COGNIFIER_MULTICHUNK_BATCHING")
+    # Per-chunk character cap when packing chunks into a batched cognifier prompt,
+    # so one oversized chunk can't blow the context window (0 = no truncation).
+    cognifier_batch_max_chunk_chars: int = Field(default=2000, alias="AUTOBOT_COGNIFIER_BATCH_MAX_CHUNK_CHARS")
+
     # Provider-specific endpoints (each provider can have its own URL)
     ollama_endpoint: str = Field(default="http://127.0.0.1:11434", alias="AUTOBOT_OLLAMA_ENDPOINT")
     openai_endpoint: str = Field(default="https://api.openai.com/v1", alias="AUTOBOT_OPENAI_ENDPOINT")

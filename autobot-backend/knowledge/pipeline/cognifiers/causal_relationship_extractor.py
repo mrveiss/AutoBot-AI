@@ -15,8 +15,12 @@ extraction with condition detection and evidence tracking.
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
-from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
+from knowledge.pipeline.cognifiers.llm_utils import (
+    batched_chunk_extract,
+    parse_llm_json_response,
+)
 from knowledge.pipeline.models.causal_edge import CausalEdge
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.registry import TaskRegistry
@@ -54,6 +58,32 @@ Return empty array [] if no clear causal relationships found.
 Text:
 {text}
 """
+
+CAUSAL_EXTRACTION_BATCH_PROMPT = """Extract CAUSAL relationships from each of the following text chunks.
+
+CRITICAL: Distinguish explicit causality from correlation:
+- ACCEPT: "X causes Y", "X leads to Y", "X results in Y", "if X then Y", "because X, Y happens"
+- REJECT: "X and Y both increase", "X is correlated with Y", "X and Y tend to occur together"
+
+Each chunk is labeled "Chunk N:". For each causal relationship provide:
+- source_name, target_name
+- effect_type: One of CAUSES, ENABLES, PREVENTS, AMPLIFIES, REDUCES, INHIBITS, ACCELERATES, DECELERATES
+- condition (empty string if unconditional)
+- evidence_text: The exact sentence supporting this causality
+- confidence: 0.9-1.0 explicit, 0.7-0.85 strong inference, reject (<0.7)
+
+Return a JSON object mapping each chunk index (as a string) to its array of
+causal relationships (same fields as above); use an empty array for chunks with
+no clear causality. Example for two chunks:
+{{
+  "0": [{{"source_name": "cache_ttl", "target_name": "query_latency", "effect_type": "REDUCES", "condition": "", "evidence_text": "...", "confidence": 0.95}}],
+  "1": []
+}}
+
+Chunks:
+{chunks}
+"""
+
 
 # NLP patterns for lightweight causal detection (fallback mode)
 CAUSAL_KEYWORDS = {
@@ -279,21 +309,26 @@ class CausalRelationshipExtractor(BaseCognifier):
         return all_edges
 
     async def _process_batch(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[CausalEdge]:
-        """
-        Process a batch of chunks.
+        """Extract causal edges for a batch in ONE LLM call when batching is on (#10598).
 
-        Args:
-            chunks: Batch of chunks
-            context: Pipeline context
-
-        Returns:
-            List of causal edges from batch
+        Routes through ``batched_chunk_extract`` (index-keyed prompt, per-chunk
+        fallback) so K chunks cost one round-trip instead of K. Falls back to the
+        legacy per-chunk loop when the config flag is disabled.
         """
-        edges = []
-        for chunk in chunks:
-            chunk_edges = await self._extract_from_chunk(chunk, context)
-            edges.extend(chunk_edges)
-        return edges
+        if not config.cognifier_multichunk_batching:
+            edges = []
+            for chunk in chunks:
+                edges.extend(await self._extract_from_chunk(chunk, context))
+            return edges
+        return await batched_chunk_extract(
+            chunks,
+            llm=self.llm,
+            batch_prompt_template=CAUSAL_EXTRACTION_BATCH_PROMPT,
+            llm_type="extraction",
+            max_chunk_chars=config.cognifier_batch_max_chunk_chars,
+            convert=lambda raw, chunk: self._convert_to_causal_edges(raw, chunk, context.document_id),
+            extract_one=lambda chunk: self._extract_from_chunk(chunk, context),
+        )
 
     async def _extract_from_chunk(self, chunk: ProcessedChunk, context: PipelineContext) -> List[CausalEdge]:
         """
