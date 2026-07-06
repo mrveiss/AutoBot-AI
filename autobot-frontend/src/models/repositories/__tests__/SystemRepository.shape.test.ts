@@ -15,6 +15,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SystemRepository } from '../SystemRepository'
+import type { AutoBotSettings } from '@/types/models'
 
 vi.mock('@/config/ssot-config', () => ({
   getApiBase: () => '/api'
@@ -380,7 +381,7 @@ describe('SystemRepository shape handling (#5207 audit)', () => {
       const response = { ui: partial.ui }
       postSpy.mockResolvedValue({ data: response })
 
-      const result = await repo.updateSettings(partial as any)
+      const result = await repo.updateSettings(partial as Partial<AutoBotSettings>)
 
       expect(postSpy).toHaveBeenCalledWith(
         expect.stringContaining('/api/settings/'),
@@ -404,15 +405,15 @@ describe('SystemRepository shape handling (#5207 audit)', () => {
   // they can't silently reappear.
   describe('config-file methods removed (#5214)', () => {
     it('getConfigFiles is not present on SystemRepository', () => {
-      expect((repo as any).getConfigFiles).toBeUndefined()
+      expect((repo as unknown as Record<string, unknown>).getConfigFiles).toBeUndefined()
     })
 
     it('getConfigFile is not present on SystemRepository', () => {
-      expect((repo as any).getConfigFile).toBeUndefined()
+      expect((repo as unknown as Record<string, unknown>).getConfigFile).toBeUndefined()
     })
 
     it('updateConfigFile is not present on SystemRepository', () => {
-      expect((repo as any).updateConfigFile).toBeUndefined()
+      expect((repo as unknown as Record<string, unknown>).updateConfigFile).toBeUndefined()
     })
   })
 })

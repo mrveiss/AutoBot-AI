@@ -11,13 +11,11 @@
  */
 
 import { ref, onMounted, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useAgentRegistry, type SpecializedAgent, type BackendAgent } from '@/composables/useAgentRegistry'
+import { useAgentRegistry, type SpecializedAgent } from '@/composables/useAgentRegistry'
 import { useAvailableModels } from '@/composables/useAvailableModels'
 import AgentSettingsPanel from '@/components/agents/AgentSettingsPanel.vue'
 import { createLogger } from '@/utils/debugUtils'
 
-const { t } = useI18n()
 const logger = createLogger('AgentRegistryView')
 
 const {
@@ -36,7 +34,6 @@ const {
 const {
   availableModelNames,
   isLoading: isLoadingModels,
-  error: modelsError,
   hasErrors: modelsHaveErrors,
   providersErrored,
   fetchModels,
@@ -70,13 +67,6 @@ function getColorClasses(color: string): string {
   return colorMap[color] || colorMap.gray
 }
 
-const categoryIcons: Record<string, string> = {
-  implementation: 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4',
-  analysis: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-  planning: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01',
-  specialized: 'M13 10V3L4 14h7v7l9-11h-7z',
-  general: 'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4',
-}
 
 async function openAgentDetail(agent: SpecializedAgent) {
   showDetailModal.value = true
