@@ -673,6 +673,16 @@ class Orchestrator(_DeprecatedRequestMixin):
         result: Dict[str, Any] = {}
         ctx = context or {}
 
+        # #11015 kill-switch: skip all planning-context I/O when disabled.
+        from autobot_shared.ssot_config import PLANNING_CONTEXT_ENABLED  # noqa: PLC0415
+
+        if not PLANNING_CONTEXT_ENABLED:
+            return result
+
+        # #11015: isolate trajectory retrieval to the caller's tenant so one org's
+        # history can never bias/inject into another's plan. Absent → un-scoped.
+        tenant_id = str(ctx.get("tenant_id") or "")
+
         # #10580 — learned prompt template from TaskPatternLearner
         try:
             from agents.task_pattern_learner import (
@@ -700,7 +710,7 @@ class Orchestrator(_DeprecatedRequestMixin):
             from memory.trajectory_store import get_trajectory_store
 
             store = await get_trajectory_store()
-            similar = await store.find_similar_trajectories(goal, top_k=5, min_reward=0.7)
+            similar = await store.find_similar_trajectories(goal, top_k=5, min_reward=0.7, tenant_id=tenant_id or None)
             if similar:
                 result["similar_trajectories"] = similar
         except Exception as exc:
@@ -806,6 +816,14 @@ class Orchestrator(_DeprecatedRequestMixin):
                 plan = await self._select_best_plan(goal, context, planning_ctx, PLAN_BEST_OF_N_COUNT)
             else:
                 plan = await self._generate_single_plan(goal, context, planning_ctx)
+
+            # #11015: stamp caller identity so the trajectory captured after
+            # execution is tagged with the tenant that owns it, keeping future
+            # retrieval isolated. Stored in the existing metadata dict (no schema
+            # change). Absent context → empty (untenanted), same as before.
+            ctx = context or {}
+            plan.metadata.setdefault("tenant_id", str(ctx.get("tenant_id") or ""))
+            plan.metadata.setdefault("user_id", str(ctx.get("user_id") or ""))
 
             self.active_workflows[plan.plan_id] = plan
             return plan

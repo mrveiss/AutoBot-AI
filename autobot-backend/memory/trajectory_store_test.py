@@ -359,3 +359,93 @@ async def test_get_trajectory_store_returns_singleton():
         assert s1 is s2
     finally:
         _mod._store = original
+
+
+# ---------------------------------------------------------------------------
+# Tests: tenant isolation (#11015)
+# ---------------------------------------------------------------------------
+
+
+def _store_entry_tenant(idx: int, tenant_id: str, reward: float = 1.0) -> Dict[str, Any]:
+    entry = _store_entry(idx, task_text=f"task {idx}", reward=reward)
+    entry["metadata"]["tenant_id"] = tenant_id
+    entry["metadata"]["user_id"] = f"user-{idx}"
+    return entry
+
+
+@pytest.mark.asyncio
+async def test_capture_tags_tenant_and_user():
+    """capture() records tenant_id/user_id in metadata for later scoped retrieval."""
+    col = _make_collection()
+    store = await _store_with_collection(col)
+
+    await store.capture(
+        task_text="Deploy service",
+        action_sequence=_ACTIONS,
+        outcome="success",
+        reward=1.0,
+        duration=5.0,
+        tenant_id="org-A",
+        user_id="user-1",
+    )
+
+    _, kwargs = col.add.call_args
+    meta = kwargs["metadatas"][0]
+    assert meta["tenant_id"] == "org-A"
+    assert meta["user_id"] == "user-1"
+
+
+@pytest.mark.asyncio
+async def test_find_similar_scoped_to_tenant_excludes_other_tenants():
+    """A tenant-scoped query never returns another tenant's trajectory (#11015)."""
+    stored = [
+        _store_entry_tenant(0, "org-A"),
+        _store_entry_tenant(1, "org-B"),
+        _store_entry_tenant(2, "org-A"),
+    ]
+    col = _make_collection(stored)
+    store = await _store_with_collection(col)
+
+    results = await store.find_similar_trajectories("task", top_k=10, min_reward=0.0, tenant_id="org-A")
+
+    assert results, "expected org-A matches"
+    assert all(r["trajectory_id"] in {"traj_0000", "traj_0002"} for r in results)
+    assert all("org-B" not in r["task_text"] for r in results)
+
+
+@pytest.mark.asyncio
+async def test_find_similar_passes_where_filter_to_chromadb():
+    """The tenant is pushed down as a ChromaDB `where` filter (primary guard)."""
+    seen = {}
+    col = _make_collection([_store_entry_tenant(0, "org-A")])
+    orig = col.query
+
+    async def _spy(**kwargs):
+        seen.update(kwargs)
+        return await orig(**kwargs)
+
+    col.query = _spy
+    store = await _store_with_collection(col)
+
+    await store.find_similar_trajectories("task", tenant_id="org-A")
+    assert seen.get("where") == {"tenant_id": "org-A"}
+
+
+@pytest.mark.asyncio
+async def test_find_similar_unscoped_returns_all_and_no_where():
+    """No tenant_id → unchanged behaviour: no `where` filter, all tenants visible."""
+    seen = {}
+    stored = [_store_entry_tenant(0, "org-A"), _store_entry_tenant(1, "org-B")]
+    col = _make_collection(stored)
+    orig = col.query
+
+    async def _spy(**kwargs):
+        seen.update(kwargs)
+        return await orig(**kwargs)
+
+    col.query = _spy
+    store = await _store_with_collection(col)
+
+    results = await store.find_similar_trajectories("task", top_k=10, min_reward=0.0)
+    assert "where" not in seen or seen.get("where") is None
+    assert len(results) == 2

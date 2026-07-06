@@ -45,6 +45,23 @@ router = APIRouter()
 logger = get_logger(__name__)
 
 
+def _with_identity(context: dict | None, current_user: dict) -> dict:
+    """Return *context* augmented with the caller's tenant/user identity (#11015).
+
+    Threads ``org_id``/``user_id`` from the authenticated user into the planning
+    context so trajectory capture + retrieval stay isolated to the owning tenant.
+    Never overrides a caller-supplied value.
+    """
+    ctx = dict(context or {})
+    org_id = current_user.get("org_id") or current_user.get("organization_id")
+    if org_id and not ctx.get("tenant_id"):
+        ctx["tenant_id"] = str(org_id)
+    user_id = current_user.get("user_id") or current_user.get("id")
+    if user_id and not ctx.get("user_id"):
+        ctx["user_id"] = str(user_id)
+    return ctx
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_workflow",
@@ -131,7 +148,7 @@ async def execute_workflow(
             orchestrator.config.max_parallel_tasks = request.max_parallel_tasks
 
         # Create and execute workflow
-        result = await create_and_execute_workflow(request.goal, request.context)
+        result = await create_and_execute_workflow(request.goal, _with_identity(request.context, current_user))
 
         # Check if workflow has multiple tasks (Issue #620: uses helpers)
         has_multiple_tasks = len(result.get("results", {})) > 1
@@ -169,7 +186,7 @@ async def create_workflow_plan(
         logger.info("Creating workflow plan for: %s", request.goal)
 
         # Create plan
-        plan = await orchestrator.create_workflow_plan(request.goal, request.context)
+        plan = await orchestrator.create_workflow_plan(request.goal, _with_identity(request.context, current_user))
 
         # Convert to serializable format
         plan_dict = {

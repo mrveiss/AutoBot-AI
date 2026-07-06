@@ -284,10 +284,17 @@ class WorkflowPlanner:
         Non-fatal: errors are caught and logged so planning always continues.
         """
         try:
+            from autobot_shared.ssot_config import PLANNING_CONTEXT_ENABLED  # noqa: PLC0415
+
+            if not PLANNING_CONTEXT_ENABLED:  # #11015 kill-switch
+                return
             from memory.trajectory_store import get_trajectory_store
 
+            # #11015: scope to the caller's tenant so one org's trajectories can't
+            # surface in another's plan. Absent tenant → un-scoped (legacy).
+            tenant_id = str(context.get("tenant_id") or "") or None
             store = await get_trajectory_store()
-            similar = await store.find_similar_trajectories(user_request, top_k=5, min_reward=0.7)
+            similar = await store.find_similar_trajectories(user_request, top_k=5, min_reward=0.7, tenant_id=tenant_id)
             if similar:
                 context["similar_trajectories"] = similar
                 logger.debug(

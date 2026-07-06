@@ -230,6 +230,8 @@ class TrajectoryStore:
         strategy: str = "",
         start_state: Optional[Dict[str, Any]] = None,
         timestamp: Optional[datetime] = None,
+        tenant_id: str = "",
+        user_id: str = "",
     ) -> str:
         """Store a completed workflow trajectory.
 
@@ -275,6 +277,10 @@ class TrajectoryStore:
             "plan_id": plan_id,
             "strategy": strategy,
             "timestamp": ts.isoformat(),
+            # Tenant/user tags for isolation-scoped retrieval (#11015). Empty
+            # string = untenanted (legacy); a scoped query filters on these.
+            "tenant_id": tenant_id,
+            "user_id": user_id,
         }
 
         collection = await self._get_collection()
@@ -303,6 +309,7 @@ class TrajectoryStore:
         task_text: str,
         top_k: int = _DEFAULT_TOP_K,
         min_reward: float = _MIN_REWARD_DEFAULT,
+        tenant_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Return the *top_k* most-similar past trajectories above *min_reward*.
 
@@ -329,13 +336,20 @@ class TrajectoryStore:
         collection = await self._get_collection()
         # Fetch extra candidates so min_reward filtering doesn't starve top_k
         fetch_k = max(top_k * 4, 20)
+        # #11015: when a tenant is supplied, isolate the query to that tenant so
+        # one org's trajectories can never surface in another's plan. A None/empty
+        # tenant_id keeps the un-scoped behaviour (backward compatible for callers
+        # and legacy trajectories that predate tenant tagging).
+        query_kwargs: Dict[str, Any] = {
+            "query_texts": [task_text],
+            "n_results": fetch_k,
+            "include": ["documents", "metadatas", "distances"],
+        }
+        if tenant_id:
+            query_kwargs["where"] = {"tenant_id": tenant_id}
         t0 = time.perf_counter()
         try:
-            raw = await collection.query(
-                query_texts=[task_text],
-                n_results=fetch_k,
-                include=["documents", "metadatas", "distances"],
-            )
+            raw = await collection.query(**query_kwargs)
         except Exception as exc:
             logger.error("TrajectoryStore.find_similar_trajectories failed: %s", exc)
             return []
@@ -355,6 +369,11 @@ class TrajectoryStore:
 
         results = []
         for traj_id, doc, meta, dist in zip(ids, docs, metas, distances):
+            # Client-side tenant backstop — the ChromaDB `where` filter is the
+            # primary guard, but enforce again here so a version whose metadata
+            # filter is lenient can never leak another tenant's trajectory (#11015).
+            if tenant_id and meta.get("tenant_id", "") != tenant_id:
+                continue
             reward = float(meta.get("reward", 0.0))
             if reward < min_reward:
                 continue

@@ -359,6 +359,7 @@ class WorkflowRunner:
             if isinstance(criteria, dict) and criteria.get("overall") == "partial":
                 outcome = "partial"
             reward = reward_from_execution(result)
+            plan_meta = getattr(plan, "metadata", None) or {}
             await store.capture(
                 task_text=plan.goal,
                 action_sequence=action_sequence,
@@ -368,6 +369,9 @@ class WorkflowRunner:
                 agent_id=getattr(plan, "assigned_agent", ""),
                 plan_id=plan.plan_id,
                 strategy=plan.strategy.value,
+                # #11015: tag with the owning tenant/user so retrieval stays isolated.
+                tenant_id=str(plan_meta.get("tenant_id") or ""),
+                user_id=str(plan_meta.get("user_id") or ""),
             )
         except Exception as exc:
             logger.warning("TrajectoryStore.capture failed (non-fatal): %s", exc)
