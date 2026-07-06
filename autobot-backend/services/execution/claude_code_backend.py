@@ -64,6 +64,7 @@ from services.execution.base_backend import (
     ExecutionStatus,
     ExecutionTask,
 )
+from services.execution.env_sanitizer import safe_task_env
 
 logger = get_logger(__name__)
 
@@ -89,25 +90,10 @@ CLAUDE_CODE_BACKEND = "claude_code"
 # Absent or falsy → provider reports unavailable (no crash).
 _ENV_FLAG = "AUTOBOT_FEATURE_CLAUDE_CODE_EXECUTION"
 
-# Security: task-supplied env_vars may never set these — credentials (which the
-# task could redirect to an attacker endpoint or override with a stolen key) and
-# process loader / path vars (which could hijack the spawned CLI). Pinned by the
-# backend after the task env is applied.
-_PROTECTED_ENV_KEYS = frozenset(
-    {
-        "ANTHROPIC_API_KEY",
-        "ANTHROPIC_AUTH_TOKEN",
-        "ANTHROPIC_BASE_URL",
-        "ANTHROPIC_API_URL",
-        "CLAUDE_CODE_ENTRYPOINT",
-        "PATH",
-        "LD_PRELOAD",
-        "LD_LIBRARY_PATH",
-        "DYLD_INSERT_LIBRARIES",
-        "PYTHONPATH",
-        "PYTHONSTARTUP",
-    }
-)
+# Security: task-supplied env_vars are semi-untrusted. They are sanitized via
+# ``safe_task_env`` (AUTOBOT_* allowlist + credential/loader/shell denylist) —
+# see services/execution/env_sanitizer.py — the AUTOBOT_* allowlist plus the
+# PROTECTED_ENV_KEYS / LD_*/DYLD_* denylist live there as the single source.
 
 # MCP server defaults (matches autobot_mcp_main.py HTTP transport)
 _DEFAULT_MCP_HOST = "127.0.0.1"
@@ -451,11 +437,11 @@ class ClaudeCodeBackend(ExecutionBackend):
         cmd.append("--")
         cmd.append(task.code)  # prompt is the task code/description (positional only)
 
-        # Security: task-supplied env_vars must NOT override credentials or the
-        # process loader/PATH (env-injection / credential-override). Apply the
-        # task env first (filtered), then pin the protected vars last so they win.
-        env = dict(os.environ)
-        env.update({k: v for k, v in task.env_vars.items() if k not in _PROTECTED_ENV_KEYS})
+        # Security: task-supplied env_vars are semi-untrusted. Start from the
+        # trusted parent env, then contribute ONLY allowlisted AUTOBOT_* task
+        # vars (hijack/credential vars rejected). Pin the credential last so it
+        # always wins over anything a task could set.
+        env = safe_task_env(os.environ, task.env_vars)
         env["ANTHROPIC_API_KEY"] = self._resolve_api_key() or ""
 
         try:
