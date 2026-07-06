@@ -4,6 +4,17 @@
 // Author: mrveiss
 import { test, expect } from '@playwright/test'
 
+// Minimal shape of the canvas store exposed on window for E2E hooks.
+interface CanvasStoreHandle {
+  cells: Array<{ id: string }>
+  isDirty: boolean
+  addCell: (owner: string) => void
+  updateCellContent: (id: string, content: string) => void
+  upsertStreamCell: (cell: { cellId: string; seq: number; delta: string; state: string }) => void
+}
+
+type CanvasWindow = Window & { __canvasStore?: CanvasStoreHandle }
+
 test.describe('Canvas (MVA-360 Phase 1)', () => {
   test.beforeEach(async ({ page }) => {
     // Set feature flag and navigate to canvas
@@ -49,7 +60,7 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
   test('agent cell displays ownership signals: color border + background tint + 🤖 badge', async ({ page }) => {
     // Create an agent cell (simulated via store)
     await page.evaluate(() => {
-      const store = (window as any).__canvasStore
+      const store = (window as unknown as CanvasWindow).__canvasStore
       if (store) {
         store.upsertStreamCell({
           cellId: 'agent-cell-1',
@@ -80,7 +91,7 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
   test('user cell displays without agent styling (color independence verified)', async ({ page }) => {
     // Create a user cell
     await page.evaluate(() => {
-      const store = (window as any).__canvasStore
+      const store = (window as unknown as CanvasWindow).__canvasStore
       if (store) {
         store.addCell('user')
       }
@@ -106,7 +117,7 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
   test('streaming state machine: skeleton → partial → complete transitions', async ({ page }) => {
     // Start with skeleton (placeholder)
     await page.evaluate(() => {
-      const store = (window as any).__canvasStore
+      const store = (window as unknown as CanvasWindow).__canvasStore
       if (store) {
         store.upsertStreamCell({
           cellId: 'stream-cell-1',
@@ -126,7 +137,7 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
 
     // Transition to partial (streaming)
     await page.evaluate(() => {
-      const store = (window as any).__canvasStore
+      const store = (window as unknown as CanvasWindow).__canvasStore
       if (store) {
         store.upsertStreamCell({
           cellId: 'stream-cell-1',
@@ -145,7 +156,7 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
 
     // Transition to complete
     await page.evaluate(() => {
-      const store = (window as any).__canvasStore
+      const store = (window as unknown as CanvasWindow).__canvasStore
       if (store) {
         store.upsertStreamCell({
           cellId: 'stream-cell-1',
@@ -186,27 +197,27 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
   test('keyboard shortcuts work: ⌘Z undo, ⌘⇧Z redo, ⌘⇧E export, ⌘L add cell', async ({ page }) => {
     // Add a cell, edit it, then undo
     await page.evaluate(() => {
-      const store = (window as any).__canvasStore
+      const store = (window as unknown as CanvasWindow).__canvasStore
       if (store) {
         store.addCell('user')
         store.updateCellContent(store.cells[store.cells.length - 1].id, 'test content')
       }
     })
 
-    const initialCount = await page.evaluate(() => (window as any).__canvasStore?.cells.length)
+    const initialCount = await page.evaluate(() => (window as unknown as CanvasWindow).__canvasStore?.cells.length)
 
     // Press ⌘Z (meta+z)
     await page.keyboard.press('Meta+z')
     await page.waitForTimeout(100)
 
-    const afterUndoCount = await page.evaluate(() => (window as any).__canvasStore?.cells.length)
+    const afterUndoCount = await page.evaluate(() => (window as unknown as CanvasWindow).__canvasStore?.cells.length)
     expect(afterUndoCount).toBe((initialCount || 0) - 1)
 
     // Press ⌘⇧Z (meta+shift+z)
     await page.keyboard.press('Meta+Shift+z')
     await page.waitForTimeout(100)
 
-    const afterRedoCount = await page.evaluate(() => (window as any).__canvasStore?.cells.length)
+    const afterRedoCount = await page.evaluate(() => (window as unknown as CanvasWindow).__canvasStore?.cells.length)
     expect(afterRedoCount).toBe(initialCount)
 
     // Verify export sheet opens on ⌘⇧E
@@ -235,7 +246,7 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
 
     // Add a cell to trigger dirty state
     await page.evaluate(() => {
-      const store = (window as any).__canvasStore
+      const store = (window as unknown as CanvasWindow).__canvasStore
       if (store) {
         store.addCell('user')
         store.isDirty = true
@@ -253,7 +264,7 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
   test('edge state: empty canvas shows "+ Add your first cell" CTA', async ({ page }) => {
     // Ensure canvas is empty
     await page.evaluate(() => {
-      const store = (window as any).__canvasStore
+      const store = (window as unknown as CanvasWindow).__canvasStore
       if (store) {
         store.cells = []
       }
@@ -281,7 +292,7 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
 
     // Trigger stream to skeleton state
     await page.evaluate(() => {
-      const store = (window as any).__canvasStore
+      const store = (window as unknown as CanvasWindow).__canvasStore
       if (store) {
         store.upsertStreamCell({
           cellId: 'motion-cell',
@@ -303,7 +314,7 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
   test('color independence: agent cell signals visible without relying on color alone (border + icon + badge)', async ({ page }) => {
     // Create agent cell
     await page.evaluate(() => {
-      const store = (window as any).__canvasStore
+      const store = (window as unknown as CanvasWindow).__canvasStore
       if (store) {
         store.upsertStreamCell({
           cellId: 'color-test-cell',
@@ -332,7 +343,7 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
   test('visual snapshot: default split layout (desktop)', async ({ page }) => {
     // Add some cells for visual interest
     await page.evaluate(() => {
-      const store = (window as any).__canvasStore
+      const store = (window as unknown as CanvasWindow).__canvasStore
       if (store) {
         store.addCell('user')
         store.updateCellContent(store.cells[0].id, '# User Cell\nSome content here')
@@ -358,7 +369,7 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
 
     // Add cells
     await page.evaluate(() => {
-      const store = (window as any).__canvasStore
+      const store = (window as unknown as CanvasWindow).__canvasStore
       if (store) {
         store.addCell('user')
         store.updateCellContent(store.cells[0].id, 'Mobile content')
@@ -373,7 +384,7 @@ test.describe('Canvas (MVA-360 Phase 1)', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
 
     await page.evaluate(() => {
-      const store = (window as any).__canvasStore
+      const store = (window as unknown as CanvasWindow).__canvasStore
       if (store) {
         store.upsertStreamCell({
           cellId: 'no-motion-cell',
