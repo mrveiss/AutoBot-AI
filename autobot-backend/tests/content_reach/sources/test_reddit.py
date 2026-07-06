@@ -6,13 +6,13 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
 
 from content_reach.base import BackendError, ContentRequest
-from source_attribution import SourceType
+from source_attribution import SourceReliability, SourceType
 
 # ---------------------------------------------------------------------------
 # Sample JSON fixtures
@@ -57,12 +57,12 @@ _HN_ALGOLIA_JSON = {
 }
 
 
-def _make_sync_mock_client(status_code: int, body: dict | None = None):
-    """Build a MagicMock httpx.Client whose .get() returns a fixed response."""
+def _make_async_mock_client(status_code: int, body: dict | None = None):
+    """Build an AsyncMock httpx.AsyncClient whose .get() returns a fixed response."""
     mock_response = MagicMock()
     mock_response.status_code = status_code
     mock_response.json.return_value = body or {}
-    mock_client = MagicMock(spec=httpx.Client)
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
     mock_client.get.return_value = mock_response
     return mock_client, mock_response
 
@@ -77,7 +77,7 @@ async def test_reddit_search_maps_posts():
     """Mock returns 2-post reddit search JSON; result.structured['posts'] has 2 entries."""
     from content_reach.sources.reddit import RedditJsonBackend
 
-    mock_client, _ = _make_sync_mock_client(200, _REDDIT_SEARCH_JSON)
+    mock_client, _ = _make_async_mock_client(200, _REDDIT_SEARCH_JSON)
     backend = RedditJsonBackend(client=mock_client)
     request = ContentRequest(query="python tips", limit=2)
     result = await backend.fetch(request)
@@ -95,7 +95,7 @@ async def test_reddit_search_sends_user_agent():
     """fetch() sends the expected User-Agent header."""
     from content_reach.sources.reddit import RedditJsonBackend, _USER_AGENT
 
-    mock_client, _ = _make_sync_mock_client(200, _REDDIT_SEARCH_JSON)
+    mock_client, _ = _make_async_mock_client(200, _REDDIT_SEARCH_JSON)
     backend = RedditJsonBackend(client=mock_client)
     request = ContentRequest(query="python tips", limit=2)
     await backend.fetch(request)
@@ -115,7 +115,7 @@ async def test_reddit_url_mode_appends_json():
     """URL mode with reddit.com URL appends .json suffix."""
     from content_reach.sources.reddit import RedditJsonBackend
 
-    mock_client, _ = _make_sync_mock_client(200, _REDDIT_SEARCH_JSON)
+    mock_client, _ = _make_async_mock_client(200, _REDDIT_SEARCH_JSON)
     backend = RedditJsonBackend(client=mock_client)
     request = ContentRequest(url="https://www.reddit.com/r/python")
     await backend.fetch(request)
@@ -129,7 +129,7 @@ async def test_reddit_url_mode_no_double_json():
     """URL already ending in .json does not get a second .json appended."""
     from content_reach.sources.reddit import RedditJsonBackend
 
-    mock_client, _ = _make_sync_mock_client(200, _REDDIT_SEARCH_JSON)
+    mock_client, _ = _make_async_mock_client(200, _REDDIT_SEARCH_JSON)
     backend = RedditJsonBackend(client=mock_client)
     request = ContentRequest(url="https://www.reddit.com/r/python.json")
     await backend.fetch(request)
@@ -149,7 +149,7 @@ async def test_reddit_non200_raises_backend_error():
     """Non-200 response raises BackendError."""
     from content_reach.sources.reddit import RedditJsonBackend
 
-    mock_client, _ = _make_sync_mock_client(403)
+    mock_client, _ = _make_async_mock_client(403)
     backend = RedditJsonBackend(client=mock_client)
     request = ContentRequest(query="python")
     with pytest.raises(BackendError, match="403"):
@@ -162,11 +162,29 @@ async def test_reddit_empty_children_raises_backend_error():
     from content_reach.sources.reddit import RedditJsonBackend
 
     empty_json = {"data": {"children": []}}
-    mock_client, _ = _make_sync_mock_client(200, empty_json)
+    mock_client, _ = _make_async_mock_client(200, empty_json)
     backend = RedditJsonBackend(client=mock_client)
     request = ContentRequest(query="python")
     with pytest.raises(BackendError, match="no posts"):
         await backend.fetch(request)
+
+
+# ---------------------------------------------------------------------------
+# RedditJsonBackend — reliability
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_reddit_result_reliability_medium():
+    """RedditJsonBackend result has reliability MEDIUM."""
+    from content_reach.sources.reddit import RedditJsonBackend
+
+    mock_client, _ = _make_async_mock_client(200, _REDDIT_SEARCH_JSON)
+    backend = RedditJsonBackend(client=mock_client)
+    request = ContentRequest(query="python tips", limit=2)
+    result = await backend.fetch(request)
+
+    assert result.reliability is SourceReliability.MEDIUM
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +197,7 @@ async def test_hn_maps_hits():
     """Mock returns 2-hit algolia JSON; result.structured['hits'] has 2 entries with hn_url."""
     from content_reach.sources.reddit import HnAlgoliaBackend
 
-    mock_client, _ = _make_sync_mock_client(200, _HN_ALGOLIA_JSON)
+    mock_client, _ = _make_async_mock_client(200, _HN_ALGOLIA_JSON)
     backend = HnAlgoliaBackend(client=mock_client)
     request = ContentRequest(query="python asyncio")
     result = await backend.fetch(request)
@@ -196,6 +214,34 @@ async def test_hn_maps_hits():
     assert hits[1]["title"] == "HN Post 2"
 
 
+@pytest.mark.asyncio
+async def test_hn_forwards_limit():
+    """HnAlgoliaBackend passes request.limit as hitsPerPage query param."""
+    from content_reach.sources.reddit import HnAlgoliaBackend
+
+    mock_client, _ = _make_async_mock_client(200, _HN_ALGOLIA_JSON)
+    backend = HnAlgoliaBackend(client=mock_client)
+    request = ContentRequest(query="python asyncio", limit=5)
+    await backend.fetch(request)
+
+    call_kwargs = mock_client.get.call_args
+    params = call_kwargs.kwargs.get("params", {})
+    assert params.get("hitsPerPage") == 5
+
+
+@pytest.mark.asyncio
+async def test_hn_result_reliability_medium():
+    """HnAlgoliaBackend result has reliability MEDIUM."""
+    from content_reach.sources.reddit import HnAlgoliaBackend
+
+    mock_client, _ = _make_async_mock_client(200, _HN_ALGOLIA_JSON)
+    backend = HnAlgoliaBackend(client=mock_client)
+    request = ContentRequest(query="python asyncio")
+    result = await backend.fetch(request)
+
+    assert result.reliability is SourceReliability.MEDIUM
+
+
 # ---------------------------------------------------------------------------
 # HnAlgoliaBackend — error cases
 # ---------------------------------------------------------------------------
@@ -206,7 +252,7 @@ async def test_hn_empty_hits_raises_backend_error():
     """Algolia response with empty hits raises BackendError."""
     from content_reach.sources.reddit import HnAlgoliaBackend
 
-    mock_client, _ = _make_sync_mock_client(200, {"hits": []})
+    mock_client, _ = _make_async_mock_client(200, {"hits": []})
     backend = HnAlgoliaBackend(client=mock_client)
     request = ContentRequest(query="python asyncio")
     with pytest.raises(BackendError, match="no hits"):
@@ -224,7 +270,7 @@ async def test_httpx_error_raises_backend_error():
     from content_reach.sources.reddit import HnAlgoliaBackend, RedditJsonBackend
 
     for BackendCls in (RedditJsonBackend, HnAlgoliaBackend):
-        mock_client = MagicMock(spec=httpx.Client)
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
         mock_client.get.side_effect = httpx.HTTPError("connection failed")
         backend = BackendCls(client=mock_client)
         request = ContentRequest(query="test")

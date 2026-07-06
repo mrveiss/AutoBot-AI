@@ -37,13 +37,15 @@ class RedditJsonBackend(ContentBackend):
     probe() always returns True — liveness validated at fetch-time via circuit breaker.
     fetch() uses request.url (appending .json) when a reddit.com URL is provided,
     otherwise falls back to the Reddit search endpoint using request.query.
+
+    Accepts an optional injected httpx.AsyncClient for testing.
     """
 
     name = "reddit_json"
     source_type = SourceType.REDDIT
 
-    def __init__(self, client: httpx.Client | None = None) -> None:
-        self._client = client or httpx.Client(timeout=_HTTP_TIMEOUT)
+    def __init__(self, client: httpx.AsyncClient | None = None) -> None:
+        self._client = client
 
     async def probe(self) -> bool:
         """Always return True — liveness validated at fetch-time via circuit breaker."""
@@ -56,17 +58,29 @@ class RedditJsonBackend(ContentBackend):
         if request.url and "reddit.com" in request.url:
             url = request.url if request.url.endswith(".json") else request.url + ".json"
             try:
-                response = self._client.get(url, headers=headers)
+                if self._client is not None:
+                    response = await self._client.get(url, headers=headers)
+                else:
+                    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+                        response = await client.get(url, headers=headers)
             except httpx.HTTPError as exc:
                 logger.debug("RedditJsonBackend: HTTP error for %r: %s", url, exc)
                 raise BackendError(str(exc)) from exc
         else:
             try:
-                response = self._client.get(
-                    "https://www.reddit.com/search.json",
-                    params={"q": request.query, "limit": request.limit},
-                    headers=headers,
-                )
+                if self._client is not None:
+                    response = await self._client.get(
+                        "https://www.reddit.com/search.json",
+                        params={"q": request.query, "limit": request.limit},
+                        headers=headers,
+                    )
+                else:
+                    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+                        response = await client.get(
+                            "https://www.reddit.com/search.json",
+                            params={"q": request.query, "limit": request.limit},
+                            headers=headers,
+                        )
             except httpx.HTTPError as exc:
                 logger.debug("RedditJsonBackend: HTTP error for query %r: %s", request.query, exc)
                 raise BackendError(str(exc)) from exc
@@ -106,7 +120,7 @@ class RedditJsonBackend(ContentBackend):
             backend_used=self.name,
             text="\n".join(text_lines),
             structured={"posts": posts},
-            reliability=SourceReliability.COMMUNITY,
+            reliability=SourceReliability.MEDIUM,
         )
 
 
@@ -115,13 +129,15 @@ class HnAlgoliaBackend(ContentBackend):
 
     probe() always returns True — pure-HTTP backend, always capable.
     fetch() searches via hn.algolia.com and maps hits to ContentResult.
+
+    Accepts an optional injected httpx.AsyncClient for testing.
     """
 
     name = "hn_algolia"
     source_type = SourceType.REDDIT
 
-    def __init__(self, client: httpx.Client | None = None) -> None:
-        self._client = client or httpx.Client(timeout=_HTTP_TIMEOUT)
+    def __init__(self, client: httpx.AsyncClient | None = None) -> None:
+        self._client = client
 
     async def probe(self) -> bool:
         """Always return True — pure-HTTP backend, always capable."""
@@ -130,10 +146,17 @@ class HnAlgoliaBackend(ContentBackend):
     async def fetch(self, request: ContentRequest) -> ContentResult:
         """Fetch HN hits from Algolia; raise BackendError on failure."""
         try:
-            response = self._client.get(
-                "http://hn.algolia.com/api/v1/search",
-                params={"query": request.query},
-            )
+            if self._client is not None:
+                response = await self._client.get(
+                    "https://hn.algolia.com/api/v1/search",
+                    params={"query": request.query, "hitsPerPage": request.limit},
+                )
+            else:
+                async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+                    response = await client.get(
+                        "https://hn.algolia.com/api/v1/search",
+                        params={"query": request.query, "hitsPerPage": request.limit},
+                    )
         except httpx.HTTPError as exc:
             logger.debug("HnAlgoliaBackend: HTTP error for query %r: %s", request.query, exc)
             raise BackendError(str(exc)) from exc
@@ -169,7 +192,7 @@ class HnAlgoliaBackend(ContentBackend):
             backend_used=self.name,
             text="\n".join(text_lines),
             structured={"hits": hits},
-            reliability=SourceReliability.COMMUNITY,
+            reliability=SourceReliability.MEDIUM,
         )
 
 
