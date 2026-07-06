@@ -36,7 +36,6 @@ from agent_loop.pre_action_verifier import (
     _threshold_for_tool,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -414,7 +413,6 @@ class TestPanel:
     @pytest.mark.asyncio
     async def test_panel_blocks_when_quorum_refutes(self):
         """Panel of 3, quorum of 2: if 2 refute, result is BLOCK."""
-        from agent_loop.pre_action_verifier import THRESHOLD_MUTATE
 
         provider = _fake_provider("anthropic")
         # Return high probability each time

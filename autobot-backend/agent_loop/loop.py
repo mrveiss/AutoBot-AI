@@ -1366,6 +1366,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
                 await self._record_verifier_verdict(verifier_result)
                 if verifier_result.verdict == VerifierVerdict.BLOCK:
                     from agent_loop.pre_action_verifier import HARD_BLOCK
+
                     if HARD_BLOCK:
                         logger.warning(
                             "AgentLoop: verifier hard-blocked tool '%s' — %s",
@@ -1417,6 +1418,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
         task_id = self._current_context.task_id if self._current_context else None
         try:
             from agent_loop.pre_action_verifier import VerifierResult  # noqa: F401
+
             result = await self._verifier.verify(
                 tool_name=tool_name,
                 args=args,

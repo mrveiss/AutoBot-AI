@@ -87,13 +87,26 @@ VERIFIER_TIMEOUT_S: float = env_float("VERIFIER_TIMEOUT_S", 30.0)
 
 _DEPLOY_TOOLS = frozenset({"deploy", "ansible", "docker", "kubectl", "helm", "terraform"})
 _MUTATE_TOOLS = frozenset(
-    {"write_file", "edit_file", "delete_file", "move_file", "copy_file",
-     "create_directory", "remove_directory",
-     "git_push", "git_commit", "git_merge", "git_rebase", "git_reset", "git_force_push"}
+    {
+        "write_file",
+        "edit_file",
+        "delete_file",
+        "move_file",
+        "copy_file",
+        "create_directory",
+        "remove_directory",
+        "git_push",
+        "git_commit",
+        "git_merge",
+        "git_rebase",
+        "git_reset",
+        "git_force_push",
+    }
 )
 _NETWORK_TOOLS = frozenset({"http_post", "http_put", "http_patch", "http_delete", "send_request"})
-_EXEC_TOOLS = frozenset({"bash", "shell", "execute_command", "run_command", "terminal",
-                          "system_exec", "code_interpreter"})
+_EXEC_TOOLS = frozenset(
+    {"bash", "shell", "execute_command", "run_command", "terminal", "system_exec", "code_interpreter"}
+)
 
 
 def _threshold_for_tool(tool_name: str) -> float:
@@ -118,9 +131,9 @@ def _threshold_for_tool(tool_name: str) -> float:
 class VerifierVerdict(str, Enum):
     """Decision produced by the adversarial verifier."""
 
-    PASS = "PASS"   # No significant flaw found — allow action.
+    PASS = "PASS"  # No significant flaw found — allow action.
     BLOCK = "BLOCK"  # Flaw found — block or escalate to human.
-    SKIP = "SKIP"   # Verifier disabled or unavailable — allow through.
+    SKIP = "SKIP"  # Verifier disabled or unavailable — allow through.
 
 
 @dataclass
@@ -259,6 +272,7 @@ async def _call_verifier_once(
     )
     try:
         import asyncio as _asyncio
+
         response = await _asyncio.wait_for(
             provider.chat_completion(request),
             timeout=VERIFIER_TIMEOUT_S,
@@ -282,7 +296,7 @@ def _parse_probability(raw: str) -> float:
     for line in raw.splitlines():
         stripped = line.strip()
         if stripped.upper().startswith("REFUTATION_PROBABILITY:"):
-            value_str = stripped[len("REFUTATION_PROBABILITY:"):].strip()
+            value_str = stripped[len("REFUTATION_PROBABILITY:") :].strip()
             try:
                 return max(0.0, min(1.0, float(value_str)))
             except ValueError:
@@ -298,7 +312,7 @@ def _parse_rationale(raw: str) -> str:
     for line in lines:
         stripped = line.strip()
         if stripped.upper().startswith("RATIONALE:"):
-            parts.append(stripped[len("RATIONALE:"):].strip())
+            parts.append(stripped[len("RATIONALE:") :].strip())
             collecting = True
         elif collecting and stripped:
             parts.append(stripped)
@@ -366,9 +380,7 @@ class PreActionVerifier:
         threshold: float,
     ) -> VerifierResult:
         """Single-verifier path (default)."""
-        prob, rationale, prov, model = await _call_verifier_once(
-            tool_name, args, reason, self._actor_provider
-        )
+        prob, rationale, prov, model = await _call_verifier_once(tool_name, args, reason, self._actor_provider)
         verdict = VerifierVerdict.BLOCK if prob >= threshold else VerifierVerdict.PASS
         result = VerifierResult(
             verdict=verdict,
@@ -397,10 +409,7 @@ class PreActionVerifier:
         import asyncio
 
         tasks = [
-            asyncio.create_task(
-                _call_verifier_once(tool_name, args, reason, self._actor_provider)
-            )
-            for _ in range(n)
+            asyncio.create_task(_call_verifier_once(tool_name, args, reason, self._actor_provider)) for _ in range(n)
         ]
         panel_results = await asyncio.gather(*tasks, return_exceptions=True)
 
