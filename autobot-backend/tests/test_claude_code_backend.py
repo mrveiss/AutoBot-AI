@@ -175,30 +175,38 @@ class TestEventStreaming:
         stream.publish = AsyncMock(side_effect=lambda evt: published.append(evt))
 
         # Simulate two JSONL lines: tool_use then tool_result
-        tool_use_line = json.dumps({
-            "type": "assistant",
-            "message": {
-                "content": [{
-                    "type": "tool_use",
-                    "id": "tu-001",
-                    "name": "kb.search",
-                    "input": {"query": "hello"},
-                }]
-            },
-        })
-        tool_result_line = json.dumps({
-            "type": "tool_result",
-            "tool_use_id": "tu-001",
-            "output": "42 results",
-            "is_error": False,
-        })
-        result_line = json.dumps({
-            "type": "result",
-            "subtype": "success",
-            "is_error": False,
-            "result": "Done",
-            "usage": {},
-        })
+        tool_use_line = json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "tu-001",
+                            "name": "kb.search",
+                            "input": {"query": "hello"},
+                        }
+                    ]
+                },
+            }
+        )
+        tool_result_line = json.dumps(
+            {
+                "type": "tool_result",
+                "tool_use_id": "tu-001",
+                "output": "42 results",
+                "is_error": False,
+            }
+        )
+        result_line = json.dumps(
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "result": "Done",
+                "usage": {},
+            }
+        )
 
         backend = _make_backend(event_stream=stream)
         lines = [tool_use_line, tool_result_line, result_line]
@@ -223,12 +231,12 @@ class TestEventStreaming:
         stream = MagicMock()
         stream.publish = AsyncMock(side_effect=lambda evt: published.append(evt))
 
-        text_line = json.dumps({
-            "type": "assistant",
-            "message": {
-                "content": [{"type": "text", "text": "Hello from Claude"}]
-            },
-        })
+        text_line = json.dumps(
+            {
+                "type": "assistant",
+                "message": {"content": [{"type": "text", "text": "Hello from Claude"}]},
+            }
+        )
         backend = _make_backend(event_stream=stream)
 
         async def _fake_exec(*a, **kw):
@@ -253,17 +261,21 @@ class TestParseCLILine:
     """_parse_cli_line correctly maps JSONL shapes to _StepEvent."""
 
     def test_parses_tool_use(self):
-        line = json.dumps({
-            "type": "assistant",
-            "message": {
-                "content": [{
-                    "type": "tool_use",
-                    "id": "id-1",
-                    "name": "kb.search",
-                    "input": {"q": "x"},
-                }]
-            },
-        })
+        line = json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "id-1",
+                            "name": "kb.search",
+                            "input": {"q": "x"},
+                        }
+                    ]
+                },
+            }
+        )
         step = _parse_cli_line(line)
         assert step is not None
         assert step.kind == "tool_use"
@@ -278,10 +290,12 @@ class TestParseCLILine:
         assert step.content["output"] == "ok"
 
     def test_parses_text_message(self):
-        line = json.dumps({
-            "type": "assistant",
-            "message": {"content": [{"type": "text", "text": "hi"}]},
-        })
+        line = json.dumps(
+            {
+                "type": "assistant",
+                "message": {"content": [{"type": "text", "text": "hi"}]},
+            }
+        )
         step = _parse_cli_line(line)
         assert step is not None
         assert step.kind == "message"
