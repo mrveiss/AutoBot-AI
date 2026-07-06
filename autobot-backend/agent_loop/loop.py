@@ -25,6 +25,7 @@ import uuid
 from typing import Any
 
 from agent_loop.belief_state import BeliefStateUpdater
+from agent_loop.pre_action_verifier import PreActionVerifier, VerifierVerdict
 from agent_loop.slack_hook import get_slack_hook
 from agent_loop.think_tool import ThinkTool
 from agent_loop.types import (
@@ -56,6 +57,7 @@ from events.event_types import BELIEF_CACHE_HIT as EVT_BELIEF_CACHE_HIT
 from events.event_types import HUMAN_ANSWER_RECEIVED as EVT_HUMAN_ANSWER_RECEIVED
 from events.event_types import HUMAN_QUESTION as EVT_HUMAN_QUESTION
 from events.event_types import STEERING_RECEIVED as EVT_STEERING_RECEIVED
+from events.event_types import VERIFIER_VERDICT as EVT_VERIFIER_VERDICT
 from events.types import (
     create_approval_required_event,
     create_human_question_event,
@@ -164,6 +166,11 @@ class AgentLoop:
         self.config = config or AgentLoopConfig()
         self._belief_updater = BeliefStateUpdater(
             contradiction_surface_threshold=self.config.contradiction_surface_threshold
+        )
+
+        # Adversarial pre-action verifier (#10547)
+        self._verifier: PreActionVerifier | None = (
+            PreActionVerifier() if self.config.pre_action_verifier_enabled else None
         )
 
         # State
@@ -1348,6 +1355,39 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
         """
         for tool in self._requires_approval(tools):
             tool_name = tool.get("tool_name", "unknown")
+            args = tool.get("args", tool.get("arguments", tool.get("parameters", {})))
+            if not isinstance(args, dict):
+                args = {"value": repr(args)}
+            reason = tool.get("reason", "")
+
+            # Adversarial pre-action verifier pass (#10547) — runs before human approval.
+            verifier_result = await self._run_verifier(tool_name, args, reason)
+            if verifier_result is not None:
+                await self._record_verifier_verdict(verifier_result)
+                if verifier_result.verdict == VerifierVerdict.BLOCK:
+                    from agent_loop.pre_action_verifier import HARD_BLOCK
+                    if HARD_BLOCK:
+                        logger.warning(
+                            "AgentLoop: verifier hard-blocked tool '%s' — %s",
+                            tool_name,
+                            verifier_result.rationale[:120],
+                        )
+                        return {
+                            tool_name: {
+                                "error": (
+                                    f"Tool '{tool_name}' was hard-blocked by the adversarial "
+                                    f"verifier (prob={verifier_result.refutation_probability:.2f}): "
+                                    f"{verifier_result.rationale}"
+                                )
+                            }
+                        }
+                    # Soft-block: escalate to human with verifier rationale attached
+                    tool = dict(tool)
+                    tool["verifier_rationale"] = (
+                        f"[Verifier BLOCK prob={verifier_result.refutation_probability:.2f}] "
+                        f"{verifier_result.rationale}"
+                    )
+
             approval_id = str(uuid.uuid4())
             approved = await self._request_approval(tool, approval_id)
             if not approved:
@@ -1360,6 +1400,60 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
                     tool_name: {"error": (f"Tool '{tool_name}' was denied by the user " f"(approval_id={approval_id})")}
                 }
         return {}
+
+    async def _run_verifier(
+        self,
+        tool_name: str,
+        args: dict[str, Any],
+        reason: str,
+    ) -> "VerifierResult | None":
+        """Dispatch the adversarial verifier for *tool_name* and return its result.
+
+        Returns None when the verifier is disabled or not configured.
+        Errors are swallowed and logged — a broken verifier must not block the loop.
+        """
+        if self._verifier is None:
+            return None
+        task_id = self._current_context.task_id if self._current_context else None
+        try:
+            from agent_loop.pre_action_verifier import VerifierResult  # noqa: F401
+            result = await self._verifier.verify(
+                tool_name=tool_name,
+                args=args,
+                reason=reason,
+                task_id=task_id,
+            )
+            return result
+        except Exception as exc:
+            logger.warning(
+                "AgentLoop: pre-action verifier raised unexpectedly (%s: %r) — skipping",
+                type(exc).__name__,
+                exc,
+            )
+            return None
+
+    async def _record_verifier_verdict(self, result: "VerifierResult") -> None:
+        """Publish the verifier verdict to the event bus and task trajectory.
+
+        The verdict is visible to the human at the approval gate so the operator
+        sees "verifier flagged X" before deciding whether to approve.
+        """
+        task_id = self._current_context.task_id if self._current_context else None
+        payload = result.to_dict()
+        await _bus_publish_event(
+            f"task:{task_id}" if task_id else "global",
+            EVT_VERIFIER_VERDICT,
+            payload,
+            persist=PersistStrategy.MEMORY,
+        )
+        if self._current_context is not None:
+            self._current_context.metadata.setdefault("verifier_verdicts", []).append(payload)
+        logger.debug(
+            "AgentLoop: verifier verdict recorded tool=%s verdict=%s prob=%.2f",
+            result.tool_name,
+            result.verdict.value,
+            result.refutation_probability,
+        )
 
     async def _request_approval(
         self,
