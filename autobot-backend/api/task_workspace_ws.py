@@ -258,14 +258,19 @@ async def workspace_shell(
     to be an admin — identical to the REST workspace endpoints — before any
     shell is attached. Fail-closed: any auth error closes the socket (1008).
     """
-    await websocket.accept()
+    # Reject cross-origin (CSWSH) BEFORE completing the handshake — a disallowed
+    # Origin never gets an accepted socket (#11016). Headers are available on the
+    # WebSocket prior to accept().
     try:
         _validate_ws_origin(websocket)
-    except PermissionError as exc:
-        await _ws_error(websocket, str(exc))
+    except PermissionError:
         await websocket.close(code=1008)
         return
 
+    await websocket.accept()
+    # Authentication (bearer header / cookie-session / internal-service key) + admin
+    # is decided solely here, so cookie-authenticated admins and internal-key clients
+    # are no longer locked out by an Authorization-header precondition (#11016).
     if not _authenticate_ws_admin(websocket):
         await _ws_error(websocket, "Authentication required (admin)")
         await websocket.close(code=1008)
@@ -364,36 +369,28 @@ async def _ws_error(websocket: WebSocket, content: str) -> None:
 
 
 def _validate_ws_origin(websocket: WebSocket) -> None:
-    """Reject cross-origin (CSWSH) and unauthenticated WebSocket connections.
+    """Reject cross-origin (CSWSH) WebSocket handshakes — Origin check ONLY.
 
-    WebSockets are exempt from the browser same-origin/CORS policy, so a
-    malicious page could otherwise open this socket using the victim's ambient
-    cookies. Defence: when an ``Origin`` header is present (browser client) it
-    MUST be on the CORS allowlist; non-browser clients omit ``Origin`` and
-    authenticate via the internal-service key. An ``Authorization`` header is
-    additionally required. Fail-closed on every branch.
+    WebSockets are exempt from the browser same-origin/CORS policy, so a malicious
+    page could otherwise open this socket using the victim's ambient cookies. When
+    an ``Origin`` header is present (browser client) it MUST be on the CORS
+    allowlist; non-browser clients omit ``Origin``. Authentication is decided
+    separately by :func:`_authenticate_ws_admin` (bearer header, cookie/session, or
+    the internal-service key), so this function no longer imposes an
+    Authorization-header precondition that locked out cookie/internal-key callers
+    (#11016). Fail-closed: a disallowed or unresolvable Origin raises.
     """
-    import os
-
     origin = websocket.headers.get("origin", "")
-    if origin:
-        try:
-            from config.manager import get_config_manager  # noqa: PLC0415
+    if not origin:
+        return  # non-browser client (no Origin) — not subject to CSWSH
+    try:
+        from config.manager import get_config_manager  # noqa: PLC0415
 
-            allowed = set(get_config_manager().get_cors_origins() or [])
-        except Exception:  # config unavailable → fail closed, allow nothing cross-origin
-            allowed = set()
-        if origin not in allowed:
-            raise PermissionError(f"Origin not allowed for workspace shell: {origin}")
-
-    auth_header = websocket.headers.get("authorization", "")
-    if not auth_header:
-        # Allow only when auth is explicitly disabled (test/dev); production
-        # defaults to "1" and therefore fails closed on a missing Authorization.
-        if os.environ.get("AUTOBOT_REQUIRE_WS_AUTH", "1") != "1":
-            return
-        # Production: block unauthenticated connections
-        raise PermissionError("Authorization header required for workspace shell")
+        allowed = set(get_config_manager().get_cors_origins() or [])
+    except Exception:  # config unavailable → fail closed, allow nothing cross-origin
+        allowed = set()
+    if origin not in allowed:
+        raise PermissionError(f"Origin not allowed for workspace shell: {origin}")
 
 
 def _authenticate_ws_admin(websocket: WebSocket) -> bool:
@@ -403,6 +400,12 @@ def _authenticate_ws_admin(websocket: WebSocket) -> bool:
     A WebSocket exposes the same ``headers``/``cookies`` interface as a Request,
     so the standard auth middleware resolves the caller. Any error → deny.
     """
+    import os  # noqa: PLC0415
+
+    # Dev/test escape hatch: when WS auth is explicitly disabled, allow the
+    # connection. Production defaults to "1", so full auth is required.
+    if os.environ.get("AUTOBOT_REQUIRE_WS_AUTH", "1") != "1":
+        return True
     try:
         if verify_internal_api_key(websocket.headers.get("X-Internal-API-Key")):
             return True

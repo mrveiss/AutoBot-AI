@@ -113,25 +113,32 @@ class ValidateWsOriginTests(unittest.TestCase):
             with self.assertRaises(PermissionError):
                 _validate_ws_origin(ws)
 
-    def test_allowlisted_origin_with_auth_passes(self):
+    def test_allowlisted_origin_passes(self):
         from api.task_workspace_ws import _validate_ws_origin
 
-        ws = self._ws({"origin": "https://app.internal", "authorization": "Bearer x"})
+        ws = self._ws({"origin": "https://app.internal"})
         with patch("config.manager.get_config_manager") as gcm:
             gcm.return_value.get_cors_origins.return_value = ["https://app.internal"]
             _validate_ws_origin(ws)  # no raise
 
-    def test_absent_origin_non_browser_with_auth_passes(self):
+    def test_absent_origin_non_browser_passes(self):
         from api.task_workspace_ws import _validate_ws_origin
 
-        _validate_ws_origin(self._ws({"authorization": "Bearer x"}))  # no raise
+        _validate_ws_origin(self._ws({}))  # no raise — Origin-only, no auth precondition
 
-    def test_absent_auth_rejected_in_production(self):
+    def test_origin_check_no_longer_requires_authorization_header(self):
+        """#11016: an allowlisted same-origin client with NO Authorization header
+        must pass the Origin gate (auth is decided by _authenticate_ws_admin), so
+        cookie-authenticated admins are no longer locked out."""
         from api.task_workspace_ws import _validate_ws_origin
 
-        with patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}):
-            with self.assertRaises(PermissionError):
-                _validate_ws_origin(self._ws({}))
+        ws = self._ws({"origin": "https://app.internal"})  # no 'authorization'
+        with (
+            patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
+            patch("config.manager.get_config_manager") as gcm,
+        ):
+            gcm.return_value.get_cors_origins.return_value = ["https://app.internal"]
+            _validate_ws_origin(ws)  # no raise
 
 
 if __name__ == "__main__":

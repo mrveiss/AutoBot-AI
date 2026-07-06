@@ -436,8 +436,11 @@ def test_authenticate_ws_admin_denies_unauthenticated():
     import api.task_workspace_ws as mod
 
     ws = SimpleNamespace(headers={})
-    with patch.object(mod, "get_auth_middleware") as gam, patch.object(mod, "ssot_config") as cfg:
-        cfg.misc.internal_api_key = "k"
+    with (
+        patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
+        patch.object(mod, "get_auth_middleware") as gam,
+        patch.object(mod, "verify_internal_api_key", return_value=False),
+    ):
         gam.return_value.get_user_from_request.return_value = None
         assert mod._authenticate_ws_admin(ws) is False
 
@@ -450,21 +453,42 @@ def test_authenticate_ws_admin_denies_non_admin():
     import api.task_workspace_ws as mod
 
     ws = SimpleNamespace(headers={})
-    with patch.object(mod, "get_auth_middleware") as gam, patch.object(mod, "ssot_config") as cfg:
-        cfg.misc.internal_api_key = "k"
+    with (
+        patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
+        patch.object(mod, "get_auth_middleware") as gam,
+        patch.object(mod, "verify_internal_api_key", return_value=False),
+    ):
         gam.return_value.get_user_from_request.return_value = {"role": "user"}
         assert mod._authenticate_ws_admin(ws) is False
 
 
 def test_authenticate_ws_admin_allows_admin_and_internal_key():
+    """#11016: a cookie/JWT-resolved admin (NO Authorization header) is allowed, as
+    is the internal-service key — the paths the removed auth-header precondition
+    used to lock out."""
     from types import SimpleNamespace
     from unittest.mock import patch
 
     import api.task_workspace_ws as mod
 
-    with patch.object(mod, "get_auth_middleware") as gam, patch.object(mod, "ssot_config") as cfg:
-        cfg.misc.internal_api_key = "k"
+    with (
+        patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
+        patch.object(mod, "get_auth_middleware") as gam,
+        patch.object(mod, "verify_internal_api_key", side_effect=lambda key: key == "k"),
+    ):
         gam.return_value.get_user_from_request.return_value = {"role": "admin"}
+        # cookie/JWT-resolved admin, NO Authorization header
         assert mod._authenticate_ws_admin(SimpleNamespace(headers={})) is True
-        # internal-service key path
+        # internal-service key path (no Authorization header either)
         assert mod._authenticate_ws_admin(SimpleNamespace(headers={"X-Internal-API-Key": "k"})) is True
+
+
+def test_authenticate_ws_admin_dev_bypass_when_disabled():
+    """AUTOBOT_REQUIRE_WS_AUTH != '1' (dev/test) → allow without credentials (#11016)."""
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    import api.task_workspace_ws as mod
+
+    with patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "0"}):
+        assert mod._authenticate_ws_admin(SimpleNamespace(headers={})) is True
