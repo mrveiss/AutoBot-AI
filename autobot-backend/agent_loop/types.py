@@ -9,6 +9,7 @@ Type definitions for the agent loop system including states, phases,
 iteration results, and configuration.
 """
 
+import os
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -17,6 +18,13 @@ from typing import Any
 
 from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import BatchConfig, RetryConfig
+
+# ---------------------------------------------------------------------------
+# Ask-the-human timeout — env-configurable, never hardcoded (#10553)
+# ---------------------------------------------------------------------------
+#: Seconds the loop suspends waiting for a human answer before escalating.
+#: Override with AUTOBOT_ASK_HUMAN_TIMEOUT_SECONDS (default: 300).
+ASK_HUMAN_TIMEOUT_SECONDS: int = int(os.environ.get("AUTOBOT_ASK_HUMAN_TIMEOUT_SECONDS", "300"))
 
 # =============================================================================
 # Loop States and Phases
@@ -45,6 +53,7 @@ class LoopState(Enum):
     INITIALIZING = auto()  # Setting up for new task
     RUNNING = auto()  # Actively executing iterations
     PAUSED = auto()  # Temporarily paused (user intervention)
+    WAITING_FOR_HUMAN = auto()  # Suspended; awaiting human answer to a question (#10553)
     COMPLETING = auto()  # Wrapping up task
     COMPLETED = auto()  # Task finished successfully
     FAILED = auto()  # Task failed
@@ -59,6 +68,8 @@ class LoopOutcome(Enum):
     It is re-runnable with different inputs; FAILED typically is not.
     STAGNATED: observation novelty plateaued — tool results carried no new
     information across the stagnation window (#6627).
+    TIMED_OUT_WAITING: ask_human() hit its deadline with no reply and the
+    configured escalation policy was "abandon" (#10553).
     """
 
     COMPLETED = "completed"
@@ -67,6 +78,7 @@ class LoopOutcome(Enum):
     CANCELLED = "cancelled"
     HALTED = "halted"
     FAILED = "failed"
+    TIMED_OUT_WAITING = "timed_out_waiting"
 
 
 class ThinkCategory(Enum):
@@ -226,6 +238,10 @@ class AgentLoopConfig:
     min_confidence_floor: float = 0.3  # Confidence threshold below which a think step is "low"
     confidence_window: int = 3  # Consecutive low-confidence steps before abstention fires
 
+    # Ask-the-human (#10553) — configurable per-deployment via environment
+    ask_human_timeout_seconds: int = field(default_factory=lambda: ASK_HUMAN_TIMEOUT_SECONDS)
+    ask_human_escalation_policy: str = "abandon"  # "abandon" | "default" | "re_ask"
+
     # Belief state prototype (MVA-1407) — off by default to avoid prod changes
     belief_state_enabled: bool = False
     # MVA-1434: min confidence to serve a cached assertion instead of re-querying
@@ -311,6 +327,57 @@ class SteeringEntry:
             "iteration": self.iteration,
             "timestamp": self.timestamp.isoformat(),
         }
+
+
+# =============================================================================
+# Ask-the-Human Types (#10553)
+# =============================================================================
+
+
+@dataclass
+class HumanQuestion:
+    """A pending clarifying question emitted by the agent; loop suspends until answered.
+
+    Persisted to Redis so a restarted loop can detect it is still suspended and
+    resume waiting for the same question_id.  The ``escalation_policy`` controls
+    what happens when ``timeout_seconds`` elapses with no answer:
+    - "abandon": halt the loop with TIMED_OUT_WAITING outcome.
+    - "default": resume with ``default_answer`` (must be provided).
+    - "re_ask": re-emit the question and reset the timer (one retry then abandon).
+    """
+
+    question_id: str
+    question: str
+    iteration: int
+    choices: list[str] | None = None
+    escalation_policy: str = "abandon"  # "abandon" | "default" | "re_ask"
+    default_answer: str | None = None  # used when escalation_policy == "default"
+    timestamp: datetime = field(default_factory=now_utc)
+
+    def to_dict(self) -> dict:
+        return {
+            "question_id": self.question_id,
+            "question": self.question,
+            "iteration": self.iteration,
+            "choices": self.choices,
+            "escalation_policy": self.escalation_policy,
+            "default_answer": self.default_answer,
+            "timestamp": self.timestamp.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "HumanQuestion":
+        from autobot_shared.time_utils import parse_utc_iso
+
+        return cls(
+            question_id=data["question_id"],
+            question=data.get("question", ""),
+            iteration=data.get("iteration", 0),
+            choices=data.get("choices"),
+            escalation_policy=data.get("escalation_policy", "abandon"),
+            default_answer=data.get("default_answer"),
+            timestamp=parse_utc_iso(data["timestamp"]) if "timestamp" in data else now_utc(),
+        )
 
 
 # =============================================================================
@@ -429,6 +496,8 @@ class TaskContext:
     observation_fingerprints: list[ObservationFingerprint] = field(default_factory=list)
     # Mid-task steering messages absorbed by the loop (#10543)
     steering_events: list["SteeringEntry"] = field(default_factory=list)
+    # Clarifying questions asked by the agent; loop suspended waiting for each (#10553)
+    human_questions: list["HumanQuestion"] = field(default_factory=list)
     # Belief state (MVA-1407)
     assertions: dict[str, "Assertion"] = field(default_factory=dict)
     contradictions: list["ContradictionRecord"] = field(default_factory=list)
@@ -491,6 +560,10 @@ class TaskContext:
     def add_steering(self, entry: "SteeringEntry") -> None:
         """Record a human steering message absorbed by the loop (#10543)."""
         self.steering_events.append(entry)
+
+    def add_human_question(self, question: "HumanQuestion") -> None:
+        """Record a clarifying question asked by the agent (#10553)."""
+        self.human_questions.append(question)
 
     def get_duration_ms(self) -> float:
         """Get task duration in milliseconds."""
