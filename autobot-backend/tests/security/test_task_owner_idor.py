@@ -13,8 +13,9 @@ Acceptance criteria:
   - verify_task_owner degrades gracefully on Redis outage (fail-open).
 """
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 # ---------------------------------------------------------------------------
 # task_owner unit tests (no FastAPI needed)

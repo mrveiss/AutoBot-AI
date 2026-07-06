@@ -153,9 +153,7 @@ class TestAskHumanSuspendResume:
             patch.object(loop, "_clear_question_checkpoint", new=AsyncMock()),
         ):
             deliver_task = asyncio.create_task(_deliver())
-            answer = await loop.ask_human(
-                "What is the capital of France?", question_id_override="q-resume"
-            )
+            answer = await loop.ask_human("What is the capital of France?", question_id_override="q-resume")
             await deliver_task
 
         assert answer == "Paris"

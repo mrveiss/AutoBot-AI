@@ -1052,13 +1052,12 @@ class AgentLoop:
         - "default": returns default_answer (or "" if unset).
         - "re_ask": retries once; abandons after the second timeout.
         """
+
         async def _drain() -> str:
             # Race between in-process queue and event stream subscription.
             queue_task = asyncio.ensure_future(self._drain_answer_queue(hq.question_id))
             stream_task = asyncio.ensure_future(self._drain_answer_stream(hq.question_id))
-            done, pending = await asyncio.wait(
-                {queue_task, stream_task}, return_when=asyncio.FIRST_COMPLETED
-            )
+            done, pending = await asyncio.wait({queue_task, stream_task}, return_when=asyncio.FIRST_COMPLETED)
             for t in pending:
                 t.cancel()
             return next(iter(done)).result()
@@ -1073,9 +1072,7 @@ class AgentLoop:
                     hq.question_id,
                 )
             elif policy == "re_ask":
-                logger.warning(
-                    "AgentLoop: ask_human timeout — re-asking once (question_id=%s)", hq.question_id
-                )
+                logger.warning("AgentLoop: ask_human timeout — re-asking once (question_id=%s)", hq.question_id)
                 re_ask_task_id = self._current_context.task_id if self._current_context else None
                 await self._emit_human_question(hq, re_ask_task_id, timeout)
                 try:
