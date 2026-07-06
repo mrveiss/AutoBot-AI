@@ -466,6 +466,30 @@ import { useImageGeneration } from '@/composables/useImageGeneration'
 import { useThinkingMode, BUDGET_STEPS, BUDGET_STEP_LABELS } from '@/composables/useThinkingMode'
 import { usePreferences } from '@/composables/usePreferences'
 
+// Minimal Web Speech API event shapes (not in TS lib.dom): only the fields this
+// component reads. SpeechRecognitionResult / *Alternative come from lib.dom.
+interface SpeechRecognitionResultEvent {
+  results: SpeechRecognitionResultList
+}
+interface SpeechRecognitionErrorEventLike {
+  error: string
+}
+
+// Upload tracking item shared by handleFileSelect / retryUpload / uploadFile.
+interface UploadItem {
+  id: string
+  filename: string
+  progress: number
+  status: string
+  current: number
+  total: number
+  eta?: number
+  error?: string
+  file?: File
+  fileId?: string
+  uploadId?: string
+}
+
 const { t } = useI18n()
 const logger = createLogger('ChatInput')
 // Issue #1146: unlock AudioContext on first user gesture so TTS can play even
@@ -882,9 +906,9 @@ const startVoiceRecording = async () => {
     logger.debug('Voice recognition started')
   }
 
-  _recognition.onresult = (event: any) => {
-    const transcript = Array.from(event.results as any[])
-      .map((r: any) => r[0].transcript as string)
+  _recognition.onresult = (event: SpeechRecognitionResultEvent) => {
+    const transcript = Array.from(event.results as unknown as SpeechRecognitionResult[])
+      .map((r: SpeechRecognitionResult) => r[0].transcript as string)
       .join('')
     messageText.value = transcript
   }
@@ -895,7 +919,7 @@ const startVoiceRecording = async () => {
     logger.debug('Voice recognition ended')
   }
 
-  _recognition.onerror = (event: any) => {
+  _recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
     logger.error('Voice recognition error:', event.error)
     isVoiceRecording.value = false
     _recognition = null
@@ -1028,7 +1052,7 @@ const generateId = (): string => {
 }
 
 // Real file upload implementation
-const uploadFile = async (upload: any, file: File): Promise<void> => {
+const uploadFile = async (upload: UploadItem, file: File): Promise<void> => {
   const formData = new FormData()
   formData.append('file', file)
 

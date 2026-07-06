@@ -600,7 +600,7 @@ const deleteSession = async (sessionId: string) => {
   const [fileStatsResult, kbFactsResult] = await Promise.allSettled([
     // Fetch file stats
     (async () => {
-      const data = await ApiClient.get<any>(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
+      const data = await ApiClient.get<{ stats?: FileStats }>(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
       return data?.stats || null
     })(),
     // Fetch KB facts (Issue #547)
@@ -636,7 +636,7 @@ const deleteCurrentSession = () => {
   }
 }
 
-const handleDeleteConfirm = async (fileAction: string, fileOptions: any, selectedFactIds: string[] = []) => {
+const handleDeleteConfirm = async (fileAction: string, fileOptions: Record<string, unknown>, selectedFactIds: string[] = []) => {
   if (!deleteTargetSessionId.value) return
   const sessionId = deleteTargetSessionId.value
 
@@ -658,7 +658,7 @@ const handleDeleteConfirm = async (fileAction: string, fileOptions: any, selecte
     }
 
     // Delete the session
-    await controller.deleteChatSession(sessionId, fileAction as any, fileOptions)
+    await controller.deleteChatSession(sessionId, fileAction as 'delete' | 'transfer_kb' | 'transfer_shared', fileOptions)
 
     // Issue #547: Show toast with KB cleanup results
     const totalFacts = deleteKBFacts.value?.length || 0
@@ -713,8 +713,8 @@ const reloadSystem = async () => {
 
   try {
     // Call real system reload API
-    const response = await ApiClient.post<any>(`${getApiBase()}/system/reload_config`)
-    const data = await (response as any).json()
+    const response = await ApiClient.post<unknown>(`${getApiBase()}/system/reload_config`)
+    const data = await (response as { json: () => Promise<Record<string, unknown>> }).json()
 
     if (data && data.success) {
       systemStatus.value = t('status.ready')
