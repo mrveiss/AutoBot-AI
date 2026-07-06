@@ -326,6 +326,25 @@ import { useContextWindow } from '@/composables/chat/useContextWindow'
 // GH#9043: context overflow protection — auto-summarize on overflow
 import { useContextOverflowProtection } from '@/composables/chat/useContextOverflowProtection'
 
+// Chat context passed to KnowledgePersistenceDialog (mirrors its chatContext prop).
+interface KnowledgeChatContext {
+  topic?: string
+  keywords?: string[]
+  file_count?: number
+}
+
+// Payload of context_warning / context_compressed live events (GH#8990/#9043).
+interface ContextWindowEventPayload {
+  usage_percent?: number
+}
+
+// TOOL_CALL detected from chat messages and forwarded from ChatTabContent.
+interface DetectedToolCall {
+  command: string
+  purpose: string
+  terminal_session_id?: string | null
+}
+
 // i18n
 const { t } = useI18n()
 
@@ -499,7 +518,7 @@ const contextWarningShown = ref(false)
 // Listen for context_warning events (80% threshold)
 subscribe('global', (event) => {
   if (event.event_type === 'context_warning') {
-    const data = event.payload as any
+    const data = event.payload as ContextWindowEventPayload
     logger.debug('[ContextWindow] Warning event received:', data)
 
     // Only show toast if mode is 'auto' or 'warn', and not already shown
@@ -512,7 +531,7 @@ subscribe('global', (event) => {
       contextWarningShown.value = true
     }
   } else if (event.event_type === 'context_compressed') {
-    const data = event.payload as any
+    const data = event.payload as ContextWindowEventPayload
     logger.info('[ContextWindow] Context compressed:', data)
 
     // Reset warning flag so next session can show it again
@@ -544,7 +563,7 @@ const showMobileSidebar = ref(false)
 const showChatSettings = ref(false)
 
 // Dialog data
-const currentChatContext = ref<any>(null)
+const currentChatContext = ref<KnowledgeChatContext | null>(null)
 const pendingCommand = ref({
   command: '',
   purpose: '',
@@ -772,18 +791,18 @@ const openTerminalInNewTab = () => {
 }
 
 // Dialog handlers
-const onKnowledgeDecisionsApplied = (decisions: any) => {
+const onKnowledgeDecisionsApplied = (decisions: unknown) => {
   logger.debug('Knowledge decisions applied:', decisions)
   // Handle knowledge persistence decisions
 }
 
-const onChatCompiled = (compiledData: any) => {
+const onChatCompiled = (compiledData: unknown) => {
   logger.debug('Chat compiled:', compiledData)
   // Handle compiled chat data
 }
 
 // Handle TOOL_CALL detection from chat messages
-const handleToolCallDetected = async (toolCall: any) => {
+const handleToolCallDetected = async (toolCall: DetectedToolCall) => {
   logger.debug('TOOL_CALL detected, showing approval dialog:', toolCall)
 
   // Assess risk level (simple heuristics for now)
@@ -878,7 +897,7 @@ const handleVisionSendToChat = (payload: {
   })
 }
 
-const onCommandApproved = async (commandData: any) => {
+const onCommandApproved = async (commandData: { command: string; result: unknown; rememberChoice: boolean }) => {
   logger.debug('Command approved:', commandData)
 
   // IMPORTANT: The backend is already waiting for approval and will execute automatically.
@@ -901,7 +920,7 @@ const onCommandDenied = ({ reason }: { command: string; reason: string }) => {
   // Handle command denial
 }
 
-const onCommandCommented = async (commentData: any) => {
+const onCommandCommented = async (commentData: { command: string; comment: string; response: unknown }) => {
   logger.debug('Command commented:', commentData)
 
   try {

@@ -293,10 +293,10 @@ export const initializeTestScenario = (scenario: keyof typeof TEST_SCENARIOS) =>
   TEST_SCENARIOS[scenario]()
 
   // Setup global fetch mock based on current scenario
-  global.fetch = vi.fn().mockImplementation((url: string, options: any = {}) => {
+  global.fetch = vi.fn().mockImplementation((url: string, options: RequestInit = {}) => {
     const method = options.method || 'GET'
     return createMockApiResponse(url.toString(), method)
-  }) as any
+  }) as unknown as typeof global.fetch
 }
 
 // Reset test configuration to defaults
@@ -324,15 +324,15 @@ export const createTestId = (component: string, element: string) => {
 
 // Common test assertions for API calls
 export const expectApiCall = {
-  toTimeout: (promise: Promise<any>) => {
+  toTimeout: (promise: Promise<unknown>) => {
     return expect(promise).rejects.toThrow(/timeout|30000ms/)
   },
 
-  toFail: (promise: Promise<any>) => {
+  toFail: (promise: Promise<unknown>) => {
     return expect(promise).rejects.toThrow(/Failed to fetch|TypeError/)
   },
 
-  toSucceed: (promise: Promise<any>) => {
+  toSucceed: (promise: Promise<unknown>) => {
     return expect(promise).resolves.toEqual(
       expect.objectContaining({
         success: true,
@@ -347,7 +347,7 @@ export const mockWebSocketBehavior = {
   connectionRefused: () => {
     global.WebSocket = vi.fn().mockImplementation(() => {
       throw new Error('Error in connection establishment: net::ERR_CONNECTION_REFUSED')
-    }) as any
+    }) as unknown as typeof global.WebSocket
   },
 
   connectionTimeout: () => {
@@ -359,7 +359,7 @@ export const mockWebSocketBehavior = {
         close: vi.fn(),
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
-        onerror: null as any,
+        onerror: null as WebSocket['onerror'],
       }
 
       // Simulate connection timeout after 30 seconds
@@ -370,7 +370,7 @@ export const mockWebSocketBehavior = {
       }, 30000)
 
       return ws
-    }) as any
+    }) as unknown as typeof global.WebSocket
   },
 
   normalConnection: () => {
@@ -385,7 +385,7 @@ export const mockWebSocketBehavior = {
       onclose: null,
       onmessage: null,
       onerror: null,
-    })) as any
+    })) as unknown as typeof global.WebSocket
   },
 }
 
