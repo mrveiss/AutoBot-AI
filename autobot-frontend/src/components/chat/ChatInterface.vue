@@ -754,7 +754,14 @@ const handleTabChange = (tabKey: string) => {
   logger.debug('Tab change requested:', tabKey)
   activeTab.value = tabKey
   const routeName = tabKey === 'chat' ? 'chat-default' : `chat-${tabKey}`
-  router.push({ name: routeName }).catch(() => {})
+  // Vue Router throws synchronously (not via the returned promise) when the
+  // named route isn't registered, so `.catch()` can't swallow it — guard with
+  // hasRoute() before navigating so an unmapped tab can't raise a console error.
+  if (router.hasRoute(routeName)) {
+    router.push({ name: routeName }).catch(() => {})
+  } else {
+    logger.debug(`No route registered for tab "${tabKey}" (${routeName}); skipping URL sync`)
+  }
   logger.debug('Active tab changed to:', activeTab.value)
 }
 
