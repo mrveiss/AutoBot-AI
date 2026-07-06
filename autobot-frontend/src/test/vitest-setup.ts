@@ -91,7 +91,7 @@ class MockWebSocket {
   })
 
   // Simulate message reception
-  simulateMessage(data: any) {
+  simulateMessage(data: unknown) {
     if (this.onmessage) {
       this.onmessage(new MessageEvent('message', { data: JSON.stringify(data) }))
     }
@@ -106,7 +106,7 @@ class MockWebSocket {
 }
 
 // Replace global WebSocket
-global.WebSocket = MockWebSocket as any
+global.WebSocket = MockWebSocket as unknown as typeof WebSocket
 
 // Global test setup
 beforeEach(() => {
