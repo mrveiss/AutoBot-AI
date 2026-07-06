@@ -4,8 +4,9 @@
 # Generated Types Freshness Gate (GH#10817)
 # autobot-frontend/src/types/generated/api.ts is generated from the backend
 # OpenAPI schema (`npm run gen:types`). Nothing gated its freshness, so it
-# silently drifted: #10746 hand-found 12 dead Enhanced* schemas and #10776
-# cleaned dead aliases, both because a stale api.ts still type-checks.
+# silently drifted: #10746 hand-found 12 dead Enhanced* schemas, #10776
+# cleaned dead aliases, and #10829's route renames never reached it — all
+# because a stale api.ts still type-checks.
 #
 # This job regenerates api.ts from the authoritative backend schema
 # (app.openapi(), same recipe as the API wiring audit) using the pinned
@@ -21,7 +22,7 @@ name: Verify Generated Types
 on:
   push:
     branches: [ main, Dev_new_gui ]
-    paths: &paths
+    paths:
       - 'autobot-backend/**/*.py'
       - 'autobot-frontend/src/types/generated/api.ts'
       - 'autobot-frontend/package.json'
@@ -29,9 +30,13 @@ on:
       - 'scripts/audit_api_wiring.py'
       - 'requirements*.txt'
       - '.github/workflows/verify-generated-types.yml'
+  # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
+  # required-check context ("verify-generated-types") always reports a conclusion.
+  # A path-filtered required check that never triggers leaves the PR deadlocked
+  # on "Expected — Waiting for status". The real work is gated on the `changes`
+  # job below and self-skips (reporting success) when no relevant paths change.
   pull_request:
     branches: [ main, Dev_new_gui ]
-    paths: *paths
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -41,7 +46,29 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      types: ${{ steps.filter.outputs.types }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706  # v4.0.2
+        id: filter
+        with:
+          filters: |
+            types:
+              - 'autobot-backend/**/*.py'
+              - 'autobot-frontend/src/types/generated/api.ts'
+              - 'autobot-frontend/package.json'
+              - 'autobot-frontend/package-lock.json'
+              - 'scripts/audit_api_wiring.py'
+              - '**/requirements*.txt'
+              - '.github/workflows/verify-generated-types.yml'
+
   verify-generated-types:
+    needs: changes
+    if: needs.changes.outputs.types == 'true'
     name: verify-generated-types
     runs-on: ubuntu-latest
 
