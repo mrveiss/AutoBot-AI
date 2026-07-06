@@ -89,6 +89,26 @@ CLAUDE_CODE_BACKEND = "claude_code"
 # Absent or falsy → provider reports unavailable (no crash).
 _ENV_FLAG = "AUTOBOT_FEATURE_CLAUDE_CODE_EXECUTION"
 
+# Security: task-supplied env_vars may never set these — credentials (which the
+# task could redirect to an attacker endpoint or override with a stolen key) and
+# process loader / path vars (which could hijack the spawned CLI). Pinned by the
+# backend after the task env is applied.
+_PROTECTED_ENV_KEYS = frozenset(
+    {
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_API_URL",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "PATH",
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "DYLD_INSERT_LIBRARIES",
+        "PYTHONPATH",
+        "PYTHONSTARTUP",
+    }
+)
+
 # MCP server defaults (matches autobot_mcp_main.py HTTP transport)
 _DEFAULT_MCP_HOST = "127.0.0.1"
 _DEFAULT_MCP_PORT = 8200
@@ -420,16 +440,23 @@ class ClaudeCodeBackend(ExecutionBackend):
             mcp_cfg_path,
         ]
         model = task.metadata.get("model")
-        if model:
-            cmd += ["--model", model]
+        if model and not str(model).startswith("-"):  # never let a value inject a flag
+            cmd += ["--model", str(model)]
         max_turns = task.metadata.get("max_turns")
         if max_turns is not None:
-            cmd += ["--max-turns", str(max_turns)]
+            cmd += ["--max-turns", str(int(max_turns))]
 
-        cmd.append(task.code)  # prompt is the task code/description
+        # Security: `--` ends option parsing so a prompt starting with `-`/`--`
+        # (e.g. "--dangerously-skip-permissions") can NOT be parsed as a flag.
+        cmd.append("--")
+        cmd.append(task.code)  # prompt is the task code/description (positional only)
 
-        env = {**os.environ, "ANTHROPIC_API_KEY": self._resolve_api_key() or ""}
-        env.update(task.env_vars)
+        # Security: task-supplied env_vars must NOT override credentials or the
+        # process loader/PATH (env-injection / credential-override). Apply the
+        # task env first (filtered), then pin the protected vars last so they win.
+        env = dict(os.environ)
+        env.update({k: v for k, v in task.env_vars.items() if k not in _PROTECTED_ENV_KEYS})
+        env["ANTHROPIC_API_KEY"] = self._resolve_api_key() or ""
 
         try:
             proc = await asyncio.create_subprocess_exec(

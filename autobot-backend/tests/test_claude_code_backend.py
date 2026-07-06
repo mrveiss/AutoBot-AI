@@ -427,3 +427,26 @@ def _make_mock_proc(lines: list[str]) -> MagicMock:
     proc.wait = AsyncMock()
     proc.kill = MagicMock()
     return proc
+
+
+# --- Security hardening (#10550 security review) ---------------------------------
+
+def test_protected_env_keys_block_credential_override():
+    """task.env_vars must NOT override ANTHROPIC_API_KEY / loader / PATH vars."""
+    from services.execution.claude_code_backend import _PROTECTED_ENV_KEYS
+
+    for key in ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "PATH", "LD_PRELOAD", "PYTHONPATH"):
+        assert key in _PROTECTED_ENV_KEYS
+
+
+def test_prompt_cannot_inject_a_flag():
+    """A prompt starting with '--' must be passed positionally (after '--'), not as a flag.
+
+    Guards against '--dangerously-skip-permissions' style argument injection.
+    """
+    import services.execution.claude_code_backend as mod
+
+    src = open(mod.__file__, encoding="utf-8").read()
+    # The end-of-options separator must be appended before the prompt positional.
+    assert 'cmd.append("--")' in src
+    assert src.index('cmd.append("--")') < src.index("cmd.append(task.code)")
