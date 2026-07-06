@@ -185,3 +185,37 @@ class BaseSkill(ABC):
     def get_available_actions(self) -> List[str]:
         """Return list of tool names this skill provides."""
         return self.get_manifest().tools
+
+
+class DeclarativeSkill(BaseSkill):
+    """Concrete BaseSkill for SKILL.md-only builtin skills.
+
+    These skills are capability descriptors — their tools are invoked by the
+    agent via shell commands or delegated libraries documented in the SKILL.md
+    body.  There is no Python execution path; ``execute`` returns a sentinel so
+    the registry can register them (enabling bundle membership, routing-index
+    inclusion, and ``list_skills`` visibility) without fabricating behaviour.
+    """
+
+    def __init__(self, manifest: SkillManifest) -> None:
+        super().__init__()
+        self._manifest = manifest
+
+    def get_manifest(self) -> SkillManifest:  # type: ignore[override]
+        """Return the manifest supplied at construction."""
+        return self._manifest
+
+    async def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Declarative skills have no Python execution path.
+
+        The agent invokes these capabilities via the tool commands documented
+        in the SKILL.md body (e.g. yt-dlp, feedparser, gh CLI, Jina Reader).
+        """
+        return {
+            "success": False,
+            "error": (
+                f"Skill '{self._manifest.name}' is a declarative skill. "
+                "Invoke its tools via the agent's tool-dispatch layer, "
+                "not through execute()."
+            ),
+        }
