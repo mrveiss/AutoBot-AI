@@ -578,9 +578,21 @@
     - restart backend
     - restart celery
 
+# The filtered file is written to /tmp, so its `-c ../constraints/shared.txt`
+# (kept from requirements.txt, #10524) would resolve relative to /tmp and fail
+# (pip errors on a missing constraint file). Rewrite it to the canonical
+# code_source constraints path, which always exists as the git checkout, so the
+# pinned constraints are actually applied on deploy (#11117).
+- name: Resolve absolute constraints path for filtered requirements
+  ansible.builtin.set_fact:
+    backend_constraints_abs: "{{ code_source_dir | default('/opt/autobot/code_source') }}/constraints/"
+
 - name: Create filtered backend requirements file
   ansible.builtin.shell:
-    cmd: "grep -Ev '^-e.*autobot[-_]shared|^-r' {{ backend_code_dir }}/requirements.txt > /tmp/requirements-filtered.txt"
+    cmd: >-
+      grep -Ev '^-e.*autobot[-_]shared|^-r' {{ backend_code_dir }}/requirements.txt
+      | sed 's|^-c \.\./constraints/|-c {{ backend_constraints_abs }}|'
+      > /tmp/requirements-filtered.txt
   become_user: "{{ backend_user }}"
 
 # (#2872) Removed failed_when: false — pip install failures must surface.
