@@ -33,7 +33,7 @@ interface Emits {
   (e: 'tab-change', tabKey: string): void
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   tabs: () => [
     { key: 'chat', label: 'Chat', icon: 'comments' },
     { key: 'files', label: 'Files', icon: 'folder' },

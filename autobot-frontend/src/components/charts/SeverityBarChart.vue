@@ -22,7 +22,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseChart from './BaseChart.vue'
-import { getCssVar, getSeverityColors } from '@/composables/useCssVars'
+import { getSeverityColors } from '@/composables/useCssVars'
 import type { ApexOptions } from 'apexcharts'
 
 const { t } = useI18n()

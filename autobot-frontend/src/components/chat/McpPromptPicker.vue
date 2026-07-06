@@ -287,7 +287,7 @@ async function insertPrompt() {
           }
           if (Array.isArray(msg.content)) {
             return msg.content
-              .map((c: any) => (typeof c === 'string' ? c : c.text || ''))
+              .map((c: unknown) => (typeof c === 'string' ? c : (c as { text?: string })?.text || ''))
               .join('\n')
           }
         }
