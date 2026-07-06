@@ -23,7 +23,24 @@ import time
 from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import SELF_IMPROVEMENT_ENABLED
 from events.bus import PersistStrategy, publish_event
+
+# Lazy-import helpers — exposed at module level so tests can patch them.
+
+
+def _get_task_outcome_judge():
+    from judges.task_outcome_judge import TaskOutcomeJudge  # noqa: PLC0415
+
+    return TaskOutcomeJudge()
+
+
+def _get_task_pattern_learner():
+    from agents.task_pattern_learner import MIN_OUTCOMES_TO_LEARN, TaskPatternLearner  # noqa: PLC0415
+
+    return MIN_OUTCOMES_TO_LEARN, TaskPatternLearner()
+
+
 from orchestration.agent_router import AgentRouter
 from orchestration.collaboration_coordinator import CollaborationCoordinator
 from orchestration.execution_strategies import ExecutionStrategyHandler
@@ -279,6 +296,13 @@ class WorkflowRunner:
         }
         # GH#7357: capture trajectory for future planner retrieval
         await self._capture_trajectory(plan, response)
+        # #10602: self-improvement write path — persist outcome then trigger learning.
+        # Fire-and-forget; never breaks workflow return.
+        if SELF_IMPROVEMENT_ENABLED:
+            asyncio.create_task(
+                self._record_outcome_for_learning(plan, response),
+                name=f"self-improve-{plan.plan_id}",
+            )
         return response
 
     async def _capture_trajectory(self, plan: WorkflowPlan, result: Dict[str, Any]) -> None:
@@ -317,6 +341,42 @@ class WorkflowRunner:
             )
         except Exception as exc:
             logger.warning("TrajectoryStore.capture failed (non-fatal): %s", exc)
+
+    async def _record_outcome_for_learning(self, plan: WorkflowPlan, result: Dict[str, Any]) -> None:
+        """Persist a task outcome via TaskOutcomeJudge then trigger TaskPatternLearner (#10602).
+
+        Connects the self-improvement write path: previously TaskOutcomeJudge.evaluate_task_outcome
+        was only called from _score_plan (planning phase) and nothing fed the Redis outcomes list
+        that TaskPatternLearner.learn_from_outcomes reads.  This method closes the loop:
+        1. Evaluate the completed workflow output with TaskOutcomeJudge (persists to Redis).
+        2. When MIN_OUTCOMES_TO_LEARN is reached, TaskPatternLearner extracts and stores the
+           best strategy so AgentRouter._check_learned_strategy can use it on the next request.
+
+        Fire-and-forget — all errors logged but never propagated.
+        """
+        try:
+            task_type = getattr(plan, "task_type", None) or plan.strategy.value
+            output_summary = str(result.get("results", ""))[:500]
+            judge = _get_task_outcome_judge()
+            await judge.evaluate_task_outcome(
+                task_type=task_type,
+                goal=plan.goal,
+                output=output_summary,
+                strategy_used=plan.strategy.value,
+            )
+
+            # Trigger learning when enough outcomes have accumulated.
+            min_outcomes, learner = _get_task_pattern_learner()
+            outcomes = await judge.get_outcomes(task_type, limit=min_outcomes + 1)
+            if len(outcomes) >= min_outcomes:
+                await learner.learn_from_outcomes(task_type, [o.__dict__ for o in outcomes])
+                logger.info(
+                    "Self-improvement: learned from %d outcomes for task_type='%s'",
+                    len(outcomes),
+                    task_type,
+                )
+        except Exception as exc:
+            logger.debug("Self-improvement recording skipped (non-fatal): %s", exc)
 
     async def _record_failure_pattern(self, plan: WorkflowPlan, error: Exception) -> Dict[str, Any] | None:
         """Learn this workflow failure and flag it when it is a known recurring pattern (#10628).
