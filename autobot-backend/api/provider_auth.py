@@ -12,8 +12,7 @@ vault (``services.envelope_secrets_service``).
 
 Routes
 ------
-POST /api/llm-auth/oauth/initiate          — begin authorization-code flow
-POST /api/llm-auth/oauth/callback          — exchange code + persist tokens
+POST /api/llm-auth/oauth/callback          — exchange authorization code + persist tokens
 POST /api/llm-auth/device/initiate         — begin device-code flow
 POST /api/llm-auth/device/poll             — poll for device-code approval + persist
 GET  /api/llm-auth/status/{provider_name}  — check whether a provider has a stored token
@@ -102,6 +101,15 @@ def _validate_outbound_url(url: str) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Host '{host}' is not in the provider OAuth allowlist",
+        )
+
+    # Port pinning (#11022): only the standard https port is allowed, so an
+    # allowlisted host can't be used to reach a non-HTTPS service on another port
+    # (e.g. https://api.github.com:22/...).
+    if parsed.port not in (None, 443):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only the standard https port (443) is permitted",
         )
 
 

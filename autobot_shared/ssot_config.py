@@ -89,10 +89,27 @@ PLAN_BEST_OF_N_ENABLED: bool = os.environ.get("AUTOBOT_PLAN_BEST_OF_N_ENABLED", 
     "true",
     "yes",
 }
-PLAN_BEST_OF_N_COUNT: int = min(
-    5,
-    max(2, int(os.environ.get("AUTOBOT_PLAN_BEST_OF_N_COUNT", "3"))),
-)
+
+
+def _env_int(name: str, default: int, *, lo: int | None = None, hi: int | None = None) -> int:
+    """Parse an int env var, falling back to *default* on missing/invalid input.
+
+    Never crash at import (#11022): a non-numeric ``AUTOBOT_PLAN_BEST_OF_N_COUNT``
+    used to raise ``ValueError`` at module import, taking down backend startup.
+    Optionally clamps to ``[lo, hi]``.
+    """
+    try:
+        val = int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        val = default
+    if lo is not None:
+        val = max(lo, val)
+    if hi is not None:
+        val = min(hi, val)
+    return val
+
+
+PLAN_BEST_OF_N_COUNT: int = _env_int("AUTOBOT_PLAN_BEST_OF_N_COUNT", 3, lo=2, hi=5)
 
 # #10602: ClaimVerifier wiring — adds KB RAG + optional research-agent LLM call per claim.
 # Default OFF because it adds latency/cost; set AUTOBOT_CLAIM_VERIFICATION_ENABLED=true to opt in.

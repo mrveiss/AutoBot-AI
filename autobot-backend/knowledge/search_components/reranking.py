@@ -573,14 +573,15 @@ _reranking_active: bool = True
 
 
 def set_reranking_active(active: bool) -> None:
-    """Record whether cross-encoder reranking is currently active (#10600)."""
+    """Record whether cross-encoder reranking is currently active (#10600).
+
+    Logs the transition at DEBUG, not WARNING (#11022): a cross-encoder that loads
+    lazily/intermittently under concurrent load flaps this flag every query, and
+    WARNING-level flapping floods production logs.
+    """
     global _reranking_active
     if _reranking_active != active:
-        logger.warning(
-            "Reranking active state changed: %s -> %s",
-            _reranking_active,
-            active,
-        )
+        logger.debug("Reranking active state changed: %s -> %s", _reranking_active, active)
     _reranking_active = active
 
 

@@ -507,6 +507,22 @@ class TestProviderAuthSecurity:
         _validate_outbound_url("https://github.com/login/oauth/access_token")
         _validate_outbound_url("https://api.anthropic.com/oauth/token")
 
+    def test_allowlisted_host_nonstandard_port_rejected(self):
+        """#11022: an allowlisted host on a non-443 port is rejected (port pinning)."""
+        from fastapi import HTTPException
+
+        from api.provider_auth import _validate_outbound_url
+
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_outbound_url("https://accounts.google.com:22/token")
+        assert exc_info.value.status_code == 400
+        assert "port" in exc_info.value.detail.lower()
+
+    def test_allowlisted_host_explicit_443_passes(self):
+        from api.provider_auth import _validate_outbound_url
+
+        _validate_outbound_url("https://accounts.google.com:443/o/oauth2/token")  # no raise
+
     def test_microsoftonline_passes(self):
         from api.provider_auth import _validate_outbound_url
 
