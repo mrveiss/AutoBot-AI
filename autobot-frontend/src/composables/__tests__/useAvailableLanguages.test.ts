@@ -35,8 +35,8 @@ describe('useAvailableLanguages', () => {
     // vi.spyOn on a constructor requires mockImplementation to use a class or
     // a function that works with `new` (returns an object from within the function).
     const spy = vi.spyOn(Intl, 'DisplayNames').mockImplementation(
-      function (_locales: any, _options: any) {
-        return { of: () => undefined, resolvedOptions: () => ({} as any) }
+      function (_locales: Intl.LocalesArgument, _options: Intl.DisplayNamesOptions) {
+        return { of: () => undefined, resolvedOptions: () => ({} as Intl.ResolvedDisplayNamesOptions) }
       } as unknown as typeof Intl.DisplayNames
     )
 

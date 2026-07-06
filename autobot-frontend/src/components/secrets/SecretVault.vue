@@ -12,7 +12,6 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useChatStore, type SessionSecret } from '@/stores/useChatStore'
 import { useSessionActivityLogger, type SecretType } from '@/composables/useSessionActivityLogger'
 import { useDebounce } from '@/composables/useDebounce'
 import { useVirtualList } from '@/composables/useVirtualList'
@@ -22,8 +21,7 @@ import { useLoadingState } from '@/composables/useLoadingState'
 
 const logger = createLogger('SecretVault')
 const { t } = useI18n()
-const chatStore = useChatStore()
-const { linkSecretToSession, logSecretUsage } = useSessionActivityLogger()
+const { logSecretUsage } = useSessionActivityLogger()
 
 // Props
 const props = defineProps<{
@@ -67,9 +65,6 @@ const secrets = ref<SecretItem[]>([])
 
 // Debounce search query for performance (Issue #4035)
 const debouncedSearchQuery = useDebounce(searchQuery, 400)
-
-// Get current session secrets
-const currentSession = computed(() => chatStore.currentSession)
 
 // Combine and filter secrets
 const allSecrets = computed<SecretItem[]>(() => {
