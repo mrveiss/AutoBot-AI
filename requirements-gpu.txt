@@ -15,7 +15,7 @@
 #
 # Requires: CUDA-compatible GPU, Python 3.12.
 
-vllm>=0.23.0
+vllm>=0.24.0
 
 # vLLM pins these exact torch builds (CUDA). They intentionally override the
 # CPU torch installed in the default image when this GPU extra is used.

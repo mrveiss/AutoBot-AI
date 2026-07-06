@@ -117,6 +117,6 @@ defusedxml>=0.7.1       # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
 # langsmith>=0.1.0       # Set LANGSMITH_API_KEY to activate
 
 # Content Reach optional source backends (#10932) — lazy-imported; backend starts without them
-ddgs>=9.0               # #10932 content-reach: keyless web search (optional, lazy)
-trafilatura>=2.0        # #10932 content-reach: readable article extraction (optional, lazy)
-yt-dlp>=2025.1.1        # #10932 content-reach: YouTube caption extraction (optional, lazy)
+ddgs>=9.14.4               # #10932 content-reach: keyless web search (optional, lazy)
+trafilatura>=2.1.0        # #10932 content-reach: readable article extraction (optional, lazy)
+yt-dlp>=2026.7.4        # #10932 content-reach: YouTube caption extraction (optional, lazy)
