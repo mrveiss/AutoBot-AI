@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from content_reach.base import BackendError, ContentRequest
 from content_reach.backends.browser import BrowserBackend, BrowserSearchBackend
+from content_reach.base import BackendError, ContentRequest
 from source_attribution import SourceType
 
 # ---------------------------------------------------------------------------

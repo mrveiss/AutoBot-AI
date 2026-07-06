@@ -93,7 +93,7 @@ async def test_reddit_search_maps_posts():
 @pytest.mark.asyncio
 async def test_reddit_search_sends_user_agent():
     """fetch() sends the expected User-Agent header."""
-    from content_reach.sources.reddit import RedditJsonBackend, _USER_AGENT
+    from content_reach.sources.reddit import _USER_AGENT, RedditJsonBackend
 
     mock_client, _ = _make_async_mock_client(200, _REDDIT_SEARCH_JSON)
     backend = RedditJsonBackend(client=mock_client)
