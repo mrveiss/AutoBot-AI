@@ -205,7 +205,7 @@ async def oauth_callback(
         authorize_url="",
         token_url=req.token_url,
         client_id_setting="",
-        client_secret_setting="",
+        client_secret_setting="",  # nosec B106 - setting NAME (empty), not a secret value
     )
 
     try:
