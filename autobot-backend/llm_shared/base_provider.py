@@ -15,13 +15,14 @@ from __future__ import annotations
 import asyncio
 import time
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 
 from .cross_worker_rate_limiter import get_llm_rate_limiter
 from .models import LLMRequest, LLMResponse
 from .observability import registry as obs_registry
+from .provider_auth import ApiKeyAuth, ProviderAuthError, ProviderAuthStrategy
 from .rate_limit_backoff import get_backoff_handler, raise_if_rate_limited
 
 logger = get_logger(__name__)
@@ -44,7 +45,11 @@ class BaseProvider(ABC):
     #: Override in each subclass with the provider's string identifier.
     provider_name: str = ""
 
-    def __init__(self, settings: Dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        settings: Dict[str, Any] | None = None,
+        auth_strategy: Optional[ProviderAuthStrategy] = None,
+    ) -> None:
         """
         Initialize the provider.
 
@@ -52,11 +57,24 @@ class BaseProvider(ABC):
             settings: Optional dict of provider-specific configuration values.
                       Keys are provider-specific (e.g., ``api_key``,
                       ``base_url``, ``default_model``).
+            auth_strategy: Optional auth strategy (``ApiKeyAuth``, ``OAuthAuth``,
+                           ``DeviceCodeAuth``, ``SessionAuth``).  When omitted, the
+                           legacy ``settings["api_key"]`` path is used via
+                           ``ApiKeyAuth`` — fully backward-compatible.
         """
         self.settings: Dict[str, Any] = settings or {}
         self._total_requests = 0
         self._total_errors = 0
-        logger.debug("Initialized %s provider", self.provider_name)
+        # Resolve auth strategy: explicit arg wins; fall back to ApiKeyAuth when an
+        # api_key is present in settings; leave None for local providers (Ollama etc.)
+        # that need no credential at all.
+        if auth_strategy is not None:
+            self._auth_strategy: Optional[ProviderAuthStrategy] = auth_strategy
+        elif self.settings.get("api_key"):
+            self._auth_strategy = ApiKeyAuth(self.settings["api_key"])
+        else:
+            self._auth_strategy = None
+        logger.debug("Initialized %s provider (auth=%s)", self.provider_name, type(self._auth_strategy).__name__)
 
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
         """
@@ -149,11 +167,32 @@ class BaseProvider(ABC):
             "total_requests": self._total_requests,
             "total_errors": self._total_errors,
             "error_rate": (self._total_errors / self._total_requests if self._total_requests else 0.0),
+            "auth_strategy": type(self._auth_strategy).__name__ if self._auth_strategy else "none",
         }
 
     def _get_setting(self, key: str, default: Any = None) -> Any:
         """Safely retrieve a value from the settings dict."""
         return self.settings.get(key, default)
+
+    async def _get_auth_token(self, session: Any = None) -> str | None:
+        """Return a valid auth token via the active strategy, or None.
+
+        Concrete providers call this instead of reading ``settings["api_key"]``
+        directly so that OAuth / device-code / session auth is transparent.
+
+        Args:
+            session: SQLAlchemy ``AsyncSession`` required by vault-backed strategies
+                     (``OAuthAuth``, ``DeviceCodeAuth``, ``SessionAuth``).
+
+        Returns:
+            Token string, or None when no auth strategy is configured (e.g. Ollama).
+
+        Raises:
+            ProviderAuthError: When a vault-backed strategy cannot obtain a token.
+        """
+        if self._auth_strategy is None:
+            return None
+        return await self._auth_strategy.resolve_token(session)
 
     def _build_provider_metadata(
         self,
@@ -183,4 +222,4 @@ class BaseProvider(ABC):
         return metadata
 
 
-__all__ = ["BaseProvider"]
+__all__ = ["BaseProvider", "ProviderAuthError"]
