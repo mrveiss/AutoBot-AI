@@ -568,7 +568,7 @@ import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useRuntimeFeaturesStore } from '@/stores/useRuntimeFeaturesStore'
 import { useSystemStatus } from '@/composables/useSystemStatus'
-import { useHostSelection } from '@/composables/useHostSelection';
+import { useHostSelection, type InfrastructureHost } from '@/composables/useHostSelection';
 import { useNavOverflow } from '@/composables/useNavOverflow'
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import NavOverflowMenu from '@/components/layout/NavOverflowMenu.vue'
@@ -678,7 +678,7 @@ export default {
     }))
 
     // Host selection event handlers
-    const onHostSelected = (result: { host: any; rememberChoice: boolean }) => {
+    const onHostSelected = (result: { host: InfrastructureHost; rememberChoice: boolean }) => {
       handleHostSelected(result)
     }
 

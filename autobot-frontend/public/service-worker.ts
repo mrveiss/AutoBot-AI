@@ -89,7 +89,17 @@ function _getCacheName(url: string): string {
 /**
  * Get cache entry metadata
  */
-function getCacheMetadata(response: Response): any {
+interface CacheMetadata {
+  timestamp: number
+  url: string
+  status: number
+  headers: {
+    contentType: string | null
+    cacheControl: string | null
+  }
+}
+
+function getCacheMetadata(response: Response): CacheMetadata {
   return {
     timestamp: Date.now(),
     url: response.url,
@@ -158,7 +168,7 @@ self.addEventListener('install', (event: ExtendableEvent) => {
     })
   )
   // Force activation immediately
-  ;(self as any).skipWaiting()
+  ;(self as unknown as ServiceWorkerGlobalScope).skipWaiting()
 })
 
 /**
@@ -191,7 +201,7 @@ self.addEventListener('activate', (event: ExtendableEvent) => {
     })()
   )
   // Claim clients immediately
-  ;(self as any).clients.claim()
+  ;(self as unknown as ServiceWorkerGlobalScope).clients.claim()
 })
 
 /**
@@ -304,7 +314,7 @@ self.addEventListener('fetch', (event: FetchEvent) => {
  */
 self.addEventListener('message', (event: ExtendableMessageEvent) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
-    ;(self as any).skipWaiting()
+    ;(self as unknown as ServiceWorkerGlobalScope).skipWaiting()
   }
 
   if (event.data && event.data.type === 'CLEAR_CACHES') {

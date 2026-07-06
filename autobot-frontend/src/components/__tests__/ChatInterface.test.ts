@@ -20,8 +20,8 @@ const mockInitializeChatInterface = vi.fn()
 const mockLoadChatInitData = vi.fn()
 vi.mock('@/services/BatchApiService', () => ({
   default: {
-    initializeChatInterface: (...args: any[]) => mockInitializeChatInterface(...args),
-    loadChatInitData: (...args: any[]) => mockLoadChatInitData(...args),
+    initializeChatInterface: (...args: unknown[]) => mockInitializeChatInterface(...args),
+    loadChatInitData: (...args: unknown[]) => mockLoadChatInitData(...args),
   },
   BatchApiService: vi.fn(),
 }))
