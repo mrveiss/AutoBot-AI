@@ -21,8 +21,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from knowledge.search_components.retrieval_learner import (
-    RetrievalLearner,
     _REDIS_ACQUIRE_TIMEOUT,
+    RetrievalLearner,
 )
 
 # ---------------------------------------------------------------------------
