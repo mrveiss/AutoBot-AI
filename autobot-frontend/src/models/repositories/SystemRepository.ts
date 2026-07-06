@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 import { ApiRepository } from './ApiRepository'
 import type { AutoBotSettings, DiagnosticsReport } from '@/types/models'
+// `/api/settings/backend` returns the open-ended provider/memory/agents config
+// object typed in settings.ts (distinct from the settings-section BackendSettings
+// in models.ts). Aliased to make the endpoint semantics explicit at call sites.
+import type { BackendSettings as BackendConfig } from '@/types/settings'
 import { getApiBase } from '@/config/ssot-config'
 
 /**
@@ -91,6 +95,45 @@ export interface CommandExecutionResponse {
   command: string
 }
 
+/**
+ * A single log record from `/api/logs/recent` (#5207 audit). The backend
+ * wraps these in `{entries, count, limit, source}`; `getLogs` unwraps to a
+ * flat `LogEntry[]`. Extra provider-specific keys are permitted.
+ */
+export interface LogEntry {
+  timestamp?: string
+  level?: string
+  message?: string
+  service?: string
+  source_type?: string
+  raw?: string
+  [key: string]: unknown
+}
+
+/**
+ * A single record from `/api/security/assessments`. The backend payload is
+ * open-ended; only the identifying fields are typed, with a pass-through
+ * index signature for the rest.
+ */
+export interface SecurityAssessment {
+  id?: string
+  status?: string
+  timestamp?: string
+  [key: string]: unknown
+}
+
+/**
+ * Metadata for a stored backup from `/api/system/backup/*` (aspirational —
+ * these endpoints are not yet implemented on the backend, see #552).
+ */
+export interface BackupInfo {
+  id?: string
+  name?: string
+  created_at?: string
+  size?: number
+  [key: string]: unknown
+}
+
 export class SystemRepository extends ApiRepository {
   // Health and status
   // Issue #5212: Backend returns {status, timestamp, initialization, components}.
@@ -166,14 +209,14 @@ export class SystemRepository extends ApiRepository {
     return (response.data ?? {}) as AutoBotSettings
   }
 
-  async getBackendSettings(): Promise<any> {
-    const response = await this.get(`${getApiBase()}/settings/backend`)
-    return response.data as any
+  async getBackendSettings(): Promise<BackendConfig> {
+    const response = await this.get<BackendConfig>(`${getApiBase()}/settings/backend`)
+    return (response.data ?? {}) as BackendConfig
   }
 
-  async saveBackendSettings(settings: any): Promise<any> {
-    const response = await this.post(`${getApiBase()}/settings/backend`, { settings })
-    return response.data as any
+  async saveBackendSettings(settings: BackendConfig): Promise<BackendConfig> {
+    const response = await this.post<BackendConfig>(`${getApiBase()}/settings/backend`, { settings })
+    return (response.data ?? {}) as BackendConfig
   }
 
   // Config-file methods removed for #5214: backend /api/settings/config returns
@@ -184,22 +227,22 @@ export class SystemRepository extends ApiRepository {
   // Terminal operations
   // Issue #552: Fixed paths - backend uses /api/agent-terminal/* not /api/terminal/*
   async executeCommand(request: ExecuteCommandRequest): Promise<CommandExecutionResponse> {
-    const response = await this.post(`${getApiBase()}/agent-terminal/execute`, request)
+    const response = await this.post<CommandExecutionResponse>(`${getApiBase()}/agent-terminal/execute`, request)
     return response.data as CommandExecutionResponse
   }
 
-  async interruptProcess(): Promise<any> {
+  async interruptProcess(): Promise<unknown> {
     // Issue #552: Backend requires session_id for interrupt
     // Using execute with interrupt flag as fallback
     const response = await this.post(`${getApiBase()}/agent-terminal/execute`, { interrupt: true })
-    return response.data as any
+    return response.data
   }
 
-  async killAllProcesses(): Promise<any> {
+  async killAllProcesses(): Promise<unknown> {
     // Issue #552: Backend requires session_id for kill
     // Using execute with kill flag as fallback
     const response = await this.post(`${getApiBase()}/agent-terminal/execute`, { kill: true })
-    return response.data as any
+    return response.data
   }
 
   async getTerminalHistory(): Promise<CommandExecutionResponse[]> {
@@ -214,53 +257,53 @@ export class SystemRepository extends ApiRepository {
     return response.data?.sessions ?? []
   }
 
-  async clearTerminalHistory(): Promise<any> {
+  async clearTerminalHistory(): Promise<unknown> {
     // Issue #552: Backend doesn't have bulk delete - delete sessions individually
     const response = await this.get(`${getApiBase()}/agent-terminal/sessions`)
-    return response.data as any
+    return response.data
   }
 
   // System control
   // Issue #552: These control endpoints don't exist in backend yet - keeping paths for future implementation
-  async restartBackend(): Promise<any> {
+  async restartBackend(): Promise<unknown> {
     // Note: Backend doesn't have /api/system/restart - this is aspirational
     const response = await this.post(`${getApiBase()}/system/restart`)
-    return response.data as any
+    return response.data
   }
 
-  async shutdownSystem(): Promise<any> {
+  async shutdownSystem(): Promise<unknown> {
     // Note: Backend doesn't have /api/system/shutdown - this is aspirational
     const response = await this.post(`${getApiBase()}/system/shutdown`)
-    return response.data as any
+    return response.data
   }
 
-  async reloadConfiguration(): Promise<any> {
+  async reloadConfiguration(): Promise<unknown> {
     // Issue #552: Backend uses /api/system/reload_config
     const response = await this.post(`${getApiBase()}/system/reload_config`)
-    return response.data as any
+    return response.data
   }
 
   // Diagnostics
   // Issue #552: Backend uses /api/system-validation/* for diagnostics
   async getDiagnosticsReport(): Promise<DiagnosticsReport> {
-    const response = await this.get(`${getApiBase()}/system-validation/validate/status`)
+    const response = await this.get<DiagnosticsReport>(`${getApiBase()}/system-validation/validate/status`)
     return response.data as DiagnosticsReport
   }
 
   async runDiagnostics(): Promise<DiagnosticsReport> {
-    const response = await this.post(`${getApiBase()}/system-validation/validate/comprehensive`)
+    const response = await this.post<DiagnosticsReport>(`${getApiBase()}/system-validation/validate/comprehensive`)
     return response.data as DiagnosticsReport
   }
 
-  async fixDiagnosticIssue(issueId: string): Promise<any> {
+  async fixDiagnosticIssue(issueId: string): Promise<unknown> {
     // Note: No fix endpoint exists in backend - validation is read-only
     const response = await this.get(`${getApiBase()}/system-validation/validate/component/${issueId}`)
-    return response.data as any
+    return response.data
   }
 
   // Logs management
   // Issue #552: Backend uses /api/logs/* not /api/system/logs
-  async getLogs(level?: string, limit?: number): Promise<any[]> {
+  async getLogs(level?: string, limit?: number): Promise<LogEntry[]> {
     const params = new URLSearchParams()
     if (level) params.append('level', level)
     if (limit) params.append('limit', limit.toString())
@@ -270,7 +313,7 @@ export class SystemRepository extends ApiRepository {
     // Previously cast the whole envelope to `any[]`, so `.map()`/`.filter()`
     // at call sites failed silently. (#5207 audit)
     const response = await this.get<{
-      entries?: any[]
+      entries?: LogEntry[]
       count?: number
       limit?: number
       source?: string
@@ -278,88 +321,88 @@ export class SystemRepository extends ApiRepository {
     return response.data?.entries ?? []
   }
 
-  async clearLogs(): Promise<any> {
+  async clearLogs(): Promise<unknown> {
     // Issue #552: Backend uses /api/logs/clear/{filename}
     const response = await this.delete(`${getApiBase()}/logs/clear/autobot`)
-    return response.data as any
+    return response.data
   }
 
   async downloadLogs(): Promise<Blob> {
     // Issue #552: Backend uses /api/logs/combined (docker + file logs merged)
-    const response = await this.get(`${getApiBase()}/logs/combined`)
+    const response = await this.get<Blob>(`${getApiBase()}/logs/combined`)
     return response.data as Blob
   }
 
   // Performance monitoring
-  async getPerformanceMetrics(timeframe?: string): Promise<any> {
+  async getPerformanceMetrics(timeframe?: string): Promise<unknown> {
     // Issue #552: Backend uses /api/monitoring/metrics/current
     const params = timeframe ? `?timeframe=${timeframe}` : ''
     const response = await this.get(`${getApiBase()}/monitoring/metrics/current${params}`)
-    return response.data as any
+    return response.data
   }
 
-  async getResourceUsage(): Promise<any> {
+  async getResourceUsage(): Promise<unknown> {
     // Issue #552: Backend uses /api/service-monitor/resources
     const response = await this.get(`${getApiBase()}/service-monitor/resources`)
-    return response.data as any
+    return response.data
   }
 
   // Backup and restore
   // Issue #552: These backup endpoints don't exist in backend yet - keeping paths for future implementation
-  async createBackup(): Promise<any> {
+  async createBackup(): Promise<unknown> {
     const response = await this.post(`${getApiBase()}/system/backup/create`)
-    return response.data as any
+    return response.data
   }
 
-  async listBackups(): Promise<any[]> {
-    const response = await this.get(`${getApiBase()}/system/backup/list`)
-    return response.data as any[]
+  async listBackups(): Promise<BackupInfo[]> {
+    const response = await this.get<BackupInfo[]>(`${getApiBase()}/system/backup/list`)
+    return (response.data ?? []) as BackupInfo[]
   }
 
-  async restoreBackup(backupId: string): Promise<any> {
+  async restoreBackup(backupId: string): Promise<unknown> {
     const response = await this.post(`${getApiBase()}/system/backup/restore/${backupId}`)
-    return response.data as any
+    return response.data
   }
 
-  async deleteBackup(backupId: string): Promise<any> {
+  async deleteBackup(backupId: string): Promise<unknown> {
     const response = await this.delete(`${getApiBase()}/system/backup/${backupId}`)
-    return response.data as any
+    return response.data
   }
 
   // Environment and version info
-  async getEnvironmentInfo(): Promise<any> {
+  async getEnvironmentInfo(): Promise<SystemInfoResponse> {
     // Issue #552: Backend doesn't have /api/system/environment - use /api/system/info
-    const response = await this.get(`${getApiBase()}/system/info`)
-    return response.data as any
+    const response = await this.get<SystemInfoResponse>(`${getApiBase()}/system/info`)
+    return response.data
   }
 
-  async getVersionInfo(): Promise<any> {
+  async getVersionInfo(): Promise<unknown> {
     // Issue #552: Fixed path - backend has /api/services/version
     const response = await this.get(`${getApiBase()}/services/version`)
-    return response.data as any
+    return response.data
   }
 
-  async checkForUpdates(): Promise<any> {
+  async checkForUpdates(): Promise<unknown> {
     // Note: Backend doesn't have update check - this is aspirational
     const response = await this.get(`${getApiBase()}/system/updates/check`)
-    return response.data as any
+    return response.data
   }
 
   // Security
   // Issue #552: Backend uses /api/security/* for security assessment
-  async getSecurityStatus(): Promise<any> {
+  async getSecurityStatus(): Promise<unknown> {
     const response = await this.get(`${getApiBase()}/security/assessments`)
-    return response.data as any
+    return response.data
   }
 
-  async runSecurityScan(): Promise<any> {
+  async runSecurityScan(): Promise<unknown> {
     const response = await this.post(`${getApiBase()}/security/assessments`)
-    return response.data as any
+    return response.data
   }
 
-  async getAuditLogs(): Promise<any[]> {
+  async getAuditLogs(): Promise<SecurityAssessment[]> {
     // Note: Backend doesn't have audit logs endpoint - using assessments
-    const response = await this.get(`${getApiBase()}/security/assessments`)
-    return response.data as any[]
+    const response = await this.get<SecurityAssessment[]>(`${getApiBase()}/security/assessments`)
+    return (response.data ?? []) as SecurityAssessment[]
   }
 }
