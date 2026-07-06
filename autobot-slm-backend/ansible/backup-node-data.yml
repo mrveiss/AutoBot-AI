@@ -24,6 +24,9 @@
     # never existed on installed nodes, so the ChromaDB backup block was a silent
     # no-op and ChromaDB collections were never captured (#10016 member 2).
     chromadb_data_dir: "{{ chromadb_data_dir | default('/opt/autobot/autobot-db-stack/chromadb/data') }}"
+    # Retention: prune this host's backup dirs older than N days at the end of a
+    # run. The just-created backup (mtime=now) always survives. 0 disables.
+    backup_retention_days: "{{ backup_retention_days | default(30) }}"
 
   tasks:
     # =========================================================================
@@ -290,6 +293,33 @@
         cd {{ backup_path }}
         sha256sum * > checksums.sha256
       changed_when: false
+
+    # =========================================================================
+    # RETENTION / PRUNE (runs after the new backup is fully written)
+    # =========================================================================
+    - name: Prune backups older than retention period
+      when: backup_retention_days | int > 0
+      block:
+        - name: Find this host's backup dirs older than retention
+          ansible.builtin.find:
+            paths: "{{ backup_dir }}"
+            patterns: "{{ target_host }}-*"
+            file_type: directory
+            age: "{{ backup_retention_days }}d"
+            age_stamp: mtime
+          register: expired_backups
+
+        - name: Remove expired backup dirs
+          ansible.builtin.file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ expired_backups.files }}"
+          loop_control:
+            label: "{{ item.path | basename }}"
+
+        - name: Report pruned backups
+          ansible.builtin.debug:
+            msg: "Retention ({{ backup_retention_days }}d): pruned {{ expired_backups.files | length }} expired backup(s) for {{ target_host }}"
 
     # =========================================================================
     # SUMMARY
