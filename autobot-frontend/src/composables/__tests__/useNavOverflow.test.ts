@@ -4,12 +4,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ref, nextTick, createApp, defineComponent, effectScope } from 'vue'
 import { useNavOverflow } from '../useNavOverflow'
 
-let observeCallback: ((entries: any[]) => void) | null = null
+let observeCallback: ((entries: ResizeObserverEntry[]) => void) | null = null
 
 beforeEach(() => {
   observeCallback = null
   vi.stubGlobal('ResizeObserver', class {
-    constructor(cb: (entries: any[]) => void) {
+    constructor(cb: (entries: ResizeObserverEntry[]) => void) {
       observeCallback = cb
     }
     observe() { }
@@ -30,7 +30,7 @@ function makeContainer(width: number, itemWidths: number[]): HTMLElement {
 }
 
 function useComposableInComponent(container: HTMLElement, itemCount: number) {
-  let result: any
+  let result: ReturnType<typeof useNavOverflow>
   const Comp = defineComponent({
     setup() {
       result = useNavOverflow(ref(container), ref(itemCount))
@@ -104,7 +104,7 @@ describe('useNavOverflow', () => {
   it('re-measures when itemCount changes', async () => {
     const container = makeContainer(800, [80, 80])
     const itemCountRef = ref(2)
-    let result: any
+    let result: ReturnType<typeof useNavOverflow>
     const Comp = defineComponent({
       setup() {
         result = useNavOverflow(ref(container), itemCountRef)
