@@ -22,15 +22,18 @@ DELETE /api/llm-auth/{provider_name}       — revoke / delete stored tokens
 
 from __future__ import annotations
 
+import ipaddress
+import os
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_db_session
-from auth_middleware import get_current_user
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
 from llm_shared.provider_auth import (
     _vault_read,
@@ -39,6 +42,67 @@ from llm_shared.provider_auth import (
 )
 
 logger = get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# SSRF allowlist — hosts that provider OAuth/token endpoints may live on.
+# Override via AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS (comma-separated hostnames).
+# ---------------------------------------------------------------------------
+
+_DEFAULT_ALLOWED_HOSTS: frozenset[str] = frozenset(
+    {
+        "accounts.google.com",
+        "oauth2.googleapis.com",
+        "github.com",
+        "api.github.com",
+        "huggingface.co",
+        "login.microsoftonline.com",
+        "api.openai.com",
+        "auth.openai.com",
+        "api.anthropic.com",
+        "api.mistral.ai",
+    }
+)
+
+_ALLOWED_OAUTH_HOSTS: frozenset[str] = (
+    frozenset(h.strip().lower() for h in os.environ["AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS"].split(",") if h.strip())
+    if os.environ.get("AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS")
+    else _DEFAULT_ALLOWED_HOSTS
+)
+
+
+def _validate_outbound_url(url: str) -> None:
+    """Reject URLs that could cause SSRF.
+
+    Rules enforced (any violation → HTTP 400):
+    - Scheme must be ``https``.
+    - Host must not parse as a valid IP address (blocks 127.0.0.1, 10.x,
+      169.254.169.254, ::1, etc.).
+    - Host must be present in the configured allowlist.
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid URL")
+
+    if parsed.scheme != "https":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only https URLs are permitted")
+
+    host = parsed.hostname or ""
+    if not host:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="URL has no host")
+
+    try:
+        ipaddress.ip_address(host)
+        # If ip_address() succeeds the host is an IP literal — reject unconditionally.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="IP-literal hosts are not permitted")
+    except ValueError:
+        pass  # Not an IP address — continue to allowlist check.
+
+    if host.lower() not in _ALLOWED_OAUTH_HOSTS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Host '{host}' is not in the provider OAuth allowlist",
+        )
 
 router = APIRouter(prefix="/api/llm-auth", tags=["llm-auth"])
 
@@ -119,14 +183,20 @@ async def oauth_callback(
     req: OAuthInitiateRequest,
     session: AsyncSession = Depends(get_db_session),
     user: Any = Depends(get_current_user),
+    _admin: bool = Depends(check_admin_permission),
 ) -> OAuthInitiateResponse:
     """Exchange an OAuth authorization code for tokens and persist to vault.
 
     The frontend redirects to this endpoint after the user completes the
     provider sign-in page.  The backend performs the PKCE code exchange and
     stores the resulting token pair in the system vault.
+
+    Requires admin — stored credential is system-wide (shared by all users).
     """
     from knowledge.connectors.oauth_flow import OAuthProvider, exchange_code  # noqa: PLC0415
+
+    # Validate outbound URL before any HTTP call — prevents SSRF via token_url.
+    _validate_outbound_url(req.token_url)
 
     # Build a minimal OAuthProvider for the exchange helper.
     provider_cfg = OAuthProvider(
@@ -147,7 +217,8 @@ async def oauth_callback(
             req.code_verifier,
         )
     except RuntimeError as exc:
-        logger.warning("OAuth code exchange failed for %s: %s", req.provider_name, exc)
+        # Log provider name only — never log code, client_secret, or token values.
+        logger.warning("OAuth code exchange failed for provider %s", req.provider_name)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     token_data = build_token_data(resp, created_by=_current_user_id(user))
@@ -174,14 +245,23 @@ async def oauth_callback(
 
 
 @router.post("/device/initiate", response_model=DeviceInitiateResponse)
-async def device_initiate(req: DeviceInitiateRequest) -> DeviceInitiateResponse:
+async def device_initiate(
+    req: DeviceInitiateRequest,
+    user: Any = Depends(get_current_user),
+    _admin: bool = Depends(check_admin_permission),
+) -> DeviceInitiateResponse:
     """Start a device-code flow.
 
     Calls the provider's device authorization endpoint and returns the
     ``user_code`` + ``verification_uri`` for the user to complete on another device.
     The caller polls ``/device/poll`` until approval or expiry.
+
+    Requires admin — stored credential is system-wide (shared by all users).
     """
     import aiohttp  # noqa: PLC0415
+
+    # Validate outbound URL before any HTTP call — prevents SSRF via device_authorization_url.
+    _validate_outbound_url(req.device_authorization_url)
 
     timeout = aiohttp.ClientTimeout(total=30.0)
     payload = {"client_id": req.client_id, "scope": req.scope}
@@ -191,6 +271,7 @@ async def device_initiate(req: DeviceInitiateRequest) -> DeviceInitiateResponse:
                 req.device_authorization_url,
                 data=payload,
                 headers={"Accept": "application/json"},
+                allow_redirects=False,
             ) as resp:
                 if resp.status >= 400:
                     body = await resp.text()
@@ -216,13 +297,19 @@ async def device_poll(
     req: DevicePollRequest,
     session: AsyncSession = Depends(get_db_session),
     user: Any = Depends(get_current_user),
+    _admin: bool = Depends(check_admin_permission),
 ) -> OAuthInitiateResponse:
     """Poll the token endpoint for a device-code grant and persist on approval.
 
     Returns ``stored=False`` when the grant is still pending (caller should
     retry after the ``interval`` from ``/device/initiate``).
+
+    Requires admin — stored credential is system-wide (shared by all users).
     """
     import aiohttp  # noqa: PLC0415
+
+    # Validate outbound URL before any HTTP call — prevents SSRF via token_url.
+    _validate_outbound_url(req.token_url)
 
     payload = {
         "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
@@ -236,6 +323,7 @@ async def device_poll(
                 req.token_url,
                 data=payload,
                 headers={"Accept": "application/json"},
+                allow_redirects=False,
             ) as resp:
                 data = await resp.json(content_type=None)
     except aiohttp.ClientError as exc:
@@ -301,8 +389,12 @@ async def revoke_provider_auth(
     provider_name: str,
     session: AsyncSession = Depends(get_db_session),
     user: Any = Depends(get_current_user),
+    _admin: bool = Depends(check_admin_permission),
 ) -> None:
-    """Revoke stored OAuth / device-code / session tokens for a provider."""
+    """Revoke stored OAuth / device-code / session tokens for a provider.
+
+    Requires admin — credential is system-wide (shared by all users).
+    """
     from sqlalchemy import delete  # noqa: PLC0415
 
     from llm_shared.provider_auth import _vault_secret_name  # noqa: PLC0415

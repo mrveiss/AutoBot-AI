@@ -91,7 +91,7 @@ class TestBaseProviderAuthIntegration:
     def _make_provider(self, settings=None, auth_strategy=None):
         """Return a minimal object that mirrors BaseProvider's auth wiring."""
 
-        from llm_shared.provider_auth import ApiKeyAuth, ProviderAuthStrategy  # noqa: PLC0415
+        from llm_shared.provider_auth import ApiKeyAuth, ProviderAuthStrategy  # noqa: PLC0415,F401
 
         class _Stub:
             provider_name = "stub"
@@ -426,3 +426,164 @@ def _sync(coro):
 
 def _sync_resolve(strategy, session=None):
     return _sync(strategy.resolve_token(session))
+
+
+# ---------------------------------------------------------------------------
+# Security tests for api/provider_auth.py (#10551 security review)
+# ---------------------------------------------------------------------------
+
+
+class TestProviderAuthSecurity:
+    """Covers the 5 findings from the #10551 security review.
+
+    These tests exercise _validate_outbound_url directly (unit) and the
+    FastAPI endpoint auth requirements (integration via TestClient).
+    """
+
+    # -- _validate_outbound_url unit tests --
+
+    def test_http_url_rejected(self):
+        from api.provider_auth import _validate_outbound_url
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_outbound_url("http://accounts.google.com/token")
+        assert exc_info.value.status_code == 400
+        assert "https" in exc_info.value.detail.lower()
+
+    def test_ip_literal_v4_rejected(self):
+        from api.provider_auth import _validate_outbound_url
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_outbound_url("https://169.254.169.254/latest/meta-data/")
+        assert exc_info.value.status_code == 400
+        assert "IP" in exc_info.value.detail
+
+    def test_localhost_ip_rejected(self):
+        from api.provider_auth import _validate_outbound_url
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_outbound_url("https://127.0.0.1/token")
+        assert exc_info.value.status_code == 400
+
+    def test_ipv6_loopback_rejected(self):
+        from api.provider_auth import _validate_outbound_url
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_outbound_url("https://[::1]/token")
+        assert exc_info.value.status_code == 400
+
+    def test_private_ip_range_rejected(self):
+        from api.provider_auth import _validate_outbound_url
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_outbound_url("https://10.0.0.1/token")
+        assert exc_info.value.status_code == 400
+
+    def test_non_allowlisted_hostname_rejected(self):
+        from api.provider_auth import _validate_outbound_url
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_outbound_url("https://evil-attacker.example.com/token")
+        assert exc_info.value.status_code == 400
+        assert "allowlist" in exc_info.value.detail.lower()
+
+    def test_allowlisted_https_host_passes(self):
+        from api.provider_auth import _validate_outbound_url
+
+        # Should not raise for any known-good provider host.
+        _validate_outbound_url("https://accounts.google.com/o/oauth2/token")
+        _validate_outbound_url("https://github.com/login/oauth/access_token")
+        _validate_outbound_url("https://api.anthropic.com/oauth/token")
+
+    def test_microsoftonline_passes(self):
+        from api.provider_auth import _validate_outbound_url
+
+        _validate_outbound_url("https://login.microsoftonline.com/common/oauth2/v2.0/token")
+
+    # -- Endpoint auth requirement tests (via FastAPI dependency inspection) --
+    # We cannot boot the full FastAPI app in unit test scope (missing DB/Redis/autobot_shared),
+    # so we verify auth by inspecting the Depends() wiring directly.  This is the
+    # correct approach for testing dependency presence without integration infrastructure.
+
+    def _get_endpoint_dependencies(self, endpoint_fn):
+        """Return the set of dependency callables declared on a FastAPI endpoint function."""
+        import inspect
+        from fastapi import params as fa_params
+
+        deps = set()
+        sig = inspect.signature(endpoint_fn)
+        for param in sig.parameters.values():
+            if isinstance(param.default, fa_params.Depends):
+                deps.add(param.default.dependency)
+        return deps
+
+    def test_device_initiate_requires_auth_no_token(self):
+        """device_initiate must declare both get_current_user and check_admin_permission."""
+        from api.provider_auth import device_initiate
+        from auth_middleware import check_admin_permission, get_current_user
+
+        deps = self._get_endpoint_dependencies(device_initiate)
+        assert get_current_user in deps, "device_initiate missing get_current_user dependency"
+        assert check_admin_permission in deps, "device_initiate missing check_admin_permission dependency"
+
+    def test_oauth_callback_requires_auth_no_token(self):
+        """oauth_callback must declare both get_current_user and check_admin_permission."""
+        from api.provider_auth import oauth_callback
+        from auth_middleware import check_admin_permission, get_current_user
+
+        deps = self._get_endpoint_dependencies(oauth_callback)
+        assert get_current_user in deps, "oauth_callback missing get_current_user dependency"
+        assert check_admin_permission in deps, "oauth_callback missing check_admin_permission dependency"
+
+    def test_device_poll_requires_auth_no_token(self):
+        """device_poll must declare both get_current_user and check_admin_permission."""
+        from api.provider_auth import device_poll
+        from auth_middleware import check_admin_permission, get_current_user
+
+        deps = self._get_endpoint_dependencies(device_poll)
+        assert get_current_user in deps, "device_poll missing get_current_user dependency"
+        assert check_admin_permission in deps, "device_poll missing check_admin_permission dependency"
+
+    def test_revoke_requires_auth_no_token(self):
+        """revoke_provider_auth must declare both get_current_user and check_admin_permission."""
+        from api.provider_auth import revoke_provider_auth
+        from auth_middleware import check_admin_permission, get_current_user
+
+        deps = self._get_endpoint_dependencies(revoke_provider_auth)
+        assert get_current_user in deps, "revoke_provider_auth missing get_current_user dependency"
+        assert check_admin_permission in deps, "revoke_provider_auth missing check_admin_permission dependency"
+
+    def test_ssrf_blocked_before_network_on_device_initiate(self):
+        """Non-allowlisted URL must be rejected 400 even if the endpoint were authenticated."""
+        from api.provider_auth import _validate_outbound_url
+        from fastapi import HTTPException
+
+        # Call the guard directly — simulates what the endpoint does after auth.
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_outbound_url("https://internal.corp/steal-metadata")
+        assert exc_info.value.status_code == 400
+
+    def test_allow_redirects_false_in_device_initiate(self):
+        """Verify allow_redirects=False is wired into the aiohttp POST in device_initiate.
+
+        We inspect the source to confirm the argument is present, preventing
+        a 302-redirect SSRF bypass from an allowlisted host to an internal one.
+        """
+        import inspect
+        from api import provider_auth as _pa_module
+
+        src = inspect.getsource(_pa_module.device_initiate)
+        assert "allow_redirects=False" in src, "device_initiate must pass allow_redirects=False to aiohttp"
+
+    def test_allow_redirects_false_in_device_poll(self):
+        import inspect
+        from api import provider_auth as _pa_module
+
+        src = inspect.getsource(_pa_module.device_poll)
+        assert "allow_redirects=False" in src, "device_poll must pass allow_redirects=False to aiohttp"
