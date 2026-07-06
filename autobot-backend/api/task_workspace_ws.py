@@ -43,9 +43,12 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
 
-from auth_middleware import check_admin_permission, get_auth_middleware
+from auth_middleware import (
+    check_admin_permission,
+    get_auth_middleware,
+    verify_internal_api_key,
+)
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config as ssot_config
 from services.docker_task_workspace import (
     WorkspaceInfo,
     get_task_workspace_manager,
@@ -385,8 +388,9 @@ def _validate_ws_origin(websocket: WebSocket) -> None:
 
     auth_header = websocket.headers.get("authorization", "")
     if not auth_header:
-        # Allow when running under test or dev environment without auth layer
-        if not os.environ.get("AUTOBOT_REQUIRE_WS_AUTH", "1") == "1":
+        # Allow only when auth is explicitly disabled (test/dev); production
+        # defaults to "1" and therefore fails closed on a missing Authorization.
+        if os.environ.get("AUTOBOT_REQUIRE_WS_AUTH", "1") != "1":
             return
         # Production: block unauthenticated connections
         raise PermissionError("Authorization header required for workspace shell")
@@ -400,8 +404,7 @@ def _authenticate_ws_admin(websocket: WebSocket) -> bool:
     so the standard auth middleware resolves the caller. Any error → deny.
     """
     try:
-        internal_key = ssot_config.misc.internal_api_key
-        if internal_key and websocket.headers.get("X-Internal-API-Key") == internal_key:
+        if verify_internal_api_key(websocket.headers.get("X-Internal-API-Key")):
             return True
         user = get_auth_middleware().get_user_from_request(websocket)  # type: ignore[arg-type]
         if not user:
