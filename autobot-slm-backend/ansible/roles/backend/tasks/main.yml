@@ -245,6 +245,10 @@
       - libsndfile1
       - libsndfile1-dev
       - portaudio19-dev
+      # Text-to-speech engine for pyttsx3 (#10566): without espeak-ng the backend
+      # reports "no speech voices installed" and TTS output is unavailable.
+      - espeak-ng
+      - espeak-ng-data
       # OCR / CAPTCHA solver (tesseract, Issue #206)
       - tesseract-ocr
       - libtesseract-dev
