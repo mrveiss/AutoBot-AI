@@ -1106,15 +1106,9 @@ export class ChatController {
   ): Promise<boolean> {
     try {
       // Lazy import to avoid circular dependency at module load time
-       
-      // @ts-ignore
-      const { fetchWithAuth } = require('@/utils/fetchWithAuth') as { fetchWithAuth: typeof import('@/utils/fetchWithAuth').fetchWithAuth }
-       
-      // @ts-ignore
-      const appConfig = (require('@/config/AppConfig.js') as { default: { getApiUrl: (p: string) => Promise<string> } }).default
-       
-      // @ts-ignore
-      const { getApiBase } = require('@/config/ssot-config') as { getApiBase: () => string }
+      const { fetchWithAuth } = await import('@/utils/fetchWithAuth')
+      const appConfig = (await import('@/config/AppConfig.js')).default
+      const { getApiBase } = await import('@/config/ssot-config')
 
       const resolvedTaskId = taskId ?? this.chatStore.currentSessionId ?? null
       const url = await appConfig.getApiUrl(

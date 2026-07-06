@@ -78,15 +78,13 @@ export class MockWebSocket {
   }
 
   static mockImplementation() {
-    // @ts-ignore
-    global.WebSocket = MockWebSocket
+    globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket
   }
 
   static restoreImplementation() {
     // Restore original WebSocket if available
     if ('WebSocket' in globalThis) {
-      // @ts-ignore
-      delete global.WebSocket
+      delete (globalThis as { WebSocket?: typeof WebSocket }).WebSocket
     }
   }
 }

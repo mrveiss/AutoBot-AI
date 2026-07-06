@@ -68,8 +68,7 @@ describe('useInlineEdit', () => {
     startEdit(item)
     editText.value = 'new'
     await saveEdit(item)
-    expect(save).toHaveBeenCalledOnce()
-    expect(save).toHaveBeenCalledWith(item, 'new')
+    expect(save).toHaveBeenCalledExactlyOnceWith(item, 'new')
     expect(editingId.value).toBeNull()
   })
 

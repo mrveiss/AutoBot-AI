@@ -787,7 +787,6 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-// @ts-ignore - JavaScript API client without type declarations
 import { secretsApiClient } from '@/utils/SecretsApiClient';
 import { useChatStore } from '@/stores/useChatStore';
 import { createLogger } from '@/utils/debugUtils';

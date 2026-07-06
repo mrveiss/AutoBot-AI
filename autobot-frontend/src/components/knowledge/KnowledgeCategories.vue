@@ -82,7 +82,7 @@
         </BaseButton>
         <h3>{{ getSelectedCategoryName() }}</h3>
       </div>
-      <KnowledgeBrowser :mode="selectedMainCategory! as 'user' | 'autobot' | 'autobot-documentation' | 'system-knowledge' | 'user-knowledge'" :preselected-category="selectedMainCategory!" />
+      <KnowledgeBrowser :mode="selectedBrowserMode" :preselected-category="selectedMainCategory!" />
     </div>
 
     <!-- System Category Documents Panel -->
@@ -201,6 +201,16 @@ const route = useRoute()
 
 // UI state
 const selectedMainCategory = ref<string | null>(null)
+
+type KnowledgeBrowserMode =
+  | 'user'
+  | 'autobot'
+  | 'autobot-documentation'
+  | 'system-knowledge'
+  | 'user-knowledge'
+const selectedBrowserMode = computed(
+  () => selectedMainCategory.value as KnowledgeBrowserMode,
+)
 
 // Shape of a category document as read by this view (Record<string, unknown>
 // on the wire; these are the fields the template/handlers access).
