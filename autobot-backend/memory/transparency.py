@@ -344,9 +344,9 @@ async def forget_memory(user_id: str, memory_id: str, store: str) -> bool:
     """
     try:
         if store == "verbatim":
-            return await _forget_verbatim(memory_id)
+            return await _forget_verbatim(user_id, memory_id)
         if store == "trajectory":
-            return await _forget_trajectory(memory_id)
+            return await _forget_trajectory(user_id, memory_id)
         if store == "working_memory":
             return await _forget_working_memory(user_id, memory_id)
         if store == "graph":
@@ -393,24 +393,42 @@ async def export_user_memory(user_id: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-async def _forget_verbatim(memory_id: str) -> bool:
+def _owns_chroma_item(existing: dict, field: str, user_id: str) -> bool:
+    """True only when the fetched Chroma item's metadata[field] matches user_id.
+
+    Security: forget/delete by id must verify ownership from metadata before
+    deleting, else any user could delete another user's memory by id (IDOR).
+    """
+    metas = existing.get("metadatas") or []
+    if not metas or not isinstance(metas[0], dict):
+        return False
+    return metas[0].get(field) == user_id
+
+
+async def _forget_verbatim(user_id: str, memory_id: str) -> bool:
     _bootstrap()
     store = await get_verbatim_store()
     collection = await store._get_collection()
-    existing = await collection.get(ids=[memory_id])
+    existing = await collection.get(ids=[memory_id], include=["metadatas"])
     if not existing.get("ids"):
+        return False
+    if not _owns_chroma_item(existing, "user_id", user_id):
+        logger.warning("forget_verbatim: tenant mismatch chunk=%s caller=%s", memory_id, user_id)
         return False
     await collection.delete(ids=[memory_id])
     logger.info("forget_verbatim: deleted chunk %s", memory_id)
     return True
 
 
-async def _forget_trajectory(memory_id: str) -> bool:
+async def _forget_trajectory(user_id: str, memory_id: str) -> bool:
     _bootstrap()
     store = await get_trajectory_store()
     collection = await store._get_collection()
-    existing = await collection.get(ids=[memory_id])
+    existing = await collection.get(ids=[memory_id], include=["metadatas"])
     if not existing.get("ids"):
+        return False
+    if not _owns_chroma_item(existing, "agent_id", user_id):
+        logger.warning("forget_trajectory: tenant mismatch traj=%s caller=%s", memory_id, user_id)
         return False
     await collection.delete(ids=[memory_id])
     logger.info("forget_trajectory: deleted trajectory %s", memory_id)

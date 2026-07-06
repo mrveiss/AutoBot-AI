@@ -153,7 +153,7 @@ class TestForgetTenantIsolation(unittest.IsolatedAsyncioTestCase):
     """Cross-user delete must be rejected by each store's forget helper."""
 
     async def test_forget_verbatim_rejects_wrong_user(self):
-        """_forget_verbatim deletes by id (tenant check is at API layer via _resolve_target_user)."""
+        """_forget_verbatim must NOT delete a chunk owned by another user (IDOR fix)."""
         import memory.transparency as mt
         from memory.transparency import _forget_verbatim
 
@@ -164,11 +164,27 @@ class TestForgetTenantIsolation(unittest.IsolatedAsyncioTestCase):
         original = mt.get_verbatim_store
         mt.get_verbatim_store = AsyncMock(return_value=store)
         try:
-            result = await _forget_verbatim("v1")
+            result = await _forget_verbatim("user-A", "v1")  # caller A, chunk owned by B
         finally:
             mt.get_verbatim_store = original
 
-        # Low-level helper deletes by id; tenant isolation is enforced at the API layer.
+        collection.delete.assert_not_called()
+        self.assertFalse(result)
+
+    async def test_forget_verbatim_deletes_own_chunk(self):
+        """_forget_verbatim deletes a chunk the caller owns."""
+        import memory.transparency as mt
+        from memory.transparency import _forget_verbatim
+
+        collection = _make_chroma_stub(ids=["v1"], metas=[{"user_id": "user-A"}])
+        store = AsyncMock()
+        store._get_collection = AsyncMock(return_value=collection)
+        original = mt.get_verbatim_store
+        mt.get_verbatim_store = AsyncMock(return_value=store)
+        try:
+            result = await _forget_verbatim("user-A", "v1")
+        finally:
+            mt.get_verbatim_store = original
         collection.delete.assert_called_once_with(ids=["v1"])
         self.assertTrue(result)
 
