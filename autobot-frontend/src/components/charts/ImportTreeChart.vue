@@ -229,7 +229,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import { getCssVar } from '@/composables/useCssVars'
@@ -587,7 +587,7 @@ function getCytoscapeStyles(): Array<{ selector: string; style: Record<string, s
 function updateCytoscapeElements() {
   if (!cy) return
 
-  const elements: Array<{ data: Record<string, any>; position?: { x: number; y: number } }> = []
+  const elements: Array<{ data: Record<string, unknown>; position?: { x: number; y: number } }> = []
   const nodeIds = new Set<string>()
 
   // Build map of imports and importers for quick lookup

@@ -175,9 +175,9 @@ const scanSessionOrphans = async () => {
       showStatus('success',
         t('knowledge.sessionOrphan.allActive', { count: data.total_facts_checked }))
     }
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Failed to scan for session orphans:', error)
-    showStatus('error', error.message || t('knowledge.sessionOrphan.scanError'))
+    showStatus('error', (error as Error).message || t('knowledge.sessionOrphan.scanError'))
   }
 }
 
@@ -199,9 +199,9 @@ const cleanupSessionOrphans = async () => {
       ? t('knowledge.sessionOrphan.preservedSuffix', { count: data.facts_preserved })
       : ''
     showStatus('success', t('knowledge.sessionOrphan.deleteSuccess', { count: data.facts_removed, preserved }))
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Failed to cleanup session orphans:', error)
-    showStatus('error', error.message || t('knowledge.sessionOrphan.cleanupError'))
+    showStatus('error', (error as Error).message || t('knowledge.sessionOrphan.cleanupError'))
   }
 }
 </script>
