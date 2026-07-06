@@ -115,7 +115,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   async function closeSession(sessionId: string): Promise<boolean> {
     error.value = null
     return wrap(async () => {
-      await ApiClient.post<any>(`${getApiBase()}/browser/close`, { session_id: sessionId })
+      await ApiClient.post<unknown>(`${getApiBase()}/browser/close`, { session_id: sessionId })
       sessions.value = sessions.value.filter(s => s.id !== sessionId)
       if (currentSession.value?.id === sessionId) {
         currentSession.value = null
@@ -159,7 +159,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   async function navigate(sessionId: string, url: string): Promise<boolean> {
     error.value = null
     return wrap(async () => {
-      await ApiClient.post<any>(`${getApiBase()}/browser/navigate`, { session_id: sessionId, url })
+      await ApiClient.post<unknown>(`${getApiBase()}/browser/navigate`, { session_id: sessionId, url })
       logger.debug('Navigated to:', url)
       await fetchSessions()
       return true
@@ -174,7 +174,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   async function click(sessionId: string, selector: string): Promise<boolean> {
     error.value = null
     return wrap(async () => {
-      await ApiClient.post<any>(`${getApiBase()}/browser/click`, { session_id: sessionId, selector })
+      await ApiClient.post<unknown>(`${getApiBase()}/browser/click`, { session_id: sessionId, selector })
       logger.debug('Clicked element:', selector)
       return true
     }).catch((err) => {
@@ -188,7 +188,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   async function type(sessionId: string, selector: string, text: string): Promise<boolean> {
     error.value = null
     return wrap(async () => {
-      await ApiClient.post<any>(`${getApiBase()}/browser/type`, { session_id: sessionId, selector, text })
+      await ApiClient.post<unknown>(`${getApiBase()}/browser/type`, { session_id: sessionId, selector, text })
       logger.debug('Typed text into:', selector)
       return true
     }).catch((err) => {
@@ -245,7 +245,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   async function deleteSession(sessionId: string): Promise<boolean> {
     error.value = null
     return wrap(async () => {
-      await ApiClient.delete<any>(`${getApiBase()}/browser/session/${sessionId}`)
+      await ApiClient.delete<unknown>(`${getApiBase()}/browser/session/${sessionId}`)
       sessions.value = sessions.value.filter(s => s.id !== sessionId)
       logger.debug('Deleted session:', sessionId)
       return true

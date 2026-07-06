@@ -385,6 +385,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
+import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers/index'
 // ManPageManager removed - consolidated to Manage → Advanced (Issue #678)
 import DocumentChangeFeed from '@/components/knowledge/DocumentChangeFeed.vue'
@@ -438,7 +439,7 @@ interface Activity {
 
 interface KnowledgeController {
   refreshStats: () => Promise<void>
-  getDetailedStats: () => Promise<Record<string, any>>
+  getDetailedStats: () => Promise<DetailedStats>
   cleanupKnowledgeBase: () => Promise<void>
   reindexKnowledgeBase: () => Promise<void>
 }
@@ -452,7 +453,7 @@ const store = useKnowledgeStore()
 // Defensive controller initialization
 let controller: KnowledgeController | null = null
 try {
-  controller = useKnowledgeController() as any
+  controller = useKnowledgeController() as unknown as KnowledgeController
   logger.info('Knowledge controller initialized:', controller)
 } catch (error) {
   logger.error('Failed to initialize knowledge controller:', error)
@@ -527,7 +528,7 @@ const maxCategoryCount = computed(() => {
 const documentsByType = computed(() => {
   const types: Record<string, number> = {}
   const documents = store.documents || []
-  documents.forEach((doc: any) => {
+  documents.forEach((doc: KnowledgeDocument) => {
     types[doc.type] = (types[doc.type] || 0) + 1
   })
   return types
@@ -537,7 +538,7 @@ const popularTags = computed(() => {
   const tagCounts: Record<string, number> = {}
 
   const documents = store.documents || []
-  documents.forEach((doc: any) => {
+  documents.forEach((doc: KnowledgeDocument) => {
     const tags = doc.tags || []
     tags.forEach((tag: string) => {
       tagCounts[tag] = (tagCounts[tag] || 0) + 1
@@ -780,7 +781,7 @@ const refreshVectorStats = async () => {
       index_name: storeStats.index_name || 'unknown',
       last_updated: storeStats.last_updated || undefined,
       categories: Array.isArray(storeStats.categories)
-        ? storeStats.categories.map((c: any) => c.name || c)
+        ? (storeStats.categories as unknown as { name?: string }[]).map((c) => c.name || c) as string[]
         : [],
       embedding_model: 'nomic-embed-text',  // From detailed stats
       embedding_dimensions: 768  // From detailed stats

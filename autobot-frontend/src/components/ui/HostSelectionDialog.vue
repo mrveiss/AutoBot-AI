@@ -208,8 +208,41 @@ interface InfrastructureHost {
   capabilities?: string[];
   purpose?: string;
   os?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   _isLegacyHost?: boolean;
+}
+
+// Minimal shapes for raw secrets / legacy hosts returned by the backend APIs,
+// mapped into InfrastructureHost in loadHosts().
+interface RawSecretMetadata {
+  host?: string;
+  ssh_port?: number;
+  username?: string;
+  auth_type?: 'ssh_key' | 'password';
+  capabilities?: string[];
+  purpose?: string;
+  os?: string;
+}
+
+interface RawSecret {
+  id: string;
+  name: string;
+  type?: string;
+  description?: string;
+  metadata?: RawSecretMetadata;
+}
+
+interface RawLegacyHost {
+  id: string;
+  name: string;
+  host: string;
+  ssh_port?: number;
+  username?: string;
+  auth_type?: 'ssh_key' | 'password';
+  capabilities?: string[];
+  purpose?: string;
+  description?: string;
+  os?: string;
 }
 
 // Props
@@ -272,7 +305,7 @@ const loadHosts = async () => {
 
     // Fetch both secrets (infrastructure_host type) and legacy hosts
     const [secretsResponse, legacyHostsResponse] = await Promise.all([
-      secretsApiClient.getSecrets({}) as Promise<Record<string, any>>,
+      secretsApiClient.getSecrets({}) as Promise<{ secrets?: RawSecret[] }>,
       fetchWithAuth(`${backendUrl}/api/infrastructure/hosts`)
         .then(r => r.ok ? r.json() : { hosts: [] })
         .catch(() => ({ hosts: [] }))
@@ -280,8 +313,8 @@ const loadHosts = async () => {
 
     // Filter to infrastructure_host type secrets
     const infraSecrets = (secretsResponse.secrets || [])
-      .filter((s: any) => s.type === 'infrastructure_host')
-      .map((s: any) => ({
+      .filter((s: RawSecret) => s.type === 'infrastructure_host')
+      .map((s: RawSecret) => ({
         id: s.id,
         name: s.name,
         host: s.metadata?.host || '',
@@ -296,7 +329,7 @@ const loadHosts = async () => {
       }));
 
     // Convert legacy hosts
-    const legacyHosts = (legacyHostsResponse.hosts || []).map((h: any) => ({
+    const legacyHosts = (legacyHostsResponse.hosts || []).map((h: RawLegacyHost) => ({
       id: h.id,
       name: h.name,
       host: h.host,
