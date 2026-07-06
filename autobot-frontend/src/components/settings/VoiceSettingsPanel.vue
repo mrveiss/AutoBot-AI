@@ -156,7 +156,6 @@ const { t } = useI18n()
 const {
   voices,
   selectedVoiceId,
-  effectiveVoiceId,
   personalityVoiceId,
   personalityVoiceIds,
   loading,

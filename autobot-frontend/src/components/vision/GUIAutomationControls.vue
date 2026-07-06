@@ -186,7 +186,7 @@ const logger = createLogger('GUIAutomationControls');
 const { showToast } = useNotificationBus();
 
 // Props
-const props = defineProps<{
+defineProps<{
   opportunities: AutomationOpportunity[];
   loading: boolean;
 }>();

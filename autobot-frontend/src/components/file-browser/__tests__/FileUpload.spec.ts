@@ -5,11 +5,12 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
+import type { App } from 'vue'
 import FileUpload from '../FileUpload.vue'
 
 // vue-i18n: provide a minimal $t stub so template calls resolve to the key
 const i18nPlugin = {
-  install(app: any) {
+  install(app: App) {
     app.config.globalProperties.$t = (key: string) => key
   }
 }

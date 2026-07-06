@@ -131,7 +131,6 @@ import {
   ref,
 } from 'vue'
 import {
-  useKnowledgeGraph,
   type Entity,
 } from '@/composables/useKnowledgeGraph'
 import { useFocusTrap } from '@/composables/useFocusTrap'

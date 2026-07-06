@@ -117,10 +117,8 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { usePlugins, type CapabilityInfo } from '@/composables/usePlugins'
 
-const { t } = useI18n()
 
 const props = defineProps<{
   pluginName: string

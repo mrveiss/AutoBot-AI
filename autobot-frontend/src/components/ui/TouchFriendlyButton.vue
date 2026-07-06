@@ -25,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, nextTick } from 'vue'
+import { computed, ref } from 'vue'
 import LoadingSpinner from './LoadingSpinner.vue'
 import type { ComponentSize } from '@/types/component-props'
 
