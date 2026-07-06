@@ -306,8 +306,8 @@ const logger = createLogger('PrecommitHookDashboard')
 
 // Issue #701: Type for API response with data property
 interface ApiDataResponse {
-  data?: any
-  [key: string]: any
+  data?: unknown
+  [key: string]: unknown
 }
 
 // Types
@@ -487,7 +487,7 @@ async function loadStatus() {
     // Issue #701: Added type assertion for response
     const response = await api.get<HookStatus | ApiDataResponse>(`${getApiBase()}/precommit/status`)
     // Issue #701: Response could be data directly or wrapped
-    hookStatus.value = (response as ApiDataResponse).data || response as HookStatus
+    hookStatus.value = (response as ApiDataResponse).data as HookStatus | undefined || response as HookStatus
   } catch (error) {
     logger.warn('Failed to load status:', error)
     hookStatus.value = { installed: false }
@@ -499,7 +499,7 @@ async function loadChecks() {
     // Issue #701: Added type assertion for response
     const response = await api.get<Check[] | ApiDataResponse>(`${getApiBase()}/precommit/checks`)
     // Issue #701: Response could be array directly or wrapped in data
-    checks.value = Array.isArray(response) ? response : ((response as ApiDataResponse).data || [])
+    checks.value = Array.isArray(response) ? response : ((response as ApiDataResponse).data as Check[] | undefined || [])
   } catch (error) {
     logger.warn('Failed to load checks:', error)
     checks.value = []
@@ -511,7 +511,7 @@ async function loadHistory() {
     // Issue #701: Added type assertion for response
     const response = await api.get<CommitCheckResult[] | ApiDataResponse>(`${getApiBase()}/precommit/history`)
     // Issue #701: Response could be array directly or wrapped in data
-    checkHistory.value = Array.isArray(response) ? response : ((response as ApiDataResponse).data || [])
+    checkHistory.value = Array.isArray(response) ? response : ((response as ApiDataResponse).data as CommitCheckResult[] | undefined || [])
   } catch (error) {
     logger.warn('Failed to load history:', error)
     checkHistory.value = []
@@ -523,7 +523,7 @@ async function loadSummary() {
     // Issue #701: Added type assertion for response
     const response = await api.get<Summary | ApiDataResponse>(`${getApiBase()}/precommit/summary`)
     // Issue #701: Response could be data directly or wrapped
-    summary.value = (response as ApiDataResponse).data || response as Summary
+    summary.value = (response as ApiDataResponse).data as Summary | undefined || response as Summary
   } catch (error) {
     logger.warn('Failed to load summary:', error)
     // Keep default empty summary state
@@ -534,7 +534,7 @@ async function installHooks() {
   installing.value = true
   try {
     // Issue #701: api.post requires data argument
-    await api.post<any>(`${getApiBase()}/precommit/install`, {})
+    await api.post<unknown>(`${getApiBase()}/precommit/install`, {})
     await loadStatus()
     showToast(t('analytics.precommit.installSuccess'), 'success')
   } catch (error) {
@@ -549,7 +549,7 @@ async function uninstallHooks() {
   installing.value = true
   try {
     // Issue #701: api.post requires data argument
-    await api.post<any>(`${getApiBase()}/precommit/uninstall`, {})
+    await api.post<unknown>(`${getApiBase()}/precommit/uninstall`, {})
     await loadStatus()
     showToast(t('analytics.precommit.uninstallSuccess'), 'info')
   } catch (error) {
@@ -566,7 +566,7 @@ async function runCheck() {
     // Issue #701: Added type assertion for response
     const response = await api.get<CommitCheckResult | ApiDataResponse>(`${getApiBase()}/precommit/check`)
     // Issue #701: Response could be data directly or wrapped
-    lastResult.value = (response as ApiDataResponse).data || response as CommitCheckResult
+    lastResult.value = (response as ApiDataResponse).data as CommitCheckResult | undefined || response as CommitCheckResult
     await loadHistory()
     await loadSummary()
 
@@ -588,7 +588,7 @@ async function toggleCheck(check: Check) {
   const newState = !check.enabled
   try {
     // Issue #701: Fixed api.post call - data should be second arg
-    await api.post<any>(`${getApiBase()}/precommit/checks/${check.id}/toggle`, { enabled: newState })
+    await api.post<unknown>(`${getApiBase()}/precommit/checks/${check.id}/toggle`, { enabled: newState })
     check.enabled = newState
   } catch (error) {
     logger.warn('Failed to toggle check:', error)

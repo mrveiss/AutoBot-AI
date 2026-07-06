@@ -1,18 +1,39 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
+import type { Mock } from 'vitest'
 import BaseXTerminal from '../BaseXTerminal.vue'
 
+// Shape of the hand-built xterm Terminal stand-in used by these tests: the
+// vi.fn() methods the component invokes plus the fields the component's watchers
+// mutate (options) and the tests assert on.
+interface TerminalMock {
+  loadAddon: Mock
+  open: Mock
+  onData: Mock
+  onResize: Mock
+  dispose: Mock
+  write: Mock
+  writeln: Mock
+  clear: Mock
+  reset: Mock
+  focus: Mock
+  blur: Mock
+  cols: number
+  rows: number
+  options: Record<string, unknown>
+}
+
 // Track the most recently created Terminal mock instance so tests can inspect it
-let lastTerminalInstance: Record<string, any> | null = null
+let lastTerminalInstance: TerminalMock | null = null
 
 // Factory that creates a fresh Terminal mock instance.
 // Returning an object from the constructor makes `new` yield it directly,
 // so no `this` mutation/aliasing is needed.
-function createTerminalMock(): Record<string, any> {
-  const instance: Record<string, any> = {
+function createTerminalMock(): TerminalMock {
+  const instance: TerminalMock = {
     loadAddon: vi.fn(),
     open: vi.fn(),
     onData: vi.fn(),
@@ -44,7 +65,7 @@ vi.mock('@xterm/xterm', () => ({
 }))
 
 vi.mock('@xterm/addon-fit', () => ({
-  FitAddon: vi.fn(function (this: Record<string, any>) {
+  FitAddon: vi.fn(function (this: { fit: Mock }) {
     this.fit = vi.fn()
   })
 }))
@@ -54,7 +75,7 @@ vi.mock('@xterm/addon-web-links', () => ({
 }))
 
 describe('BaseXTerminal', () => {
-  let wrapper: any
+  let wrapper: VueWrapper | null
 
   beforeEach(() => {
     wrapper = null
@@ -62,7 +83,7 @@ describe('BaseXTerminal', () => {
     // vitest.config has mockReset: true which clears mockImplementation between
     // tests. Re-apply the Terminal constructor implementation so every test gets
     // a proper mock instance when the component calls `new Terminal(...)`.
-    vi.mocked(Terminal).mockImplementation(createTerminalMock as any)
+    vi.mocked(Terminal).mockImplementation(createTerminalMock as unknown as () => Terminal)
   })
 
   afterEach(() => {
