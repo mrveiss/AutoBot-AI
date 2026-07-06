@@ -81,6 +81,19 @@ INSTRUCTION_MODEL = "mistral:7b-instruct"  # RAG, entity extraction, instruction
 SYSTEM_MODEL = "dolphin-llama3:8b"  # System commands, security (uncensored)
 QUALITY_MODEL = DEFAULT_LLM_MODEL  # User-facing chat, research, code analysis
 
+# Best-of-N plan selection (#10583)
+# AUTOBOT_PLAN_BEST_OF_N_ENABLED=true  → opt-in path (default: off)
+# AUTOBOT_PLAN_BEST_OF_N_COUNT=3       → number of candidate plans (default: 3, max: 5)
+PLAN_BEST_OF_N_ENABLED: bool = os.environ.get("AUTOBOT_PLAN_BEST_OF_N_ENABLED", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+PLAN_BEST_OF_N_COUNT: int = min(
+    5,
+    max(2, int(os.environ.get("AUTOBOT_PLAN_BEST_OF_N_COUNT", "3"))),
+)
+
 
 class VMConfig(BaseSettings):
     """
