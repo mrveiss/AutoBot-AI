@@ -266,6 +266,27 @@ interface CategoryOption {
   count: number
 }
 
+// Loose shape of a knowledge fact/entry as returned by the KB endpoints
+// (Record<string, unknown> at the wire; these are the fields we read).
+interface KnowledgeFactLike {
+  key?: string
+  title?: string
+  source?: string
+  content?: string
+  full_content?: string
+  timestamp?: string
+  created_at?: string
+  category?: string
+  metadata?: Record<string, unknown>
+}
+
+// Nested folder scaffold built while grouping facts by path segment. Each key
+// is either a nested directory or the special `_files` bucket of leaf nodes.
+interface NestedDir {
+  _files?: TreeNode[]
+  [segment: string]: NestedDir | TreeNode[] | undefined
+}
+
 // State
 const treeData = ref<TreeNode[]>([])
 const nodeExpansion = useExpansion<string>()
@@ -306,7 +327,7 @@ const { isLoading: isLoadingContent, wrap: loadFileContentOp } = useLoadingState
 const contentError = ref<Error | null>(null)
 
 // Cursor-based pagination for user knowledge entries
-const allLoadedEntries = ref<any[]>([])
+const allLoadedEntries = ref<Record<string, unknown>[]>([])
 const entriesCursor = ref<string>('0')
 const hasMoreEntries = ref<boolean>(true)
 const isLoadingMore = ref<boolean>(false)
@@ -454,12 +475,12 @@ const filteredTree = computed(() => {
 })
 
 // Helper function to build nested folder structure from file paths
-const buildNestedTree = (facts: any[], category: string): TreeNode[] => {
-  const root: Record<string, any> = {}
+const buildNestedTree = (facts: Record<string, unknown>[], category: string): TreeNode[] => {
+  const root: NestedDir = {};
 
-  facts.forEach((fact: any, factIdx: number) => {
+  (facts as KnowledgeFactLike[]).forEach((fact, factIdx: number) => {
     // Extract filename from metadata
-    const filename = fact.metadata?.filename || fact.title || `Fact ${factIdx + 1}`
+    const filename = (fact.metadata?.filename || fact.title || `Fact ${factIdx + 1}`) as string
 
     // Parse the path (e.g., "docs/api/endpoints.md" -> ["docs", "api", "endpoints.md"])
     const pathParts = filename.split('/').filter((p: string) => p)
@@ -475,7 +496,7 @@ const buildNestedTree = (facts: any[], category: string): TreeNode[] => {
         if (!current._files) current._files = []
         // Extract the actual fact ID from the Redis key (e.g., "fact:UUID" -> "UUID")
         const factId = fact.key ? fact.key.replace('fact:', '') : `fact-${category}-${factIdx}`
-        const fileContent = fact.full_content || fact.content || ''
+        const fileContent = (fact.full_content || fact.content || '') as string
         current._files.push({
           id: factId, // Use actual fact ID from Redis, not synthetic ID
           name: part,
@@ -495,13 +516,13 @@ const buildNestedTree = (facts: any[], category: string): TreeNode[] => {
         if (!current[part]) {
           current[part] = {}
         }
-        current = current[part]
+        current = current[part] as NestedDir
       }
     }
   })
 
   // Convert nested object to TreeNode array
-  const convertToTreeNodes = (obj: Record<string, any>, prefix = ''): TreeNode[] => {
+  const convertToTreeNodes = (obj: NestedDir, prefix = ''): TreeNode[] => {
     const nodes: TreeNode[] = []
 
     // Add folders
@@ -509,11 +530,12 @@ const buildNestedTree = (facts: any[], category: string): TreeNode[] => {
       if (key === '_files') return
 
       const folderPath = prefix ? `${prefix}/${key}` : key
-      const children = convertToTreeNodes(obj[key], folderPath)
+      const children = convertToTreeNodes(obj[key] as NestedDir, folderPath)
 
       // Add files from this level
-      if (obj[key]._files) {
-        children.push(...obj[key]._files)
+      const childFiles = (obj[key] as NestedDir)._files
+      if (childFiles) {
+        children.push(...childFiles)
       }
 
       nodes.push({
@@ -707,12 +729,12 @@ const loadMoreEntries = async () => {
   restoreExpandedState(treeData.value, expandedPaths)
 }
 
-const buildTreeFromEntries = (entries: any[]) => {
+const buildTreeFromEntries = (entries: Record<string, unknown>[]) => {
   // Build tree from entries (group by category)
   const categoryMap = new Map<string, TreeNode[]>()
 
   if (Array.isArray(entries)) {
-    entries.forEach((entry: any, idx: number) => {
+    (entries as KnowledgeFactLike[]).forEach((entry, idx: number) => {
       const category = entry.category || 'Uncategorized'
 
       if (!categoryMap.has(category)) {
@@ -935,18 +957,18 @@ const loadFolderContents = async (folder: TreeNode) => {
     const data = await fetchFolderContents(folder.category || '')
 
     if (data.results && Array.isArray(data.results)) {
-      folder.children = data.results.map((item: any, idx: number) => ({
+      folder.children = (data.results as KnowledgeFactLike[]).map((item, idx: number) => ({
         id: `file-${folder.id}-${idx}`,
-        name: item.metadata?.title || item.metadata?.source || `Document ${idx + 1}`,
+        name: (item.metadata?.title || item.metadata?.source || `Document ${idx + 1}`) as string,
         type: 'file' as const,
         path: `${folder.path}/${item.metadata?.title || item.metadata?.source}`,
-        size: item.content?.length || 0,
-        date: item.metadata?.timestamp,
+        size: (item.content?.length as number | undefined) || 0,
+        date: item.metadata?.timestamp as string | undefined,
         category: folder.category,
         metadata: item
       }))
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to load folder contents:', err)
   }
 }

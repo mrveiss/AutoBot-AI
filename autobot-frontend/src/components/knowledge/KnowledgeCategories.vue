@@ -49,7 +49,7 @@
             <Icon name="pencil-alt" />
           </button>
           <div class="category-icon-large" :style="{ backgroundColor: category.color }">
-            <Icon :name="category.icon" />
+            <Icon :name="category.icon as IconName" />
           </div>
           <div class="category-content">
             <h3>{{ category.name }}</h3>
@@ -165,16 +165,20 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
 import { useKnowledgeStats } from '@/composables/knowledge/useKnowledgeStats'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { useKnowledgeCategories } from '@/composables/knowledge/useKnowledgeCategories'
+import type { MainCategoryItem } from '@/composables/knowledge/useKnowledgeCategories'
+import type { KnowledgeStats } from '@/types/knowledgeBase'
 import { formatDate, formatCategoryName, formatFileSize } from '@/utils/formatHelpers'
 import KnowledgeBrowser from './KnowledgeBrowser.vue'
 import DocumentChangeFeed from './DocumentChangeFeed.vue'
 import CategoryEditModal from './modals/CategoryEditModal.vue'
+import type { Category } from './modals/CategoryEditModal.vue'
 import { BaseModal } from '@autobot/ui'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -198,24 +202,35 @@ const route = useRoute()
 // UI state
 const selectedMainCategory = ref<string | null>(null)
 
+// Shape of a category document as read by this view (Record<string, unknown>
+// on the wire; these are the fields the template/handlers access).
+interface CategoryDocument {
+  path?: string
+  title?: string
+  filename?: string
+  type?: string
+  size?: number
+  content?: string
+}
+
 // Shared state
 const isLoadingKBStats = ref(false)
-const kbStats = ref<any>(null)
-const mainCategories = ref<any[]>([])
+const kbStats = ref<KnowledgeStats | null>(null)
+const mainCategories = ref<MainCategoryItem[]>([])
 const isLoadingCategories = ref(false)
 const categoriesError = ref<string | null>(null)
 
 // Category documents state
 const isLoadingCategoryDocs = ref(false)
-const categoryDocuments = ref<any[]>([])
+const categoryDocuments = ref<CategoryDocument[]>([])
 const showCategoryDocuments = ref(false)
 const selectedCategoryPath = ref('')
 const showDocumentModal = ref(false)
-const currentDocument = ref<any>(null)
+const currentDocument = ref<CategoryDocument | null>(null)
 
 // Issue #747: Category edit modal state
 const showCategoryEditModal = ref(false)
-const categoryToEdit = ref<any>(null)
+const categoryToEdit = ref<Category | null>(null)
 
 // Computed properties
 const systemCategories = computed(() => {
@@ -243,12 +258,12 @@ const browseCategory = async (category: string) => {
   })
 }
 
-const viewCategoryDocuments = async (category: any) => {
+const viewCategoryDocuments = async (category: MainCategoryItem) => {
   isLoadingCategoryDocs.value = true
-  selectedCategoryPath.value = category.path
+  selectedCategoryPath.value = category.path as string
 
   try {
-    categoryDocuments.value = await fetchCategoryDocuments(category.path)
+    categoryDocuments.value = (await fetchCategoryDocuments(category.path as string)) as CategoryDocument[]
     showCategoryDocuments.value = true
   } catch (error) {
     logger.error('Error loading category documents:', error)
@@ -264,7 +279,7 @@ const closeCategoryDocuments = () => {
   selectedCategoryPath.value = ''
 }
 
-const viewDocumentDetails = (doc: any) => {
+const viewDocumentDetails = (doc: CategoryDocument) => {
   currentDocument.value = doc
   showDocumentModal.value = true
 }
@@ -313,17 +328,17 @@ const getSelectedCategoryName = () => {
 }
 
 // Issue #747: Category edit/delete handlers
-const openCategoryEdit = (category: any, event: Event) => {
+const openCategoryEdit = (category: MainCategoryItem, event: Event) => {
   event.stopPropagation() // Prevent card click from triggering
-  categoryToEdit.value = category
+  categoryToEdit.value = category as Category
   showCategoryEditModal.value = true
 }
 
-const handleCategoryUpdated = (updatedCategory: any) => {
+const handleCategoryUpdated = (updatedCategory: Category) => {
   // Update the category in the list
   const index = mainCategories.value.findIndex(c => c.id === updatedCategory.id)
   if (index !== -1) {
-    mainCategories.value[index] = { ...mainCategories.value[index], ...updatedCategory }
+    mainCategories.value[index] = { ...mainCategories.value[index], ...updatedCategory } as MainCategoryItem
   }
   showCategoryEditModal.value = false
   categoryToEdit.value = null
