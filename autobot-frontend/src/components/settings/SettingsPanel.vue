@@ -204,14 +204,21 @@ const updateChatSetting = (key: string, value: unknown) => {
   markAsChanged()
 }
 
-// NOTE (#11024): No-op placeholder. There is no user-settings section in
-// SettingsStructure yet and nothing in the app emits a `user.*` setting-changed
-// event, so the `case 'user'` branch in handleSettingChanged is currently
-// unreachable. Kept (not deleted) as the wire-in point for a future User
-// Management settings section — persist into a `settings.value.user` section
-// (mirroring updateChatSetting/updateUISetting) once that section is added and
-// a child view emits `user.*`.
-const updateUserSetting = (_key: string, _value: unknown) => {
+// #11024: persist user-management settings into a `settings.value.user` section,
+// mirroring updateBackendSetting (nested-key safe-set + prototype-pollution guard)
+// so the `case 'user'` dispatch in handleSettingChanged round-trips key/value
+// instead of silently dropping both parameters.
+const updateUserSetting = (key: string, value: unknown) => {
+  const root = settings.value as Record<string, unknown>
+  if (!root.user || typeof root.user !== 'object') {
+    root.user = {}
+  }
+  const userSettings = root.user as Record<string, unknown>
+  if (key.includes('.')) {
+    safeNestedSet(userSettings, key, value)
+  } else if (!_UNSAFE_KEYS.has(key)) {
+    userSettings[key] = value
+  }
   markAsChanged()
 }
 
