@@ -30,6 +30,7 @@ from agent_loop.think_tool import ThinkTool
 from agent_loop.types import (
     AgentLoopConfig,
     AgentMessage,
+    HumanQuestion,
     IterationResult,
     LoopOutcome,
     LoopPhase,
@@ -52,8 +53,14 @@ from events.bus import publish_event as _bus_publish_event
 from events.event_types import AGENT_ABSTAINED as EVT_AGENT_ABSTAINED
 from events.event_types import APPROVAL_REQUIRED as EVT_APPROVAL_REQUIRED
 from events.event_types import BELIEF_CACHE_HIT as EVT_BELIEF_CACHE_HIT
+from events.event_types import HUMAN_ANSWER_RECEIVED as EVT_HUMAN_ANSWER_RECEIVED
+from events.event_types import HUMAN_QUESTION as EVT_HUMAN_QUESTION
 from events.event_types import STEERING_RECEIVED as EVT_STEERING_RECEIVED
-from events.types import create_approval_required_event, create_message_event
+from events.types import (
+    create_approval_required_event,
+    create_human_question_event,
+    create_message_event,
+)
 from planner import PlannerModule
 from tools.parallel import ParallelToolExecutor
 
@@ -167,6 +174,10 @@ class AgentLoop:
         self._consecutive_errors = 0
         # Steering inbox: human guidance messages queued for the next iteration (#10543)
         self._steering_inbox: asyncio.Queue[SteeringEntry] = asyncio.Queue()
+        # Human-answer inbox: answers arrive here via answer() and resolve ask_human() waits (#10553)
+        self._human_answer_inbox: asyncio.Queue[tuple[str, str]] = asyncio.Queue()  # (question_id, answer)
+        # Set while loop is suspended waiting for a human answer (#10553)
+        self._waiting_for_human: bool = False
         # Issue #3877: explicit flag set when repetition halt fires; checked by
         # _should_continue() so the main while-loop exits on the very next guard
         # check rather than relying solely on _should_iterate()'s error detection.
@@ -249,6 +260,9 @@ class AgentLoop:
         self._error_budget_exhausted = False
         # Clear any leftover steering messages from a previous run.
         self._steering_inbox = asyncio.Queue()
+        # Clear answer inbox and waiting flag from a previous run (#10553).
+        self._human_answer_inbox = asyncio.Queue()
+        self._waiting_for_human = False
 
     async def _execute_main_loop(self) -> list[IterationResult]:
         """Execute the main iteration loop.
@@ -447,6 +461,25 @@ class AgentLoop:
         )
         await self._steering_inbox.put(entry)
         logger.info("AgentLoop: steering message queued (steering_id=%s)", steering_id)
+        return True
+
+    async def answer(self, question_id: str, answer_text: str) -> bool:
+        """Deliver a human's answer to a suspended ask_human() call (#10553).
+
+        Routes the answer into the ``_human_answer_inbox`` queue so the
+        awaiting ``ask_human()`` coroutine picks it up immediately.
+        Returns False when no task is running (caller should surface 409).
+        Mirrors ``steer()`` — same guard logic, same inbox pattern.
+        """
+        if self._state not in (LoopState.RUNNING, LoopState.WAITING_FOR_HUMAN):
+            logger.warning(
+                "AgentLoop: answer() called while state=%s — dropped (question_id=%s)",
+                self._state.name,
+                question_id,
+            )
+            return False
+        await self._human_answer_inbox.put((question_id, answer_text))
+        logger.info("AgentLoop: human answer queued (question_id=%s)", question_id)
         return True
 
     # =========================================================================
@@ -907,6 +940,205 @@ class AgentLoop:
         # Placeholder - actual implementation would wait for user MESSAGE event
         return ""
 
+    async def ask_human(
+        self,
+        question: str,
+        choices: list[str] | None = None,
+        escalation_policy: str | None = None,
+        default_answer: str | None = None,
+        question_id_override: str | None = None,
+    ) -> str:
+        """Emit a clarifying question, suspend the loop, and resume on answer (#10553).
+
+        The loop state transitions to WAITING_FOR_HUMAN; the question is published
+        to the live task channel so the in-app UI renders an answer affordance.
+        Slack/push are notified via the existing hooks (fire-and-forget).
+        The pending question is checkpointed to Redis so a restarted loop can
+        detect it is still suspended.
+
+        Returns the human's answer text (authoritative; injects into trajectory).
+        Raises asyncio.TimeoutError only when escalation_policy="abandon" and the
+        deadline passes; callers should treat that as TIMED_OUT_WAITING.
+        """
+        question_id = question_id_override or str(uuid.uuid4())
+        task_id = self._current_context.task_id if self._current_context else None
+        policy = escalation_policy or self.config.ask_human_escalation_policy
+        timeout = self.config.ask_human_timeout_seconds
+
+        hq = HumanQuestion(
+            question_id=question_id,
+            question=question,
+            iteration=self._iteration_count,
+            choices=choices,
+            escalation_policy=policy,
+            default_answer=default_answer,
+        )
+        if self._current_context is not None:
+            self._current_context.add_human_question(hq)
+
+        await self._checkpoint_question(hq, task_id)
+        await self._emit_human_question(hq, task_id, timeout)
+
+        prev_state = self._state
+        self._state = LoopState.WAITING_FOR_HUMAN
+        self._waiting_for_human = True
+        try:
+            return await self._wait_for_answer(hq, timeout, policy, default_answer)
+        finally:
+            self._waiting_for_human = False
+            if self._state == LoopState.WAITING_FOR_HUMAN:
+                self._state = prev_state
+            await self._clear_question_checkpoint(question_id, task_id)
+
+    async def _emit_human_question(
+        self,
+        hq: "HumanQuestion",
+        task_id: str | None,
+        timeout: int,
+    ) -> None:
+        """Publish HUMAN_QUESTION to the event bus + Slack/push (fire-and-forget)."""
+        event = create_human_question_event(
+            question_id=hq.question_id,
+            question=hq.question,
+            timeout_seconds=timeout,
+            task_id=task_id,
+            choices=hq.choices,
+        )
+        await self.event_stream.publish(event)
+        channel = f"task:{task_id}" if task_id else "global"
+        await _bus_publish_event(
+            channel,
+            EVT_HUMAN_QUESTION,
+            {
+                "question_id": hq.question_id,
+                "question": hq.question,
+                "choices": hq.choices,
+                "timeout_seconds": timeout,
+                "task_id": task_id,
+                "iteration": hq.iteration,
+            },
+            persist=PersistStrategy.MEMORY,
+        )
+        slack = get_slack_hook()
+        await slack.ask_human(
+            question_id=hq.question_id,
+            question=hq.question,
+            choices=hq.choices,
+            task_id=task_id,
+        )
+        logger.info(
+            "AgentLoop: ask_human emitted (question_id=%s, policy=%s, timeout=%ds)",
+            hq.question_id,
+            hq.escalation_policy,
+            timeout,
+        )
+
+    async def _wait_for_answer(
+        self,
+        hq: "HumanQuestion",
+        timeout: int,
+        policy: str,
+        default_answer: str | None,
+    ) -> str:
+        """Wait up to *timeout* seconds for a human answer (#10553).
+
+        Two sources are drained concurrently:
+        1. ``_human_answer_inbox`` — direct in-process delivery via answer().
+        2. Event stream subscription — delivery via the REST endpoint or any
+           other channel that publishes a HUMAN_ANSWER event with matching id.
+
+        Applies escalation policy when the deadline expires:
+        - "abandon": raises asyncio.TimeoutError (caller sets TIMED_OUT_WAITING).
+        - "default": returns default_answer (or "" if unset).
+        - "re_ask": retries once; abandons after the second timeout.
+        """
+        async def _drain() -> str:
+            # Race between in-process queue and event stream subscription.
+            queue_task = asyncio.ensure_future(self._drain_answer_queue(hq.question_id))
+            stream_task = asyncio.ensure_future(self._drain_answer_stream(hq.question_id))
+            done, pending = await asyncio.wait(
+                {queue_task, stream_task}, return_when=asyncio.FIRST_COMPLETED
+            )
+            for t in pending:
+                t.cancel()
+            return next(iter(done)).result()
+
+        try:
+            answer = await asyncio.wait_for(_drain(), timeout=timeout)
+        except asyncio.TimeoutError:
+            if policy == "default":
+                answer = default_answer or ""
+                logger.warning(
+                    "AgentLoop: ask_human timeout — using default answer (question_id=%s)",
+                    hq.question_id,
+                )
+            elif policy == "re_ask":
+                logger.warning(
+                    "AgentLoop: ask_human timeout — re-asking once (question_id=%s)", hq.question_id
+                )
+                re_ask_task_id = self._current_context.task_id if self._current_context else None
+                await self._emit_human_question(hq, re_ask_task_id, timeout)
+                try:
+                    answer = await asyncio.wait_for(_drain(), timeout=timeout)
+                except asyncio.TimeoutError:
+                    raise
+            else:  # "abandon"
+                raise
+
+        task_id = self._current_context.task_id if self._current_context else None
+        await _bus_publish_event(
+            f"task:{task_id}" if task_id else "global",
+            EVT_HUMAN_ANSWER_RECEIVED,
+            {"question_id": hq.question_id, "answer": answer, "task_id": task_id},
+            persist=PersistStrategy.MEMORY,
+        )
+        logger.info(
+            "AgentLoop: ask_human resolved (question_id=%s, answer=%r)",
+            hq.question_id,
+            answer[:80],
+        )
+        return answer
+
+    async def _drain_answer_queue(self, question_id: str) -> str:
+        """Block until the in-process answer inbox yields the matching answer (#10553)."""
+        while True:
+            qid, ans = await self._human_answer_inbox.get()
+            if qid == question_id:
+                return ans
+            # Unrelated question_id — put it back and retry.
+            await self._human_answer_inbox.put((qid, ans))
+
+    async def _drain_answer_stream(self, question_id: str) -> str:
+        """Subscribe to the event stream and return when a HUMAN_ANSWER matches (#10553).
+
+        Mirrors _request_approval's subscribe() pattern so remote answers (REST,
+        Slack reply, mobile push) resolve the wait the moment they are published.
+        """
+        async for event in self.event_stream.subscribe(event_types=[EventType.HUMAN_ANSWER]):
+            if event.content.get("question_id") == question_id:
+                return event.content.get("answer", "")
+        return ""  # stream exhausted (loop shutdown)
+
+    async def _checkpoint_question(self, hq: "HumanQuestion", task_id: str | None) -> None:
+        """Persist the pending question to Redis so a restart can detect suspension (#10553)."""
+        try:
+            from autobot_shared.redis_client import redis_set
+
+            key = f"autobot:ask_human:{task_id or 'global'}:{hq.question_id}"
+            await redis_set(key, json.dumps(hq.to_dict()), expire=self.config.ask_human_timeout_seconds + 60)
+        except Exception as exc:
+            logger.warning("AgentLoop: ask_human checkpoint failed (non-critical): %s", exc)
+
+    async def _clear_question_checkpoint(self, question_id: str, task_id: str | None) -> None:
+        """Remove the Redis checkpoint after the question is resolved or abandoned (#10553)."""
+        try:
+            from autobot_shared.redis_client import redis_delete
+
+            key = f"autobot:ask_human:{task_id or 'global'}:{question_id}"
+            await redis_delete(key)
+        except Exception as exc:
+            logger.warning("AgentLoop: ask_human checkpoint clear failed (non-critical): %s", exc)
+
     # =========================================================================
     # Think Tool Integration
     # =========================================================================
@@ -1242,7 +1474,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
             return False
         if self._halted_on_stagnation:
             return False
-        if self._state not in (LoopState.RUNNING, LoopState.PAUSED):
+        if self._state not in (LoopState.RUNNING, LoopState.PAUSED, LoopState.WAITING_FOR_HUMAN):
             return False
         if self._iteration_count >= self.config.max_iterations:
             return False
@@ -1381,6 +1613,8 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
             return LoopOutcome.STAGNATED
         if self._halted_on_repetition:
             return LoopOutcome.HALTED
+        if self._halt_outcome == LoopOutcome.TIMED_OUT_WAITING:
+            return LoopOutcome.TIMED_OUT_WAITING
         if self._state == LoopState.CANCELLED:
             return LoopOutcome.CANCELLED
         if self._state == LoopState.FAILED:

@@ -55,6 +55,15 @@ class _NullSlackHook:
     ) -> None:
         pass
 
+    async def ask_human(
+        self,
+        question_id: str,
+        question: str,
+        choices: list[str] | None = None,
+        task_id: str | None = None,
+    ) -> None:
+        pass
+
 
 class _SlackHook:
     """Active hook backed by SlackNotificationIntegration."""
@@ -129,6 +138,37 @@ class _SlackHook:
             await self._integration.request_approval(params)
         except Exception as exc:
             logger.debug("SlackHook.request_approval failed (non-critical): %s", exc)
+
+    async def ask_human(
+        self,
+        question_id: str,
+        question: str,
+        choices: list[str] | None = None,
+        task_id: str | None = None,
+    ) -> None:
+        """Notify the Slack approvals channel that the agent needs a human answer (#10553).
+
+        Human can reply via the /tasks/{task_id}/answer endpoint; the reply
+        body must include the question_id to be routed correctly.
+        """
+        choices_text = " | ".join(choices) if choices else "free-form text"
+        description = (
+            f"Agent is waiting for your answer (question_id={question_id}).\n"
+            f"Choices: {choices_text}\n"
+            f"Reply via POST /api/agent-terminal/tasks/{task_id}/answer"
+        )
+        params: Dict[str, Any] = {
+            "channel": self._approvals_channel,
+            "approval_id": question_id,
+            "title": f"Agent question: {question[:80]}",
+            "description": description,
+            "approval_type": "human_question",
+            "requested_by": "AgentLoop",
+        }
+        try:
+            await self._integration.request_approval(params)
+        except Exception as exc:
+            logger.debug("SlackHook.ask_human failed (non-critical): %s", exc)
 
 
 # Module-level singleton; resolved lazily on first call to get_slack_hook().
