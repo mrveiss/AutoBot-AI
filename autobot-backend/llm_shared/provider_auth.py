@@ -52,7 +52,7 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 # Vault secret type tag for all provider-auth tokens stored via EnvelopeSecretsService.
-PROVIDER_AUTH_SECRET_TYPE = "provider_auth_token"
+PROVIDER_AUTH_SECRET_TYPE = "provider_auth_token"  # nosec B105 - vault type tag, not a credential
 
 # Grace window before expiry at which a refresh is proactively triggered (seconds).
 _REFRESH_GRACE_SECONDS = 300
@@ -361,7 +361,7 @@ class DeviceCodeAuth(ProviderAuthStrategy):
             provider_name=self._provider_name,
             token_url=self._token_url,
             client_id=self._client_id,
-            client_secret="",  # device-code token refresh is public (no secret)
+            client_secret="",  # nosec B106 - device-code token refresh is public (no secret)
             owner_vault_str=self._owner_vault_str,
             subject=self._subject,
         )
