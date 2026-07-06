@@ -331,6 +331,11 @@ if "llm_shared" not in sys.modules:
     # in the lightweight run_credentials module; load it real so tests importing
     # them don't hit the llm_shared MagicMock stub.
     _load_real_mod("llm_shared.run_credentials", _llm_root / "run_credentials.py")
+    # #10551: provider auth abstraction — load real so tests can import the
+    # strategy classes without hitting the llm_shared MagicMock stub.
+    _load_real_mod("llm_shared.provider_auth", _llm_root / "provider_auth.py")
+    # #10551: base_provider — load real so BaseProvider tests can instantiate it.
+    _load_real_mod("llm_shared.base_provider", _llm_root / "base_provider.py")
 
     # Stub llm_shared.optimization.model_inspector so complexity_router.py can
     # load without the full optimization stack (inspect_model is only called in
