@@ -1,7 +1,7 @@
-# Copyright (c) 2024 mrveiss. All rights reserved.
-# Unauthorized copying of this file, via any medium is strictly prohibited.
-# Proprietary and confidential.
-# Written by mrveiss.
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
 """Tests for content_reach.sources.reddit (RedditJsonBackend, HnAlgoliaBackend, build_reddit_chain)."""
 
 from __future__ import annotations
