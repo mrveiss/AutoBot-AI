@@ -131,7 +131,7 @@ def _threshold_for_tool(tool_name: str) -> float:
 class VerifierVerdict(str, Enum):
     """Decision produced by the adversarial verifier."""
 
-    PASS = "PASS"  # No significant flaw found — allow action.
+    PASS = "PASS"  # nosec B105 - verifier verdict label, not a credential; no flaw found — allow
     BLOCK = "BLOCK"  # Flaw found — block or escalate to human.
     SKIP = "SKIP"  # Verifier disabled or unavailable — allow through.
 
