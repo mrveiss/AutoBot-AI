@@ -803,6 +803,58 @@ const { t } = useI18n();
 const logger = createLogger('SecretsManager');
 const { fetchInfraHosts, fetchSecretsUsage, deleteInfraHost } = useSecretsAuditApi();
 
+// Infrastructure-host connection metadata stored alongside a secret.
+interface SecretMetadata {
+  host?: string
+  ssh_port?: number
+  vnc_port?: number | null
+  username?: string
+  auth_type?: 'ssh_key' | 'password'
+  capabilities?: string[]
+  os?: string | null
+  purpose?: string | null
+}
+
+// Runtime shape of a credential as returned by the secrets API and rendered
+// by this component (superset of the wire SecretData plus display fields).
+interface Secret {
+  id: string
+  name: string
+  type: string
+  scope: string
+  chat_id?: string | null
+  description?: string
+  value?: string
+  tags?: string[]
+  created_at?: string
+  updated_at?: string
+  expires_at?: string | null
+  metadata?: SecretMetadata
+  // Issue #685: hierarchical access fields
+  visibility?: string
+  owner_id?: string
+  org_id?: string
+  team_ids?: string[]
+  shared_with?: string[]
+  // Local display flags for legacy / infrastructure hosts
+  _isLegacyHost?: boolean
+  _isInfraHost?: boolean
+}
+
+// Secrets statistics summary returned by getSecretsStats().
+interface SecretsStats {
+  total_secrets: number
+  by_scope?: Record<string, number>
+  by_type?: Record<string, number>
+  expired_count: number
+}
+
+// Workflow-template usage entry for a secret (#1415).
+interface WorkflowUsage {
+  template_id: string
+  template_name: string
+}
+
 // Credential type categories with icons and colors (using design tokens)
 interface CredentialCategory {
   type: string
@@ -848,10 +900,11 @@ const credentialTemplates = computed<CredentialTemplate[]>(() => [
 ]);
 
 // State
-const secrets = ref<any[]>([]);
-const stats = ref<any>(null);
+const secrets = ref<Secret[]>([]);
+// Runtime value is null until loaded; template guards access with v-if="stats".
+const stats = ref<SecretsStats>(null as unknown as SecretsStats);
 const loading = ref(false);
-const workflowUsage = ref<Record<string, any[]>>({});
+const workflowUsage = ref<Record<string, WorkflowUsage[]>>({});
 const saving = ref(false);
 const deleting = ref(false);
 const transferring = ref(false);
@@ -907,15 +960,15 @@ const secretForm = reactive({
 const tagsInput = ref('');
 const teamIdsInput = ref('');
 const sharedWithInput = ref('');
-const viewingSecret = ref<any>(null);
-const transferringSecret = ref<any>(null);
-const deletingSecret = ref<any>(null);
+const viewingSecret = ref<Secret | null>(null);
+const transferringSecret = ref<Secret | null>(null);
+const deletingSecret = ref<Secret | null>(null);
 
 // Debounced search
 const debouncedSearch = useDebounce(searchQuery, 300);
 
 // Cache for memoized filteredSecrets computation
-const filterCache = new Map<string, any[]>();
+const filterCache = new Map<string, Secret[]>();
 
 // Helper function to generate stable cache key from filter values
 const getFilterCacheKey = (): string => {
@@ -1029,14 +1082,14 @@ const loadSecrets = async () => {
   try {
     // Fetch secrets and stats - infrastructure_host is now a regular secret type
     const [secretsResponse, statsResponse, legacyHostsResponse] = await Promise.all([
-      secretsApiClient.getSecrets({}) as Promise<Record<string, any>>,
-      secretsApiClient.getSecretsStats() as Promise<Record<string, any>>,
+      secretsApiClient.getSecrets({}) as Promise<{ secrets?: Secret[] }>,
+      secretsApiClient.getSecretsStats() as Promise<SecretsStats>,
       // Also fetch legacy hosts for backwards compatibility (will be migrated eventually)
       fetchInfraHosts()
     ]);
 
     // Convert legacy infrastructure hosts to secret-like format for unified display
-    const legacyInfraSecrets = (legacyHostsResponse.hosts || []).map((host: any) => ({
+    const legacyInfraSecrets: Secret[] = (legacyHostsResponse.hosts || []).map((host) => ({
       id: host.id,
       name: host.name,
       type: 'infrastructure_host',
@@ -1052,8 +1105,8 @@ const loadSecrets = async () => {
         ssh_port: host.ssh_port,
         vnc_port: host.vnc_port,
         username: host.username,
-        auth_type: host.auth_type,
-        capabilities: host.capabilities
+        auth_type: host.auth_type as 'ssh_key' | 'password',
+        capabilities: host.capabilities as string[] | undefined
       },
       _isLegacyHost: true  // Flag for legacy hosts that need different delete API
     }));
@@ -1085,14 +1138,14 @@ const loadSecrets = async () => {
 const loadWorkflowUsage = async () => {
   try {
     const data = await fetchSecretsUsage();
-    workflowUsage.value = data.secrets_usage || {};
+    workflowUsage.value = (data.secrets_usage || {}) as Record<string, WorkflowUsage[]>;
   } catch (error) {
     logger.error('Failed to load workflow usage:', error);
   }
 };
 
 // Get workflow usage for a secret by matching name to keys (#1415)
-const getWorkflowUsage = (secret: any): any[] => {
+const getWorkflowUsage = (secret: Secret): WorkflowUsage[] => {
   const name = (secret.name || '').toUpperCase().replace(/\s+/g, '_');
   return workflowUsage.value[name] || [];
 };
@@ -1136,17 +1189,17 @@ const getCategoryCount = (type: string) => {
   return secrets.value.filter(s => s.type === type).length;
 };
 
-const getTypeColor = (type: string) => {
+const getTypeColor = (type?: string) => {
   const cat = credentialCategories.value.find(c => c.type === type);
   return cat?.color || getCssVar('--text-tertiary', '#6b7280');
 };
 
-const getTypeIcon = (type: string) => {
+const getTypeIcon = (type?: string) => {
   const cat = credentialCategories.value.find(c => c.type === type);
   return cat?.icon || 'key';
 };
 
-const getTypeLabel = (type: string) => {
+const getTypeLabel = (type?: string) => {
   const cat = credentialCategories.value.find(c => c.type === type);
   return cat?.label.replace(/s$/, '') || type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || '';
 };
@@ -1197,7 +1250,7 @@ const getValueHint = (type: string) => {
   return hints[type] || 'This value will be encrypted and stored securely';
 };
 
-const selectSecret = (secret: any) => {
+const selectSecret = (secret: Secret) => {
   selectedSecretId.value = secret.id;
 };
 
@@ -1205,7 +1258,7 @@ const selectType = (type: string) => {
   secretForm.type = type;
 };
 
-const useTemplate = (template: any) => {
+const useTemplate = (template: CredentialTemplate) => {
   resetForm();
   secretForm.type = template.type;
   secretForm.name = template.name;
@@ -1218,7 +1271,7 @@ const openCreateModal = () => {
   showCreateModal.value = true;
 };
 
-const viewSecret = async (secret: any) => {
+const viewSecret = async (secret: Secret) => {
   try {
     // Handle infrastructure hosts - show connection info instead of raw credential
     if (secret.type === 'infrastructure_host') {
@@ -1234,7 +1287,7 @@ const viewSecret = async (secret: any) => {
     }
 
     const response = await secretsApiClient.getSecret(secret.id, { chatId: secret.chat_id });
-    viewingSecret.value = response;
+    viewingSecret.value = response as Secret;
     showSecretValue.value = false;
     showViewModal.value = true;
   } catch (error) {
@@ -1242,7 +1295,8 @@ const viewSecret = async (secret: any) => {
   }
 };
 
-const editSecret = (secret: any) => {
+const editSecret = (secret: Secret | null) => {
+  if (!secret) return;
   secretForm.id = secret.id;
   secretForm.name = secret.name;
   secretForm.type = secret.type;
@@ -1279,12 +1333,12 @@ const editSecret = (secret: any) => {
   showEditModal.value = true;
 };
 
-const transferSecret = (secret: any) => {
+const transferSecret = (secret: Secret) => {
   transferringSecret.value = secret;
   showTransferModal.value = true;
 };
 
-const confirmDelete = (secret: any) => {
+const confirmDelete = (secret: Secret) => {
   deletingSecret.value = secret;
   showDeleteModal.value = true;
 };
@@ -1371,7 +1425,7 @@ const saveSecret = async () => {
     const chatStore = useChatStore();
 
     // Build base secret data
-    const secretData: any = {
+    const secretData: Record<string, unknown> = {
       name: secretForm.name,
       type: secretForm.type,
       scope: secretForm.scope,
@@ -1412,13 +1466,13 @@ const saveSecret = async () => {
     }
 
     if (showEditModal.value) {
-      await secretsApiClient.updateSecret(secretForm.id, secretData, { chatId: secretData.chat_id });
+      await secretsApiClient.updateSecret(secretForm.id, secretData, { chatId: secretData.chat_id as string | null | undefined });
     } else {
       // For non-infrastructure_host types, use the standard value field
       if (secretForm.type !== 'infrastructure_host') {
         secretData.value = secretForm.value;
       }
-      await secretsApiClient.createSecret(secretData);
+      await secretsApiClient.createSecret(secretData as unknown as Parameters<typeof secretsApiClient.createSecret>[0]);
     }
 
     closeModals();
@@ -1523,12 +1577,12 @@ const copySecretValue = async () => {
   }
 };
 
-const formatDate = (dateString: string) => {
+const formatDate = (dateString?: string | null) => {
   if (!dateString) return 'N/A';
   return formatDateTime(dateString);
 };
 
-const formatRelativeTime = (dateString: string) => {
+const formatRelativeTime = (dateString?: string) => {
   if (!dateString) return '';
   const date = new Date(dateString);
   const now = new Date();
@@ -1553,12 +1607,12 @@ const truncate = (text: string, length: number) => {
   return text.substring(0, length) + '...';
 };
 
-const isExpired = (secret: any) => {
+const isExpired = (secret?: Secret | null) => {
   if (!secret?.expires_at) return false;
   return new Date(secret.expires_at) < new Date();
 };
 
-const isExpiringSoon = (secret: any) => {
+const isExpiringSoon = (secret?: Secret | null) => {
   if (!secret?.expires_at || isExpired(secret)) return false;
   const expiry = new Date(secret.expires_at);
   const now = new Date();
@@ -1567,11 +1621,11 @@ const isExpiringSoon = (secret: any) => {
 };
 
 // Issue #685: Visibility badge helpers
-const getVisibility = (secret: any): string | null => {
+const getVisibility = (secret?: Secret | null): string | null => {
   return secret?.visibility || null;
 };
 
-const formatVisibility = (secret: any): string => {
+const formatVisibility = (secret: Secret): string => {
   const visibility = getVisibility(secret);
   if (!visibility) return '';
 
@@ -1586,7 +1640,7 @@ const formatVisibility = (secret: any): string => {
 };
 
 // #9724: 'user-friends'/'building' are not SVG IconNames (rendered empty)
-const getVisibilityIcon = (secret: Record<string, unknown>): IconName => {
+const getVisibilityIcon = (secret: Secret): IconName => {
   const visibility = getVisibility(secret);
   const icons: Record<string, IconName> = {
     'private': 'lock',

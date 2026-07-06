@@ -154,7 +154,7 @@ const markAsChanged = () => {
 }
 
 // Generic setting change handler that routes to appropriate update function
-const handleSettingChanged = (key: string, value: any) => {
+const handleSettingChanged = (key: string, value: unknown) => {
   const [category, ...rest] = key.split('.')
   const subKey = rest.join('.')
 
@@ -190,7 +190,7 @@ const handleSettingChanged = (key: string, value: any) => {
   }
 }
 
-const updateChatSetting = (key: string, value: any) => {
+const updateChatSetting = (key: string, value: unknown) => {
   if (!settings.value.chat) {
     settings.value.chat = {
       auto_scroll: true,
@@ -198,29 +198,29 @@ const updateChatSetting = (key: string, value: any) => {
       message_retention_days: 30
     } as ChatSettingsType
   }
-  // Issue #156 Fix: Use Record<string, any> type assertion for dynamic property assignment
-  const chatSettings = settings.value.chat as Record<string, any>
+  // Issue #156 Fix: Use Record<string, unknown> type assertion for dynamic property assignment
+  const chatSettings = settings.value.chat as Record<string, unknown>
   chatSettings[key] = value
   markAsChanged()
 }
 
-const updateUserSetting = (key: string, value: any) => {
+const updateUserSetting = (key: string, value: unknown) => {
   // Handle user management settings
   markAsChanged()
 }
 
 // #1721: Shared safe nested-set helper to prevent prototype pollution
 const _UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
-function safeNestedSet(root: Record<string, any>, key: string, value: any): void {
+function safeNestedSet(root: Record<string, unknown>, key: string, value: unknown): void {
   const keys = key.split('.')
   if (keys.some(k => _UNSAFE_KEYS.has(k))) return
-  let obj: Record<string, any> = root
+  let obj: Record<string, unknown> = root
   for (let i = 0; i < keys.length - 1; i++) {
     const k = keys[i]
     if (!Object.prototype.hasOwnProperty.call(obj, k) || typeof obj[k] !== 'object') {
-      obj[k] = Object.create(null) as Record<string, any> // codeql[js/prototype-pollution-utility]
+      obj[k] = Object.create(null) as Record<string, unknown> // codeql[js/prototype-pollution-utility]
     }
-    obj = obj[k] as Record<string, any>
+    obj = obj[k] as Record<string, unknown>
   }
   const finalKey = keys[keys.length - 1]
   if (!_UNSAFE_KEYS.has(finalKey)) {
@@ -228,22 +228,22 @@ function safeNestedSet(root: Record<string, any>, key: string, value: any): void
   }
 }
 
-const updateBackendSetting = (key: string, value: any) => {
+const updateBackendSetting = (key: string, value: unknown) => {
   if (!settings.value.backend) {
     settings.value.backend = {} as BackendSettingsType
   }
   // Handle nested settings for memory and agents
   if (key.includes('.')) {
-    safeNestedSet(settings.value.backend as Record<string, any>, key, value)
+    safeNestedSet(settings.value.backend as Record<string, unknown>, key, value)
   } else {
     if (!_UNSAFE_KEYS.has(key)) {
-      (settings.value.backend as any)[key] = value
+      (settings.value.backend as Record<string, unknown>)[key] = value
     }
   }
   markAsChanged()
 }
 
-const updateLLMSetting = (key: string, value: any) => {
+const updateLLMSetting = (key: string, value: unknown) => {
   if (!settings.value.backend) {
     settings.value.backend = {} as BackendSettingsType
   }
@@ -251,12 +251,12 @@ const updateLLMSetting = (key: string, value: any) => {
     settings.value.backend.llm = {}
   }
   safeNestedSet(
-    settings.value.backend.llm as Record<string, any>, key, value
+    settings.value.backend.llm as Record<string, unknown>, key, value
   )
   markAsChanged()
 }
 
-const updateUISetting = (key: string, value: any) => {
+const updateUISetting = (key: string, value: unknown) => {
   if (!settings.value.ui) {
     settings.value.ui = {
       theme: 'auto',
@@ -266,13 +266,13 @@ const updateUISetting = (key: string, value: any) => {
       auto_refresh_interval: 30
     } as UISettingsType
   }
-  // Issue #156 Fix: Use Record<string, any> type assertion for dynamic property assignment
-  const uiSettings = settings.value.ui as Record<string, any>
+  // Issue #156 Fix: Use Record<string, unknown> type assertion for dynamic property assignment
+  const uiSettings = settings.value.ui as Record<string, unknown>
   uiSettings[key] = value
   markAsChanged()
 }
 
-const updateLoggingSetting = (key: string, value: any) => {
+const updateLoggingSetting = (key: string, value: unknown) => {
   if (!settings.value.logging) {
     settings.value.logging = {
       level: 'info',
@@ -284,13 +284,13 @@ const updateLoggingSetting = (key: string, value: any) => {
       log_sql: false
     } as LoggingSettingsType
   }
-  // Issue #156 Fix: Use Record<string, any> type assertion for dynamic property assignment
-  const loggingSettings = settings.value.logging as Record<string, any>
+  // Issue #156 Fix: Use Record<string, unknown> type assertion for dynamic property assignment
+  const loggingSettings = settings.value.logging as Record<string, unknown>
   loggingSettings[key] = value
   markAsChanged()
 }
 
-const updateDeveloperSetting = (key: string, value: any) => {
+const updateDeveloperSetting = (key: string, value: unknown) => {
   if (!settings.value.developer) {
     settings.value.developer = {
       enabled: false,
@@ -308,11 +308,11 @@ const updateDeveloperSetting = (key: string, value: any) => {
       }
     } as DeveloperSettingsType
   }
-  (settings.value.developer as DeveloperSettingsType)[key as keyof DeveloperSettingsType] = value
+  (settings.value.developer as unknown as Record<string, unknown>)[key] = value
   markAsChanged()
 }
 
-const updateRUMSetting = (key: string, value: any) => {
+const updateRUMSetting = (key: string, value: unknown) => {
   if (!settings.value.developer) {
     settings.value.developer = {
       enabled: false,
@@ -341,12 +341,12 @@ const updateRUMSetting = (key: string, value: any) => {
       max_events_per_session: 1000
     }
   }
-  (settings.value.developer.rum as any)[key] = value
+  (settings.value.developer.rum as Record<string, unknown>)[key] = value
   markAsChanged()
 }
 
-const updateCacheConfig = (key: string, value: any) => {
-  (cacheConfig as any)[key] = value
+const updateCacheConfig = (key: string, value: unknown) => {
+  (cacheConfig as Record<string, unknown>)[key] = value
   markAsChanged()
 }
 
