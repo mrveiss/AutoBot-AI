@@ -434,10 +434,20 @@ def _make_mock_proc(lines: list[str]) -> MagicMock:
 
 def test_protected_env_keys_block_credential_override():
     """task.env_vars must NOT override ANTHROPIC_API_KEY / loader / PATH vars."""
-    from services.execution.claude_code_backend import _PROTECTED_ENV_KEYS
+    from services.execution.env_sanitizer import is_protected_env_key
 
-    for key in ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "PATH", "LD_PRELOAD", "PYTHONPATH"):
-        assert key in _PROTECTED_ENV_KEYS
+    for key in (
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_BASE_URL",
+        "PATH",
+        "LD_PRELOAD",
+        "PYTHONPATH",
+        "NODE_OPTIONS",
+        "BASH_ENV",
+        "GIT_SSH_COMMAND",
+        "DYLD_INSERT_LIBRARIES",
+    ):
+        assert is_protected_env_key(key)
 
 
 def test_prompt_cannot_inject_a_flag():
