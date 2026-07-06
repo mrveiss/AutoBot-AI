@@ -80,6 +80,37 @@ describe('SystemHealthView.vue', () => {
     expect(jinaSpan?.classes()).toContain('bg-red-100')
   })
 
+  it('renders Degraded badge when probe returns degraded status', async () => {
+    mockGetHealth.mockResolvedValue({
+      status: 'degraded',
+      detail: 'partial outage',
+      sources: { web: ['ddgs'] },
+      live: {},
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Degraded')
+    expect(wrapper.text()).toContain('partial outage')
+    expect(wrapper.text()).toContain('web')
+  })
+
+  it('renders Down badge when probe returns down status', async () => {
+    mockGetHealth.mockResolvedValue({
+      status: 'down',
+      detail: 'all backends unreachable',
+      sources: { web: ['ddgs'] },
+      live: {},
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Down')
+    expect(wrapper.text()).toContain('all backends unreachable')
+  })
+
   it('renders unavailable / empty state when no sources are returned', async () => {
     mockGetHealth.mockResolvedValue({
       status: 'unavailable',

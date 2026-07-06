@@ -27,16 +27,30 @@ interface ContentReachHealth {
 }
 
 // ---------------------------------------------------------------------------
+// Runtime-narrowing helper (Fix 2 — no unchecked casts)
+// ---------------------------------------------------------------------------
+
+function toSourceMap(v: unknown): Record<string, string[]> {
+  if (!v || typeof v !== 'object') return {}
+  const out: Record<string, string[]> = {}
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    if (Array.isArray(val)) out[k] = val.filter((x): x is string => typeof x === 'string')
+  }
+  return out
+}
+
+// ---------------------------------------------------------------------------
 // Composable wiring
 // ---------------------------------------------------------------------------
 
 const getHealth = useProbeBackedHealth<ContentReachHealth>({
   probeName: PROBE_NAMES.CONTENT_REACH,
+  renderNonOkFromProbe: true,
   buildHealthy: (probe, data) => ({
     status: probe.status ?? 'unavailable',
     detail: probe.detail,
-    sources: (data.sources as Record<string, string[]>) ?? {},
-    live: (data.live as Record<string, string[]>) ?? {},
+    sources: toSourceMap(data.sources),
+    live: toSourceMap(data.live),
   }),
   buildUnavailable: (message) => ({
     status: 'unavailable',
