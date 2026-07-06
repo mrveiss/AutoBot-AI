@@ -10,7 +10,7 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, get_args
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -28,6 +28,11 @@ from services.llm_service import get_llm_service
 
 logger = get_logger(__name__)
 
+# Prompt fragments derived from the TemporalType/EventType Literals (#11017) so the
+# prompt can never drift from the type (validation already uses ``__args__``).
+_TEMPORAL_TYPES_STR = ", ".join(get_args(TemporalType))
+_EVENT_TYPES_STR = ", ".join(get_args(EventType))
+
 
 EVENT_EXTRACTION_PROMPT = """Extract temporal events from the text.
 
@@ -35,8 +40,8 @@ For each event:
 - name: Event title
 - description: Brief description
 - temporal_expression: Time phrase (e.g., "yesterday", "2024-01-15")
-- temporal_type: point, range, relative, recurring
-- event_type: action, decision, change, milestone, occurrence
+- temporal_type: One of %%TEMPORAL_TYPES%%
+- event_type: One of %%EVENT_TYPES%%
 - participants: Entity names involved
 - location: Where it happened (if mentioned)
 - confidence: 0.0-1.0
@@ -45,7 +50,7 @@ Return JSON: [{{"name": "...", "description": "...", ...}}, ...]
 
 Text:
 {text}
-"""
+""".replace("%%TEMPORAL_TYPES%%", _TEMPORAL_TYPES_STR).replace("%%EVENT_TYPES%%", _EVENT_TYPES_STR)
 
 EVENT_EXTRACTION_BATCH_PROMPT = """Extract temporal events from each of the following text chunks.
 
@@ -53,8 +58,8 @@ Each chunk is labeled "Chunk N:". For each event provide:
 - name: Event title
 - description: Brief description
 - temporal_expression: Time phrase (e.g., "yesterday", "2024-01-15")
-- temporal_type: point, range, relative, recurring
-- event_type: action, decision, change, milestone, occurrence
+- temporal_type: One of %%TEMPORAL_TYPES%%
+- event_type: One of %%EVENT_TYPES%%
 - participants: Entity names involved
 - location: Where it happened (if mentioned)
 - confidence: 0.0-1.0
@@ -70,7 +75,7 @@ Example for two chunks:
 
 Chunks:
 {chunks}
-"""
+""".replace("%%TEMPORAL_TYPES%%", _TEMPORAL_TYPES_STR).replace("%%EVENT_TYPES%%", _EVENT_TYPES_STR)
 
 
 @TaskRegistry.register_cognifier("extract_events")
