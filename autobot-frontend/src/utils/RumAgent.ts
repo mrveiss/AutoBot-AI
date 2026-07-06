@@ -143,6 +143,12 @@ class RumAgent {
     timeoutThreshold: number
   }
   private rumEventEndpoint: string
+  // #10956: circuit breaker so a failing telemetry endpoint can't be retried
+  // in a tight loop (backend restart → 502 per event → console flood).
+  private rumEventFailures = 0
+  private rumEventCircuitOpenUntil = 0
+  private static readonly RUM_EVENT_FAILURE_THRESHOLD = 5
+  private static readonly RUM_EVENT_CIRCUIT_COOLDOWN_MS = 60000
   // Issue #476: Prometheus metrics export configuration
   private prometheusEnabled: boolean
   private prometheusEndpoint: string
@@ -660,6 +666,10 @@ class RumAgent {
   // #10938: Post a structured RumEvent to /api/rum/event so rum.log captures it.
   // errorData fields go into the nested `data` field the backend formatter expects.
   private sendRumEvent(type: string, errorData: Record<string, any>): void {
+    // #10956: if the endpoint has failed repeatedly (e.g. backend restarting →
+    // 502), stop sending for a cooldown so telemetry can't flood the console.
+    if (Date.now() < this.rumEventCircuitOpenUntil) return
+
     const payload = {
       type,
       timestamp: new Date().toISOString(),
@@ -673,9 +683,28 @@ class RumAgent {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       keepalive: true
-    }).catch(() => {
-      // Silently ignore — never disrupt the user experience for telemetry
     })
+      .then((res) => {
+        // A 502/5xx is a resolved response, not a rejection — count it so the
+        // breaker opens during backend outages.
+        if (res.ok) {
+          this.rumEventFailures = 0
+        } else {
+          this.recordRumEventFailure()
+        }
+      })
+      .catch(() => {
+        // Network-layer rejection (backend unreachable) — also a failure.
+        this.recordRumEventFailure()
+      })
+  }
+
+  private recordRumEventFailure(): void {
+    this.rumEventFailures += 1
+    if (this.rumEventFailures >= RumAgent.RUM_EVENT_FAILURE_THRESHOLD) {
+      this.rumEventCircuitOpenUntil = Date.now() + RumAgent.RUM_EVENT_CIRCUIT_COOLDOWN_MS
+      this.rumEventFailures = 0
+    }
   }
 
   // Issue #476: Enable/disable Prometheus reporting
