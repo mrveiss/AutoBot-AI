@@ -668,7 +668,7 @@ const estimatedResponseTime = ref<number | null>(null)
 
 // Issue #249: Citation display state
 const citationExpansion = useExpansion<string>()
-const expandedCitations = citationExpansion.expanded
+const _expandedCitations = citationExpansion.expanded
 
 // CRITICAL FIX: Prevent EmptyState from flashing during polling/reactivity updates
 // Once messages have been loaded, never show EmptyState again (prevents flicker)
@@ -731,7 +731,7 @@ const {
   totalSize,
   measureElement,
   scrollToBottom,
-  isStuckToBottom,
+  isStuckToBottom: _isStuckToBottom,
 } = useVirtualChatScroll({
   messagesContainerRef: messagesContainer,
   filteredMessages,
@@ -927,7 +927,7 @@ const formatMessageContent = (content: string, messageId?: string): string => {
   return result
 }
 
-const getStatusText = (status: string): string => {
+const _getStatusText = (status: string): string => {
   const statusMap: Record<string, string> = {
     sending: t('chat.messages.statusSending'),
     sent: t('chat.messages.statusSent'),
@@ -992,24 +992,24 @@ const hasCodeBlocks = (content: string): boolean => {
 }
 
 // Issue #249: Citation helper functions
-const toggleCitations = (messageId: string) => {
+const _toggleCitations = (messageId: string) => {
   citationExpansion.toggle(messageId)
 }
 
-const truncateCitation = (content: string, maxLength: number = 200): string => {
+const _truncateCitation = (content: string, maxLength: number = 200): string => {
   if (!content) return ''
   if (content.length <= maxLength) return content
   return content.substring(0, maxLength).trim() + '...'
 }
 
-const getScoreClass = (score: number): string => {
+const _getScoreClass = (score: number): string => {
   if (score >= 0.9) return 'score-excellent'
   if (score >= 0.8) return 'score-good'
   if (score >= 0.7) return 'score-acceptable'
   return 'score-low'
 }
 
-const formatSourcePath = (sourcePath: string): string => {
+const _formatSourcePath = (sourcePath: string): string => {
   if (!sourcePath) return 'Unknown'
   // Extract filename from path
   const parts = sourcePath.split('/')
@@ -1042,7 +1042,7 @@ const copyMessage = async (message: ChatMessage) => {
   try {
     await navigator.clipboard.writeText(message.content)
     // Could show a toast notification here
-  } catch (error) {
+  } catch {
     // Fallback for older browsers
     const textArea = document.createElement('textarea')
     textArea.value = message.content
@@ -1095,7 +1095,7 @@ const retryMessage = async (messageId: string) => {
 }
 
 // TOOL_CALL Detection
-const detectToolCalls = (message: ChatMessage) => {
+const _detectToolCalls = (message: ChatMessage) => {
   const toolCallRegex = /<TOOL_CALL\s+name="execute_command"\s+params='({.*?})'>(.*?)<\/TOOL_CALL>/gs
   const matches = [...message.content.matchAll(toolCallRegex)]
 

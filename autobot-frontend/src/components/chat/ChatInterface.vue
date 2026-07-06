@@ -289,13 +289,10 @@ import { useOverseerAgent } from '@/composables/useOverseerAgent'
 // GH#9062: migrated from useGlobalWebSocket — context events flow through
 // LiveEventManager (global channel), so useEventBus is the correct subscriber
 import { useEventBus } from '@/composables/useEventBus'
-import ApiClient from '@/utils/ApiClient'
 import batchApiService from '@/services/BatchApiService'
 // MIGRATED: Using AppConfig.js for better configuration management
 import appConfig from '@/config/AppConfig.js'
 import { getApiBase } from '@/config/ssot-config'
-// FIXED: Import NetworkConstants for IP fallback values
-import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('ChatInterface')
@@ -380,7 +377,7 @@ const contextWindowProps = computed(() => ({
 }))
 
 // GH#9043: context overflow protection — auto-summarize when approaching limit
-const { isProtectionActive, isSummarizing } = useContextOverflowProtection({
+const { isProtectionActive: _isProtectionActive, isSummarizing } = useContextOverflowProtection({
   sessionId: computed(() => store.currentSessionId),
   messages: computed(() => store.currentSession?.messages ?? []),
   modelName: computed(() => store.settings.model),
@@ -420,7 +417,7 @@ const _stopCountdown = (): void => {
   }
 }
 
-const _startCountdown = (timeoutSeconds: number, deadlineTs?: number): void => {
+const _startCountdown = (timeoutSeconds: number, _deadlineTs?: number): void => {
   _stopCountdown()
   toolApprovalSecondsLeft.value = timeoutSeconds
   _countdownInterval = setInterval(() => {
@@ -481,7 +478,7 @@ const onToolDenied = async (comment?: string): Promise<void> => {
 // Voice output (#928)
 const {
   voiceOutputEnabled, isSpeaking, toggleVoiceOutput,
-  speak, speakStreaming, flushStreaming,
+  speak: _speak, speakStreaming, flushStreaming,
 } = useVoiceOutput()
 
 // Voice conversation (#1029)
@@ -785,7 +782,7 @@ const handleTabChange = (tabKey: string) => {
 }
 
 // Terminal tab handler for explicit new tab opening (not used for tab clicks)
-const openTerminalInNewTab = () => {
+const _openTerminalInNewTab = () => {
   // Open terminal in a new browser tab by navigating to tools/terminal
   window.open('/tools/terminal', '_blank')
 }
@@ -945,7 +942,7 @@ const onCommandCommented = async (commentData: { command: string; comment: strin
         throw new Error(`Server returned ${response.status}`)
       }
 
-      const result = await response.json()
+      await response.json()
 
       logger.debug('Command denied with user feedback/alternative approach')
       notify(t('chat.interface.feedbackSent'), 'success')
@@ -1273,7 +1270,7 @@ watch(
     }
     return null
   },
-  (current, previous) => {
+  (current, _previous) => {
     if (!voiceOutputEnabled.value || voiceConversation.isActive.value) return
     if (!current) return
 

@@ -205,10 +205,9 @@ import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { useKnowledgeCategories } from '@/composables/knowledge/useKnowledgeCategories'
 import { useMachineKnowledge } from '@/composables/knowledge/useMachineKnowledge'
 import { useManPages } from '@/composables/knowledge/useManPages'
-import { formatDate, formatFileSize, formatCategoryName } from '@/utils/formatHelpers'
+import { formatCategoryName } from '@/utils/formatHelpers'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
 import { useLoadingState } from '@/composables/useLoadingState'
-import { usePagination } from '@/composables/usePagination'
 import { useDebounce } from '@/composables/useTimeout'
 import TreeNodeComponent, { type TreeNode } from './TreeNodeComponent.vue'
 import VectorizationProgressModal from './VectorizationProgressModal.vue'
@@ -223,7 +222,7 @@ const logger = createLogger('KnowledgeBrowser')
 
 // Domain composables (migrated from useKnowledgeBase BC shim in #5193)
 const { getCategoryIcon, getFileIcon: getFileIconUtil } = useKnowledgeIcons()
-const { getCategorizedFacts, buildCategoryFilterOptions } = useKnowledgeCategories()
+const { getCategorizedFacts: _getCategorizedFacts, buildCategoryFilterOptions: _buildCategoryFilterOptions } = useKnowledgeCategories()
 const { refreshSystemKnowledge } = useMachineKnowledge()
 const { populateAutoBotDocs } = useManPages()
 
@@ -709,7 +708,7 @@ const loadKnowledgeTreeFn = async () => {
   }
 }
 
-const loadUserKnowledge = async () => {
+const _loadUserKnowledge = async () => {
   // Reset pagination and load first page
   resetPagination()
   await loadMore()
@@ -948,7 +947,7 @@ const handlePopulate = async (categoryId: string) => {
   }
 }
 
-const handleImport = () => {
+const _handleImport = () => {
   router.push('/knowledge/upload')
 }
 
@@ -1077,7 +1076,7 @@ const clearSearch = () => {
 }
 
 // Utility functions (now using composable)
-const getFileIcon = (node: TreeNode): string => {
+const _getFileIcon = (node: TreeNode): string => {
   if (node.type === 'folder') {
     return nodeExpansion.isExpanded(node.id) ? 'folder-open' : 'folder'
   }
