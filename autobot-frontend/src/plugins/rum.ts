@@ -4,7 +4,7 @@
  * Vue RUM Plugin - Integrates RUM agent with Vue application
  */
 
-import type { App } from 'vue'
+import type { App, ComponentPublicInstance } from 'vue'
 import type { Router } from 'vue-router'
 import rumAgent from '../utils/RumAgent'
 import { createLogger } from '@/utils/debugUtils'
@@ -15,17 +15,27 @@ interface RumPluginOptions {
   router?: Router
 }
 
+// Minimal structural view of a component instance as this plugin uses it:
+// the merged options carry an optional `name`, and the performance-tracking
+// mixin stashes mount/update start timestamps directly on the instance.
+type RumComponentInstance = ComponentPublicInstance & {
+  $options: { name?: string }
+  _rumMountStart?: number
+  _rumUpdateStart?: number
+}
+
 export default {
   install(app: App, options: RumPluginOptions = {}) {
     // Configure Vue error handler
     app.config.errorHandler = (error, instance, info) => {
       // Track Vue errors with RUM
       const err = error as Error
+      const vm = instance as RumComponentInstance | null
       rumAgent.trackError('vue_error', {
         message: err.message,
         stack: err.stack,
         componentInfo: info,
-        component: (instance as any)?.$options?.name || 'unknown'
+        component: vm?.$options?.name || 'unknown'
       })
 
       // Also log for development
@@ -40,33 +50,33 @@ export default {
 
     // Add performance tracking mixin
     app.mixin({
-      beforeMount() {
-        if ((this as any).$options.name) {
-          (this as any)._rumMountStart = performance.now()
+      beforeMount(this: RumComponentInstance) {
+        if (this.$options.name) {
+          this._rumMountStart = performance.now()
         }
       },
-      mounted() {
-        if ((this as any).$options.name && (this as any)._rumMountStart) {
-          const mountTime = performance.now() - (this as any)._rumMountStart
+      mounted(this: RumComponentInstance) {
+        if (this.$options.name && this._rumMountStart) {
+          const mountTime = performance.now() - this._rumMountStart
           if (mountTime > 100) { // Only track slow mounts
             rumAgent.logMetric('component_mount', {
-              component: (this as any).$options.name,
+              component: this.$options.name,
               duration: mountTime
             })
           }
         }
       },
-      beforeUpdate() {
-        if ((this as any).$options.name) {
-          (this as any)._rumUpdateStart = performance.now()
+      beforeUpdate(this: RumComponentInstance) {
+        if (this.$options.name) {
+          this._rumUpdateStart = performance.now()
         }
       },
-      updated() {
-        if ((this as any).$options.name && (this as any)._rumUpdateStart) {
-          const updateTime = performance.now() - (this as any)._rumUpdateStart
+      updated(this: RumComponentInstance) {
+        if (this.$options.name && this._rumUpdateStart) {
+          const updateTime = performance.now() - this._rumUpdateStart
           if (updateTime > 50) { // Only track slow updates
             rumAgent.logMetric('component_update', {
-              component: (this as any).$options.name,
+              component: this.$options.name,
               duration: updateTime
             })
           }
