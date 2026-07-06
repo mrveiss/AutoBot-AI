@@ -149,7 +149,9 @@ class TestInlineJudgeNode:
 
     @pytest.mark.asyncio
     async def test_judge_count_cap_prevents_second_regen(self) -> None:
-        """(d) judge_count already 1 → node is a no-op (cap enforcement)."""
+        """(d) judge_count already 1 → cap enforced: no re-score, and the loop is
+        broken by advancing the count + clearing the hint so route_after_judge
+        routes to persist instead of regenerating forever (#11013)."""
         graph_mod = _load_graph()
 
         mock_ssot = MagicMock()
@@ -158,7 +160,7 @@ class TestInlineJudgeNode:
         with patch.object(graph_mod, "_ssot_config", mock_ssot):
             result = await graph_mod.inline_judge_response(_make_state(judge_count=1), _make_config())
 
-        assert result == {}
+        assert result == {"judge_count": 2, "rlm_refinement_hint": ""}
 
     @pytest.mark.asyncio
     async def test_judge_exception_is_nonfatal(self) -> None:
@@ -338,3 +340,27 @@ class TestStructuredOutputInExtractClaims:
         assert (
             call_kwargs.get("structured_output") is True
         ), "_extract_claims must pass structured_output=True to prevent silent JSON drops"
+
+
+class TestRouteAfterJudge:
+    """route_after_judge must never loop indefinitely (#11013)."""
+
+    def test_routes_to_generate_for_exactly_one_regen(self) -> None:
+        graph_mod = _load_graph()
+        state = _make_state(judge_count=1)
+        state["rlm_refinement_hint"] = "revise please"
+        assert graph_mod.route_after_judge(state) == "generate_response"
+
+    def test_persists_once_hint_cleared_by_cap(self) -> None:
+        """After the cap clears the hint (judge_count advanced to 2, hint=''), the
+        router must go to persist — not loop back to generate_response (#11013)."""
+        graph_mod = _load_graph()
+        state = _make_state(judge_count=2)
+        state["rlm_refinement_hint"] = ""
+        assert graph_mod.route_after_judge(state) == "persist_conversation"
+
+    def test_persists_when_no_hint(self) -> None:
+        graph_mod = _load_graph()
+        state = _make_state(judge_count=0)
+        state["rlm_refinement_hint"] = ""
+        assert graph_mod.route_after_judge(state) == "persist_conversation"

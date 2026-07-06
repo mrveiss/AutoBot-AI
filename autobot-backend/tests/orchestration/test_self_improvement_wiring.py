@@ -13,12 +13,18 @@ Verifies that _record_outcome_for_learning:
 
 from __future__ import annotations
 
+import asyncio
 import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from orchestration.workflow_runner import WorkflowRunner
+
+
+def _fake_self() -> types.SimpleNamespace:
+    """Minimal stand-in for the WorkflowRunner instance the method needs (#11014)."""
+    return types.SimpleNamespace(_learning_semaphore=asyncio.Semaphore(1))
 
 
 def _make_plan(goal: str = "test goal", strategy: str = "sequential") -> types.SimpleNamespace:
@@ -56,7 +62,7 @@ class TestRecordOutcomeForLearning:
                 return_value=(0, mock_learner),
             ),
         ):
-            await WorkflowRunner._record_outcome_for_learning(object(), plan, _make_result())
+            await WorkflowRunner._record_outcome_for_learning(_fake_self(), plan, _make_result())
 
         mock_judge.evaluate_task_outcome.assert_called_once()
         call_kwargs = mock_judge.evaluate_task_outcome.call_args
@@ -95,7 +101,7 @@ class TestRecordOutcomeForLearning:
                 return_value=(MIN_OUTCOMES_TO_LEARN, mock_learner_inst),
             ),
         ):
-            await WorkflowRunner._record_outcome_for_learning(object(), plan, _make_result())
+            await WorkflowRunner._record_outcome_for_learning(_fake_self(), plan, _make_result())
 
         mock_learner_inst.learn_from_outcomes.assert_called_once()
         _, outcomes_arg = mock_learner_inst.learn_from_outcomes.call_args.args
@@ -133,7 +139,7 @@ class TestRecordOutcomeForLearning:
                 return_value=(MIN_OUTCOMES_TO_LEARN, mock_learner_inst),
             ),
         ):
-            await WorkflowRunner._record_outcome_for_learning(object(), plan, _make_result())
+            await WorkflowRunner._record_outcome_for_learning(_fake_self(), plan, _make_result())
 
         mock_learner_inst.learn_from_outcomes.assert_not_called()
 
@@ -147,7 +153,7 @@ class TestRecordOutcomeForLearning:
             side_effect=RuntimeError("redis down"),
         ):
             # Must not raise
-            await WorkflowRunner._record_outcome_for_learning(object(), plan, _make_result())
+            await WorkflowRunner._record_outcome_for_learning(_fake_self(), plan, _make_result())
 
     @pytest.mark.asyncio
     async def test_flag_off_skips_task_creation(self, monkeypatch):
@@ -181,3 +187,31 @@ class TestRecordOutcomeForLearning:
             await WorkflowRunner._handle_workflow_execution_success(runner, plan, {}, time.time())
 
         assert created_tasks == [], "create_task should not be called when flag is off"
+
+
+class TestOutcomeToDict:
+    """_outcome_to_dict must coerce any outcome shape so learning never silently
+    aborts on a bare o.__dict__ AttributeError (#11014)."""
+
+    def test_plain_dict_passthrough(self):
+        from orchestration.workflow_runner import _outcome_to_dict
+
+        assert _outcome_to_dict({"score": 0.9}) == {"score": 0.9}
+
+    def test_object_with_dict(self):
+        from orchestration.workflow_runner import _outcome_to_dict
+
+        o = types.SimpleNamespace(score=0.8, task_type="t")
+        assert _outcome_to_dict(o) == {"score": 0.8, "task_type": "t"}
+
+    def test_slots_object(self):
+        from orchestration.workflow_runner import _outcome_to_dict
+
+        class Slotted:
+            __slots__ = ("score", "task_type")
+
+            def __init__(self):
+                self.score = 0.7
+                self.task_type = "s"
+
+        assert _outcome_to_dict(Slotted()) == {"score": 0.7, "task_type": "s"}

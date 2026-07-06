@@ -19,12 +19,17 @@ Moved from enhanced_orchestration.workflow_runner to orchestration.workflow_runn
 """
 
 import asyncio
+import os
 import time
 from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import SELF_IMPROVEMENT_ENABLED
 from events.bus import PersistStrategy, publish_event
+
+# Max concurrent background self-improvement (judge-LLM) tasks — bounds the
+# fan-out so a burst of workflow completions can't saturate the LLM tier (#11014).
+_LEARNING_MAX_CONCURRENCY = int(os.environ.get("AUTOBOT_SELF_IMPROVEMENT_MAX_CONCURRENCY", "2"))
 
 # Lazy-import helpers — exposed at module level so tests can patch them.
 
@@ -33,6 +38,22 @@ def _get_task_outcome_judge():
     from judges.task_outcome_judge import TaskOutcomeJudge  # noqa: PLC0415
 
     return TaskOutcomeJudge()
+
+
+def _outcome_to_dict(outcome: Any) -> Dict[str, Any]:
+    """Coerce a judge outcome to a plain dict regardless of its shape (#11014).
+
+    ``get_outcomes`` may return dataclasses, ``__slots__`` objects, or already-dicts;
+    a bare ``o.__dict__`` raises ``AttributeError`` on the latter two and silently
+    aborts learning.
+    """
+    if isinstance(outcome, dict):
+        return outcome
+    data = getattr(outcome, "__dict__", None)
+    if data is not None:
+        return dict(data)
+    slots = getattr(outcome, "__slots__", ())
+    return {s: getattr(outcome, s) for s in slots if hasattr(outcome, s)}
 
 
 def _get_task_pattern_learner():
@@ -80,6 +101,12 @@ class WorkflowRunner:
         self.resource_semaphore: asyncio.Semaphore = asyncio.Semaphore(max_parallel_tasks)
         self._criteria_evaluator = criteria_evaluator or SuccessCriteriaEvaluator()
         self._strategy_handler: ExecutionStrategyHandler | None = None
+        # #11014: strong refs for fire-and-forget self-improvement tasks so the
+        # event loop can't GC them mid-flight (asyncio keeps only a weak ref),
+        # plus a cap so a burst of completions can't fan out unbounded judge-LLM
+        # calls and saturate the provider tier / connection pool.
+        self._bg_tasks: set[asyncio.Task] = set()
+        self._learning_semaphore: asyncio.Semaphore = asyncio.Semaphore(_LEARNING_MAX_CONCURRENCY)
         # #7431 ADR-006 §Q1: subscriber that wakes blocked plans when
         # skill_promoted events arrive on Redis pub-sub. Lazy-constructed
         # via get_blocked_plan_resumer(); not started automatically — the
@@ -299,10 +326,13 @@ class WorkflowRunner:
         # #10602: self-improvement write path — persist outcome then trigger learning.
         # Fire-and-forget; never breaks workflow return.
         if SELF_IMPROVEMENT_ENABLED:
-            asyncio.create_task(
+            task = asyncio.create_task(
                 self._record_outcome_for_learning(plan, response),
                 name=f"self-improve-{plan.plan_id}",
             )
+            # Hold a strong ref until done so the loop can't GC it mid-flight (#11014).
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
         return response
 
     async def _capture_trajectory(self, plan: WorkflowPlan, result: Dict[str, Any]) -> None:
@@ -352,29 +382,32 @@ class WorkflowRunner:
         2. When MIN_OUTCOMES_TO_LEARN is reached, TaskPatternLearner extracts and stores the
            best strategy so AgentRouter._check_learned_strategy can use it on the next request.
 
+        NOTE: this issues ONE TaskOutcomeJudge LLM call per completed workflow
+        while enabled — bounded by ``self._learning_semaphore`` (#11014).
         Fire-and-forget — all errors logged but never propagated.
         """
         try:
-            task_type = getattr(plan, "task_type", None) or plan.strategy.value
-            output_summary = str(result.get("results", ""))[:500]
-            judge = _get_task_outcome_judge()
-            await judge.evaluate_task_outcome(
-                task_type=task_type,
-                goal=plan.goal,
-                output=output_summary,
-                strategy_used=plan.strategy.value,
-            )
-
-            # Trigger learning when enough outcomes have accumulated.
-            min_outcomes, learner = _get_task_pattern_learner()
-            outcomes = await judge.get_outcomes(task_type, limit=min_outcomes + 1)
-            if len(outcomes) >= min_outcomes:
-                await learner.learn_from_outcomes(task_type, [o.__dict__ for o in outcomes])
-                logger.info(
-                    "Self-improvement: learned from %d outcomes for task_type='%s'",
-                    len(outcomes),
-                    task_type,
+            async with self._learning_semaphore:
+                task_type = getattr(plan, "task_type", None) or plan.strategy.value
+                output_summary = str(result.get("results", ""))[:500]
+                judge = _get_task_outcome_judge()
+                await judge.evaluate_task_outcome(
+                    task_type=task_type,
+                    goal=plan.goal,
+                    output=output_summary,
+                    strategy_used=plan.strategy.value,
                 )
+
+                # Trigger learning when enough outcomes have accumulated.
+                min_outcomes, learner = _get_task_pattern_learner()
+                outcomes = await judge.get_outcomes(task_type, limit=min_outcomes + 1)
+                if len(outcomes) >= min_outcomes:
+                    await learner.learn_from_outcomes(task_type, [_outcome_to_dict(o) for o in outcomes])
+                    logger.info(
+                        "Self-improvement: learned from %d outcomes for task_type='%s'",
+                        len(outcomes),
+                        task_type,
+                    )
         except Exception as exc:
             logger.debug("Self-improvement recording skipped (non-fatal): %s", exc)
 
