@@ -81,6 +81,34 @@ INSTRUCTION_MODEL = "mistral:7b-instruct"  # RAG, entity extraction, instruction
 SYSTEM_MODEL = "dolphin-llama3:8b"  # System commands, security (uncensored)
 QUALITY_MODEL = DEFAULT_LLM_MODEL  # User-facing chat, research, code analysis
 
+# Best-of-N plan selection (#10583)
+# AUTOBOT_PLAN_BEST_OF_N_ENABLED=true  → opt-in path (default: off)
+# AUTOBOT_PLAN_BEST_OF_N_COUNT=3       → number of candidate plans (default: 3, max: 5)
+PLAN_BEST_OF_N_ENABLED: bool = os.environ.get("AUTOBOT_PLAN_BEST_OF_N_ENABLED", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+PLAN_BEST_OF_N_COUNT: int = min(
+    5,
+    max(2, int(os.environ.get("AUTOBOT_PLAN_BEST_OF_N_COUNT", "3"))),
+)
+
+# #10602: ClaimVerifier wiring — adds KB RAG + optional research-agent LLM call per claim.
+# Default OFF because it adds latency/cost; set AUTOBOT_CLAIM_VERIFICATION_ENABLED=true to opt in.
+_TRUE_VALUES = {"1", "true", "yes"}
+CLAIM_VERIFICATION_ENABLED: bool = os.environ.get("AUTOBOT_CLAIM_VERIFICATION_ENABLED", "false").lower() in _TRUE_VALUES
+
+# #10602: Self-improvement write path — pure plumbing, no extra LLM calls until outcomes exist.
+# Default ON.  Set AUTOBOT_SELF_IMPROVEMENT_ENABLED=false to disable.
+SELF_IMPROVEMENT_ENABLED: bool = os.environ.get("AUTOBOT_SELF_IMPROVEMENT_ENABLED", "true").lower() in _TRUE_VALUES
+
+# #10602: Subagent reflection pass — adds LLM score + optional revision per task.
+# Default OFF; set AUTOBOT_SUBAGENT_REFLECTION_ENABLED=true to opt in.
+SUBAGENT_REFLECTION_ENABLED: bool = (
+    os.environ.get("AUTOBOT_SUBAGENT_REFLECTION_ENABLED", "false").lower() in _TRUE_VALUES
+)
+
 
 class VMConfig(BaseSettings):
     """
@@ -210,6 +238,22 @@ class LLMConfig(BaseSettings):
             "AUTOBOT_CHAT_GROUNDING",
         ),
     )
+    # Inline AgentResponseJudge on chat replies (#10599, §3.3).
+    # OFF by default — each judge call adds one LLM round-trip.
+    # Enable with AUTOBOT_CHAT_INLINE_JUDGE=true.
+    chat_inline_judge_enabled: bool = Field(default=False, alias="AUTOBOT_CHAT_INLINE_JUDGE")
+    # Minimum judge overall_score to accept a response without one regeneration
+    # attempt.  Only used when chat_inline_judge_enabled=True.
+    chat_inline_judge_threshold: float = Field(default=0.6, alias="AUTOBOT_CHAT_INLINE_JUDGE_THRESHOLD")
+
+    # Knowledge-ingestion cognifier batching (#10598). When True, extraction
+    # cognifiers pack multiple chunks into ONE structured LLM call (index-keyed)
+    # instead of one call per chunk — a pure token/round-trip win, with an
+    # automatic per-chunk fallback that keeps correctness. Default on.
+    cognifier_multichunk_batching: bool = Field(default=True, alias="AUTOBOT_COGNIFIER_MULTICHUNK_BATCHING")
+    # Per-chunk character cap when packing chunks into a batched cognifier prompt,
+    # so one oversized chunk can't blow the context window (0 = no truncation).
+    cognifier_batch_max_chunk_chars: int = Field(default=2000, alias="AUTOBOT_COGNIFIER_BATCH_MAX_CHUNK_CHARS")
 
     # Provider-specific endpoints (each provider can have its own URL)
     ollama_endpoint: str = Field(default="http://127.0.0.1:11434", alias="AUTOBOT_OLLAMA_ENDPOINT")

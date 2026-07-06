@@ -68,13 +68,44 @@ MIGRATIONS_DIR = Path(__file__).resolve().parent
 # chain repair has a designated place to record stamp translations.
 KNOWN_FOREIGN_REVISIONS: dict[str, str] = {}
 
-# Structural markers for revisions whose only effect is a column TYPE change
-# and which are therefore invisible to the created-tables/added-columns
-# probes. Checked only when the table exists: True ⇔ TIMESTAMPTZ.
+# Structural markers for revisions whose TIMESTAMPTZ effect is invisible to the
+# created-tables/added-columns probes — either a column TYPE change, or a
+# TIMESTAMPTZ column added via raw ``op.execute("ALTER TABLE ...")`` (which the
+# literal-arg AST extractor in ``extract_artifacts`` cannot see). Each
+# ``(table, column)`` is verified only when the table exists: the schema looks
+# applied ⇔ that column is TIMESTAMPTZ.
 TIMESTAMPTZ_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
     "20260422_018": (
         ("process_runs", "started_at"),
         ("agent_sessions", "expires_at"),
+    ),
+    # 20260629_063 adds ``updated_at TIMESTAMPTZ`` to Base-drifted tables via
+    # ``op.execute("ALTER TABLE ... ADD COLUMN IF NOT EXISTS updated_at ...")``,
+    # so the AST probe sees nothing. These markers make it observable and give
+    # adoption a real per-table TIMESTAMPTZ check (the migration's ``has_table``
+    # guard is mirrored by the ``table in facts.tables`` guard in applied_status).
+    "20260629_063": (
+        ("agent_connections", "updated_at"),
+        ("agent_task_history", "updated_at"),
+        ("audit_logs", "updated_at"),
+        ("chat_shared_links", "updated_at"),
+        ("completion_feedback", "updated_at"),
+        ("desktop_mobile_devices", "updated_at"),
+        ("heartbeat_run_events", "updated_at"),
+        ("llc_activity_log", "updated_at"),
+        ("llc_agent_api_keys", "updated_at"),
+        ("llc_heartbeat_runs", "updated_at"),
+        ("llc_routine_runs", "updated_at"),
+        ("llc_run_replay_logs", "updated_at"),
+        ("mesh_edges", "updated_at"),
+        ("mesh_evolution_log", "updated_at"),
+        ("mesh_nodes", "updated_at"),
+        ("mesh_nodes_archive", "updated_at"),
+        ("push_subscriptions", "updated_at"),
+        ("role_permissions", "updated_at"),
+        ("task_approval_links", "updated_at"),
+        ("user_voice_bundle", "updated_at"),
+        ("workflow_audit_log", "updated_at"),
     ),
 }
 

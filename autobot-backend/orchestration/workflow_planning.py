@@ -202,6 +202,13 @@ class StrategyPlanner:
                 await self._trigger_async_gap_fill(task, task_desc)
             return
 
+        # #10545: bounded, explainable preference bias. When humans in this
+        # tenant/task-class repeatedly reject/edit this skill, drop the binding
+        # so legacy capability-based routing handles the task instead, and
+        # record why. Best-effort: bias failures leave the binding unchanged.
+        if await self._skill_rejected_by_tenant(skill_name, task, task_data):
+            return
+
         # Action defaults to ``"execute"`` — Phase 2 (WorkflowExecutor
         # consumption) can refine this once the dispatch contract is decided.
         task.skill_name = skill_name
@@ -213,6 +220,47 @@ class StrategyPlanner:
             task.task_id,
             task.skill_resolution_method,
         )
+
+    async def _skill_rejected_by_tenant(
+        self,
+        skill_name: str,
+        task: "AgentTask",
+        task_data: Dict[str, Any],
+    ) -> bool:
+        """True when the tenant's learned preference strongly averts this skill (#10545).
+
+        Reads the feedback aggregator scoped to the plan's org/user/task-class.
+        Only a bias at/above half the bounded cap drops the binding, so a weak
+        signal merely records itself while a strong one changes the choice. The
+        explanation is stored on the task for the trajectory. Best-effort.
+        """
+        ctx = task_data.get("tenant") or {}
+        try:
+            from services.feedback_aggregator import _MAX_BIAS, get_feedback_aggregator
+
+            bias = await get_feedback_aggregator().get_bias(
+                skill_name,
+                task_class=ctx.get("task_class") or task_data.get("task_class", "general"),
+                user_id=ctx.get("user_id"),
+                org_id=ctx.get("org_id"),
+            )
+        except Exception as exc:  # noqa: BLE001 — never break planning on bias lookup
+            logger.debug("skill preference bias lookup failed: %s", exc)
+            return False
+
+        if bias is None:
+            return False
+
+        task.skill_preference_note = bias.explanation
+        if abs(bias.bias) >= _MAX_BIAS / 2:
+            logger.info(
+                "skill '%s' unbound from task %s by tenant preference (%s)",
+                skill_name,
+                task.task_id,
+                bias.explanation,
+            )
+            return True
+        return False
 
     async def _trigger_async_gap_fill(self, task: "AgentTask", intent: str) -> None:
         """Fire Phase 3 gap-fill in background; attach pending_skill_id (#7431).

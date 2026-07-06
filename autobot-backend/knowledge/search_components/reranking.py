@@ -194,6 +194,86 @@ def apply_mmr_reorder(
     return selected
 
 
+def _token_set(text: str) -> set:
+    """Return the lower-cased token set of *text* for Jaccard similarity.
+
+    Issue #10600: MMR redundancy measure for result objects that carry text but
+    no embedding vector (e.g. optimizer SearchResult).  Splitting on whitespace
+    is deterministic and dependency-free.
+    """
+    return set(text.lower().split())
+
+
+def _jaccard_similarity(tokens_a: set, tokens_b: set) -> float:
+    """Return the Jaccard overlap of two token sets (0.0 when either is empty).
+
+    Issue #10600: content-based redundancy proxy used by
+    ``apply_mmr_reorder_by_content`` when no embeddings are available.
+    """
+    if not tokens_a or not tokens_b:
+        return 0.0
+    intersection = len(tokens_a & tokens_b)
+    union = len(tokens_a | tokens_b)
+    return intersection / union if union else 0.0
+
+
+def apply_mmr_reorder_by_content(
+    results: list,
+    mmr_lambda: float,
+    content_getter,
+    score_getter,
+) -> list:
+    """MMR-reorder arbitrary result objects using token-Jaccard redundancy.
+
+    Issue #10600: the advanced RAG optimizer works with SearchResult objects
+    that expose ``content`` and a relevance score but no embedding vector, so
+    ``apply_mmr_reorder`` (embedding-based) degrades to identity for them.  This
+    variant measures redundancy from the result text instead, letting the
+    optimizer suppress near-duplicate chunks when ``mmr_lambda`` is in (0, 1).
+
+    Args:
+        results:        Result objects sorted by relevance (descending).
+        mmr_lambda:     Trade-off in [0, 1].  <=0 or >=1 returns results
+                        unchanged (pure-relevance / no-op, backward-compatible).
+        content_getter: Callable returning each result's text.
+        score_getter:   Callable returning each result's relevance score (0-1).
+
+    Returns:
+        A new list re-ordered for diversity; identical order when the guard
+        conditions above hold.
+    """
+    if not results or mmr_lambda <= 0.0 or mmr_lambda >= 1.0:
+        return results
+
+    remaining = list(results)
+    token_sets = [_token_set(content_getter(r) or "") for r in remaining]
+    selected: list = []
+    selected_tokens: list = []
+
+    while remaining:
+        best_idx = 0
+        best_mmr = float("-inf")
+        for i, candidate in enumerate(remaining):
+            relevance = float(score_getter(candidate) or 0.0)
+            if selected_tokens:
+                max_sim = max(_jaccard_similarity(token_sets[i], sel) for sel in selected_tokens)
+            else:
+                max_sim = 0.0
+            mmr_score = mmr_lambda * relevance - (1.0 - mmr_lambda) * max_sim
+            if mmr_score > best_mmr:
+                best_mmr = mmr_score
+                best_idx = i
+        selected.append(remaining.pop(best_idx))
+        selected_tokens.append(token_sets.pop(best_idx))
+
+    logger.debug(
+        "Content-MMR reorder applied (lambda=%.2f): %d results reordered",
+        mmr_lambda,
+        len(selected),
+    )
+    return selected
+
+
 def compute_blended_score(
     reranker_score: float,
     vector_score: float,
@@ -383,6 +463,7 @@ class ResultReranker:
                 from sentence_transformers import CrossEncoder  # noqa: F401
             except ImportError:
                 logger.warning("CrossEncoder not available, skipping reranking")
+                set_reranking_active(False)  # #10600: surface silent fallback
                 return results
 
             if not results:
@@ -395,6 +476,11 @@ class ResultReranker:
             staleness_map = await self._fetch_staleness_map(results, effective_weights)
 
             cross_encoder = await self._ensure_cross_encoder()
+            if cross_encoder is None:
+                logger.warning("CrossEncoder model unavailable, skipping reranking")
+                set_reranking_active(False)  # #10600: surface silent fallback
+                return results
+            set_reranking_active(True)  # #10600
             pairs = [(query, r.get("content", "")) for r in results]
             scores = await asyncio.to_thread(cross_encoder.predict, pairs)
             self._apply_rerank_scores(results, scores, weights=effective_weights, staleness_map=staleness_map)
@@ -449,9 +535,11 @@ def get_cross_encoder():
                 except ImportError:
                     logger.warning("sentence-transformers not available, CrossEncoder disabled")
                     _cross_encoder_model = None
+                    set_reranking_active(False)  # #10600: surface silent fallback
                 except Exception as exc:
                     logger.error("Failed to load CrossEncoder model: %s", exc)
                     _cross_encoder_model = _LOAD_FAILED
+                    set_reranking_active(False)  # #10600: surface silent fallback
     if _cross_encoder_model is _LOAD_FAILED:
         return None
     return _cross_encoder_model
@@ -475,3 +563,27 @@ def get_reranker() -> ResultReranker:
             if _reranker is None:
                 _reranker = ResultReranker()
     return _reranker
+
+
+# Issue #10600: reranking-active health signal.  set to False whenever a
+# reranker call silently falls back (sentence-transformers absent or model load
+# failed) so operators can detect that retrieval is running without the
+# cross-encoder instead of the failure being swallowed at debug level.
+_reranking_active: bool = True
+
+
+def set_reranking_active(active: bool) -> None:
+    """Record whether cross-encoder reranking is currently active (#10600)."""
+    global _reranking_active
+    if _reranking_active != active:
+        logger.warning(
+            "Reranking active state changed: %s -> %s",
+            _reranking_active,
+            active,
+        )
+    _reranking_active = active
+
+
+def is_reranking_active() -> bool:
+    """Return the last-recorded reranking-active state (#10600)."""
+    return _reranking_active

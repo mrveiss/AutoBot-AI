@@ -15,19 +15,10 @@
  */
 
 import { applyOrgHeader } from '@/utils/orgContext'
+import { readStoredAuthToken } from '@/utils/authToken'
 
 export function getAuthToken(): string | null {
-  try {
-    const stored = localStorage.getItem('autobot_auth')
-    if (!stored) return null
-    const auth: { token?: string } = JSON.parse(stored)
-    if (auth.token && auth.token !== 'single_user_mode') {
-      return auth.token
-    }
-    return null
-  } catch {
-    return null
-  }
+  return readStoredAuthToken()
 }
 
 /**

@@ -20,11 +20,22 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:{{ prometheus_port }}"]
 
-  # SLM Backend metrics
+  # SLM Backend DB-derived metrics (SystemMetrics text exposition)
   - job_name: "slm"
     static_configs:
       - targets: ["localhost:8000"]
     metrics_path: /api/performance/metrics/prometheus
+    scheme: http
+
+  # SLM Backend shared-registry app metrics (#10851 top-level /metrics; #10858)
+  # Exposes autobot_llm_requests_total / autobot_knowledge_search_requests_total
+  # / autobot_api_requests_total for the BI dashboard real-source queries
+  # (#10720/#10778). Unauthenticated per health-probe convention; plain http on
+  # the uvicorn backend port (8000), not the nginx TLS front.
+  - job_name: "slm-backend"
+    static_configs:
+      - targets: ["localhost:8000"]
+    metrics_path: /metrics
     scheme: http
 
   # Node exporters on all managed fleet nodes (auto-populated from inventory)

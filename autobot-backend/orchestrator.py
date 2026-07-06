@@ -629,12 +629,30 @@ class Orchestrator(_DeprecatedRequestMixin):
 
     # ------------------------------------------ workflow planning (canonical path)
 
-    def _build_planning_prompt(self, goal: str) -> str:
+    def _build_planning_prompt(
+        self,
+        goal: str,
+        *,
+        learned_prompt_template: str | None = None,
+        similar_trajectories: List[Any] | None = None,
+    ) -> str:
+        """Render the planning prompt.
+
+        #10580: passes ``learned_prompt_template`` from a high-confidence
+        LearnedStrategy so the planner benefits from proven approaches.
+        #10581: passes ``similar_trajectories`` as few-shot priors so the planner
+        can reuse proven decompositions from past high-reward executions.
+        """
         capabilities_json = json.dumps(
             {agent: [cap.value for cap in caps] for agent, caps in self.agent_capabilities.items()},
             indent=2,
         )
-        return build_planning_prompt(goal, capabilities_json)
+        return build_planning_prompt(
+            goal,
+            capabilities_json,
+            learned_prompt_template=learned_prompt_template,
+            similar_trajectories=similar_trajectories,
+        )
 
     def _parse_planning_response(self, response: Any, goal: str) -> Dict[str, Any]:
         if response.tier_used.value in FALLBACK_TIERS:
@@ -646,19 +664,149 @@ class Orchestrator(_DeprecatedRequestMixin):
             return parse_result.data
         return self._strategy_planner.create_fallback_plan(goal)
 
+    async def _fetch_planning_context(self, goal: str, context: Dict[str, Any] | None) -> Dict[str, Any]:
+        """Gather learned template and similar trajectories for #10580/#10581.
+
+        Non-fatal: always returns a dict (possibly empty) so planning continues
+        even when Redis or ChromaDB is unavailable.
+        """
+        result: Dict[str, Any] = {}
+        ctx = context or {}
+
+        # #10580 — learned prompt template from TaskPatternLearner
+        try:
+            from agents.task_pattern_learner import (
+                LEARNED_STRATEGY_CONFIDENCE,
+                TaskPatternLearner,
+            )
+
+            task_type = ctx.get("task_type", "")
+            if task_type:
+                learner = TaskPatternLearner()
+                task_type = learner.normalize_task_type(task_type)
+                strategy = await learner.get_learned_strategy(task_type)
+                if strategy and strategy.confidence > LEARNED_STRATEGY_CONFIDENCE and strategy.best_prompt_template:
+                    result["learned_prompt_template"] = strategy.best_prompt_template
+                    logger.info(
+                        "used learned prompt template for %s (confidence=%.2f)",
+                        task_type,
+                        strategy.confidence,
+                    )
+        except Exception as exc:
+            logger.debug("Learned prompt template lookup failed (non-fatal): %s", exc)
+
+        # #10581 — similar trajectories from TrajectoryStore
+        try:
+            from memory.trajectory_store import get_trajectory_store
+
+            store = await get_trajectory_store()
+            similar = await store.find_similar_trajectories(goal, top_k=5, min_reward=0.7)
+            if similar:
+                result["similar_trajectories"] = similar
+        except Exception as exc:
+            logger.debug("Similar trajectory lookup failed (non-fatal): %s", exc)
+
+        return result
+
+    async def _generate_single_plan(
+        self,
+        goal: str,
+        context: Dict[str, Any] | None,
+        planning_ctx: Dict[str, Any],
+    ) -> WorkflowPlan:
+        """Generate one candidate plan from the LLM."""
+        from agents.llm_failsafe_agent import get_robust_llm_response
+
+        prompt = self._build_planning_prompt(
+            goal,
+            learned_prompt_template=planning_ctx.get("learned_prompt_template"),
+            similar_trajectories=planning_ctx.get("similar_trajectories"),
+        )
+        response = await get_robust_llm_response(prompt, context)
+        plan_data = self._parse_planning_response(response, goal)
+        return await self._strategy_planner.build_workflow_plan(goal, plan_data)
+
+    async def _score_plan(self, plan: WorkflowPlan, goal: str) -> float:
+        """Score a candidate plan with TaskOutcomeJudge (#10583)."""
+        try:
+            from judges.task_outcome_judge import TaskOutcomeJudge
+
+            judge = TaskOutcomeJudge()
+            result = await judge.evaluate_task_outcome(
+                task_type="planning",
+                goal=goal,
+                output=str(plan.tasks),
+                strategy_used=str(plan.execution_strategy),
+            )
+            return result.overall_score
+        except Exception as exc:
+            logger.debug("Plan scoring failed (non-fatal): %s", exc)
+            return 0.0
+
+    async def _select_best_plan(
+        self,
+        goal: str,
+        context: Dict[str, Any] | None,
+        planning_ctx: Dict[str, Any],
+        n: int,
+    ) -> WorkflowPlan:
+        """Sample N candidate plans, score each, return the top-ranked (#10583).
+
+        Rejected candidates and their scores are recorded in the trajectory
+        context for explainability.  Scoring uses TaskOutcomeJudge directly —
+        no parallel scorer is introduced.
+        """
+        candidates: List[WorkflowPlan] = []
+        for i in range(n):
+            try:
+                plan = await self._generate_single_plan(goal, context, planning_ctx)
+                candidates.append(plan)
+            except Exception as exc:
+                logger.warning("Candidate plan %d/%d generation failed: %s", i + 1, n, exc)
+
+        if not candidates:
+            return self._strategy_planner.create_simple_workflow_plan(goal)
+
+        scored: List[tuple[float, WorkflowPlan]] = []
+        for plan in candidates:
+            score = await self._score_plan(plan, goal)
+            scored.append((score, plan))
+        scored.sort(key=lambda t: t[0], reverse=True)
+
+        best_score, best = scored[0]
+        rejected = [{"plan_id": p.plan_id, "score": s} for s, p in scored[1:]]
+        logger.info(
+            "best-of-%d plan selection: best_plan=%s score=%.3f rejected=%s",
+            n,
+            best.plan_id,
+            best_score,
+            rejected,
+        )
+        # Record rejected candidates on context for trajectory explainability.
+        if context is not None:
+            context.setdefault("plan_selection", {}).update({"best_score": best_score, "rejected_candidates": rejected})
+        return best
+
     async def create_workflow_plan(self, goal: str, context: Dict[str, Any] | None = None) -> WorkflowPlan:
         """Create an intelligent workflow plan for a goal via LLM planning.
 
         Issue #5040: merged from EnhancedMultiAgentOrchestrator.
+        #10580/#10581: injects learned prompt template and similar-trajectory priors.
+        #10583: when AUTOBOT_PLAN_BEST_OF_N_ENABLED=true, samples N candidate plans
+        and executes the top-ranked; flag OFF (default) = exactly one plan, zero
+        extra judge calls, cost/behaviour unchanged.
         """
+        from autobot_shared.ssot_config import PLAN_BEST_OF_N_COUNT, PLAN_BEST_OF_N_ENABLED
+
         logger.info("Creating workflow plan for: %s", goal)
         try:
-            from agents.llm_failsafe_agent import get_robust_llm_response
+            planning_ctx = await self._fetch_planning_context(goal, context)
 
-            planning_prompt = self._build_planning_prompt(goal)
-            response = await get_robust_llm_response(planning_prompt, context)
-            plan_data = self._parse_planning_response(response, goal)
-            plan = await self._strategy_planner.build_workflow_plan(goal, plan_data)
+            if PLAN_BEST_OF_N_ENABLED:
+                plan = await self._select_best_plan(goal, context, planning_ctx, PLAN_BEST_OF_N_COUNT)
+            else:
+                plan = await self._generate_single_plan(goal, context, planning_ctx)
+
             self.active_workflows[plan.plan_id] = plan
             return plan
         except Exception as e:

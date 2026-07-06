@@ -29,6 +29,16 @@ def _make_key(session_id: str, key: str) -> str:
     return _KEY_PREFIX.format(session_id=session_id, key=key)
 
 
+def is_working_memory_key(key: str) -> bool:
+    """True only for keys matching the canonical ``autobot:session:*:memory:*`` shape.
+
+    Used as an allowlist before any privileged Redis op on a caller-supplied
+    key, so an arbitrary key (e.g. another subsystem's) can never be read or
+    deleted through the memory-privacy endpoints.
+    """
+    return isinstance(key, str) and key.startswith("autobot:session:") and ":memory:" in key
+
+
 class WorkingMemoryService(AsyncRedisClientMixin):
     """Session-scoped working memory backed by Redis with TTL support."""
 

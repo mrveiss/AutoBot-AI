@@ -174,6 +174,7 @@ async def _post_token(token_url: str, payload: dict) -> dict:
                 token_url,
                 data=payload,
                 headers={"Accept": "application/json"},
+                allow_redirects=False,
             ) as resp:
                 body = await resp.json(content_type=None)
                 if resp.status >= 400:

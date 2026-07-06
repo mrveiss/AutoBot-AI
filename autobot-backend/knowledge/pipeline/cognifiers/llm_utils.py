@@ -6,15 +6,19 @@
 Shared LLM utilities for ECL pipeline cognifiers.
 
 Issue #1074: Extract duplicated parse/build helpers from cognifiers (ARCH-3/4).
+Issue #10598: Shared multi-chunk batching helper — pack K chunks into one LLM
+call keyed by chunk index, with per-chunk fallback (generalizes #10647).
 """
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Awaitable, Callable, Dict, List, TypeVar
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.pipeline.models.entity import Entity
 
 logger = get_logger(__name__)
+
+_R = TypeVar("_R")
 
 
 def parse_llm_json_response(
@@ -75,3 +79,100 @@ def build_entity_map(
         if include_canonical:
             entity_map[entity.canonical_name] = entity
     return entity_map
+
+
+def build_indexed_chunk_blocks(contents: List[str], max_chars: int) -> str:
+    """Render chunk texts as ``Chunk N:`` blocks for an index-keyed batch prompt.
+
+    Args:
+        contents: Per-chunk text, in order.
+        max_chars: Truncate each chunk to this many characters (0 = no limit).
+
+    Returns:
+        Newline-separated ``Chunk i:\\n<text>`` blocks.
+    """
+    parts = []
+    for i, text in enumerate(contents):
+        body = text[:max_chars] if max_chars and max_chars > 0 else text
+        parts.append(f"Chunk {i}:\n{body}")
+    return "\n\n".join(parts)
+
+
+def parse_indexed_batch_response(content: str, n_chunks: int) -> Dict[int, List[Any]]:
+    """Parse an index-keyed batch response into ``{chunk_index: [raw items]}``.
+
+    Raises ``ValueError`` on a non-object response or one whose keys are disjoint
+    from the chunk indices, so the caller can fall back to per-chunk extraction
+    (mirrors ``FactExtractor._extract_batched`` #10647). A single-object value is
+    coerced to a one-element list; missing/None indices yield an empty list.
+    """
+    parsed = parse_llm_json_response(content)
+    if not isinstance(parsed, dict):
+        raise ValueError("batched response was not a JSON object")
+    if {str(i) for i in range(n_chunks)}.isdisjoint(parsed.keys()):
+        raise ValueError("batched response keys do not match chunk indices")
+    result: Dict[int, List[Any]] = {}
+    for i in range(n_chunks):
+        raw = parsed.get(str(i))
+        if raw is None:
+            result[i] = []
+        elif isinstance(raw, dict):
+            result[i] = [raw]
+        elif isinstance(raw, list):
+            result[i] = raw
+        else:
+            result[i] = []
+    return result
+
+
+async def batched_chunk_extract(
+    chunks: List[Any],
+    *,
+    llm: Any,
+    batch_prompt_template: str,
+    llm_type: str,
+    max_chunk_chars: int,
+    convert: Callable[[List[Any], Any], List[_R]],
+    extract_one: Callable[[Any], Awaitable[List[_R]]],
+    content_of: Callable[[Any], str] = lambda c: c.content,
+) -> List[_R]:
+    """Extract items from many chunks in ONE structured LLM call (#10598).
+
+    Sends all ``chunks`` in a single index-keyed prompt, parses results back per
+    chunk, and calls ``convert(raw_items, chunk)`` to build domain objects while
+    preserving per-chunk mapping and order. On any structural failure (non-object
+    response, disjoint keys, or exception) it falls back to ``extract_one(chunk)``
+    per chunk so correctness never regresses. A single-chunk batch skips batching.
+
+    Args:
+        chunks: The chunk objects to process.
+        llm: LLM service exposing ``async chat(messages, *, llm_type, structured_output)``.
+        batch_prompt_template: Prompt with a ``{chunks}`` placeholder.
+        llm_type: Cheap task tier passed through to the LLM (e.g. ``"extraction"``).
+        max_chunk_chars: Per-chunk truncation for the batched prompt (0 = no limit).
+        convert: ``(raw_items, chunk) -> [domain objects]``.
+        extract_one: Per-chunk async fallback returning domain objects.
+        content_of: Extract the text of a chunk (default ``chunk.content``).
+
+    Returns:
+        Flattened list of extracted items across all chunks, in chunk order.
+    """
+    if not chunks:
+        return []
+    if len(chunks) == 1:
+        return await extract_one(chunks[0])
+    try:
+        blocks = build_indexed_chunk_blocks([content_of(c) for c in chunks], max_chunk_chars)
+        prompt = batch_prompt_template.format(chunks=blocks)
+        response = await llm.chat([{"role": "user", "content": prompt}], llm_type=llm_type, structured_output=True)
+        by_index = parse_indexed_batch_response(response.content, len(chunks))
+    except Exception as exc:
+        logger.warning("Batched extraction failed (%s); falling back to per-chunk", exc)
+        results: List[_R] = []
+        for chunk in chunks:
+            results.extend(await extract_one(chunk))
+        return results
+    items: List[_R] = []
+    for i, chunk in enumerate(chunks):
+        items.extend(convert(by_index.get(i, []), chunk))
+    return items

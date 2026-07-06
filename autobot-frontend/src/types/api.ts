@@ -55,6 +55,33 @@ export interface RagSource {
   chunk_id: string;
 }
 
+/**
+ * Structured source citation from RAG retrieval (#10548).
+ * Populated by default on every grounded assistant response.
+ * Rendered by CitationsDisplay.vue as clickable chips.
+ */
+export interface Citation {
+  /** Chunk/doc/graph-node unique identifier. */
+  id: string;
+  /** Origin of this citation: 'doc' | 'chunk' | 'graph'. */
+  source_type: 'doc' | 'chunk' | 'graph';
+  /** Human-readable title or file name. */
+  title: string;
+  /** Relative path or URI for deep-linking into the doc/knowledge viewer. */
+  uri: string | null;
+  /** Retrieval relevance score (0–1). */
+  score: number;
+}
+
+/**
+ * Grounding transparency marker attached to every assistant response (#10548).
+ * grounded=false signals a model-only claim (no KB/graph evidence was found).
+ */
+export interface GroundingStatus {
+  grounded: boolean;
+  strategy: 'rag' | 'cag' | 'kag' | null;
+}
+
 /** Thinking mode metadata for Claude 3.7+ reasoning models (MVA-3090). */
 export interface ThinkingMetadata {
   /** Whether thinking mode was used for this response. */
@@ -104,6 +131,17 @@ export interface ChatMessage {
    * Present on assistant messages when extended thinking was used.
    */
   thinking_metadata?: ThinkingMetadata;
+  /**
+   * Structured RAG citations — default-on for every grounded response (#10548).
+   * CitationsDisplay.vue renders these as clickable chips.
+   * Empty array when grounding.grounded=false (model-only claim).
+   */
+  citations?: Citation[];
+  /**
+   * Grounding transparency marker (#10548).
+   * grounded=false means this response has no KB/graph evidence.
+   */
+  grounding?: GroundingStatus;
 }
 
 /** A user-defined slash command preset (GH#4449). */

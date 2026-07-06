@@ -120,10 +120,16 @@
         </div>
       </div>
 
-      <!-- Issue #249: Knowledge Base Citations Display -->
+      <!-- Issue #10548: model-only claim badge (no KB/graph evidence found) -->
+      <div v-if="isModelOnlyClaim" class="ungrounded-badge" :title="$t('chat.citations.modelOnlyTooltip')">
+        <Icon name="robot" />
+        <span>{{ $t('chat.citations.modelOnly') }}</span>
+      </div>
+
+      <!-- Issue #249 / #10548: Knowledge Base Citations Display (default-on for grounded responses) -->
       <CitationsDisplay
         v-if="hasCitations"
-        :citations="(message.metadata as any)?.citations || []"
+        :citations="resolvedCitations"
         :initially-expanded="citationsExpanded"
         @citation-click="$emit('citation-click', $event)"
         @expanded-change="$emit('citations-expanded-change', { messageId: message.id, expanded: $event })"
@@ -306,11 +312,21 @@ const showMetadata = computed(() => {
   )
 })
 
+// Issue #10548: citations sourced from top-level field (new path) or metadata (legacy).
+const resolvedCitations = computed(() => {
+  const topLevel = (props.message as any).citations
+  if (Array.isArray(topLevel) && topLevel.length > 0) return topLevel
+  return (props.message.metadata as any)?.citations || []
+})
+
 const hasCitations = computed(() => {
-  return (
-    props.message.sender === 'assistant' &&
-    ((props.message.metadata as any)?.citations?.length || 0) > 0
-  )
+  return props.message.sender === 'assistant' && resolvedCitations.value.length > 0
+})
+
+// Issue #10548: show "no grounded source" badge when grounding is explicitly false.
+const isModelOnlyClaim = computed(() => {
+  const grounding = (props.message as any).grounding
+  return props.message.sender === 'assistant' && grounding != null && grounding.grounded === false
 })
 
 const hasAttachments = computed(() => {
@@ -535,5 +551,20 @@ const formattedContent = computed(() => {
     margin-right: var(--spacing-0);
     margin-left: var(--spacing-0-5);
   }
+}
+
+/* Issue #10548: model-only claim badge */
+.ungrounded-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  margin-top: var(--spacing-2);
+  padding: 2px var(--spacing-2);
+  border-radius: var(--radius-full);
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--color-warning);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  user-select: none;
 }
 </style>

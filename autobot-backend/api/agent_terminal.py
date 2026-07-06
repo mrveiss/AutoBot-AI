@@ -237,6 +237,7 @@ from api.schemas_agent import (
     AgentTerminalResumeResponse,
 )
 from api.schemas_system import (
+    TaskAnswerRequest,
     TaskSteeringRequest,
     TerminalApproveCommandRequest,
     TerminalCreateSessionRequest,
@@ -599,6 +600,7 @@ async def steer_agent_task(
     of the next ANALYZE_EVENTS phase.  The loop continues without restart;
     the agent acknowledges the guidance in its next tool selection.
 
+    Returns 403 when the caller does not own the task (IDOR fix, #10553).
     Returns 409 when no running loop owns the given task_id (stale or wrong ID).
     Mirrors the approval-response path: publish a STEERING event so the live
     event stream records the guidance in the task's trajectory.
@@ -607,6 +609,12 @@ async def steer_agent_task(
 
     from events.stream_manager import RedisEventStreamManager
     from events.types import create_steering_event
+    from services.task_owner import verify_task_owner
+
+    user_id = current_user.get("user_id") or current_user.get("sub") or current_user.get("username", "")
+    user_role = current_user.get("role", "")
+    if not await verify_task_owner(task_id, user_id, user_role):
+        raise HTTPException(status_code=403, detail="Not authorized to steer this task")
 
     steering_id = str(uuid.uuid4())
     event = create_steering_event(
@@ -626,6 +634,54 @@ async def steer_agent_task(
         "task_id": task_id,
         "steering_id": steering_id,
         "guidance": request.guidance,
+    }
+
+
+@router.post("/tasks/{task_id}/answer")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="answer_human_question",
+    error_code_prefix="AGENT_TERMINAL",
+)
+async def answer_human_question(
+    task_id: str,
+    request: TaskAnswerRequest,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """Deliver a human's answer to a suspended ask_human() call (#10553).
+
+    The answer is published as a HUMAN_ANSWER event on the event stream so the
+    waiting loop can pick it up via its answer inbox.  Mirrors the steer endpoint
+    — publish-then-return; no blocking.
+
+    Returns 403 when the caller does not own the task (IDOR fix, #10553).
+    """
+    from events.stream_manager import RedisEventStreamManager
+    from events.types import create_human_answer_event
+    from services.task_owner import verify_task_owner
+
+    user_id = current_user.get("user_id") or current_user.get("sub") or current_user.get("username", "")
+    user_role = current_user.get("role", "")
+    if not await verify_task_owner(task_id, user_id, user_role):
+        raise HTTPException(status_code=403, detail="Not authorized to answer this task's question")
+
+    event = create_human_answer_event(
+        question_id=request.question_id,
+        answer=request.answer,
+        task_id=task_id,
+    )
+    stream = RedisEventStreamManager()
+    await stream.publish(event)
+    logger.info(
+        "[API] Human answer published: task_id=%s question_id=%s",
+        task_id,
+        request.question_id,
+    )
+    return {
+        "status": "delivered",
+        "task_id": task_id,
+        "question_id": request.question_id,
+        "answer": request.answer,
     }
 
 
