@@ -28,6 +28,7 @@ from api.schemas_agent import (
     LoginRequest,
     LoginResponse,
     LogoutRequest,
+    PasswordWarning,
     SignupRequest,
     SignupResponse,
 )
@@ -38,6 +39,7 @@ from autobot_shared.auth.jwt_core import JWTDecodeError, _peek_alg, decode_jwt_n
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.password_weakness import check_password_weakness
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
 from services.audit.audit import EventType  # GH#8290 Phase 2
 from services.audit.audit import emit as _emit_event  # GH#8290 Phase 2
@@ -169,6 +171,19 @@ async def login(request: Request, login_data: LoginRequest):
             "last_login": user_data.get("last_login"),
         }
 
+        # Soft password-weakness check (#10199). Advisory only — never blocks login.
+        # Evaluated on the submitted plaintext (available here, discarded after).
+        # The plaintext is NOT logged.
+        weakness_reason = check_password_weakness(login_data.password)
+        password_warning: PasswordWarning | None = None
+        if weakness_reason:
+            password_warning = PasswordWarning(reason=weakness_reason)
+            logger.info(
+                "Login soft-warning for user '%s': weak password detected (%s)",
+                login_data.username,
+                weakness_reason,
+            )
+
         _emit_event(
             EventType.USER_LOGIN,
             user_id=safe_user_data["user_id"],
@@ -180,6 +195,7 @@ async def login(request: Request, login_data: LoginRequest):
             user=safe_user_data,
             token=jwt_token,
             session_id=session_id,
+            password_warning=password_warning,
         )
 
     except HTTPException:

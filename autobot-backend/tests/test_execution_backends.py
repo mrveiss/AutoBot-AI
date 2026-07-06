@@ -176,14 +176,14 @@ class TestLocalBackend:
         assert "timeout" in result.stderr.lower()
 
     async def test_execute_with_env_vars(self):
-        """Test environment variable injection."""
+        """Allowlisted AUTOBOT_* task env vars reach the subprocess."""
         backend = LocalBackend()
 
         task = ExecutionTask(
             task_id="local-5",
-            code="echo $TEST_VAR",
+            code="echo $AUTOBOT_TEST_VAR",
             language="bash",
-            env_vars={"TEST_VAR": "test-value"},
+            env_vars={"AUTOBOT_TEST_VAR": "test-value"},
             timeout_seconds=10,
         )
 
@@ -191,6 +191,23 @@ class TestLocalBackend:
 
         assert result.status == ExecutionStatus.SUCCESS
         assert "test-value" in result.stdout
+
+    async def test_execute_drops_non_allowlisted_env_var(self):
+        """A non-AUTOBOT_ task env var is dropped and never reaches the subprocess."""
+        backend = LocalBackend()
+
+        task = ExecutionTask(
+            task_id="local-5b",
+            code="echo [$TEST_VAR]",
+            language="bash",
+            env_vars={"TEST_VAR": "leak"},
+            timeout_seconds=10,
+        )
+
+        result = await backend.execute(task)
+
+        assert result.status == ExecutionStatus.SUCCESS
+        assert "leak" not in result.stdout
 
     async def test_health_check(self):
         """Test backend health check."""
