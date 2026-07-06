@@ -82,7 +82,7 @@ interface Props {
   contactAdmin?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   title: undefined,
   message: undefined,
   requiredPermission: undefined,

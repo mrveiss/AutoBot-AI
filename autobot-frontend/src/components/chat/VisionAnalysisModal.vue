@@ -49,7 +49,7 @@ const analysisResult = ref<MultiModalResponse | null>(null)
 const error = ref<string | null>(null)
 const showRawJson = ref(false)
 
-const intentLabels = computed(() => ({
+const _intentLabels = computed(() => ({
   analysis: t('chat.vision.intentAnalysis'),
   visual_qa: t('chat.vision.intentVisualQA'),
   automation: t('chat.vision.intentAutomation'),

@@ -41,7 +41,7 @@ interface Emits {
 }
 
 const props = defineProps<Props>()
-const emit = defineEmits<Emits>()
+defineEmits<Emits>()
 
 // Local state for path input
 const pathInput = ref(props.currentPath)
