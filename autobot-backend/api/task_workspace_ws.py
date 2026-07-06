@@ -361,15 +361,31 @@ async def _ws_error(websocket: WebSocket, content: str) -> None:
 
 
 def _validate_ws_origin(websocket: WebSocket) -> None:
-    """Minimal auth gate: reject unauthenticated WebSocket connections."""
-    # Full auth via token header; if absent treat as unauthenticated.
-    # The REST endpoints use Depends(check_admin_permission); WebSocket deps
-    # are plumbed via query params or headers following the terminal.py pattern.
+    """Reject cross-origin (CSWSH) and unauthenticated WebSocket connections.
+
+    WebSockets are exempt from the browser same-origin/CORS policy, so a
+    malicious page could otherwise open this socket using the victim's ambient
+    cookies. Defence: when an ``Origin`` header is present (browser client) it
+    MUST be on the CORS allowlist; non-browser clients omit ``Origin`` and
+    authenticate via the internal-service key. An ``Authorization`` header is
+    additionally required. Fail-closed on every branch.
+    """
+    import os
+
+    origin = websocket.headers.get("origin", "")
+    if origin:
+        try:
+            from config.manager import get_config_manager  # noqa: PLC0415
+
+            allowed = set(get_config_manager().get_cors_origins() or [])
+        except Exception:  # config unavailable → fail closed, allow nothing cross-origin
+            allowed = set()
+        if origin not in allowed:
+            raise PermissionError(f"Origin not allowed for workspace shell: {origin}")
+
     auth_header = websocket.headers.get("authorization", "")
     if not auth_header:
         # Allow when running under test or dev environment without auth layer
-        import os
-
         if not os.environ.get("AUTOBOT_REQUIRE_WS_AUTH", "1") == "1":
             return
         # Production: block unauthenticated connections
