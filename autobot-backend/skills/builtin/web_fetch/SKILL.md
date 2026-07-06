@@ -26,6 +26,57 @@ tags:
   - content-extraction
 ---
 
+## Capability Tiers
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ web-fetch                                                     │
+├─────────────────────────────────────────────────────────────┤
+│ STANDALONE   (always works, zero config)                     │
+│   • Fetch any public URL as clean markdown via Jina Reader   │
+│   • wget / httpx fallback when Jina is down or rate-limited  │
+│   • JSON + plain-text output modes                           │
+├─────────────────────────────────────────────────────────────┤
+│ SUPERCHARGED (unlocks when you connect a tool)               │
+│   • Jina API key    → higher rate limits, larger responses   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**STANDALONE — always works, zero config**
+
+- Fetch and extract clean markdown from any HTTP/HTTPS URL through the public
+  Jina Reader endpoint (no key required).
+- Automatic graceful degradation: Jina Reader → `wget` → `httpx` if the
+  preferred path is unavailable or rate-limited.
+- `markdown` (default), `json`, and `text` output modes.
+
+**SUPERCHARGED — unlocks per connected tool**
+
+| Connect this | Unlocks |
+|--------------|---------|
+| `api_key` — Jina API key | Higher request rate limits and larger extracted-text responses than the anonymous tier. |
+
+Nothing here changes the degradation logic — an unset key simply keeps the skill
+on the anonymous STANDALONE tier.
+
+## Output Contract
+
+Every fetch returns this fixed shape so callers can rely on the structure:
+
+```
+## Fetched: <page title or URL>
+
+**Source:** <final URL after redirects>
+**Tier used:** jina | wget | httpx
+**Extracted:** <approx word/char count>
+
+<clean markdown / text / JSON body>
+```
+
+- `Tier used` names which path in the fallback chain produced the result.
+- On total failure the contract collapses to a single line:
+  `Unreachable: <url> — <reason>` (see Fallback Instructions).
+
 ## When to Use
 
 Use this skill whenever an agent needs to read the content of a public URL — news

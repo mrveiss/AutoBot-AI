@@ -116,8 +116,8 @@ class OpenRouterProvider(BaseProvider):
 
             return LLMResponse(
                 content=content,
-                model_name=request.model_name or chat_kwargs["model"],
-                provider_name=self.provider_name,
+                model=request.model_name or chat_kwargs["model"],
+                provider=self.provider_name,
                 usage=usage,
                 provider_metadata=self._build_provider_metadata(
                     model_api_name=chat_kwargs["model"],
@@ -132,8 +132,8 @@ class OpenRouterProvider(BaseProvider):
             logger.error(error_msg)
             return LLMResponse(
                 content="",
-                model_name=request.model_name or "openrouter-model",
-                provider_name=self.provider_name,
+                model=request.model_name or "openrouter-model",
+                provider=self.provider_name,
                 error=error_msg,
             )
 

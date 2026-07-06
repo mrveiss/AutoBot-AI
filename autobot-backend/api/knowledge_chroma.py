@@ -30,6 +30,17 @@ router = APIRouter(
     tags=["knowledge-chroma", "chroma"],
 )
 
+# Substrings ChromaDB uses to signal a genuinely missing collection, across
+# versions (ValueError "does not exist" in <1.0, NotFoundError "not found" in
+# 1.x). Detecting by message keeps a real internal error from being mislabeled
+# as a 404 and vice versa.
+_NOT_FOUND_MARKERS = ("does not exist", "not found", "not exist")
+
+
+def _is_collection_not_found(exc: Exception) -> bool:
+    """True when the exception indicates the collection genuinely doesn't exist."""
+    return any(marker in str(exc).lower() for marker in _NOT_FOUND_MARKERS)
+
 
 # ============================================================================
 # Pydantic Models
@@ -204,14 +215,13 @@ async def get_collection_detail(
             ),
         )
 
-    except ValueError:
-        # ChromaDB raises ValueError for missing collection
-        logger.warning(f"Collection not found: {name}")
-        raise HTTPException(
-            status_code=404,
-            detail=f"Collection '{name}' not found",
-        )
     except Exception as e:
+        if _is_collection_not_found(e):
+            logger.warning(f"Collection not found: {name}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Collection '{name}' not found",
+            )
         logger.error(f"Failed to get collection {name}: {e}")
         raise HTTPException(
             status_code=500,
@@ -257,10 +267,14 @@ async def list_documents(
             include=["documents", "metadatas", "embeddings"],
         )
 
-        # Add embedding dimensionality info
+        # Add embedding dimensionality info.
+        # ChromaDB 1.x returns embeddings as a numpy ndarray; bare truthiness
+        # (`if results.get("embeddings")`) raises "truth value of an array is
+        # ambiguous" — use `is not None` + len() which is numpy-safe.
         embedding_dim = None
-        if results.get("embeddings") and len(results["embeddings"]) > 0:
-            embedding_dim = len(results["embeddings"][0])
+        embeddings = results.get("embeddings")
+        if embeddings is not None and len(embeddings) > 0:
+            embedding_dim = len(embeddings[0])
 
         # Get total count
         total = await collection.count()
@@ -276,13 +290,16 @@ async def list_documents(
             total=total,
         )
 
-    except ValueError:
-        logger.warning(f"Collection not found: {name}")
-        raise HTTPException(
-            status_code=404,
-            detail=f"Collection '{name}' not found",
-        )
     except Exception as e:
+        # ChromaDB signals a genuinely missing collection differently across
+        # versions (ValueError in <1.0, NotFoundError in 1.x) — detect by
+        # message so a real internal error isn't mislabeled as 404 and vice versa.
+        if _is_collection_not_found(e):
+            logger.warning(f"Collection not found: {name}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Collection '{name}' not found",
+            )
         logger.error(f"Failed to list documents in collection {name}: {e}")
         raise HTTPException(
             status_code=500,
@@ -363,13 +380,13 @@ async def search_collection(
 
     except HTTPException:
         raise
-    except ValueError:
-        logger.warning(f"Collection not found: {name}")
-        raise HTTPException(
-            status_code=404,
-            detail=f"Collection '{name}' not found",
-        )
     except Exception as e:
+        if _is_collection_not_found(e):
+            logger.warning(f"Collection not found: {name}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Collection '{name}' not found",
+            )
         logger.error(f"Search failed in collection {name}: {e}")
         raise HTTPException(
             status_code=500,
