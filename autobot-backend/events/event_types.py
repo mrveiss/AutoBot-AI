@@ -43,3 +43,8 @@ HUMAN_QUESTION = "human_question"
 # Agent loop — human answer received (#10553)
 # Emitted when the loop resumes after receiving the human's answer.
 HUMAN_ANSWER_RECEIVED = "human_answer_received"
+
+# Agent loop — adversarial pre-action verifier verdict (#10547)
+# Emitted when the verifier completes a pass; shown to the human at the
+# approval gate so the operator sees "verifier flagged X" before approving.
+VERIFIER_VERDICT = "verifier_verdict"

@@ -249,6 +249,10 @@ class AgentLoopConfig:
     # GH#9053: min confidence delta to surface contradictions for agent review
     contradiction_surface_threshold: float = 0.3
 
+    # Adversarial pre-action verifier (#10547)
+    # Enable independent second-model refutation before consequential actions.
+    pre_action_verifier_enabled: bool = True
+
     # Logging
     log_iterations: bool = True  # Log each iteration
     log_tool_results: bool = True  # Log tool execution results
