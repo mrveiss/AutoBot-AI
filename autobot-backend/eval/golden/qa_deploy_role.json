@@ -1,0 +1,17 @@
+{
+  "fixture_version": "1",
+  "trajectory_id": "qa_deploy_role",
+  "task_class": "knowledge_qa",
+  "inputs": {
+    "prompt": "How do I deploy a new service role to an SLM node?"
+  },
+  "expected_tools": ["search_knowledge_base"],
+  "baseline_score": 0.85,
+  "expected_output": {
+    "final_status": "completed",
+    "output_text_excerpt": "Open the /slm setup wizard, select the target node, choose the service role, and run the playbook; the role syncs from code_source and restarts the service."
+  },
+  "agent_config": {
+    "adapter_type": "autobot_agent"
+  }
+}
