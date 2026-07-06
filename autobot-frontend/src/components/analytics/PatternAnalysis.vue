@@ -260,7 +260,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { watch, onMounted, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { usePatternAnalysis } from '@/composables/usePatternAnalysis'
+import { usePatternAnalysis, type PatternAnalysisReport, type CodeLocation } from '@/composables/usePatternAnalysis'
 
 const { t } = useI18n()
 
@@ -272,7 +272,7 @@ const props = defineProps<{
 
 // Emits
 const emit = defineEmits<{
-  (e: 'analysis-complete', report: any): void
+  (e: 'analysis-complete', report: PatternAnalysisReport): void
   (e: 'error', message: string): void
 }>()
 
@@ -296,7 +296,6 @@ const {
   hasResults,
   analyzePatterns,
   getSummary,
-  getCachedSummary,
   getDuplicates,
   getRegexOpportunities,
   getComplexityHotspots,
@@ -345,7 +344,7 @@ const truncateCode = (code: string, maxLength: number = 100): string => {
   return code.length > maxLength ? code.substring(0, maxLength) + '...' : code
 }
 
-const formatLocation = (loc: any): string => {
+const formatLocation = (loc: CodeLocation | null | undefined): string => {
   if (!loc) return 'N/A'
   let result = `${loc.file_path}:${loc.start_line}`
   if (loc.function_name) result += ` (${loc.function_name})`

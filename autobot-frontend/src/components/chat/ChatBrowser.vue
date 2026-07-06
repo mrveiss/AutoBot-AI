@@ -139,11 +139,6 @@ const sessionIcon = computed(() => {
   return 'times-circle'
 })
 
-const iconClass = computed(() => ({
-  'text-green-600': browserStatus.value === 'connected',
-  'text-yellow-600': browserStatus.value === 'connecting',
-  'text-red-600': browserStatus.value === 'disconnected' || browserStatus.value === 'error'
-}))
 
 // Retry configuration
 const MAX_RETRIES = 3
@@ -170,10 +165,10 @@ const connectBrowserSession = async (retry = false) => {
 
     // Get or create browser session for this conversation
     // Use type assertion for the API call since ApiClient is JavaScript
-    const response = await (apiClient as any).getOrCreateChatBrowserSession({
+    const response = await apiClient.getOrCreateChatBrowserSession({
       conversation_id: props.chatSessionId,
       headless: false
-    }) as BrowserSessionResponse
+    }) as unknown as BrowserSessionResponse
 
     if (response && response.session_id) {
       browserSessionId.value = response.session_id
@@ -239,7 +234,7 @@ const disconnectBrowserSession = async () => {
 
   try {
     // Use type assertion for the API call since ApiClient is JavaScript
-    await (apiClient as any).deleteChatBrowserSession(props.chatSessionId)
+    await apiClient.deleteChatBrowserSession(props.chatSessionId)
     logger.info('Browser session disconnected for chat:', props.chatSessionId)
   } catch (error) {
     logger.warn('Failed to disconnect browser session:', error)

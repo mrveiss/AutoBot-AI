@@ -260,7 +260,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FileStats } from '@/composables/useConversationFiles'
 import type { SessionFact } from '@/models/repositories/ChatRepository'
@@ -279,9 +279,14 @@ const props = defineProps<{
   kbFactsLoading?: boolean
 }>()
 
+type FileTransferOptions =
+  | { categories: string[]; extract_text: boolean }
+  | { target_path: string }
+  | undefined
+
 const emit = defineEmits<{
   'update:visible': [value: boolean]
-  confirm: [fileAction: string, fileOptions: any, selectedFactIds: string[]]
+  confirm: [fileAction: string, fileOptions: FileTransferOptions, selectedFactIds: string[]]
   cancel: []
 }>()
 
@@ -298,8 +303,6 @@ const factSelection = useBatchSelection<SessionFact, string>(
   (f) => f.id
 )
 
-// Computed
-const hasFiles = computed(() => props.fileStats && props.fileStats.total_files > 0)
 
 // Watch for facts changes to seed selection with already-important/preserve facts.
 watch(() => props.kbFacts, (newFacts) => {
@@ -349,7 +352,7 @@ const getFileActionSummary = (): string => {
   }
 }
 
-const buildFileOptions = (): any => {
+const buildFileOptions = (): FileTransferOptions => {
   if (fileAction.value === 'transfer_kb') {
     return {
       categories: kbCategories.value.split(',').map(c => c.trim()).filter(c => c),
@@ -361,7 +364,7 @@ const buildFileOptions = (): any => {
     }
   }
 
-  return null
+  return undefined
 }
 
 const handleConfirm = () => {
