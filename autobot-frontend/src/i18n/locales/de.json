@@ -400,7 +400,9 @@
       "reliabilityLow": "Niedrig",
       "aiTrainingData": "KI-Trainingsdaten",
       "webSource": "Webquelle",
-      "knowledgeBase": "Wissensdatenbank"
+      "knowledgeBase": "Wissensdatenbank",
+      "modelOnly": "Nur Modell",
+      "modelOnlyTooltip": "Diese Aussage basiert nur auf Modell-Trainingsdaten — es wurden keine Quellen abgerufen"
     },
     "tabContent": {
       "openInNewWindow": "In neuem Fenster öffnen",
@@ -7614,7 +7616,8 @@
     "llcNoCompanies": "No companies yet.",
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
-    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it."
+    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
+    "systemHealth": "Systemzustand"
   },
   "llcMembers": {
     "title": "Mitglieder",
@@ -8383,5 +8386,23 @@
     "target": "Ziel {date}",
     "backlogLink": "Backlog",
     "timelineLink": "Zeitachse"
+  },
+  "admin": {
+    "systemHealth": {
+      "title": "Systemzustand",
+      "subtitle": "Live-Backend-Erreichbarkeit für Inhaltsquellen",
+      "status": "Status",
+      "sources": "Quellen",
+      "live": "Live",
+      "backends": "Backends",
+      "healthy": "Gesund",
+      "degraded": "Eingeschränkt",
+      "down": "Ausgefallen",
+      "unavailable": "Nicht verfügbar",
+      "loading": "Gesundheitsdaten werden geladen...",
+      "error": "Systemzustand konnte nicht geladen werden",
+      "refresh": "Aktualisieren",
+      "noSources": "Keine Inhaltsquellen konfiguriert"
+    }
   }
 }

@@ -890,6 +890,18 @@ export const routes: RouteRecordRaw[] = [
       hideInNav: true,
     },
   },
+  // Issue #10932: Admin System Health panel — CONTENT_REACH probe
+  {
+    path: '/admin/system-health',
+    name: 'admin-system-health',
+    component: () => import('@/views/SystemHealthView.vue'),
+    meta: {
+      title: 'System Health',
+      hideInNav: true,
+      requiresAuth: true,
+      admin: true,
+    },
+  },
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },
