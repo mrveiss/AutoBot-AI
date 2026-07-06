@@ -157,7 +157,7 @@ import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
 import NotificationConfigModal from './NotificationConfigModal.vue';
 
 const props = defineProps<{ workflows: ActiveWorkflow[]; currentWorkflow: ActiveWorkflow | null; loading: boolean }>();
-const emit = defineEmits<{
+defineEmits<{
   (e: 'start-workflow', id: string): void;
   (e: 'pause-workflow', id: string): void;
   (e: 'resume-workflow', id: string): void;
@@ -172,7 +172,7 @@ const showNotifConfig = ref(false);
 const completedSteps = computed(() => props.currentWorkflow?.steps.filter(s => s.status === 'completed').length ?? 0);
 const failedSteps = computed(() => props.currentWorkflow?.steps.filter(s => s.status === 'failed').length ?? 0);
 
-function selectWorkflow(wf: ActiveWorkflow) {
+function selectWorkflow(_wf: ActiveWorkflow) {
   // Parent should handle selection via props
 }
 

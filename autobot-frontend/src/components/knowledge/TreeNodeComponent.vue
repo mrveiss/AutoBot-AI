@@ -109,6 +109,21 @@ import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import VectorizationStatusBadge from './VectorizationStatusBadge.vue'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
+import type { DocumentVectorizationState } from '@/composables/useKnowledgeVectorization'
+
+// Metadata attached to a knowledge tree node. Mirrors the KnowledgeFactLike
+// shape produced by the knowledge browser (all fields optional).
+export interface TreeNodeMetadata {
+  key?: string
+  title?: string
+  source?: string
+  content?: string
+  full_content?: string
+  timestamp?: string
+  created_at?: string
+  category?: string
+  metadata?: Record<string, unknown>
+}
 
 // Tree node interface
 export interface TreeNode {
@@ -120,7 +135,7 @@ export interface TreeNode {
   size?: number
   date?: string
   category?: string
-  metadata?: any
+  metadata?: TreeNodeMetadata
   content?: string
 }
 
@@ -130,7 +145,7 @@ interface Props {
   expandedNodes: Set<string>
   selectedId?: string
   selectedDocuments: Set<string>
-  vectorizationStates: Map<string, any>
+  vectorizationStates: Map<string, DocumentVectorizationState>
 }
 
 const props = withDefaults(defineProps<Props>(), {
