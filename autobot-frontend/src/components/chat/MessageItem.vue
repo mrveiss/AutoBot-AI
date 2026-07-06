@@ -189,6 +189,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import type { ChatMessage } from '@/stores/useChatStore'
+import type { Citation } from '@/types/api'
 import { formatTime } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
@@ -314,9 +315,9 @@ const showMetadata = computed(() => {
 
 // Issue #10548: citations sourced from top-level field (new path) or metadata (legacy).
 const resolvedCitations = computed(() => {
-  const topLevel = (props.message as any).citations
+  const topLevel = (props.message as { citations?: Citation[] }).citations
   if (Array.isArray(topLevel) && topLevel.length > 0) return topLevel
-  return (props.message.metadata as any)?.citations || []
+  return (props.message.metadata as { citations?: Citation[] } | undefined)?.citations || []
 })
 
 const hasCitations = computed(() => {
@@ -325,7 +326,7 @@ const hasCitations = computed(() => {
 
 // Issue #10548: show "no grounded source" badge when grounding is explicitly false.
 const isModelOnlyClaim = computed(() => {
-  const grounding = (props.message as any).grounding
+  const grounding = (props.message as { grounding?: { grounded?: boolean } }).grounding
   return props.message.sender === 'assistant' && grounding != null && grounding.grounded === false
 })
 

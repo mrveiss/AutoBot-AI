@@ -362,10 +362,10 @@ const logger = createLogger('PerformanceAnalysisDashboard')
 
 // Issue #701: Type for API response with data property
 interface ApiDataResponse {
-  data?: any
+  data?: unknown
   total_issues?: number
   issues?: PerformanceIssue[]
-  [key: string]: any
+  [key: string]: unknown
 }
 
 // Types
@@ -536,9 +536,9 @@ async function runAnalysis() {
       params: { path: selectedPath.value }
     })
     // Issue #701: Response is returned directly, handle both response structures
-    lastResult.value = (response as ApiDataResponse).data || response as unknown as AnalysisResult
+    lastResult.value = ((response as ApiDataResponse).data as AnalysisResult | undefined) || response as unknown as AnalysisResult
 
-    const totalIssues = (response as ApiDataResponse).total_issues ?? (response as ApiDataResponse).data?.total_issues ?? 0
+    const totalIssues = (response as ApiDataResponse).total_issues ?? ((response as ApiDataResponse).data as AnalysisResult | undefined)?.total_issues ?? 0
     if (totalIssues === 0) {
       showToast(t('analytics.performanceAnalysis.noIssuesFound'), 'success')
     } else {
@@ -559,7 +559,7 @@ async function loadPatterns() {
     // Issue #701: Added type assertion for response
     const response = await api.get<Pattern[] | ApiDataResponse>(`${getApiBase()}/performance/patterns`)
     // Issue #701: Response could be array directly or wrapped in data
-    patterns.value = Array.isArray(response) ? response : ((response as ApiDataResponse).data || [])
+    patterns.value = Array.isArray(response) ? response : (((response as ApiDataResponse).data as Pattern[] | undefined) || [])
   } catch (error) {
     logger.warn('Failed to load patterns:', error)
     patterns.value = []
@@ -571,7 +571,7 @@ async function loadHotspots() {
     // Issue #701: Added type assertion for response
     const response = await api.get<Hotspot[] | ApiDataResponse>(`${getApiBase()}/performance/hotspots`)
     // Issue #701: Response could be array directly or wrapped in data
-    hotspots.value = Array.isArray(response) ? response : ((response as ApiDataResponse).data || [])
+    hotspots.value = Array.isArray(response) ? response : (((response as ApiDataResponse).data as Hotspot[] | undefined) || [])
   } catch (error) {
     logger.warn('Failed to load hotspots:', error)
     hotspots.value = []
@@ -582,7 +582,7 @@ async function togglePattern(pattern: Pattern) {
   const newState = !pattern.enabled
   try {
     // Issue #701: Fixed api.post call - data should be second arg, options third
-    await api.post<any>(`${getApiBase()}/performance/patterns/${pattern.id}/toggle`, { enabled: newState })
+    await api.post<unknown>(`${getApiBase()}/performance/patterns/${pattern.id}/toggle`, { enabled: newState })
     pattern.enabled = newState
   } catch (error) {
     logger.warn('Failed to toggle pattern:', error)

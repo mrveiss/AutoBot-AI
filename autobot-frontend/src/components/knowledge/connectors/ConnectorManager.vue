@@ -20,7 +20,6 @@ import ConnectorHistoryPanel from './ConnectorHistoryPanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { BaseModal } from '@autobot/ui'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import { formatTimeAgo } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
@@ -136,7 +135,7 @@ async function handleViewHistory(id: string) {
   }
 }
 
-function onConnectorSaved(config: ConnectorConfig) {
+function onConnectorSaved(_config: ConnectorConfig) {
   // Reload all connectors to get fresh statuses
   loadConnectors()
 }
@@ -163,7 +162,7 @@ function getStatus(id: string): ConnectorStatus {
   )
 }
 
-function setCardRef(id: string, el: any) {
+function setCardRef(id: string, el: InstanceType<typeof ConnectorStatusCard> | null) {
   if (el) {
     cardRefs.value[id] = el
   }
