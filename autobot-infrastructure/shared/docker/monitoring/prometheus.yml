@@ -1,57 +1,50 @@
-# AutoBot Prometheus Configuration
-# Monitoring configuration for production deployment
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Prometheus scrape configuration for docker-compose single-node deployments.
+# For fleet deployments, scrape config is rendered from:
+#   autobot-slm-backend/ansible/roles/monitoring/templates/prometheus.yml.j2
+---
 
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    monitor: 'autobot-monitor'
+    environment: docker
+
+alerting:
+  alertmanagers: []
 
 rule_files:
-  # - "alert_rules.yml"
+  - "alerts-chat-ssot.yml"  # Phase 4 (#7590): SSOT cardinality + disk file alerts
 
 scrape_configs:
   # Prometheus self-monitoring
-  - job_name: 'prometheus'
+  - job_name: "prometheus"
     static_configs:
-      - targets: ['localhost:9090']
-    scrape_interval: 30s
+      - targets: ["localhost:9090"]
 
-  # AutoBot backend monitoring
-  - job_name: 'autobot-backend'
+  # AutoBot backend metrics (docker-compose service name)
+  - job_name: "autobot-backend"
     static_configs:
-      - targets: ['autobot-backend:8001']
-    metrics_path: '/api/metrics/prometheus'
-    scrape_interval: 15s
-    scrape_timeout: 10s
-    honor_labels: true
+      - targets: ["autobot-backend:8001"]
+    metrics_path: /api/metrics/prometheus
+    scheme: http
 
-  # Redis monitoring
-  - job_name: 'redis'
+  # AutoBot SLM backend DB-derived metrics (docker-compose service name)
+  - job_name: "autobot-slm"
     static_configs:
-      - targets: ['redis:6379']
-    scrape_interval: 30s
+      - targets: ["autobot-slm:8000"]
+    metrics_path: /api/performance/metrics/prometheus
+    scheme: http
 
-  # Nginx monitoring (if enabled)
-  - job_name: 'nginx'
+  # AutoBot SLM shared-registry app metrics (#10851 top-level /metrics; #10858)
+  # Powers the BI dashboard real-source queries (#10720/#10778) via
+  # autobot_llm_requests_total / autobot_knowledge_search_requests_total /
+  # autobot_api_requests_total. Unauthenticated, plain http on the backend port.
+  - job_name: "slm-backend"
     static_configs:
-      - targets: ['autobot-frontend:80']
-    metrics_path: '/nginx_status'
-    scrape_interval: 30s
-
-  # System monitoring (node exporter)
-  - job_name: 'node-exporter'
-    static_configs:
-      - targets: ['node-exporter:9100']
-    scrape_interval: 30s
-
-# Alerting configuration
-alerting:
-  alertmanagers:
-    - static_configs:
-        - targets:
-          # - alertmanager:9093
-
-# Remote storage (optional)
-# remote_write:
-#   - url: "http://your-remote-storage:8086/api/v1/prom/write"
+      - targets: ["autobot-slm:8000"]
+    metrics_path: /metrics
+    scheme: http

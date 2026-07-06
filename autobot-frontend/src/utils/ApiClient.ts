@@ -4,6 +4,7 @@ import appConfig from '@/config/AppConfig.js';
 import { createLogger } from '@/utils/debugUtils';
 import { getApiBase } from '@/config/ssot-config';
 import { getSelectedCompanyId } from '@/utils/orgContext';
+import { isRealAuthToken } from '@/utils/authToken';
 
 // Create scoped logger for ApiClient
 const logger = createLogger('ApiClient');
@@ -218,7 +219,7 @@ export class ApiClient {
       const stored = localStorage.getItem('autobot_auth');
       if (!stored) return null;
       const auth = JSON.parse(stored);
-      if (auth.token && auth.token !== 'single_user_mode') {
+      if (isRealAuthToken(auth.token)) {
         // Check expiry before returning — expired tokens cause widespread 401s (#979)
         if (auth.expiresAt && new Date(auth.expiresAt) <= new Date()) {
           logger.warn('Auth token expired, clearing stale localStorage');

@@ -189,6 +189,34 @@ class ThinkingMetadata(BaseModel):
     tokens_used: int | None = Field(None, description="Number of thinking tokens consumed (null if thinking not used)")
 
 
+class Citation(BaseModel):
+    """Structured source citation attached to a RAG-grounded response (#10548).
+
+    Propagated from retrieval (kb_results / RAGMetrics) through the response
+    builder to the API payload and rendered by CitationsDisplay.vue as chips.
+    """
+
+    id: str = Field(..., description="Unique citation identifier (chunk/doc/graph-node id)")
+    source_type: str = Field(
+        ...,
+        description="Origin of this citation: 'doc' | 'chunk' | 'graph'",
+    )
+    title: str = Field(..., description="Human-readable title or file name")
+    uri: str | None = Field(None, description="Relative path or URI for deep-linking")
+    score: float = Field(..., ge=0.0, le=1.0, description="Retrieval relevance score (0–1)")
+
+
+class GroundingStatus(BaseModel):
+    """Grounding transparency marker attached to every assistant response (#10548).
+
+    ``grounded=True``  → citations[] is non-empty and comes from real retrieval.
+    ``grounded=False`` → model-only claim; no KB/graph evidence was found.
+    """
+
+    grounded: bool = Field(..., description="True when citations[] contains verified retrieval evidence")
+    strategy: str | None = Field(None, description="Retrieval strategy used: 'rag' | 'cag' | 'kag' | None")
+
+
 class ChatMessageData(BaseModel):
     """data payload for POST /chat and POST /chat/message (alias).
 
@@ -204,6 +232,15 @@ class ChatMessageData(BaseModel):
     metadata: Dict[str, Any] | None = None
     thinking_metadata: ThinkingMetadata | None = Field(
         None, description="Thinking mode metadata (Claude 3.7+ reasoning models)"
+    )
+    # Issue #10548: grounded citations — default-on; empty list = no retrieval evidence.
+    citations: List[Citation] = Field(
+        default_factory=list,
+        description="Structured source citations from RAG retrieval. " "Non-empty only when grounding.grounded=True.",
+    )
+    grounding: GroundingStatus | None = Field(
+        None,
+        description="Grounding transparency marker. grounded=False signals a model-only claim.",
     )
 
 

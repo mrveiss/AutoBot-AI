@@ -200,14 +200,22 @@ async def service_client(fresh_db_url):
     async def _service_principal_override():
         return "test-slm"
 
+    # The active root key the coordinator derives KEKs from.  A KEK rewrap migrates
+    # the stored wrapped-DEKs to a *new* root; in production the operator then swaps
+    # AUTOBOT_SECRETS_ROOT_KEY and restarts, so subsequent reads use the new root.
+    # We model that restart by rebuilding the coordinator from this mutable holder,
+    # letting a rewrap test flip the active root before reading back.
+    active_root = {"key": _ROOT}
+
     app.dependency_overrides[envelope_secrets.get_session] = _session_override
     app.dependency_overrides[envelope_secrets.get_coordinator] = lambda: SecretsCoordinator(
-        EnvelopeSecretsService(root_key=_ROOT)
+        EnvelopeSecretsService(root_key=active_root["key"])
     )
     app.dependency_overrides[envelope_secrets.service_principal] = _service_principal_override
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://t", follow_redirects=True) as c:
+        c.set_active_root = lambda raw: active_root.__setitem__("key", raw)  # type: ignore[attr-defined]
         yield c
     await engine.dispose()
 
@@ -250,6 +258,10 @@ async def test_service_rewrap_system_vault(service_client):
     r = await service_client.post(f"{_P}/system/{sid}/rewrap", json={"new_root_key": _ROOT2_B64})
     assert r.status_code == 200, r.text
     assert r.json()["version"] == 1  # KEK-only rotation — sealed value untouched
+    # The DEK is now wrapped under _ROOT2; a read must use the migrated root (as prod
+    # does after swapping AUTOBOT_SECRETS_ROOT_KEY + restart).  The sealed value —
+    # never re-encrypted — still decrypts, proving the rewrap preserved the payload.
+    service_client.set_active_root(base64.urlsafe_b64decode(_ROOT2_B64))
     rr = await service_client.get(f"{_P}/system/{sid}")
     assert rr.status_code == 200 and rr.json()["value"] == "fleet-secret"
 

@@ -34,3 +34,17 @@ BELIEF_CACHE_HIT = "belief_cache_hit"
 # Emitted when the loop absorbs a human steering message and acknowledges it.
 # Frontend consumers can show the acknowledgement alongside approval controls.
 STEERING_RECEIVED = "steering_received"
+
+# Agent loop — ask-the-human (#10553)
+# Emitted when the loop suspends to wait for a human answer to a clarifying question.
+# Frontend consumers must render an answer affordance tied to question_id.
+HUMAN_QUESTION = "human_question"
+
+# Agent loop — human answer received (#10553)
+# Emitted when the loop resumes after receiving the human's answer.
+HUMAN_ANSWER_RECEIVED = "human_answer_received"
+
+# Agent loop — adversarial pre-action verifier verdict (#10547)
+# Emitted when the verifier completes a pass; shown to the human at the
+# approval gate so the operator sees "verifier flagged X" before approving.
+VERIFIER_VERDICT = "verifier_verdict"

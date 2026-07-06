@@ -651,7 +651,7 @@
         # #10400: prefer SLM_SECRET_KEY when present, else keep the role default.
         backend_jwt_secret: "{{ (existing_slm_secret_key.stdout | default('') | trim) if (existing_slm_secret_key.stdout | default('') | trim) | length > 0 else (existing_secret_key.stdout | default('') | trim) }}"
         # #10636: internal service API key + full-user-management DB password,
-        # read from /etc/autobot above (no longer undefined / single_user).
+        # read from /etc/autobot above.
         autobot_internal_api_key: "{{ existing_internal_api_key.stdout | default('') | trim }}"
         backend_postgres_password: "{{ existing_autobot_db_password.stdout | default('') | trim }}"
         # #10636: seed the default platform admin on first boot (full user mgmt).
@@ -663,14 +663,14 @@
       become: true
       register: backend_user_mode_probe
       changed_when: false
-      failed_when: false  # absent .env/var means single_user (no Postgres)
+      failed_when: false  # absent .env/var = not yet configured; skip until set
       when: "'backend' in group_names"
       tags: [backend, migrate]
 
     - name: "[PLAY 2] Backend | Database migration sequence (#10001)"
       when:
         - "'backend' in group_names"
-        - backend_user_mode_probe.stdout | default('') | trim not in ['', 'single_user']
+        - backend_user_mode_probe.stdout | default('') | trim != ''
       tags: [backend, migrate]
       block:
         # Strict migration sequence consolidated into one shared include

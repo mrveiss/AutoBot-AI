@@ -105,7 +105,7 @@ class SubagentDispatcher:
             try:
                 coro = asyncio.wait_for(
                     self._execute_task(task),
-                    timeout=task.timeout_seconds,
+                    timeout=task.timeout,
                 )
                 pending.append((task.task_id, coro))
             except Exception as exc:

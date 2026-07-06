@@ -43,10 +43,22 @@ import argparse
 import dataclasses
 import importlib.util
 import sys
+import types
 import typing
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union, get_args, get_origin
+
+# PEP 604 `X | Y` unions have origin ``types.UnionType`` (py3.10+), which is a
+# distinct object from ``typing.Union``. ``get_type_hints`` may return either
+# form depending on the interpreter version, so both must be treated as unions
+# for deterministic output across Python 3.10 … 3.14.
+_UNION_ORIGINS = (Union, getattr(types, "UnionType", Union))
+
+
+def _is_optional(annotation: object) -> bool:
+    """True when *annotation* is a union that admits ``None`` (Optional[...])."""
+    return get_origin(annotation) in _UNION_ORIGINS and type(None) in get_args(annotation)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 OUTPUT_PATH = REPO_ROOT / "autobot-frontend" / "src" / "types" / "_generated" / "workflow.ts"
@@ -181,8 +193,8 @@ def _ts_type(py_type: Any, known_names: Set[str]) -> str:
     origin = get_origin(py_type)
     args = get_args(py_type)
 
-    if origin is Union:
-        # Handle Optional[X] = Union[X, None] specially
+    if origin in _UNION_ORIGINS:
+        # Handle Optional[X] = Union[X, None] and PEP 604 `X | None` specially
         non_none = [a for a in args if a is not type(None)]
         rendered = " | ".join(_ts_type(a, known_names) for a in non_none)
         if type(None) in args:
@@ -246,10 +258,12 @@ def _render_dataclass(cls: type, known_names: Set[str], source: str) -> str:
     for f in dataclasses.fields(cls):
         annotation = type_hints.get(f.name, f.type)
         ts = _ts_type(annotation, known_names)
-        # Optional in TS is best signalled via `field?: T` when default is
-        # None or default_factory is callable returning a "missing" stand-in.
-        # Keep it simple here: emit `field: T` always so the schema is exact.
-        lines.append(f"  {f.name}: {ts};")
+        # A field whose annotation admits ``None`` (``Optional[X]`` / ``X | None``)
+        # is not required at construction and is serialized as ``null`` when
+        # unset — emit ``field?: T`` so consumers need not supply it. Non-nullable
+        # fields stay required so the wire schema remains exact.
+        opt = "?" if _is_optional(annotation) else ""
+        lines.append(f"  {f.name}{opt}: {ts};")
     lines.append("}\n")
     return "\n".join(lines)
 

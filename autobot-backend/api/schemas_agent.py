@@ -1399,12 +1399,26 @@ class LoginRequest(BaseModel):
         return v
 
 
+class PasswordWarning(BaseModel):
+    """Non-blocking soft warning attached to a successful login response (#10199).
+
+    Presence of this field does NOT indicate an auth failure — the token is
+    still valid.  Clients should surface the ``reason`` as a nudge to the user
+    to update their password.
+    """
+
+    weak: bool = True
+    reason: str
+
+
 class LoginResponse(BaseModel):
     success: bool
     message: str
     user: dict | None = None
     token: str | None = None
     session_id: str | None = None
+    password_warning: PasswordWarning | None = None
+    """Soft warning when the submitted password is weak (non-blocking, #10199)."""
 
 
 class LogoutRequest(BaseModel):

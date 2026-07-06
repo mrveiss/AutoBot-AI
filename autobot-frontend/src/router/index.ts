@@ -1328,13 +1328,15 @@ router.beforeEach(async (to, from) => {
     // Check authentication requirements
     const requiresAuth = to.matched.some(record => record.meta.requiresAuth === true)
 
-    // If route requires auth and user not authenticated, try backend check first
-    // This handles single_user mode where backend auto-authenticates
+    // If route requires auth and the store has no session yet, verify a
+    // bearer-authenticated session against the backend before redirecting. Auth
+    // is always enabled (#10713); this restores a valid JWT session, it does not
+    // auto-authenticate.
     if (requiresAuth && !userStore.isAuthenticated) {
-      logger.debug('Route requires auth, checking backend for auto-auth (single_user mode)')
+      logger.debug('Route requires auth, verifying session against backend')
       const backendAuthenticated = await userStore.checkAuthFromBackend()
       if (backendAuthenticated) {
-        logger.debug('Backend auto-authenticated user (single_user mode)')
+        logger.debug('Backend confirmed authenticated session')
         // Continue to route - user is now authenticated
         return
       }

@@ -1,0 +1,17 @@
+{
+  "fixture_version": "1",
+  "trajectory_id": "code_fix_null_guard",
+  "task_class": "code_fix",
+  "inputs": {
+    "prompt": "The function crashes when the config dict is missing the 'timeout' key. Add a null guard that falls back to the module default."
+  },
+  "expected_tools": ["read_file", "edit_file", "run_tests"],
+  "baseline_score": 0.9,
+  "expected_output": {
+    "final_status": "completed",
+    "output_text_excerpt": "Added a guard that defaults timeout to DEFAULT_TIMEOUT when absent; ran the test suite and all tests pass."
+  },
+  "agent_config": {
+    "adapter_type": "autobot_agent"
+  }
+}

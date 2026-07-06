@@ -238,14 +238,23 @@ class FailurePatternDetector(AsyncRedisClientMixin):
         except Exception as exc:
             logger.warning("Failed to store pattern: %s", exc)
 
+    @staticmethod
+    def _decode_members(raw: set) -> set:
+        """Normalise smembers() output to a set of str.
+
+        Redis-py returns ``set[bytes]`` when *decode_responses* is False/unset
+        and ``set[str]`` when it is True.  Normalising at the consumption
+        point makes every caller correct regardless of client configuration.
+        """
+        return {m.decode() if isinstance(m, bytes) else m for m in raw}
+
     async def get_pattern_statistics(self) -> Dict[str, Any]:
         """Get overall statistics about learned patterns."""
         try:
             redis = await self._get_redis()
 
-            pattern_hashes = (
-                await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT) or set()
-            )
+            raw = await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT)
+            pattern_hashes = self._decode_members(raw or set())
 
             if not pattern_hashes:
                 return {
@@ -304,9 +313,8 @@ class FailurePatternDetector(AsyncRedisClientMixin):
         """
         try:
             redis = await self._get_redis()
-            pattern_hashes = (
-                await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT) or set()
-            )
+            raw = await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT)
+            pattern_hashes = self._decode_members(raw or set())
 
             patterns: List[FailurePattern] = []
 
@@ -331,9 +339,8 @@ class FailurePatternDetector(AsyncRedisClientMixin):
         """Clear all learned patterns (for testing or reset)."""
         try:
             redis = await self._get_redis()
-            pattern_hashes = (
-                await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT) or set()
-            )
+            raw = await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT)
+            pattern_hashes = self._decode_members(raw or set())
 
             for pattern_hash in pattern_hashes:
                 pattern_key = f"{PATTERN_KEY_PREFIX}{pattern_hash}"

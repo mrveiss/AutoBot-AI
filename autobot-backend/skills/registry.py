@@ -10,14 +10,18 @@ Handles skill lifecycle (load, enable, disable) and dependency validation.
 """
 
 import importlib
+import importlib.util
+import os
 import pkgutil
 import threading
 from typing import Any, Dict, List, Set, Type
 
+import yaml
+
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from prepared_facts import SkillRoutingIndex
-from skills.base_skill import BaseSkill, SkillHealth, SkillManifest, SkillStatus
+from skills.base_skill import BaseSkill, DeclarativeSkill, SkillHealth, SkillManifest, SkillStatus
 from skills.dependency_resolver import check_missing_dependencies, resolve_dependencies
 
 logger = get_logger(__name__)
@@ -253,6 +257,18 @@ class SkillRegistry:
     def discover_builtin_skills(self) -> int:
         """Auto-discover and register all skills in skills.builtin package.
 
+        Handles two kinds of builtin skills:
+
+        1. Python modules — files ending in ``.py`` (or packages with
+           ``__init__.py``) that contain a ``BaseSkill`` subclass.  Discovered
+           via ``pkgutil.iter_modules`` as before.
+
+        2. Declarative SKILL.md-only subdirectories — subdirectories that
+           contain a ``SKILL.md`` but no Python entry-point.  The YAML
+           front-matter is parsed into a ``SkillManifest`` and the subdir is
+           registered as a ``DeclarativeSkill`` so it appears in the registry,
+           the routing index, and can be enabled/disabled by bundles.
+
         Returns the number of newly registered skills.
         """
         count = 0
@@ -262,6 +278,7 @@ class SkillRegistry:
             logger.warning("skills.builtin package not found")
             return 0
 
+        # --- pass 1: Python BaseSkill subclasses ---
         for importer, modname, _ispkg in pkgutil.iter_modules(builtin_pkg.__path__):
             try:
                 module = importlib.import_module(f"skills.builtin.{modname}")
@@ -272,6 +289,40 @@ class SkillRegistry:
                         count += 1
             except Exception:
                 logger.exception("Failed to load skill module: %s", modname)
+
+        # --- pass 2: SKILL.md-only declarative subdirectories ---
+        for pkg_path in builtin_pkg.__path__:
+            for entry in os.scandir(pkg_path):
+                if not entry.is_dir():
+                    continue
+                skill_md = os.path.join(entry.path, "SKILL.md")
+                py_init = os.path.join(entry.path, "__init__.py")
+                # Only handle dirs that have SKILL.md but no Python package
+                # entry-point (those are already covered by pass 1 above).
+                if not os.path.isfile(skill_md) or os.path.isfile(py_init):
+                    continue
+                # Also skip if any .py file exists — pass 1 handles those.
+                has_py = any(f.endswith(".py") for f in os.listdir(entry.path))
+                if has_py:
+                    continue
+                manifest = _parse_skill_md(skill_md)
+                if manifest is None:
+                    continue
+                # Skip if already registered (e.g. by a Python module of the same name)
+                if self._skills.get(manifest.name):
+                    continue
+                instance = DeclarativeSkill(manifest)
+                with self._lock:
+                    self._skills[manifest.name] = instance
+                logger.info(
+                    "Registered declarative skill: %s v%s (SKILL.md-only)",
+                    manifest.name,
+                    manifest.version,
+                )
+                self._publish_skill_promoted(manifest.name, manifest.tools)
+                count += 1
+
+        self._rebuild_routing_index()
         logger.info("Discovered %d builtin skills", count)
         return count
 
@@ -314,6 +365,66 @@ def _find_enabled_dependents(skills: Dict[str, BaseSkill], name: str) -> List[st
         if skill.enabled and name in skill.get_manifest().dependencies:
             dependents.append(skill_name)
     return dependents
+
+
+def _parse_skill_md(skill_md_path: str) -> SkillManifest | None:
+    """Parse the YAML front-matter of a SKILL.md file into a SkillManifest.
+
+    Returns None and logs a warning on any parse/validation error so that a
+    single malformed SKILL.md cannot abort the entire discovery pass.
+    """
+    try:
+        with open(skill_md_path, encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError as exc:
+        logger.warning("Cannot read %s: %s", skill_md_path, exc)
+        return None
+
+    # Extract the YAML front-matter block delimited by --- lines.
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        logger.warning("SKILL.md has no front-matter block: %s", skill_md_path)
+        return None
+    end = None
+    for i, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            end = i
+            break
+    if end is None:
+        logger.warning("SKILL.md front-matter not closed: %s", skill_md_path)
+        return None
+
+    raw_yaml = "\n".join(lines[1:end])
+    try:
+        data = yaml.safe_load(raw_yaml)
+    except yaml.YAMLError as exc:
+        logger.warning("Invalid YAML in %s: %s", skill_md_path, exc)
+        return None
+
+    if not isinstance(data, dict):
+        logger.warning("SKILL.md front-matter is not a mapping: %s", skill_md_path)
+        return None
+
+    name = data.get("name")
+    if not name:
+        logger.warning("SKILL.md missing 'name' field: %s", skill_md_path)
+        return None
+
+    try:
+        return SkillManifest(
+            name=str(name),
+            version=str(data.get("version", "1.0.0")),
+            description=str(data.get("description", "")),
+            author=str(data.get("author", "mrveiss")),
+            category=str(data.get("category", "general")),
+            dependencies=[str(d) for d in (data.get("dependencies") or [])],
+            tools=[str(t) for t in (data.get("tools") or [])],
+            triggers=[str(tr) for tr in (data.get("triggers") or [])],
+            tags=[str(tg) for tg in (data.get("tags") or [])],
+        )
+    except Exception as exc:
+        logger.warning("Cannot build SkillManifest from %s: %s", skill_md_path, exc)
+        return None
 
 
 get_skill_registry = lazy_singleton(SkillRegistry)

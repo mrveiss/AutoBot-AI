@@ -2326,6 +2326,18 @@ class TaskSteeringRequest(BaseModel):
     task_id: str | None = Field(None, description="Task ID (also available from URL path)")
 
 
+class TaskAnswerRequest(BaseModel):
+    """Request to deliver a human answer to a suspended ask_human() call (#10553).
+
+    Mirrors TaskSteeringRequest — delivers free-form or choice-constrained text
+    back to the awaiting loop via the answer inbox.
+    """
+
+    question_id: str = Field(..., description="UUID from the HUMAN_QUESTION event")
+    answer: str = Field(..., description="Human's response (free-form or one of the choices)")
+    task_id: str | None = Field(None, description="Task ID (also available from URL path)")
+
+
 class TerminalInterruptRequest(BaseModel):
     """Request to interrupt agent and take control"""
 
