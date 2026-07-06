@@ -400,7 +400,9 @@
       "reliabilityLow": "Niedrig",
       "aiTrainingData": "KI-Trainingsdaten",
       "webSource": "Webquelle",
-      "knowledgeBase": "Wissensdatenbank"
+      "knowledgeBase": "Wissensdatenbank",
+      "modelOnly": "Nur Modell",
+      "modelOnlyTooltip": "Diese Antwort basiert auf den Trainingsdaten des KI-Modells, nicht auf einer fundierten Wissensquelle."
     },
     "tabContent": {
       "openInNewWindow": "In neuem Fenster öffnen",

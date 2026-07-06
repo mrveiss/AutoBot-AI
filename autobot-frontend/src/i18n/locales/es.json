@@ -400,7 +400,9 @@
       "reliabilityLow": "Bajo",
       "aiTrainingData": "Datos de entrenamiento de IA",
       "webSource": "Fuente web",
-      "knowledgeBase": "Base de conocimientos"
+      "knowledgeBase": "Base de conocimientos",
+      "modelOnly": "Solo modelo",
+      "modelOnlyTooltip": "Esta respuesta se basa en los datos de entrenamiento del modelo de IA, no en una fuente de conocimiento verificada."
     },
     "tabContent": {
       "openInNewWindow": "Abrir en nueva ventana",

@@ -400,7 +400,9 @@
       "reliabilityLow": "Low",
       "aiTrainingData": "AI Training Data",
       "webSource": "Web Source",
-      "knowledgeBase": "قاعدة المعرفة"
+      "knowledgeBase": "قاعدة المعرفة",
+      "modelOnly": "النموذج فقط",
+      "modelOnlyTooltip": "تستند هذه الإجابة إلى بيانات تدريب نموذج الذكاء الاصطناعي، وليس إلى مصدر معرفي موثّق."
     },
     "tabContent": {
       "openInNewWindow": "Open in new window",

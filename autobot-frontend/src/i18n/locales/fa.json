@@ -4954,7 +4954,9 @@
       "reliabilityVerified": "Verified",
       "reliabilityMedium": "Medium",
       "knowledgeBase": "Knowledge Base",
-      "model": "Model:"
+      "model": "Model:",
+      "modelOnly": "فقط مدل",
+      "modelOnlyTooltip": "این پاسخ بر اساس داده‌های آموزشی مدل هوش مصنوعی است، نه یک منبع دانش مستند."
     },
     "sidebar": {
       "deletedWithFactsPreserved": "Deleted {count} chats (facts preserved in knowledge base)",

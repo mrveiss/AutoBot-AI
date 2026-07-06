@@ -4954,7 +4954,9 @@
       "reliabilityVerified": "Verified",
       "reliabilityMedium": "Medium",
       "knowledgeBase": "Knowledge Base",
-      "model": "Model:"
+      "model": "Model:",
+      "modelOnly": "מודל בלבד",
+      "modelOnlyTooltip": "תשובה זו מבוססת על נתוני האימון של מודל ה-AI, ולא על מקור ידע מבוסס."
     },
     "sidebar": {
       "deletedWithFactsPreserved": "Deleted {count} chats (facts preserved in knowledge base)",

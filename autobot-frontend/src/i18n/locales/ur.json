@@ -4954,7 +4954,9 @@
       "reliabilityVerified": "Verified",
       "reliabilityMedium": "Medium",
       "knowledgeBase": "Knowledge Base",
-      "model": "Model:"
+      "model": "Model:",
+      "modelOnly": "صرف ماڈل",
+      "modelOnlyTooltip": "یہ جواب AI ماڈل کے تربیتی ڈیٹا پر مبنی ہے، کسی مستند علمی ماخذ پر نہیں۔"
     },
     "sidebar": {
       "deletedWithFactsPreserved": "Deleted {count} chats (facts preserved in knowledge base)",

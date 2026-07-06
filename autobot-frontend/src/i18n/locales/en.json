@@ -451,7 +451,9 @@
       "reliabilityLow": "Low",
       "aiTrainingData": "AI Training Data",
       "webSource": "Web Source",
-      "knowledgeBase": "Knowledge Base"
+      "knowledgeBase": "Knowledge Base",
+      "modelOnly": "Model only",
+      "modelOnlyTooltip": "This response is based on the AI model's training data, not a grounded knowledge source."
     },
     "tabContent": {
       "openInNewWindow": "Open in new window",
