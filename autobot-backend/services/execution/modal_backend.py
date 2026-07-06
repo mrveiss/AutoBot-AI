@@ -26,6 +26,7 @@ from services.execution.base_backend import (
     ExecutionStatus,
     ExecutionTask,
 )
+from services.execution.env_sanitizer import safe_task_env
 
 logger = get_logger(__name__)
 
@@ -198,9 +199,11 @@ class ModalBackend(ExecutionBackend):
 
             try:
                 with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                    # Execute code in isolated namespace
-                    namespace = {"__name__": "__modal__"}
-                    namespace.update(task.env_vars)
+                    # Execute code in isolated namespace. Security: task env
+                    # vars become exec() globals, so filter them through the
+                    # same AUTOBOT_* allowlist to block runtime/loader hijack
+                    # names leaking into the executed code namespace.
+                    namespace = safe_task_env({"__name__": "__modal__"}, task.env_vars)
 
                     exec(task.code, namespace)  # nosec B102
 
