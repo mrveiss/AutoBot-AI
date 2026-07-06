@@ -1280,6 +1280,7 @@ def get_optimized_prompt(
     recent_context: str | None = None,
     additional_params: Dict | None = None,
     tool_descriptions: Dict | None = None,
+    preference_clause: str | None = None,
 ) -> str:
     """
     Get a prompt optimized for vLLM prefix caching.
@@ -1315,8 +1316,56 @@ def get_optimized_prompt(
         tool_descriptions,
     )
 
-    # Combine: static prefix + dynamic suffix (CRITICAL for vLLM prefix caching)
-    return f"{base_prompt}\n\n{dynamic_context}"
+    # Combine: static prefix + dynamic suffix (CRITICAL for vLLM prefix caching).
+    combined = f"{base_prompt}\n\n{dynamic_context}"
+    # #10545: append a bounded, explainable tenant-preference guidance block
+    # after the dynamic suffix (kept out of the cached static prefix). Callers
+    # on async paths pre-fetch it via ``build_preference_clause`` so this sync
+    # function stays sync.
+    if preference_clause:
+        combined = f"{combined}\n\n{preference_clause}"
+    return combined
+
+
+async def build_preference_clause(
+    behaviors: List[str],
+    *,
+    task_class: str = "general",
+    user_id: str | None = None,
+    org_id: str | None = None,
+) -> str | None:
+    """Build a tenant-preference guidance block for prompt assembly (#10545).
+
+    Reads the feedback aggregator for the given candidate ``behaviors`` (skills,
+    styles, approaches) scoped to the tenant + task-class. When humans there
+    have repeatedly rejected/edited a behavior, an explicit, bounded guidance
+    line is emitted so the model avoids it — the same signal that biases routing
+    and skill selection, surfaced in the prompt and therefore explainable.
+
+    Returns ``None`` when no qualifying preference exists (prompt unchanged).
+    """
+    if not behaviors:
+        return None
+    try:
+        from services.feedback_aggregator import get_feedback_aggregator
+
+        biases = await get_feedback_aggregator().get_biases_for_class(
+            behaviors, task_class=task_class, user_id=user_id, org_id=org_id
+        )
+    except Exception:  # noqa: BLE001 — never break prompt assembly on bias lookup
+        return None
+
+    if not biases:
+        return None
+
+    lines = [f"- {bias.explanation}" for bias in biases.values()]
+    body = "\n".join(lines)
+    return (
+        "**Learned Preferences (from this team's past feedback):**\n"
+        f"{body}\n"
+        "Prefer alternatives to the above where a reasonable one exists; "
+        "this is guidance, not a hard constraint."
+    )
 
 
 def list_available_prompts(filter_pattern: str | None = None) -> List[str]:
