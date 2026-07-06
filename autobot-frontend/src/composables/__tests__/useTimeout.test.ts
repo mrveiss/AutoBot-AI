@@ -327,7 +327,7 @@ describe('useTimeout Composable', () => {
 
     it('should preserve function context', async () => {
       // vi.fn records invocation contexts — no manual `this` capture needed
-      const callback = vi.fn(function (this: any) {})
+      const callback = vi.fn(function (this: unknown) {})
 
       const context = { value: 'test-context' }
       const TestComponent = defineComponent({

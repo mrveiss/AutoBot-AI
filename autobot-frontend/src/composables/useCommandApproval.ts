@@ -410,10 +410,10 @@ export function useCommandApproval() {
     chatId: string | null | undefined,
     message: string
   ): Promise<unknown> => {
-    const response = await apiClient.post<any>(`${getApiBase()}/chat/direct`, {
+    const response = await apiClient.post<{ data?: unknown }>(`${getApiBase()}/chat/direct`, {
       message,
       chat_id: chatId
-    }) as { data?: unknown }
+    })
     return response
   }
 

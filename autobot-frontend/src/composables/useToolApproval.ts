@@ -95,7 +95,7 @@ export function useToolApproval(): UseToolApprovalReturn {
     }
     submittingApproval.value = true
     try {
-      await apiClient.post<any>(
+      await apiClient.post<unknown>(
         `${getApiBase()}/agent-terminal/tools/approve/${encodeURIComponent(approval.approval_id)}`,
         { approved, comment: comment ?? null, task_id: approval.task_id ?? null }
       )

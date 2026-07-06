@@ -157,7 +157,7 @@ if ('serviceWorker' in navigator && !_swHostIsIp) {
 
       logger.debug('Service Worker registered successfully', {
         scope: registration.scope,
-        updateViaCache: (registration as any).updateViaCache
+        updateViaCache: registration.updateViaCache
       })
 
       // Check for updates periodically

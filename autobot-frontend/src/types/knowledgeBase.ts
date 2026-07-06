@@ -309,6 +309,42 @@ export type ConnectorType =
   | 'forgejo'
 
 /**
+ * Connector-specific settings bag. Each connector type populates a subset of
+ * these optional fields (see ConnectorConfigModal build/apply logic). Kept as a
+ * single flat interface because the backend stores them in one `config` object.
+ */
+export interface ConnectorSettings {
+  // file_server
+  base_path?: string
+  max_file_size_mb?: number
+  // web_crawler
+  urls?: string[]
+  max_depth?: number
+  // database
+  connection_string?: string
+  query?: string
+  id_column?: string
+  content_columns?: string[]
+  timestamp_column?: string
+  // gdrive / onedrive
+  source_type?: string
+  drive_id?: string
+  folder_id?: string
+  folder_path?: string
+  site_id?: string
+  sync_subfolders?: boolean
+  // gitlab / gitea / forgejo
+  gitlab_url?: string
+  gitea_url?: string
+  token?: string
+  project_ids?: string[]
+  repos?: string[]
+  sync_issues?: boolean
+  sync_merge_requests?: boolean
+  sync_files?: boolean
+}
+
+/**
  * Connector configuration as stored by the backend.
  * Each connector defines how to ingest data from an external source.
  */
@@ -316,7 +352,7 @@ export interface ConnectorConfig {
   connector_id: string
   connector_type: ConnectorType
   name: string
-  config: Record<string, any>
+  config: ConnectorSettings
   schedule_cron: string | null
   verification_mode: 'autonomous' | 'collaborative'
   enabled: boolean
