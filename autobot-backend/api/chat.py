@@ -39,9 +39,11 @@ from api.schemas_chat import (
     ChatPreferences,
     ChatSaveData,
     ChatStatsData,
+    Citation,
     ConversationSummarizeRequest,
     DetectLanguageData,
     DetectLanguageRequest,
+    GroundingStatus,
     TranslateData,
     TranslateRequest,
 )
@@ -602,6 +604,31 @@ async def _generate_ai_response(
         }, None
 
 
+def _build_citations_from_kb_results(kb_results: List[Dict[str, Any]]) -> List[Citation]:
+    """Convert raw KB search results to structured Citation objects (#10548).
+
+    Each kb_result dict coming from search() typically carries:
+      content, source (file path), score, metadata (chunk_id, title, …).
+    We construct a Citation for each entry, capping at 5 to avoid payload bloat.
+    """
+    citations: List[Citation] = []
+    for idx, result in enumerate(kb_results[:5]):
+        raw_meta = result.get("metadata") or {}
+        chunk_id = raw_meta.get("chunk_id") or raw_meta.get("id") or f"chunk-{idx}"
+        source_path = result.get("source") or raw_meta.get("source_path") or ""
+        title = raw_meta.get("title") or (source_path.split("/")[-1] if source_path else f"Source {idx + 1}")
+        citations.append(
+            Citation(
+                id=str(chunk_id),
+                source_type="chunk",
+                title=title,
+                uri=source_path or None,
+                score=float(result.get("score") or 0.0),
+            )
+        )
+    return citations
+
+
 async def _store_and_log_ai_response(
     ai_response: Dict,
     session_id: str,
@@ -745,6 +772,24 @@ async def process_chat_message(
             "context_limit": overflow_status.get("context_limit", 0),
         }
 
+    # Issue #10548: RAG grounding — query KB and attach structured citations by default.
+    # Uses the knowledge_base dependency already available on this path (no re-retrieval).
+    citations: List[Citation] = []
+    if message.use_knowledge_base and knowledge_base:
+        try:
+            kb_hits = await knowledge_base.search(query=message.content, top_k=5)
+            if kb_hits:
+                citations = _build_citations_from_kb_results(kb_hits)
+                logger.debug("[#10548] Attached %d citations to response in session %s", len(citations), session_id)
+        except Exception as _cit_err:
+            logger.warning("[#10548] Citation retrieval failed (non-fatal): %s", _cit_err)
+
+    grounding = GroundingStatus(grounded=bool(citations), strategy="rag" if citations else None)
+    # Surface citations in metadata so CitationsDisplay.vue can consume them
+    # (MessageItem.vue reads message.metadata.citations).
+    if citations:
+        metadata = {**(metadata or {}), "citations": [c.model_dump() for c in citations]}
+
     # MVA-3090: Extract thinking metadata from LLM response
     thinking_metadata = None
     if llm_response and llm_response.usage:
@@ -767,6 +812,8 @@ async def process_chat_message(
         timestamp=utc_timestamp(),
         metadata=metadata,
         thinking_metadata=thinking_metadata,
+        citations=citations,
+        grounding=grounding,
     )
 
 
