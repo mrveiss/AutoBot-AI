@@ -56,6 +56,7 @@ export interface WorkflowTask {
   skill_name: unknown;
   skill_action: unknown;
   skill_resolution_method: unknown;
+  skill_preference_note: unknown;
   pending_skill_id: unknown;
   preconditions: string[];
   effects: string[];
