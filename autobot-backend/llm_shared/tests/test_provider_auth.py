@@ -23,6 +23,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+# Module reference for patch.object.  The llm_shared stub package loads provider_auth
+# via _load_real_mod into sys.modules["llm_shared.provider_auth"].  We must patch on
+# the exact module object that OAuthAuth.__globals__ points to — which is the module
+# where OAuthAuth was defined (its __globals__["__name__"] == "llm_shared.provider_auth").
+# Obtain it via the class's function globals to guarantee identity.
+import llm_shared.provider_auth as _provider_auth_mod  # standard import path
 from llm_shared.provider_auth import (
     ApiKeyAuth,
     DeviceCodeAuth,
@@ -30,25 +36,17 @@ from llm_shared.provider_auth import (
     ProviderAuthError,
     SessionAuth,
     TokenExpiredError,
-    build_token_data,
     _merge_token_response,
+    build_token_data,
 )
-
-# Module reference for patch.object.  The llm_shared stub package loads provider_auth
-# via _load_real_mod into sys.modules["llm_shared.provider_auth"].  We must patch on
-# the exact module object that OAuthAuth.__globals__ points to — which is the module
-# where OAuthAuth was defined (its __globals__["__name__"] == "llm_shared.provider_auth").
-# Obtain it via the class's function globals to guarantee identity.
-import llm_shared.provider_auth as _provider_auth_mod  # standard import path
 
 # Use the class's actual globals dict as the authoritative module reference.
 # This handles the case where _load_real_mod creates a fresh module object that
 # patch.object must target to replace the function seen by OAuthAuth.resolve_token.
 _PA_GLOBALS = OAuthAuth.resolve_token.__globals__  # type: ignore[attr-defined]
 import sys as _sys
-_PA_MOD = _sys.modules.get(
-    _PA_GLOBALS.get("__name__", ""), _provider_auth_mod
-)
+
+_PA_MOD = _sys.modules.get(_PA_GLOBALS.get("__name__", ""), _provider_auth_mod)
 
 
 # ---------------------------------------------------------------------------

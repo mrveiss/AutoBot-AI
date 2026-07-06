@@ -33,7 +33,6 @@ from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
 from llm_shared.provider_auth import (
-    PROVIDER_AUTH_SECRET_TYPE,
     _vault_read,
     _vault_write,
     build_token_data,
@@ -127,7 +126,7 @@ async def oauth_callback(
     provider sign-in page.  The backend performs the PKCE code exchange and
     stores the resulting token pair in the system vault.
     """
-    from knowledge.connectors.oauth_flow import exchange_code, OAuthProvider  # noqa: PLC0415
+    from knowledge.connectors.oauth_flow import OAuthProvider, exchange_code  # noqa: PLC0415
 
     # Build a minimal OAuthProvider for the exchange helper.
     provider_cfg = OAuthProvider(
@@ -305,8 +304,9 @@ async def revoke_provider_auth(
 ) -> None:
     """Revoke stored OAuth / device-code / session tokens for a provider."""
     from sqlalchemy import delete  # noqa: PLC0415
-    from models.secret import Secret  # noqa: PLC0415
+
     from llm_shared.provider_auth import _vault_secret_name  # noqa: PLC0415
+    from models.secret import Secret  # noqa: PLC0415
 
     name = _vault_secret_name(provider_name, "global")
     await session.execute(delete(Secret).where(Secret.name == name, Secret.owner_vault == _SYSTEM_VAULT))

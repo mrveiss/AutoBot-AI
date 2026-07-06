@@ -138,17 +138,15 @@ async def _vault_read(
     """Read a stored token dict from the vault.  Returns None on miss."""
     import json
 
-    from autobot_shared.secrets_vault import VaultRef
-    from services.envelope_secrets_service import EnvelopeSecretsService, SecretAccessError, SecretNotFoundError
-
     from sqlalchemy import select  # noqa: PLC0415 — conditional import inside helper
+
+    from autobot_shared.secrets_vault import VaultRef
     from models.secret import Secret  # noqa: PLC0415
+    from services.envelope_secrets_service import EnvelopeSecretsService, SecretAccessError, SecretNotFoundError
 
     name = _vault_secret_name(provider_name, subject)
     # Look up the secret row by name + owner_vault to find the secret_id.
-    result = await session.execute(
-        select(Secret).where(Secret.name == name, Secret.owner_vault == owner_vault_str)
-    )
+    result = await session.execute(select(Secret).where(Secret.name == name, Secret.owner_vault == owner_vault_str))
     secret_row = result.scalar_one_or_none()
     if secret_row is None:
         return None
@@ -181,15 +179,14 @@ async def _vault_write(
     import uuid
 
     from sqlalchemy import delete  # noqa: PLC0415
-    from models.secret import Secret  # noqa: PLC0415
+
     from autobot_shared.secrets_vault import VaultRef
+    from models.secret import Secret  # noqa: PLC0415
     from services.envelope_secrets_service import EnvelopeSecretsService
 
     name = _vault_secret_name(provider_name, subject)
     # Remove old entry (if any) before re-sealing — avoids DEK sprawl.
-    await session.execute(
-        delete(Secret).where(Secret.name == name, Secret.owner_vault == owner_vault_str)
-    )
+    await session.execute(delete(Secret).where(Secret.name == name, Secret.owner_vault == owner_vault_str))
     await session.flush()
 
     owner_ref = VaultRef.parse(owner_vault_str)
@@ -275,9 +272,7 @@ class OAuthAuth(ProviderAuthStrategy):
             return token_data["access_token"]
         refresh_token = token_data.get("refresh_token")
         if not refresh_token:
-            raise TokenExpiredError(
-                f"OAuth token for {self._provider_name!r} expired and no refresh token available."
-            )
+            raise TokenExpiredError(f"OAuth token for {self._provider_name!r} expired and no refresh token available.")
         return await self._refresh(session, token_data, refresh_token)
 
     async def _refresh(self, session: Any, old_data: dict, refresh_token: str) -> str:
@@ -427,9 +422,7 @@ class SessionAuth(ProviderAuthStrategy):
             )
         expires_at = token_data.get("expires_at", 0)
         if expires_at and time.time() > expires_at:
-            raise TokenExpiredError(
-                f"Session token for {self._provider_name!r} expired. Please reconnect."
-            )
+            raise TokenExpiredError(f"Session token for {self._provider_name!r} expired. Please reconnect.")
         return token_data["access_token"]
 
     def __repr__(self) -> str:
