@@ -52,7 +52,6 @@
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import type { Operation, OperationsFilter } from '@/types/operations'
 import OperationsList from './OperationsList.vue'
 import OperationDetail from './OperationDetail.vue'
@@ -65,7 +64,6 @@ interface Props {
   filter?: OperationsFilter
 }
 
-const { t } = useI18n()
 
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
