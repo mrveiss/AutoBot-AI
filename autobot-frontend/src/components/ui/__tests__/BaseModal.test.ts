@@ -66,7 +66,7 @@ describe('BaseModal focus trap (#5016)', () => {
     await flushPromises()
     const dialog = wrapper.find('[role="dialog"]')
     expect(dialog.exists()).toBe(true)
-    expect(dialog.find('.close-btn').exists()).toBe(true)
+    expect(dialog.find('.aui-dialog-close').exists()).toBe(true)
     expect(dialog.find('.body-btn').exists()).toBe(true)
     wrapper.unmount()
   })

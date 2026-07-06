@@ -6,6 +6,8 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
+import en from '@/i18n/locales/en.json'
 
 const post = vi.fn()
 const get = vi.fn()
@@ -45,9 +47,15 @@ const ITEMS = [
   { id: 'c', title: 'C', type: 'pbi', status: 'new', priority: 'medium', backlog_position: 2 },
 ]
 
+// vue-i18n 11 requires app.use(); install a real i18n plugin (BacklogView uses
+// useI18n()) so mounting doesn't throw. Real en.json keeps template render valid.
+const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+
 async function mountView() {
   get.mockResolvedValue({ items: ITEMS.map(i => ({ ...i })) })
-  const wrapper = mount(BacklogView, { global: { stubs: { LlcBreadcrumb: true, 'router-link': true } } })
+  const wrapper = mount(BacklogView, {
+    global: { plugins: [i18n], stubs: { LlcBreadcrumb: true, 'router-link': true } },
+  })
   await flushPromises()
   return wrapper
 }
