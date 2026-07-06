@@ -16,8 +16,8 @@ const meta = {
 } as Meta<typeof TerminalWindow>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 // NOTE: TerminalWindow uses WebSocket, Vue Router, and i18n.  In Storybook
 // these are provided by the global decorators configured in .storybook/preview.ts.

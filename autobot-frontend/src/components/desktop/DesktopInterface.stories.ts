@@ -34,8 +34,8 @@ const meta = {
 } as Meta<typeof DesktopInterface>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = import('@storybook/vue3').StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = import('@storybook/vue3').StoryObj<Record<string, unknown>>;
 
 /**
  * Default — no host prop; the component attempts to load the VNC URL from AppConfig.
@@ -46,7 +46,7 @@ export const Default: Story = {
   args: {
     host: null,
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { DesktopInterface },
     setup() { return { args } },
     template: `<div style="height:600px"><DesktopInterface v-bind="args" /></div>`,
@@ -66,7 +66,7 @@ export const WithHostProp: Story = {
       name: 'Frontend VM',
     } satisfies Partial<SelectorHost>,
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { DesktopInterface },
     setup() { return { args } },
     template: `<div style="height:600px"><DesktopInterface v-bind="args" /></div>`,
@@ -78,7 +78,7 @@ export const WithHostProp: Story = {
  */
 export const CompactHeight: Story = {
   args: { host: null },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { DesktopInterface },
     setup() { return { args } },
     template: `<div style="height:360px"><DesktopInterface v-bind="args" /></div>`,
@@ -90,7 +90,7 @@ export const CompactHeight: Story = {
  */
 export const TallLayout: Story = {
   args: { host: null },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { DesktopInterface },
     setup() { return { args } },
     template: `<div style="height:900px"><DesktopInterface v-bind="args" /></div>`,
@@ -109,7 +109,7 @@ export const CustomVmHost: Story = {
       name: 'Worker VM',
     } satisfies Partial<SelectorHost>,
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { DesktopInterface },
     setup() { return { args } },
     template: `<div style="height:600px"><DesktopInterface v-bind="args" /></div>`,

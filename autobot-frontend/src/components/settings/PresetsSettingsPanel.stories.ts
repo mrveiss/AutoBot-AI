@@ -14,7 +14,7 @@ const meta = {
 } as Meta<typeof PresetsSettingsPanel>
 
 export default meta
-// #7273: relaxed to StoryObj<any> for render-only stories
-type Story = StoryObj<any>
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories
+type Story = StoryObj<Record<string, unknown>>
 
 export const Default: Story = {}

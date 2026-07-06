@@ -21,8 +21,8 @@ const meta = {
 } as Meta<typeof ReasoningTrace>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 const sampleEntries = [
   { id: '1', kind: 'step_start', label: 'Starting task: analyze user request', durationMs: null },

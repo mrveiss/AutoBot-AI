@@ -38,8 +38,8 @@ const meta = {
 } as Meta<typeof BaseXTerminal>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 // NOTE: BaseXTerminal initialises an xterm.js Terminal instance on mount and
 // requires a real browser DOM.  In Storybook Canvas mode all stories render

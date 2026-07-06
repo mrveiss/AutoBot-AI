@@ -22,9 +22,9 @@ const meta = {
 
 export default meta
 
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Story = import('@storybook/vue3').StoryObj<any>
+type Story = import('@storybook/vue3').StoryObj<Record<string, unknown>>
 
 export const Default: Story = {
   render: () => ({
