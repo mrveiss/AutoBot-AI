@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from llm_shared.types import LLMType
 
 from .rag_assembler import AssemblerProfile, LLCRAGAssembler
 
@@ -83,7 +84,7 @@ class HandoffBriefGenerator:
                         "artifacts (list of created/modified artifacts)",
                     },
                 ],
-                llm_type="extraction",
+                llm_type=LLMType.EXTRACTION,
                 temperature=0.1,
                 max_tokens=1024,
             )
@@ -172,7 +173,7 @@ class HandoffBriefGenerator:
                         "suggested_approach (recommended strategy for this work)",
                     },
                 ],
-                llm_type="extraction",
+                llm_type=LLMType.EXTRACTION,
                 temperature=0.1,
                 max_tokens=1024,
             )

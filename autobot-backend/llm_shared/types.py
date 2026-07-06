@@ -58,8 +58,14 @@ class ProviderType(Enum):
     BEDROCK = "bedrock"  # GH#9010
 
 
-class LLMType(Enum):
-    """Types of LLM usage contexts."""
+class LLMType(str, Enum):
+    """Types of LLM usage contexts.
+
+    Subclasses ``str`` (#11019) so a member is interchangeable with its string
+    value everywhere — ``LLMType.EXTRACTION == "extraction"``, dict lookups keyed
+    by the raw string still resolve, and legacy call sites passing the string keep
+    working — while call sites can adopt ``LLMType.X`` for author-time typo safety.
+    """
 
     ORCHESTRATOR = "orchestrator"
     TASK = "task"

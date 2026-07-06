@@ -23,6 +23,7 @@ from enum import Enum
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from llm_shared.types import LLMType
 
 logger = get_logger(__name__)
 
@@ -184,7 +185,7 @@ class BaseLLMJudge:
                     {"role": "system", "content": self._get_system_prompt()},
                     {"role": "user", "content": prompt},
                 ],
-                llm_type="analysis",
+                llm_type=LLMType.ANALYSIS,
                 temperature=0.1,  # Low temperature for consistent judgments
                 structured_output=True,  # #10672: force valid JSON so judgments aren't dropped
             )
