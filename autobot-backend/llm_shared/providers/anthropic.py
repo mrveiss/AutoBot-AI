@@ -32,9 +32,29 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+
+# ---------------------------------------------------------------------------
+# Adapter helpers — lazy so tests that don't boot the full app still work.
+# ---------------------------------------------------------------------------
+
+
+def _get_adapter_sync():
+    """Return the live AutoBotClaudeAPIAdapter singleton without awaiting init.
+
+    Returns None if the module has not been imported yet or the instance is
+    absent.  Callers must handle None gracefully (fail-safe path).
+    """
+    try:
+        from utils.claude_api_integration import AutoBotClaudeAPIAdapter
+
+        return AutoBotClaudeAPIAdapter._instance
+    except Exception:
+        return None
+
+
 from autobot_shared.ssot_config import config
 from constants.model_constants import (
     ANTHROPIC_CLAUDE3_OPUS_DATED,
@@ -68,6 +88,17 @@ _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 def _strip_think_blocks(text: str) -> str:
     """Remove ``<think>…</think>`` wrapper blocks from *text*."""
     return _THINK_BLOCK_RE.sub("", text).strip()
+
+
+def _extract_think_tag_content(text: str) -> Optional[str]:
+    """Return the concatenated inner text of all ``<think>…</think>`` blocks, or None."""
+    matches = _THINK_BLOCK_RE.findall(text)
+    if not matches:
+        return None
+    # findall returns the full match including tags; strip the wrapper.
+    inner_re = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
+    parts = inner_re.findall(text)
+    return "\n".join(p.strip() for p in parts if p.strip()) or None
 
 
 def _build_api_kwargs(
@@ -119,17 +150,45 @@ def _extract_text_content(response_content: list, preserve_reasoning: bool) -> s
     When *preserve_reasoning* is False (default) ``<think>…</think>`` wrapper
     blocks written by the model are stripped before returning.
     """
-    parts: List[str] = []
+    text, _ = _extract_content_pair(response_content, preserve_reasoning)
+    return text
+
+
+def _extract_content_pair(response_content: list, preserve_reasoning: bool) -> tuple[str, Optional[str]]:
+    """
+    Extract ``(content, reasoning_content)`` from an Anthropic response block list.
+
+    *content* has thinking blocks removed (or ``<think>`` tags stripped unless
+    *preserve_reasoning* is True).  *reasoning_content* contains the captured
+    reasoning text from native ``thinking`` blocks and ``<think>`` tags, or
+    ``None`` if none were present.
+    """
+    reasoning_parts: List[str] = []
+    text_parts: List[str] = []
+
     for block in response_content:
         block_type = getattr(block, "type", None)
         if block_type == "thinking":
+            thinking_text = getattr(block, "thinking", None) or getattr(block, "text", None)
+            if thinking_text:
+                reasoning_parts.append(thinking_text.strip())
             continue
         text = getattr(block, "text", None)
         if text:
-            parts.append(text)
+            text_parts.append(text)
 
-    joined = "\n".join(parts)
-    return joined if preserve_reasoning else _strip_think_blocks(joined)
+    joined = "\n".join(text_parts)
+    if preserve_reasoning:
+        content = joined
+    else:
+        # Capture any <think> tags from the text blocks before stripping them.
+        tag_reasoning = _extract_think_tag_content(joined)
+        if tag_reasoning:
+            reasoning_parts.append(tag_reasoning)
+        content = _strip_think_blocks(joined)
+
+    reasoning_content: Optional[str] = "\n".join(reasoning_parts) if reasoning_parts else None
+    return content, reasoning_content
 
 
 class AnthropicProvider(BaseProvider):
@@ -236,10 +295,36 @@ class AnthropicProvider(BaseProvider):
 
         Supports extended thinking when ``request.metadata["api_kwargs"]``
         contains a ``thinking`` key.
+
+        Issue #10849: outbound payload is routed through the AutoBotClaudeAPIAdapter
+        pre-send pipeline (rate-limit check, payload optimization, metric recording)
+        before being dispatched to the Anthropic API.  The adapter is accessed via
+        its module-level singleton; when absent the call proceeds unchanged (fail-safe).
         """
         self._total_requests += 1
         start = time.time()
         model = request.model_name or self._get_setting("default_model", ANTHROPIC_CLAUDE_SONNET4_6)
+
+        # --- Adapter pre-send: rate-limit + payload optimization (#10849) ----------
+        # Serialize the user-visible content for the adapter pipeline.
+        # The adapter operates on the text content; the full structured payload
+        # (tools, extra_headers, etc.) flows unchanged to the Anthropic SDK.
+        _adapter = _get_adapter_sync()
+        _context_type: str = request.llm_type.value if hasattr(request.llm_type, "value") else "general"
+        if _adapter is not None and _adapter.is_initialized:
+            try:
+                _raw_content = " ".join(m.get("content", "") for m in request.messages if isinstance(m, dict))
+                await _adapter.optimize_for_send(
+                    content=_raw_content,
+                    context_type=_context_type,
+                )
+            except Exception as _adapt_err:
+                logger.debug(
+                    "Claude adapter pre-send optimization skipped (fail-safe): %s",
+                    _adapt_err,
+                )
+        # --------------------------------------------------------------------------
+
         try:
             client = self._ensure_client()
             kwargs, extra_headers, preserve_reasoning = self._build_request_kwargs(model, request)
@@ -250,7 +335,7 @@ class AnthropicProvider(BaseProvider):
             call_kwargs = sorted_for_cache(call_kwargs)
 
             response = await client.messages.create(**call_kwargs)
-            content = _extract_text_content(response.content, preserve_reasoning)
+            content, reasoning_content = _extract_content_pair(response.content, preserve_reasoning)
             total_tokens = response.usage.input_tokens + response.usage.output_tokens
             processing_time = time.time() - start
 
@@ -278,7 +363,7 @@ class AnthropicProvider(BaseProvider):
                 if thinking_tokens is not None and thinking_tokens > 0:
                     usage_dict["thinking_tokens"] = thinking_tokens
 
-            return LLMResponse(
+            llm_response = LLMResponse(
                 content=content,
                 model=response.model,
                 provider=self.provider_name,
@@ -292,15 +377,44 @@ class AnthropicProvider(BaseProvider):
                     api_kwargs_applied=call_kwargs,
                     total_tokens=total_tokens,
                 ),
+                reasoning_content=reasoning_content,
             )
+            # --- Adapter post-send: metric recording (#10849) ---------------------
+            if _adapter is not None and _adapter.is_initialized:
+                try:
+                    _raw_len = sum(len(m.get("content", "")) for m in request.messages if isinstance(m, dict))
+                    await _adapter.record_send_result(
+                        context_type=_context_type,
+                        content_len=_raw_len,
+                        response_time=processing_time,
+                        success=True,
+                    )
+                except Exception as _rec_err:
+                    logger.debug("Claude adapter post-send record skipped: %s", _rec_err)
+            # ----------------------------------------------------------------------
+            return llm_response
         except Exception as exc:
             self._total_errors += 1
             logger.error("Anthropic chat_completion error: %s", exc)
+            processing_time = time.time() - start
+            # --- Adapter post-send: error metric recording (#10849) ---------------
+            if _adapter is not None and _adapter.is_initialized:
+                try:
+                    await _adapter.record_send_result(
+                        context_type=_context_type,
+                        content_len=sum(len(m.get("content", "")) for m in request.messages if isinstance(m, dict)),
+                        response_time=processing_time,
+                        success=False,
+                        error_message=str(exc),
+                    )
+                except Exception as _rec_err:
+                    logger.debug("Claude adapter post-send error record skipped: %s", _rec_err)
+            # ----------------------------------------------------------------------
             return LLMResponse(
                 content="",
                 model=model,
                 provider=self.provider_name,
-                processing_time=time.time() - start,
+                processing_time=processing_time,
                 request_id=request.request_id,
                 error=str(exc),
             )
@@ -310,9 +424,34 @@ class AnthropicProvider(BaseProvider):
 
         Supports extended thinking when ``request.metadata["api_kwargs"]``
         contains a ``thinking`` key.  Thinking blocks are not yielded.
+
+        Issue #10849: applies adapter pre-send optimization (rate-limit check,
+        payload optimization) before streaming begins.  Post-send metric recording
+        is not applied per-chunk; the adapter records the stream open as a single
+        individual request.  Streaming cannot be routed through submit_request()
+        which is non-streaming by design.
         """
         self._total_requests += 1
         model = request.model_name or self._get_setting("default_model", ANTHROPIC_CLAUDE_SONNET4_6)
+
+        # --- Adapter pre-send: rate-limit + payload optimization (#10849) ----------
+        _stream_adapter = _get_adapter_sync()
+        _stream_context_type = request.llm_type.value if hasattr(request.llm_type, "value") else "general"
+        if _stream_adapter is not None and _stream_adapter.is_initialized:
+            try:
+                _stream_raw = " ".join(m.get("content", "") for m in request.messages if isinstance(m, dict))
+                await _stream_adapter.optimize_for_send(
+                    content=_stream_raw,
+                    context_type=_stream_context_type,
+                )
+            except Exception as _sadapt_err:
+                logger.debug(
+                    "Claude adapter stream pre-send optimization skipped (fail-safe): %s",
+                    _sadapt_err,
+                )
+        # --------------------------------------------------------------------------
+
+        _stream_start = time.time()
         try:
             client = self._ensure_client()
             kwargs, extra_headers, _preserve = self._build_request_kwargs(model, request)
@@ -325,6 +464,19 @@ class AnthropicProvider(BaseProvider):
             async with client.messages.stream(**call_kwargs) as stream:
                 async for text in stream.text_stream:
                     yield text
+
+            # --- Adapter post-send: success metric (#10849) -----------------------
+            if _stream_adapter is not None and _stream_adapter.is_initialized:
+                try:
+                    await _stream_adapter.record_send_result(
+                        context_type=_stream_context_type,
+                        content_len=sum(len(m.get("content", "")) for m in request.messages if isinstance(m, dict)),
+                        response_time=time.time() - _stream_start,
+                        success=True,
+                    )
+                except Exception as _srec_err:
+                    logger.debug("Claude adapter stream post-send record skipped: %s", _srec_err)
+            # ----------------------------------------------------------------------
         except Exception as exc:
             self._total_errors += 1
             logger.error("Anthropic stream_completion error: %s", exc)
@@ -351,6 +503,8 @@ __all__ = [
     "AnthropicProvider",
     "_ANTHROPIC_MODELS",
     "_build_api_kwargs",
+    "_extract_content_pair",
     "_extract_text_content",
+    "_extract_think_tag_content",
     "_strip_think_blocks",
 ]

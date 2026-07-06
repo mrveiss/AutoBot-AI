@@ -51,6 +51,7 @@ class KnownProbes(str, enum.Enum):
     INTELLIGENT_AGENT = "intelligent_agent"
     LLC = "llc"
     PRICING = "pricing"  # GH#6480
+    CONTENT_REACH = "content_reach"  # #10932
 
 
 # Per-probe timeout. Probes slower than this become ``status="down"`` so a slow

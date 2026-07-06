@@ -29,6 +29,58 @@ tags:
   - content-aggregation
 ---
 
+## Capability Tiers
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ rss-reader                                                    │
+├─────────────────────────────────────────────────────────────┤
+│ STANDALONE   (always works, zero config)                     │
+│   • Parse any public RSS/Atom feed with feedparser           │
+│     (tolerant of malformed XML, no auth)                     │
+├─────────────────────────────────────────────────────────────┤
+│ SUPERCHARGED (unlocks when you connect a tool)               │
+│   • atoma parser         → typed Atom objects on strict feeds │
+│   • Custom User-Agent /  → feeds that reject the default      │
+│     Accept header           request                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**STANDALONE — always works, zero config**
+
+- Parse any public RSS or Atom feed with `feedparser`; both formats are detected
+  automatically and malformed XML is tolerated.
+- List titles, extract entries as JSON, read full entry content, and inspect
+  feed metadata — all without authentication.
+
+**SUPERCHARGED — unlocks per connected tool**
+
+| Connect this | Unlocks |
+|--------------|---------|
+| `atoma` parser | Strongly-typed Atom entry objects for strict Atom feeds where `feedparser` degrades. |
+| Custom `User-Agent` / `Accept` header handler | Feeds that reject the default request (403 / empty body) become readable. |
+
+These are graceful fallbacks — the skill defaults to `feedparser` and only needs
+the extras for the minority of feeds that require them.
+
+## Output Contract
+
+Feed reads return this fixed shape:
+
+```
+## Feed: <feed title>
+
+**URL:** <feed_url>   **Type:** rss | atom   **Entries:** <n>
+**Parser:** feedparser | atoma
+
+| # | Title | Published | Link |
+|---|-------|-----------|------|
+| 1 | ...   | ...       | ...  |
+```
+
+Single-entry content mode returns the raw entry body (HTML or plain text) under
+a `## <entry title>` heading.
+
 ## When to Use
 
 Use this skill when an agent needs to read news, blog posts, or any content

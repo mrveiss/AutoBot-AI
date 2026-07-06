@@ -32,6 +32,8 @@ from api.schemas_common import DataResponse
 from api.schemas_workflows import (
     MCPSpanResponse,
     SkillActionsResponse,
+    SkillBundleInstallResponse,
+    SkillBundlesListResponse,
     SkillDetailResponse,
     SkillHealthResponse,
     SkillMetricsResponse,
@@ -292,6 +294,67 @@ async def install_catalog_skill(name: str, body: SkillInstallRequest) -> Dict[st
 
     logger.info("Installed catalog skill '%s' (id=%s)", pkg.name, pkg.id)
     return {"success": True, "id": pkg.id, "name": pkg.name, "version": pkg.version, "trust_level": pkg.trust_level}
+
+
+@router.get("/bundles", summary="List curated skill bundles", response_model=SkillBundlesListResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_skill_bundles",
+    error_code_prefix="SKILLS",
+)
+async def list_skill_bundles() -> dict:
+    """Return all role-curated skill bundles (Research / Engineering / Knowledge).
+
+    Bundles are DATA ONLY — they reference existing builtin skill ids and
+    introduce no new skill logic (Issue #10540).
+    """
+    from skills.bundles import list_bundles
+
+    return {
+        "bundles": [
+            {
+                "id": b.id,
+                "name": b.name,
+                "description": b.description,
+                "member_skill_ids": b.member_skill_ids,
+            }
+            for b in list_bundles()
+        ],
+        "total": len(list_bundles()),
+    }
+
+
+@router.post(
+    "/bundles/{bundle_id}/enable",
+    summary="Enable all skills in a curated bundle",
+    response_model=SkillBundleInstallResponse,
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enable_skill_bundle",
+    error_code_prefix="SKILLS",
+)
+async def enable_skill_bundle(bundle_id: str) -> dict:
+    """Enable every member skill of a curated bundle.
+
+    Delegates to the existing ``registry.enable_skill`` +
+    ``manager.persist_skill_enabled`` pair for each member skill — exactly the
+    same path taken by ``POST /skills/{name}/enable`` (Issue #10540).
+
+    Returns which skills were enabled, which were skipped (not registered),
+    and which failed (e.g. dependency errors).
+    """
+    from skills.bundles import enable_bundle, get_bundle
+
+    try:
+        get_bundle(bundle_id)  # validate before doing any work
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    registry = get_skill_registry()
+    manager = _get_manager()
+    result = await enable_bundle(bundle_id, registry=registry, manager=manager)
+    return result
 
 
 @router.get("/{name}", summary="Get skill details", response_model=SkillDetailResponse)

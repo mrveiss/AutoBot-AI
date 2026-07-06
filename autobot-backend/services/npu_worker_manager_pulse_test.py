@@ -417,18 +417,23 @@ def _metrics_status(completed: int, failed: int, uptime: int, load: int) -> NPUW
     )
 
 
-def test_build_worker_metrics_computes_real_rates():
+@pytest.mark.asyncio
+async def test_build_worker_metrics_computes_real_rates():
+    # _build_worker_metrics is now async (#10698); stub the Redis aggregation
     mgr = _make_manager()
-    m = mgr._build_worker_metrics("m-worker", _metrics_status(completed=90, failed=10, uptime=120, load=3))
+    mgr._aggregate_avg_response_time_ms = AsyncMock(return_value=0.0)
+    m = await mgr._build_worker_metrics("m-worker", _metrics_status(completed=90, failed=10, uptime=120, load=3))
     assert m.id == "m-worker"
     assert m.success_rate == 90.0  # 90 / (90+10) * 100
     assert m.requests_per_minute == 45.0  # 90 / (120s / 60) = 45/min
     assert m.peak_load == 3
 
 
-def test_build_worker_metrics_no_traffic_defaults():
+@pytest.mark.asyncio
+async def test_build_worker_metrics_no_traffic_defaults():
     mgr = _make_manager()
-    m = mgr._build_worker_metrics("m-worker", _metrics_status(completed=0, failed=0, uptime=0, load=0))
+    mgr._aggregate_avg_response_time_ms = AsyncMock(return_value=0.0)
+    m = await mgr._build_worker_metrics("m-worker", _metrics_status(completed=0, failed=0, uptime=0, load=0))
     assert m.success_rate == 100.0  # no tasks → treat as healthy
     assert m.requests_per_minute == 0.0
 
@@ -438,7 +443,8 @@ async def test_store_worker_metrics_writes_correct_key():
     redis = AsyncMock()
     mgr = _make_manager(redis_client=redis)
     mgr.redis_client = redis
-    m = mgr._build_worker_metrics("m-worker", _metrics_status(50, 0, 60, 1))
+    mgr._aggregate_avg_response_time_ms = AsyncMock(return_value=0.0)
+    m = await mgr._build_worker_metrics("m-worker", _metrics_status(50, 0, 60, 1))
 
     await mgr._store_worker_metrics("m-worker", m)
 
