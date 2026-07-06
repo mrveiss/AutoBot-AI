@@ -231,7 +231,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLogPatternData } from '@/composables/analytics/useLogPatternData'
-import type { LogPattern, LogAnomaly, LogTrend, MiningResult, RealtimeData } from '@/composables/analytics/useLogPatternData'
+import type { LogPattern, LogTrend, MiningResult, RealtimeData } from '@/composables/analytics/useLogPatternData'
 
 const { t } = useI18n()
 

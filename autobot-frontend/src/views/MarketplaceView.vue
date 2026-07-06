@@ -340,7 +340,7 @@ async function handleInstall(name: string): Promise<void> {
   try {
     // #6524: include source_id so backend resolves against the same catalog
     // the user was browsing (otherwise plugins from custom marketplaces 404).
-    await ApiClient.post<any>(`${getApiBase()}/marketplace/install`, {
+    await ApiClient.post(`${getApiBase()}/marketplace/install`, {
       plugin_name: name,
       source_id: selectedSourceId.value,
     })
@@ -358,7 +358,7 @@ async function handleUninstall(name: string): Promise<void> {
   actionLoading.value[name] = true
   error.value = null
   try {
-    await ApiClient.delete<any>(`${getApiBase()}/marketplace/install/${encodeURIComponent(name)}`)
+    await ApiClient.delete(`${getApiBase()}/marketplace/install/${encodeURIComponent(name)}`)
     const next = new Set(installedNames.value)
     next.delete(name)
     installedNames.value = next

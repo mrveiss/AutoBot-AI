@@ -61,8 +61,8 @@ export interface HealthData {
 
 export interface HealthCheckResult {
   status: 'fulfilled' | 'rejected';
-  value?: any;
-  reason?: any;
+  value?: unknown;
+  reason?: unknown;
 }
 
 declare class OptimizedHealthMonitor {
