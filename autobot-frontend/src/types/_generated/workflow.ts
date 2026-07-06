@@ -15,7 +15,7 @@
 /** Generated from `autobot_shared.workflow.types.PromptSpec` */
 export interface PromptSpec {
   user_prompt: string;
-  system_prompt: unknown;
+  system_prompt?: string | null;
   template_vars: Record<string, unknown>;
   version: string;
 }
@@ -32,15 +32,15 @@ export type ExecutionStrategy =
 export interface WorkflowTask {
   task_id: string;
   description: string;
-  agent_type: unknown;
-  action: unknown;
-  command: unknown;
-  prompt: unknown;
-  tools_allowed: string[] | null;
+  agent_type?: string | null;
+  action?: string | null;
+  command?: string | null;
+  prompt?: PromptSpec | null;
+  tools_allowed?: string[] | null;
   tools_denied: string[];
   inputs: Record<string, unknown>;
-  expected_outputs: Record<string, string> | null;
-  outputs: Record<string, unknown> | null;
+  expected_outputs?: Record<string, string> | null;
+  outputs?: Record<string, unknown> | null;
   dependencies: string[];
   requires_approval: boolean;
   priority: number;
@@ -50,14 +50,14 @@ export interface WorkflowTask {
   capabilities_required: string[];
   estimated_duration_seconds: number;
   status: string;
-  error: unknown;
-  start_time: unknown;
-  end_time: unknown;
-  skill_name: unknown;
-  skill_action: unknown;
-  skill_resolution_method: unknown;
-  skill_preference_note: unknown;
-  pending_skill_id: unknown;
+  error?: string | null;
+  start_time?: number | null;
+  end_time?: number | null;
+  skill_name?: string | null;
+  skill_action?: string | null;
+  skill_resolution_method?: string | null;
+  skill_preference_note?: string | null;
+  pending_skill_id?: string | null;
   preconditions: string[];
   effects: string[];
   metadata: Record<string, unknown>;
@@ -80,7 +80,7 @@ export interface WorkflowPlan {
   status: string;
   is_goap_plan: boolean;
   goap_goal: string[];
-  created_at_epoch: unknown;
+  created_at_epoch?: number | null;
   metadata: Record<string, unknown>;
 }
 
