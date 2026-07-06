@@ -189,7 +189,7 @@
     "llcNoCompanies": "No companies yet.",
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
-    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment runs in single_user mode, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it."
+    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it."
   },
   "llcMembers": {
     "title": "اعضا",

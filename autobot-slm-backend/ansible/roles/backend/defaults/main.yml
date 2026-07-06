@@ -41,7 +41,7 @@ backend_redis_password: ""
 # There is no single_user mode; do not reintroduce it as a fallback.
 backend_user_mode: "single_company"
 
-# PostgreSQL for non-single_user modes (Issue #2953)
+# PostgreSQL for user management — always enabled (Issue #2953)
 backend_postgres_host: "127.0.0.1"
 backend_postgres_port: 5432
 backend_postgres_db: "autobot_users"
