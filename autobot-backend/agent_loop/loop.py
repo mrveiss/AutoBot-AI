@@ -25,7 +25,7 @@ import uuid
 from typing import Any
 
 from agent_loop.belief_state import BeliefStateUpdater
-from agent_loop.pre_action_verifier import PreActionVerifier, VerifierVerdict
+from agent_loop.pre_action_verifier import PreActionVerifier, VerifierResult, VerifierVerdict
 from agent_loop.slack_hook import get_slack_hook
 from agent_loop.think_tool import ThinkTool
 from agent_loop.types import (
@@ -1417,7 +1417,6 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
             return None
         task_id = self._current_context.task_id if self._current_context else None
         try:
-            from agent_loop.pre_action_verifier import VerifierResult  # noqa: F401
 
             result = await self._verifier.verify(
                 tool_name=tool_name,
