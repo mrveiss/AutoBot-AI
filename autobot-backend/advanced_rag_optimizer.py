@@ -24,16 +24,23 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Tuple
 
-# MAP-Elites minimum category coverage required to activate grid-based selection.
-_MAP_ELITES_MIN_CATEGORIES = 2
-
 from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
 from constants.ttl_constants import TTL_5_MINUTES
-from knowledge.search_components.reranking import RerankWeights, compute_blended_score
+from knowledge.search_components.bm25 import BM25Scorer
+from knowledge.search_components.reranking import (
+    RerankWeights,
+    apply_mmr_reorder_by_content,
+    compute_blended_score,
+    set_reranking_active,
+)
 from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 logger = get_llm_logger("advanced_rag_optimizer")
+
+# MAP-Elites minimum category coverage required to activate grid-based selection.
+# Issue #10600: moved below imports to clear pre-existing E402 lint.
+_MAP_ELITES_MIN_CATEGORIES = 2
 
 # Performance optimization: O(1) lookup for troubleshooting keywords (Issue #326)
 TROUBLESHOOTING_KEYWORDS = {"error", "problem", "issue", "trouble"}
@@ -111,17 +118,37 @@ class AdvancedRAGOptimizer:
 
     MAX_CACHE_ENTRIES = 500  # Hard ceiling to prevent unbounded growth. Issue #1732.
 
-    def __init__(self, rerank_weights: RerankWeights | None = None):
+    def __init__(
+        self,
+        rerank_weights: RerankWeights | None = None,
+        bm25_hybrid_enabled: bool | None = None,
+        min_score: float | None = None,
+        mmr_lambda: float | None = None,
+    ):
         """Initialize RAG optimizer with search configuration. Issue #620.
 
         Args:
             rerank_weights: Blend weights forwarded to the cross-encoder scoring
                 step. Defaults to RerankWeights() (legacy 0.8/0.2 split).
                 Issue #2034: enables RAGConfig.rerank_weights to flow through.
+            bm25_hybrid_enabled: Issue #10600 — route the hybrid keyword half
+                through BM25 Okapi instead of the substring TF scan.  None falls
+                back to model_config.RAG_BM25_HYBRID_ENABLED (default False).
+            min_score: Issue #10600 — default relevance floor applied by
+                advanced_search when the caller passes 0.0.  None falls back to
+                model_config.RAG_MIN_SCORE (default 0.0 = no floor).
+            mmr_lambda: Issue #10600 — MMR diversity trade-off applied after
+                reranking.  None falls back to rerank_weights.mmr_lambda.
         """
         self.kb = None
         self.semantic_chunker = None
         self._rerank_weights: RerankWeights = rerank_weights or RerankWeights()
+        # Issue #10600: config-gated retrieval-quality knobs (defaults = no-op).
+        self._bm25_hybrid_enabled: bool = (
+            model_config.RAG_BM25_HYBRID_ENABLED if bm25_hybrid_enabled is None else bm25_hybrid_enabled
+        )
+        self._default_min_score: float = model_config.RAG_MIN_SCORE if min_score is None else min_score
+        self._mmr_lambda: float = self._rerank_weights.mmr_lambda if mmr_lambda is None else mmr_lambda
         self._init_search_config()
         self._init_query_patterns()
         self._init_performance_tracking()
@@ -398,29 +425,68 @@ class AdvancedRAGOptimizer:
             chunk_index=metadata.get("chunk_index", 0),
         )
 
+    @staticmethod
+    def _build_bm25_scorer(all_facts: List[Dict]) -> BM25Scorer:
+        """Build a BM25 scorer from in-memory corpus statistics (#10600).
+
+        Reuses the canonical BM25Scorer instead of the substring TF heuristic.
+        Document frequencies and average length are computed once per query from
+        the facts the optimizer already loaded, so no extra Redis round-trips are
+        introduced.
+        """
+        doc_frequencies: Dict[str, int] = {}
+        total_length = 0
+        for fact in all_facts:
+            tokens = fact.get("content", "").lower().split()
+            total_length += len(tokens)
+            for term in set(tokens):
+                doc_frequencies[term] = doc_frequencies.get(term, 0) + 1
+        total_docs = len(all_facts)
+        avg_length = (total_length / total_docs) if total_docs else 1.0
+        return BM25Scorer(total_docs, avg_length, doc_frequencies)
+
+    def _keyword_search_bm25(self, query: str, all_facts: List[Dict]) -> List[SearchResult]:
+        """BM25 Okapi keyword scoring over the in-memory fact corpus (#10600)."""
+        query_terms = [t for t in query.lower().split() if t]
+        if not query_terms:
+            return []
+        bm25 = self._build_bm25_scorer(all_facts)
+        scored = []
+        for fact in all_facts:
+            content = fact.get("content", "")
+            score = bm25.score(query_terms, content, len(content.split()))
+            if score > 0:
+                scored.append(self._create_keyword_result(fact, score))
+        scored.sort(key=lambda x: x.keyword_score, reverse=True)
+        for i, result in enumerate(scored):
+            result.relevance_rank = i + 1
+        logger.debug("BM25 keyword search returned %s results", len(scored))
+        return scored[:20]
+
+    def _keyword_search_substring(self, query: str, all_facts: List[Dict]) -> List[SearchResult]:
+        """Legacy substring TF keyword scoring (pre-#10600 default). Issue #620."""
+        query_lower = query.lower()
+        query_terms = set(query_lower.split())
+        keyword_results = []
+        for fact in all_facts:
+            content = fact.get("content", "").lower()
+            metadata_str = json.dumps(fact.get("metadata", {})).lower()
+            combined_text = f"{content} {metadata_str}"
+            score = self._calculate_keyword_score(query_lower, query_terms, combined_text)
+            if score > 0:
+                keyword_results.append(self._create_keyword_result(fact, score))
+        keyword_results.sort(key=lambda x: x.keyword_score, reverse=True)
+        for i, result in enumerate(keyword_results):
+            result.relevance_rank = i + 1
+        logger.debug("Keyword search returned %s results", len(keyword_results))
+        return keyword_results[:20]
+
     def _perform_keyword_search(self, query: str, all_facts: List[Dict]) -> List[SearchResult]:
-        """Perform keyword-based search with TF-IDF-like scoring. Issue #620."""
+        """Keyword search — BM25 when enabled (#10600), else legacy substring TF."""
         try:
-            query_lower = query.lower()
-            query_terms = set(query_lower.split())
-            keyword_results = []
-
-            for fact in all_facts:
-                content = fact.get("content", "").lower()
-                metadata_str = json.dumps(fact.get("metadata", {})).lower()
-                combined_text = f"{content} {metadata_str}"
-
-                score = self._calculate_keyword_score(query_lower, query_terms, combined_text)
-                if score > 0:
-                    keyword_results.append(self._create_keyword_result(fact, score))
-
-            keyword_results.sort(key=lambda x: x.keyword_score, reverse=True)
-            for i, result in enumerate(keyword_results):
-                result.relevance_rank = i + 1
-
-            logger.debug("Keyword search returned %s results", len(keyword_results))
-            return keyword_results[:20]
-
+            if self._bm25_hybrid_enabled:
+                return self._keyword_search_bm25(query, all_facts)
+            return self._keyword_search_substring(query, all_facts)
         except Exception as e:
             logger.error("Keyword search failed: %s", e)
             return []
@@ -633,8 +699,18 @@ class AdvancedRAGOptimizer:
             )
 
     def _finalize_rerank_results(self, results: List[SearchResult]) -> List[SearchResult]:
-        """Sort and rank results after reranking (Issue #398: extracted)."""
+        """Sort, MMR-diversify (#10600), and rank results after reranking (#398)."""
         results.sort(key=lambda x: x.rerank_score or 0, reverse=True)
+        # Issue #10600: MMR diversity pass on reranked results using content
+        # redundancy (SearchResult carries no embedding).  No-op when
+        # mmr_lambda is 0.0, so the legacy pure-relevance ordering is preserved.
+        if self._mmr_lambda > 0.0:
+            results = apply_mmr_reorder_by_content(
+                results,
+                self._mmr_lambda,
+                content_getter=lambda r: r.content,
+                score_getter=lambda r: r.rerank_score or 0.0,
+            )
         for i, result in enumerate(results):
             result.relevance_rank = i + 1
         logger.debug("Reranking completed: top score = %.3f", results[0].rerank_score)
@@ -646,8 +722,10 @@ class AdvancedRAGOptimizer:
             self._ensure_cross_encoder_loaded()
 
             if self._cross_encoder is not None:
+                set_reranking_active(True)  # #10600
                 await self._apply_cross_encoder_scores(query, results)
             else:
+                set_reranking_active(False)  # #10600: surface silent fallback
                 self._apply_fallback_reranking(query, results)
 
             return self._finalize_rerank_results(results)
@@ -687,7 +765,9 @@ class AdvancedRAGOptimizer:
             logger.info("Advanced search: '%s' (max_results=%s)", query, max_results)
 
             # Cache read — skip all heavy operations on hit (Issue #1548)
-            cache_key = self._make_cache_key(query, max_results, enable_reranking, min_score)
+            cache_key = self._make_cache_key(
+                query, max_results, enable_reranking, min_score if min_score > 0.0 else self._default_min_score
+            )
             cached = self._get_cached_result(cache_key)
             if cached is not None:
                 return cached
@@ -713,8 +793,12 @@ class AdvancedRAGOptimizer:
             # Step 4: Apply context optimization and limit results
             optimized_results = self._optimize_result_count(final_results, max_results, context)
 
-            # #10703: relevance floor — drop sub-threshold results (default 0.0 = no-op).
-            optimized_results = self._apply_relevance_floor(optimized_results, min_score)
+            # #10703 / #10600: relevance floor — drop sub-threshold results.
+            # When the caller leaves min_score at 0.0, fall back to the
+            # config-driven default floor (self._default_min_score, itself 0.0
+            # by default so existing callers see no behaviour change).
+            effective_min_score = min_score if min_score > 0.0 else self._default_min_score
+            optimized_results = self._apply_relevance_floor(optimized_results, effective_min_score)
 
             metrics.final_results_count = len(optimized_results)
             metrics.total_time = time.time() - start_time

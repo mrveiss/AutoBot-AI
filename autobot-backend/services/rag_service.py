@@ -117,7 +117,14 @@ class RAGService:
             # Create optimizer instance
             # Issue #2034: Pass rerank_weights at construction time so
             # RAGConfig.rerank_weights is honoured instead of defaulting to 0.8/0.2.
-            self.optimizer = AdvancedRAGOptimizer(rerank_weights=self.config.rerank_weights)
+            # Issue #10600: forward BM25-hybrid, relevance-floor, and MMR knobs so
+            # the optimizer honours the config-gated retrieval-quality flips.
+            self.optimizer = AdvancedRAGOptimizer(
+                rerank_weights=self.config.rerank_weights,
+                bm25_hybrid_enabled=self.config.bm25_hybrid_enabled,
+                min_score=self.config.min_score,
+                mmr_lambda=self.config.mmr_lambda,
+            )
 
             # Configure from settings
             self.optimizer.hybrid_weight_semantic = self.config.hybrid_weight_semantic
