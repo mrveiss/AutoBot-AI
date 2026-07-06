@@ -1,0 +1,75 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Trajectory-level eval & regression harness (GH#10546)
+# Replays the golden trajectory set (eval/golden/) against the current
+# candidate and emits a per-task-class pass/regress report.
+#
+# NON-BLOCKING signal (continue-on-error): this reports drift but does NOT
+# gate merges yet — mirroring how other advisory checks (api-wiring pre-#9864)
+# were introduced. Once the golden corpus is broad enough it can be promoted
+# to a gate by dropping continue-on-error and passing --fail-on-regression.
+
+name: Trajectory Eval (non-blocking)
+
+on:
+  push:
+    branches: [ main, Dev_new_gui ]
+    paths: &paths
+      - 'autobot-backend/eval/**'
+      - 'autobot-backend/rlm/**'
+      - 'autobot-backend/llc/**/replay*'
+      - '.github/workflows/trajectory-eval.yml'
+  pull_request:
+    branches: [ main, Dev_new_gui ]
+    paths: *paths
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  trajectory-eval:
+    runs-on: ubuntu-latest
+    # NON-BLOCKING: report drift without gating the merge (GH#10546).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements-ci.txt --prefer-binary || true
+          python -m pip install pytest pytest-asyncio --prefer-binary
+
+      - name: Run harness unit tests
+        working-directory: autobot-backend
+        run: python -m pytest eval/tests -q
+
+      - name: Replay golden trajectories (non-blocking report)
+        working-directory: autobot-backend
+        run: |
+          set -o pipefail
+          python -m eval.run --json trajectory-eval-report.json | tee trajectory-eval-report.md
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trajectory-eval-report
+          path: |
+            autobot-backend/trajectory-eval-report.json
+            autobot-backend/trajectory-eval-report.md
+          if-no-files-found: ignore
