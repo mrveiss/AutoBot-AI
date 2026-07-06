@@ -690,6 +690,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # as a system router. Duplicate registration caused routes to appear twice.
     # GH#4459: Web push notification endpoints (subscribe/unsubscribe/vapid-key)
     ("api.push", "/push", ["push", "notifications"], "push"),
+    # GH#10554: Per-user memory transparency + forget/export (GDPR right-to-erasure)
+    ("api.memory_privacy", "", ["memory-privacy"], "memory_privacy"),
     # GH#9044: Transcriber routes are mounted by core_routers via
     # api.transcriber.router (prefix "/transcriber" → /api/transcriber/*).
     # The transcriber_extension combined router carries a full "/api/transcriber"

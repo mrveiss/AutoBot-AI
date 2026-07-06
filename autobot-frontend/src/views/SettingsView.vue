@@ -316,7 +316,7 @@ Issue #753: User preference management interface
           </div>
         </section>
 
-        <!-- Issue #9035: Telemetry and analytics opt-out -->
+        <!-- Issue #9035: Telemetry and analytics opt-out; #10554: memory transparency -->
         <section v-if="activeTab === 'privacy'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
@@ -327,6 +327,10 @@ Issue #753: User preference management interface
           </div>
           <div class="section-content">
             <TelemetrySettingsPanel />
+            <!-- Issue #10554: memory transparency + forget/export -->
+            <div style="margin-top: var(--spacing-xl, 2rem);">
+              <MemoryPrivacyPanel />
+            </div>
           </div>
         </section>
       </div>
@@ -350,6 +354,7 @@ import PresetsSettingsPanel from '@/components/settings/PresetsSettingsPanel.vue
 import PushNotificationSettingsPanel from '@/components/settings/PushNotificationSettingsPanel.vue'
 import DeviceManagementPanel from '@/components/profile/DeviceManagementPanel.vue'
 import TelemetrySettingsPanel from '@/components/settings/TelemetrySettingsPanel.vue'
+import MemoryPrivacyPanel from '@/components/settings/MemoryPrivacyPanel.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
