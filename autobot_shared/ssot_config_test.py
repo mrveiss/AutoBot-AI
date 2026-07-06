@@ -440,25 +440,24 @@ class TestChatCitationInstructionAliasChoices:
 
 
 class TestEnvIntSafeParse:
-    """#11022: _env_int must never crash the module at import on bad env input."""
+    """#11022: PLAN_BEST_OF_N_COUNT must never crash the module at import on bad
+    env input — it uses the shared env_int_clamped helper (#11022 audit follow-up)."""
 
-    def test_invalid_falls_back_to_default(self):
+    def test_invalid_env_falls_back_to_default_no_import_crash(self):
         import importlib
 
         with patch.dict(os.environ, {"AUTOBOT_PLAN_BEST_OF_N_COUNT": "not-a-number"}):
             import autobot_shared.ssot_config as c
 
-            importlib.reload(c)
+            importlib.reload(c)  # must not raise
             assert c.PLAN_BEST_OF_N_COUNT == 3
-            assert c._env_int("X_MISSING_VAR", 7) == 7
-            assert c._env_int("AUTOBOT_PLAN_BEST_OF_N_COUNT", 3) == 3  # invalid → default
 
     def test_clamps_to_bounds(self):
+        import importlib
+
         import autobot_shared.ssot_config as c
 
-        with patch.dict(os.environ, {"X_CLAMP": "99"}):
-            assert c._env_int("X_CLAMP", 3, lo=2, hi=5) == 5
-        with patch.dict(os.environ, {"X_CLAMP": "1"}):
-            assert c._env_int("X_CLAMP", 3, lo=2, hi=5) == 2
-        with patch.dict(os.environ, {"X_CLAMP": "4"}):
-            assert c._env_int("X_CLAMP", 3, lo=2, hi=5) == 4
+        for raw, expected in (("99", 5), ("1", 2), ("4", 4)):
+            with patch.dict(os.environ, {"AUTOBOT_PLAN_BEST_OF_N_COUNT": raw}):
+                importlib.reload(c)
+                assert c.PLAN_BEST_OF_N_COUNT == expected

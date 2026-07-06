@@ -72,11 +72,16 @@ def _sanitize_injected(text: Any, limit: int) -> str:
 
     Trajectory ``task_text``/actions come from prior (possibly other-user) executions,
     so treat them as untrusted: collapse ALL whitespace/newlines to single spaces so a
-    stored value can't break out of its line and pose as prompt instructions, then
-    truncate. Framing in the section header additionally tells the planner to treat the
-    block as data, not directives.
+    stored value can't break out of its line and pose as prompt instructions, strip any
+    ``<<<...>>>`` marker so stored text can't forge the reference-block delimiters and
+    escape the framing, then truncate. Framing in the section header additionally tells
+    the planner to treat the block as data, not directives (#11015; marker-strip #11036).
     """
-    return " ".join(str(text).split())[:limit]
+    cleaned = " ".join(str(text).split())
+    # Defang triple-angle delimiters so a stored `<<<END_REFERENCE_TRAJECTORIES>>>`
+    # can't spoof the block terminator.
+    cleaned = cleaned.replace("<<<", "< <<").replace(">>>", ">> >")
+    return cleaned[:limit]
 
 
 def _render_similar_trajectories_section(similar_trajectories: List[Any] | None) -> str:

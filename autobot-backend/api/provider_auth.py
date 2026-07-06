@@ -105,8 +105,14 @@ def _validate_outbound_url(url: str) -> None:
 
     # Port pinning (#11022): only the standard https port is allowed, so an
     # allowlisted host can't be used to reach a non-HTTPS service on another port
-    # (e.g. https://api.github.com:22/...).
-    if parsed.port not in (None, 443):
+    # (e.g. https://api.github.com:22/...). urlparse defers port parsing to
+    # attribute access, so a malformed port (:99999) raises ValueError here —
+    # catch it and fail with 400, not an unhandled 500 (#11066 audit follow-up).
+    try:
+        port = parsed.port
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="URL has an invalid port")
+    if port not in (None, 443):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only the standard https port (443) is permitted",

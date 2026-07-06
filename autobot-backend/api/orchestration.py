@@ -50,13 +50,16 @@ def _with_identity(context: dict | None, current_user: dict) -> dict:
 
     Threads ``org_id``/``user_id`` from the authenticated user into the planning
     context so trajectory capture + retrieval stay isolated to the owning tenant.
-    Never overrides a caller-supplied value.
+    Reuses the canonical ``extract_user_context_from_request`` (single precedence
+    for user/org resolution) rather than re-deriving it here (#11036 audit
+    follow-up). Never overrides a caller-supplied value.
     """
+    from knowledge.search_filters import extract_user_context_from_request  # noqa: PLC0415
+
     ctx = dict(context or {})
-    org_id = current_user.get("org_id") or current_user.get("organization_id")
+    user_id, org_id, _ = extract_user_context_from_request(current_user)
     if org_id and not ctx.get("tenant_id"):
         ctx["tenant_id"] = str(org_id)
-    user_id = current_user.get("user_id") or current_user.get("id")
     if user_id and not ctx.get("user_id"):
         ctx["user_id"] = str(user_id)
     return ctx

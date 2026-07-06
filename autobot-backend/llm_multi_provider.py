@@ -238,9 +238,13 @@ class LLMInterface:
             provider_name = provider
 
         registry = self._get_registry()
+        # Route through the canonical coercion (#11055 follow-up): a valid raw
+        # string like "extraction" must resolve to its tier, not silently → GENERAL.
+        from services.llm_service import _normalize_llm_type  # noqa: PLC0415
+
         request = LLMRequest(
             messages=messages,
-            llm_type=llm_type if isinstance(llm_type, LLMType) else LLMType.GENERAL,
+            llm_type=_normalize_llm_type(llm_type),
             model_name=model_name,
             metadata=kwargs,
         )
