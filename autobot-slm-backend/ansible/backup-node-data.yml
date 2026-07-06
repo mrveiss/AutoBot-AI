@@ -19,6 +19,11 @@
     backup_path: "{{ backup_dir }}/{{ backup_name }}"
     include_models: "{{ include_models | default(true) }}"
     postgres_user: "{{ postgres_user | default('postgres') }}"
+    # Canonical ChromaDB data dir — must match the redis role's chromadb_data_dir
+    # default (roles/redis/defaults/main.yml). The legacy /var/lib/chromadb path
+    # never existed on installed nodes, so the ChromaDB backup block was a silent
+    # no-op and ChromaDB collections were never captured (#10016 member 2).
+    chromadb_data_dir: "{{ chromadb_data_dir | default('/opt/autobot/autobot-db-stack/chromadb/data') }}"
 
   tasks:
     # =========================================================================
@@ -198,14 +203,14 @@
     # =========================================================================
     - name: Check if ChromaDB data exists
       ansible.builtin.stat:
-        path: /var/lib/chromadb
+        path: "{{ chromadb_data_dir }}"
       register: chromadb_dir
 
     - name: Backup ChromaDB collections
       block:
         - name: Tar ChromaDB data directory
           ansible.builtin.archive:
-            path: /var/lib/chromadb
+            path: "{{ chromadb_data_dir }}"
             dest: "{{ backup_path }}/chromadb-data.tar.gz"
             format: gz
 
