@@ -565,6 +565,7 @@ import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import { usePermissionStore } from '@/stores/usePermissionStore'
 import { useVirtualChatScroll } from '@/composables/useVirtualChatScroll'
 import type { ChatMessage } from '@/stores/useChatStore'
+import type { FileAttachment } from '@/types/api'
 import MessageStatus from '@/components/ui/MessageStatus.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
@@ -595,7 +596,7 @@ const emit = defineEmits<{
     command: string
     host: string
     purpose: string
-    params: Record<string, any>
+    params: Record<string, unknown>
     terminal_session_id: string | null
   }]
 }>()
@@ -773,7 +774,7 @@ const getMessageWrapperClass = (message: ChatMessage): string => {
 
   // Add message type class for type-specific styling
   // Issue #680: Exclude streaming types from type-class assignment to prevent wrong badges
-  const messageType = message.type || (message.metadata as any)?.display_type
+  const messageType = message.type || (message.metadata?.display_type as string | undefined)
   const noTypeClassTypes = ['response', 'message', 'default', 'llm_response', 'llm_response_chunk']
   if (messageType && !noTypeClassTypes.includes(String(messageType))) {
     classes.push(`type-${messageType}`)
@@ -838,7 +839,7 @@ const getSenderName = (sender: string): string => {
 
 /** Issue #1310: Visible badge for typed messages so they're clearly distinguishable. */
 const getMessageTypeBadge = (message: ChatMessage): { label: string; icon: string; type: string } | null => {
-  const msgType = message.type || (message.metadata as any)?.display_type
+  const msgType = message.type || (message.metadata?.display_type as string | undefined)
   if (!msgType) return null
 
   const badges: Record<string, { label: string; icon: string; type: string }> = {
@@ -1070,7 +1071,7 @@ const getAttachmentIcon = (type: string): IconName => {
 
 // NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
 
-const viewAttachment = (attachment: any) => {
+const viewAttachment = (attachment: FileAttachment) => {
   // Handle attachment viewing
   if (attachment.url) {
     window.open(attachment.url, '_blank')
@@ -1107,7 +1108,7 @@ const detectToolCalls = (message: ChatMessage) => {
 
       // Search for terminal_session_id in recent assistant messages
       // The terminal_session_id might be in metadata of streaming chunks, not necessarily the message with TOOL_CALL
-      let terminal_session_id: string | null = ((message.metadata as any)?.terminal_session_id as string) || null
+      let terminal_session_id: string | null = (message.metadata?.terminal_session_id as string) || null
 
       if (!terminal_session_id) {
         // Search backwards through recent assistant messages for terminal_session_id
@@ -1117,7 +1118,7 @@ const detectToolCalls = (message: ChatMessage) => {
           .slice(0, 10) // Check last 10 assistant messages
 
         for (const msg of recentAssistantMessages) {
-          const metadataSessionId = (msg.metadata as any)?.terminal_session_id as string | null
+          const metadataSessionId = msg.metadata?.terminal_session_id as string | null
           if (metadataSessionId) {
             terminal_session_id = metadataSessionId
             logger.debug('Found terminal_session_id in message metadata:', terminal_session_id)
