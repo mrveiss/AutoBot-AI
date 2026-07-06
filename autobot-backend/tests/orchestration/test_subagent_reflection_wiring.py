@@ -22,8 +22,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from orchestration.subagent_dispatcher import SubagentTask, get_subagent_dispatcher
 from orchestration.execution_strategies._parallel import ParallelStrategy
+from orchestration.subagent_dispatcher import SubagentTask, get_subagent_dispatcher
 
 
 def _make_agent_task(task_id: str = "t1", description: str = "do work") -> types.SimpleNamespace:
