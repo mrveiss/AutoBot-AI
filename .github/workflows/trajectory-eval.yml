@@ -56,13 +56,17 @@ jobs:
 
       - name: Run harness unit tests
         working-directory: autobot-backend
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/autobot-backend
         run: python -m pytest eval/tests -q
 
       - name: Replay golden trajectories (non-blocking report)
         working-directory: autobot-backend
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/autobot-backend
         run: |
           set -o pipefail
-          python -m eval.run --json trajectory-eval-report.json | tee trajectory-eval-report.md
+          python -m eval.run --json trajectory-eval-report.json | tee trajectory-eval-report.md || true
 
       - name: Upload eval report
         if: always()
