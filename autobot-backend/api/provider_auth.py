@@ -104,6 +104,7 @@ def _validate_outbound_url(url: str) -> None:
             detail=f"Host '{host}' is not in the provider OAuth allowlist",
         )
 
+
 router = APIRouter(prefix="/api/llm-auth", tags=["llm-auth"])
 
 # System vault string — provider-level tokens are scoped to the system vault so

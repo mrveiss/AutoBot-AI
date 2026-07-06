@@ -443,8 +443,9 @@ class TestProviderAuthSecurity:
     # -- _validate_outbound_url unit tests --
 
     def test_http_url_rejected(self):
-        from api.provider_auth import _validate_outbound_url
         from fastapi import HTTPException
+
+        from api.provider_auth import _validate_outbound_url
 
         with pytest.raises(HTTPException) as exc_info:
             _validate_outbound_url("http://accounts.google.com/token")
@@ -452,8 +453,9 @@ class TestProviderAuthSecurity:
         assert "https" in exc_info.value.detail.lower()
 
     def test_ip_literal_v4_rejected(self):
-        from api.provider_auth import _validate_outbound_url
         from fastapi import HTTPException
+
+        from api.provider_auth import _validate_outbound_url
 
         with pytest.raises(HTTPException) as exc_info:
             _validate_outbound_url("https://169.254.169.254/latest/meta-data/")
@@ -461,32 +463,36 @@ class TestProviderAuthSecurity:
         assert "IP" in exc_info.value.detail
 
     def test_localhost_ip_rejected(self):
-        from api.provider_auth import _validate_outbound_url
         from fastapi import HTTPException
+
+        from api.provider_auth import _validate_outbound_url
 
         with pytest.raises(HTTPException) as exc_info:
             _validate_outbound_url("https://127.0.0.1/token")
         assert exc_info.value.status_code == 400
 
     def test_ipv6_loopback_rejected(self):
-        from api.provider_auth import _validate_outbound_url
         from fastapi import HTTPException
+
+        from api.provider_auth import _validate_outbound_url
 
         with pytest.raises(HTTPException) as exc_info:
             _validate_outbound_url("https://[::1]/token")
         assert exc_info.value.status_code == 400
 
     def test_private_ip_range_rejected(self):
-        from api.provider_auth import _validate_outbound_url
         from fastapi import HTTPException
+
+        from api.provider_auth import _validate_outbound_url
 
         with pytest.raises(HTTPException) as exc_info:
             _validate_outbound_url("https://10.0.0.1/token")
         assert exc_info.value.status_code == 400
 
     def test_non_allowlisted_hostname_rejected(self):
-        from api.provider_auth import _validate_outbound_url
         from fastapi import HTTPException
+
+        from api.provider_auth import _validate_outbound_url
 
         with pytest.raises(HTTPException) as exc_info:
             _validate_outbound_url("https://evil-attacker.example.com/token")
@@ -514,6 +520,7 @@ class TestProviderAuthSecurity:
     def _get_endpoint_dependencies(self, endpoint_fn):
         """Return the set of dependency callables declared on a FastAPI endpoint function."""
         import inspect
+
         from fastapi import params as fa_params
 
         deps = set()
@@ -561,8 +568,9 @@ class TestProviderAuthSecurity:
 
     def test_ssrf_blocked_before_network_on_device_initiate(self):
         """Non-allowlisted URL must be rejected 400 even if the endpoint were authenticated."""
-        from api.provider_auth import _validate_outbound_url
         from fastapi import HTTPException
+
+        from api.provider_auth import _validate_outbound_url
 
         # Call the guard directly — simulates what the endpoint does after auth.
         with pytest.raises(HTTPException) as exc_info:
@@ -576,6 +584,7 @@ class TestProviderAuthSecurity:
         a 302-redirect SSRF bypass from an allowlisted host to an internal one.
         """
         import inspect
+
         from api import provider_auth as _pa_module
 
         src = inspect.getsource(_pa_module.device_initiate)
@@ -583,6 +592,7 @@ class TestProviderAuthSecurity:
 
     def test_allow_redirects_false_in_device_poll(self):
         import inspect
+
         from api import provider_auth as _pa_module
 
         src = inspect.getsource(_pa_module.device_poll)
