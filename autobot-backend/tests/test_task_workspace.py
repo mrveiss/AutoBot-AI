@@ -22,16 +22,12 @@ from __future__ import annotations
 
 import json
 import time
-import uuid
-from dataclasses import dataclass, field
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 import services.docker_task_workspace as dtw
 from services.docker_task_workspace import (
-    ExecResult,
     TaskWorkspaceManager,
     WorkspaceInfo,
     _apply_sandbox_security,
@@ -43,7 +39,6 @@ from services.docker_task_workspace import (
     _validate_task_id,
     validate_exec_command,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

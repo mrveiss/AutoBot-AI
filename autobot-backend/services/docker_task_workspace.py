@@ -39,13 +39,12 @@ import asyncio
 import json
 import os
 import time
-import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
-from constants.ttl_constants import TTL_1_HOUR, TTL_7_DAYS
+from constants.ttl_constants import TTL_7_DAYS
 
 logger = get_logger(__name__)
 
@@ -163,9 +162,7 @@ class TaskWorkspaceManager:
 
     def __init__(self, docker_client: Any = None) -> None:
         if not _DOCKER_AVAILABLE:
-            raise DockerException(
-                "docker SDK not installed; `pip install docker` to enable TaskWorkspaceManager."
-            )
+            raise DockerException("docker SDK not installed; `pip install docker` to enable TaskWorkspaceManager.")
         self._docker: Any = docker_client or docker.from_env()
         self._redis = get_redis_client(async_client=False)
         self._lock: asyncio.Lock = asyncio.Lock()
@@ -290,9 +287,7 @@ class TaskWorkspaceManager:
 
         image_tag = _snapshot_image_tag(task_id, checkpoint_name)
         await asyncio.to_thread(self._stop_container_sync, info.container_id, force=True)
-        new_container_id = await asyncio.to_thread(
-            self._start_container_sync, task_id, info.volume_name, image_tag
-        )
+        new_container_id = await asyncio.to_thread(self._start_container_sync, task_id, info.volume_name, image_tag)
         info.container_id = new_container_id
         info.last_active = time.time()
         await asyncio.to_thread(self._redis.set, _redis_meta_key(task_id), _serialize_info(info), ex=TTL_7_DAYS)
@@ -323,9 +318,7 @@ class TaskWorkspaceManager:
         if info is None:
             raise ValueError(f"No workspace for task {task_id}")
         shell_cmd = cmd or ["/bin/sh"]
-        return await asyncio.to_thread(
-            self._create_exec_handle_sync, info.container_id, shell_cmd, tty
-        )
+        return await asyncio.to_thread(self._create_exec_handle_sync, info.container_id, shell_cmd, tty)
 
     async def list_all(self) -> list[WorkspaceInfo]:
         """Return all registered workspaces (for quota enforcement + stats)."""

@@ -39,19 +39,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-import socket as _socket
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
 
-from auth_middleware import check_admin_permission, get_current_user
+from auth_middleware import check_admin_permission
 from autobot_shared.logging_manager import get_logger
 from services.docker_task_workspace import (
-    ExecResult,
-    SnapshotInfo,
     WorkspaceInfo,
     get_task_workspace_manager,
-    validate_exec_command,
 )
 
 logger = get_logger(__name__)
@@ -219,7 +215,7 @@ async def workspace_stats(
     _admin: bool = Depends(check_admin_permission),
 ) -> dict:
     """Return quota + all active workspace metadata."""
-    from services.docker_task_workspace import _MAX_WORKSPACES, _IDLE_EXPIRY_SECONDS, _DISK_QUOTA_MB
+    from services.docker_task_workspace import _DISK_QUOTA_MB, _IDLE_EXPIRY_SECONDS, _MAX_WORKSPACES
 
     mgr = await get_task_workspace_manager()
     workspaces = await mgr.list_all()
