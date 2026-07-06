@@ -298,9 +298,7 @@ async def test_clear_patterns_bytes_smembers_uses_str_key() -> None:
     )
     # The bytes-repr variant must NOT appear.
     bad_key = f"{PATTERN_KEY_PREFIX}b'abc123'"
-    assert bad_key not in all_args, (
-        f"delete was called with bytes-repr key {bad_key!r} — bytes were not decoded."
-    )
+    assert bad_key not in all_args, f"delete was called with bytes-repr key {bad_key!r} — bytes were not decoded."
 
 
 # ---------------------------------------------------------------------------
