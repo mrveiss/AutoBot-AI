@@ -224,9 +224,8 @@ async def test_execute_workflow_end_to_end_with_skill_bound_plan() -> None:
 
     with (
         patch("skills.registry.get_skill_registry", return_value=stub_reg),
-        patch("orchestration.workflow_runner._get_event_manager") as mock_em,
+        patch("orchestration.workflow_runner.publish_event", new_callable=AsyncMock),
     ):
-        mock_em.return_value.publish = AsyncMock()
         result = await runner.execute_workflow(plan)
 
     assert result["success"] is True, "workflow with skill-bound tasks must succeed"
@@ -303,9 +302,8 @@ async def test_try_resume_unblocks_plan_and_executes_when_skill_synthesized() ->
 
     with (
         patch("skills.registry.get_skill_registry", return_value=stub_reg),
-        patch("orchestration.workflow_runner._get_event_manager") as mock_em,
+        patch("orchestration.workflow_runner.publish_event", new_callable=AsyncMock),
     ):
-        mock_em.return_value.publish = AsyncMock()
         result = await runner.try_resume_blocked_plan(plan.plan_id)
 
     assert result["resumed"] is True, "plan must be resumed when skill is now available"
