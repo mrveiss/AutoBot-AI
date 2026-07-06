@@ -89,6 +89,11 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/useUserStore'
 import { useFileBrowser } from '@/composables/file-browser/useFileBrowser'
+import type { FileBrowserItem, FileBrowserTreeNode, FilePreviewData } from '@/composables/file-browser/useFileBrowser'
+
+// The FilePreview @download payload carries an optional `fileType`, so we only
+// rely on the fields actually read here (name/url) via Pick to stay compatible.
+type PreviewDownloadFile = Pick<FilePreviewData, 'name' | 'url'>
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
 
@@ -261,7 +266,7 @@ const handleFileSelected = async (fileList: FileList) => {
 }
 
 const { execute: viewFile, loading: isViewingFile } = useAsyncHandler(
-  async (file: any) => {
+  async (file: FileBrowserItem) => {
     await fetchPreview(file, getFileType)
     showPreview.value = true
 
@@ -281,7 +286,7 @@ const { execute: viewFile, loading: isViewingFile } = useAsyncHandler(
 )
 
 const { execute: performDelete, loading: isDeletingFile } = useAsyncHandler(
-  async (file: any) => {
+  async (file: FileBrowserItem) => {
     const itemType = file.is_dir ? 'folder' : 'file'
     await deleteFileOrFolder(file.path)
     await refreshFiles()
@@ -305,7 +310,7 @@ const { execute: performDelete, loading: isDeletingFile } = useAsyncHandler(
   }
 )
 
-const deleteFile = async (file: any) => {
+const deleteFile = async (file: FileBrowserItem) => {
   const message = t('fileBrowser.browser.deleteConfirm', { name: file.name })
 
   if (confirm(message)) {
@@ -314,7 +319,7 @@ const deleteFile = async (file: any) => {
 }
 
 const { execute: performRename, loading: isRenamingFile } = useAsyncHandler(
-  async (file: any, newName: string) => {
+  async (file: FileBrowserItem, newName: string) => {
     await renameFileOrFolder(file.path, newName)
     await refreshFiles()
 
@@ -336,7 +341,7 @@ const { execute: performRename, loading: isRenamingFile } = useAsyncHandler(
   }
 )
 
-const renameFile = async (file: any) => {
+const renameFile = async (file: FileBrowserItem) => {
   const newName = prompt(t('fileBrowser.browser.renamePrompt'), file.name)
 
   if (newName && newName !== file.name) {
@@ -379,7 +384,7 @@ const closePreview = () => {
   previewFile.value = null
 }
 
-const downloadPreviewFile = (file: any) => {
+const downloadPreviewFile = (file: PreviewDownloadFile) => {
   if (file.url) {
     const a = document.createElement('a')
     a.href = file.url
@@ -388,7 +393,7 @@ const downloadPreviewFile = (file: any) => {
   }
 }
 
-const toggleNode = (item: any) => {
+const toggleNode = (item: FileBrowserTreeNode) => {
   if (item.is_dir) {
     item.expanded = !item.expanded
     selectedPath.value = item.path
@@ -397,7 +402,7 @@ const toggleNode = (item: any) => {
 }
 
 const expandAll = () => {
-  const expandNodeRecursively = (nodes: any[]) => {
+  const expandNodeRecursively = (nodes: FileBrowserTreeNode[]) => {
     nodes.forEach(node => {
       if (node.is_dir) {
         node.expanded = true
@@ -411,7 +416,7 @@ const expandAll = () => {
 }
 
 const collapseAll = () => {
-  const collapseNodeRecursively = (nodes: any[]) => {
+  const collapseNodeRecursively = (nodes: FileBrowserTreeNode[]) => {
     nodes.forEach(node => {
       if (node.is_dir) {
         node.expanded = false
