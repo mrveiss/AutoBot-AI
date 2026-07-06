@@ -76,7 +76,9 @@ export function usePlugins() {
   async function listPlugins(): Promise<void> {
     error.value = null
     try {
-      const data = await wrap(() => ApiClient.get<any>(`${getApiBase()}/plugins`))
+      const data = await wrap(() =>
+        ApiClient.get<PluginInfo[] | { plugins?: PluginInfo[] }>(`${getApiBase()}/plugins`),
+      )
       // Backend returns {plugins:[...], total:N}. Guard against a bare array
       // response to handle shape divergence between PluginListResponse and actual
       // payload. (#6774)
@@ -91,7 +93,9 @@ export function usePlugins() {
   async function discoverPlugins(): Promise<void> {
     error.value = null
     try {
-      const data = await wrap(() => ApiClient.get<any>(`${getApiBase()}/plugins/discover`))
+      const data = await wrap(() =>
+        ApiClient.get<{ discovered?: PluginManifest[] }>(`${getApiBase()}/plugins/discover`),
+      )
       discovered.value = data.discovered ?? []
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to discover plugins'
@@ -103,7 +107,7 @@ export function usePlugins() {
   async function loadPlugin(name: string, config?: Record<string, unknown>): Promise<boolean> {
     error.value = null
     try {
-      await ApiClient.post<any>(`${getApiBase()}/plugins/${name}/load`, config ? { config } : {})
+      await ApiClient.post<unknown>(`${getApiBase()}/plugins/${name}/load`, config ? { config } : {})
       await listPlugins()
       return true
     } catch (err: unknown) {
@@ -117,7 +121,7 @@ export function usePlugins() {
   async function unloadPlugin(name: string): Promise<boolean> {
     error.value = null
     try {
-      await ApiClient.post<any>(`${getApiBase()}/plugins/${name}/unload`, {})
+      await ApiClient.post<unknown>(`${getApiBase()}/plugins/${name}/unload`, {})
       await listPlugins()
       return true
     } catch (err: unknown) {
@@ -131,7 +135,7 @@ export function usePlugins() {
   async function reloadPlugin(name: string): Promise<boolean> {
     error.value = null
     try {
-      await ApiClient.post<any>(`${getApiBase()}/plugins/${name}/reload`, {})
+      await ApiClient.post<unknown>(`${getApiBase()}/plugins/${name}/reload`, {})
       await listPlugins()
       return true
     } catch (err: unknown) {
@@ -145,7 +149,7 @@ export function usePlugins() {
   async function enablePlugin(name: string): Promise<boolean> {
     error.value = null
     try {
-      await ApiClient.post<any>(`${getApiBase()}/plugins/${name}/enable`, {})
+      await ApiClient.post<unknown>(`${getApiBase()}/plugins/${name}/enable`, {})
       await listPlugins()
       return true
     } catch (err: unknown) {
@@ -159,7 +163,7 @@ export function usePlugins() {
   async function disablePlugin(name: string): Promise<boolean> {
     error.value = null
     try {
-      await ApiClient.post<any>(`${getApiBase()}/plugins/${name}/disable`, {})
+      await ApiClient.post<unknown>(`${getApiBase()}/plugins/${name}/disable`, {})
       await listPlugins()
       return true
     } catch (err: unknown) {
@@ -172,7 +176,7 @@ export function usePlugins() {
 
   async function getPluginInfo(name: string): Promise<PluginInfo | null> {
     try {
-      return await ApiClient.get<any>(`${getApiBase()}/plugins/${name}`)
+      return await ApiClient.get<PluginInfo>(`${getApiBase()}/plugins/${name}`)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : `Failed to get info for plugin ${name}`
       logger.error('getPluginInfo error: %s', msg)
@@ -182,7 +186,7 @@ export function usePlugins() {
 
   async function getPluginConfig(name: string): Promise<Record<string, unknown> | null> {
     try {
-      return await ApiClient.get<any>(`${getApiBase()}/plugins/${name}/config`)
+      return await ApiClient.get<Record<string, unknown>>(`${getApiBase()}/plugins/${name}/config`)
     } catch {
       logger.warn('getPluginConfig: no config for %s', name)
       return null
@@ -195,7 +199,7 @@ export function usePlugins() {
   ): Promise<boolean> {
     error.value = null
     try {
-      await ApiClient.put<any>(`${getApiBase()}/plugins/${name}/config`, { config })
+      await ApiClient.put<unknown>(`${getApiBase()}/plugins/${name}/config`, { config })
       return true
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : `Failed to update config for plugin ${name}`
