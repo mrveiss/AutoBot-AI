@@ -41,13 +41,11 @@ expect.extend({
   }
 });
 
-// Declare the extended matchers
-declare global {
-  namespace PlaywrightTest {
-    interface Matchers<R> {
-      toHaveKBLibrarianResponse(message: string): R;
-      toBeValidApiResponse(): R;
-    }
+// Declare the extended matchers via module augmentation (no namespace)
+declare module '@playwright/test' {
+  interface Matchers<R> {
+    toHaveKBLibrarianResponse(message: string): R;
+    toBeValidApiResponse(): R;
   }
 }
 

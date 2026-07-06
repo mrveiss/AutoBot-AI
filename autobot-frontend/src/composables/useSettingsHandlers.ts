@@ -30,6 +30,11 @@ export interface ValidationState {
 }
 
 /**
+ * Emit signature used by the settings handlers: (eventName, key, value).
+ */
+type SettingsEmit = (eventName: string, key: string, value: unknown) => void
+
+/**
  * Creates reusable typed event handlers for settings forms
  *
  * @param emit - Vue emit function for the component
@@ -45,7 +50,7 @@ export function useSettingsHandlers<T extends (...args: unknown[]) => void>(
    */
   const handleInputChange = (key: string) => (event: Event) => {
     const target = event.target as HTMLInputElement
-    ;(emit as Function)(eventName, key, target.value)
+    ;(emit as SettingsEmit)(eventName, key, target.value)
   }
 
   /**
@@ -53,7 +58,7 @@ export function useSettingsHandlers<T extends (...args: unknown[]) => void>(
    */
   const handleNumberInputChange = (key: string) => (event: Event) => {
     const target = event.target as HTMLInputElement
-    ;(emit as Function)(eventName, key, parseInt(target.value, 10))
+    ;(emit as SettingsEmit)(eventName, key, parseInt(target.value, 10))
   }
 
   /**
@@ -61,7 +66,7 @@ export function useSettingsHandlers<T extends (...args: unknown[]) => void>(
    */
   const handleFloatInputChange = (key: string) => (event: Event) => {
     const target = event.target as HTMLInputElement
-    ;(emit as Function)(eventName, key, parseFloat(target.value))
+    ;(emit as SettingsEmit)(eventName, key, parseFloat(target.value))
   }
 
   /**
@@ -69,7 +74,7 @@ export function useSettingsHandlers<T extends (...args: unknown[]) => void>(
    */
   const handleCheckboxChange = (key: string) => (event: Event) => {
     const target = event.target as HTMLInputElement
-    ;(emit as Function)(eventName, key, target.checked)
+    ;(emit as SettingsEmit)(eventName, key, target.checked)
   }
 
   /**
@@ -77,7 +82,7 @@ export function useSettingsHandlers<T extends (...args: unknown[]) => void>(
    */
   const handleSelectChange = (key: string) => (event: Event) => {
     const target = event.target as HTMLSelectElement
-    ;(emit as Function)(eventName, key, target.value)
+    ;(emit as SettingsEmit)(eventName, key, target.value)
   }
 
   return {

@@ -6,7 +6,7 @@ declare const WorkflowProgressWidget: DefineComponent<
   {
     workflowId?: string
   },
-  {},
+  Record<string, never>,
   unknown
 >
 

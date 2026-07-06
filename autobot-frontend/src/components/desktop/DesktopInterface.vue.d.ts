@@ -2,6 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { DefineComponent } from 'vue'
 
-declare const DesktopInterface: DefineComponent<{}, {}, unknown>
+declare const DesktopInterface: DefineComponent<Record<string, never>, Record<string, never>, unknown>
 
 export default DesktopInterface
