@@ -654,7 +654,8 @@
 
 # ==========================================================
 # PostgreSQL for User Management (Issue #2953)
-# Included only when backend_user_mode is not single_user.
+# AutoBot always runs full user management (#10713); every supported user mode
+# is Postgres-backed, so this always runs.
 # Re-uses the shared postgresql role with autobot_users DB.
 # ==========================================================
 - name: "Backend | Configure PostgreSQL for user management (#2953)"
@@ -680,7 +681,6 @@
     # slm_app's rules survive), and this second run must ONLY reload, never
     # restart, the shared instance. postgresql.conf renders identically on both
     # runs (both pass listen_addresses=localhost), so no restart is triggered.
-  when: (backend_user_mode | default('single_company')) != 'single_user'
   tags: ['backend', 'postgresql']
 
 # ==========================================================

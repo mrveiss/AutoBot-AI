@@ -5,6 +5,7 @@ import type { AxiosInstance, AxiosResponse, AxiosRequestConfig } from 'axios'
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { readStoredAuthToken } from '@/utils/authToken'
 import type { ChatMessage } from '@/types/api'
 
 // Create scoped logger for ChatRepository
@@ -182,18 +183,7 @@ export class ChatRepository {
   }
 
   private _getAuthToken(): string | null {
-    try {
-      const stored = localStorage.getItem('autobot_auth')
-      if (stored) {
-        const auth = JSON.parse(stored)
-        if (auth.token && auth.token !== 'single_user_mode') {
-          return auth.token
-        }
-      }
-    } catch {
-      // ignore parse errors
-    }
-    return null
+    return readStoredAuthToken()
   }
 
   /**

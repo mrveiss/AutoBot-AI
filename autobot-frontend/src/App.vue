@@ -623,7 +623,8 @@ export default {
     const chatStore = useChatStore();
     const knowledgeStore = useKnowledgeStore();
     // #10502: runtime (deployment) feature flags from /api/frontend-config,
-    // used to gate the Company OS nav item in single_user deployments.
+    // used to gate the Company OS nav item when the deployment lacks the
+    // PostgreSQL company mode.
     const runtimeFeaturesStore = useRuntimeFeaturesStore();
     const router = useRouter();
     const route = useRoute();
@@ -1010,8 +1011,8 @@ export default {
     const navContainerRef = ref<HTMLElement | null>(null)
 
     // #10502: hide the Company OS entry when the deployment has no PostgreSQL
-    // company mode (single_user) — its endpoints return 503 there. The runtime
-    // flag defaults fail-closed until /frontend-config resolves.
+    // company mode — its endpoints return 503 there. The runtime flag defaults
+    // fail-closed until /frontend-config resolves.
     const filteredNavItems = computed(() =>
       filterByFeatureFlag(navItems).filter(
         (item) =>

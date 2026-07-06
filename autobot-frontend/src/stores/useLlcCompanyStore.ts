@@ -32,8 +32,8 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   // True when the backend reports LLC is not enabled for this deployment
-  // (single_user mode → HTTP 503). This is an expected state, NOT an error to
-  // surface to end users.
+  // (no PostgreSQL company mode → HTTP 503). This is an expected state, NOT an
+  // error to surface to end users.
   const unavailable = ref(false)
 
   const selectedCompany = computed(
@@ -60,7 +60,7 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : ''
-      // HTTP 503 = LLC data layer disabled in this deployment mode (single_user).
+      // HTTP 503 = LLC data layer disabled in this deployment (no company mode).
       // Treat as "unavailable", not a user-facing error.
       if (message.startsWith('HTTP 503')) {
         unavailable.value = true
