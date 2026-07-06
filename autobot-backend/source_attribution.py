@@ -47,6 +47,7 @@ class SourceReliability(Enum):
     MEDIUM = "medium"  # Web search, API responses
     LOW = "low"  # User input, unverified sources
     UNKNOWN = "unknown"  # Cannot determine reliability
+    COMMUNITY = "community"  # Community-sourced content (Reddit, HN) #10932
 
 
 @dataclass
