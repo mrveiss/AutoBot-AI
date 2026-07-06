@@ -12,7 +12,7 @@ distinguishing causality from correlation. Uses LLM guidance for high-confidence
 extraction with condition detection and evidence tracking.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, get_args
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -21,12 +21,17 @@ from knowledge.pipeline.cognifiers.llm_utils import (
     batched_chunk_extract,
     parse_llm_json_response,
 )
-from knowledge.pipeline.models.causal_edge import CausalEdge
+from knowledge.pipeline.models.causal_edge import CausalEdge, EffectType
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.registry import TaskRegistry
 from services.llm_service import get_llm_service
 
 logger = get_logger(__name__)
+
+# Allowed effect-type values derived from the EffectType Literal (#11017) so the
+# prompt fragment and the validation set can never drift from the type.
+_EFFECT_TYPES = tuple(get_args(EffectType))
+_EFFECT_TYPES_STR = ", ".join(_EFFECT_TYPES)
 
 CAUSAL_EXTRACTION_PROMPT = """Extract CAUSAL relationships from the following text.
 
@@ -37,7 +42,7 @@ CRITICAL: Distinguish explicit causality from correlation:
 For each causal relationship, provide:
 - source_name: The cause entity (e.g., "cache_ttl", "request_rate")
 - target_name: The effect entity (e.g., "query_latency", "memory_usage")
-- effect_type: One of CAUSES, ENABLES, PREVENTS, AMPLIFIES, REDUCES, INHIBITS, ACCELERATES, DECELERATES
+- effect_type: One of %%EFFECT_TYPES%%
 - condition: When does this causality hold? (e.g., "when cache is full", "under high load",
   or empty string for unconditional)
 - evidence_text: The exact sentence supporting this causality
@@ -57,7 +62,7 @@ Return empty array [] if no clear causal relationships found.
 
 Text:
 {text}
-"""
+""".replace("%%EFFECT_TYPES%%", _EFFECT_TYPES_STR)
 
 CAUSAL_EXTRACTION_BATCH_PROMPT = """Extract CAUSAL relationships from each of the following text chunks.
 
@@ -67,7 +72,7 @@ CRITICAL: Distinguish explicit causality from correlation:
 
 Each chunk is labeled "Chunk N:". For each causal relationship provide:
 - source_name, target_name
-- effect_type: One of CAUSES, ENABLES, PREVENTS, AMPLIFIES, REDUCES, INHIBITS, ACCELERATES, DECELERATES
+- effect_type: One of %%EFFECT_TYPES%%
 - condition (empty string if unconditional)
 - evidence_text: The exact sentence supporting this causality
 - confidence: 0.9-1.0 explicit, 0.7-0.85 strong inference, reject (<0.7)
@@ -83,7 +88,7 @@ no clear causality. Example for two chunks:
 
 Chunks:
 {chunks}
-"""
+""".replace("%%EFFECT_TYPES%%", _EFFECT_TYPES_STR)
 
 
 # NLP patterns for lightweight causal detection (fallback mode)
@@ -386,16 +391,7 @@ class CausalRelationshipExtractor(BaseCognifier):
                     continue
 
                 effect_type = raw.get("effect_type", "CAUSES")
-                if effect_type not in (
-                    "CAUSES",
-                    "ENABLES",
-                    "PREVENTS",
-                    "AMPLIFIES",
-                    "REDUCES",
-                    "INHIBITS",
-                    "ACCELERATES",
-                    "DECELERATES",
-                ):
+                if effect_type not in _EFFECT_TYPES:
                     effect_type = "CAUSES"
 
                 edge = CausalEdge(

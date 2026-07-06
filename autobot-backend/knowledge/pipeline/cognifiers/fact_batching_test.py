@@ -123,3 +123,67 @@ async def test_single_chunk_skips_batching():
     assert ext.llm.chat.call_count == 1
     assert len(facts) == 1
     assert facts[0].source_chunk_ids == [c0.id]
+
+
+# ---------------------------------------------------------------------------
+# #11017 — fact_extractor routes through the shared helper: honors config flag,
+# derives allowed types from the FactType Literal, inherits partial-response fix
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_flag_off_uses_legacy_per_chunk(monkeypatch):
+    """cognifier_multichunk_batching=False → one LLM call PER chunk (no batching)."""
+    import knowledge.pipeline.cognifiers.fact_extractor as fx
+
+    monkeypatch.setattr(fx.config, "cognifier_multichunk_batching", False)
+    c0, c1 = _chunk("c0"), _chunk("c1")
+    ext = _extractor()
+    ext.llm = types.SimpleNamespace(
+        chat=AsyncMock(
+            side_effect=[
+                types.SimpleNamespace(content=json.dumps([_fact("A")])),
+                types.SimpleNamespace(content=json.dumps([_fact("B")])),
+            ]
+        )
+    )
+    facts = await ext._process_batch([c0, c1], _ctx())
+    assert ext.llm.chat.call_count == 2  # per-chunk, not batched
+    assert {f.subject for f in facts} == {"A", "B"}
+
+
+@pytest.mark.asyncio
+async def test_partial_batch_recovers_missing_chunk(monkeypatch):
+    """A batch response missing an index recovers that chunk via per-chunk fallback
+    instead of silently dropping it — inherited from the shared helper (#11012/#11017)."""
+    import knowledge.pipeline.cognifiers.fact_extractor as fx
+
+    monkeypatch.setattr(fx.config, "cognifier_multichunk_batching", True)
+    c0, c1 = _chunk("c0"), _chunk("c1")
+    ext = _extractor()
+    # Batch reply omits index "1"; the per-chunk fallback for c1 returns a fact.
+    ext.llm = types.SimpleNamespace(
+        chat=AsyncMock(
+            side_effect=[
+                types.SimpleNamespace(content=json.dumps({"0": [_fact("A")]})),
+                types.SimpleNamespace(content=json.dumps([_fact("recovered")])),
+            ]
+        )
+    )
+    facts = await ext._process_batch([c0, c1], _ctx())
+    subjects = {f.subject for f in facts}
+    assert "A" in subjects and "recovered" in subjects  # c1 not dropped
+
+
+def test_valid_fact_types_derived_from_literal():
+    """VALID_FACT_TYPES and the prompt fragment come from the FactType Literal (#11017)."""
+    from typing import get_args
+
+    from knowledge.pipeline.cognifiers import fact_extractor as fx
+    from knowledge.pipeline.models.fact import FactType
+
+    expected = set(get_args(FactType))
+    assert set(fx.VALID_FACT_TYPES) == expected
+    for value in expected:
+        assert value in fx.FACT_EXTRACTION_PROMPT
+        assert value in fx.FACT_EXTRACTION_BATCH_PROMPT
