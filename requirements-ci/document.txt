@@ -5,4 +5,4 @@ reportlab>=4.0.0            # MVA-2174: PDF export for transcripts
 markdown==3.10.2
 nltk==3.9.4
 beautifulsoup4==4.15.0
-markdownify==1.2.2
+markdownify==1.2.3
