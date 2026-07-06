@@ -157,6 +157,10 @@ class WorkflowTask:
     skill_name: str | None = None
     skill_action: str | None = None
     skill_resolution_method: str | None = None
+    # #10545: explanation recorded when a tenant's learned feedback
+    # preference influenced (or would have influenced) this task's skill
+    # binding — surfaced in the trajectory/decision log for explainability.
+    skill_preference_note: str | None = None
 
     # Async gap-fill marker (#7431 Phase 3, ADR-006). Set when the planner
     # found no matching skill for the task's intent and triggered Phase 3

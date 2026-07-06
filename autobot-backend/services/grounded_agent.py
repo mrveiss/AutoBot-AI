@@ -367,13 +367,18 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
                 llm_type=LLMType.EXTRACTION,
                 temperature=0.1,
                 max_tokens=1024,
+                structured_output=True,  # #10599 §3.4: prevent silent JSON drops
             )
 
-            # Parse JSON response (simplified - production would use robust parsing)
+            # Parse JSON response — structured_output=True asks the provider for
+            # valid JSON; the fence-stripping fallback in _extract_json_object
+            # covers providers that ignore the flag (#10672).
             import json
 
+            from judges import _extract_json_object
+
             try:
-                claims_data = json.loads(response_obj.content)
+                claims_data = _extract_json_object(response_obj.content)
             except json.JSONDecodeError:
                 logger.warning("Failed to parse claim extraction JSON")
                 claims_data = []
