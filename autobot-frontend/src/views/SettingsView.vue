@@ -181,6 +181,33 @@ Issue #753: User preference management interface
               <Icon name="magic" />
               {{ $t('settings.apiKeys.wizardTitle') }}
             </button>
+
+            <!-- #10551: Provider subscription / OAuth sign-in affordance -->
+            <div class="provider-auth-section">
+              <h3 class="provider-auth-heading">Provider sign-in (subscription-based)</h3>
+              <p class="provider-auth-desc">
+                Connect to providers using your existing subscription instead of a billed API key.
+                Tokens are stored securely in the AutoBot secrets vault.
+              </p>
+              <div class="provider-auth-list">
+                <ProviderOAuthConnect
+                  v-for="p in oauthProviders"
+                  :key="p.name"
+                  :provider-name="p.name"
+                  :provider-label="p.label"
+                  :tos-note="p.tosNote"
+                  :device-auth="p.deviceAuth"
+                  :device-authorization-url="p.deviceAuthorizationUrl"
+                  :token-url="p.tokenUrl"
+                  :client-id="p.clientId"
+                  :scope="p.scope"
+                >
+                  <template #apikey>
+                    <p class="apikey-hint">Enter your API key in the wizard above.</p>
+                  </template>
+                </ProviderOAuthConnect>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -348,6 +375,7 @@ import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import WebResearchSettingsPanel from '@/components/settings/WebResearchSettingsPanel.vue'
 import TelegramSettingsPanel from '@/components/settings/TelegramSettingsPanel.vue'
 import ApiKeySetupWizard from '@/components/settings/ApiKeySetupWizard.vue'
+import ProviderOAuthConnect from '@/components/settings/ProviderOAuthConnect.vue'
 import ConnectionSettingsPanel from '@/components/desktop/ConnectionSettingsPanel.vue'
 import FeatureFlagsSettingsPanel from '@/components/settings/FeatureFlagsSettingsPanel.vue'
 import PresetsSettingsPanel from '@/components/settings/PresetsSettingsPanel.vue'
@@ -371,6 +399,41 @@ logger.debug('Settings view initialized')
 type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys' | 'connection' | 'featureflags' | 'presets' | 'telegram' | 'notifications' | 'devices' | 'privacy'
 const activeTab = ref<PreferenceTab>('appearance')
 const showApiKeyWizard = ref(false)
+
+// #10551: OAuth-capable providers — operators configure client_id / tokenUrl via .env / SLM.
+// Each entry shows a "Sign in with {label}" tab alongside the API key option.
+const oauthProviders = [
+  {
+    name: 'openai',
+    label: 'OpenAI',
+    tosNote: 'Connecting uses your OpenAI account subscription. Charges apply per the OpenAI ToS.',
+    deviceAuth: false,
+    deviceAuthorizationUrl: '',
+    tokenUrl: '',
+    clientId: '',
+    scope: 'openid',
+  },
+  {
+    name: 'anthropic',
+    label: 'Anthropic',
+    tosNote: 'Connecting uses your Anthropic Console account. Charges apply per the Anthropic ToS.',
+    deviceAuth: false,
+    deviceAuthorizationUrl: '',
+    tokenUrl: '',
+    clientId: '',
+    scope: 'openid',
+  },
+  {
+    name: 'huggingface',
+    label: 'HuggingFace',
+    tosNote: 'Uses your HuggingFace account token (PRO or Inference API access required).',
+    deviceAuth: true,
+    deviceAuthorizationUrl: 'https://huggingface.co/oauth/device',
+    tokenUrl: 'https://huggingface.co/oauth/token',
+    clientId: '',
+    scope: 'read-repos inference-api',
+  },
+]
 
 // Backend reachability check (#6964 wire-in for apiClient.validateConnection, resolves #6845)
 const isChecking = ref(false)

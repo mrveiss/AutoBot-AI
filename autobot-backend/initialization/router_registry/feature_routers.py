@@ -134,6 +134,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # ("api.execution_snapshots", "", ["execution", "snapshots"], "execution_snapshots"),
     # Core workflow and batch processing
     # Issue #6229: api.websockets and api.live_events promoted to core_routers
+    # #10551: Provider OAuth/device-code/session auth connect endpoints
+    ("api.provider_auth", "", ["llm-auth"], "provider_auth"),
     ("api.workflow", "/workflow", ["workflow"], "workflow"),
     # Issue #1287: batch.py consolidated into batch_jobs.py
     (
