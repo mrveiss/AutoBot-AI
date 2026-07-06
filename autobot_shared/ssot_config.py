@@ -103,6 +103,12 @@ CLAIM_VERIFICATION_ENABLED: bool = os.environ.get("AUTOBOT_CLAIM_VERIFICATION_EN
 # Default ON.  Set AUTOBOT_SELF_IMPROVEMENT_ENABLED=false to disable.
 SELF_IMPROVEMENT_ENABLED: bool = os.environ.get("AUTOBOT_SELF_IMPROVEMENT_ENABLED", "true").lower() in _TRUE_VALUES
 
+# #11015: Planning context (learned-strategy + similar-trajectory retrieval) at plan time.
+# Kill-switch for the always-on ChromaDB/Redis I/O added by #10580/#10581 — set
+# AUTOBOT_PLANNING_CONTEXT_ENABLED=false to disable the retrieval entirely (e.g. when
+# the vector store is cold/slow). Default ON to preserve the shipped behaviour.
+PLANNING_CONTEXT_ENABLED: bool = os.environ.get("AUTOBOT_PLANNING_CONTEXT_ENABLED", "true").lower() in _TRUE_VALUES
+
 # #10602: Subagent reflection pass — adds LLM score + optional revision per task.
 # Default OFF; set AUTOBOT_SUBAGENT_REFLECTION_ENABLED=true to opt in.
 SUBAGENT_REFLECTION_ENABLED: bool = (
