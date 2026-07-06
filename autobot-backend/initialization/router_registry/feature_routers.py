@@ -392,6 +392,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["task-workspace"],
         "task_workspace",
     ),
+    # #10544: persistent branchable per-task workspace — stateful sandbox + WS shell
+    (
+        "api.task_workspace_ws",
+        "",
+        ["task-workspace", "websockets"],
+        "task_workspace_ws",
+    ),
     # Long-running and validation
     # Moved back from core_routers — has _OPERATIONS_AVAILABLE graceful degradation (Issue #6306)
     (
