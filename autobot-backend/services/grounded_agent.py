@@ -37,12 +37,23 @@ from uuid import uuid4
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_config import CLAIM_VERIFICATION_ENABLED
 from knowledge_factory import get_or_create_knowledge_base
 from llm_shared.types import LLMType
 from services.ai_stack_client import get_ai_stack_client
 from services.causal_inference_engine import CausalInferenceEngine
 
 logger = get_logger(__name__)
+
+
+def _make_claim_verifier(knowledge_base):
+    """Lazy import of ClaimVerifier to avoid circular imports at module load.
+
+    Exposed as a module-level function so tests can patch it.
+    """
+    from services.claim_verifier import ClaimVerifier  # noqa: PLC0415
+
+    return ClaimVerifier(knowledge_base=knowledge_base)
 
 
 class ClaimStatus(str, Enum):
@@ -392,31 +403,15 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
             return []
 
     async def _classify_and_verify_claim(self, claim: Claim) -> VerifiedClaim:
-        """
-        Classify claim against KB and verify if needed.
+        """Classify claim against KB and verify if needed.
 
-        Classification:
-        - IN_KB: Found in knowledge base
-        - UNKNOWN: Not in KB, needs research
-        - CONTRADICTS: Contradicts KB fact
-        - VERIFIED: Verified through external research
-        - UNVERIFIABLE: Cannot be verified
-
-        Args:
-            claim: Claim to classify
-
-        Returns:
-            VerifiedClaim with status and evidence
+        When AUTOBOT_CLAIM_VERIFICATION_ENABLED=true, UNKNOWN claims are escalated
+        to ClaimVerifier for a second RAG pass with research-agent fallback (#10602).
         """
         if not self.kb:
-            return VerifiedClaim(
-                claim=claim,
-                kb_status=ClaimStatus.UNKNOWN,
-                confidence=0.0,
-            )
+            return VerifiedClaim(claim=claim, kb_status=ClaimStatus.UNKNOWN, confidence=0.0)
 
         try:
-            # Search KB for related facts
             search_results = await self.kb.search(
                 query=claim.claim_text,
                 limit=5,
@@ -424,33 +419,18 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
             )
 
             if not search_results:
-                return VerifiedClaim(
-                    claim=claim,
-                    kb_status=ClaimStatus.UNKNOWN,
-                    confidence=0.0,
-                    evidence=["No matching KB facts found"],
-                )
+                return await self._escalate_to_claim_verifier(claim, "No matching KB facts found")
 
-            # Find best match
-            best_match = search_results[0] if search_results else None
-
-            if not best_match:
-                return VerifiedClaim(
-                    claim=claim,
-                    kb_status=ClaimStatus.UNKNOWN,
-                    confidence=0.0,
-                )
-
+            best_match = search_results[0]
             match_confidence = best_match.get("similarity_score", 0.0)
             fact_id = best_match.get("fact_id", "")
 
-            # Determine status based on confidence
             if match_confidence > 0.85:
                 status = ClaimStatus.IN_KB
             elif match_confidence > 0.5:
                 status = ClaimStatus.VERIFIED
             else:
-                status = ClaimStatus.UNKNOWN
+                return await self._escalate_to_claim_verifier(claim, best_match.get("content", "")[:200])
 
             return VerifiedClaim(
                 claim=claim,
@@ -469,6 +449,52 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
                 confidence=0.0,
                 evidence=[f"Classification error: {str(e)[:100]}"],
             )
+
+    async def _escalate_to_claim_verifier(self, claim: Claim, kb_evidence: str) -> VerifiedClaim:
+        """Escalate a low-confidence claim to ClaimVerifier when enabled (#10602).
+
+        Returns UNKNOWN VerifiedClaim when CLAIM_VERIFICATION_ENABLED=false (default).
+        When enabled, runs ClaimVerifier.kb_rag_search + research-agent escalation
+        and maps the result back into GroundedAgent's VerifiedClaim type.
+        """
+        if not CLAIM_VERIFICATION_ENABLED:
+            return VerifiedClaim(
+                claim=claim,
+                kb_status=ClaimStatus.UNKNOWN,
+                confidence=0.0,
+                evidence=[kb_evidence] if kb_evidence else ["No matching KB facts found"],
+                verification_method="kb_lookup",
+            )
+
+        try:
+            verifier = _make_claim_verifier(self.kb)
+            rag_result = await verifier.kb_rag_search(claim.claim_text)
+
+            if rag_result and rag_result.confidence >= 0.7:
+                logger.info(
+                    "ClaimVerifier RAG confidence %.2f for claim: %s...",
+                    rag_result.confidence,
+                    claim.claim_text[:60],
+                )
+                status = ClaimStatus.VERIFIED if rag_result.confidence >= 0.8 else ClaimStatus.UNKNOWN
+                evidence = [m.text[:200] for m in rag_result.matches[:2]] if rag_result.matches else []
+                return VerifiedClaim(
+                    claim=claim,
+                    kb_status=status,
+                    confidence=rag_result.confidence,
+                    evidence=evidence,
+                    verification_method="claim_verifier_rag",
+                )
+        except Exception as exc:
+            logger.warning("ClaimVerifier escalation failed (non-fatal): %s", exc)
+
+        return VerifiedClaim(
+            claim=claim,
+            kb_status=ClaimStatus.UNKNOWN,
+            confidence=0.0,
+            evidence=[kb_evidence] if kb_evidence else [],
+            verification_method="kb_lookup",
+        )
 
     async def _reconstruct_response(
         self,

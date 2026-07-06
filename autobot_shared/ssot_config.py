@@ -94,6 +94,21 @@ PLAN_BEST_OF_N_COUNT: int = min(
     max(2, int(os.environ.get("AUTOBOT_PLAN_BEST_OF_N_COUNT", "3"))),
 )
 
+# #10602: ClaimVerifier wiring — adds KB RAG + optional research-agent LLM call per claim.
+# Default OFF because it adds latency/cost; set AUTOBOT_CLAIM_VERIFICATION_ENABLED=true to opt in.
+_TRUE_VALUES = {"1", "true", "yes"}
+CLAIM_VERIFICATION_ENABLED: bool = os.environ.get("AUTOBOT_CLAIM_VERIFICATION_ENABLED", "false").lower() in _TRUE_VALUES
+
+# #10602: Self-improvement write path — pure plumbing, no extra LLM calls until outcomes exist.
+# Default ON.  Set AUTOBOT_SELF_IMPROVEMENT_ENABLED=false to disable.
+SELF_IMPROVEMENT_ENABLED: bool = os.environ.get("AUTOBOT_SELF_IMPROVEMENT_ENABLED", "true").lower() in _TRUE_VALUES
+
+# #10602: Subagent reflection pass — adds LLM score + optional revision per task.
+# Default OFF; set AUTOBOT_SUBAGENT_REFLECTION_ENABLED=true to opt in.
+SUBAGENT_REFLECTION_ENABLED: bool = (
+    os.environ.get("AUTOBOT_SUBAGENT_REFLECTION_ENABLED", "false").lower() in _TRUE_VALUES
+)
+
 
 class VMConfig(BaseSettings):
     """
