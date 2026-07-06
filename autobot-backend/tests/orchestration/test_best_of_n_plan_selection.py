@@ -170,8 +170,6 @@ async def test_flag_off_generates_exactly_one_plan_no_judge_calls():
 @pytest.mark.asyncio
 async def test_flag_on_generates_n_plans_and_scores_each():
     """When flag is ON, N plans are generated and each is scored."""
-    import importlib
-    import os
 
     plans_generated = []
     scores_returned = []
