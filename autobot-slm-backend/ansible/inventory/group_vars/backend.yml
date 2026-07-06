@@ -7,17 +7,15 @@
 # ==========================================
 # USER-MANAGEMENT MODE
 # ==========================================
-# single_company enables the full PostgreSQL-backed userbase + RBAC and the
-# Company OS (LLC) module. Flipping off single_user (the role default):
-#   * auto-provisions a local PostgreSQL instance (backend role includes the
-#     postgresql role when this is not single_user) and runs `alembic upgrade
-#     head` on first start (#9759);
-#   * activates RBAC — the FIRST user to register becomes the admin, and the
-#     single_user synthetic-admin auth bypass (#6838) no longer applies, so
-#     real authentication is required;
+# AutoBot always runs full, PostgreSQL-backed user management (#10713); there is
+# no single_user mode. single_company (the default) or multi_company:
+#   * auto-provisions a local PostgreSQL instance (the backend role always
+#     includes the postgresql role) and runs `alembic upgrade head` on first
+#     start (#9759);
+#   * activates RBAC — the FIRST user to register becomes the admin, and real
+#     authentication is always required;
 #   * makes the "Company OS" nav item visible (gated on company mode via
 #     /api/frontend-config → company_os_enabled, #10502).
-# Apply with an Ansible sync once PostgreSQL is acceptable on the backend node.
 backend_user_mode: "single_company"
 
 # ==========================================
@@ -133,7 +131,7 @@ backend:
 
     # Deployment settings
     AUTOBOT_DEPLOYMENT_MODE: "production"  # Infrastructure mode: local/hybrid/distributed/production
-    AUTOBOT_USER_MODE: "single_company"    # User management: single_user/single_company/multi_company/provider
+    AUTOBOT_USER_MODE: "single_company"    # User management: single_company/multi_company/provider
     AUTOBOT_BACKEND_HOST: "0.0.0.0"
     AUTOBOT_BACKEND_PORT: 8001
 
