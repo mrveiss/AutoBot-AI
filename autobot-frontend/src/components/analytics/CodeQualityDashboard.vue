@@ -447,12 +447,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
+import type { DirectiveBinding } from 'vue';
 import { BaseModal } from '@autobot/ui'
 import { useRoute } from 'vue-router';
 import { createLogger } from '@/utils/debugUtils';
 import { getCssVar } from '@/composables/useCssVars';
 import { useWebSocket } from '@/composables/useWebSocket';
 import { useCodeQualityData } from '@/composables/analytics/useCodeQualityData';
+import type { QualityDrillDown } from '@/composables/analytics/useCodeQualityData';
 import { useUnwiredTrackers } from '@/composables/analytics/useUnwiredTrackers';
 import UnwiredTrackerTile from '@/components/analytics/UnwiredTrackerTile.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
@@ -548,6 +550,17 @@ interface TrendPoint {
   date: string;
 }
 
+// WebSocket message envelope emitted by /api/quality/ws.
+interface QualityWsMessage {
+  type: string;
+  data: Record<string, unknown>;
+}
+
+// HTMLElement augmented with the click-outside listener stored by v-click-outside.
+interface ClickOutsideElement extends HTMLElement {
+  _clickOutside?: (event: Event) => void;
+}
+
 // State
 const loading = ref(false);
 const wsConnected = ref(false);
@@ -575,7 +588,7 @@ const complexity = ref<Complexity>({
 });
 const trendData = ref<Array<{ date: string; score: number }>>([]);
 const codebaseStats = ref({ files: 0, lines: 0, issues: 0 });
-const drillDownData = ref({ total_files: 0, total_issues: 0, average_score: 0, files: [] as any[] });
+const drillDownData = ref<QualityDrillDown>({ total_files: 0, total_issues: 0, average_score: 0, files: [] });
 
 // WebSocket managed via useWebSocket composable
 const _qualityWsUrl = (() => {
@@ -845,19 +858,19 @@ function connectWebSocket(): void {
   wsConnect();
 }
 
-function handleWebSocketMessage(message: any): void {
+function handleWebSocketMessage(message: QualityWsMessage): void {
   switch (message.type) {
     case 'snapshot':
       // Update all data from snapshot
       if (message.data.health_score) {
-        healthScore.value = message.data.health_score;
+        healthScore.value = message.data.health_score as HealthScore;
       }
       break;
     case 'metric_update':
       // Update specific metric
       const metricIndex = metrics.value.findIndex(m => m.category === message.data.category);
       if (metricIndex >= 0) {
-        metrics.value[metricIndex] = { ...metrics.value[metricIndex], ...message.data };
+        metrics.value[metricIndex] = { ...metrics.value[metricIndex], ...message.data } as Metric;
       }
       break;
     case 'pattern_update':
@@ -960,16 +973,16 @@ function formatShortDate(dateStr: string): string {
 
 // Directive for click outside
 const vClickOutside = {
-  mounted(el: HTMLElement, binding: any) {
-    (el as any)._clickOutside = (event: Event) => {
+  mounted(el: HTMLElement, binding: DirectiveBinding<() => void>) {
+    (el as ClickOutsideElement)._clickOutside = (event: Event) => {
       if (!(el === event.target || el.contains(event.target as Node))) {
         binding.value();
       }
     };
-    document.addEventListener('click', (el as any)._clickOutside);
+    document.addEventListener('click', (el as ClickOutsideElement)._clickOutside as EventListener);
   },
   unmounted(el: HTMLElement) {
-    document.removeEventListener('click', (el as any)._clickOutside);
+    document.removeEventListener('click', (el as ClickOutsideElement)._clickOutside as EventListener);
   },
 };
 
