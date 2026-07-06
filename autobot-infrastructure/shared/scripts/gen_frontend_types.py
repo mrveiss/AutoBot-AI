@@ -47,7 +47,7 @@ import types
 import typing
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union, get_args, get_origin
+from typing import Any, Dict, List, Set, Tuple, Union, get_args, get_origin
 
 # PEP 604 `X | Y` unions have origin ``types.UnionType`` (py3.10+), which is a
 # distinct object from ``typing.Union``. ``get_type_hints`` may return either
@@ -56,9 +56,16 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union, get_args, get_o
 _UNION_ORIGINS = (Union, getattr(types, "UnionType", Union))
 
 
+def _ts_array(inner: str) -> str:
+    """Render ``inner[]`` but parenthesize a union member so ``X | null`` becomes
+    ``(X | null)[]`` — otherwise TS parses ``X | null[]`` as ``X | (null[])`` (#11020)."""
+    return f"({inner})[]" if "|" in inner else f"{inner}[]"
+
+
 def _is_optional(annotation: object) -> bool:
     """True when *annotation* is a union that admits ``None`` (Optional[...])."""
     return get_origin(annotation) in _UNION_ORIGINS and type(None) in get_args(annotation)
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 OUTPUT_PATH = REPO_ROOT / "autobot-frontend" / "src" / "types" / "_generated" / "workflow.ts"
@@ -203,7 +210,7 @@ def _ts_type(py_type: Any, known_names: Set[str]) -> str:
 
     if origin in (list, List):
         inner = _ts_type(args[0], known_names) if args else "unknown"
-        return f"{inner}[]"
+        return _ts_array(inner)
 
     if origin in (dict, Dict):
         if not args:
@@ -215,7 +222,7 @@ def _ts_type(py_type: Any, known_names: Set[str]) -> str:
 
     if origin in (set, Set, frozenset):
         inner = _ts_type(args[0], known_names) if args else "unknown"
-        return f"{inner}[]"
+        return _ts_array(inner)
 
     if origin is tuple:
         inner = ", ".join(_ts_type(a, known_names) for a in args) if args else "unknown"
@@ -223,6 +230,16 @@ def _ts_type(py_type: Any, known_names: Set[str]) -> str:
 
     if py_type is Any:
         return "unknown"
+
+    # Bare (unsubscripted) containers — no origin/args but a real type. Render the
+    # collection shape rather than falling through to "unknown" (#11020), so
+    # ``Optional[dict]`` becomes ``Record<string, unknown> | null`` etc.
+    if py_type is dict:
+        return "Record<string, unknown>"
+    if py_type in (list, set, frozenset):
+        return "unknown[]"
+    if py_type is tuple:
+        return "unknown[]"
 
     # Last resort — emit the type name and let TypeScript flag it
     name = getattr(py_type, "__name__", None) or repr(py_type)
