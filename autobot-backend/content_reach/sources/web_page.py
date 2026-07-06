@@ -78,11 +78,14 @@ class TrafilaturaBackend(ContentBackend):
         except ImportError:
             raise BackendError("trafilatura not installed")
 
-        if self._client is not None:
-            response = await self._client.get(request.url)
-        else:
-            async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-                response = await client.get(request.url)
+        try:
+            if self._client is not None:
+                response = await self._client.get(request.url)
+            else:
+                async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+                    response = await client.get(request.url)
+        except httpx.HTTPError as exc:
+            raise BackendError(f"TrafilaturaBackend: HTTP error fetching {request.url!r}: {exc}") from exc
 
         html = response.text
         text = await asyncio.to_thread(_trafilatura_extract, html)
@@ -131,11 +134,14 @@ class JinaReaderBackend(ContentBackend):
         url = f"{_JINA_READER_BASE}{request.url}"
         headers = {"Accept": "text/plain"}
 
-        if self._client is not None:
-            response = await self._client.get(url, headers=headers)
-        else:
-            async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-                response = await client.get(url, headers=headers)
+        try:
+            if self._client is not None:
+                response = await self._client.get(url, headers=headers)
+            else:
+                async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+                    response = await client.get(url, headers=headers)
+        except httpx.HTTPError as exc:
+            raise BackendError(f"JinaReaderBackend: HTTP error fetching {request.url!r}: {exc}") from exc
 
         if response.status_code != 200:
             logger.debug(

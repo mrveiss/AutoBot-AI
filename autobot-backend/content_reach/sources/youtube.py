@@ -63,7 +63,7 @@ def _ytdlp_extract_info(url: str) -> dict:
 
 
 def _vtt_to_text(vtt: str) -> str:
-    """Convert WebVTT/SRV1 caption content to plain text lines."""
+    """Convert WebVTT caption content to plain text lines."""
     # Strip WEBVTT header and timestamps; keep non-empty non-tag lines.
     lines = []
     for line in vtt.splitlines():

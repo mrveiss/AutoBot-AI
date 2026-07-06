@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 
 from content_reach.base import BackendError, ContentRequest
@@ -21,6 +22,7 @@ from source_attribution import SourceType
 @pytest.mark.asyncio
 async def test_trafilatura_probe_true_when_importable():
     """probe() returns True when trafilatura is importable (installed here)."""
+    pytest.importorskip("trafilatura")
     from content_reach.sources.web_page import TrafilaturaBackend
 
     backend = TrafilaturaBackend()
@@ -147,6 +149,26 @@ async def test_trafilatura_fetch_absent_lib_raises_backend_error(monkeypatch):
         await backend.fetch(request)
 
 
+@pytest.mark.asyncio
+async def test_trafilatura_fetch_httpx_error_raises_backend_error(monkeypatch):
+    """httpx.HTTPError raised by client.get() → BackendError (not raw httpx error)."""
+    from content_reach.sources import web_page as wp_mod
+
+    monkeypatch.setattr(wp_mod, "_trafilatura_extract", lambda html: "text")
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(side_effect=httpx.HTTPError("connection refused"))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    from content_reach.sources.web_page import TrafilaturaBackend
+
+    backend = TrafilaturaBackend(client=mock_client)
+    request = ContentRequest(url="https://example.com/article")
+    with pytest.raises(BackendError):
+        await backend.fetch(request)
+
+
 # ---------------------------------------------------------------------------
 # JinaReaderBackend — fetch()
 # ---------------------------------------------------------------------------
@@ -230,6 +252,22 @@ async def test_jina_reader_empty_text_raises():
 
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    backend = JinaReaderBackend(client=mock_client)
+    request = ContentRequest(url="https://example.com/page")
+    with pytest.raises(BackendError):
+        await backend.fetch(request)
+
+
+@pytest.mark.asyncio
+async def test_jina_reader_httpx_error_raises_backend_error():
+    """httpx.HTTPError raised by client.get() → BackendError (not raw httpx error)."""
+    from content_reach.sources.web_page import JinaReaderBackend
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(side_effect=httpx.HTTPError("connection refused"))
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
 

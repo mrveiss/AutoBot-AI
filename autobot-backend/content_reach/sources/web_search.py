@@ -58,11 +58,18 @@ class DdgsBackend(ContentBackend):
             _import_ddgs()
             return True
         except ImportError:
+            logger.warning("ddgs not installed; DdgsBackend unavailable")
             return False
 
     async def fetch(self, request: ContentRequest) -> ContentResult:
         """Fetch web-search results via DDGS.text(); raise BackendError when empty."""
-        ddgs_cls = DDGS if DDGS is not None else _import_ddgs()
+        if DDGS is not None:
+            ddgs_cls = DDGS
+        else:
+            try:
+                ddgs_cls = _import_ddgs()
+            except ImportError:
+                raise BackendError("ddgs not installed")
 
         def _search():
             return ddgs_cls().text(request.query, max_results=request.limit)
@@ -70,6 +77,7 @@ class DdgsBackend(ContentBackend):
         raw_results: list[dict] = await asyncio.to_thread(_search)
 
         if not raw_results:
+            logger.debug("DdgsBackend: no results for %r", request.query)
             raise BackendError(f"DdgsBackend: no results for query {request.query!r}")
 
         text_lines = [f"{r.get('title', '')} — {r.get('href', '')}\n{r.get('body', '')}" for r in raw_results]
@@ -111,11 +119,14 @@ class JinaSearchBackend(ContentBackend):
         url = f"{_JINA_SEARCH_BASE}{encoded_query}"
         headers = {"Accept": "application/json"}
 
-        if self._client is not None:
-            response = await self._client.get(url, headers=headers)
-        else:
-            async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-                response = await client.get(url, headers=headers)
+        try:
+            if self._client is not None:
+                response = await self._client.get(url, headers=headers)
+            else:
+                async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+                    response = await client.get(url, headers=headers)
+        except httpx.HTTPError as exc:
+            raise BackendError(f"JinaSearchBackend: HTTP error for query {request.query!r}: {exc}") from exc
 
         if response.status_code != 200:
             raise BackendError(f"JinaSearchBackend: HTTP {response.status_code} for query {request.query!r}")

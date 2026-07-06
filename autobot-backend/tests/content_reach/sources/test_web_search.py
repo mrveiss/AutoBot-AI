@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 
 from content_reach.base import BackendError, ContentRequest
@@ -21,6 +22,7 @@ from source_attribution import SourceType
 @pytest.mark.asyncio
 async def test_ddgs_probe_true_when_importable():
     """probe() returns True when ddgs is importable (ddgs is installed here)."""
+    pytest.importorskip("ddgs")
     from content_reach.sources.web_search import DdgsBackend
 
     backend = DdgsBackend()
@@ -164,6 +166,45 @@ async def test_jina_search_empty_text_raises():
 
     backend = JinaSearchBackend(client=mock_client)
     request = ContentRequest(query="empty text")
+    with pytest.raises(BackendError):
+        await backend.fetch(request)
+
+
+@pytest.mark.asyncio
+async def test_jina_search_sends_accept_header():
+    """fetch() sends Accept: application/json header to the Jina search endpoint."""
+    from content_reach.sources.web_search import JinaSearchBackend
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = "Result text from Jina"
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    backend = JinaSearchBackend(client=mock_client)
+    request = ContentRequest(query="accept header check")
+    await backend.fetch(request)
+
+    call_kwargs = mock_client.get.call_args
+    headers = call_kwargs.kwargs.get("headers", {})
+    assert headers.get("Accept") == "application/json"
+
+
+@pytest.mark.asyncio
+async def test_jina_search_httpx_error_raises_backend_error():
+    """fetch() wraps httpx.HTTPError into BackendError."""
+    from content_reach.sources.web_search import JinaSearchBackend
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(side_effect=httpx.HTTPError("connection failed"))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    backend = JinaSearchBackend(client=mock_client)
+    request = ContentRequest(query="http error query")
     with pytest.raises(BackendError):
         await backend.fetch(request)
 
