@@ -6,7 +6,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('WorkflowAutomation')
@@ -30,10 +30,10 @@ interface WorkflowData {
   }>
 }
 
-interface ProcessInfo {
-  pid: number
-  command: string
-  startTime: Date
+interface TerminalOutputLine {
+  content: string
+  type: string
+  timestamp: Date
 }
 
 interface Props {
@@ -56,7 +56,7 @@ interface Emits {
   (e: 'update:waiting-for-user-confirmation', value: boolean): void
   (e: 'send-automation-control', action: string): void
   (e: 'execute-automated-command', command: string): void
-  (e: 'add-output-line', line: any): void
+  (e: 'add-output-line', line: TerminalOutputLine): void
   (e: 'add-running-process', command: string): void
   (e: 'request-manual-step-confirmation', stepInfo: WorkflowStep): void
 }
@@ -352,7 +352,7 @@ const handleWorkflowMessage = (message: string) => {
 }
 
 // Advanced Modal Methods for parent component
-const executeConfirmedStep = (stepData: any) => {
+const executeConfirmedStep = (stepData: WorkflowStep) => {
   emit('add-output-line', {
     content: `🤖 EXECUTING: ${stepData.command}`,
     type: 'system_message',
@@ -377,7 +377,7 @@ const executeAllRemainingSteps = () => {
   processNextAutomationStep()
 }
 
-const saveCustomWorkflow = (workflowData: any) => {
+const saveCustomWorkflow = (workflowData: WorkflowData) => {
   emit('add-output-line', {
     content: `💾 WORKFLOW SAVED: ${workflowData.name}`,
     type: 'system_message',
