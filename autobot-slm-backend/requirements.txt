@@ -34,7 +34,7 @@ redis[asyncio]>=8.0.1
 
 # Async utilities
 aiofiles>=25.1.0
-websockets>=16.0,<17       # Issue #3098: relaxed from >=16.0 (#10386): slm_client uses only API present in 15.x; <16 satisfies langgraph-sdk 0.4.2 on backend side
+websockets>=15.0,<16       # Issue #3098: relaxed from >=16.0 (#10386): slm_client uses only API present in 15.x; <16 satisfies langgraph-sdk 0.4.2 on backend side
 
 # Ansible integration
 ansible-runner>=2.4.3
