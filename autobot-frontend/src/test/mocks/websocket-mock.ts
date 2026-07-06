@@ -39,7 +39,7 @@ export class MockWebSocket {
   }
 
   // Helper methods for testing
-  public simulateMessage(data: any) {
+  public simulateMessage(data: unknown) {
     if (this.readyState === MockWebSocket.OPEN && this.onmessage) {
       const event = new MessageEvent('message', {
         data: typeof data === 'string' ? data : JSON.stringify(data),
@@ -51,7 +51,7 @@ export class MockWebSocket {
   public simulateError(error?: string) {
     if (this.onerror) {
       const event = new Event('error')
-      ;(event as any).error = error || 'Mock WebSocket error'
+      ;(event as Event & { error?: string }).error = error || 'Mock WebSocket error'
       this.onerror(event)
     }
   }
@@ -132,7 +132,7 @@ export const createMockTerminalOutput = (output: string, command?: string) =>
     timestamp: Date.now(),
   })
 
-export const createMockSystemStatus = (status: string, details?: any) =>
+export const createMockSystemStatus = (status: string, details?: unknown) =>
   createMockWebSocketEvent(WebSocketMessageType.SYSTEM_STATUS, {
     status,
     details,
@@ -163,7 +163,7 @@ export class WebSocketTestUtil {
     return this.mockWs || MockWebSocket.getLatestInstance() || null
   }
 
-  simulateMessage(type: string, data: any) {
+  simulateMessage(type: string, data: unknown) {
     const ws = this.getConnection()
     if (ws) {
       ws.simulateMessage(createMockWebSocketEvent(type, data))
@@ -242,7 +242,7 @@ export class WebSocketTestUtil {
     }
   }
 
-  expectMessageSent(expectedData?: any) {
+  expectMessageSent(expectedData?: unknown) {
     const ws = this.getConnection()
     expect(ws?.send).toHaveBeenCalled()
 

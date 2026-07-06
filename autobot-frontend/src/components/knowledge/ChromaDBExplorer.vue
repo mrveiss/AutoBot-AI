@@ -249,20 +249,20 @@ const apiClient = useApiClient()
 interface CollectionMetadata {
   name: string
   count: number
-  metadata: Record<string, any> | null
+  metadata: Record<string, unknown> | null
 }
 
 interface DocumentItem {
   id: string
   document: string | null
-  metadata: Record<string, any> | null
+  metadata: Record<string, unknown> | null
   embedding_dim: number | null
 }
 
 interface SearchResultItem {
   id: string
   document: string | null
-  metadata: Record<string, any> | null
+  metadata: Record<string, unknown> | null
   distance: number | null
 }
 
@@ -329,7 +329,7 @@ async function loadDocuments() {
       data: {
         ids: string[]
         documents: (string | null)[]
-        metadatas: (Record<string, any> | null)[]
+        metadatas: (Record<string, unknown> | null)[]
         embedding_dim: number | null
       }
       total: number

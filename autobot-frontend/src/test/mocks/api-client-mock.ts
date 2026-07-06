@@ -21,7 +21,7 @@ export class MockApiClient {
   }
 
   // Helper methods to configure mock responses
-  mockGet(endpoint: string, response: any) {
+  mockGet(endpoint: string, response: unknown) {
     this.get.mockImplementation((url: string) => {
       if (url === endpoint) {
         return Promise.resolve({
@@ -34,7 +34,7 @@ export class MockApiClient {
     })
   }
 
-  mockPost(endpoint: string, response: any) {
+  mockPost(endpoint: string, response: unknown) {
     this.post.mockImplementation((url: string) => {
       if (url === endpoint) {
         return Promise.resolve({
@@ -118,12 +118,12 @@ export const createMockApiService = () => {
       return await response.json()
     },
 
-    async post(endpoint: string, data?: any) {
+    async post(endpoint: string, data?: unknown) {
       const response = await mockClient.post(endpoint, data)
       return await response.json()
     },
 
-    async put(endpoint: string, data?: any) {
+    async put(endpoint: string, data?: unknown) {
       const response = await mockClient.put(endpoint, data)
       return await response.json()
     },
@@ -164,7 +164,7 @@ export const createMockApiService = () => {
       return this.get('/api/settings')
     },
 
-    async saveSettings(settings: any) {
+    async saveSettings(settings: unknown) {
       return this.post('/api/settings', settings)
     },
 
