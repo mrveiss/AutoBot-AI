@@ -2,16 +2,24 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Unit tests for ExecutionStrategyHandler. Issue #6421."""
+"""Unit tests for ExecutionStrategyHandler. Issue #6421.
+
+Updated for the #6830 Strategy-pattern decomposition: ExecutionStrategyHandler is
+now a thin dispatcher holding per-strategy instances in ``handler._strategies``.
+Each concrete strategy (SequentialStrategy, ParallelStrategy, PipelineStrategy,
+CollaborativeStrategy, AdaptiveStrategy) exposes ``execute(plan)`` plus the shared
+helpers inherited from BaseExecutionStrategy (``_safe_execute``,
+``_execute_single_task``). Tests reach the strategy under test via ``_strat()``.
+"""
 
 import asyncio
 
 import pytest
 
+from autobot_shared.workflow import ExecutionStrategy
 from orchestration.execution_strategies import ExecutionStrategyHandler
 from orchestration.types import (
     AgentTask,
-    ExecutionStrategy,
     WorkflowDependencies,
     WorkflowPlan,
 )
@@ -83,8 +91,13 @@ def _make_handler(execute_fn=None, deps_met_fn=None, max_parallel=5, group_stage
     )
 
 
+def _strat(handler: ExecutionStrategyHandler, strategy: ExecutionStrategy):
+    """Return the concrete strategy instance the dispatcher holds for ``strategy``."""
+    return handler._strategies[strategy]
+
+
 # ---------------------------------------------------------------------------
-# execute_sequential
+# SequentialStrategy.execute
 # ---------------------------------------------------------------------------
 
 
@@ -98,7 +111,7 @@ async def test_sequential_executes_all_tasks():
         return _completed(task.task_id)
 
     handler = _make_handler(execute_fn=execute)
-    results = await handler.execute_sequential(_plan(tasks))
+    results = await _strat(handler, ExecutionStrategy.SEQUENTIAL).execute(_plan(tasks))
     assert executed == ["t1", "t2", "t3"]
     assert all(results[tid]["status"] == "completed" for tid in ["t1", "t2", "t3"])
 
@@ -115,7 +128,7 @@ async def test_sequential_stops_on_required_task_failure():
         return _completed(task.task_id)
 
     handler = _make_handler(execute_fn=execute)
-    results = await handler.execute_sequential(_plan(tasks))
+    results = await _strat(handler, ExecutionStrategy.SEQUENTIAL).execute(_plan(tasks))
     assert "t3" not in executed
     assert results["t2"]["status"] == "failed"
 
@@ -134,13 +147,13 @@ async def test_sequential_continues_after_optional_task_failure():
         return _completed(task.task_id)
 
     handler = _make_handler(execute_fn=execute)
-    await handler.execute_sequential(_plan(tasks))
+    await _strat(handler, ExecutionStrategy.SEQUENTIAL).execute(_plan(tasks))
     assert "t3" in executed
 
 
 @pytest.mark.asyncio
 async def test_sequential_records_failed_result_when_dep_failed():
-    """execute_sequential must record a failed result (not raise) when a dep fails (#6438).
+    """SequentialStrategy must record a failed result (not raise) when a dep fails (#6438).
 
     t1 is optional so the loop doesn't break after t1 fails; t2 depends on t1 so
     _wait_for_dependencies raises RuntimeError — must be caught and recorded, not propagated.
@@ -157,7 +170,7 @@ async def test_sequential_records_failed_result_when_dep_failed():
         return _completed(task.task_id)
 
     handler = _make_handler(execute_fn=execute)
-    results = await handler.execute_sequential(_plan([t1, t2]))
+    results = await _strat(handler, ExecutionStrategy.SEQUENTIAL).execute(_plan([t1, t2]))
     assert results["t1"]["status"] == "failed"
     assert results["t2"]["status"] == "failed"
     assert "t2" not in executed
@@ -184,19 +197,19 @@ async def test_sequential_continues_when_blocked_dep_is_optional():
         return _completed(task.task_id)
 
     handler = _make_handler(execute_fn=execute)
-    results = await handler.execute_sequential(_plan([t1, t2, t3]))
+    results = await _strat(handler, ExecutionStrategy.SEQUENTIAL).execute(_plan([t1, t2, t3]))
     assert "t3" in executed
     assert results["t3"]["status"] == "completed"
 
 
 # ---------------------------------------------------------------------------
-# execute_pipeline stage failure (#6439)
+# PipelineStrategy.execute stage failure (#6439)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_pipeline_stops_after_required_stage_failure():
-    """execute_pipeline must not run stage 2 when stage 1 has a required failure (#6439)."""
+    """PipelineStrategy must not run stage 2 when stage 1 has a required failure (#6439)."""
     t1 = _task("t1")
     t2 = _task("t2")
     stage1, stage2 = [t1], [t2]
@@ -212,14 +225,14 @@ async def test_pipeline_stops_after_required_stage_failure():
         execute_fn=execute,
         group_stages_fn=lambda tasks, graph: [stage1, stage2],
     )
-    results = await handler.execute_pipeline(_plan([t1, t2]))
+    results = await _strat(handler, ExecutionStrategy.PIPELINE).execute(_plan([t1, t2]))
     assert results["t1"]["status"] == "failed"
     assert "t2" not in executed
 
 
 @pytest.mark.asyncio
 async def test_pipeline_continues_when_failed_stage_task_is_optional():
-    """execute_pipeline must proceed to next stage when only optional tasks fail (#6439)."""
+    """PipelineStrategy must proceed to next stage when only optional tasks fail (#6439)."""
     t1 = _task("t1")
     t1.metadata["optional"] = True
     t2 = _task("t2")
@@ -236,14 +249,14 @@ async def test_pipeline_continues_when_failed_stage_task_is_optional():
         execute_fn=execute,
         group_stages_fn=lambda tasks, graph: [stage1, stage2],
     )
-    results = await handler.execute_pipeline(_plan([t1, t2]))
+    results = await _strat(handler, ExecutionStrategy.PIPELINE).execute(_plan([t1, t2]))
     assert "t2" in executed
     assert results["t2"]["status"] == "completed"
 
 
 @pytest.mark.asyncio
 async def test_sequential_records_failed_result_when_task_raises():
-    """execute_sequential must convert task exceptions to failed results, not propagate (#6459)."""
+    """SequentialStrategy must convert task exceptions to failed results, not propagate (#6459)."""
     t1 = _task("t1")
     t1.metadata["optional"] = True
     t2 = _task("t2")
@@ -254,7 +267,7 @@ async def test_sequential_records_failed_result_when_task_raises():
         return _completed(task.task_id)
 
     handler = _make_handler(execute_fn=execute)
-    results = await handler.execute_sequential(_plan([t1, t2]))
+    results = await _strat(handler, ExecutionStrategy.SEQUENTIAL).execute(_plan([t1, t2]))
     assert results["t1"]["status"] == "failed"
     assert "boom" in results["t1"]["error"]
     assert results["t2"]["status"] == "completed"
@@ -262,7 +275,7 @@ async def test_sequential_records_failed_result_when_task_raises():
 
 @pytest.mark.asyncio
 async def test_parallel_records_failed_result_when_task_raises():
-    """execute_parallel must convert task exceptions to failed results, not propagate (#6459)."""
+    """ParallelStrategy must convert task exceptions to failed results, not propagate (#6459)."""
     t_ok = _task("t_ok")
     t_bad = _task("t_bad")
 
@@ -272,7 +285,9 @@ async def test_parallel_records_failed_result_when_task_raises():
         return _completed(task.task_id)
 
     handler = _make_handler(execute_fn=execute)
-    results = await handler.execute_parallel(_plan([t_ok, t_bad], ExecutionStrategy.PARALLEL))
+    results = await _strat(handler, ExecutionStrategy.PARALLEL).execute(
+        _plan([t_ok, t_bad], ExecutionStrategy.PARALLEL)
+    )
     assert results["t_ok"]["status"] == "completed"
     assert results["t_bad"]["status"] == "failed"
     assert "kaboom" in results["t_bad"]["error"]
@@ -280,7 +295,7 @@ async def test_parallel_records_failed_result_when_task_raises():
 
 @pytest.mark.asyncio
 async def test_collaborative_records_failed_result_when_task_raises():
-    """execute_collaborative must convert task exceptions to failed results AND still clean up coordinator (#6459)."""
+    """CollaborativeStrategy must convert task exceptions to failed results AND still clean up coordinator (#6459)."""
     cleanup_ran = False
 
     async def _coordinator(channel):
@@ -306,7 +321,9 @@ async def test_collaborative_records_failed_result_when_task_raises():
         resource_semaphore=asyncio.Semaphore(5),
         deps=deps,
     )
-    results = await handler.execute_collaborative(_plan([_task("t1")], ExecutionStrategy.COLLABORATIVE))
+    results = await _strat(handler, ExecutionStrategy.COLLABORATIVE).execute(
+        _plan([_task("t1")], ExecutionStrategy.COLLABORATIVE)
+    )
     assert results["t1"]["status"] == "failed"
     assert "collab boom" in results["t1"]["error"]
     assert cleanup_ran
@@ -314,14 +331,14 @@ async def test_collaborative_records_failed_result_when_task_raises():
 
 @pytest.mark.asyncio
 async def test_adaptive_records_failed_result_when_sequential_step_raises():
-    """execute_adaptive (via _execute_sequential_step) must convert task exceptions to failed results (#6459)."""
+    """AdaptiveStrategy (via _execute_sequential_step) must convert task exceptions to failed results (#6459)."""
     t_bad = _task("t_bad")
 
     async def execute(task, ctx):
         raise RuntimeError("adaptive boom")
 
     handler = _make_handler(execute_fn=execute)
-    results = await handler.execute_adaptive(_plan([t_bad], ExecutionStrategy.ADAPTIVE))
+    results = await _strat(handler, ExecutionStrategy.ADAPTIVE).execute(_plan([t_bad], ExecutionStrategy.ADAPTIVE))
     assert results["t_bad"]["status"] == "failed"
     assert "adaptive boom" in results["t_bad"]["error"]
 
@@ -335,12 +352,12 @@ async def test_safe_execute_propagates_cancelled_error():
 
     handler = _make_handler(execute_fn=execute)
     with pytest.raises(asyncio.CancelledError):
-        await handler._safe_execute(_task("t1"), {})
+        await _strat(handler, ExecutionStrategy.SEQUENTIAL)._safe_execute(_task("t1"), {})
 
 
 @pytest.mark.asyncio
 async def test_pipeline_records_failed_result_when_task_raises():
-    """execute_pipeline must record a failed result when _execute_single_task raises (#6449)."""
+    """PipelineStrategy must record a failed result when _execute_single_task raises (#6449)."""
     t1 = _task("t1")
     t2 = _task("t2")
     stage1, stage2 = [t1], [t2]
@@ -356,14 +373,14 @@ async def test_pipeline_records_failed_result_when_task_raises():
         execute_fn=execute,
         group_stages_fn=lambda tasks, graph: [stage1, stage2],
     )
-    results = await handler.execute_pipeline(_plan([t1, t2]))
+    results = await _strat(handler, ExecutionStrategy.PIPELINE).execute(_plan([t1, t2]))
     assert results["t1"]["status"] == "failed"
     assert "t2" not in executed
 
 
 @pytest.mark.asyncio
 async def test_parallel_batch_records_failed_result_when_task_raises():
-    """_execute_parallel_batch must record a failed result when _execute_single_task raises (#6449)."""
+    """AdaptiveStrategy._execute_parallel_batch must record a failed result when _execute_single_task raises (#6449)."""
     t_ok = _task("t_ok")
     t_bad = _task("t_bad")
 
@@ -375,7 +392,7 @@ async def test_parallel_batch_records_failed_result_when_task_raises():
     handler = _make_handler(execute_fn=execute)
     pending = [t_ok, t_bad]
     results = {}
-    c, f = await handler._execute_parallel_batch(pending, results)
+    c, f = await _strat(handler, ExecutionStrategy.ADAPTIVE)._execute_parallel_batch(pending, results)
     assert results["t_ok"]["status"] == "completed"
     assert results["t_bad"]["status"] == "failed"
     assert c == 1 and f == 1
@@ -390,11 +407,11 @@ async def test_wait_for_dependencies_raises_on_non_failed_terminal_status():
 
     handler = _make_handler()
     with pytest.raises(RuntimeError, match="terminal"):
-        await handler._wait_for_dependencies(t1, results)
+        await _strat(handler, ExecutionStrategy.SEQUENTIAL)._wait_for_dependencies(t1, results)
 
 
 # ---------------------------------------------------------------------------
-# execute_parallel
+# ParallelStrategy.execute
 # ---------------------------------------------------------------------------
 
 
@@ -408,7 +425,7 @@ async def test_parallel_executes_independent_tasks():
         return _completed(task.task_id)
 
     handler = _make_handler(execute_fn=execute)
-    results = await handler.execute_parallel(_plan(tasks, ExecutionStrategy.PARALLEL))
+    results = await _strat(handler, ExecutionStrategy.PARALLEL).execute(_plan(tasks, ExecutionStrategy.PARALLEL))
     assert set(executed) == {"t1", "t2", "t3"}
     assert all(results[tid]["status"] == "completed" for tid in ["t1", "t2", "t3"])
 
@@ -422,7 +439,7 @@ async def test_parallel_deadlock_detection(caplog):
         return _completed(task.task_id)  # pragma: no cover
 
     handler = _make_handler(execute_fn=execute)
-    results = await handler.execute_parallel(_plan([t1], ExecutionStrategy.PARALLEL))
+    results = await _strat(handler, ExecutionStrategy.PARALLEL).execute(_plan([t1], ExecutionStrategy.PARALLEL))
     assert results["t1"]["status"] == "failed"
     assert "deadlock" in results["t1"]["error"].lower()
 
@@ -442,12 +459,12 @@ async def test_parallel_respects_max_parallel_tasks():
         return _completed(task.task_id)
 
     handler = _make_handler(execute_fn=execute, max_parallel=3)
-    await handler.execute_parallel(_plan(tasks, ExecutionStrategy.PARALLEL))
+    await _strat(handler, ExecutionStrategy.PARALLEL).execute(_plan(tasks, ExecutionStrategy.PARALLEL))
     assert concurrency_peak <= 3
 
 
 # ---------------------------------------------------------------------------
-# execute_adaptive — strategy switching
+# AdaptiveStrategy.execute — strategy switching
 # ---------------------------------------------------------------------------
 
 
@@ -462,17 +479,17 @@ async def test_adaptive_switches_to_sequential_on_high_failure():
         return _failed(task.task_id)
 
     handler = _make_handler(execute_fn=execute)
-    results = await handler.execute_adaptive(_plan(tasks, ExecutionStrategy.ADAPTIVE))
+    results = await _strat(handler, ExecutionStrategy.ADAPTIVE).execute(_plan(tasks, ExecutionStrategy.ADAPTIVE))
     assert all(results[t.task_id]["status"] == "failed" for t in tasks)
 
 
 @pytest.mark.asyncio
 async def test_adaptive_deadlock_detection():
-    """execute_adaptive must not loop forever when dependencies can never be met (#6429)."""
+    """AdaptiveStrategy must not loop forever when dependencies can never be met (#6429)."""
     t1 = _task("t1", deps=["t_missing"])
 
     handler = _make_handler()
-    results = await handler.execute_adaptive(_plan([t1], ExecutionStrategy.ADAPTIVE))
+    results = await _strat(handler, ExecutionStrategy.ADAPTIVE).execute(_plan([t1], ExecutionStrategy.ADAPTIVE))
     assert results["t1"]["status"] == "failed"
     assert "deadlock" in results["t1"]["error"].lower()
 
@@ -496,7 +513,7 @@ async def test_parallel_batch_skips_tasks_with_unmet_deps():
     handler = _make_handler(execute_fn=execute)
     pending = [t_ready, t_blocked]
     results = {}
-    await handler._execute_parallel_batch(pending, results)
+    await _strat(handler, ExecutionStrategy.ADAPTIVE)._execute_parallel_batch(pending, results)
 
     assert "t_ready" in executed
     assert "t_blocked" not in executed
@@ -506,7 +523,7 @@ async def test_parallel_batch_skips_tasks_with_unmet_deps():
 
 
 # ---------------------------------------------------------------------------
-# execute_collaborative coordinator cleanup (#6431)
+# CollaborativeStrategy coordinator cleanup (#6431)
 # ---------------------------------------------------------------------------
 
 
@@ -539,8 +556,8 @@ async def test_collaborative_coordinator_awaited_on_cancel():
         deps=deps,
     )
     plan = _plan([_task("t1")], ExecutionStrategy.COLLABORATIVE)
-    await handler.execute_collaborative(plan)
-    assert cleanup_ran, "coordinator finally block must run before execute_collaborative returns"
+    await _strat(handler, ExecutionStrategy.COLLABORATIVE).execute(plan)
+    assert cleanup_ran, "coordinator finally block must run before execute returns"
 
 
 # ---------------------------------------------------------------------------
@@ -549,7 +566,12 @@ async def test_collaborative_coordinator_awaited_on_cancel():
 
 
 def test_workflow_dependencies_fields_wired_correctly():
-    """Ensure all 6 callables are accessible via named deps fields."""
+    """Ensure the injected callables reach the concrete strategy instances (#6830).
+
+    After the Strategy-pattern decomposition the dispatcher fans the shared
+    ``execute_single_task`` plus each strategy-specific callable out to the
+    matching strategy instance; assert each landed on the right one.
+    """
     sentinel = object()
     deps = WorkflowDependencies(
         execute_single_task=sentinel,
@@ -564,9 +586,18 @@ def test_workflow_dependencies_fields_wired_correctly():
         resource_semaphore=asyncio.Semaphore(1),
         deps=deps,
     )
-    assert handler._execute_single_task is sentinel
-    assert handler._topological_sort_tasks is sentinel
-    assert handler._dependencies_met is sentinel
-    assert handler._group_pipeline_stages is sentinel
-    assert handler._enhance_task_for_collaboration is sentinel
-    assert handler._coordinate_collaboration is sentinel
+    seq = _strat(handler, ExecutionStrategy.SEQUENTIAL)
+    par = _strat(handler, ExecutionStrategy.PARALLEL)
+    pip = _strat(handler, ExecutionStrategy.PIPELINE)
+    col = _strat(handler, ExecutionStrategy.COLLABORATIVE)
+
+    # execute_single_task is shared across every strategy.
+    assert seq._execute_single_task is sentinel
+    assert par._execute_single_task is sentinel
+    # Strategy-specific callables land on their owning strategy.
+    assert seq._topological_sort_tasks is sentinel
+    assert seq._dependencies_met is sentinel
+    assert par._dependencies_met is sentinel
+    assert pip._group_pipeline_stages is sentinel
+    assert col._enhance_task_for_collaboration is sentinel
+    assert col._coordinate_collaboration is sentinel
