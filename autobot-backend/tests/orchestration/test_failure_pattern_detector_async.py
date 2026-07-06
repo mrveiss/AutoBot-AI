@@ -270,6 +270,35 @@ async def test_clear_patterns_awaits_delete_per_pattern_and_set() -> None:
     all_args = [c.args[0] for c in redis.delete.await_args_list]
     # One call must target the known-patterns set key.
     assert any(KNOWN_PATTERNS_KEY in str(a) for a in all_args)
+    # Pattern key must use the decoded string hash — not the bytes repr.
+    expected_pattern_key = f"{PATTERN_KEY_PREFIX}{h.decode()}"
+    assert any(a == expected_pattern_key for a in all_args), (
+        f"Expected delete({expected_pattern_key!r}) but got calls with: {all_args!r}. "
+        "smembers bytes were not decoded before building the Redis key."
+    )
+
+
+@pytest.mark.asyncio
+async def test_clear_patterns_bytes_smembers_uses_str_key() -> None:
+    """Regression (#10906): when smembers returns bytes, clear_patterns must delete
+    'failure:pattern:<hex>' not 'failure:pattern:b\"<hex>\"'."""
+    det = FailurePatternDetector()
+    # Simulate a redis client with decode_responses=False — smembers returns bytes.
+    raw_hash = b"abc123"
+    redis = make_async_redis(smembers_returns={raw_hash})
+
+    with patch(_MIXIN_PATH, new=AsyncMock(return_value=redis)):
+        await det.clear_patterns()
+
+    all_args = [c.args[0] for c in redis.delete.await_args_list]
+    expected_pattern_key = f"{PATTERN_KEY_PREFIX}abc123"
+    assert expected_pattern_key in all_args, (
+        f"Expected delete key {expected_pattern_key!r} but delete was called with: {all_args!r}. "
+        "Bytes from smembers must be decoded before building the Redis key."
+    )
+    # The bytes-repr variant must NOT appear.
+    bad_key = f"{PATTERN_KEY_PREFIX}b'abc123'"
+    assert bad_key not in all_args, f"delete was called with bytes-repr key {bad_key!r} — bytes were not decoded."
 
 
 # ---------------------------------------------------------------------------
