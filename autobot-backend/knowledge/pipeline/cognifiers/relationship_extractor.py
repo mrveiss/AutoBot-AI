@@ -13,8 +13,10 @@ from itertools import combinations
 from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import (
+    batched_chunk_extract,
     build_entity_map,
     parse_llm_json_response,
 )
@@ -44,6 +46,34 @@ Return JSON array:
 
 Text:
 {text}
+"""
+
+
+# Batched variant (#11044): extract relationships from many entity-conditioned
+# chunks in one call. Each "Chunk N:" block carries its own chunk-relevant entity
+# list (folded in via ``aux_of``), so the model only relates entities present in
+# that chunk — matching the per-chunk conditioning of the single-chunk path.
+RELATIONSHIP_EXTRACTION_BATCH_PROMPT = """Extract relationships between entities from each of the following text chunks.
+
+Each chunk is labeled "Chunk N:" and lists its known entities followed by its text.
+Only relate entities listed for that same chunk.
+
+Relationship types: CAUSES, ENABLES, PREVENTS, TRIGGERS, CONTAINS, PART_OF,
+COMPOSED_OF, RELATES_TO, SIMILAR_TO, CONTRASTS_WITH, PRECEDES, FOLLOWS,
+DURING, IS_A, INSTANCE_OF, SUBTYPE_OF, CREATED_BY, AUTHORED_BY, OWNED_BY,
+IMPLEMENTS, EXTENDS, DEPENDS_ON, USES
+
+Return a JSON object mapping each chunk index (as a string) to its array of
+relationships (fields: source, target, type, description, bidirectional,
+confidence); use an empty array for chunks with no relationships. Example:
+{{
+  "0": [{{"source": "Entity1", "target": "Entity2", "type": "CAUSES",
+    "description": "...", "bidirectional": false, "confidence": 0.9}}],
+  "1": []
+}}
+
+Chunks:
+{chunks}
 """
 
 
@@ -228,12 +258,28 @@ class RelationshipExtractor(BaseCognifier):
         entities: List[Entity],
         entity_map: Dict[str, Entity],
     ) -> List[Relationship]:
-        """Process batch of chunks for relationships."""
-        relationships = []
-        for chunk in chunks:
-            chunk_rels = await self._extract_from_chunk(chunk, entities, entity_map)
-            relationships.extend(chunk_rels)
-        return relationships
+        """Extract relationships for a batch in ONE LLM call when batching is on (#11044).
+
+        Routes through the shared ``batched_chunk_extract`` helper, folding each
+        chunk's relevant entity list into its block via ``aux_of`` so the
+        entity-conditioning of the per-chunk path is preserved. Falls back to the
+        legacy per-chunk loop when the config flag is disabled.
+        """
+        if not config.cognifier_multichunk_batching:
+            relationships = []
+            for chunk in chunks:
+                relationships.extend(await self._extract_from_chunk(chunk, entities, entity_map))
+            return relationships
+        return await batched_chunk_extract(
+            chunks,
+            llm=self.llm,
+            batch_prompt_template=RELATIONSHIP_EXTRACTION_BATCH_PROMPT,
+            llm_type=LLMType.EXTRACTION,
+            max_chunk_chars=config.cognifier_batch_max_chunk_chars,
+            convert=lambda raw, chunk: self._convert_to_relationships(raw, chunk, entity_map),
+            extract_one=lambda chunk: self._extract_from_chunk(chunk, entities, entity_map),
+            aux_of=lambda chunk: "Entities:\n" + self._format_entity_list(entities, chunk),
+        )
 
     async def _extract_from_chunk(
         self,
