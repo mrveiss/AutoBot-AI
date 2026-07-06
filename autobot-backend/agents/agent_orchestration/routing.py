@@ -115,19 +115,23 @@ class AgentRouter:
         return None
 
     def _build_learned_result(self, strategy, task_type: str) -> Dict[str, Any]:
-        """Build routing result dict from a LearnedStrategy (#2209)."""
+        """Build routing result dict from a LearnedStrategy (#2209, #10580)."""
         logger.info(
             "Using learned strategy for %s (confidence=%.2f)",
             task_type,
             strategy.confidence,
         )
-        return {
+        result: Dict[str, Any] = {
             "strategy": "single_agent",
             "primary_agent": self._resolve_agent_type(strategy.best_approach),
             "confidence": strategy.confidence,
             "reasoning": (f"Learned strategy: {strategy.best_approach} " f"(samples={strategy.sample_size})"),
             "source": "learned",
         }
+        # #10580: thread best_prompt_template through so prompt assembly can use it.
+        if strategy.best_prompt_template:
+            result["learned_prompt_template"] = strategy.best_prompt_template
+        return result
 
     def _get_rl_router(self):
         """Lazily initialise and return the RLRouter singleton (Issue #2092)."""
