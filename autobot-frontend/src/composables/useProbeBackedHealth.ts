@@ -67,6 +67,16 @@ export interface ProbeBackedHealthOptions<R> {
 
   /** Error toast message when the underlying fetch fails. */
   errorMessage?: string
+
+  /**
+   * When true, calls `buildHealthy` for ANY status where the probe was FOUND
+   * (ok/degraded/down/etc.), reserving `buildUnavailable` only for a missing
+   * probe or fetch error. Defaults to false (legacy behavior: only `ok` calls
+   * `buildHealthy`).
+   *
+   * Opt-in only — existing callers are unaffected.
+   */
+  renderNonOkFromProbe?: boolean
 }
 
 /**
@@ -91,7 +101,7 @@ export function useProbeBackedHealth<R>(
         return options.buildUnavailable(`${options.probeName} probe not registered`)
       }
       const data = probe.data ?? {}
-      if (probe.status === 'ok') {
+      if (probe.status === 'ok' || options.renderNonOkFromProbe) {
         return options.buildHealthy(probe, data)
       }
       return options.buildUnavailable(probe.detail ?? 'Service unavailable')
