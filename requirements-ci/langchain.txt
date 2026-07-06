@@ -4,4 +4,4 @@ langchain-classic==1.0.8
 langchain-community==0.4.1
 langchain-core>=1.4.8,<2.0.0    # #7049: floor bumped from ==1.2.28 — langchain-text-splitters 1.1.2 requires >=1.2.31
 langchain-text-splitters==1.1.2
-langsmith==0.9.3                 # GH#8325: bumped from 0.7.31 — security fix
+langsmith==0.9.7                 # GH#8325: bumped from 0.7.31 — security fix

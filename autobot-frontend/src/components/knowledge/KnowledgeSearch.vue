@@ -295,6 +295,13 @@ const ragOptions = ref({
   limit: 10
 })
 
+// Issue #685: documents may carry access-level fields not present on the base
+// KnowledgeDocument type (populated by the backend for hierarchical filtering).
+interface AccessLevelDoc {
+  access_level?: string
+  metadata?: { access_level?: string }
+}
+
 // Issue #4035: Debounce filter changes to avoid excessive re-searches
 const { debouncedFn: debouncedCategoryChange } = useDebouncedFn(
   async () => {
@@ -389,8 +396,8 @@ const handleSearch = async () => {
           // Issue #685: Filter by access level client-side
           if (selectedAccessLevel.value) {
             results = results.filter(r => {
-              const docAccessLevel = (r.document as any)?.access_level
-              const metaAccessLevel = (r.document as any)?.metadata?.access_level
+              const docAccessLevel = (r.document as AccessLevelDoc)?.access_level
+              const metaAccessLevel = (r.document as AccessLevelDoc)?.metadata?.access_level
               return docAccessLevel === selectedAccessLevel.value || metaAccessLevel === selectedAccessLevel.value
             })
           }
@@ -422,8 +429,8 @@ const handleSearch = async () => {
       // Issue #685: Filter by access level client-side
       if (selectedAccessLevel.value) {
         results = results.filter(r => {
-          const docAccessLevel = (r.document as any)?.access_level
-          const metaAccessLevel = (r.document as any)?.metadata?.access_level
+          const docAccessLevel = (r.document as AccessLevelDoc)?.access_level
+          const metaAccessLevel = (r.document as AccessLevelDoc)?.metadata?.access_level
           return docAccessLevel === selectedAccessLevel.value || metaAccessLevel === selectedAccessLevel.value
         })
       }
