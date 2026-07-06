@@ -16,9 +16,9 @@ from autobot_shared.security.input_sanitizer import (
     sanitize_shell_arg,
     validate_url,
 )
+from autobot_shared.security.password_weakness import check_password_weakness
 from autobot_shared.security.path_validator import validate_path, validate_relative_path
 from autobot_shared.security.safe_response import safe_error_response
-from autobot_shared.security.password_weakness import check_password_weakness
 from autobot_shared.security.ssrf_guard import (
     SSRFError,
     fetch_safe_url,
