@@ -20,7 +20,7 @@ export const handlers = [
   ...canvasHandlers,
   // Chat API endpoints
   http.post(`${API_BASE}/api/chat`, async ({ request }) => {
-    const body = await request.json() as any
+    const body = await request.json() as { message?: string; chatId?: string }
     const mockMessage = createMockChatMessage({
       content: `Echo: ${body.message}`,
       sender: 'assistant',
@@ -161,7 +161,7 @@ export const handlers = [
 
   // Terminal API endpoints
   http.post(`${API_BASE}/api/terminal/execute`, async ({ request }) => {
-    const body = await request.json() as any
+    const body = await request.json() as { command?: string }
     return HttpResponse.json(
       createMockApiResponse({
         command: body.command,
@@ -191,7 +191,7 @@ export const handlers = [
 
   // Knowledge Base API endpoints
   http.post(`${API_BASE}/api/knowledge_base/search`, async ({ request }) => {
-    const body = await request.json() as any
+    const body = await request.json() as { query?: string }
     return HttpResponse.json(
       createMockApiResponse({
         query: body.query,

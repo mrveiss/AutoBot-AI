@@ -227,7 +227,7 @@
 
 <script setup>
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useServiceManagement } from '@/composables/useServiceManagement'
 import { NetworkConstants } from '@/constants/network'
@@ -244,7 +244,6 @@ const {
   serviceStatus,
   healthStatus,
   loading,
-  error,
   startService,
   stopService,
   restartService,
@@ -296,8 +295,7 @@ const getHealthCheckVariant = (status) => {
  * Lifecycle: Subscribe to WebSocket updates on mount
  */
 onMounted(() => {
-  subscribeToStatusUpdates((message) => {
-  })
+  subscribeToStatusUpdates()
 })
 
 /**
