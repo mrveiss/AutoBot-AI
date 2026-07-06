@@ -848,8 +848,7 @@ async def get_current_user(request: Request) -> Dict:
     Raises HTTPException if authentication fails.
     """
     # Issue #1779: Allow trusted internal services via API key
-    _internal_key = ssot_config.misc.internal_api_key
-    if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
+    if verify_internal_api_key(request.headers.get("X-Internal-API-Key")):
         return {"username": "service:slm", "role": "admin", "service": True}
 
     middleware = get_auth_middleware()
@@ -904,6 +903,19 @@ async def get_current_user(request: Request) -> Dict:
     raise_auth_error("AUTH_0002", "Authentication required")
 
 
+def verify_internal_api_key(provided: str | None) -> bool:
+    """Constant-time check of the trusted internal-service API key (Issue #1145).
+
+    Returns True only when the internal key is configured AND ``provided`` matches
+    it exactly. Uses :func:`secrets.compare_digest` so a partial match cannot be
+    inferred from response timing; a missing/``None`` header can never match.
+    """
+    expected = ssot_config.misc.internal_api_key
+    if not expected or not provided:
+        return False
+    return secrets.compare_digest(provided, expected)
+
+
 def check_admin_permission(request: Request) -> bool:
     """
     FastAPI dependency to check if user has admin permission.
@@ -921,8 +933,7 @@ def check_admin_permission(request: Request) -> bool:
     """
     # Issue #1145: Allow trusted internal services (e.g. SLM backend) via API key.
     # The key is set via AUTOBOT_INTERNAL_API_KEY env var on both services.
-    _internal_key = ssot_config.misc.internal_api_key
-    if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
+    if verify_internal_api_key(request.headers.get("X-Internal-API-Key")):
         logger.debug("Internal API key auth: granting admin access")
         return True
 

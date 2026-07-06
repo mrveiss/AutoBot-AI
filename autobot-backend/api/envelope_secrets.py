@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth_middleware import get_auth_middleware
+from auth_middleware import get_auth_middleware, verify_internal_api_key
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from llc.deps import get_session
 from models.secret import Secret
@@ -83,10 +83,7 @@ async def service_principal(request: Request) -> str:
     Either path is scoped STRICTLY to the system vault.  Non-system vault access is
     rejected at the endpoint level so the audit log always sees the attempt.
     """
-    from autobot_shared.ssot_config import config as _ssot
-
-    _internal_key = _ssot.misc.internal_api_key
-    if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
+    if verify_internal_api_key(request.headers.get("X-Internal-API-Key")):
         service_id = "slm-backend"
         logger.info(
             "service principal authenticated via X-Internal-API-Key",
