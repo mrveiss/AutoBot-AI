@@ -316,7 +316,9 @@ async def _amend_verbatim(user_id: str, chunk_id: str, new_content: str) -> bool
         return False
     meta = (existing.get("metadatas") or [{}])[0]
     if meta.get("user_id") != user_id:
-        logger.warning("_amend_verbatim: tenant mismatch chunk=%s owner=%s caller=%s", chunk_id, meta.get("user_id"), user_id)
+        logger.warning(
+            "_amend_verbatim: tenant mismatch chunk=%s owner=%s caller=%s", chunk_id, meta.get("user_id"), user_id
+        )
         return False
     await collection.delete(ids=[chunk_id])
     await collection.add(ids=[chunk_id], documents=[new_content], metadatas=[meta])

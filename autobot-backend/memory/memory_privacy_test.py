@@ -18,7 +18,6 @@ import json
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-
 # ---------------------------------------------------------------------------
 # Helpers / stubs
 # ---------------------------------------------------------------------------
@@ -104,7 +103,14 @@ class TestListUserMemories(unittest.IsolatedAsyncioTestCase):
         from memory.transparency import list_user_memories
 
         with (
-            patch("memory.transparency._list_verbatim", AsyncMock(return_value=[{"memory_id": "v1", "store": "verbatim", "content": "x", "provenance": {}, "timestamp": ""}])),
+            patch(
+                "memory.transparency._list_verbatim",
+                AsyncMock(
+                    return_value=[
+                        {"memory_id": "v1", "store": "verbatim", "content": "x", "provenance": {}, "timestamp": ""}
+                    ]
+                ),
+            ),
             patch("memory.transparency._list_trajectory", AsyncMock(return_value=[])),
             patch("memory.transparency._list_working_memory", AsyncMock(return_value=[])),
             patch("memory.transparency._list_graph_entities", AsyncMock(return_value=[])),
@@ -124,7 +130,14 @@ class TestListUserMemories(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch("memory.transparency._list_verbatim", _fail),
-            patch("memory.transparency._list_trajectory", AsyncMock(return_value=[{"memory_id": "t1", "store": "trajectory", "content": "y", "provenance": {}, "timestamp": ""}])),
+            patch(
+                "memory.transparency._list_trajectory",
+                AsyncMock(
+                    return_value=[
+                        {"memory_id": "t1", "store": "trajectory", "content": "y", "provenance": {}, "timestamp": ""}
+                    ]
+                ),
+            ),
             patch("memory.transparency._list_working_memory", AsyncMock(return_value=[])),
             patch("memory.transparency._list_graph_entities", AsyncMock(return_value=[])),
             patch("memory.transparency._list_rl_patterns", AsyncMock(return_value=[])),
@@ -214,9 +227,7 @@ class TestForgetEverywhere(unittest.IsolatedAsyncioTestCase):
         """forget_everywhere tries every store and returns a per-store result dict."""
         from memory.transparency import forget_everywhere
 
-        with (
-            patch("memory.transparency.forget_memory", AsyncMock(return_value=True)) as mock_forget,
-        ):
+        with (patch("memory.transparency.forget_memory", AsyncMock(return_value=True)) as mock_forget,):
             results = await forget_everywhere("user-A", "mem-id-1")
 
         # Should have tried all 5 stores
@@ -280,8 +291,9 @@ class TestApiEndpointTenantIsolation(unittest.IsolatedAsyncioTestCase):
 
     async def test_non_admin_cannot_use_target_user_id(self):
         """Non-admin supplying a different target_user_id gets 403."""
-        from api.memory_privacy import _resolve_target_user
         from fastapi import HTTPException
+
+        from api.memory_privacy import _resolve_target_user
 
         current_user = {"user_id": "user-A", "role": "user"}
 

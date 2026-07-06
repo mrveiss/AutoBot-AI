@@ -49,13 +49,17 @@ def _bootstrap() -> None:
     global get_verbatim_store, get_trajectory_store, get_redis_client
     if get_verbatim_store is None:
         from memory.verbatim_store import get_verbatim_store as _gvs
+
         get_verbatim_store = _gvs
     if get_trajectory_store is None:
         from memory.trajectory_store import get_trajectory_store as _gts
+
         get_trajectory_store = _gts
     if get_redis_client is None:
         from autobot_shared.redis_client import get_redis_client as _grc
+
         get_redis_client = _grc
+
 
 _GRAPH_ENTITY_PATTERN = "memory:entity:*"
 _RL_PATTERN_PREFIX = "rag:retrieval_patterns:"
@@ -124,13 +128,15 @@ async def _list_verbatim(user_id: str) -> List[Dict[str, Any]]:
     docs = raw.get("documents", [])
     metas = raw.get("metadatas", [])
     for chunk_id, doc, meta in zip(ids, docs or [], metas or []):
-        items.append({
-            "memory_id": chunk_id,
-            "store": "verbatim",
-            "content": doc[:300] if doc else "",
-            "provenance": meta or {},
-            "timestamp": (meta or {}).get("timestamp", ""),
-        })
+        items.append(
+            {
+                "memory_id": chunk_id,
+                "store": "verbatim",
+                "content": doc[:300] if doc else "",
+                "provenance": meta or {},
+                "timestamp": (meta or {}).get("timestamp", ""),
+            }
+        )
     return items
 
 
@@ -158,17 +164,19 @@ async def _list_trajectory(user_id: str) -> List[Dict[str, Any]]:
     docs = raw.get("documents", [])
     metas = raw.get("metadatas", [])
     for traj_id, doc, meta in zip(ids, docs or [], metas or []):
-        items.append({
-            "memory_id": traj_id,
-            "store": "trajectory",
-            "content": doc[:300] if doc else "",
-            "provenance": {
-                "outcome": (meta or {}).get("outcome", ""),
-                "reward": (meta or {}).get("reward", 0),
-                "agent_id": (meta or {}).get("agent_id", ""),
-            },
-            "timestamp": (meta or {}).get("timestamp", ""),
-        })
+        items.append(
+            {
+                "memory_id": traj_id,
+                "store": "trajectory",
+                "content": doc[:300] if doc else "",
+                "provenance": {
+                    "outcome": (meta or {}).get("outcome", ""),
+                    "reward": (meta or {}).get("reward", 0),
+                    "agent_id": (meta or {}).get("agent_id", ""),
+                },
+                "timestamp": (meta or {}).get("timestamp", ""),
+            }
+        )
     return items
 
 
@@ -203,13 +211,15 @@ async def _list_working_memory(user_id: str) -> List[Dict[str, Any]]:
             parts = redis_key.split(":", 4)
             session_id = parts[2] if len(parts) > 2 else ""
             key_suffix = parts[4] if len(parts) > 4 else redis_key
-            items.append({
-                "memory_id": redis_key,
-                "store": "working_memory",
-                "content": str(value)[:300],
-                "provenance": {"session_id": session_id, "key": key_suffix},
-                "timestamp": value.get("timestamp", ""),
-            })
+            items.append(
+                {
+                    "memory_id": redis_key,
+                    "store": "working_memory",
+                    "content": str(value)[:300],
+                    "provenance": {"session_id": session_id, "key": key_suffix},
+                    "timestamp": value.get("timestamp", ""),
+                }
+            )
         except Exception:
             continue
     return items
@@ -234,16 +244,18 @@ async def _list_graph_entities(user_id: str) -> List[Dict[str, Any]]:
             meta = raw.get("metadata") or {}
             if meta.get("user_id") != user_id and meta.get("owner_id") != user_id:
                 continue
-            items.append({
-                "memory_id": raw.get("id", entity_key),
-                "store": "graph",
-                "content": raw.get("name", "")[:300],
-                "provenance": {
-                    "type": raw.get("type", ""),
-                    "observations": (raw.get("observations") or [])[:3],
-                },
-                "timestamp": meta.get("created_at", ""),
-            })
+            items.append(
+                {
+                    "memory_id": raw.get("id", entity_key),
+                    "store": "graph",
+                    "content": raw.get("name", "")[:300],
+                    "provenance": {
+                        "type": raw.get("type", ""),
+                        "observations": (raw.get("observations") or [])[:3],
+                    },
+                    "timestamp": meta.get("created_at", ""),
+                }
+            )
         except Exception:
             continue
     return items
@@ -267,20 +279,24 @@ async def _list_rl_patterns(user_id: str) -> List[Dict[str, Any]]:
             if not raw:
                 continue
             m = {_decode(k): _decode(v) for k, v in raw.items()}
-            items.append({
-                "memory_id": redis_key,
-                "store": "retrieval_learner",
-                "content": f"Retrieval pattern: type={m.get('query_type', '?')} "
-                           f"success_rate={m.get('success_rate', '?')}",
-                "provenance": {
-                    "query_type": m.get("query_type", ""),
-                    "success_rate": m.get("success_rate", ""),
-                    "usage_count": m.get("usage_count", ""),
-                },
-                "timestamp": datetime.fromtimestamp(
-                    float(m.get("last_seen", 0)), tz=timezone.utc
-                ).isoformat() if m.get("last_seen") else "",
-            })
+            items.append(
+                {
+                    "memory_id": redis_key,
+                    "store": "retrieval_learner",
+                    "content": f"Retrieval pattern: type={m.get('query_type', '?')} "
+                    f"success_rate={m.get('success_rate', '?')}",
+                    "provenance": {
+                        "query_type": m.get("query_type", ""),
+                        "success_rate": m.get("success_rate", ""),
+                        "usage_count": m.get("usage_count", ""),
+                    },
+                    "timestamp": (
+                        datetime.fromtimestamp(float(m.get("last_seen", 0)), tz=timezone.utc).isoformat()
+                        if m.get("last_seen")
+                        else ""
+                    ),
+                }
+            )
         except Exception:
             continue
     return items
