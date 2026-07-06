@@ -309,7 +309,7 @@ class ClaudeCodeBackend(ExecutionBackend):
         event_stream: Any = None,
         mcp_host: str = _DEFAULT_MCP_HOST,
         mcp_port: int = _DEFAULT_MCP_PORT,
-        mcp_token: str = "",
+        mcp_token: str = "",  # nosec B107 - optional token; resolved from config when empty
         use_sdk: bool = False,
     ) -> None:
         super().__init__(BackendType.LOCAL)  # reuse LOCAL slot; manager keys by instance
@@ -627,7 +627,7 @@ def build_claude_code_backend(
     event_stream: Any = None,
     mcp_host: str = _DEFAULT_MCP_HOST,
     mcp_port: int = _DEFAULT_MCP_PORT,
-    mcp_token: str = "",
+    mcp_token: str = "",  # nosec B107 - optional token; resolved from config when empty
     use_sdk: bool = False,
 ) -> ClaudeCodeBackend:
     """Factory used by the execution-manager registry.
