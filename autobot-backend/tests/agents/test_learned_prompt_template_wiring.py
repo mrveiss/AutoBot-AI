@@ -194,3 +194,14 @@ def test_build_planning_prompt_no_template_unchanged():
 
     prompt = build_planning_prompt("deploy service X", "{}")
     assert "Learned approach" not in prompt
+
+
+def test_learned_template_with_positional_field_does_not_crash():
+    """#11022: a stored template containing a positional field like {0} must not
+    raise IndexError from .format(goal=...); it falls back to the raw template."""
+    from orchestration.orchestrator_prompts import _render_learned_template_section
+
+    # {0} is a positional field — .format(goal=...) raises IndexError, previously uncaught.
+    out = _render_learned_template_section("Do {0} then {goal}", "deploy")
+    assert "Learned approach" in out
+    assert "{0}" in out  # rendered raw (fallback), not crashed

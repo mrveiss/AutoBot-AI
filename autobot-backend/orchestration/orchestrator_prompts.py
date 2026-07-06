@@ -60,7 +60,9 @@ def _render_learned_template_section(learned_prompt_template: str | None, goal: 
         return ""
     try:
         rendered = learned_prompt_template.format(goal=goal)
-    except (KeyError, ValueError):
+    except (KeyError, ValueError, IndexError):
+        # IndexError guards a stored template containing a positional field like
+        # ``{0}`` — ``.format(goal=...)`` raises IndexError, not KeyError/ValueError (#11022).
         rendered = learned_prompt_template
     return f"\n        Learned approach for this task type:\n        {rendered}\n"
 
