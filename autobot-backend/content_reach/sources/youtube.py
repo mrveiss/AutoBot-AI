@@ -37,7 +37,7 @@ _YDL_OPTS: dict = {
 }
 
 # Caption formats we can parse to plain text, in preference order.
-_PREFERRED_EXTS = ("json3", "srv1", "vtt")
+_PREFERRED_EXTS = ("json3", "vtt", "srv1")
 
 
 def _import_yt_dlp():
@@ -50,9 +50,14 @@ def _import_yt_dlp():
 def _ytdlp_extract_info(url: str) -> dict:
     """Synchronous wrapper around YoutubeDL.extract_info.
 
+    Performs the yt_dlp import and raises BackendError (not ImportError) when
+    yt_dlp is unavailable, so callers do not need to re-check availability.
     Module-level so tests can monkeypatch without hitting the network.
     """
-    yt_dlp = _import_yt_dlp()
+    try:
+        yt_dlp = _import_yt_dlp()
+    except ImportError as exc:
+        raise BackendError("yt-dlp not installed") from exc
     with yt_dlp.YoutubeDL(_YDL_OPTS) as ydl:
         return ydl.extract_info(url, download=False)
 
@@ -97,11 +102,37 @@ def _json3_to_text(raw: str) -> str:
     return "\n".join(parts)
 
 
+def _srv1_to_text(xml: str) -> str:
+    """Convert YouTube SRV1 XML caption format to plain text.
+
+    SRV1 looks like: <transcript><text start="0" dur="3">Hello &amp; world</text>...</transcript>
+    Uses defusedxml (XXE/billion-laughs safe); falls back to regex tag-stripping
+    on parse failure. Never raises.
+    """
+    import html
+
+    import defusedxml.ElementTree as DET
+
+    try:
+        root = DET.fromstring(xml)
+        parts = []
+        for elem in root.iter("text"):
+            raw = (elem.text or "").strip()
+            if raw:
+                parts.append(html.unescape(raw))
+        return "\n".join(parts)
+    except Exception:
+        # Fallback: strip all XML/HTML tags then unescape entities.
+        stripped = re.sub(r"<[^>]+>", " ", xml)
+        return html.unescape(stripped).strip()
+
+
 def _caption_raw_to_text(raw: str, ext: str) -> str:
     """Convert raw caption file content to plain text based on extension."""
     if ext == "json3":
         return _json3_to_text(raw)
-    # vtt and srv1 share the same timestamp-stripping logic.
+    if ext == "srv1":
+        return _srv1_to_text(raw)
     return _vtt_to_text(raw)
 
 
@@ -143,12 +174,11 @@ class YtDlpCaptionBackend(ContentBackend):
             return False
 
     async def fetch(self, request: ContentRequest) -> ContentResult:
-        """Extract captions from request.url via yt-dlp; raise BackendError on failure."""
-        try:
-            _import_yt_dlp()
-        except ImportError:
-            raise BackendError("yt-dlp not installed")
+        """Extract captions from request.url via yt-dlp; raise BackendError on failure.
 
+        _ytdlp_extract_info owns the yt_dlp import check and raises BackendError
+        when yt_dlp is unavailable, so no separate guard is needed here.
+        """
         info: dict = await asyncio.to_thread(_ytdlp_extract_info, request.url)
 
         track = _pick_caption_track(info)
