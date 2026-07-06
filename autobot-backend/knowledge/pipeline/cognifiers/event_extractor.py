@@ -63,7 +63,8 @@ Return a JSON object mapping each chunk index (as a string) to its array of
 events (same fields as above); use an empty array for chunks with no events.
 Example for two chunks:
 {{
-  "0": [{{"name": "...", "description": "...", "temporal_expression": "...", "temporal_type": "point", "event_type": "occurrence", "participants": [], "confidence": 0.9}}],
+  "0": [{{"name": "...", "description": "...", "temporal_expression": "...",
+         "temporal_type": "point", "event_type": "occurrence", "participants": [], "confidence": 0.9}}],
   "1": []
 }}
 

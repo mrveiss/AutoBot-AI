@@ -76,7 +76,8 @@ Return a JSON object mapping each chunk index (as a string) to its array of
 causal relationships (same fields as above); use an empty array for chunks with
 no clear causality. Example for two chunks:
 {{
-  "0": [{{"source_name": "cache_ttl", "target_name": "query_latency", "effect_type": "REDUCES", "condition": "", "evidence_text": "...", "confidence": 0.95}}],
+  "0": [{{"source_name": "cache_ttl", "target_name": "query_latency", "effect_type": "REDUCES",
+         "condition": "", "evidence_text": "...", "confidence": 0.95}}],
   "1": []
 }}
 
