@@ -427,6 +427,7 @@ def test_checkpoint_name_rejects_slash():
 
 # --- WS shell auth (security review: auth bypass / broken access control / fail-open) ---
 
+
 def test_authenticate_ws_admin_denies_unauthenticated():
     """Fail-closed: no user + no internal key → deny (no shell)."""
     from types import SimpleNamespace
