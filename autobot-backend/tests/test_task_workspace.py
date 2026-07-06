@@ -423,3 +423,47 @@ def test_checkpoint_name_valid():
 def test_checkpoint_name_rejects_slash():
     with pytest.raises(ValueError):
         _validate_checkpoint_name("../etc")
+
+
+# --- WS shell auth (security review: auth bypass / broken access control / fail-open) ---
+
+def test_authenticate_ws_admin_denies_unauthenticated():
+    """Fail-closed: no user + no internal key → deny (no shell)."""
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    import api.task_workspace_ws as mod
+
+    ws = SimpleNamespace(headers={})
+    with patch.object(mod, "get_auth_middleware") as gam, patch.object(mod, "ssot_config") as cfg:
+        cfg.misc.internal_api_key = "k"
+        gam.return_value.get_user_from_request.return_value = None
+        assert mod._authenticate_ws_admin(ws) is False
+
+
+def test_authenticate_ws_admin_denies_non_admin():
+    """A valid but non-admin user is denied the interactive shell."""
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    import api.task_workspace_ws as mod
+
+    ws = SimpleNamespace(headers={})
+    with patch.object(mod, "get_auth_middleware") as gam, patch.object(mod, "ssot_config") as cfg:
+        cfg.misc.internal_api_key = "k"
+        gam.return_value.get_user_from_request.return_value = {"role": "user"}
+        assert mod._authenticate_ws_admin(ws) is False
+
+
+def test_authenticate_ws_admin_allows_admin_and_internal_key():
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    import api.task_workspace_ws as mod
+
+    with patch.object(mod, "get_auth_middleware") as gam, patch.object(mod, "ssot_config") as cfg:
+        cfg.misc.internal_api_key = "k"
+        gam.return_value.get_user_from_request.return_value = {"role": "admin"}
+        assert mod._authenticate_ws_admin(SimpleNamespace(headers={})) is True
+        # internal-service key path
+        assert mod._authenticate_ws_admin(SimpleNamespace(headers={"X-Internal-API-Key": "k"})) is True

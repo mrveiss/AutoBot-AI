@@ -43,8 +43,9 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
 
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config as ssot_config
 from services.docker_task_workspace import (
     WorkspaceInfo,
     get_task_workspace_manager,
@@ -249,13 +250,21 @@ async def workspace_shell(
     regardless of what the human types — the sandbox cannot be escaped through
     this shell.
 
-    Auth: validates the Authorization header token before accepting the WS.
+    Auth: an interactive container shell is admin-only. The connection is
+    authenticated (JWT/session/cookie or the internal-service key) AND required
+    to be an admin — identical to the REST workspace endpoints — before any
+    shell is attached. Fail-closed: any auth error closes the socket (1008).
     """
     await websocket.accept()
     try:
         _validate_ws_origin(websocket)
     except PermissionError as exc:
         await _ws_error(websocket, str(exc))
+        await websocket.close(code=1008)
+        return
+
+    if not _authenticate_ws_admin(websocket):
+        await _ws_error(websocket, "Authentication required (admin)")
         await websocket.close(code=1008)
         return
 
@@ -365,6 +374,26 @@ def _validate_ws_origin(websocket: WebSocket) -> None:
             return
         # Production: block unauthenticated connections
         raise PermissionError("Authorization header required for workspace shell")
+
+
+def _authenticate_ws_admin(websocket: WebSocket) -> bool:
+    """Fail-closed auth+authz for the shell WS: a valid user (JWT/session/cookie)
+    or the internal-service key, AND admin role — matching the REST endpoints.
+
+    A WebSocket exposes the same ``headers``/``cookies`` interface as a Request,
+    so the standard auth middleware resolves the caller. Any error → deny.
+    """
+    try:
+        internal_key = ssot_config.misc.internal_api_key
+        if internal_key and websocket.headers.get("X-Internal-API-Key") == internal_key:
+            return True
+        user = get_auth_middleware().get_user_from_request(websocket)  # type: ignore[arg-type]
+        if not user:
+            return False
+        return user.get("role") == "admin"
+    except Exception:
+        logger.warning("workspace_shell: WS auth error — denying", exc_info=True)
+        return False
 
 
 def _info_to_response(info: WorkspaceInfo) -> WorkspaceInfoResponse:
