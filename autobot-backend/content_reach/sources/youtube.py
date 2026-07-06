@@ -17,6 +17,7 @@ import re
 import httpx
 
 from autobot_shared.logging_manager import get_logger
+from content_reach._url_guard import ensure_public_url
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
 from content_reach.chain import ContentSourceChain
 from source_attribution import SourceReliability, SourceType
@@ -179,6 +180,8 @@ class YtDlpCaptionBackend(ContentBackend):
         _ytdlp_extract_info owns the yt_dlp import check and raises BackendError
         when yt_dlp is unavailable, so no separate guard is needed here.
         """
+        await ensure_public_url(request.url)
+
         info: dict = await asyncio.to_thread(_ytdlp_extract_info, request.url)
 
         track = _pick_caption_track(info)
@@ -190,6 +193,7 @@ class YtDlpCaptionBackend(ContentBackend):
             raise BackendError(f"YtDlpCaptionBackend: no English captions for {request.url!r}")
 
         caption_url, ext = track
+        await ensure_public_url(caption_url)
 
         try:
             if self._client is not None:

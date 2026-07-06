@@ -17,6 +17,7 @@ import asyncio
 import httpx
 
 from autobot_shared.logging_manager import get_logger
+from content_reach._url_guard import ensure_public_url, ensure_robots_allowed
 from content_reach.backends.browser import BrowserBackend
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
 from content_reach.chain import ContentSourceChain
@@ -73,6 +74,9 @@ class TrafilaturaBackend(ContentBackend):
 
     async def fetch(self, request: ContentRequest) -> ContentResult:
         """GET request.url, extract text via trafilatura; raise BackendError on failure."""
+        await ensure_public_url(request.url)
+        await ensure_robots_allowed(request.url)
+
         try:
             _import_trafilatura()
         except ImportError:
@@ -131,6 +135,9 @@ class JinaReaderBackend(ContentBackend):
 
     async def fetch(self, request: ContentRequest) -> ContentResult:
         """GET https://r.jina.ai/<url>; raise BackendError on non-200 or empty body."""
+        await ensure_public_url(request.url)
+        await ensure_robots_allowed(request.url)
+
         url = f"{_JINA_READER_BASE}{request.url}"
         headers = {"Accept": "text/plain"}
 
