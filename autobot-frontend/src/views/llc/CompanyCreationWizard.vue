@@ -458,9 +458,10 @@ async function createCompany() {
     // boards, sprints, etc. with the sidebar) rather than the sidebar-less
     // standalone /llc/dashboard, which left all PM features unreachable.
     await router.push(`/llc/companies/${createdCompany.id}`)
-  } catch (err: any) {
+  } catch (err) {
     logger.error('Failed to create company', err)
-    error.value = err?.response?.data?.detail || err?.message || t('llc.wizard.createFailed')
+    const e = err as { response?: { data?: { detail?: string } }; message?: string }
+    error.value = e?.response?.data?.detail || e?.message || t('llc.wizard.createFailed')
   } finally {
     loading.value = false
   }

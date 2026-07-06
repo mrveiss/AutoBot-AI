@@ -223,15 +223,16 @@ class GlobalErrorHandler {
     }
   }
 
-  private getUnhandledRejectionMessage(reason: any): string {
-    if (reason?.message) {
-      if (reason.message.includes('Failed to fetch')) {
+  private getUnhandledRejectionMessage(reason: unknown): string {
+    const message = (reason as { message?: unknown })?.message
+    if (typeof message === 'string') {
+      if (message.includes('Failed to fetch')) {
         return 'Connection failed. Please check your internet connection and try again.'
       }
-      if (reason.message.includes('NetworkError')) {
+      if (message.includes('NetworkError')) {
         return 'Network error occurred. Please try again.'
       }
-      if (reason.message.includes('ChunkLoadError')) {
+      if (message.includes('ChunkLoadError')) {
         return 'Application update detected. Please reload the page.'
       }
     }

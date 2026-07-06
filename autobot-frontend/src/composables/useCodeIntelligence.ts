@@ -321,7 +321,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
   async function deleteAnalysis(analysisId: string): Promise<boolean> {
     startLoading()
     try {
-      await ApiClient.delete<any>(`${getApiBase()}/code-intelligence/analysis/${analysisId}`)
+      await ApiClient.delete<unknown>(`${getApiBase()}/code-intelligence/analysis/${analysisId}`)
       analysisHistory.value = analysisHistory.value.filter(a => a.id !== analysisId)
       logger.debug('Deleted analysis:', analysisId)
       return true
