@@ -223,6 +223,13 @@ class LLMConfig(BaseSettings):
             "AUTOBOT_CHAT_GROUNDING",
         ),
     )
+    # Inline AgentResponseJudge on chat replies (#10599, §3.3).
+    # OFF by default — each judge call adds one LLM round-trip.
+    # Enable with AUTOBOT_CHAT_INLINE_JUDGE=true.
+    chat_inline_judge_enabled: bool = Field(default=False, alias="AUTOBOT_CHAT_INLINE_JUDGE")
+    # Minimum judge overall_score to accept a response without one regeneration
+    # attempt.  Only used when chat_inline_judge_enabled=True.
+    chat_inline_judge_threshold: float = Field(default=0.6, alias="AUTOBOT_CHAT_INLINE_JUDGE_THRESHOLD")
 
     # Provider-specific endpoints (each provider can have its own URL)
     ollama_endpoint: str = Field(default="http://127.0.0.1:11434", alias="AUTOBOT_OLLAMA_ENDPOINT")
