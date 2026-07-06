@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from memory.working_memory import is_working_memory_key
 
 logger = get_logger(__name__)
 
@@ -437,12 +438,19 @@ async def _forget_trajectory(user_id: str, memory_id: str) -> bool:
 
 async def _forget_working_memory(user_id: str, memory_id: str) -> bool:
     _bootstrap()
+    # Allowlist the key shape BEFORE any Redis op — a caller-supplied id must be
+    # a working-memory key, never an arbitrary key from another subsystem.
+    if not is_working_memory_key(memory_id):
+        logger.warning("forget_working_memory: rejected non-working-memory key %s", memory_id)
+        return False
     redis = await get_redis_client(async_client=True, database="knowledge")
     raw = await redis.get(memory_id)
     if not raw:
         return False
-    value = json.loads(raw) if isinstance(raw, (str, bytes)) else {}
-    if isinstance(value, dict) and value.get("user_id") != user_id:
+    value = json.loads(raw) if isinstance(raw, (str, bytes)) else None
+    # Deny by default: require a dict payload owned by the caller (fail-closed —
+    # a non-dict value is not a legitimate working-memory entry).
+    if not isinstance(value, dict) or value.get("user_id") != user_id:
         logger.warning("forget_working_memory: tenant mismatch for key %s", memory_id)
         return False
     deleted = await redis.delete(memory_id)
@@ -460,7 +468,9 @@ async def _forget_graph_entity(user_id: str, entity_id: str) -> bool:
         return False
     meta = raw.get("metadata") or {}
     owner = meta.get("user_id") or meta.get("owner_id")
-    if owner and owner != user_id:
+    # Deny by default: require a positive ownership match. A missing/blank owner
+    # is NOT deletable by a normal caller (shared/system entities are protected).
+    if owner != user_id:
         logger.warning("forget_graph_entity: tenant mismatch entity=%s owner=%s caller=%s", entity_id, owner, user_id)
         return False
     # Delete relations (both directions)

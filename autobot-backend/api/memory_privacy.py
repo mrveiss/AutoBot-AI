@@ -329,13 +329,19 @@ async def _amend_verbatim(user_id: str, chunk_id: str, new_content: str) -> bool
 async def _amend_working_memory(user_id: str, redis_key: str, new_content: str) -> bool:
     """Replace a working-memory entry's content field in-place."""
     from autobot_shared.redis_client import get_redis_client
+    from memory.working_memory import is_working_memory_key
 
+    # Allowlist the key shape before any Redis op — never touch an arbitrary key.
+    if not is_working_memory_key(redis_key):
+        logger.warning("_amend_working_memory: rejected non-working-memory key %s", redis_key)
+        return False
     redis = await get_redis_client(async_client=True, database="knowledge")
     raw = await redis.get(redis_key)
     if not raw:
         return False
-    value = json.loads(raw) if isinstance(raw, (str, bytes)) else {}
-    if isinstance(value, dict) and value.get("user_id") != user_id:
+    value = json.loads(raw) if isinstance(raw, (str, bytes)) else None
+    # Deny by default: require a dict payload owned by the caller (fail-closed).
+    if not isinstance(value, dict) or value.get("user_id") != user_id:
         logger.warning("_amend_working_memory: tenant mismatch key=%s caller=%s", redis_key, user_id)
         return False
     value["content"] = new_content
