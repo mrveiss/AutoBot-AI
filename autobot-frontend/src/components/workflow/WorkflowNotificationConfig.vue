@@ -165,7 +165,6 @@ import { createLogger } from '@/utils/debugUtils';
 import {
   useWorkflowNotificationConfig,
   ALL_EVENTS,
-  ALL_CHANNELS,
   type NotificationEvent,
   type NotificationChannel,
   type NotificationConfigPayload,
@@ -184,7 +183,7 @@ interface WorkflowSummary {
   [key: string]: unknown;
 }
 
-const props = defineProps<{
+defineProps<{
   workflows: WorkflowSummary[];
 }>();
 
