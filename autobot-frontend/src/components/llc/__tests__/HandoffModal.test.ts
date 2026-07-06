@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
 
 const get = vi.fn()
 const post = vi.fn()
@@ -18,7 +19,23 @@ vi.mock('@/stores/useUserStore', () => ({
 
 import HandoffModal from '../HandoffModal.vue'
 
-const mountOpts = { global: { mocks: { $t: (k: string) => k } } }
+// vue-i18n 11 requires app.use(); HandoffModal uses useI18n() in <script setup>,
+// so a bare $t mock is not enough. Install a real i18n instance with empty
+// messages + warnings off so t('key') / $t('key') return the key verbatim (the
+// original assertion contract that mocks: { $t } provided).
+const i18n = createI18n({
+  legacy: false,
+  locale: 'en',
+  fallbackLocale: 'en',
+  messages: { en: {} },
+  missingWarn: false,
+  fallbackWarn: false,
+})
+
+// BaseModal (@autobot/ui) wraps its body/actions in <Teleport to="body">;
+// stub Teleport so the slotted <select> + .handoff-confirm render inline where
+// wrapper.find() can reach them.
+const mountOpts = { global: { plugins: [i18n], stubs: { teleport: true } } }
 
 describe('HandoffModal (GH#10531)', () => {
   beforeEach(() => {
