@@ -634,8 +634,12 @@ async def inline_judge_response(state: ChatState, config: RunnableConfig) -> dic
 
     judge_count = state.get("judge_count", 0)
     if judge_count > 0:
-        # Already triggered one regeneration this turn — do not loop.
-        return {}
+        # Already triggered one regeneration this turn — advance the count and
+        # clear the refinement hint so route_after_judge routes to persist.
+        # Leaving the hint set with judge_count stuck at 1 made route_after_judge
+        # loop back to generate_response forever (GraphRecursionError) when RLM
+        # reflection was off and never cleared it (#11013).
+        return {"judge_count": judge_count + 1, "rlm_refinement_hint": ""}
 
     try:
         from judges.agent_response_judge import AgentResponseJudge

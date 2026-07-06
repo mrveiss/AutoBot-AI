@@ -281,3 +281,82 @@ async def test_causal_extractor_batches_and_maps():
     _, kwargs = ext.llm.chat.call_args
     assert kwargs.get("llm_type") == "extraction"
     assert kwargs.get("structured_output") is True
+
+
+# ---------------------------------------------------------------------------
+# #11012 — partial/truncated batch response must not silently drop chunks
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_helper_partial_response_recovers_missing_chunks_per_chunk():
+    """A truncated batch (index 1 absent) recovers chunk 1 via per-chunk fallback,
+    instead of silently yielding zero items for it (#11012)."""
+    c0, c1 = _chunk("c0"), _chunk("c1")
+    resp = json.dumps({"0": [{"v": "A"}]})  # "1" missing — response truncated
+    llm = types.SimpleNamespace(chat=AsyncMock(return_value=_resp(resp)))
+    fallback: list = []
+
+    async def extract_one(chunk):
+        fallback.append(chunk.id)
+        return [(chunk.id, "recovered")]
+
+    items = await llm_utils.batched_chunk_extract(
+        [c0, c1],
+        llm=llm,
+        batch_prompt_template="{chunks}",
+        llm_type="extraction",
+        max_chunk_chars=0,
+        convert=lambda raw, chunk: [(chunk.id, r["v"]) for r in raw],
+        extract_one=extract_one,
+    )
+
+    assert llm.chat.call_count == 1  # still one batched call
+    assert fallback == [c1.id]  # ONLY the missing chunk fell back
+    assert items == [(c0.id, "A"), (c1.id, "recovered")]  # no chunk dropped
+
+
+@pytest.mark.asyncio
+async def test_helper_present_but_empty_index_does_not_fall_back():
+    """An index present with an explicit empty list is a real 'no items' answer —
+    it must NOT trigger per-chunk fallback (#11012)."""
+    c0, c1 = _chunk("c0"), _chunk("c1")
+    resp = json.dumps({"0": [{"v": "A"}], "1": []})  # "1" present, explicitly empty
+    llm = types.SimpleNamespace(chat=AsyncMock(return_value=_resp(resp)))
+
+    async def extract_one(chunk):  # pragma: no cover - must not run
+        raise AssertionError("present-but-empty index must not fall back")
+
+    items = await llm_utils.batched_chunk_extract(
+        [c0, c1],
+        llm=llm,
+        batch_prompt_template="{chunks}",
+        llm_type="extraction",
+        max_chunk_chars=0,
+        convert=lambda raw, chunk: [(chunk.id, r["v"]) for r in raw],
+        extract_one=extract_one,
+    )
+
+    assert items == [(c0.id, "A")]  # chunk 1 legitimately contributed nothing
+
+
+@pytest.mark.asyncio
+async def test_helper_scales_max_tokens_with_batch_size():
+    """The batched call raises max_tokens with the batch size (capped) so packing
+    K chunks doesn't truncate the response (#11012)."""
+    chunks = [_chunk(str(i)) for i in range(3)]
+    resp = json.dumps({str(i): [] for i in range(3)})
+    llm = types.SimpleNamespace(chat=AsyncMock(return_value=_resp(resp)))
+
+    await llm_utils.batched_chunk_extract(
+        chunks,
+        llm=llm,
+        batch_prompt_template="{chunks}",
+        llm_type="extraction",
+        max_chunk_chars=0,
+        convert=lambda raw, chunk: [],
+        extract_one=AsyncMock(return_value=[]),
+    )
+
+    _, kwargs = llm.chat.call_args
+    assert kwargs.get("max_tokens") == llm_utils._BATCH_MAX_TOKENS_PER_CHUNK * 3

@@ -11,6 +11,7 @@ call keyed by chunk index, with per-chunk fallback (generalizes #10647).
 """
 
 import json
+import os
 from typing import Any, Awaitable, Callable, Dict, List, TypeVar
 
 from autobot_shared.logging_manager import get_logger
@@ -19,6 +20,13 @@ from knowledge.pipeline.models.entity import Entity
 logger = get_logger(__name__)
 
 _R = TypeVar("_R")
+
+# Batched extraction packs K chunks into one call, so the response is ~K× larger
+# than a single-chunk reply. Scale ``max_tokens`` with the batch size (capped) so
+# the batched output isn't truncated mid-response — truncation drops trailing
+# chunk indices, which per-chunk fallback then has to recover (#11012).
+_BATCH_MAX_TOKENS_PER_CHUNK = int(os.environ.get("AUTOBOT_COGNIFIER_BATCH_MAX_TOKENS_PER_CHUNK", "1024"))
+_BATCH_MAX_TOKENS_CAP = int(os.environ.get("AUTOBOT_COGNIFIER_BATCH_MAX_TOKENS_CAP", "8192"))
 
 
 def parse_llm_json_response(
@@ -104,7 +112,12 @@ def parse_indexed_batch_response(content: str, n_chunks: int) -> Dict[int, List[
     Raises ``ValueError`` on a non-object response or one whose keys are disjoint
     from the chunk indices, so the caller can fall back to per-chunk extraction
     (mirrors ``FactExtractor._extract_batched`` #10647). A single-object value is
-    coerced to a one-element list; missing/None indices yield an empty list.
+    coerced to a one-element list.
+
+    Indices whose key is **absent** from the response are OMITTED from the result
+    (distinct from a present-but-empty ``[]``), so the caller can recover only the
+    dropped chunks via per-chunk fallback — a partial/truncated batch response no
+    longer silently yields zero items for the missing chunks (#11012).
     """
     parsed = parse_llm_json_response(content)
     if not isinstance(parsed, dict):
@@ -113,15 +126,16 @@ def parse_indexed_batch_response(content: str, n_chunks: int) -> Dict[int, List[
         raise ValueError("batched response keys do not match chunk indices")
     result: Dict[int, List[Any]] = {}
     for i in range(n_chunks):
-        raw = parsed.get(str(i))
-        if raw is None:
-            result[i] = []
-        elif isinstance(raw, dict):
+        key = str(i)
+        if key not in parsed:
+            continue  # missing — omit so the caller falls back for this chunk only
+        raw = parsed[key]
+        if isinstance(raw, dict):
             result[i] = [raw]
         elif isinstance(raw, list):
             result[i] = raw
         else:
-            result[i] = []
+            result[i] = []  # present but null/scalar → explicitly empty, no fallback
     return result
 
 
@@ -164,7 +178,13 @@ async def batched_chunk_extract(
     try:
         blocks = build_indexed_chunk_blocks([content_of(c) for c in chunks], max_chunk_chars)
         prompt = batch_prompt_template.format(chunks=blocks)
-        response = await llm.chat([{"role": "user", "content": prompt}], llm_type=llm_type, structured_output=True)
+        batch_max_tokens = min(_BATCH_MAX_TOKENS_PER_CHUNK * len(chunks), _BATCH_MAX_TOKENS_CAP)
+        response = await llm.chat(
+            [{"role": "user", "content": prompt}],
+            llm_type=llm_type,
+            structured_output=True,
+            max_tokens=batch_max_tokens,
+        )
         by_index = parse_indexed_batch_response(response.content, len(chunks))
     except Exception as exc:
         logger.warning("Batched extraction failed (%s); falling back to per-chunk", exc)
@@ -174,5 +194,10 @@ async def batched_chunk_extract(
         return results
     items: List[_R] = []
     for i, chunk in enumerate(chunks):
-        items.extend(convert(by_index.get(i, []), chunk))
+        if i in by_index:
+            items.extend(convert(by_index[i], chunk))
+        else:
+            # Missing from a partial/truncated batch response — recover this chunk
+            # via per-chunk extraction so no chunk is silently dropped (#11012).
+            items.extend(await extract_one(chunk))
     return items
