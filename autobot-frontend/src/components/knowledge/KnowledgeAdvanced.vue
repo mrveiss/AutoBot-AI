@@ -186,6 +186,14 @@ const { t } = useI18n()
 
 const store = useKnowledgeStore()
 
+// Shape of the knowledge_base population/clear endpoint responses.
+interface KnowledgeBaseOpResponse {
+  status?: string
+  message?: string
+  items_added?: number
+  items_removed?: number
+}
+
 // State
 const isPopulating = ref(false)
 const isClearing = ref(false)
@@ -324,7 +332,7 @@ const populateSystemCommands = async () => {
     startProgress(t('knowledge.advanced.progressPopulatingSystemCommands'), 150)
     progressDetails.value = t('knowledge.advanced.progressAddingCommands')
 
-    const response = await ApiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/populate_system_commands`, {})
+    const response = await ApiClient.post<KnowledgeBaseOpResponse>(`${getApiBase()}/knowledge_base/populate_system_commands`, {})
 
     if (response.status === 'success') {
       populateStatus.value.systemCommands = 'success'
@@ -336,11 +344,11 @@ const populateSystemCommands = async () => {
     } else {
       throw new Error(response.message || 'Failed to populate system commands')
     }
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Failed to populate system commands:', error)
     populateStatus.value.systemCommands = 'error'
     addStatusMessage('error', t('knowledge.advanced.systemCommandsFailed'),
-      error.message || 'An error occurred while populating system commands')
+      (error as { message?: string }).message || 'An error occurred while populating system commands')
   } finally {
     isPopulating.value = false
     stopProgress()
@@ -362,7 +370,7 @@ const populateManPages = async () => {
     startProgress(t('knowledge.advanced.progressPopulatingManPages'), 50)
     progressDetails.value = t('knowledge.advanced.progressAddingManPages')
 
-    const response = await ApiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/populate_man_pages`, {})
+    const response = await ApiClient.post<KnowledgeBaseOpResponse>(`${getApiBase()}/knowledge_base/populate_man_pages`, {})
 
     if (response.status === 'success') {
       populateStatus.value.manPages = 'success'
@@ -374,11 +382,11 @@ const populateManPages = async () => {
     } else {
       throw new Error(response.message || 'Failed to populate manual pages')
     }
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Failed to populate manual pages:', error)
     populateStatus.value.manPages = 'error'
     addStatusMessage('error', t('knowledge.advanced.manualPagesFailed'),
-      error.message || 'An error occurred while populating manual pages')
+      (error as { message?: string }).message || 'An error occurred while populating manual pages')
   } finally {
     isPopulating.value = false
     stopProgress()
@@ -400,7 +408,7 @@ const populateAutoBotDocs = async () => {
     startProgress(t('knowledge.advanced.progressPopulatingAutobotDocs'), 30)
     progressDetails.value = t('knowledge.advanced.progressAddingAutobotDocs')
 
-    const response = await ApiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/populate_autobot_docs`, {})
+    const response = await ApiClient.post<KnowledgeBaseOpResponse>(`${getApiBase()}/knowledge_base/populate_autobot_docs`, {})
 
     if (response.status === 'success') {
       populateStatus.value.autobotDocs = 'success'
@@ -412,11 +420,11 @@ const populateAutoBotDocs = async () => {
     } else {
       throw new Error(response.message || 'Failed to populate AutoBot documentation')
     }
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Failed to populate AutoBot docs:', error)
     populateStatus.value.autobotDocs = 'error'
     addStatusMessage('error', t('knowledge.advanced.autobotDocsFailed'),
-      error.message || 'An error occurred while populating AutoBot documentation')
+      (error as { message?: string }).message || 'An error occurred while populating AutoBot documentation')
   } finally {
     isPopulating.value = false
     stopProgress()
@@ -453,7 +461,7 @@ const clearAllKnowledge = async () => {
     startProgress(t('knowledge.advanced.progressClearingKB'), 1)
     progressDetails.value = t('knowledge.advanced.progressRemovingEntries')
 
-    const response = await ApiClient.post<Record<string, any>>(`${getApiBase()}/knowledge_base/clear_all`, {})
+    const response = await ApiClient.post<KnowledgeBaseOpResponse>(`${getApiBase()}/knowledge_base/clear_all`, {})
 
     if (response.status === 'success') {
       addStatusMessage('success', t('knowledge.advanced.clearSuccess'),
@@ -471,10 +479,10 @@ const clearAllKnowledge = async () => {
     } else {
       throw new Error(response.message || 'Failed to clear knowledge base')
     }
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Failed to clear knowledge base:', error)
     addStatusMessage('error', t('knowledge.advanced.clearFailed'),
-      error.message || 'An error occurred while clearing the knowledge base')
+      (error as { message?: string }).message || 'An error occurred while clearing the knowledge base')
   } finally{
     isClearing.value = false
     stopProgress()
