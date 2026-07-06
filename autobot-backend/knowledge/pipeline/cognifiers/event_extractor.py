@@ -13,8 +13,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import (
+    batched_chunk_extract,
     build_entity_map,
     parse_llm_json_response,
 )
@@ -43,6 +45,31 @@ Return JSON: [{{"name": "...", "description": "...", ...}}, ...]
 
 Text:
 {text}
+"""
+
+EVENT_EXTRACTION_BATCH_PROMPT = """Extract temporal events from each of the following text chunks.
+
+Each chunk is labeled "Chunk N:". For each event provide:
+- name: Event title
+- description: Brief description
+- temporal_expression: Time phrase (e.g., "yesterday", "2024-01-15")
+- temporal_type: point, range, relative, recurring
+- event_type: action, decision, change, milestone, occurrence
+- participants: Entity names involved
+- location: Where it happened (if mentioned)
+- confidence: 0.0-1.0
+
+Return a JSON object mapping each chunk index (as a string) to its array of
+events (same fields as above); use an empty array for chunks with no events.
+Example for two chunks:
+{{
+  "0": [{{"name": "...", "description": "...", "temporal_expression": "...",
+         "temporal_type": "point", "event_type": "occurrence", "participants": [], "confidence": 0.9}}],
+  "1": []
+}}
+
+Chunks:
+{chunks}
 """
 
 
@@ -90,12 +117,26 @@ class EventExtractor(BaseCognifier):
         entity_map: Dict[str, Entity],
         context: PipelineContext,
     ) -> List[TemporalEvent]:
-        """Process batch of chunks for events."""
-        events = []
-        for chunk in chunks:
-            chunk_events = await self._extract_from_chunk(chunk, entity_map, context)
-            events.extend(chunk_events)
-        return events
+        """Extract events for a batch in ONE LLM call when batching is on (#10598).
+
+        Routes through ``batched_chunk_extract`` (index-keyed prompt, per-chunk
+        fallback) so K chunks cost one round-trip instead of K. Falls back to the
+        legacy per-chunk loop when the config flag is disabled.
+        """
+        if not config.cognifier_multichunk_batching:
+            events = []
+            for chunk in chunks:
+                events.extend(await self._extract_from_chunk(chunk, entity_map, context))
+            return events
+        return await batched_chunk_extract(
+            chunks,
+            llm=self.llm,
+            batch_prompt_template=EVENT_EXTRACTION_BATCH_PROMPT,
+            llm_type="extraction",
+            max_chunk_chars=config.cognifier_batch_max_chunk_chars,
+            convert=lambda raw, chunk: self._convert_to_events(raw, chunk, entity_map, context),
+            extract_one=lambda chunk: self._extract_from_chunk(chunk, entity_map, context),
+        )
 
     async def _extract_from_chunk(
         self,

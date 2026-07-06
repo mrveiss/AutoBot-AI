@@ -178,7 +178,7 @@ async function forgetItem(item: MemoryItem) {
   try {
     await apiClient.delete(`/memory/privacy/${item.store}/${encodeURIComponent(item.memory_id)}`)
     memories.value = memories.value.filter(m => m.memory_id !== item.memory_id)
-    showToast({ message: 'Memory item forgotten.', type: 'success' })
+    showToast('Memory item forgotten.', 'success')
     logger.info('MemoryPrivacyPanel: forgot %s from %s', item.memory_id, item.store)
   } catch (err) {
     logger.warn('MemoryPrivacyPanel: forget failed', err)
@@ -199,7 +199,7 @@ async function forgetEverywhere(item: MemoryItem) {
     )
     memories.value = memories.value.filter(m => m.memory_id !== item.memory_id)
     const from = (result.deleted_from || []).join(', ') || 'none'
-    showToast({ message: `Forgotten from: ${from}`, type: 'success' })
+    showToast(`Forgotten from: ${from}`, 'success')
     logger.info('MemoryPrivacyPanel: forget-everywhere %s → %s', item.memory_id, from)
   } catch (err) {
     logger.warn('MemoryPrivacyPanel: forget-everywhere failed', err)
@@ -223,7 +223,7 @@ async function downloadExport() {
     a.download = 'memory_export.json'
     a.click()
     URL.revokeObjectURL(url)
-    showToast({ message: 'Memory export downloaded.', type: 'success' })
+    showToast('Memory export downloaded.', 'success')
     logger.info('MemoryPrivacyPanel: export downloaded')
   } catch (err) {
     logger.warn('MemoryPrivacyPanel: export failed', err)

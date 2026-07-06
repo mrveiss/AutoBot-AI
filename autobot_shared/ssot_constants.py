@@ -219,6 +219,14 @@ class ModelConfig:
     # MMR diversity scoring (0.0 = pure relevance, 1.0 = pure diversity)
     RAG_MMR_LAMBDA: float = 0.0
 
+    # Issue #10600: hybrid keyword half uses BM25 Okapi instead of substring TF.
+    # Default False preserves the legacy substring scan (no behaviour change).
+    RAG_BM25_HYBRID_ENABLED: bool = False
+
+    # Issue #10600: relevance floor for the optimizer hybrid path (0.0 = no floor).
+    # Drops results scoring below this before returning; default 0.0 = no-op.
+    RAG_MIN_SCORE: float = 0.0
+
 
 class ModelConstants:
     """LLM Model configuration constants for AutoBot."""

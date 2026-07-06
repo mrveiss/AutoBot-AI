@@ -15,8 +15,12 @@ from typing import Any, Dict, List
 from uuid import UUID
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from knowledge.pipeline.base import BaseCognifier, CognifyError, PipelineContext
-from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
+from knowledge.pipeline.cognifiers.llm_utils import (
+    batched_chunk_extract,
+    parse_llm_json_response,
+)
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity, EntityType
 from knowledge.pipeline.registry import TaskRegistry
@@ -61,6 +65,26 @@ Return JSON array of entities:
 
 Text:
 {text}
+"""
+
+ENTITY_EXTRACTION_BATCH_PROMPT = """Extract named entities from each of the following text chunks.
+
+Each chunk is labeled "Chunk N:". For each entity provide:
+- name: The entity name as mentioned in text
+- type: One of PERSON, ORGANIZATION, CONCEPT, TECHNOLOGY, LOCATION, EVENT, DOCUMENT
+- description: Brief description
+- confidence: Score 0.0-1.0
+
+Return a JSON object mapping each chunk index (as a string) to its array of
+entities (same fields as above); use an empty array for chunks with no entities.
+Example for two chunks:
+{{
+  "0": [{{"name": "AutoBot", "type": "TECHNOLOGY", "description": "...", "confidence": 0.9}}],
+  "1": []
+}}
+
+Chunks:
+{chunks}
 """
 
 
@@ -262,12 +286,26 @@ class EntityExtractor(BaseCognifier):
         return merged
 
     async def _process_batch(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[Entity]:
-        """Process a batch of chunks."""
-        entities = []
-        for chunk in chunks:
-            chunk_entities = await self._extract_from_chunk(chunk, context)
-            entities.extend(chunk_entities)
-        return entities
+        """Extract entities for a batch in ONE LLM call when batching is on (#10598).
+
+        Routes through ``batched_chunk_extract`` (index-keyed prompt, per-chunk
+        fallback) so K chunks cost one round-trip instead of K. Falls back to the
+        legacy per-chunk loop when the config flag is disabled.
+        """
+        if not config.cognifier_multichunk_batching:
+            entities = []
+            for chunk in chunks:
+                entities.extend(await self._extract_from_chunk(chunk, context))
+            return entities
+        return await batched_chunk_extract(
+            chunks,
+            llm=self.llm,
+            batch_prompt_template=ENTITY_EXTRACTION_BATCH_PROMPT,
+            llm_type="extraction",
+            max_chunk_chars=config.cognifier_batch_max_chunk_chars,
+            convert=lambda raw, chunk: self._convert_to_entities(raw, chunk, context.document_id),
+            extract_one=lambda chunk: self._extract_from_chunk(chunk, context),
+        )
 
     async def _extract_from_chunk(self, chunk: ProcessedChunk, context: PipelineContext) -> List[Entity]:
         """Extract entities from a single chunk.

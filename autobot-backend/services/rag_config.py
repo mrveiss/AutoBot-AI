@@ -50,6 +50,14 @@ class RAGConfig:
     # Issue #2090: MMR diversity pass lambda (0.0 = disabled, backward-compatible).
     mmr_lambda: float = model_config.RAG_MMR_LAMBDA
 
+    # Issue #10600: route the hybrid keyword half through BM25 Okapi instead of
+    # the substring TF scan.  Default False preserves legacy behaviour.
+    bm25_hybrid_enabled: bool = model_config.RAG_BM25_HYBRID_ENABLED
+
+    # Issue #10600: relevance floor for the optimizer hybrid path.
+    # 0.0 = no floor (default, no behaviour change).
+    min_score: float = model_config.RAG_MIN_SCORE
+
     # Performance (from model_config)
     cache_ttl_seconds: int = model_config.DEFAULT_CACHE_TTL
     timeout_seconds: float = float(model_config.DEFAULT_TIMEOUT)
@@ -172,6 +180,10 @@ class RAGConfig:
         if not 0.0 <= self.mmr_lambda <= 1.0:
             raise ValueError(f"mmr_lambda must be in [0, 1], got {self.mmr_lambda}")
 
+        # Issue #10600: relevance floor must be non-negative.
+        if self.min_score < 0.0:
+            raise ValueError(f"min_score must be >= 0, got {self.min_score}")
+
         # Issue #1718: Agentic search iteration guard
         if self.max_search_iterations < 1:
             raise ValueError(f"max_search_iterations must be >= 1, got {self.max_search_iterations}")
@@ -229,6 +241,9 @@ class RAGConfig:
             },
             # Issue #2090: top-level MMR lambda (mirrors rerank_weights.mmr_lambda).
             "mmr_lambda": self.mmr_lambda,
+            # Issue #10600: BM25 hybrid + relevance floor flags.
+            "bm25_hybrid_enabled": self.bm25_hybrid_enabled,
+            "min_score": self.min_score,
             "cache_ttl_seconds": self.cache_ttl_seconds,
             "timeout_seconds": self.timeout_seconds,
             "enable_advanced_rag": self.enable_advanced_rag,
