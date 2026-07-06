@@ -174,7 +174,7 @@ import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { useKnowledgeCategories } from '@/composables/knowledge/useKnowledgeCategories'
 import type { MainCategoryItem } from '@/composables/knowledge/useKnowledgeCategories'
 import type { KnowledgeStats } from '@/types/knowledgeBase'
-import { formatDate, formatCategoryName, formatFileSize } from '@/utils/formatHelpers'
+import { formatCategoryName, formatFileSize } from '@/utils/formatHelpers'
 import KnowledgeBrowser from './KnowledgeBrowser.vue'
 import DocumentChangeFeed from './DocumentChangeFeed.vue'
 import CategoryEditModal from './modals/CategoryEditModal.vue'
@@ -192,12 +192,12 @@ import '@/styles/document-feed-wrapper.css'
 
 // Domain composables (migrated from useKnowledgeBase BC shim in #5193)
 const { fetchBasicStats } = useKnowledgeStats()
-const { getCategoryIcon, getTypeIcon } = useKnowledgeIcons()
+const { getCategoryIcon: _getCategoryIcon, getTypeIcon } = useKnowledgeIcons()
 const { fetchMainCategories, fetchCategoryDocuments } = useKnowledgeCategories()
 
 // Router
 const router = useRouter()
-const route = useRoute()
+const _route = useRoute()
 
 // UI state
 const selectedMainCategory = ref<string | null>(null)
@@ -243,7 +243,7 @@ const showCategoryEditModal = ref(false)
 const categoryToEdit = ref<Category | null>(null)
 
 // Computed properties
-const systemCategories = computed(() => {
+const _systemCategories = computed(() => {
   return kbStats.value?.categories || []
 })
 
@@ -260,7 +260,7 @@ const getKBStats = async () => {
   }
 }
 
-const browseCategory = async (category: string) => {
+const _browseCategory = async (category: string) => {
   // Navigate to search with category filter
   router.push({
     path: '/knowledge/search',
@@ -268,7 +268,7 @@ const browseCategory = async (category: string) => {
   })
 }
 
-const viewCategoryDocuments = async (category: MainCategoryItem) => {
+const _viewCategoryDocuments = async (category: MainCategoryItem) => {
   isLoadingCategoryDocs.value = true
   selectedCategoryPath.value = category.path as string
 

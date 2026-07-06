@@ -264,12 +264,12 @@ export default {
 
     // Use composables for async operations
     const { isLoading, wrap: fetchStatsOp } = useLoadingState()
-    const { isLoading: isInitializing, wrap: initializeMachineKnowledgeOp } = useLoadingState()
-    const { isLoading: isReindexing, wrap: reindexDocumentsOp } = useLoadingState()
-    const { isLoading: isRefreshing, wrap: refreshSystemKnowledgeOp } = useLoadingState()
-    const { isLoading: isPopulating, wrap: populateManPagesOp } = useLoadingState()
-    const { isLoading: isDocPopulating, wrap: populateAutoBotDocsOp } = useLoadingState()
-    const { isLoading: isVectorizing, wrap: generateVectorEmbeddingsOp } = useLoadingState()
+    const { isLoading: isInitializing } = useLoadingState()
+    const { isLoading: isReindexing } = useLoadingState()
+    const { isLoading: isRefreshing } = useLoadingState()
+    const { isLoading: isPopulating } = useLoadingState()
+    const { isLoading: isDocPopulating } = useLoadingState()
+    const { isLoading: isVectorizing } = useLoadingState()
 
     const addLogEntry = (message, status) => {
       const time = new Date().toLocaleTimeString();

@@ -143,7 +143,7 @@ const sortField = ref('name')
 const sortOrder = ref<'asc' | 'desc'>('asc')
 const showPreview = ref(false)
 
-const userStore = useUserStore()
+const _userStore = useUserStore()
 
 // Computed properties
 const sortedFiles = computed(() => {
@@ -177,7 +177,7 @@ const sortedFiles = computed(() => {
 })
 
 // Methods
-const { execute: refreshFiles, loading: isRefreshingFiles } = useAsyncHandler(
+const { execute: refreshFiles, loading: _isRefreshingFiles } = useAsyncHandler(
   async () => {
     await fetchFiles(currentPath.value)
 
@@ -191,7 +191,7 @@ const { execute: refreshFiles, loading: isRefreshingFiles } = useAsyncHandler(
   }
 )
 
-const { execute: loadDirectoryTree, loading: isLoadingTree } = useAsyncHandler(
+const { execute: loadDirectoryTree, loading: _isLoadingTree } = useAsyncHandler(
   async () => {
     await fetchTree()
   },
@@ -236,7 +236,7 @@ const triggerFileUpload = () => {
   fileUploadRef.value?.triggerFileSelect()
 }
 
-const { execute: uploadFiles, loading: isUploadingFiles } = useAsyncHandler(
+const { execute: uploadFiles, loading: _isUploadingFiles } = useAsyncHandler(
   async (fileList: FileList) => {
     await composableUploadFiles(fileList, currentPath.value)
     await refreshFiles()
@@ -265,7 +265,7 @@ const handleFileSelected = async (fileList: FileList) => {
   await uploadFiles(fileList)
 }
 
-const { execute: viewFile, loading: isViewingFile } = useAsyncHandler(
+const { execute: viewFile, loading: _isViewingFile } = useAsyncHandler(
   async (file: FileBrowserItem) => {
     await fetchPreview(file, getFileType)
     showPreview.value = true
@@ -285,7 +285,7 @@ const { execute: viewFile, loading: isViewingFile } = useAsyncHandler(
   }
 )
 
-const { execute: performDelete, loading: isDeletingFile } = useAsyncHandler(
+const { execute: performDelete, loading: _isDeletingFile } = useAsyncHandler(
   async (file: FileBrowserItem) => {
     const itemType = file.is_dir ? 'folder' : 'file'
     await deleteFileOrFolder(file.path)
@@ -318,7 +318,7 @@ const deleteFile = async (file: FileBrowserItem) => {
   }
 }
 
-const { execute: performRename, loading: isRenamingFile } = useAsyncHandler(
+const { execute: performRename, loading: _isRenamingFile } = useAsyncHandler(
   async (file: FileBrowserItem, newName: string) => {
     await renameFileOrFolder(file.path, newName)
     await refreshFiles()
@@ -349,7 +349,7 @@ const renameFile = async (file: FileBrowserItem) => {
   }
 }
 
-const { execute: performCreateFolder, loading: isCreatingFolder } = useAsyncHandler(
+const { execute: performCreateFolder, loading: _isCreatingFolder } = useAsyncHandler(
   async (folderName: string) => {
     await createDirectory(currentPath.value, folderName)
     await refreshFiles()
