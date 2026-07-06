@@ -236,8 +236,7 @@ class ChatMessageData(BaseModel):
     # Issue #10548: grounded citations — default-on; empty list = no retrieval evidence.
     citations: List[Citation] = Field(
         default_factory=list,
-        description="Structured source citations from RAG retrieval. "
-        "Non-empty only when grounding.grounded=True.",
+        description="Structured source citations from RAG retrieval. " "Non-empty only when grounding.grounded=True.",
     )
     grounding: GroundingStatus | None = Field(
         None,
