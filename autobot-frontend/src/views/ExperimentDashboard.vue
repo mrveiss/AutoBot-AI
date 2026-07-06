@@ -31,7 +31,9 @@ const {
 } = useAutoResearch()
 
 onMounted(async () => {
-  await Promise.all([
+  // #11081: allSettled so one failing widget (e.g. insights on a fresh deployment)
+  // degrades gracefully instead of crashing the whole dashboard via Promise.all.
+  await Promise.allSettled([
     fetchExperiments(),
     fetchStats(),
     fetchPendingApprovals(),
