@@ -53,4 +53,4 @@ defusedxml>=0.7.1
 
 # MinHash LSH - Locality-Sensitive Hashing for duplicate detection (Issue #659)
 # Provides 10-100x speedup for similarity search via O(n) expected complexity
-datasketch>=1.10.0
+datasketch>=2.0.0

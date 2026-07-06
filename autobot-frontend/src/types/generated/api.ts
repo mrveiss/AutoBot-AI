@@ -21344,7 +21344,7 @@ export interface paths {
          *     - Quality breakdown
          *     - Recommendations
          */
-        get: operations["get_analytics_report_api_unified_report_get"];
+        get: operations["get_analytics_report_api_reporting_report_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21366,7 +21366,7 @@ export interface paths {
          *
          *     Lightweight endpoint for dashboard cards.
          */
-        get: operations["get_quick_summary_api_unified_summary_get"];
+        get: operations["get_quick_summary_api_reporting_summary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21388,7 +21388,7 @@ export interface paths {
          *
          *     Note: Returns no_data status as trend storage requires historical snapshots.
          */
-        get: operations["get_trends_api_unified_trends_get"];
+        get: operations["get_trends_api_reporting_trends_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -26377,11 +26377,38 @@ export interface paths {
          *     of the next ANALYZE_EVENTS phase.  The loop continues without restart;
          *     the agent acknowledges the guidance in its next tool selection.
          *
+         *     Returns 403 when the caller does not own the task (IDOR fix, #10553).
          *     Returns 409 when no running loop owns the given task_id (stale or wrong ID).
          *     Mirrors the approval-response path: publish a STEERING event so the live
          *     event stream records the guidance in the task's trajectory.
          */
         post: operations["steer_agent_task_api_agent_terminal_tasks__task_id__steer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-terminal/tasks/{task_id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer Human Question
+         * @description Deliver a human's answer to a suspended ask_human() call (#10553).
+         *
+         *     The answer is published as a HUMAN_ANSWER event on the event stream so the
+         *     waiting loop can pick it up via its answer inbox.  Mirrors the steer endpoint
+         *     — publish-then-return; no blocking.
+         *
+         *     Returns 403 when the caller does not own the task (IDOR fix, #10553).
+         */
+        post: operations["answer_human_question_api_agent_terminal_tasks__task_id__answer_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -29613,6 +29640,125 @@ export interface paths {
          */
         post: operations["configure_whatsapp_api_whatsapp_config_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/api/llm-auth/oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Oauth Callback
+         * @description Exchange an OAuth authorization code for tokens and persist to vault.
+         *
+         *     The frontend redirects to this endpoint after the user completes the
+         *     provider sign-in page.  The backend performs the PKCE code exchange and
+         *     stores the resulting token pair in the system vault.
+         *
+         *     Requires admin — stored credential is system-wide (shared by all users).
+         */
+        post: operations["oauth_callback_api_api_llm_auth_oauth_callback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/api/llm-auth/device/initiate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Device Initiate
+         * @description Start a device-code flow.
+         *
+         *     Calls the provider's device authorization endpoint and returns the
+         *     ``user_code`` + ``verification_uri`` for the user to complete on another device.
+         *     The caller polls ``/device/poll`` until approval or expiry.
+         *
+         *     Requires admin — stored credential is system-wide (shared by all users).
+         */
+        post: operations["device_initiate_api_api_llm_auth_device_initiate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/api/llm-auth/device/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Device Poll
+         * @description Poll the token endpoint for a device-code grant and persist on approval.
+         *
+         *     Returns ``stored=False`` when the grant is still pending (caller should
+         *     retry after the ``interval`` from ``/device/initiate``).
+         *
+         *     Requires admin — stored credential is system-wide (shared by all users).
+         */
+        post: operations["device_poll_api_api_llm_auth_device_poll_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/api/llm-auth/status/{provider_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Provider Auth Status
+         * @description Return the auth connection status for a provider.
+         */
+        get: operations["provider_auth_status_api_api_llm_auth_status__provider_name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/api/llm-auth/{provider_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Provider Auth
+         * @description Revoke stored OAuth / device-code / session tokens for a provider.
+         *
+         *     Requires admin — credential is system-wide (shared by all users).
+         */
+        delete: operations["revoke_provider_auth_api_api_llm_auth__provider_name__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -39211,7 +39357,7 @@ export interface paths {
          *     - CPU fallback for reliability
          *     - Intelligent device selection based on workload
          */
-        post: operations["semantic_search_api_enhanced_search_semantic_post"];
+        post: operations["semantic_search_api_npu_search_semantic_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -39231,7 +39377,7 @@ export interface paths {
          *
          *     Returns information about NPU, GPU, and CPU availability and performance.
          */
-        get: operations["get_hardware_status_api_enhanced_search_hardware_status_get"];
+        get: operations["get_hardware_status_api_npu_search_hardware_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -39255,7 +39401,7 @@ export interface paths {
          *
          *     Tests search performance on NPU, GPU, and CPU to provide optimization insights.
          */
-        post: operations["benchmark_search_performance_api_enhanced_search_benchmark_post"];
+        post: operations["benchmark_search_performance_api_npu_search_benchmark_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -39281,7 +39427,7 @@ export interface paths {
          *     - quality_optimized: Best search result quality
          *     - balanced: Balanced performance (default)
          */
-        post: operations["optimize_search_engine_api_enhanced_search_optimize_post"];
+        post: operations["optimize_search_engine_api_npu_search_optimize_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -39302,7 +39448,7 @@ export interface paths {
          *     Provides insights into search engine performance, hardware utilization,
          *     and optimization opportunities.
          */
-        get: operations["get_performance_analytics_api_enhanced_search_performance_analytics_get"];
+        get: operations["get_performance_analytics_api_npu_search_performance_analytics_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -39324,7 +39470,7 @@ export interface paths {
          *
          *     Verifies that the NPU Worker is accessible and NPU hardware is available.
          */
-        get: operations["test_npu_connectivity_api_enhanced_search_test_connectivity_get"];
+        get: operations["test_npu_connectivity_api_npu_search_test_connectivity_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -39344,7 +39490,7 @@ export interface paths {
          * Get Memory Statistics
          * @description Get comprehensive memory and task execution statistics.
          */
-        get: operations["get_memory_statistics_api_enhanced_memory_statistics_get"];
+        get: operations["get_memory_statistics_api_task_memory_statistics_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -39364,7 +39510,7 @@ export interface paths {
          * Get Task History
          * @description Get task execution history with filtering options.
          */
-        get: operations["get_task_history_api_enhanced_memory_tasks_history_get"];
+        get: operations["get_task_history_api_task_memory_tasks_history_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -39386,7 +39532,7 @@ export interface paths {
          * Create Task
          * @description Create a new task record.
          */
-        post: operations["create_task_api_enhanced_memory_tasks_post"];
+        post: operations["create_task_api_task_memory_tasks_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -39405,7 +39551,7 @@ export interface paths {
          * Update Task
          * @description Update task status and information.
          */
-        put: operations["update_task_api_enhanced_memory_tasks__task_id__put"];
+        put: operations["update_task_api_task_memory_tasks__task_id__put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -39426,7 +39572,7 @@ export interface paths {
          * Add Markdown Reference
          * @description Add markdown file reference to a task.
          */
-        post: operations["add_markdown_reference_api_enhanced_memory_tasks__task_id__markdown_reference_post"];
+        post: operations["add_markdown_reference_api_task_memory_tasks__task_id__markdown_reference_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -39444,7 +39590,7 @@ export interface paths {
          * Scan Markdown System
          * @description Initialise and scan markdown reference system.
          */
-        get: operations["scan_markdown_system_api_enhanced_memory_markdown_scan_get"];
+        get: operations["scan_markdown_system_api_task_memory_markdown_scan_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -39464,7 +39610,7 @@ export interface paths {
          * Search Markdown
          * @description Search markdown content and sections.
          */
-        get: operations["search_markdown_api_enhanced_memory_markdown_search_get"];
+        get: operations["search_markdown_api_task_memory_markdown_search_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -39484,7 +39630,7 @@ export interface paths {
          * Get Document References
          * @description Get all references for a specific markdown document.
          */
-        get: operations["get_document_references_api_enhanced_memory_markdown__file_path__references_get"];
+        get: operations["get_document_references_api_task_memory_markdown__file_path__references_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -39504,7 +39650,7 @@ export interface paths {
          * Get Embedding Cache Stats
          * @description Get embedding cache statistics.
          */
-        get: operations["get_embedding_cache_stats_api_enhanced_memory_embeddings_cache_stats_get"];
+        get: operations["get_embedding_cache_stats_api_task_memory_embeddings_cache_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -39527,7 +39673,7 @@ export interface paths {
          * Cleanup Old Data
          * @description Clean up old task records and cached data.
          */
-        delete: operations["cleanup_old_data_api_enhanced_memory_cleanup_delete"];
+        delete: operations["cleanup_old_data_api_task_memory_cleanup_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -39544,7 +39690,7 @@ export interface paths {
          * Get Active Tasks
          * @description Get currently active tasks.
          */
-        get: operations["get_active_tasks_api_enhanced_memory_active_tasks_get"];
+        get: operations["get_active_tasks_api_task_memory_active_tasks_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -40567,6 +40713,130 @@ export interface paths {
          *     for this task.
          */
         get: operations["get_task_workspace_api_tasks__task_id__workspace_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspace/tasks/{task_id}/create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Workspace
+         * @description Create or resume the persistent workspace container for *task_id*.
+         */
+        post: operations["create_workspace_api_workspace_tasks__task_id__create_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspace/tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Workspace
+         * @description Return workspace info for *task_id*; 404 if not found.
+         */
+        get: operations["get_workspace_api_workspace_tasks__task_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Destroy Workspace
+         * @description Stop container, remove volume, delete Redis metadata.
+         */
+        delete: operations["destroy_workspace_api_workspace_tasks__task_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspace/tasks/{task_id}/exec": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exec Command
+         * @description Exec a command inside the task workspace container.
+         */
+        post: operations["exec_command_api_workspace_tasks__task_id__exec_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspace/tasks/{task_id}/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Snapshot Workspace
+         * @description Snapshot the workspace filesystem state via ``docker commit``.
+         */
+        post: operations["snapshot_workspace_api_workspace_tasks__task_id__snapshot_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspace/tasks/{task_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Workspace
+         * @description Restore workspace from a named snapshot (rolls back container to that checkpoint).
+         */
+        post: operations["restore_workspace_api_workspace_tasks__task_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspace/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Workspace Stats
+         * @description Return quota + all active workspace metadata.
+         */
+        get: operations["workspace_stats_api_workspace_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -45128,6 +45398,56 @@ export interface paths {
          *     returns the catalog entry dict containing at minimum a ``skill_md`` field.
          */
         post: operations["install_catalog_skill_api_skills_catalog__name__install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/bundles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List curated skill bundles
+         * @description Return all role-curated skill bundles (Research / Engineering / Knowledge).
+         *
+         *     Bundles are DATA ONLY — they reference existing builtin skill ids and
+         *     introduce no new skill logic (Issue #10540).
+         */
+        get: operations["list_skill_bundles_api_skills_bundles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/bundles/{bundle_id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable all skills in a curated bundle
+         * @description Enable every member skill of a curated bundle.
+         *
+         *     Delegates to the existing ``registry.enable_skill`` +
+         *     ``manager.persist_skill_enabled`` pair for each member skill — exactly the
+         *     same path taken by ``POST /skills/{name}/enable`` (Issue #10540).
+         *
+         *     Returns which skills were enabled, which were skipped (not registered),
+         *     and which failed (e.g. dependency errors).
+         */
+        post: operations["enable_skill_bundle_api_skills_bundles__bundle_id__enable_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -50632,6 +50952,105 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/memory/privacy/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Memories
+         * @description List all memory items stored for the authenticated user.
+         *
+         *     Returns items from every store (verbatim, trajectory, working_memory,
+         *     graph, retrieval_learner) with provenance and timestamps.
+         */
+        get: operations["list_memories_api_memory_privacy_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/privacy/forget-everywhere/{memory_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Forget Everywhere
+         * @description Cascade-delete a memory item from every store.
+         *
+         *     Returns a per-store map of ``{store: true/false}`` indicating whether the
+         *     item existed in that store.  A True value means it was deleted from there.
+         */
+        delete: operations["forget_everywhere_api_memory_privacy_forget_everywhere__memory_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/privacy/{store}/{memory_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Amend Memory
+         * @description Amend (correct) a memory item's content.
+         *
+         *     Only ``verbatim`` and ``working_memory`` stores support amendment.
+         *     For graph entities, delete and recreate via the knowledge graph API.
+         */
+        put: operations["amend_memory_api_memory_privacy__store___memory_id__put"];
+        post?: never;
+        /**
+         * Forget From Store
+         * @description Forget a specific memory item from a named store.
+         *
+         *     Use the ``store`` and ``memory_id`` values returned by GET /list.
+         *     Returns 404 when the item is not found in the named store.
+         */
+        delete: operations["forget_from_store_api_memory_privacy__store___memory_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/privacy/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Memory
+         * @description Download the caller's complete memory footprint as a JSON file.
+         *
+         *     Reuses the LLC full-state-snapshot export pattern: returns
+         *     Content-Disposition: attachment so browsers trigger a download.
+         */
+        get: operations["export_memory_api_memory_privacy_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/mcp/lookup_man_page": {
         parameters: {
             query?: never;
@@ -53808,6 +54227,19 @@ export interface components {
             agents: unknown[];
             /** Total Agents */
             total_agents: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AmendRequest
+         * @description Body for PUT /memory/privacy/{store}/{memory_id}.
+         */
+        AmendRequest: {
+            /**
+             * Content
+             * @description Replacement content text
+             */
+            content: string;
         } & {
             [key: string]: unknown;
         };
@@ -59017,6 +59449,13 @@ export interface components {
             } | null;
             /** @description Thinking mode metadata (Claude 3.7+ reasoning models) */
             thinking_metadata?: components["schemas"]["ThinkingMetadata"] | null;
+            /**
+             * Citations
+             * @description Structured source citations from RAG retrieval. Non-empty only when grounding.grounded=True.
+             */
+            citations?: components["schemas"]["Citation"][];
+            /** @description Grounding transparency marker. grounded=False signals a model-only claim. */
+            grounding?: components["schemas"]["GroundingStatus"] | null;
         } & {
             [key: string]: unknown;
         };
@@ -59308,6 +59747,42 @@ export interface components {
          * @description Response for GET /circuit-breakers — opaque shape from manager.get_status().
          */
         CircuitBreakerStatusResponse: {
+            [key: string]: unknown;
+        };
+        /**
+         * Citation
+         * @description Structured source citation attached to a RAG-grounded response (#10548).
+         *
+         *     Propagated from retrieval (kb_results / RAGMetrics) through the response
+         *     builder to the API payload and rendered by CitationsDisplay.vue as chips.
+         */
+        Citation: {
+            /**
+             * Id
+             * @description Unique citation identifier (chunk/doc/graph-node id)
+             */
+            id: string;
+            /**
+             * Source Type
+             * @description Origin of this citation: 'doc' | 'chunk' | 'graph'
+             */
+            source_type: string;
+            /**
+             * Title
+             * @description Human-readable title or file name
+             */
+            title: string;
+            /**
+             * Uri
+             * @description Relative path or URI for deep-linking
+             */
+            uri?: string | null;
+            /**
+             * Score
+             * @description Retrieval relevance score (0–1)
+             */
+            score: number;
+        } & {
             [key: string]: unknown;
         };
         /**
@@ -60471,7 +60946,7 @@ export interface components {
             /**
              * Codebase Path
              * @description Path to codebase to index
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10776
+             * @default /home/runner/work/AutoBot-AI/AutoBot-AI
              */
             codebase_path: string;
             /**
@@ -68494,6 +68969,37 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DeviceInitiateRequest */
+        DeviceInitiateRequest: {
+            /** Provider Name */
+            provider_name: string;
+            /** Device Authorization Url */
+            device_authorization_url: string;
+            /** Client Id */
+            client_id: string;
+            /**
+             * Scope
+             * @default openid
+             */
+            scope: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DeviceInitiateResponse */
+        DeviceInitiateResponse: {
+            /** Device Code */
+            device_code: string;
+            /** User Code */
+            user_code: string;
+            /** Verification Uri */
+            verification_uri: string;
+            /** Expires In */
+            expires_in: number;
+            /** Interval */
+            interval: number;
+        } & {
+            [key: string]: unknown;
+        };
         /** DeviceListResponse */
         DeviceListResponse: {
             /** Devices */
@@ -68506,6 +69012,19 @@ export interface components {
          * @enum {string}
          */
         DevicePlatform: "ios" | "android" | "pwa";
+        /** DevicePollRequest */
+        DevicePollRequest: {
+            /** Provider Name */
+            provider_name: string;
+            /** Token Url */
+            token_url: string;
+            /** Client Id */
+            client_id: string;
+            /** Device Code */
+            device_code: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** DeviceResponse */
         DeviceResponse: {
             /**
@@ -70195,6 +70714,32 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ExecRequest */
+        ExecRequest: {
+            /** Command */
+            command: string[] | string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ExecResponse */
+        ExecResponse: {
+            /** Success */
+            success: boolean;
+            /** Exit Code */
+            exit_code: number;
+            /** Stdout */
+            stdout: string;
+            /** Stderr */
+            stderr: string;
+            /** Execution Time */
+            execution_time: number;
+            /** Task Id */
+            task_id: string;
+            /** Security Blocked */
+            security_blocked: boolean;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * ExpandQueryResponse
          * @description Shape returned by POST /expand_query.
@@ -70699,6 +71244,21 @@ export interface components {
              * @description Position in top-k suggestions
              */
             completion_rank?: number | null;
+            /**
+             * Org Id
+             * @description Tenant/org identifier (#10545 preference scope)
+             */
+            org_id?: string | null;
+            /**
+             * Task Class
+             * @description Task class for preference scope, e.g. 'code-fix' (#10545)
+             */
+            task_class?: string | null;
+            /**
+             * Behavior
+             * @description Behavior judged: agent/skill/strategy tag (#10545)
+             */
+            behavior?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -71784,7 +72344,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI
+             * @default /opt/autobot
              */
             repo_path: string;
             /**
@@ -71813,7 +72373,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI
+             * @default /opt/autobot
              */
             repo_path: string;
             /**
@@ -71833,7 +72393,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI
+             * @default /opt/autobot
              */
             repo_path: string;
             /**
@@ -72065,7 +72625,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI
+             * @default /opt/autobot
              */
             repo_path: string;
             /**
@@ -72155,7 +72715,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI
+             * @default /opt/autobot
              */
             repo_path: string;
             /**
@@ -72175,7 +72735,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path (must be whitelisted)
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI
+             * @default /opt/autobot
              */
             repo_path: string;
             /**
@@ -72585,6 +73145,27 @@ export interface components {
             context?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GroundingStatus
+         * @description Grounding transparency marker attached to every assistant response (#10548).
+         *
+         *     ``grounded=True``  → citations[] is non-empty and comes from real retrieval.
+         *     ``grounded=False`` → model-only claim; no KB/graph evidence was found.
+         */
+        GroundingStatus: {
+            /**
+             * Grounded
+             * @description True when citations[] contains verified retrieval evidence
+             */
+            grounded: boolean;
+            /**
+             * Strategy
+             * @description Retrieval strategy used: 'rag' | 'cag' | 'kag' | None
+             */
+            strategy?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -74407,7 +74988,7 @@ export interface components {
              * Source Paths
              * @description Paths to populate from
              * @default [
-             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10776"
+             *       "/home/runner/work/AutoBot-AI/AutoBot-AI"
              *     ]
              */
             source_paths: string[];
@@ -78276,6 +78857,7 @@ export interface components {
             token?: string | null;
             /** Session Id */
             session_id?: string | null;
+            password_warning?: components["schemas"]["PasswordWarning"] | null;
         } & {
             [key: string]: unknown;
         };
@@ -81256,7 +81838,7 @@ export interface components {
          *       "name": "Primary NPU Worker",
          *       "platform": "linux",
          *       "priority": 8,
-         *       "url": "http://YOUR_BACKEND_IP:8081",
+         *       "url": "http://127.0.0.1:8081",
          *       "weight": 2
          *     }
          */
@@ -81320,7 +81902,7 @@ export interface components {
          *         "name": "Primary NPU Worker",
          *         "platform": "linux",
          *         "priority": 8,
-         *         "url": "http://YOUR_BACKEND_IP:8081",
+         *         "url": "http://127.0.0.1:8081",
          *         "weight": 2
          *       },
          *       "metrics": {
@@ -81666,6 +82248,36 @@ export interface components {
              * @default false
              */
             include_usage: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** OAuthInitiateRequest */
+        OAuthInitiateRequest: {
+            /** Provider Name */
+            provider_name: string;
+            /** Token Url */
+            token_url: string;
+            /** Client Id */
+            client_id: string;
+            /** Client Secret */
+            client_secret: string;
+            /** Code */
+            code: string;
+            /** Redirect Uri */
+            redirect_uri: string;
+            /** Code Verifier */
+            code_verifier: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** OAuthInitiateResponse */
+        OAuthInitiateResponse: {
+            /** Provider Name */
+            provider_name: string;
+            /** Stored */
+            stored: boolean;
+            /** Expires At */
+            expires_at?: number | null;
         } & {
             [key: string]: unknown;
         };
@@ -82512,6 +83124,25 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * PasswordWarning
+         * @description Non-blocking soft warning attached to a successful login response (#10199).
+         *
+         *     Presence of this field does NOT indicate an auth failure — the token is
+         *     still valid.  Clients should surface the ``reason`` as a nudge to the user
+         *     to update their password.
+         */
+        PasswordWarning: {
+            /**
+             * Weak
+             * @default true
+             */
+            weak: boolean;
+            /** Reason */
+            reason: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * PatternAnalysisRequest
          * @description Request model for pattern analysis.
          */
@@ -82519,7 +83150,7 @@ export interface components {
             /**
              * Path
              * @description Path to analyze (defaults to project root)
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10776
+             * @default /home/runner/work/AutoBot-AI/AutoBot-AI
              */
             path: string;
             /**
@@ -84935,6 +85566,19 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ProviderAuthStatus */
+        ProviderAuthStatus: {
+            /** Provider Name */
+            provider_name: string;
+            /** Connected */
+            connected: boolean;
+            /** Expires At */
+            expires_at?: number | null;
+            /** Auth Kind */
+            auth_kind?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * ProviderCredentialCreate
          * @description Request to create/update user provider credential.
@@ -86507,43 +87151,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * RestoreRequest
-         * @description Request model for restoring knowledge base from backup (Issue #419)
-         */
-        RestoreRequest: {
-            /**
-             * Backup File
-             * @description Path to backup file to restore
-             */
-            backup_file: string;
-            /**
-             * Overwrite Existing
-             * @description Overwrite existing facts with backup data
-             * @default false
-             */
-            overwrite_existing: boolean;
-            /**
-             * Skip Duplicates
-             * @description Skip facts that already exist
-             * @default true
-             */
-            skip_duplicates: boolean;
-            /**
-             * Restore Embeddings
-             * @description Restore vector embeddings if available
-             * @default true
-             */
-            restore_embeddings: boolean;
-            /**
-             * Dry Run
-             * @description Only validate backup, don't actually restore
-             * @default true
-             */
-            dry_run: boolean;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * RestoreSnapshotResponse
          * @description Response for POST /execution/snapshots/{id}/restore.
          */
@@ -87249,11 +87856,8 @@ export interface components {
             url: string;
             /** Useragent */
             userAgent: string;
-            /**
-             * Data
-             * @default {}
-             */
-            data: {
+            /** Data */
+            data?: {
                 [key: string]: unknown;
             };
         } & {
@@ -89052,7 +89656,7 @@ export interface components {
              * Scan Paths
              * @description Paths to scan
              * @default [
-             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10776"
+             *       "/home/runner/work/AutoBot-AI/AutoBot-AI"
              *     ]
              */
             scan_paths: string[];
@@ -90455,6 +91059,52 @@ export interface components {
          */
         SkillActivationLevel: "trusted" | "monitored" | "sandboxed" | "restricted";
         /**
+         * SkillBundleInstallResponse
+         * @description Response for POST /skills/bundles/{bundle_id}/enable (Issue #10540).
+         */
+        SkillBundleInstallResponse: {
+            /** Bundle Id */
+            bundle_id: string;
+            /** Enabled */
+            enabled: string[];
+            /** Skipped */
+            skipped: string[];
+            /** Failed */
+            failed: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SkillBundleResponse
+         * @description A single role-curated skill bundle returned by GET /skills/bundles.
+         */
+        SkillBundleResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Member Skill Ids */
+            member_skill_ids: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SkillBundlesListResponse
+         * @description Response for GET /skills/bundles (Issue #10540).
+         */
+        SkillBundlesListResponse: {
+            /** Bundles */
+            bundles: components["schemas"]["SkillBundleResponse"][];
+            /** Total */
+            total: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * SkillCatalogInstallData
          * @description Response data for POST /skills/catalog/{name}/install.
          */
@@ -90929,6 +91579,26 @@ export interface components {
              * @default
              */
             user_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** SnapshotRequest */
+        SnapshotRequest: {
+            /** Checkpoint Name */
+            checkpoint_name: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** SnapshotResponse */
+        SnapshotResponse: {
+            /** Task Id */
+            task_id: string;
+            /** Checkpoint Name */
+            checkpoint_name: string;
+            /** Image Tag */
+            image_tag: string;
+            /** Created At */
+            created_at: number;
         } & {
             [key: string]: unknown;
         };
@@ -92635,6 +93305,32 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * TaskAnswerRequest
+         * @description Request to deliver a human answer to a suspended ask_human() call (#10553).
+         *
+         *     Mirrors TaskSteeringRequest — delivers free-form or choice-constrained text
+         *     back to the awaiting loop via the answer inbox.
+         */
+        TaskAnswerRequest: {
+            /**
+             * Question Id
+             * @description UUID from the HUMAN_QUESTION event
+             */
+            question_id: string;
+            /**
+             * Answer
+             * @description Human's response (free-form or one of the choices)
+             */
+            answer: string;
+            /**
+             * Task Id
+             * @description Task ID (also available from URL path)
+             */
+            task_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * TaskApprovalLinkResponse
          * @description Response for a task-approval link.
          */
@@ -94026,7 +94722,7 @@ export interface components {
             /**
              * Test Path
              * @description Path to test directory
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-10776/autobot-backend
+             * @default /home/runner/work/AutoBot-AI/AutoBot-AI/autobot-backend
              */
             test_path: string;
             /**
@@ -97811,7 +98507,7 @@ export interface components {
          *       "total_tasks_completed": 42,
          *       "total_tasks_failed": 2,
          *       "uptime_seconds": 3600.5,
-         *       "url": "http://YOUR_NPU_WORKER_IP:8081",
+         *       "url": "http://127.0.0.1:8081",
          *       "worker_id": "windows_npu_worker_abc123"
          *     }
          */
@@ -98417,6 +99113,25 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** WorkspaceInfoResponse */
+        WorkspaceInfoResponse: {
+            /** Task Id */
+            task_id: string;
+            /** Container Id */
+            container_id: string;
+            /** Volume Name */
+            volume_name: string;
+            /** Image */
+            image: string;
+            /** Created At */
+            created_at: number;
+            /** Last Active */
+            last_active: number;
+            /** Checkpoint Tags */
+            checkpoint_tags: string[];
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * WriteFileRequest
          * @description Request model for writing files.
@@ -98589,6 +99304,43 @@ export interface components {
              * @default false
              */
             include_embeddings: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RestoreRequest
+         * @description Request model for restoring knowledge base from backup (Issue #419)
+         */
+        api__schemas_knowledge__RestoreRequest: {
+            /**
+             * Backup File
+             * @description Path to backup file to restore
+             */
+            backup_file: string;
+            /**
+             * Overwrite Existing
+             * @description Overwrite existing facts with backup data
+             * @default false
+             */
+            overwrite_existing: boolean;
+            /**
+             * Skip Duplicates
+             * @description Skip facts that already exist
+             * @default true
+             */
+            skip_duplicates: boolean;
+            /**
+             * Restore Embeddings
+             * @description Restore vector embeddings if available
+             * @default true
+             */
+            restore_embeddings: boolean;
+            /**
+             * Dry Run
+             * @description Only validate backup, don't actually restore
+             * @default true
+             */
+            dry_run: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -98892,6 +99644,13 @@ export interface components {
              * @description Registry id or name of the skill to install
              */
             skill_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** RestoreRequest */
+        api__task_workspace_ws__RestoreRequest: {
+            /** Checkpoint Name */
+            checkpoint_name: string;
         } & {
             [key: string]: unknown;
         };
@@ -106626,7 +107385,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["RestoreRequest"];
+                "application/json": components["schemas"]["api__schemas_knowledge__RestoreRequest"];
             };
         };
         responses: {
@@ -126791,7 +127550,7 @@ export interface operations {
             };
         };
     };
-    get_analytics_report_api_unified_report_get: {
+    get_analytics_report_api_reporting_report_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -126811,7 +127570,7 @@ export interface operations {
             };
         };
     };
-    get_quick_summary_api_unified_summary_get: {
+    get_quick_summary_api_reporting_summary_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -126831,7 +127590,7 @@ export interface operations {
             };
         };
     };
-    get_trends_api_unified_trends_get: {
+    get_trends_api_reporting_trends_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -133245,6 +134004,43 @@ export interface operations {
             };
         };
     };
+    answer_human_question_api_agent_terminal_tasks__task_id__answer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskAnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     interrupt_agent_session_api_agent_terminal_sessions__session_id__interrupt_post: {
         parameters: {
             query?: {
@@ -137411,6 +138207,165 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WhatsAppConfigResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_callback_api_api_llm_auth_oauth_callback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthInitiateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthInitiateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    device_initiate_api_api_llm_auth_device_initiate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceInitiateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceInitiateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    device_poll_api_api_llm_auth_device_poll_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevicePollRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthInitiateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    provider_auth_status_api_api_llm_auth_status__provider_name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderAuthStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_provider_auth_api_api_llm_auth__provider_name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -150351,7 +151306,7 @@ export interface operations {
             };
         };
     };
-    semantic_search_api_enhanced_search_semantic_post: {
+    semantic_search_api_npu_search_semantic_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -150384,7 +151339,7 @@ export interface operations {
             };
         };
     };
-    get_hardware_status_api_enhanced_search_hardware_status_get: {
+    get_hardware_status_api_npu_search_hardware_status_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -150404,7 +151359,7 @@ export interface operations {
             };
         };
     };
-    benchmark_search_performance_api_enhanced_search_benchmark_post: {
+    benchmark_search_performance_api_npu_search_benchmark_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -150437,7 +151392,7 @@ export interface operations {
             };
         };
     };
-    optimize_search_engine_api_enhanced_search_optimize_post: {
+    optimize_search_engine_api_npu_search_optimize_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -150470,7 +151425,7 @@ export interface operations {
             };
         };
     };
-    get_performance_analytics_api_enhanced_search_performance_analytics_get: {
+    get_performance_analytics_api_npu_search_performance_analytics_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -150490,7 +151445,7 @@ export interface operations {
             };
         };
     };
-    test_npu_connectivity_api_enhanced_search_test_connectivity_get: {
+    test_npu_connectivity_api_npu_search_test_connectivity_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -150510,7 +151465,7 @@ export interface operations {
             };
         };
     };
-    get_memory_statistics_api_enhanced_memory_statistics_get: {
+    get_memory_statistics_api_task_memory_statistics_get: {
         parameters: {
             query?: {
                 days_back?: number;
@@ -150541,7 +151496,7 @@ export interface operations {
             };
         };
     };
-    get_task_history_api_enhanced_memory_tasks_history_get: {
+    get_task_history_api_task_memory_tasks_history_get: {
         parameters: {
             query?: {
                 agent_type?: string | null;
@@ -150575,7 +151530,7 @@ export interface operations {
             };
         };
     };
-    create_task_api_enhanced_memory_tasks_post: {
+    create_task_api_task_memory_tasks_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -150608,7 +151563,7 @@ export interface operations {
             };
         };
     };
-    update_task_api_enhanced_memory_tasks__task_id__put: {
+    update_task_api_task_memory_tasks__task_id__put: {
         parameters: {
             query?: never;
             header?: never;
@@ -150643,7 +151598,7 @@ export interface operations {
             };
         };
     };
-    add_markdown_reference_api_enhanced_memory_tasks__task_id__markdown_reference_post: {
+    add_markdown_reference_api_task_memory_tasks__task_id__markdown_reference_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -150678,7 +151633,7 @@ export interface operations {
             };
         };
     };
-    scan_markdown_system_api_enhanced_memory_markdown_scan_get: {
+    scan_markdown_system_api_task_memory_markdown_scan_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -150698,7 +151653,7 @@ export interface operations {
             };
         };
     };
-    search_markdown_api_enhanced_memory_markdown_search_get: {
+    search_markdown_api_task_memory_markdown_search_get: {
         parameters: {
             query: {
                 query: string;
@@ -150732,7 +151687,7 @@ export interface operations {
             };
         };
     };
-    get_document_references_api_enhanced_memory_markdown__file_path__references_get: {
+    get_document_references_api_task_memory_markdown__file_path__references_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -150763,7 +151718,7 @@ export interface operations {
             };
         };
     };
-    get_embedding_cache_stats_api_enhanced_memory_embeddings_cache_stats_get: {
+    get_embedding_cache_stats_api_task_memory_embeddings_cache_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -150783,7 +151738,7 @@ export interface operations {
             };
         };
     };
-    cleanup_old_data_api_enhanced_memory_cleanup_delete: {
+    cleanup_old_data_api_task_memory_cleanup_delete: {
         parameters: {
             query?: {
                 days_to_keep?: number;
@@ -150814,7 +151769,7 @@ export interface operations {
             };
         };
     };
-    get_active_tasks_api_enhanced_memory_active_tasks_get: {
+    get_active_tasks_api_task_memory_active_tasks_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -152371,6 +153326,224 @@ export interface operations {
             };
         };
     };
+    create_workspace_api_workspace_tasks__task_id__create_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceInfoResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workspace_api_workspace_tasks__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceInfoResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    destroy_workspace_api_workspace_tasks__task_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    exec_command_api_workspace_tasks__task_id__exec_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExecRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    snapshot_workspace_api_workspace_tasks__task_id__snapshot_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnapshotRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnapshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_workspace_api_workspace_tasks__task_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["api__task_workspace_ws__RestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceInfoResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workspace_stats_api_workspace_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     start_codebase_indexing_api_long_running_codebase_index_post: {
         parameters: {
             query?: never;
@@ -153853,7 +155026,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["RestoreRequest"];
+                "application/json": components["schemas"]["api__schemas_knowledge__RestoreRequest"];
             };
         };
         responses: {
@@ -157855,6 +159028,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_SkillCatalogInstallData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_skill_bundles_api_skills_bundles_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillBundlesListResponse"];
+                };
+            };
+        };
+    };
+    enable_skill_bundle_api_skills_bundles__bundle_id__enable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bundle_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillBundleInstallResponse"];
                 };
             };
             /** @description Validation Error */
@@ -167977,6 +169201,182 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_memories_api_memory_privacy_list_get: {
+        parameters: {
+            query?: {
+                /** @description Admin only: inspect another user */
+                target_user_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forget_everywhere_api_memory_privacy_forget_everywhere__memory_id__delete: {
+        parameters: {
+            query?: {
+                target_user_id?: string | null;
+            };
+            header?: never;
+            path: {
+                memory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    amend_memory_api_memory_privacy__store___memory_id__put: {
+        parameters: {
+            query?: {
+                target_user_id?: string | null;
+            };
+            header?: never;
+            path: {
+                store: string;
+                memory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AmendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forget_from_store_api_memory_privacy__store___memory_id__delete: {
+        parameters: {
+            query?: {
+                target_user_id?: string | null;
+            };
+            header?: never;
+            path: {
+                store: string;
+                memory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_memory_api_memory_privacy_export_get: {
+        parameters: {
+            query?: {
+                target_user_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

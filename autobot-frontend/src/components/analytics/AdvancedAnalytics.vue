@@ -244,7 +244,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(feature, idx) in (engagementMetrics.feature_popularity as any[])" :key="feature.feature">
+            <tr v-for="(feature, idx) in engagementMetrics.feature_popularity" :key="feature.feature">
               <td>
                 <span class="rank-badge" :class="'rank-' + ((idx as number) + 1)">{{ (idx as number) + 1 }}</span>
                 {{ feature.feature }}
@@ -271,7 +271,7 @@
         </template>
         <div class="peak-hours-list">
           <div
-            v-for="(peak, idx) in (usageHeatmap.peak_hours as any[])"
+            v-for="(peak, idx) in usageHeatmap.peak_hours"
             :key="peak.hour"
             class="peak-hour-item"
           >
@@ -337,8 +337,105 @@ const logger = createLogger('AdvancedAnalytics')
 
 // Issue #701: Type for API response with data property
 interface ApiDataResponse {
-  data?: any
-  [key: string]: any
+  data?: unknown
+  [key: string]: unknown
+}
+
+// Domain shapes for analytics responses (fields consumed by the template)
+interface CostSummary {
+  total_cost_usd?: number
+  avg_daily_cost?: number
+}
+
+interface CostTrends {
+  trend?: string
+  growth_rate_percent?: number
+}
+
+interface ModelCost {
+  model: string
+  cost_usd?: number
+  input_tokens: number
+  output_tokens: number
+  call_count: number
+}
+
+interface ModelCostsData {
+  models?: ModelCost[]
+}
+
+interface AgentPerformance {
+  agent_id: string
+  agent_type?: string
+  total_tasks?: number
+  success_rate: number
+  error_rate: number
+  avg_duration_ms: number
+}
+
+interface AgentMetrics {
+  total_agents?: number
+  summary?: {
+    total_tasks?: number
+    avg_success_rate?: number
+  }
+  agents?: AgentPerformance[]
+}
+
+interface AgentRecommendationDetail {
+  severity: string
+  message: string
+  suggestion: string
+}
+
+interface AgentRecommendation {
+  agent_id: string
+  agent_type?: string
+  recommendations: AgentRecommendationDetail[]
+}
+
+interface Recommendations {
+  recommendations?: AgentRecommendation[]
+}
+
+interface ExportEndpoint {
+  path: string
+  description: string
+}
+
+interface ExportFormat {
+  format: string
+  description: string
+  icon: IconName
+  endpoints: ExportEndpoint[]
+}
+
+interface ExportFormatsData {
+  formats?: ExportFormat[]
+}
+
+interface EngagementMetricsData {
+  metrics?: {
+    total_sessions?: number
+    total_page_views?: number
+    avg_session_duration_ms?: number
+    pages_per_session?: number
+  }
+  feature_popularity?: FeaturePopularity[]
+}
+
+interface FeaturePopularity {
+  feature: string
+  views: number
+}
+
+interface PeakHour {
+  hour: number
+  total_events: number
+}
+
+interface UsageHeatmap {
+  peak_hours?: PeakHour[]
 }
 
 // State
@@ -347,15 +444,15 @@ const activeTab = ref('cost')
 const showExportModal = ref(false)
 
 // Data
-const costSummary = ref<any>(null)
-const costTrends = ref<any>(null)
-const modelCosts = ref<any[]>([])
-const agentMetrics = ref<any>(null)
-const recommendations = ref<any>(null)
-const exportFormats = ref<any[]>([])
-const behaviorMetrics = ref<any>(null)
-const engagementMetrics = ref<any>(null)
-const usageHeatmap = ref<any>(null)
+const costSummary = ref<CostSummary | null>(null)
+const costTrends = ref<CostTrends | null>(null)
+const modelCosts = ref<ModelCost[]>([])
+const agentMetrics = ref<AgentMetrics | null>(null)
+const recommendations = ref<Recommendations | null>(null)
+const exportFormats = ref<ExportFormat[]>([])
+const behaviorMetrics = ref<unknown>(null)
+const engagementMetrics = ref<EngagementMetricsData | null>(null)
+const usageHeatmap = ref<UsageHeatmap | null>(null)
 
 // Tabs configuration
 const tabs = computed(() => [
@@ -419,9 +516,9 @@ const fetchCostData = async () => {
       api.get<ApiDataResponse>(`${getApiBase()}/analytics/cost/trends`),
       api.get<ApiDataResponse>(`${getApiBase()}/analytics/cost/by-model`)
     ])
-    costSummary.value = (summaryRes as ApiDataResponse).data
-    costTrends.value = (trendsRes as ApiDataResponse).data
-    modelCosts.value = (modelsRes as ApiDataResponse).data?.models || []
+    costSummary.value = (summaryRes as ApiDataResponse).data as CostSummary | null
+    costTrends.value = (trendsRes as ApiDataResponse).data as CostTrends | null
+    modelCosts.value = ((modelsRes as ApiDataResponse).data as ModelCostsData | undefined)?.models || []
   } catch (error) {
     logger.error('Failed to fetch cost data:', error)
   }
@@ -435,8 +532,8 @@ const fetchAgentData = async () => {
       api.get<ApiDataResponse>(`${getApiBase()}/analytics/agents/performance`),
       api.get<ApiDataResponse>(`${getApiBase()}/analytics/agents/recommendations`)
     ])
-    agentMetrics.value = (metricsRes as ApiDataResponse).data
-    recommendations.value = (recsRes as ApiDataResponse).data
+    agentMetrics.value = (metricsRes as ApiDataResponse).data as AgentMetrics | null
+    recommendations.value = (recsRes as ApiDataResponse).data as Recommendations | null
   } catch (error) {
     logger.error('Failed to fetch agent data:', error)
   }
@@ -447,9 +544,9 @@ const fetchExportFormats = async () => {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertion for response
     const res = await api.get<ApiDataResponse>(`${getApiBase()}/analytics/export/formats`)
-    exportFormats.value = (res as ApiDataResponse).data?.formats || []
+    exportFormats.value = ((res as ApiDataResponse).data as ExportFormatsData | undefined)?.formats || []
     // Add icons
-    exportFormats.value.forEach((f: any) => {
+    exportFormats.value.forEach((f: ExportFormat) => {
       if (f.format === 'CSV') f.icon = 'file-csv'
       else if (f.format === 'JSON') f.icon = 'file-code'
       else if (f.format === 'Prometheus') f.icon = 'chart-area'
@@ -470,9 +567,9 @@ const fetchBehaviorData = async () => {
       api.get<ApiDataResponse>(`${getApiBase()}/analytics/behavior/features`),
       api.get<ApiDataResponse>(`${getApiBase()}/analytics/behavior/stats/heatmap`)
     ])
-    engagementMetrics.value = (engagementRes as ApiDataResponse).data
+    engagementMetrics.value = (engagementRes as ApiDataResponse).data as EngagementMetricsData | null
     behaviorMetrics.value = (featuresRes as ApiDataResponse).data
-    usageHeatmap.value = (heatmapRes as ApiDataResponse).data
+    usageHeatmap.value = (heatmapRes as ApiDataResponse).data as UsageHeatmap | null
   } catch (error) {
     logger.error('Failed to fetch behavior data:', error)
   }
@@ -480,7 +577,7 @@ const fetchBehaviorData = async () => {
 
 const maxFeatureViews = computed((): number => {
   if (!engagementMetrics.value?.feature_popularity?.length) return 0
-  return Math.max(...engagementMetrics.value.feature_popularity.map((f: any) => f.views || 0))
+  return Math.max(...engagementMetrics.value.feature_popularity.map((f: FeaturePopularity) => f.views || 0))
 })
 
 const getPopularityWidth = (views: number): string => {
