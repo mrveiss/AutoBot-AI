@@ -431,6 +431,7 @@ def _make_mock_proc(lines: list[str]) -> MagicMock:
 
 # --- Security hardening (#10550 security review) ---------------------------------
 
+
 def test_protected_env_keys_block_credential_override():
     """task.env_vars must NOT override ANTHROPIC_API_KEY / loader / PATH vars."""
     from services.execution.claude_code_backend import _PROTECTED_ENV_KEYS
