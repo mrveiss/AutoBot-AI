@@ -17,6 +17,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import LLMDefaults
+from llm_shared.types import LLMType
 
 from .topology import AgentTopology, InMemoryTopologyDB
 from .topology_routing import TopologyAwareRouter
@@ -311,7 +312,7 @@ class AgentRouter:
 
             response = await self.llm_interface.chat_completion(
                 messages=messages,
-                llm_type="orchestrator",
+                llm_type=LLMType.ORCHESTRATOR,
                 temperature=0.3,  # Lower temperature for consistent routing
                 max_tokens=LLMDefaults.CHAT_MAX_TOKENS,
                 top_p=0.8,

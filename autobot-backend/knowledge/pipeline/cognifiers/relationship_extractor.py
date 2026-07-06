@@ -22,6 +22,7 @@ from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.relationship import Relationship, RelationType
 from knowledge.pipeline.registry import TaskRegistry
+from llm_shared.types import LLMType
 from services.llm_service import get_llm_service
 
 logger = get_logger(__name__)
@@ -249,7 +250,7 @@ class RelationshipExtractor(BaseCognifier):
         prompt = RELATIONSHIP_EXTRACTION_PROMPT.format(entities=entity_list, text=chunk.content)
         try:
             response = await self.llm.chat(
-                [{"role": "user", "content": prompt}], llm_type="extraction", structured_output=True
+                [{"role": "user", "content": prompt}], llm_type=LLMType.EXTRACTION, structured_output=True
             )
         except Exception as e:
             logger.error("Relationship extraction LLM call failed (transient): %s", e)
