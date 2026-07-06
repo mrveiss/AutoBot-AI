@@ -420,7 +420,7 @@
 <script lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import type { Ref } from 'vue'
-import type { AutomationResults, SearchData, TestData, MessageData } from '@/types/browser'
+import type { AutomationResults, SearchData, TestData, TestResult, MessageData, TestStep } from '@/types/browser'
 import appConfig from '@/config/AppConfig.js'
 import { useBrowserSessionData } from '@/composables/desktop/useBrowserSessionData'
 import type { PlaywrightNavigationResponse, PageRegion, SnapshotWithRegionsResult } from '@/composables/desktop/useBrowserSessionData'
@@ -443,6 +443,24 @@ interface ConsoleLogEntry {
   timestamp: string
   level: string
   message: string
+}
+
+interface PopoutBrowserProps {
+  sessionId: string
+  initialUrl: string
+  canResize: boolean
+  autoPopout: boolean
+}
+
+type PopoutBrowserEmit = (event: 'close' | 'navigate' | 'interact' | 'popout' | 'dock', ...args: unknown[]) => void
+
+// Minimal shape of an Electron <webview> element (only the methods this component calls)
+interface WebviewElement {
+  canGoBack(): boolean
+  canGoForward(): boolean
+  goBack(): void
+  goForward(): void
+  reload(): void
 }
 
 export default {
@@ -475,7 +493,7 @@ export default {
     }
   },
   emits: ['close', 'navigate', 'interact', 'popout', 'dock'],
-  setup(props: any, { emit }: any) {
+  setup(props: PopoutBrowserProps, { emit }: { emit: PopoutBrowserEmit }) {
     // Browser session data composable (replaces inline fetchWithAuth/apiClient calls)
     const browserApi = useBrowserSessionData()
 
@@ -525,7 +543,7 @@ export default {
 
     // Refs
     const vncIframe: Ref<HTMLIFrameElement | null> = ref(null)
-    const webview: Ref<any | null> = ref(null)
+    const webview: Ref<WebviewElement | null> = ref(null)
     const remoteIframe: Ref<HTMLIFrameElement | null> = ref(null)
 
     // Region-marking state (#5136 / #6446) — snapshot-with-regions wire-in
@@ -792,7 +810,7 @@ export default {
         onSuccess: (data) => {
           if (data) {
             automationResults.value.lastSearch = data as unknown as SearchData
-            addConsoleLog('info', `Search completed: ${(data as any).results?.length || 0} results found`)
+            addConsoleLog('info', `Search completed: ${(data as SearchData).results?.length || 0} results found`)
           }
         },
         onError: (error) => {
@@ -813,8 +831,8 @@ export default {
       {
         onSuccess: (data) => {
           if (data) {
-            const tests = (data as any).tests
-            const passed = tests?.filter((t: any) => t.status === 'PASS').length || 0
+            const tests = (data as TestData).tests
+            const passed = tests?.filter((t: TestResult) => t.status === 'PASS').length || 0
             const total = tests?.length || 0
 
             automationResults.value.lastTest = { passed, total, data } as TestData
@@ -840,8 +858,8 @@ export default {
         onSuccess: (data) => {
           if (data) {
             automationResults.value.lastMessage = data as unknown as MessageData
-            const steps = (data as any).steps
-            const successSteps = steps?.filter((s: any) => s.status === 'SUCCESS').length || 0
+            const steps = (data as MessageData).steps
+            const successSteps = steps?.filter((s: TestStep) => s.status === 'SUCCESS').length || 0
             addConsoleLog('info', `Test message completed: ${successSteps} steps successful`)
           }
         },
@@ -991,7 +1009,7 @@ export default {
       browserStatus.value = 'connected'
     }
 
-    const handlePlaywrightError = (error: any) => {
+    const handlePlaywrightError = (error: Error) => {
       logger.error('Playwright connection error:', error)
       browserStatus.value = 'error'
       addConsoleLog('error', `Playwright connection failed: ${error.message || error}`)
@@ -1008,7 +1026,7 @@ export default {
       browserStatus.value = 'ready'
     }
 
-    const handleSessionError = (error: any) => {
+    const handleSessionError = (error: Error) => {
       logger.error('Session initialization error:', error)
       loading.value = false
       browserStatus.value = 'error'
