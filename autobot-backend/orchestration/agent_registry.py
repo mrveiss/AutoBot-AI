@@ -12,6 +12,7 @@ Contains agent registration, lookup, and management functionality.
 from typing import Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.tool_catalogue import INFRA_AND_SHELL_TOOLS
 
 from .types import AgentCapability, AgentProfile
 
@@ -20,19 +21,8 @@ logger = get_logger(__name__)
 
 # GH#11139: infra/shell tools that non-executor agents may not invoke. The system
 # agent is the designated executor and is intentionally excluded from this boundary.
-_INFRA_AND_SHELL_TOOLS: List[str] = [
-    "bash",
-    "shell",
-    "execute_command",
-    "run_command",
-    "system_exec",
-    "deploy",
-    "ansible",
-    "docker",
-    "kubectl",
-    "helm",
-    "terraform",
-]
+# GH#11206: composed from the canonical tool catalogue (SSOT).
+_INFRA_AND_SHELL_TOOLS: List[str] = list(INFRA_AND_SHELL_TOOLS)
 
 
 def _create_research_agent() -> AgentProfile:

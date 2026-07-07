@@ -49,6 +49,7 @@ from autobot_shared.error_boundaries import (
     classify_error,
 )
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.tool_catalogue import SENSITIVE_TOOLS
 from autobot_shared.tracing import step_span
 from events import EventStreamManager, EventType
 from events.bus import PersistStrategy
@@ -74,49 +75,9 @@ logger = get_logger(__name__)
 # Approval Workflow – Sensitive Tool Classification (Issue #4092)
 # =============================================================================
 
-#: Tools that require explicit user approval before execution.
-#: Covers file modifications, system commands, and deployment operations.
-SENSITIVE_TOOLS: frozenset[str] = frozenset(
-    {
-        # File & filesystem mutations
-        "write_file",
-        "edit_file",
-        "delete_file",
-        "move_file",
-        "copy_file",
-        "create_directory",
-        "remove_directory",
-        # Shell / system commands
-        "bash",
-        "shell",
-        "execute_command",
-        "run_command",
-        "terminal",
-        "system_exec",
-        # Deployment / infrastructure
-        "deploy",
-        "ansible",
-        "docker",
-        "kubectl",
-        "helm",
-        "terraform",
-        # Git mutations (write-side)
-        "git_push",
-        "git_commit",
-        "git_merge",
-        "git_rebase",
-        "git_reset",
-        "git_force_push",
-        # Network / HTTP mutations
-        "http_post",
-        "http_put",
-        "http_patch",
-        "http_delete",
-        "send_request",
-        # Code execution
-        "code_interpreter",
-    }
-)
+#: Tools that require explicit user approval before execution (file/system/deploy/
+#: git/http mutations + code execution). GH#11206: composed from the canonical
+#: tool catalogue (SSOT) — imported at module top as ``SENSITIVE_TOOLS``.
 
 # =============================================================================
 # Repetition-Halt Guard (Issue #3859, #3862, #3877)
