@@ -262,6 +262,20 @@ class AgentLoopConfig:
     log_tool_results: bool = True  # Log tool execution results
     emit_progress_events: bool = True  # Emit progress to event stream
 
+    @classmethod
+    def with_guard_profile(cls, **overrides: object) -> "AgentLoopConfig":
+        """Build a config with guard fields resolved from ``AUTOBOT_GUARD_PROFILE`` (GH#11150).
+
+        Profile + per-guard env vars set the discretionary guard defaults;
+        explicit ``**overrides`` win over both. The default profile (``standard``)
+        yields the same values as ``AgentLoopConfig()``.
+        """
+        from agent_loop.guard_profile import resolve_guard_config_overrides
+
+        merged = resolve_guard_config_overrides()
+        merged.update(overrides)
+        return cls(**merged)  # type: ignore[arg-type]
+
 
 # =============================================================================
 # Message Types (Manus Pattern)

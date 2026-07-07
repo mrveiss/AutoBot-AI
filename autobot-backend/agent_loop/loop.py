@@ -170,7 +170,11 @@ class AgentLoop:
         self.tool_executor = tool_executor
         self.think_tool = think_tool or ThinkTool()
         self.agent_id = agent_id
-        self.config = self._resolve_forbidden_tools(config or AgentLoopConfig(), agent_id)
+        # GH#11150: when no explicit config is supplied, resolve the discretionary
+        # guard defaults from AUTOBOT_GUARD_PROFILE (standard == today's defaults).
+        # An explicitly-passed config is respected as-is — the caller owns it.
+        base_config = config if config is not None else AgentLoopConfig.with_guard_profile()
+        self.config = self._resolve_forbidden_tools(base_config, agent_id)
         self._belief_updater = BeliefStateUpdater(
             contradiction_surface_threshold=self.config.contradiction_surface_threshold
         )
