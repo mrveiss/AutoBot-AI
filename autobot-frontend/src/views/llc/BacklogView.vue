@@ -93,13 +93,11 @@
               <span class="item-identifier">{{ item.identifier }}</span>
             </td>
             <td class="col-type">
-              <span class="type-badge" :class="`type-${item.type}`">{{ workItemTypeLabel(item.type) }}</span>
+              <WorkItemBadge kind="type" :value="item.type" />
             </td>
             <td class="col-title">{{ item.title }}</td>
             <td class="col-priority">
-              <span class="priority-badge" :class="`priority-${item.priority}`">
-                {{ priorityLabel(item.priority) }}
-              </span>
+              <WorkItemBadge kind="priority" :value="item.priority" />
             </td>
             <td class="col-points">{{ item.story_points ?? '—' }}</td>
             <td class="col-assignee">
@@ -220,16 +218,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
+import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 
 const logger = createLogger('BacklogView')
 const api = useApiClient()
 const route = useRoute()
 const { t } = useI18n()
-const { workItemTypeLabel, priorityLabel } = useWorkItemLabels()
 
 const companyId = computed(() => route.params.companyId as string)
 
@@ -541,30 +538,6 @@ onMounted(fetchBacklog)
   font-size: 0.8rem;
   color: var(--text-secondary, #6b7280);
 }
-
-.type-badge,
-.priority-badge {
-  display: inline-block;
-  padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-transform: capitalize;
-}
-
-.type-epic { background: #ddd6fe; color: #5b21b6; }
-.type-feature { background: #bfdbfe; color: #1d4ed8; }
-.type-pbi { background: #d1fae5; color: #065f46; }
-.type-task { background: #e0f2fe; color: #0369a1; }
-.type-bug { background: #fee2e2; color: #991b1b; }
-.type-spike { background: #fef3c7; color: #92400e; }
-.type-subtask { background: #f3f4f6; color: #374151; }
-.type-risk { background: #fce7f3; color: #9d174d; }
-
-.priority-critical { background: #fee2e2; color: #991b1b; }
-.priority-high { background: #ffedd5; color: #9a3412; }
-.priority-medium { background: #fef9c3; color: #713f12; }
-.priority-low { background: #f0fdf4; color: #14532d; }
 
 .assignee-avatar {
   display: inline-flex;

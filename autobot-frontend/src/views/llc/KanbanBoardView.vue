@@ -123,6 +123,7 @@ import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
+import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('KanbanBoardView')
@@ -249,14 +250,14 @@ const KanbanCard = defineComponent({
     return () => h('div', { class: 'kanban-card-inner' }, [
       h('div', { class: 'card-header-row' }, [
         h('span', { class: 'card-id' }, props.item.identifier),
-        h('span', { class: `card-type type-${props.item.type}` }, props.item.type),
+        h(WorkItemBadge, { kind: 'type', value: props.item.type, size: 'xs' }),
         props.item.linked_pr_urls?.length
           ? h('span', { class: 'pr-badge', title: t('llc.kanban.prLinked', { count: props.item.linked_pr_urls.length }) }, '🔗')
           : null,
       ]),
       h('p', { class: 'card-title' }, props.item.title),
       h('div', { class: 'card-footer-row' }, [
-        h('span', { class: `priority-dot priority-${props.item.priority}`, title: props.item.priority }),
+        h(WorkItemBadge, { kind: 'priority', value: props.item.priority, variant: 'dot', size: 'xs' }),
         props.item.story_points ? h('span', { class: 'card-pts' }, String(props.item.story_points)) : null,
         props.item.assignee_name
           ? h('span', { class: 'card-avatar', title: props.item.assignee_name }, initials(props.item.assignee_name))
@@ -449,14 +450,6 @@ onUnmounted(() => ws?.close())
   color: var(--text-secondary, #9ca3af);
 }
 
-.card-type {
-  font-size: 0.6rem;
-  padding: 0.1rem 0.35rem;
-  border-radius: 9999px;
-  font-weight: 500;
-  text-transform: capitalize;
-}
-
 .pr-badge {
   font-size: 0.7rem;
   cursor: help;
@@ -467,15 +460,6 @@ onUnmounted(() => ws?.close())
 .pr-badge:hover {
   opacity: 1;
 }
-
-.type-epic { background: #ddd6fe; color: #5b21b6; }
-.type-feature { background: #bfdbfe; color: #1d4ed8; }
-.type-pbi { background: #d1fae5; color: #065f46; }
-.type-task { background: #e0f2fe; color: #0369a1; }
-.type-bug { background: #fee2e2; color: #991b1b; }
-.type-spike { background: #fef3c7; color: #92400e; }
-.type-subtask { background: #f3f4f6; color: #374151; }
-.type-risk { background: #fce7f3; color: #9d174d; }
 
 .card-title {
   margin: 0;
@@ -488,18 +472,6 @@ onUnmounted(() => ws?.close())
   align-items: center;
   gap: 0.375rem;
 }
-
-.priority-dot {
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.priority-critical { background: #ef4444; }
-.priority-high { background: #f97316; }
-.priority-medium { background: #eab308; }
-.priority-low { background: #22c55e; }
 
 .card-pts {
   font-size: 0.65rem;
