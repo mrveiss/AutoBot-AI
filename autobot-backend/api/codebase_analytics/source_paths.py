@@ -1,6 +1,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """Shared path constants and helpers for code-source clone directories (#11129)."""
+
 from pathlib import Path
 
 CODE_SOURCES_BASE: Path = Path("/opt/autobot/data/code-sources")

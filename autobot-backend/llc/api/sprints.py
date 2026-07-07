@@ -580,13 +580,17 @@ async def list_projects_with_repos(
 ) -> List[ProjectResponse]:
     """Return all projects in the caller's org that have a code source linked (#11129)."""
     rows = (
-        await session.execute(
-            select(LLCProject).where(
-                LLCProject.company_id == ctx.org_id,
-                LLCProject.code_source_id.isnot(None),
+        (
+            await session.execute(
+                select(LLCProject).where(
+                    LLCProject.company_id == ctx.org_id,
+                    LLCProject.code_source_id.isnot(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     out: List[ProjectResponse] = []
     for p in rows:
         resp = ProjectResponse.model_validate(p)

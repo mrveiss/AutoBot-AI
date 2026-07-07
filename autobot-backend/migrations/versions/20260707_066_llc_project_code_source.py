@@ -1,6 +1,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """llc project code_source link (#11129)."""
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa

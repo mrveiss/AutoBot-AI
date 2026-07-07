@@ -11,7 +11,6 @@ Covers:
 """
 
 import pytest
-from httpx import ASGITransport, AsyncClient
 
 # fixtures: llc_client, a_project, a_project_with_repo — declared in conftest.py
 

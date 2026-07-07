@@ -256,8 +256,9 @@ def _build_llc_app(
     project_with_repo: MagicMock | None,
 ):
     """Build a FastAPI app wired to the sprints router with mocked dependencies."""
-    from api.user_management.dependencies import get_current_user, require_org_context  # noqa: PLC0415
     from fastapi import FastAPI  # noqa: PLC0415
+
+    from api.user_management.dependencies import get_current_user, require_org_context  # noqa: PLC0415
     from llc.api.sprints import router as sprints_router  # noqa: PLC0415
     from llc.deps import get_session  # noqa: PLC0415
     from user_management.services import TenantContext  # noqa: PLC0415
@@ -281,9 +282,7 @@ def _build_llc_app(
 
     async def _execute(stmt, *args, **kwargs):
         result = MagicMock()
-        froms = (
-            stmt.get_final_froms() if hasattr(stmt, "get_final_froms") else (getattr(stmt, "froms", None) or [])
-        )
+        froms = stmt.get_final_froms() if hasattr(stmt, "get_final_froms") else (getattr(stmt, "froms", None) or [])
         entity = None
         is_list = False
         if froms:

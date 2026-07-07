@@ -14,6 +14,7 @@ active in the session — so an import-based test is order-dependent and flaky i
 full suite. A source-level check catches exactly the stale-import regression without
 that fragility.
 """
+
 import ast
 from pathlib import Path
 

@@ -23,7 +23,6 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
 from .. import source_service
-from ..source_paths import CODE_SOURCES_BASE, make_clone_path
 from ..source_models import (
     CodeSource,
     CodeSourceCreateRequest,
@@ -32,6 +31,7 @@ from ..source_models import (
     SourceStatus,
     SourceSyncResponse,
 )
+from ..source_paths import CODE_SOURCES_BASE, make_clone_path
 from ..source_storage import delete_source, get_source, list_sources, save_source
 
 logger = get_logger(__name__)
