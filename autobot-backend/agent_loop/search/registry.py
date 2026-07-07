@@ -127,6 +127,11 @@ def _populate_default_providers(registry: SearchProviderRegistry) -> None:
     else:
         logger.debug("BRAVE_SEARCH_API_KEY not set — Brave search provider not registered")
 
+    from agent_loop.search.content_reach_provider import ContentReachSearchProvider
+
+    registry.register(ContentReachSearchProvider())
+    logger.debug("Registered content_reach as fallback web-search provider")
+
 
 def get_search_registry() -> SearchProviderRegistry:
     """Return the process-wide registry, populating it on first use."""

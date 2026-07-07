@@ -105,3 +105,43 @@ def test_register_dedupes_fallback_chain():
     registry.register(_StubProvider("brave"))
     registry.register(_StubProvider("brave"))
     assert registry.list_providers() == ["brave"]
+
+
+def test_populate_default_providers_registers_content_reach_without_creds(monkeypatch):
+    """content_reach must appear in the fallback chain even when no API keys are set."""
+    import sys
+    import types
+    from unittest.mock import MagicMock, patch
+
+    from agent_loop.search.registry import SearchProviderRegistry, _populate_default_providers
+
+    # Stub ssot_config so no Brave / SearXNG keys are set.
+    fake_config = MagicMock()
+    fake_config.searxng_instance_url = ""
+    fake_config.brave_search_api_key = ""
+
+    # Ensure autobot_shared.ssot_config exposes our fake config.
+    ssot_mod = sys.modules.get("autobot_shared.ssot_config")
+    if ssot_mod is None:
+        ssot_mod = types.ModuleType("autobot_shared.ssot_config")
+        sys.modules["autobot_shared.ssot_config"] = ssot_mod
+    original_config = getattr(ssot_mod, "config", None)
+    ssot_mod.config = fake_config  # type: ignore[attr-defined]
+
+    # Stub content_reach imports so the test stays fully offline.
+    stub_cr_registry = MagicMock()
+    stub_cr_registry.get_chain = MagicMock(return_value=MagicMock())
+
+    try:
+        with patch("content_reach.registry.get_content_source_registry", return_value=stub_cr_registry):
+            registry = SearchProviderRegistry()
+            _populate_default_providers(registry)
+    finally:
+        if original_config is not None:
+            ssot_mod.config = original_config  # type: ignore[attr-defined]
+        else:
+            del ssot_mod.config  # type: ignore[attr-defined]
+
+    assert "content_reach" in registry.list_providers()
+    # No SearXNG or Brave keys → only content_reach registered.
+    assert registry.list_providers() == ["content_reach"]

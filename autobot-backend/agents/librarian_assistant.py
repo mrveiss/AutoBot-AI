@@ -90,74 +90,51 @@ class LibrarianAssistant:
             logger.error("Cannot reach Playwright service: %s", e)
             return False
 
-    async def _execute_search_request(
-        self,
-        query: str,
-        search_engine: str,
-        progress_callback: Callable | None,
-    ) -> List[Dict[str, Any]]:
-        """POST to Playwright /search and emit result_found events. Issue #1256.
-
-        Returns top search results or empty list on failure.
-        """
-        payload = {"query": query, "search_engine": search_engine}
-        async with await self.http_client.post(f"{self.playwright_service_url}/search", json=payload) as response:
-            if response.status != 200:
-                logger.error("Search request failed: status %s", response.status)
-                return []
-
-            result = await response.json()
-
-            if not result.get("success"):
-                logger.error("Search failed: %s", result.get("error", "Unknown error"))
-                return []
-
-            results = result.get("results", [])
-            logger.info("Found %s search results", len(results))
-            top_results = results[: self.max_search_results]
-            for item in top_results:
-                await self._emit(
-                    progress_callback,
-                    {
-                        "event": "research:result_found",
-                        "url": item.get("url", ""),
-                        "title": item.get("title", ""),
-                        "snippet": item.get("snippet", "")[:300],
-                    },
-                )
-            return top_results
-
     async def search_web(
         self,
         query: str,
         search_engine: str = "duckduckgo",
         progress_callback: Callable | None = None,
     ) -> List[Dict[str, Any]]:
-        """Search the web for information using the browser VM Playwright service.
+        """Search the web via the agent_loop search registry (#10932).
+
+        Uses the registry fallback chain (SearXNG → Brave → content_reach).
+        ``search_engine`` is kept in the signature for backwards compatibility
+        but is no longer used to route requests.
 
         Args:
             query: Search query
-            search_engine: Which search engine to use
+            search_engine: Advisory / unused (registry selects provider)
             progress_callback: Optional async callable for progress events (#1256)
 
         Returns:
-            List of search results with URLs and content
+            List of search result dicts with ``url``, ``title``, ``snippet``
         """
         if not self.enabled:
             return []
 
-        if not await self._check_playwright_service():
-            logger.error("Playwright service not available")
-            return []
-
-        logger.info("Searching with %s via Playwright service: %s", search_engine, query)
+        logger.info("Searching via registry: %s", query)
         await self._emit(
             progress_callback,
             {"event": "research:searching", "engine": search_engine, "query": query},
         )
 
         try:
-            return await self._execute_search_request(query, search_engine, progress_callback)
+            from agent_loop.search.registry import get_search_registry
+
+            results = await get_search_registry().search(query, count=self.max_search_results)
+            dicts = [r.to_dict() for r in results][: self.max_search_results]
+            for item in dicts:
+                await self._emit(
+                    progress_callback,
+                    {
+                        "event": "research:result_found",
+                        "url": item.get("url", ""),
+                        "title": item.get("title", ""),
+                        "snippet": (item.get("snippet") or "")[:300],
+                    },
+                )
+            return dicts
         except Exception as e:
             logger.error("Error during web search: %s", e)
             return []
@@ -524,16 +501,18 @@ class LibrarianAssistant:
         research_results = self._create_empty_research_results(query)
 
         try:
-            if not await self._check_playwright_service():
-                research_results["error"] = "Playwright service not available"
-                return research_results
-
             logger.info("Researching query: %s", query)
             search_results = await self.search_web(query, progress_callback=progress_callback)
             research_results["search_results"] = search_results
 
             if not search_results:
                 research_results["summary"] = "No search results found for the query."
+                return research_results
+
+            # Extract step still requires Playwright; skip gracefully if unavailable.
+            if not await self._check_playwright_service():
+                logger.warning("Playwright service not available; skipping content extraction")
+                research_results["summary"] = "Search completed but content extraction unavailable."
                 return research_results
 
             extracted_content = await self._extract_and_process_results(
