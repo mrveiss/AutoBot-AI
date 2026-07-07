@@ -58,9 +58,10 @@ SENSITIVE_PORTS: "dict[int, tuple[str, str]]" = {
     2375: ("docker-api", SecurityEventSeverity.CRITICAL.value),
     2376: ("docker-api-tls", SecurityEventSeverity.HIGH.value),
     9090: ("prometheus", SecurityEventSeverity.MEDIUM.value),
-    3000: ("grafana", SecurityEventSeverity.MEDIUM.value),
     9120: ("slm-dashboard", SecurityEventSeverity.MEDIUM.value),
     9123: ("agent-dashboard", SecurityEventSeverity.MEDIUM.value),
+    # NB: grafana:3000 intentionally excluded — collides with common app/dev
+    # servers (Node, frontends) and would be a false-positive source.
 }
 
 _LOOPBACK_ADDRESSES = frozenset({"127.0.0.1", "::1", "localhost"})
@@ -131,11 +132,11 @@ def _build_security_event(node_id: str, finding: dict) -> SecurityEvent:
         source_node_id=node_id,
         target_node_id=node_id,
         target_resource=f"{address}:{port}",
-        title=f"Sensitive port {port} ({service}) publicly exposed on {node_id}",
+        title=f"Sensitive port {port} ({service}) reachable off-host on {node_id}",
         description=(
-            f"Service '{service}' is listening on {address}:{port} (non-loopback) on node "
-            f"{node_id}. Confirm this exposure is intended and firewalled; bind to loopback "
-            f"or restrict access if not."
+            f"Service '{service}' is listening on {address}:{port} (non-loopback / off-host "
+            f"reachable) on node {node_id}. A private-LAN bind is included. Confirm the exposure "
+            f"is intended and firewalled; bind to loopback or restrict access if not."
         ),
         raw_data={
             "port": port,

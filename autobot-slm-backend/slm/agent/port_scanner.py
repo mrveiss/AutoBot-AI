@@ -95,9 +95,10 @@ def _parse_process_info(parts: List[str]) -> tuple:
 
 def _deduplicate_ports(ports: List[PortInfo]) -> List[PortInfo]:
     """
-    Remove duplicate ports from list, keeping first occurrence.
+    Remove duplicate (port, address) pairs, keeping first occurrence.
 
-    Issue #620.
+    Issue #620; keyed on (port, address) since GH#11224 so a public bind is not
+    collapsed into a loopback bind on the same port.
 
     Args:
         ports: List of PortInfo objects
@@ -108,8 +109,11 @@ def _deduplicate_ports(ports: List[PortInfo]) -> List[PortInfo]:
     seen = set()
     unique_ports = []
     for p in ports:
-        if p.port not in seen:
-            seen.add(p.port)
+        # GH#11224: key on (port, address) so a public bind is not masked by a
+        # loopback bind on the same port for the security-posture audit.
+        key = (p.port, p.address)
+        if key not in seen:
+            seen.add(key)
             unique_ports.append(p)
     return unique_ports
 
