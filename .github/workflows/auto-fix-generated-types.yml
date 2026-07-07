@@ -1,0 +1,99 @@
+# Auto-regenerate the frontend generated types (api.ts) on PR branches.
+# Companion to verify-generated-types.yml (the REQUIRED gate): rather than
+# force every author to hand-run `npm run gen:types` against a py3.14 backend
+# (the deployed/dev boxes may run a different Python and produce a schema that
+# never matches the gate), this job regenerates api.ts in the SAME py3.14
+# environment the gate uses and commits it back to the PR branch — self-healing
+# the recurring drift (#10817). Runs on GitHub-hosted runners so it never
+# competes with the self-hosted runner.
+
+name: Auto-fix Generated Types
+
+on:
+  pull_request:
+    paths:
+      # Backend changes can alter the OpenAPI schema that api.ts is generated from.
+      - 'autobot-backend/**/*.py'
+      - 'autobot_shared/**/*.py'
+      - 'autobot-frontend/src/types/generated/api.ts'
+      - '.github/workflows/auto-fix-generated-types.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  autofix-types:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements-ci.txt --prefer-binary
+
+      - name: Dump authoritative OpenAPI schema
+        run: |
+          set -o pipefail
+          export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
+          mkdir -p data logs static config
+          if ! python scripts/audit_api_wiring.py --dump-openapi openapi.raw.json; then
+            echo "::error::Backend app.openapi() build failed — cannot regenerate types (see startup-import-smoke)."
+            exit 1
+          fi
+          # Strip the audit-only x-websocket-paths extension so the schema matches
+          # exactly what verify-generated-types diffs against.
+          python -c "import json; s=json.load(open('openapi.raw.json')); s.pop('x-websocket-paths', None); json.dump(s, open('openapi.json','w'))"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: autobot-frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: autobot-frontend
+        run: npm ci
+
+      - name: Regenerate api.ts from authoritative schema
+        working-directory: autobot-frontend
+        run: npx --no-install openapi-typescript ../openapi.json -o src/types/generated/api.ts --additional-properties
+
+      - name: Commit regenerated types if drifted
+        run: |
+          rm -f openapi.raw.json openapi.json
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add autobot-frontend/src/types/generated/api.ts
+          if git diff --staged --quiet; then
+            echo "Generated types already fresh — nothing to commit."
+          else
+            git commit -m "$(cat <<'EOF'
+          chore(types): regenerate api.ts from backend OpenAPI schema
+
+          Auto-regenerated (py3.14) to match the backend schema so the required
+          verify-generated-types gate passes. Triggered by auto-fix-generated-types.yml.
+          EOF
+          )"
+            git push
+            echo "✅ api.ts regenerated and pushed to the PR branch."
+          fi
