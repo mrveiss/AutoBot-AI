@@ -1071,6 +1071,7 @@ async def set_session_role(
     session_id: str,
     role: str = Body(..., embed=True),
     current_user: dict = Depends(get_current_user),
+    request: Request = None,
 ):
     """Pin a chat session to a governed agent role (GH#11186).
 
@@ -1079,6 +1080,7 @@ async def set_session_role(
     """
     from chat_workflow.session_role import SessionRoleService
 
+    await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
     try:
         await SessionRoleService().set_role(session_id, role)
     except ValueError as exc:
@@ -1095,10 +1097,12 @@ async def set_session_role(
 async def get_session_role(
     session_id: str,
     current_user: dict = Depends(get_current_user),
+    request: Request = None,
 ):
     """Return the session's pinned governed role (or null) plus the valid roles."""
     from chat_workflow.session_role import SessionRoleService, valid_roles
 
+    await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
     role = await SessionRoleService().get_role(session_id)
     return DataResponse(data={"session_id": session_id, "role": role, "valid_roles": sorted(valid_roles())})
 
@@ -1112,10 +1116,12 @@ async def get_session_role(
 async def clear_session_role(
     session_id: str,
     current_user: dict = Depends(get_current_user),
+    request: Request = None,
 ):
     """Remove a session's governed-role binding (reverts to ungoverned chat)."""
     from chat_workflow.session_role import SessionRoleService
 
+    await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
     await SessionRoleService().clear_role(session_id)
     return DataResponse(data={"session_id": session_id, "role": None})
 
