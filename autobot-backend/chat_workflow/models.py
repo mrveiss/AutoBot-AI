@@ -370,11 +370,18 @@ def build_governed_identity(
     profile id) when present, so the production tool-dispatch seam can enforce that
     agent's ``forbidden_work`` manifest. The work-item fields carry the declared
     approval gates resolved upstream. All absent → a plain, ungoverned run.
+
+    Trust boundary: enforcement is fail-safe under a user-controlled context — a
+    caller can only *add* restrictions to their own run (an unknown/omitted
+    ``agent_id`` forbids nothing; a set one only forbids), never lift them. But for
+    these to be a real control a *trusted* server-side path must populate them; a
+    future trusted producer must override, not merge with, user-supplied keys.
     """
     agent_id = source.get("agent_id")
     agent_context = AgentContext(agent_id=agent_id, session_id=session_id) if agent_id else None
     work_item_id = source.get("work_item_id")
-    categories = list(source.get("requires_approval_before", []) or [])
+    raw_categories = source.get("requires_approval_before") or []
+    categories = list(raw_categories) if isinstance(raw_categories, (list, tuple)) else []
     return agent_context, work_item_id, categories
 
 

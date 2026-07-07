@@ -54,10 +54,16 @@ def test_build_governed_identity_empty_when_absent():
 
 def test_approval_category_matches_exact_and_prefix():
     assert _approval_category_for("git_push", ["pushing commits"]) == "pushing commits"
-    assert _approval_category_for("deploy_service", ["publishing"]) == "publishing"  # prefix
+    assert _approval_category_for("deploy_service", ["publishing"]) == "publishing"  # word-boundary prefix
     assert _approval_category_for("web_search", ["pushing commits"]) is None
     assert _approval_category_for("git_push", []) is None  # category not declared
     assert _approval_category_for("bash", ["unknown category"]) is None
+
+
+def test_approval_category_requires_word_boundary():
+    """A bare-token prefix without the ``_`` boundary must not match."""
+    assert _approval_category_for("deployment_status", ["publishing"]) is None
+    assert _approval_category_for("basha", ["destructive operations"]) is None
 
 
 # --- #11159: governed identity → forbidden_work bites ----------------------
@@ -93,6 +99,26 @@ def test_work_item_approval_noop_without_declaration():
     results: list[dict] = []
     assert mixin._enforce_work_item_approval({"name": "git_push"}, _ctx(), results) is None
     assert results == []
+
+
+@pytest.mark.asyncio
+async def test_forbidden_work_takes_precedence_over_approval_gate():
+    """A tool that is both forbidden and approval-gated is denied outright, not held."""
+    mixin = _mixin()
+    results: list[dict] = []
+    messages = []
+    ctx = SimpleNamespace(
+        agent_context=build_governed_identity({"agent_id": "research_agent"}, "s")[0],
+        requires_approval_before=["destructive operations"],  # also gates bash
+        work_item_id="wi-1",
+    )
+    async for item in mixin._dispatch_tool_call(
+        {"name": "bash", "params": {}}, "s", "t", "http://x", "m", results, [], ctx=ctx
+    ):
+        messages.append(item)
+    assert len(messages) == 1
+    assert messages[0].metadata.get("forbidden_by_manifest") is True
+    assert messages[0].metadata.get("approval_required") is not True
 
 
 @pytest.mark.asyncio

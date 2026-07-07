@@ -429,11 +429,16 @@ _APPROVAL_CATEGORY_TOOLS: dict[str, tuple[str, ...]] = {
 
 
 def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
-    """Return the declared category that gates *tool_name*, else None (GH#11160)."""
+    """Return the declared category that gates *tool_name*, else None (GH#11160).
+
+    Matches by exact name or ``<gated>_`` word-boundary prefix (so ``deploy`` gates
+    ``deploy_service`` but not ``deployment_status``). A false positive only ever
+    adds an approval hold — the fail-safe direction — never a bypass.
+    """
     name = tool_name.lower()
     for category in declared:
         for gated in _APPROVAL_CATEGORY_TOOLS.get(category, ()):
-            if name == gated or name.startswith(gated):
+            if name == gated or name.startswith(gated + "_"):
                 return category
     return None
 
