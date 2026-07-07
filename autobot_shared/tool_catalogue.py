@@ -34,8 +34,9 @@ def match_tool_name(tool_name: str, patterns: Iterable[str], *, word_boundary: b
     pats = tuple(patterns)
     if name in pats:
         return name
+    suffix = "_" if word_boundary else ""
     for pattern in pats:
-        if name.startswith(f"{pattern}_") if word_boundary else name.startswith(pattern):
+        if name.startswith(pattern + suffix):
             return pattern
     return None
 
