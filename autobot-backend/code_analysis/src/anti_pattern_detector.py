@@ -20,6 +20,7 @@ Each anti-pattern includes:
 """
 
 import ast
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -29,6 +30,7 @@ from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.repo_path import to_repo_relative
 from autobot_shared.status_enums import Severity  # #7253: consolidated onto canonical (#6689)
 
 # Anti-pattern severity → 0-100 integer score. Kept as a module-level helper
@@ -43,6 +45,12 @@ _ANTI_PATTERN_SCORES: Dict[Severity, int] = {
 
 # Minimum occurrences of a pattern_type to be included in the systemic rollup.
 _SYSTEMIC_THRESHOLD = 3
+
+# Multiplicative weight applied to the runtime_risk boost in the ranking key.
+# Sort key per finding: freq(type) * severity_score * (1 + ALPHA * runtime_risk).
+# At ALPHA=0 the boost is inactive; ALPHA=1.0 means a fully-risky file doubles
+# its effective score.  Override via env var when tuning signal weight.
+_RANKING_ALPHA: float = float(os.environ.get("AUTOBOT_RANKING_ALPHA", "1.0"))
 
 
 def anti_pattern_score(severity: Severity) -> int:
@@ -253,6 +261,9 @@ class AntiPatternInstance:
     suggestion: str
     refactoring_effort: str  # low, medium, high
     related_entities: List[str] = field(default_factory=list)
+    # Runtime failure risk for this instance's file; populated by _generate_report
+    # when a runtime_risk map is available (#11183).  Default 0.0 = no signal.
+    runtime_risk: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -268,6 +279,7 @@ class AntiPatternInstance:
             "suggestion": self.suggestion,
             "refactoring_effort": self.refactoring_effort,
             "related_entities": self.related_entities,
+            "runtime_risk": self.runtime_risk,
         }
 
 
@@ -498,10 +510,19 @@ class AntiPatternDetector:
         # Issue #6748: repeated Vue reactive boilerplate that should be a composable
         anti_patterns.extend(await self._detect_composable_opportunities(root_path))
 
-        # Phase 3: Generate report
+        # Phase 3: Fetch runtime failure risk map (#11183) then generate report.
+        # Imported lazily so the module can load without the services package.
+        runtime_risk: Dict[str, float] = {}
+        try:
+            from code_analysis.src.runtime_risk import build_runtime_risk_map
+
+            runtime_risk = await build_runtime_risk_map()
+        except Exception as _rr_exc:
+            logger.debug("runtime_risk unavailable (non-fatal): %s", _rr_exc)
+
         analysis_time = time.time() - start_time
 
-        report = self._generate_report(anti_patterns, analysis_time)
+        report = self._generate_report(anti_patterns, analysis_time, runtime_risk)
 
         # Cache results
         await self._cache_results(report)
@@ -2026,13 +2047,24 @@ class AntiPatternDetector:
 
     # ========== Report Generation ==========
 
-    def _generate_report(self, anti_patterns: List[AntiPatternInstance], analysis_time: float) -> AntiPatternReport:
+    def _generate_report(
+        self,
+        anti_patterns: List[AntiPatternInstance],
+        analysis_time: float,
+        runtime_risk: Dict[str, float] | None = None,
+    ) -> AntiPatternReport:
         """Generate comprehensive anti-pattern report.
 
-        Findings are ranked by prevalence × severity so a pattern_type that
-        appears many times across the codebase rises above a single one-off
-        finding of nominally higher severity (#11171).
+        Findings are ranked by prevalence × severity × runtime_risk_boost so
+        a pattern_type that appears many times AND whose file has a high
+        runtime failure rate rises above a same-frequency finding in a
+        low-risk file (#11173, #11183).
+
+        The boost factor ``(1 + ALPHA * runtime_risk[file])`` is always ≥ 1,
+        so adding runtime signal can only raise a finding's rank, never lower it.
         """
+        risk_map = runtime_risk or {}
+
         # Count by severity
         critical_count = sum(1 for ap in anti_patterns if ap.severity == Severity.CRITICAL)
         high_count = sum(1 for ap in anti_patterns if ap.severity == Severity.HIGH)
@@ -2045,17 +2077,23 @@ class AntiPatternDetector:
             pattern_type = ap.pattern_type.value
             summary_by_type[pattern_type] = summary_by_type.get(pattern_type, 0) + 1
 
-        # #11171: rank each finding by freq(pattern_type) × severity_score.
+        # Annotate each instance with its file's runtime_risk (#11183).
+        # Use to_repo_relative so absolute and repo-relative file_paths both hit
+        # the same lookup key that the resolver stored.
+        for ap in anti_patterns:
+            rel = to_repo_relative(ap.file_path) or ap.file_path
+            ap.runtime_risk = risk_map.get(rel, 0.0)
+
+        # #11171/#11183: rank each finding by
+        #   freq(pattern_type) * severity_score * (1 + ALPHA * runtime_risk).
         # Stable secondary sort on severity_score keeps same-rank entries ordered
         # by their individual severity (highest first).
-        sorted_patterns = sorted(
-            anti_patterns,
-            key=lambda x: (
-                summary_by_type[x.pattern_type.value] * anti_pattern_score(x.severity),
-                anti_pattern_score(x.severity),
-            ),
-            reverse=True,
-        )
+        def _rank_key(x: AntiPatternInstance):
+            base = summary_by_type[x.pattern_type.value] * anti_pattern_score(x.severity)
+            boost = 1.0 + _RANKING_ALPHA * x.runtime_risk
+            return (base * boost, anti_pattern_score(x.severity))
+
+        sorted_patterns = sorted(anti_patterns, key=_rank_key, reverse=True)
 
         # #11171: systemic rollup — types exceeding _SYSTEMIC_THRESHOLD occurrences.
         systemic_patterns = _build_systemic_rollup(sorted_patterns, summary_by_type)
