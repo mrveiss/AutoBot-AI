@@ -384,6 +384,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers/index'
@@ -406,6 +407,7 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('KnowledgeStats')
 
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 // Import shared document feed wrapper styles
 import '@/styles/document-feed-wrapper.css'
@@ -636,7 +638,7 @@ const exportStats = async () => {
 }
 
 const optimizeKnowledge = async () => {
-  if (!confirm(t('knowledge.stats.confirmOptimize'))) {
+  if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.stats.confirmOptimize') }))) {
     return
   }
 

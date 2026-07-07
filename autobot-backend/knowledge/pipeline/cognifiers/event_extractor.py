@@ -10,7 +10,7 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, get_args
+from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -18,7 +18,9 @@ from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import (
     batched_chunk_extract,
     build_entity_map,
+    literal_prompt_list,
     parse_llm_json_response,
+    render_prompt_sentinels,
 )
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity
@@ -31,11 +33,12 @@ logger = get_logger(__name__)
 
 # Prompt fragments derived from the TemporalType/EventType Literals (#11017) so the
 # prompt can never drift from the type (validation already uses ``__args__``).
-_TEMPORAL_TYPES_STR = ", ".join(get_args(TemporalType))
-_EVENT_TYPES_STR = ", ".join(get_args(EventType))
+_TEMPORAL_TYPES_STR = literal_prompt_list(TemporalType)
+_EVENT_TYPES_STR = literal_prompt_list(EventType)
 
 
-EVENT_EXTRACTION_PROMPT = """Extract temporal events from the text.
+EVENT_EXTRACTION_PROMPT = render_prompt_sentinels(
+    """Extract temporal events from the text.
 
 For each event:
 - name: Event title
@@ -51,9 +54,12 @@ Return JSON: [{{"name": "...", "description": "...", ...}}, ...]
 
 Text:
 {text}
-""".replace("%%TEMPORAL_TYPES%%", _TEMPORAL_TYPES_STR).replace("%%EVENT_TYPES%%", _EVENT_TYPES_STR)
+""",
+    {"TEMPORAL_TYPES": _TEMPORAL_TYPES_STR, "EVENT_TYPES": _EVENT_TYPES_STR},
+)
 
-EVENT_EXTRACTION_BATCH_PROMPT = """Extract temporal events from each of the following text chunks.
+EVENT_EXTRACTION_BATCH_PROMPT = render_prompt_sentinels(
+    """Extract temporal events from each of the following text chunks.
 
 Each chunk is labeled "Chunk N:". For each event provide:
 - name: Event title
@@ -76,7 +82,9 @@ Example for two chunks:
 
 Chunks:
 {chunks}
-""".replace("%%TEMPORAL_TYPES%%", _TEMPORAL_TYPES_STR).replace("%%EVENT_TYPES%%", _EVENT_TYPES_STR)
+""",
+    {"TEMPORAL_TYPES": _TEMPORAL_TYPES_STR, "EVENT_TYPES": _EVENT_TYPES_STR},
+)
 
 
 @TaskRegistry.register_cognifier("extract_events")
@@ -126,14 +134,9 @@ class EventExtractor(BaseCognifier):
         """Extract events for a batch in ONE LLM call when batching is on (#10598).
 
         Routes through ``batched_chunk_extract`` (index-keyed prompt, per-chunk
-        fallback) so K chunks cost one round-trip instead of K. Falls back to the
-        legacy per-chunk loop when the config flag is disabled.
+        fallback) so K chunks cost one round-trip instead of K. The helper runs
+        the legacy per-chunk loop itself when the config flag is disabled (#11090).
         """
-        if not config.cognifier_multichunk_batching:
-            events = []
-            for chunk in chunks:
-                events.extend(await self._extract_from_chunk(chunk, entity_map, context))
-            return events
         return await batched_chunk_extract(
             chunks,
             llm=self.llm,

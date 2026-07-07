@@ -52,11 +52,11 @@
             >
               <div class="card-header">
                 <span class="card-identifier">{{ item.identifier }}</span>
-                <span class="card-type-badge" :class="`type-${item.type}`">{{ workItemTypeLabel(item.type) }}</span>
+                <WorkItemBadge kind="type" :value="item.type" size="sm" />
               </div>
               <p class="card-title">{{ item.title }}</p>
               <div class="card-footer">
-                <span class="priority-dot" :class="`priority-${item.priority}`" :title="priorityLabel(item.priority)" />
+                <WorkItemBadge kind="priority" :value="item.priority" variant="dot" />
                 <span v-if="item.story_points" class="card-points">{{ item.story_points }}</span>
                 <span v-if="item.assignee_name" class="card-assignee" :title="item.assignee_name">
                   {{ initials(item.assignee_name) }}
@@ -116,11 +116,12 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
 import WorkItemDetail from './WorkItemDetail.vue'
+import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 
 const logger = createLogger('SprintBoardView')
 const api = useApiClient()
 const route = useRoute()
-const { workItemTypeLabel, priorityLabel, sprintStatusLabel } = useWorkItemLabels()
+const { sprintStatusLabel } = useWorkItemLabels()
 
 const companyId = computed(() => route.params.companyId as string)
 const boardId = computed(() => route.params.boardId as string)
@@ -440,23 +441,6 @@ onUnmounted(() => {
   color: var(--text-secondary, #9ca3af);
 }
 
-.card-type-badge {
-  font-size: 0.65rem;
-  padding: 0.1rem 0.4rem;
-  border-radius: 9999px;
-  font-weight: 500;
-  text-transform: capitalize;
-}
-
-.type-epic { background: #ddd6fe; color: #5b21b6; }
-.type-feature { background: #bfdbfe; color: #1d4ed8; }
-.type-pbi { background: #d1fae5; color: #065f46; }
-.type-task { background: #e0f2fe; color: #0369a1; }
-.type-bug { background: #fee2e2; color: #991b1b; }
-.type-spike { background: #fef3c7; color: #92400e; }
-.type-subtask { background: #f3f4f6; color: #374151; }
-.type-risk { background: #fce7f3; color: #9d174d; }
-
 .card-title {
   margin: 0;
   font-size: 0.8rem;
@@ -470,18 +454,6 @@ onUnmounted(() => {
   gap: 0.5rem;
   margin-top: 0.125rem;
 }
-
-.priority-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.priority-critical { background: #ef4444; }
-.priority-high { background: #f97316; }
-.priority-medium { background: #eab308; }
-.priority-low { background: #22c55e; }
 
 .card-points {
   font-size: 0.7rem;

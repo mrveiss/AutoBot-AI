@@ -3493,6 +3493,9 @@
         "emptyState": "Enter a URL and a JSON Schema, then click Get Data to extract structured information.",
         "resultTitle": "Extracted Data"
       }
+    },
+    "watchFolders": {
+      "confirmDelete": "Are you sure you want to delete this watch folder?"
     }
   },
   "reasoningTrace": {
@@ -3946,7 +3949,8 @@
       "emergencyKillTitle": "EMERGENCY KILL - Stop all running processes immediately",
       "takeControlDesc": "Pause automation and perform manual steps",
       "resumeAutomation": "Resume automated workflow",
-      "stepProgress": "Step {current} of {total}"
+      "stepProgress": "Step {current} of {total}",
+      "closeConfirm": "Are you sure you want to close this terminal window?"
     },
     "modals": {
       "executeDesc": "Run the command and continue with the workflow",

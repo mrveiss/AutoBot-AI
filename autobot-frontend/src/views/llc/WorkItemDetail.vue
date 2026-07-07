@@ -8,8 +8,8 @@
       <div class="drawer-header">
         <div class="header-left">
           <span class="item-identifier">{{ item.identifier }}</span>
-          <span class="type-badge" :class="`type-${item.type}`">{{ workItemTypeLabel(item.type) }}</span>
-          <span class="status-badge" :class="`status-${item.status}`">{{ workItemStatusLabel(item.status) }}</span>
+          <WorkItemBadge kind="type" :value="item.type" />
+          <WorkItemBadge kind="status" :value="item.status" />
         </div>
         <button class="close-btn" @click="$emit('close')" :aria-label="$t('common.close')">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="close-icon">
@@ -44,7 +44,7 @@
       <div class="meta-row">
         <div class="meta-field">
           <span class="meta-label">{{ $t('llc.workItem.priority') }}</span>
-          <span class="priority-badge" :class="`priority-${localItem.priority}`">{{ localItem.priority }}</span>
+          <WorkItemBadge kind="priority" :value="localItem.priority" />
         </div>
         <div class="meta-field">
           <span class="meta-label">{{ $t('llc.workItem.assignee') }}</span>
@@ -240,12 +240,11 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import HandoffModal from '@/components/llc/HandoffModal.vue'
 import { useCompanyPeople } from '@/composables/llc/useCompanyPeople'
-import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
+import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 
 const logger = createLogger('WorkItemDetail')
 const api = useApiClient()
 const { t } = useI18n()
-const { workItemTypeLabel, workItemStatusLabel } = useWorkItemLabels()
 
 import type { WorkItem } from './workItemTypes'
 
@@ -587,32 +586,6 @@ onMounted(() => {
   color: var(--text-secondary, #6b7280);
 }
 
-.type-badge,
-.status-badge {
-  font-size: 0.75rem;
-  padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
-  font-weight: 500;
-  text-transform: capitalize;
-}
-
-.type-epic { background: #ddd6fe; color: #5b21b6; }
-.type-feature { background: #bfdbfe; color: #1d4ed8; }
-.type-pbi { background: #d1fae5; color: #065f46; }
-.type-task { background: #e0f2fe; color: #0369a1; }
-.type-bug { background: #fee2e2; color: #991b1b; }
-.type-spike { background: #fef3c7; color: #92400e; }
-.type-subtask { background: #f3f4f6; color: #374151; }
-.type-risk { background: #fce7f3; color: #9d174d; }
-
-.status-backlog { background: #f3f4f6; color: #374151; }
-.status-ready { background: #e0f2fe; color: #0369a1; }
-.status-in_progress { background: #ddd6fe; color: #5b21b6; }
-.status-in_review { background: #fef9c3; color: #713f12; }
-.status-done { background: #d1fae5; color: #065f46; }
-.status-blocked { background: #fee2e2; color: #991b1b; }
-.status-cancelled { background: #f3f4f6; color: #9ca3af; }
-
 .close-btn {
   background: none;
   border: none;
@@ -693,19 +666,6 @@ onMounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-
-.priority-badge {
-  font-size: 0.75rem;
-  padding: 0.1rem 0.45rem;
-  border-radius: 9999px;
-  font-weight: 500;
-  text-transform: capitalize;
-}
-
-.priority-critical { background: #fee2e2; color: #991b1b; }
-.priority-high { background: #ffedd5; color: #9a3412; }
-.priority-medium { background: #fef9c3; color: #713f12; }
-.priority-low { background: #f0fdf4; color: #14532d; }
 
 .assignee-chip {
   font-size: 0.8rem;

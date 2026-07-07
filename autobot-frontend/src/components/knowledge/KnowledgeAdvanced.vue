@@ -174,6 +174,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
@@ -183,6 +184,7 @@ import { useFakeProgress } from '@/composables/useFakeProgress'
 
 const logger = createLogger('KnowledgeAdvanced')
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 const store = useKnowledgeStore()
 
@@ -434,11 +436,11 @@ const clearAllKnowledge = async () => {
   if (isClearing.value || isPopulating.value) return
 
   // Double confirmation for destructive action
-  const firstConfirm = confirm(t('knowledge.advanced.confirmClearAll'))
+  const firstConfirm = await confirm({ title: t('common.confirm'), message: t('knowledge.advanced.confirmClearAll') })
 
   if (!firstConfirm) return
 
-  const secondConfirm = confirm(t('knowledge.advanced.confirmClearFinal'))
+  const secondConfirm = await confirm({ title: t('common.confirm'), message: t('knowledge.advanced.confirmClearFinal') })
 
   if (!secondConfirm) return
 

@@ -272,6 +272,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
@@ -344,6 +345,7 @@ interface DetectedToolCall {
 
 // i18n
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 // Router — tab routes (#6415)
 const route = useRoute()
@@ -755,7 +757,7 @@ const exportSession = async () => {
 const clearSession = async () => {
   if (!store.currentSessionId) return
 
-  if (confirm(t('chat.interface.confirmClear'))) {
+  if (await confirm({ title: t('common.confirm'), message: t('chat.interface.confirmClear') })) {
     try {
       await controller.resetCurrentChat()
     } catch (error) {

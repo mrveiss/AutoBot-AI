@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 _DDG_SEARCH_URL = "https://duckduckgo.com/html/?q={}"
 
 
-def _get_manager():  # pragma: no cover — replaced by monkeypatch in tests
+def _get_manager():
     """Lazy accessor for the research browser manager (avoids import at module load)."""
     from research_browser_manager import get_research_browser_manager
 

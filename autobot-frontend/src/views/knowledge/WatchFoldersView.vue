@@ -269,7 +269,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useWatchFolders, type WatchFolderConfig } from '@/composables/knowledge/useWatchFolders'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 
 const {
   watchFolders,
@@ -283,6 +285,9 @@ const {
   disableWatchFolder,
   loadStats,
 } = useWatchFolders()
+
+const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 const showAddDialog = ref(false)
 const newFolderTags = ref('')
@@ -344,7 +349,7 @@ async function handleResume(folderId: string) {
 }
 
 async function handleDelete(folderId: string) {
-  if (confirm('Are you sure you want to delete this watch folder?')) {
+  if (await confirm({ title: t('common.confirm'), message: t('knowledge.watchFolders.confirmDelete') })) {
     await deleteWatchFolder(folderId)
     await loadStats()
   }

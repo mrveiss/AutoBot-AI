@@ -262,14 +262,9 @@ class RelationshipExtractor(BaseCognifier):
 
         Routes through the shared ``batched_chunk_extract`` helper, folding each
         chunk's relevant entity list into its block via ``aux_of`` so the
-        entity-conditioning of the per-chunk path is preserved. Falls back to the
-        legacy per-chunk loop when the config flag is disabled.
+        entity-conditioning of the per-chunk path is preserved. The helper runs
+        the legacy per-chunk loop itself when the config flag is disabled (#11090).
         """
-        if not config.cognifier_multichunk_batching:
-            relationships = []
-            for chunk in chunks:
-                relationships.extend(await self._extract_from_chunk(chunk, entities, entity_map))
-            return relationships
         return await batched_chunk_extract(
             chunks,
             llm=self.llm,

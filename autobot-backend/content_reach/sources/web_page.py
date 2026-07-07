@@ -17,6 +17,7 @@ import asyncio
 import httpx
 
 from autobot_shared.logging_manager import get_logger
+from content_reach._http import http_get
 from content_reach._url_guard import ensure_public_url, ensure_robots_allowed
 from content_reach.backends.browser import BrowserBackend
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
@@ -24,9 +25,6 @@ from content_reach.chain import ContentSourceChain
 from source_attribution import SourceReliability, SourceType
 
 logger = get_logger(__name__)
-
-# Module-level HTTP timeout constant (seconds).
-_HTTP_TIMEOUT = 15.0
 
 # Jina Reader base URL.
 _JINA_READER_BASE = "https://r.jina.ai/"
@@ -83,11 +81,7 @@ class TrafilaturaBackend(ContentBackend):
             raise BackendError("trafilatura not installed")
 
         try:
-            if self._client is not None:
-                response = await self._client.get(request.url)
-            else:
-                async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-                    response = await client.get(request.url)
+            response = await http_get(request.url, client=self._client)
         except httpx.HTTPError as exc:
             raise BackendError(f"TrafilaturaBackend: HTTP error fetching {request.url!r}: {exc}") from exc
 
@@ -142,11 +136,7 @@ class JinaReaderBackend(ContentBackend):
         headers = {"Accept": "text/plain"}
 
         try:
-            if self._client is not None:
-                response = await self._client.get(url, headers=headers)
-            else:
-                async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-                    response = await client.get(url, headers=headers)
+            response = await http_get(url, client=self._client, headers=headers)
         except httpx.HTTPError as exc:
             raise BackendError(f"JinaReaderBackend: HTTP error fetching {request.url!r}: {exc}") from exc
 
