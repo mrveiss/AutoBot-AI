@@ -14,8 +14,68 @@ from autobot_shared.tool_catalogue import (
     INFRA_AND_SHELL_TOOLS,
     SENSITIVE_TOOLS,
     ApprovalCategory,
+    match_tool_name,
     valid_approval_categories,
 )
+
+
+# --- match_tool_name (canonical matcher) -----------------------------------
+
+
+def test_match_tool_name_exact_and_case_insensitive():
+    assert match_tool_name("bash", ("bash", "deploy")) == "bash"
+    assert match_tool_name("BASH", ("bash",)) == "bash"
+
+
+def test_match_tool_name_plain_prefix():
+    assert match_tool_name("bash_run", ("bash",)) == "bash"
+    assert match_tool_name("deployment", ("deploy",)) == "deploy"  # plain prefix matches
+
+
+def test_match_tool_name_word_boundary():
+    assert match_tool_name("deploy_service", ("deploy",), word_boundary=True) == "deploy"
+    assert match_tool_name("deployment", ("deploy",), word_boundary=True) is None
+
+
+def test_match_tool_name_no_match_and_empty():
+    assert match_tool_name("web_search", ("bash", "deploy")) is None
+    assert match_tool_name("bash", ()) is None
+
+
+def _orig_forbidden(name, forbidden):
+    if not forbidden:
+        return None
+    name = name.lower()
+    if name in forbidden:
+        return name
+    for pattern in forbidden:
+        if name.startswith(pattern):
+            return pattern
+    return None
+
+
+def _orig_approval(name, declared):
+    name = name.lower()
+    for category in declared:
+        for gated in APPROVAL_CATEGORY_TOOLS.get(category, ()):
+            if name == gated or name.startswith(gated + "_"):
+                return category
+    return None
+
+
+def test_match_tool_name_parity_with_original_matchers():
+    from chat_workflow.tool_handler import _approval_category_for
+    from orchestration.agent_registry import match_forbidden_tool
+
+    forbidden = frozenset(INFRA_AND_SHELL_TOOLS)
+    cats = list(APPROVAL_CATEGORY_TOOLS)
+    names = [
+        "bash", "BASH", "bash_run", "deploy", "deployment", "deploy_service",
+        "git_push", "git_pusher", "web_search", "docker_compose", "unknown_tool", "",
+    ]
+    for n in names:
+        assert match_forbidden_tool(n, forbidden) == _orig_forbidden(n, forbidden), n
+        assert _approval_category_for(n, cats) == _orig_approval(n, cats), n
 
 # --- frozen snapshots of the original literals (pre-#11206) -----------------
 
