@@ -18,15 +18,13 @@ from urllib.parse import quote_plus
 import httpx
 
 from autobot_shared.logging_manager import get_logger
+from content_reach._http import http_get
 from content_reach.backends.browser import BrowserSearchBackend
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
 from content_reach.chain import ContentSourceChain
 from source_attribution import SourceReliability, SourceType
 
 logger = get_logger(__name__)
-
-# Module-level HTTP timeout constant (seconds).
-_HTTP_TIMEOUT = 15.0
 
 # Module-level name so tests can monkeypatch: content_reach.sources.web_search.DDGS
 DDGS = None  # populated lazily by _import_ddgs()
@@ -120,11 +118,7 @@ class JinaSearchBackend(ContentBackend):
         headers = {"Accept": "application/json"}
 
         try:
-            if self._client is not None:
-                response = await self._client.get(url, headers=headers)
-            else:
-                async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-                    response = await client.get(url, headers=headers)
+            response = await http_get(url, client=self._client, headers=headers)
         except httpx.HTTPError as exc:
             raise BackendError(f"JinaSearchBackend: HTTP error for query {request.query!r}: {exc}") from exc
 

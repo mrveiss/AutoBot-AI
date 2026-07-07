@@ -522,3 +522,109 @@ async def test_real_util_blocks_link_local():
 
     result = await is_public_url_async("http://169.254.169.254/latest/meta-data/")
     assert result is False
+
+
+# ---------------------------------------------------------------------------
+# 11. robots cache bound (#11078)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_robots_cache_cleared_when_max_reached(monkeypatch):
+    """Cache is cleared when it reaches _ROBOTS_CACHE_MAX before adding a new entry."""
+    import content_reach._url_guard as guard_mod
+
+    # Patch _ROBOTS_CACHE_MAX to a small value for the test.
+    monkeypatch.setattr(guard_mod, "_ROBOTS_CACHE_MAX", 3)
+
+    # Reset the cache state.
+    guard_mod._robots_cache.clear()
+
+    # Pre-populate with 3 entries (at the limit).
+    import urllib.robotparser
+
+    for i in range(3):
+        guard_mod._robots_cache[f"http://example{i}.com"] = urllib.robotparser.RobotFileParser()
+
+    assert len(guard_mod._robots_cache) == 3
+
+    # Mock fetch to return empty text.
+    async def _empty_fetch(domain: str) -> str:
+        return ""
+
+    monkeypatch.setattr(guard_mod, "_fetch_robots_text", _empty_fetch)
+
+    # Adding a 4th entry should trigger a clear and then add the new entry.
+    await guard_mod._get_robots_parser("http://new-domain.com")
+
+    # After clear + add new, cache should contain exactly 1 entry.
+    assert len(guard_mod._robots_cache) == 1
+    assert "http://new-domain.com" in guard_mod._robots_cache
+
+
+@pytest.mark.asyncio
+async def test_robots_cache_under_max_not_cleared(monkeypatch):
+    """Cache is NOT cleared when it is below _ROBOTS_CACHE_MAX."""
+    import content_reach._url_guard as guard_mod
+
+    monkeypatch.setattr(guard_mod, "_ROBOTS_CACHE_MAX", 10)
+    guard_mod._robots_cache.clear()
+
+    import urllib.robotparser
+
+    for i in range(5):
+        guard_mod._robots_cache[f"http://domain{i}.com"] = urllib.robotparser.RobotFileParser()
+
+    async def _empty_fetch(domain: str) -> str:
+        return ""
+
+    monkeypatch.setattr(guard_mod, "_fetch_robots_text", _empty_fetch)
+
+    await guard_mod._get_robots_parser("http://another.com")
+
+    # 5 existing + 1 new = 6
+    assert len(guard_mod._robots_cache) == 6
+
+
+# ---------------------------------------------------------------------------
+# 12. robots fetch-error log level is WARNING (#11078)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_robots_fetch_error_logs_at_warning(monkeypatch, caplog):
+    """_fetch_robots_text logs at WARNING (not DEBUG) on fetch failure."""
+    import logging
+
+    import content_reach._url_guard as guard_mod
+
+    async def _boom(domain: str) -> str:
+        raise RuntimeError("firewall blocked robots.txt")
+
+    # We need to trigger the real except path, so monkeypatch aiohttp to raise.
+    import aiohttp
+
+    class _FailSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            pass
+
+        def get(self, *a, **kw):
+            return _FailResp()
+
+    class _FailResp:
+        async def __aenter__(self):
+            raise aiohttp.ClientError("blocked")
+
+        async def __aexit__(self, *a):
+            pass
+
+    monkeypatch.setattr(aiohttp, "ClientSession", lambda: _FailSession())
+
+    with caplog.at_level(logging.WARNING, logger="content_reach._url_guard"):
+        text = await guard_mod._fetch_robots_text("http://example.com")
+
+    assert text == ""
+    assert any("robots.txt fetch failed" in r.message for r in caplog.records if r.levelno == logging.WARNING)
