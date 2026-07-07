@@ -6,21 +6,14 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
 
 from .source_models import CodeSource, SourceAccess, SourceType
+from .source_paths import make_clone_path
 from .source_storage import save_source
 
 logger = get_logger(__name__)
-
-_CODE_SOURCES_BASE = Path("/opt/autobot/data/code-sources")
-
-
-def _make_clone_path(source_id: str) -> str:
-    """Return the canonical clone path for a source ID."""
-    return str(_CODE_SOURCES_BASE / source_id)
 
 
 async def create_github_source(
@@ -47,7 +40,7 @@ async def create_github_source(
         owner_id=owner_id,
         access=access,
     )
-    source.clone_path = _make_clone_path(source.id)
+    source.clone_path = make_clone_path(source.id)
     await save_source(source)
     logger.info("Created github CodeSource %s for repo %s", source.id, repo)
 

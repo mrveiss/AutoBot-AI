@@ -23,6 +23,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
 from .. import source_service
+from ..source_paths import CODE_SOURCES_BASE, make_clone_path
 from ..source_models import (
     CodeSource,
     CodeSourceCreateRequest,
@@ -37,17 +38,10 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
-_CODE_SOURCES_BASE = Path("/opt/autobot/data/code-sources")
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _make_clone_path(source_id: str) -> str:
-    """Return the canonical clone path for a source ID."""
-    return str(_CODE_SOURCES_BASE / source_id)
 
 
 async def _resolve_token(credential_id: str) -> str | None:
@@ -346,9 +340,9 @@ async def delete_code_source(source_id: str):
     if source is None:
         raise HTTPException(status_code=404, detail=f"Source {source_id} not found")
     if source.clone_path and Path(source.clone_path).exists():
-        # Only remove clone directories we created (under _CODE_SOURCES_BASE)
+        # Only remove clone directories we created (under CODE_SOURCES_BASE)
         clone = Path(source.clone_path).resolve()
-        if clone.is_relative_to(_CODE_SOURCES_BASE):
+        if clone.is_relative_to(CODE_SOURCES_BASE):
             shutil.rmtree(source.clone_path, ignore_errors=True)
     ok = await delete_source(source_id)
     logger.info("Deleted code source %s", source_id)
@@ -386,7 +380,7 @@ async def sync_code_source(source_id: str):
         return JSONResponse(resp.model_dump())
 
     if not source.clone_path:
-        source.clone_path = _make_clone_path(source.id)
+        source.clone_path = make_clone_path(source.id)
         await save_source(source)
 
     from ..scanner import _active_tasks
@@ -460,13 +454,13 @@ async def _get_last_commit(clone_path: str, repo: str | None, is_local: bool = F
     """Read latest git commit info from a clone directory.
 
     Helper for get_source_summary (#1458).
-    Issue #1756: Allow local source paths outside _CODE_SOURCES_BASE.
+    Issue #1756: Allow local source paths outside CODE_SOURCES_BASE.
     """
     clone = Path(clone_path)
     if not clone.is_dir():
         return None
     # Only enforce base-dir check for managed clones, not local sources
-    if not is_local and not clone.resolve().is_relative_to(_CODE_SOURCES_BASE):
+    if not is_local and not clone.resolve().is_relative_to(CODE_SOURCES_BASE):
         logger.warning("Clone path %s outside base directory", clone_path)
         return None
     try:
