@@ -3117,6 +3117,20 @@ before summarizing.
         workflow_messages.append(error_msg)
         return error_msg
 
+    async def _apply_session_role(self, session_id: str, context: Dict[str, Any] | None) -> Dict[str, Any] | None:
+        """Overlay the trusted per-session governed role onto the chat context (GH#11186).
+
+        A server-set session role (via the authenticated role endpoint) overrides
+        any client-supplied ``agent_id`` so the pinned agent's ``forbidden_work``
+        manifest is enforced at the tool seam and cannot be lifted by the caller.
+        No role set → context is returned unchanged (a client-supplied ``agent_id``
+        may still only further-restrict the caller's own run).
+        """
+        from chat_workflow.session_role import SessionRoleService, apply_role
+
+        role = await SessionRoleService().get_role(session_id)
+        return apply_role(context, role)
+
     async def process_message_stream(self, session_id: str, message: str, context: Dict[str, Any] | None = None):
         """Process a message via LangGraph StateGraph.
 
@@ -3126,6 +3140,9 @@ before summarizing.
 
         Falls back to legacy flow if LangGraph is unavailable.
         """
+        # GH#11186: apply the trusted per-session role once here, so both the graph
+        # and legacy paths carry the governed identity into the tool seam.
+        context = await self._apply_session_role(session_id, context)
         try:
             async for msg in self._process_via_graph(session_id, message, context):
                 yield msg

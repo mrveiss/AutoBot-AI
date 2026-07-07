@@ -1061,6 +1061,65 @@ async def stream_message(
 # ====================================================================
 
 
+@router.put("/chat/sessions/{session_id}/role", response_model=DataResponse[Dict[str, Any]])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_session_role",
+    error_code_prefix="CHAT",
+)
+async def set_session_role(
+    session_id: str,
+    role: str = Body(..., embed=True),
+    current_user: dict = Depends(get_current_user),
+):
+    """Pin a chat session to a governed agent role (GH#11186).
+
+    The role's ``forbidden_work`` manifest is then enforced at the tool seam for
+    this session and overrides any client-supplied ``agent_id``.
+    """
+    from chat_workflow.session_role import SessionRoleService
+
+    try:
+        await SessionRoleService().set_role(session_id, role)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return DataResponse(data={"session_id": session_id, "role": role})
+
+
+@router.get("/chat/sessions/{session_id}/role", response_model=DataResponse[Dict[str, Any]])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_session_role",
+    error_code_prefix="CHAT",
+)
+async def get_session_role(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the session's pinned governed role (or null) plus the valid roles."""
+    from chat_workflow.session_role import SessionRoleService, valid_roles
+
+    role = await SessionRoleService().get_role(session_id)
+    return DataResponse(data={"session_id": session_id, "role": role, "valid_roles": sorted(valid_roles())})
+
+
+@router.delete("/chat/sessions/{session_id}/role", response_model=DataResponse[Dict[str, Any]])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_session_role",
+    error_code_prefix="CHAT",
+)
+async def clear_session_role(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Remove a session's governed-role binding (reverts to ungoverned chat)."""
+    from chat_workflow.session_role import SessionRoleService
+
+    await SessionRoleService().clear_role(session_id)
+    return DataResponse(data={"session_id": session_id, "role": None})
+
+
 @router.get("/chat/health", response_model=ChatHealthData)
 @with_error_handling(
     category=ErrorCategory.SERVICE_UNAVAILABLE,
