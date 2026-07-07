@@ -312,7 +312,7 @@ async def _project_source_summary(code_source_id: Optional[str]) -> Optional[Cod
         repo=src.repo,
         branch=src.branch,
         clone_path=src.clone_path,
-        status=str(src.status),
+        status=src.status.value,
         error_message=src.error_message,
     )
 

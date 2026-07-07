@@ -238,12 +238,14 @@ def _make_mock_project(company_id: uuid.UUID, code_source_id: str | None = None)
 
 def _make_fake_code_source(source_id: str = _FAKE_SOURCE_ID, repo: str = _FAKE_SOURCE_REPO) -> MagicMock:
     """Return a MagicMock resembling a CodeSource."""
+    from api.codebase_analytics.source_models import SourceStatus  # noqa: PLC0415
+
     src = MagicMock()
     src.id = source_id
     src.repo = repo
     src.branch = "main"
     src.clone_path = f"/opt/autobot/data/code-sources/{source_id}/"
-    src.status = "configured"
+    src.status = SourceStatus.CONFIGURED  # use enum so .value works in _project_source_summary
     src.error_message = None
     return src
 
