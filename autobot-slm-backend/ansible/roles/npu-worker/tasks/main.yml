@@ -102,7 +102,7 @@
 
 - name: Create Python virtual environment
   ansible.builtin.command:
-    cmd: python3 -m venv {{ npu_install_dir }}/venv
+    cmd: python3.11 -m venv {{ npu_install_dir }}/venv
     creates: "{{ npu_install_dir }}/venv/bin/python"
 
 - name: Fix venv ownership

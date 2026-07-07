@@ -19,7 +19,7 @@
   register: venv_stat
 
 - name: Create Python virtual environment
-  command: "python3 -m venv {{ venv_dir }}"
+  command: "python3.14 -m venv {{ venv_dir }}"
   args:
     creates: "{{ venv_dir }}/bin/activate"
   become_user: "{{ service_user }}"

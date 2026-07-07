@@ -115,7 +115,7 @@
 
 - name: "TTS Worker | Create Python virtual environment"
   ansible.builtin.command:
-    cmd: python3 -m venv {{ tts_install_dir }}/venv
+    cmd: python3.14 -m venv {{ tts_install_dir }}/venv
     creates: "{{ tts_install_dir }}/venv/bin/python"
   tags: ['tts', 'venv']
 
