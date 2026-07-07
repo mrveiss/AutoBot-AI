@@ -8201,6 +8201,15 @@
         "subtask": "Subtask",
         "risk": "Risk"
       },
+      "workItemStatus": {
+        "backlog": "Uzdevumu saraksts",
+        "ready": "Gatavs",
+        "in_progress": "Procesā",
+        "in_review": "Pārskatīšanā",
+        "done": "Pabeigts",
+        "blocked": "Bloķēts",
+        "cancelled": "Atcelts"
+      },
       "priority": {
         "critical": "Critical",
         "high": "High",

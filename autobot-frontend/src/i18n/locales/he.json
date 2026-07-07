@@ -8201,6 +8201,15 @@
         "subtask": "Subtask",
         "risk": "Risk"
       },
+      "workItemStatus": {
+        "backlog": "מאגר משימות",
+        "ready": "מוכן",
+        "in_progress": "בתהליך",
+        "in_review": "בבדיקה",
+        "done": "הושלם",
+        "blocked": "חסום",
+        "cancelled": "בוטל"
+      },
       "priority": {
         "critical": "Critical",
         "high": "High",

@@ -169,7 +169,7 @@
             <h4><Icon name="tasks" /> Initial Work Items</h4>
             <div class="work-list">
               <div v-for="(item, i) in previewTemplate.work_items.slice(0, 5)" :key="i" class="work-item">
-                <span class="work-type">{{ item.type }}</span>
+                <span class="work-type">{{ workItemTypeLabel(item.type) }}</span>
                 <span class="work-title">{{ item.title }}</span>
               </div>
               <span v-if="previewTemplate.work_items.length > 5" class="work-more">
@@ -200,6 +200,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useCompanyTemplates, type CompanyTemplate, type TemplateCategory } from '@/composables/llc/useCompanyTemplates'
 import Icon from '@/components/ui/Icon.vue'
+import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
 
 const props = withDefaults(
   defineProps<{
@@ -218,6 +219,7 @@ const emit = defineEmits<{
 }>()
 
 const { templates, loading, error, listBuiltInTemplates } = useCompanyTemplates()
+const { workItemTypeLabel } = useWorkItemLabels()
 
 const searchQuery = ref('')
 const selectedCategory = ref<TemplateCategory | 'all'>('all')
