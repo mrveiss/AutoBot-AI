@@ -83,6 +83,10 @@ from services.database import db_service
 from services.git_tracker import start_version_checker
 from services.reconciler import reconciler_service
 from services.schedule_executor import start_schedule_executor, stop_schedule_executor
+from services.security_posture_auditor import (
+    start_security_posture_auditor,
+    stop_security_posture_auditor,
+)
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -268,6 +272,10 @@ async def lifespan(app: FastAPI):
     start_schedule_executor()
     logger.info("Schedule executor started")
 
+    # Start fleet security-posture auditor (GH#11224)
+    start_security_posture_auditor()
+    logger.info("Security-posture auditor started")
+
     # Start A2A card refresh background task (Issue #962)
     a2a_card_task = start_card_refresh_task()
     logger.info("A2A card refresh task started")
@@ -294,6 +302,8 @@ async def lifespan(app: FastAPI):
         logger.info("A2A card refresh task stopped")
     stop_schedule_executor()
     logger.info("Schedule executor stopped")
+    stop_security_posture_auditor()
+    logger.info("Security-posture auditor stopped")
     await reconciler_service.stop()
     await db_service.close()
 

@@ -23,6 +23,10 @@ class PortInfo:
     port: int
     process: str | None = None
     pid: int | None = None
+    # GH#11224: bind interface ("0.0.0.0", "*", "::", "127.0.0.1", a concrete IP).
+    # Lets the fleet security-posture audit distinguish public exposure from
+    # loopback-only. None when the source line can't be parsed.
+    address: str | None = None
 
 
 def _parse_port_from_address(local_addr: str) -> int | None:
@@ -45,6 +49,20 @@ def _parse_port_from_address(local_addr: str) -> int | None:
         return int(port_str)
     except ValueError:
         return None
+
+
+def _parse_bind_address(local_addr: str) -> str | None:
+    """
+    Extract the bind interface from an ss/netstat local-address string (GH#11224).
+
+    Handles ``*:port``, ``0.0.0.0:port``, ``:::port``, ``[::]:port``,
+    ``127.0.0.1:port``, ``[::1]:port``. Returns the address with the port and any
+    IPv6 brackets stripped, or None if it can't be parsed.
+    """
+    if ":" not in local_addr:
+        return None
+    addr = local_addr.rsplit(":", 1)[0].strip("[]")
+    return addr or None
 
 
 def _parse_process_info(parts: List[str]) -> tuple:
@@ -127,7 +145,7 @@ def get_listening_ports() -> List[PortInfo]:
                 continue
 
             process, pid = _parse_process_info(parts)
-            ports.append(PortInfo(port=port, process=process, pid=pid))
+            ports.append(PortInfo(port=port, process=process, pid=pid, address=_parse_bind_address(parts[3])))
 
     except subprocess.TimeoutExpired:
         logger.warning("Port scan timed out")
@@ -165,7 +183,7 @@ def _get_ports_netstat() -> List[PortInfo]:
 
             try:
                 port = int(port_str)
-                ports.append(PortInfo(port=port))
+                ports.append(PortInfo(port=port, address=_parse_bind_address(local_addr)))
             except ValueError:
                 continue
 
