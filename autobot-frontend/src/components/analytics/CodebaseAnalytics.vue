@@ -33,6 +33,10 @@
         <div class="project-header-name">
           <i :class="selectedSource.source_type === 'github' ? 'github' : 'folder'"></i>
           {{ selectedSource.name }}
+          <!-- GH#11129: LLC project label when this source is linked to a project -->
+          <span v-if="selectedSourceProject" class="project-header-llc-label">
+            {{ selectedSourceProject }}
+          </span>
         </div>
         <div class="project-header-meta">
           <span v-if="selectedSource.repo" class="project-meta-item">
@@ -458,6 +462,7 @@ import { useAnalyticsDataFetchers } from '@/composables/analytics/useAnalyticsDa
 import { useCodeIntelAnalysis } from '@/composables/analytics/useCodeIntelAnalysis'
 import { useAnalyticsDebug } from '@/composables/analytics/useAnalyticsDebug'
 import { createLogger } from '@/utils/debugUtils'
+import { useApiClient } from '@/plugins/api'
 // Issue #1133: Code Source Registry Components
 import CodebaseOverviewPanel from '@/components/analytics/CodebaseOverviewPanel.vue'
 import CodebaseDependenciesPanel from '@/components/analytics/CodebaseDependenciesPanel.vue'
@@ -483,6 +488,29 @@ import CodebaseOwnershipPanel from '@/components/analytics/panels/CodebaseOwners
 import CodebaseChartsSection from '@/components/analytics/panels/CodebaseChartsSection.vue'
 
 const logger = createLogger('CodebaseAnalytics')
+
+// GH#11129: map code_source_id → LLC project name for source labelling.
+const api = useApiClient()
+const codeSourceProjectMap = ref<Record<string, string>>({})
+
+async function loadProjectRepoMap(): Promise<void> {
+  try {
+    const items = await api.get<{ id: string; name: string; code_source_id: string | null }[]>(
+      '/api/llc/projects/with-repos',
+    )
+    const map: Record<string, string> = {}
+    for (const item of items) {
+      if (item.code_source_id) map[item.code_source_id] = item.name
+    }
+    codeSourceProjectMap.value = map
+  } catch (err) {
+    logger.warn('Failed to load project repo map', err)
+  }
+}
+
+const selectedSourceProject = computed(() =>
+  selectedSource.value ? (codeSourceProjectMap.value[selectedSource.value.id] ?? null) : null,
+)
 
 // i18n + routing
 const { t } = useI18n()
@@ -931,6 +959,7 @@ onMounted(async () => {
     return
   }
 
+  void loadProjectRepoMap()
   await checkCurrentIndexingJob()
   loadCachedAnalyticsData(codeIntelExtraScans())
   // #2390: Auto-load overview dashboard cards on page visit
@@ -996,6 +1025,16 @@ onUnmounted(() => {
 .project-meta-item.status-ready { color: var(--color-success, #22c55e); }
 .project-meta-item.status-syncing { color: var(--color-warning, #f59e0b); }
 .project-meta-item.status-error { color: var(--color-error, #ef4444); }
+
+/* GH#11129: LLC project label displayed next to source name */
+.project-header-llc-label {
+  font-size: 0.75em;
+  font-weight: 500;
+  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  background: var(--bg-hover);
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+}
 
 .btn-primary {
   padding: var(--spacing-2-5) var(--spacing-5);

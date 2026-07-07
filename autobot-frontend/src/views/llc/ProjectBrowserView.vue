@@ -6,6 +6,7 @@
   Lists the projects under a program as a card grid. Each card links out to
   the company-scoped Backlog and Timeline views. A header "Create" action opens
   a modal that POSTs a new project and prepends it to the list (#10750 B1).
+  GH#11129: repo linkage UI — Attach / Sync / Detach a GitHub repo per project.
 -->
 <template>
   <div class="llc-browser">
@@ -52,6 +53,60 @@
           <Sparkline :points="velocityFor(p.id)" :aria-label="t('llcBrowser.velocityAria', { name: p.name })" />
         </div>
         <p class="card-meta">{{ t('llcBrowser.target', { date: formatDate(p.target_date) }) }}</p>
+
+        <!-- GH#11129: repo linkage section -->
+        <div v-if="p.code_source" class="card-repo">
+          <div class="repo-row">
+            <span class="repo-label">{{ t('llcBrowser.repo.linkedLabel') }}</span>
+            <a
+              :href="`https://github.com/${p.code_source.repo}`"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="repo-link"
+            >{{ p.code_source.repo }}</a>
+          </div>
+          <div class="repo-row">
+            <span class="repo-label">{{ t('llcBrowser.repo.clonePath') }}</span>
+            <code class="repo-path">{{ p.code_source.clone_path }}</code>
+          </div>
+          <div class="repo-row">
+            <span class="repo-label">{{ t('llcBrowser.repo.status') }}</span>
+            <span class="repo-status" :class="`repo-status-${p.code_source.status}`">
+              {{ p.code_source.status }}
+            </span>
+          </div>
+          <div class="repo-actions">
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :loading="syncingRepo === p.id"
+              :disabled="syncingRepo === p.id"
+              @click="syncRepo(p)"
+            >
+              {{ t('llcBrowser.repo.syncBtn') }}
+            </BaseButton>
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :loading="detachingRepo === p.id"
+              :disabled="detachingRepo === p.id"
+              @click="detachRepo(p)"
+            >
+              {{ t('llcBrowser.repo.detachBtn') }}
+            </BaseButton>
+          </div>
+          <ErrorBanner v-if="repoError[p.id]" :message="repoError[p.id]" class="browser-error" />
+        </div>
+        <div v-else class="card-repo card-repo-empty">
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            @click="openAttach(p.id)"
+          >
+            {{ t('llcBrowser.repo.attachBtn') }}
+          </BaseButton>
+        </div>
+
         <div class="card-actions">
           <RouterLink class="action-link" :to="`/llc/companies/${companyId}/backlog`">
             {{ t('llcBrowser.backlogLink') }}
@@ -63,6 +118,7 @@
       </article>
     </div>
 
+    <!-- Create project modal -->
     <BaseModal
       v-model="showCreate"
       :title="t('llcBrowser.projects.createTitle')"
@@ -103,6 +159,41 @@
         </BaseButton>
       </template>
     </BaseModal>
+
+    <!-- GH#11129: Attach repo modal -->
+    <BaseModal
+      v-model="showAttach"
+      :title="t('llcBrowser.repo.attachTitle')"
+      size="sm"
+    >
+      <ErrorBanner v-if="attachError" :message="attachError" class="browser-error" />
+      <div class="create-form">
+        <BaseInput
+          v-model="attachForm.repo"
+          :label="t('llcBrowser.repo.repoLabel')"
+          :placeholder="t('llcBrowser.repo.repoPlaceholder')"
+          required
+        />
+        <BaseInput
+          v-model="attachForm.credential_id"
+          :label="t('llcBrowser.repo.credentialLabel')"
+          :placeholder="t('llcBrowser.repo.credentialPlaceholder')"
+        />
+      </div>
+      <template #actions>
+        <BaseButton variant="secondary" :disabled="attaching" @click="showAttach = false">
+          {{ t('llcBrowser.cancel') }}
+        </BaseButton>
+        <BaseButton
+          variant="primary"
+          :loading="attaching"
+          :disabled="!attachForm.repo.trim() || attaching"
+          @click="submitAttach"
+        >
+          {{ t('llcBrowser.repo.submitBtn') }}
+        </BaseButton>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -118,6 +209,16 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import { BaseModal } from '@autobot/ui'
 import ErrorBanner from '@/components/base/ErrorBanner.vue'
+
+// GH#11129: linked code-source summary on a project.
+interface CodeSourceSummary {
+  id: string
+  repo: string | null
+  branch: string | null
+  clone_path: string | null
+  status: string
+  error_message: string | null
+}
 
 interface ProjectResponse {
   id: string
@@ -135,6 +236,9 @@ interface ProjectResponse {
   updated_at: string
   open_work_item_count: number
   active_sprint_name: string | null
+  // GH#11129: repo linkage fields (present when backend Task 1-3 is active)
+  code_source_id?: string | null
+  code_source?: CodeSourceSummary | null
 }
 
 interface VelocityHistory {
@@ -158,6 +262,17 @@ const showCreate = ref(false)
 const creating = ref(false)
 const createError = ref('')
 const form = ref({ name: '', description: '' })
+
+// GH#11129: repo attach/detach/sync state
+const showAttach = ref(false)
+const attachTargetId = ref<string | null>(null)
+const attaching = ref(false)
+const attachError = ref('')
+const attachForm = ref({ repo: '', credential_id: '' })
+const detachingRepo = ref<string | null>(null)
+const syncingRepo = ref<string | null>(null)
+// per-project error messages (keyed by project id)
+const repoError = ref<Record<string, string>>({})
 
 function velocityFor(projectId: string): number[] {
   return velocities.value[projectId] ?? []
@@ -241,6 +356,73 @@ async function createProject(): Promise<void> {
     createError.value = t('llcBrowser.projects.createError')
   } finally {
     creating.value = false
+  }
+}
+
+// GH#11129: repo linkage actions -------------------------------------------
+
+function openAttach(projectId: string): void {
+  attachTargetId.value = projectId
+  attachForm.value = { repo: '', credential_id: '' }
+  attachError.value = ''
+  showAttach.value = true
+}
+
+async function submitAttach(): Promise<void> {
+  const repo = attachForm.value.repo.trim()
+  if (!repo || !attachTargetId.value) return
+  attaching.value = true
+  attachError.value = ''
+  try {
+    const updated = await api.post<ProjectResponse>(
+      `/api/llc/projects/${attachTargetId.value}/repo`,
+      {
+        repo,
+        credential_id: attachForm.value.credential_id.trim() || null,
+      },
+    )
+    const idx = projects.value.findIndex(p => p.id === attachTargetId.value)
+    if (idx !== -1) projects.value[idx] = updated
+    showAttach.value = false
+  } catch (err) {
+    logger.error('Failed to attach repo', err)
+    attachError.value = t('llcBrowser.repo.attachError')
+  } finally {
+    attaching.value = false
+  }
+}
+
+async function detachRepo(project: ProjectResponse): Promise<void> {
+  detachingRepo.value = project.id
+  repoError.value = { ...repoError.value, [project.id]: '' }
+  try {
+    await api.delete(`/api/llc/projects/${project.id}/repo`)
+    const idx = projects.value.findIndex(p => p.id === project.id)
+    if (idx !== -1) {
+      projects.value[idx] = { ...projects.value[idx], code_source_id: null, code_source: null }
+    }
+  } catch (err) {
+    logger.error('Failed to detach repo', err)
+    repoError.value = { ...repoError.value, [project.id]: t('llcBrowser.repo.detachError') }
+  } finally {
+    detachingRepo.value = null
+  }
+}
+
+// Sync calls the codebase-analytics source sync endpoint.
+// Sync route confirmed: POST /api/analytics/codebase/sources/{source_id}/sync (GH#11129)
+async function syncRepo(project: ProjectResponse): Promise<void> {
+  const sourceId = project.code_source?.id
+  if (!sourceId) return
+  syncingRepo.value = project.id
+  repoError.value = { ...repoError.value, [project.id]: '' }
+  try {
+    await api.post(`/api/analytics/codebase/sources/${sourceId}/sync`)
+  } catch (err) {
+    logger.error('Failed to sync repo', err)
+    repoError.value = { ...repoError.value, [project.id]: t('llcBrowser.repo.syncError') }
+  } finally {
+    syncingRepo.value = null
   }
 }
 
@@ -420,5 +602,85 @@ onMounted(loadProjects)
   color: var(--text-primary);
   font-size: 0.875rem;
   resize: vertical;
+}
+
+/* GH#11129: repo linkage styles */
+.card-repo {
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.card-repo-empty {
+  padding-top: 0.5rem;
+}
+
+.repo-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.repo-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.repo-link {
+  font-size: 0.8125rem;
+  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.repo-link:hover {
+  text-decoration: underline;
+}
+
+.repo-path {
+  font-size: 0.75rem;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.repo-status {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.125rem 0.375rem;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.repo-status-ready {
+  color: var(--color-success, #16a34a);
+  background: var(--color-success-bg, #dcfce7);
+}
+
+.repo-status-error {
+  color: var(--color-error, #dc2626);
+  background: var(--color-error-bg, #fee2e2);
+}
+
+.repo-status-syncing {
+  color: var(--color-warning, #d97706);
+  background: var(--color-warning-bg, #fef3c7);
+}
+
+.repo-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 </style>
