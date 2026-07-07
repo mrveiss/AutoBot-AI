@@ -29645,7 +29645,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/api/llm-auth/oauth/callback": {
+    "/api/llm-auth/oauth/callback": {
         parameters: {
             query?: never;
             header?: never;
@@ -29664,14 +29664,14 @@ export interface paths {
          *
          *     Requires admin — stored credential is system-wide (shared by all users).
          */
-        post: operations["oauth_callback_api_api_llm_auth_oauth_callback_post"];
+        post: operations["oauth_callback_api_llm_auth_oauth_callback_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/api/llm-auth/device/initiate": {
+    "/api/llm-auth/device/initiate": {
         parameters: {
             query?: never;
             header?: never;
@@ -29690,14 +29690,14 @@ export interface paths {
          *
          *     Requires admin — stored credential is system-wide (shared by all users).
          */
-        post: operations["device_initiate_api_api_llm_auth_device_initiate_post"];
+        post: operations["device_initiate_api_llm_auth_device_initiate_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/api/llm-auth/device/poll": {
+    "/api/llm-auth/device/poll": {
         parameters: {
             query?: never;
             header?: never;
@@ -29715,14 +29715,14 @@ export interface paths {
          *
          *     Requires admin — stored credential is system-wide (shared by all users).
          */
-        post: operations["device_poll_api_api_llm_auth_device_poll_post"];
+        post: operations["device_poll_api_llm_auth_device_poll_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/api/llm-auth/status/{provider_name}": {
+    "/api/llm-auth/status/{provider_name}": {
         parameters: {
             query?: never;
             header?: never;
@@ -29733,7 +29733,7 @@ export interface paths {
          * Provider Auth Status
          * @description Return the auth connection status for a provider.
          */
-        get: operations["provider_auth_status_api_api_llm_auth_status__provider_name__get"];
+        get: operations["provider_auth_status_api_llm_auth_status__provider_name__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -29742,7 +29742,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/api/llm-auth/{provider_name}": {
+    "/api/llm-auth/{provider_name}": {
         parameters: {
             query?: never;
             header?: never;
@@ -29758,7 +29758,7 @@ export interface paths {
          *
          *     Requires admin — credential is system-wide (shared by all users).
          */
-        delete: operations["revoke_provider_auth_api_api_llm_auth__provider_name__delete"];
+        delete: operations["revoke_provider_auth_api_llm_auth__provider_name__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -46620,6 +46620,11 @@ export interface paths {
         /**
          * List Insights
          * @description List distilled experiment insights.
+         *
+         *     Resilient by design (#11081): on a fresh/empty deployment the insights
+         *     collection may not exist yet (or the vector store is unavailable), which
+         *     would otherwise 500 and crash the whole Experiments dashboard. Absence of
+         *     data is not an error — return an empty list instead.
          */
         get: operations["list_insights_api_autoresearch_insights_get"];
         put?: never;
@@ -138219,7 +138224,7 @@ export interface operations {
             };
         };
     };
-    oauth_callback_api_api_llm_auth_oauth_callback_post: {
+    oauth_callback_api_llm_auth_oauth_callback_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -138252,7 +138257,7 @@ export interface operations {
             };
         };
     };
-    device_initiate_api_api_llm_auth_device_initiate_post: {
+    device_initiate_api_llm_auth_device_initiate_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -138285,7 +138290,7 @@ export interface operations {
             };
         };
     };
-    device_poll_api_api_llm_auth_device_poll_post: {
+    device_poll_api_llm_auth_device_poll_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -138318,7 +138323,7 @@ export interface operations {
             };
         };
     };
-    provider_auth_status_api_api_llm_auth_status__provider_name__get: {
+    provider_auth_status_api_llm_auth_status__provider_name__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -138349,7 +138354,7 @@ export interface operations {
             };
         };
     };
-    revoke_provider_auth_api_api_llm_auth__provider_name__delete: {
+    revoke_provider_auth_api_llm_auth__provider_name__delete: {
         parameters: {
             query?: never;
             header?: never;
