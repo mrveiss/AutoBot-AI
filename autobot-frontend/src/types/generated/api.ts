@@ -48927,6 +48927,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/projects/with-repos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Projects With Repos
+         * @description Return all projects in the caller's org that have a code source linked (#11129).
+         */
+        get: operations["list_projects_with_repos_api_llc_projects_with_repos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/projects/{project_id}": {
         parameters: {
             query?: never;
@@ -48944,6 +48964,30 @@ export interface paths {
         head?: never;
         /** Update Project */
         patch: operations["update_project_api_llc_projects__project_id__patch"];
+        trace?: never;
+    };
+    "/api/llc/projects/{project_id}/repo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attach Project Repo
+         * @description Attach a GitHub repo to a project by creating a CodeSource and storing its id (#11129).
+         */
+        post: operations["attach_project_repo_api_llc_projects__project_id__repo_post"];
+        /**
+         * Detach Project Repo
+         * @description Unlink the repo from a project; the CodeSource record survives (#11129).
+         */
+        delete: operations["detach_project_repo_api_llc_projects__project_id__repo_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/llc/projects/{project_id}/sprints": {
@@ -56016,6 +56060,20 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** AttachRepoRequest */
+        AttachRepoRequest: {
+            /** Repo */
+            repo: string;
+            /** Credential Id */
+            credential_id?: string | null;
+            /**
+             * Branch
+             * @default main
+             */
+            branch: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * AudioIngestRequest
          * @description Request body for POST /api/knowledge_base/audio (URL-based ingestion).
@@ -60925,6 +60983,23 @@ export interface components {
             credential_id?: string | null;
             /** @default private */
             access: components["schemas"]["SourceAccess"];
+        } & {
+            [key: string]: unknown;
+        };
+        /** CodeSourceSummary */
+        CodeSourceSummary: {
+            /** Id */
+            id: string;
+            /** Repo */
+            repo?: string | null;
+            /** Branch */
+            branch?: string | null;
+            /** Clone Path */
+            clone_path?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Error Message */
+            error_message?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85300,6 +85375,9 @@ export interface components {
             open_work_item_count: number;
             /** Active Sprint Name */
             active_sprint_name?: string | null;
+            /** Code Source Id */
+            code_source_id?: string | null;
+            code_source?: components["schemas"]["CodeSourceSummary"] | null;
         } & {
             [key: string]: unknown;
         };
@@ -164934,6 +165012,26 @@ export interface operations {
             };
         };
     };
+    list_projects_with_repos_api_llc_projects_with_repos_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"][];
+                };
+            };
+        };
+    };
     get_project_api_llc_projects__project_id__get: {
         parameters: {
             query?: never;
@@ -165008,6 +165106,72 @@ export interface operations {
                 "application/json": components["schemas"]["llc__api__sprints__ProjectUpdate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_project_repo_api_llc_projects__project_id__repo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachRepoRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detach_project_repo_api_llc_projects__project_id__repo_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
