@@ -56,8 +56,8 @@ def _build_systemic_rollup(
 ) -> "List[Dict[str, Any]]":
     """Return systemic pattern entries for types with count >= _SYSTEMIC_THRESHOLD.
 
-    Each entry is {pattern_type, count, top_severity} where top_severity is the
-    highest-scoring severity seen for that type.  Result is sorted by count desc
+    Each entry is {pattern_type, count, top_severity_score} where top_severity_score
+    is the highest severity score seen for that type.  Result is sorted by count desc
     so callers get "god_class ×14" style summaries first (#11171).
     """
     top_severity: Dict[str, int] = {}
@@ -352,7 +352,7 @@ class AntiPatternReport:
     recommendations: List[str]
     analysis_time_seconds: float
     # #11171: systemic rollup — pattern types with count >= _SYSTEMIC_THRESHOLD,
-    # sorted by count desc.  Each entry: {pattern_type, count, top_severity}.
+    # sorted by count desc.  Each entry: {pattern_type, count, top_severity_score}.
     systemic_patterns: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:

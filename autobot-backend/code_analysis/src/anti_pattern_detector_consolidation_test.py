@@ -675,9 +675,9 @@ class TinyLazy{i}:
 
 
 @pytest.mark.asyncio
-async def test_frequency_weighted_ranking_tie_breaking_stability(fixture_root):
-    """Within a tie (same freq × sev), secondary sort on severity keeps
-    higher individual severity first — result must be stable (#11171).
+async def test_equal_frequency_orders_by_severity(fixture_root):
+    """At equal frequency (both freq=1), the higher-severity finding ranks
+    first — the secondary severity term in the sort key decides (#11171).
     """
     apd = _load_detector_module()
     # Two classes each appear once: one god-class (HIGH sev expected),
