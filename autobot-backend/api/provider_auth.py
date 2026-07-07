@@ -21,11 +21,9 @@ DELETE /api/llm-auth/{provider_name}       — revoke / delete stored tokens
 
 from __future__ import annotations
 
-import ipaddress
 import os
 import time
 from typing import Any
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -34,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.url_safety import require_allowlisted_https
 from llm_shared.provider_auth import (
     _vault_read,
     _vault_write,
@@ -70,53 +69,18 @@ _ALLOWED_OAUTH_HOSTS: frozenset[str] = (
 
 
 def _validate_outbound_url(url: str) -> None:
-    """Reject URLs that could cause SSRF.
+    """Reject URLs that could cause SSRF (any violation → HTTP 400).
 
-    Rules enforced (any violation → HTTP 400):
-    - Scheme must be ``https``.
-    - Host must not parse as a valid IP address (blocks 127.0.0.1, 10.x,
-      169.254.169.254, ::1, etc.).
-    - Host must be present in the configured allowlist.
+    Delegates the https / IP-literal / allowlist / port-pinning rules to the shared
+    ``require_allowlisted_https`` guard in ``autobot_shared.url_safety`` so there is
+    a single SSRF module (#11091 item 3), translating its ``ValueError`` into an
+    HTTP 400. Behaviour is unchanged; ``_ALLOWED_OAUTH_HOSTS`` remains the
+    provider-OAuth allowlist passed to the shared check.
     """
     try:
-        parsed = urlparse(url)
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid URL")
-
-    if parsed.scheme != "https":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only https URLs are permitted")
-
-    host = parsed.hostname or ""
-    if not host:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="URL has no host")
-
-    try:
-        ipaddress.ip_address(host)
-        # If ip_address() succeeds the host is an IP literal — reject unconditionally.
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="IP-literal hosts are not permitted")
-    except ValueError:
-        pass  # Not an IP address — continue to allowlist check.
-
-    if host.lower() not in _ALLOWED_OAUTH_HOSTS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Host '{host}' is not in the provider OAuth allowlist",
-        )
-
-    # Port pinning (#11022): only the standard https port is allowed, so an
-    # allowlisted host can't be used to reach a non-HTTPS service on another port
-    # (e.g. https://api.github.com:22/...). urlparse defers port parsing to
-    # attribute access, so a malformed port (:99999) raises ValueError here —
-    # catch it and fail with 400, not an unhandled 500 (#11066 audit follow-up).
-    try:
-        port = parsed.port
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="URL has an invalid port")
-    if port not in (None, 443):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only the standard https port (443) is permitted",
-        )
+        require_allowlisted_https(url, _ALLOWED_OAUTH_HOSTS)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
 # The registry/app-factory prepends "/api" (see feature_routers.py), so this
