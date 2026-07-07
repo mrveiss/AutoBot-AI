@@ -280,6 +280,20 @@ class AgentLoop:
         )
         self._state = LoopState.INITIALIZING
         self._iteration_count = 0
+        self._reset_run_flags()
+        # Clear any leftover steering messages from a previous run.
+        self._steering_inbox = asyncio.Queue()
+        # Clear answer inbox and waiting flag from a previous run (#10553).
+        self._human_answer_inbox = asyncio.Queue()
+        self._waiting_for_human = False
+
+    def _reset_run_flags(self) -> None:
+        """Reset per-run halt/error latch state (GH#11175).
+
+        Shared by ``_init_task_context`` (fresh run) and ``resume_run`` (crash
+        recovery) so a resumed run does not inherit a stale halt/abstain/error
+        latch that ``_should_continue`` would trip on immediately.
+        """
         self._consecutive_errors = 0
         self._investigated_files = set()  # GH#11149: reset fact-forcing state per task
         self._halted_on_repetition = False
@@ -291,11 +305,6 @@ class AgentLoop:
         self._halt_outcome = None
         self._halt_reason = ""
         self._error_budget_exhausted = False
-        # Clear any leftover steering messages from a previous run.
-        self._steering_inbox = asyncio.Queue()
-        # Clear answer inbox and waiting flag from a previous run (#10553).
-        self._human_answer_inbox = asyncio.Queue()
-        self._waiting_for_human = False
 
     async def _execute_main_loop(self) -> list[IterationResult]:
         """Execute the main iteration loop.
@@ -419,9 +428,6 @@ class AgentLoop:
             # Issue #620: Use helper for task finalization
             result = await self._finalize_task(results)
 
-            # GH#11175: run reached a terminal state — drop its resume checkpoint.
-            await self._clear_run_checkpoint(task_id)
-
             # Issue #4308: notify Slack on successful task completion
             duration = time.monotonic() - _task_start
             await slack.post_task_completion(
@@ -459,6 +465,10 @@ class AgentLoop:
 
         finally:
             self._current_phase = LoopPhase.STANDBY
+            # GH#11175: clear the resume checkpoint on any terminal path
+            # (success/failure/cancel). A hard process crash skips finally, so its
+            # checkpoint survives for resume_run() — which is the intended behaviour.
+            await self._clear_run_checkpoint(task_id)
 
     async def resume_run(self, task_id: str) -> dict[str, Any]:
         """Resume a crashed/restarted run from its last persisted checkpoint (GH#11175).
@@ -474,6 +484,7 @@ class AgentLoop:
 
         self._current_context = TaskContext.from_snapshot(snapshot)
         self._iteration_count = self._current_context.iteration_count
+        self._reset_run_flags()  # start from a clean halt/error latch (GH#11175)
         logger.info(
             "AgentLoop: resuming task %s from iteration %d",
             task_id,
@@ -1232,6 +1243,9 @@ class AgentLoop:
         try:
             from autobot_shared.redis_client import redis_set
 
+            # The live iteration counter is the AgentLoop attribute; mirror it onto
+            # the context so the snapshot records real progress (else resume → 0).
+            self._current_context.iteration_count = self._iteration_count
             key = _run_checkpoint_key(self._current_context.task_id)
             snapshot = self._current_context.to_snapshot()
             await redis_set(key, json.dumps(snapshot), expire=_RUN_CHECKPOINT_TTL_SECONDS)

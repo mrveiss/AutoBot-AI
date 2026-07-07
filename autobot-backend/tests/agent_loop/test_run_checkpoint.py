@@ -9,12 +9,18 @@ and resume_run restoring state and continuing to a terminal result.
 """
 
 import json
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from agent_loop.loop import AgentLoop, _run_checkpoint_key
 from agent_loop.types import TaskContext
+
+# The stubbing conftest plants a fake ``agent_loop`` package, so string-target
+# patches like ``patch("agent_loop.loop.x")`` fail dot-lookup; patch the real
+# module object fetched from sys.modules instead.
+_loop_module = sys.modules["agent_loop.loop"]
 
 
 def _ctx() -> TaskContext:
@@ -65,6 +71,7 @@ def test_from_snapshot_rejects_incompatible_version():
 async def test_checkpoint_run_writes_snapshot_to_redis():
     loop = _loop()
     loop._current_context = _ctx()
+    loop._iteration_count = 3
     redis_set = AsyncMock()
     with patch("autobot_shared.redis_client.redis_set", redis_set):
         await loop._checkpoint_run()
@@ -72,6 +79,19 @@ async def test_checkpoint_run_writes_snapshot_to_redis():
     key, payload = redis_set.await_args.args[0], redis_set.await_args.args[1]
     assert key == _run_checkpoint_key("task-abc")
     assert json.loads(payload)["iteration_count"] == 3
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_syncs_live_iteration_counter():
+    """Regression: the snapshot must record the loop's live counter, not the
+    context's stale default — nothing else advances context.iteration_count."""
+    loop = _loop()
+    loop._current_context = TaskContext(task_id="t", description="d")  # iteration_count defaults to 0
+    loop._iteration_count = 5
+    redis_set = AsyncMock()
+    with patch("autobot_shared.redis_client.redis_set", redis_set):
+        await loop._checkpoint_run()
+    assert json.loads(redis_set.await_args.args[1])["iteration_count"] == 5
 
 
 @pytest.mark.asyncio
@@ -118,3 +138,19 @@ async def test_resume_run_raises_when_no_checkpoint():
     with patch.object(AgentLoop, "load_run_snapshot", AsyncMock(return_value=None)):
         with pytest.raises(ValueError):
             await loop.resume_run("missing")
+
+
+@pytest.mark.asyncio
+async def test_run_task_clears_checkpoint_on_failure():
+    """A failed run must drop its checkpoint (finally path), not leave it resumable."""
+    loop = _loop()
+    slack = MagicMock()
+    slack.post_agent_status = AsyncMock()
+    slack.post_task_completion = AsyncMock()
+    loop._create_task_plan = AsyncMock()
+    loop._execute_main_loop = AsyncMock(side_effect=RuntimeError("boom"))
+    loop._clear_run_checkpoint = AsyncMock()
+    with patch.object(_loop_module, "get_slack_hook", return_value=slack):
+        with pytest.raises(RuntimeError):
+            await loop.run_task("do it", task_id="task-x")
+    loop._clear_run_checkpoint.assert_awaited_with("task-x")
