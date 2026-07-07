@@ -159,7 +159,9 @@ class Orchestrator(_DeprecatedRequestMixin):
         self.agent_registry: Dict[str, AgentProfile] = {}
         # GH #6820: AgentRegistry — structured profile store with capability-based lookup.
         # Runs alongside the plain-dict self.agent_registry for structured queries.
-        self._profile_registry = AgentRegistry(initialize_defaults=True)
+        # GH#11139: seeded by _initialize_default_agents() (called later in __init__)
+        # via register(), so skip the built-in defaults to avoid double instantiation.
+        self._profile_registry = AgentRegistry(initialize_defaults=False)
         self.workflow_documentation: Dict[str, WorkflowDocumentation] = {}
         self.agent_interactions: List[AgentInteraction] = []
         self.knowledge_base = KnowledgeBase() if KNOWLEDGE_BASE_AVAILABLE else None

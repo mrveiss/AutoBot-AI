@@ -14,6 +14,8 @@ Acceptance criteria:
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from agent_loop.loop import AgentLoop
 from agent_loop.types import AgentLoopConfig
 
@@ -63,3 +65,35 @@ class TestCheckForbidden:
     def test_empty_manifest_passes_everything(self) -> None:
         loop = _make_loop(frozenset())
         assert loop._check_forbidden([{"tool_name": "bash"}, {"tool_name": "deploy"}]) == {}
+
+
+class TestExecuteToolsShortCircuit:
+    """End-to-end: a forbidden tool is blocked in _execute_tools before approval."""
+
+    @pytest.mark.asyncio
+    async def test_forbidden_tool_never_reaches_approval_or_executor(self) -> None:
+        loop = _make_loop(frozenset({"bash"}))
+        # Isolate the forbidden path: no repetition halt, and prove the later
+        # stages are never reached.
+        loop._check_tool_call_repetition = MagicMock(return_value=None)
+        loop._check_approvals = AsyncMock(return_value={})
+        loop.tool_executor = MagicMock()
+
+        result = await loop._execute_tools([{"tool_name": "bash", "args": {"cmd": "ls"}}])
+
+        assert "bash" in result and "forbidden" in result["bash"]["error"].lower()
+        loop._check_approvals.assert_not_awaited()
+        loop.tool_executor.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_allowed_tool_proceeds_past_forbidden_check(self) -> None:
+        loop = _make_loop(frozenset({"bash"}))
+        loop._check_tool_call_repetition = MagicMock(return_value=None)
+        # Stop execution right after the forbidden check so we only assert it passed.
+        loop._check_approvals = AsyncMock(return_value={"read_file": {"error": "stop"}})
+
+        result = await loop._execute_tools([{"tool_name": "read_file", "args": {}}])
+
+        # Reached the approval stage → forbidden check did not block it.
+        loop._check_approvals.assert_awaited_once()
+        assert result == {"read_file": {"error": "stop"}}
