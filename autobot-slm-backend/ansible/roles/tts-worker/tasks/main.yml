@@ -104,9 +104,18 @@
 # ============================================================
 # Python venv
 # ============================================================
+- name: "TTS Worker | Enforce venv target Python version (env-drift fix)"
+  ansible.builtin.include_role:
+    name: python314
+    tasks_from: ensure_venv_version
+  vars:
+    venv_path: "{{ tts_install_dir }}/venv"
+    venv_python: python3.14
+  tags: ['tts', 'venv']
+
 - name: "TTS Worker | Create Python virtual environment"
   ansible.builtin.command:
-    cmd: python3 -m venv {{ tts_install_dir }}/venv
+    cmd: python3.14 -m venv {{ tts_install_dir }}/venv
     creates: "{{ tts_install_dir }}/venv/bin/python"
   tags: ['tts', 'venv']
 

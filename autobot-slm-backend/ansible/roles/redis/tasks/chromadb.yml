@@ -20,6 +20,15 @@
   become: true
   tags: ['redis', 'chromadb']
 
+- name: "ChromaDB | Enforce venv target Python version (env-drift fix)"
+  ansible.builtin.include_role:
+    name: python314
+    tasks_from: ensure_venv_version
+  vars:
+    venv_path: "{{ chromadb_install_dir }}/venv"
+    venv_python: python3.14
+  tags: ['redis', 'chromadb']
+
 - name: "ChromaDB | Create Python venv"
   ansible.builtin.command:
     cmd: "python3.14 -m venv {{ chromadb_install_dir }}/venv --clear"

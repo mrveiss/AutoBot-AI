@@ -540,6 +540,14 @@
     - venv_check.stat.exists and venv_check.stat.isdir
     - (_venv_health.rc | default(0)) != 0
 
+- name: "Backend | Enforce venv target Python version (env-drift fix)"
+  ansible.builtin.include_role:
+    name: python314
+    tasks_from: ensure_venv_version
+  vars:
+    venv_path: "{{ backend_code_dir }}/venv"
+    venv_python: python3.14
+
 - name: Create Python 3.14 virtual environment via deadsnakes
   ansible.builtin.command:
     cmd: "python3.14 -m venv {{ backend_code_dir }}/venv"
