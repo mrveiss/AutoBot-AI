@@ -4,9 +4,9 @@
 # Author: mrveiss
 """Librarian Assistant Agent for Web Research.
 
-This agent performs web research using the Playwright service running on the
-browser VM (.25), presents results with proper source attribution, and stores
-quality information in the knowledge base for future reference.
+This agent performs web research using content_reach (youtube/reddit/web_page
+by URL-aware routing), presents results with proper source attribution, and
+stores quality information in the knowledge base for future reference.
 
 Architecture: called by the orchestrator when local KB results are insufficient
 or the query requires current/external data.
@@ -15,20 +15,35 @@ or the query requires current/external data.
 import json
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List
+from urllib.parse import urlparse
 
-from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from config import config
 from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
-from utils.service_registry import get_service_url
 
 logger = get_logger(__name__)
 
 
+def _source_for_url(url: str) -> str:
+    """Route a URL to the appropriate content_reach source name.
+
+    Returns "youtube" for YouTube URLs, "reddit" for Reddit URLs,
+    "web_page" for everything else.  Robust to missing scheme.
+    """
+    if "://" not in url:
+        url = "https://" + url
+    host = urlparse(url).netloc.lower()
+    if "youtube.com" in host or "youtu.be" in host:
+        return "youtube"
+    if "reddit.com" in host:
+        return "reddit"
+    return "web_page"
+
+
 class LibrarianAssistant:
-    """An agent that researches information using the browser VM Playwright service."""
+    """An agent that researches information using content_reach for extraction."""
 
     def __init__(self):
         """Initialize the Librarian Assistant Agent."""
@@ -38,10 +53,6 @@ class LibrarianAssistant:
 
         # Configuration
         self.enabled = self.config.get_nested("librarian_assistant.enabled", True)
-        self.playwright_service_url = self.config.get_nested(
-            "librarian_assistant.playwright_service_url",
-            get_service_url("playwright-vnc"),
-        )
         self.max_search_results = self.config.get_nested("librarian_assistant.max_search_results", 5)
         self.max_content_length = self.config.get_nested("librarian_assistant.max_content_length", 2000)
         self.quality_threshold = self.config.get_nested("librarian_assistant.quality_threshold", 0.7)
@@ -63,9 +74,6 @@ class LibrarianAssistant:
             ],
         )
 
-        # Use HTTP client singleton for requests to Playwright service
-        self.http_client = get_http_client()
-
     @staticmethod
     async def _emit(callback: Callable | None, event: Dict[str, Any]) -> None:
         """Fire a progress event if a callback is registered. Issue #1256."""
@@ -75,20 +83,6 @@ class LibrarianAssistant:
             await callback(event)
         except Exception as exc:
             logger.warning("Progress callback error for event %s: %s", event, exc)
-
-    async def _check_playwright_service(self) -> bool:
-        """Check if browser VM Playwright service is available."""
-        try:
-            async with await self.http_client.get(f"{self.playwright_service_url}/health") as response:
-                if response.status == 200:
-                    logger.info("Playwright service is healthy")
-                    return True
-                else:
-                    logger.error("Playwright service unhealthy: status %s", response.status)
-                    return False
-        except Exception as e:
-            logger.error("Cannot reach Playwright service: %s", e)
-            return False
 
     async def search_web(
         self,
@@ -139,67 +133,73 @@ class LibrarianAssistant:
             logger.error("Error during web search: %s", e)
             return []
 
-    def _build_content_data(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Build content data dictionary from extraction result.
+    def _content_data_from_result(self, result: Any, url: str) -> Dict[str, Any]:
+        """Map a ContentResult to the 8-key content_data shape. Issue #10932.
 
         Args:
-            result: Raw result from Playwright extraction service
+            result: ContentResult from content_reach registry
+            url: Original request URL (fallback when result.url is empty)
 
         Returns:
-            Formatted content data dictionary. Issue #620.
+            content_data dict with url/title/description/content/domain/
+            is_trusted/timestamp/content_length.
         """
+        effective_url = result.url or url
+        content = result.text or ""
+        structured = result.structured if result.structured else {}
+        netloc = urlparse(effective_url).netloc
+
+        title = structured.get("title") or netloc
+        description = structured.get("description") or content[:200]
+        domain = netloc
+
+        is_trusted = any(domain.endswith(td) for td in self.trusted_domains) if domain else False
+
         return {
-            "url": result["url"],
-            "title": result["title"],
-            "description": result["description"],
-            "content": result["content"],
-            "domain": result["domain"],
-            "is_trusted": result["is_trusted"],
-            "timestamp": result["timestamp"],
-            "content_length": result["content_length"],
+            "url": effective_url,
+            "title": title,
+            "description": description,
+            "content": content,
+            "domain": domain,
+            "is_trusted": is_trusted,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "content_length": len(content),
         }
 
     async def extract_content(self, url: str) -> Dict[str, Any] | None:
-        """Extract content from a web page using the browser VM Playwright service.
+        """Extract content from a URL via content_reach (URL-aware routing). Issue #10932.
+
+        Routes YouTube URLs to the "youtube" source, reddit.com URLs to
+        "reddit", and everything else to "web_page".
 
         Args:
             url: URL to extract content from
 
         Returns:
-            Dictionary containing extracted content and metadata
+            content_data dict or None on failure / empty content
         """
-        if not await self._check_playwright_service():
-            return None
+        from content_reach.base import ContentRequest
+        from content_reach.registry import get_content_source_registry
 
+        reg = get_content_source_registry()
+        if reg.get_chain("web_page") is None:
+            from content_reach.bootstrap import register_default_sources
+
+            register_default_sources(reg)
+
+        source = _source_for_url(url)
         try:
-            payload = {"url": url}
-            logger.info("Extracting content via Playwright service: %s", url)
-
-            async with await self.http_client.post(f"{self.playwright_service_url}/extract", json=payload) as response:
-                if response.status != 200:
-                    logger.error("Content extraction failed: status %s", response.status)
-                    return None
-
-                result = await response.json()
-
-                if result.get("success"):
-                    content_data = self._build_content_data(result)
-                    logger.info(
-                        "Extracted %s characters from %s",
-                        result["content_length"],
-                        result["domain"],
-                    )
-                    return content_data
-                else:
-                    logger.error(
-                        "Content extraction failed: %s",
-                        result.get("error", "Unknown error"),
-                    )
-                    return None
-
-        except Exception as e:
-            logger.error("Error extracting content from %s: %s", url, e)
+            result = await reg.fetch(source, ContentRequest(url=url, query=url, source=source))
+        except Exception as exc:
+            logger.error("content_reach extract failed for %s (%s): %s", url, source, exc)
             return None
+
+        if not result.success or not (result.text or "").strip():
+            logger.info("No content extracted for %s via %s", url, source)
+            return None
+
+        logger.info("Extracted %d characters from %s via %s", len(result.text or ""), url, source)
+        return self._content_data_from_result(result, url)
 
     def _build_fallback_assessment(self, content_data: Dict[str, Any], error_msg: str | None = None) -> Dict[str, Any]:
         """Build fallback assessment when LLM fails (Issue #665: extracted helper)."""
@@ -507,12 +507,6 @@ class LibrarianAssistant:
 
             if not search_results:
                 research_results["summary"] = "No search results found for the query."
-                return research_results
-
-            # Extract step still requires Playwright; skip gracefully if unavailable.
-            if not await self._check_playwright_service():
-                logger.warning("Playwright service not available; skipping content extraction")
-                research_results["summary"] = "Search completed but content extraction unavailable."
                 return research_results
 
             extracted_content = await self._extract_and_process_results(

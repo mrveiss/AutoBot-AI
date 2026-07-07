@@ -9,7 +9,6 @@ Verifies:
 - emits research:result_found per result
 - returns {url,title,snippet} dicts
 - returns [] on exception
-- extract_content path is UNCHANGED (still calls Playwright /extract)
 """
 
 from __future__ import annotations
@@ -51,7 +50,6 @@ for _stub_name in [
     "knowledge_base",
     "services",
     "services.llm_service",
-    "utils.service_registry",
 ]:
     sys.modules.setdefault(_stub_name, _make_stub(_stub_name))
 
@@ -99,7 +97,7 @@ _fake_config.get_nested = MagicMock(side_effect=lambda key, default=None: defaul
 sys.modules.setdefault("config", types.SimpleNamespace(config=_fake_config))
 
 # Patch autobot_shared stubs if not already real modules.
-for _shared in ["autobot_shared.http_client", "autobot_shared.logging_manager"]:
+for _shared in ["autobot_shared.logging_manager"]:
     if _shared not in sys.modules:
         _make_stub(_shared)
 
@@ -114,16 +112,6 @@ if "autobot_shared.singleton_factory" not in sys.modules:
 _logging_mod = sys.modules.get("autobot_shared.logging_manager")
 if _logging_mod is not None:
     _logging_mod.get_logger = logging.getLogger  # type: ignore[attr-defined]
-
-# get_http_client must return a mock with async context-manager methods.
-_http_mod = sys.modules.get("autobot_shared.http_client")
-if _http_mod is not None:
-    _http_mod.get_http_client = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
-
-# get_service_url can return any string.
-_utils_mod = sys.modules.get("utils.service_registry")
-if _utils_mod is not None:
-    _utils_mod.get_service_url = MagicMock(return_value="http://playwright:3000")  # type: ignore[attr-defined]
 
 # get_llm_service can return a mock.
 _llm_mod = sys.modules.get("services.llm_service")
@@ -163,14 +151,12 @@ def _make_assistant() -> LibrarianAssistant:
         assistant.knowledge_base = MagicMock()
         assistant.llm = MagicMock()
         assistant.enabled = True
-        assistant.playwright_service_url = "http://playwright:3000"
         assistant.max_search_results = 5
         assistant.max_content_length = 2000
         assistant.quality_threshold = 0.7
         assistant.auto_store_quality = True
         assistant.trusted_domains = []
-        assistant.http_client = MagicMock()
-    return assistant
+        return assistant
 
 
 def _sr(n: int) -> MagicMock:
@@ -210,8 +196,8 @@ async def test_search_web_uses_registry_not_playwright():
         results = await assistant.search_web("python asyncio")
 
     mock_registry.search.assert_awaited_once()
-    # Must NOT have called the Playwright /search endpoint.
-    assistant.http_client.post.assert_not_called()
+    # http_client is removed — no Playwright endpoint can be called.
+    assert not hasattr(assistant, "http_client")
     assert len(results) == 2
     assert results[0]["url"] == "https://example.com/1"
     assert results[0]["title"] == "Title 1"
@@ -296,44 +282,3 @@ async def test_search_web_returns_dicts_not_search_result_objects():
     assert "url" in results[0]
     assert "title" in results[0]
     assert "snippet" in results[0]
-
-
-@pytest.mark.asyncio
-async def test_extract_content_still_calls_playwright_extract():
-    """extract_content must POST to Playwright /extract (unchanged path)."""
-    assistant = _make_assistant()
-
-    extract_response = MagicMock()
-    extract_response.status = 200
-    extract_response.json = AsyncMock(
-        return_value={
-            "success": True,
-            "url": "https://example.com/page",
-            "title": "Page Title",
-            "description": "desc",
-            "content": "content text",
-            "domain": "example.com",
-            "is_trusted": True,
-            "timestamp": "2026-01-01T00:00:00Z",
-            "content_length": 12,
-        }
-    )
-    extract_response.__aenter__ = AsyncMock(return_value=extract_response)
-    extract_response.__aexit__ = AsyncMock(return_value=False)
-
-    health_response = MagicMock()
-    health_response.status = 200
-    health_response.__aenter__ = AsyncMock(return_value=health_response)
-    health_response.__aexit__ = AsyncMock(return_value=False)
-
-    assistant.http_client.get = AsyncMock(return_value=health_response)
-    assistant.http_client.post = AsyncMock(return_value=extract_response)
-
-    result = await assistant.extract_content("https://example.com/page")
-
-    assert result is not None
-    assert result["url"] == "https://example.com/page"
-    # Confirm the POST went to /extract, not /search.
-    call_url = assistant.http_client.post.call_args[0][0]
-    assert "/extract" in call_url
-    assert "/search" not in call_url
