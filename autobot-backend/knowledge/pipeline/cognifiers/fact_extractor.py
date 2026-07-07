@@ -17,7 +17,12 @@ from uuid import UUID
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
-from knowledge.pipeline.cognifiers.llm_utils import batched_chunk_extract, parse_llm_json_response
+from knowledge.pipeline.cognifiers.llm_utils import (
+    batched_chunk_extract,
+    literal_prompt_list,
+    parse_llm_json_response,
+    render_prompt_sentinels,
+)
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.fact import AtomicFact, FactType
 from knowledge.pipeline.registry import TaskRegistry
@@ -30,12 +35,13 @@ logger = get_logger(__name__)
 # the ``FactType`` Literal so the prompt fragment and the validation set can never
 # drift from the type. Adding a value to FactType updates both at once.
 _FACT_TYPES = tuple(get_args(FactType))
-_FACT_TYPES_STR = ", ".join(f"'{t}'" for t in _FACT_TYPES)
+_FACT_TYPES_STR = literal_prompt_list(FactType, quote=True)
 
 # Max characters of a chunk sent to the LLM (shared by per-chunk and batched paths).
 MAX_CHUNK_CHARS = 2000
 
-FACT_EXTRACTION_PROMPT = """Extract atomic facts from the following text.
+FACT_EXTRACTION_PROMPT = render_prompt_sentinels(
+    """Extract atomic facts from the following text.
 
 For each fact, provide:
 - subject: Main subject or entity (e.g., "AutoBot", "ChromaDB")
@@ -59,11 +65,14 @@ Return JSON array of facts:
 
 Text:
 {text}
-""".replace("%%FACT_TYPES%%", _FACT_TYPES_STR)
+""",
+    {"FACT_TYPES": _FACT_TYPES_STR},
+)
 
 # Batched variant (#10647): extract facts from multiple labeled chunks in one
 # call, keyed by chunk index, to cut LLM round-trips.
-FACT_EXTRACTION_BATCH_PROMPT = """Extract atomic facts from each of the following text chunks.
+FACT_EXTRACTION_BATCH_PROMPT = render_prompt_sentinels(
+    """Extract atomic facts from each of the following text chunks.
 
 Each chunk is labeled "Chunk N:". For each fact provide:
 - subject, predicate, object
@@ -83,7 +92,9 @@ no facts. Example for two chunks:
 
 Chunks:
 {chunks}
-""".replace("%%FACT_TYPES%%", _FACT_TYPES_STR)
+""",
+    {"FACT_TYPES": _FACT_TYPES_STR},
+)
 
 # NLP-based patterns for fact extraction (Issue #3395)
 # Used when sentence-level parsing can identify simple facts
@@ -255,13 +266,9 @@ class FactExtractor(BaseCognifier):
         of a fact-local reimplementation — so fact extraction honors the
         ``cognifier_multichunk_batching`` / ``cognifier_batch_max_chunk_chars``
         config like the other extractors and inherits the #11012 partial-response
-        fix. Falls back to the legacy per-chunk loop when the flag is disabled.
+        fix. ``batched_chunk_extract`` honors the flag itself, running the legacy
+        per-chunk loop when it is disabled (#11090).
         """
-        if not config.cognifier_multichunk_batching:
-            facts: List[AtomicFact] = []
-            for chunk in chunks:
-                facts.extend(await self._extract_from_chunk(chunk, context))
-            return facts
         return await batched_chunk_extract(
             chunks,
             llm=self.llm,

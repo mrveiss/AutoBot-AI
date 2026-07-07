@@ -149,6 +149,63 @@ async def test_helper_single_chunk_skips_batching():
     assert items == ["one"]
 
 
+@pytest.mark.asyncio
+async def test_helper_batching_disabled_runs_per_chunk():
+    """batching_enabled=False runs extract_one per chunk without any batched LLM
+    call — the legacy guard the extractors used to repeat inline now lives here (#11090)."""
+    c0, c1 = _chunk("c0"), _chunk("c1")
+    llm = types.SimpleNamespace(chat=AsyncMock())  # must NOT be called for the batch path
+    seen: list = []
+
+    async def extract_one(chunk):
+        seen.append(chunk.id)
+        return [chunk.id]
+
+    items = await llm_utils.batched_chunk_extract(
+        [c0, c1],
+        llm=llm,
+        batch_prompt_template="{chunks}",
+        llm_type="extraction",
+        max_chunk_chars=0,
+        convert=lambda raw, chunk: raw,
+        extract_one=extract_one,
+        batching_enabled=False,
+    )
+
+    assert llm.chat.call_count == 0  # no batched call
+    assert seen == [c0.id, c1.id]  # each chunk extracted individually, in order
+    assert items == [c0.id, c1.id]
+
+
+@pytest.mark.asyncio
+async def test_helper_batching_flag_read_from_config_when_unset(monkeypatch):
+    """When batching_enabled is not passed, the flag is read from config at call
+    time (not import) so monkeypatching it takes effect (#11090)."""
+    from autobot_shared.ssot_config import config
+
+    monkeypatch.setattr(config, "cognifier_multichunk_batching", False)
+    c0, c1 = _chunk("c0"), _chunk("c1")
+    llm = types.SimpleNamespace(chat=AsyncMock())
+    calls: list = []
+
+    async def extract_one(chunk):
+        calls.append(chunk.id)
+        return []
+
+    await llm_utils.batched_chunk_extract(
+        [c0, c1],
+        llm=llm,
+        batch_prompt_template="{chunks}",
+        llm_type="extraction",
+        max_chunk_chars=0,
+        convert=lambda raw, chunk: raw,
+        extract_one=extract_one,
+    )
+
+    assert llm.chat.call_count == 0  # config flag off -> per-chunk
+    assert calls == [c0.id, c1.id]
+
+
 def test_indexed_blocks_truncate_and_label():
     blocks = llm_utils.build_indexed_chunk_blocks(["abcdef", "xyz"], max_chars=3)
     assert blocks == "Chunk 0:\nabc\n\nChunk 1:\nxyz"
