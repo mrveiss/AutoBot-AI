@@ -718,9 +718,9 @@ class TieLazy:
 
     assert god_idx is not None, "god_class finding expected"
     assert lazy_idx is not None, "lazy_class finding expected"
-    assert god_idx < lazy_idx, (
-        f"god_class (higher severity) must precede lazy_class; got god={god_idx}, lazy={lazy_idx}"
-    )
+    assert (
+        god_idx < lazy_idx
+    ), f"god_class (higher severity) must precede lazy_class; got god={god_idx}, lazy={lazy_idx}"
 
 
 @pytest.mark.asyncio
@@ -799,6 +799,4 @@ class BelowLazy{i}:
         patterns=["*.py"],
         exclude_patterns=["__pycache__"],
     )
-    assert report.systemic_patterns == [], (
-        f"count=2 is below threshold=3; expected [], got {report.systemic_patterns}"
-    )
+    assert report.systemic_patterns == [], f"count=2 is below threshold=3; expected [], got {report.systemic_patterns}"
