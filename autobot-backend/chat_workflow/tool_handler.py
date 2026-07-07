@@ -1794,45 +1794,65 @@ class ToolHandlerMixin:
 
         return message, break_loop_requested, respond_content
 
-    def _handle_delegate_tool(
-        self, tool_call: dict[str, Any], execution_results: list[dict[str, Any]]
-    ) -> WorkflowMessage:
-        """
-        Handle the 'delegate' tool for subordinate agent delegation.
+    async def _handle_delegate_tool(
+        self,
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
+        ctx: "LLMIterationContext" | None = None,
+    ):
+        """Handle the 'delegate' tool (Issue #657; GH#11207 execution).
 
-        Issue #665: Extracted from _process_tool_calls for single responsibility.
-        Issue #657: Original delegate tool handling logic.
-
-        Returns:
-            WorkflowMessage for delegation status
+        When ``AUTOBOT_DELEGATION_ENABLED`` is off (default) this keeps the original
+        record-only behaviour — no change to the live chat path. When on, it runs
+        the subtask as a governed subagent (its ``forbidden_work`` constrains it) via
+        the selected engine and returns the result. Yields WorkflowMessage(s).
         """
+        from chat_workflow.delegation import DELEGATION_ENABLED, run_delegated_subtask
+
         params = tool_call.get("params", {})
         task = params.get("task", "")
         reason = params.get("reason", "Task delegation")
-        wait_for_result = params.get("wait_for_result", True)
 
-        logger.info("[Issue #657] Delegate tool invoked: task=%s, reason=%s", task[:100], reason)
+        if not DELEGATION_ENABLED:
+            logger.info("[Issue #657] Delegate tool invoked (record-only): task=%s", task[:100])
+            execution_results.append(
+                {
+                    "tool": "delegate",
+                    "task": task,
+                    "reason": reason,
+                    "wait_for_result": params.get("wait_for_result", True),
+                    "status": "pending_delegation",
+                }
+            )
+            yield WorkflowMessage(
+                type="delegation",
+                content=f"Delegating subtask: {task[:100]}...",
+                metadata={"message_type": "delegate_tool", "reason": reason, "task": task},
+            )
+            return
 
-        # Record delegation for manager to process
-        execution_results.append(
-            {
-                "tool": "delegate",
-                "task": task,
-                "reason": reason,
-                "wait_for_result": wait_for_result,
-                "status": "pending_delegation",
-            }
-        )
-
-        return WorkflowMessage(
-            type="delegation",
-            content=f"Delegating subtask: {task[:100]}...",
-            metadata={
-                "message_type": "delegate_tool",
-                "reason": reason,
-                "task": task,
-            },
-        )
+        agent_type = params.get("agent_type", "research_agent")
+        engine = params.get("engine", "claude_code")
+        depth = int((getattr(ctx, "context", None) or {}).get("delegation_depth", 0)) if ctx else 0
+        logger.info("[GH#11207] Delegating to %s subagent (engine=%s, depth=%d): %s", agent_type, engine, depth, task[:100])
+        try:
+            result = await run_delegated_subtask(task, agent_type=agent_type, depth=depth, engine=engine)
+            execution_results.append(
+                {"tool": "delegate", "task": task, "agent_type": agent_type, "engine": engine, "status": "completed", "result": result}
+            )
+            yield WorkflowMessage(
+                type="delegation",
+                content=f"Subagent ({agent_type}) completed: {result[:200]}",
+                metadata={"message_type": "delegate_tool", "agent_type": agent_type, "engine": engine},
+            )
+        except Exception as exc:
+            logger.warning("[GH#11207] Delegation failed: %s", exc)
+            execution_results.append({"tool": "delegate", "task": task, "status": "error", "error": str(exc)})
+            yield WorkflowMessage(
+                type="error",
+                content=f"Delegation failed: {exc}",
+                metadata={"message_type": "delegate_tool", "error": True},
+            )
 
     def _validate_browser_params(self, tool_name: str, params: dict[str, Any]) -> str | None:
         """Validate browser tool params. Returns error message or None. #1368."""
@@ -2598,7 +2618,8 @@ class ToolHandlerMixin:
         if tool_name == "delegate":
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
-            yield self._handle_delegate_tool(tool_call, execution_results)
+            async for msg in self._handle_delegate_tool(tool_call, execution_results, ctx):
+                yield msg
             return
 
         # Issue #1368: Route browser tools to browser VM
