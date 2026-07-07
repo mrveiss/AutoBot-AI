@@ -21,6 +21,7 @@ import sys
 import types
 import uuid  # noqa: F401 — used in fixture helpers below
 from datetime import datetime, timezone  # noqa: F401 — used in fixture helpers below
+from pathlib import Path
 from typing import AsyncGenerator, Dict  # noqa: F401 — used in fixture type hints below
 from unittest.mock import AsyncMock, MagicMock, patch  # noqa: F401 — used in fixtures below
 
@@ -104,47 +105,98 @@ _make_services_stub()
 _make_agents_stub()
 
 
-def _make_codebase_analytics_stubs() -> None:
-    """Stub api.codebase_analytics so the LLC tests never touch its heavy __init__.
+def _shield_codebase_analytics_package() -> None:
+    """Register a lightweight package stub for api.codebase_analytics in sys.modules.
 
-    ``api/codebase_analytics/__init__.py`` imports ``storage.py`` which pulls in
-    ``knowledge.backends`` — unavailable in the unit-test venv.  We pre-populate
-    sys.modules with thin stubs that expose only what the LLC repo-attach endpoints
-    need (``source_service.create_github_source`` and ``source_storage.get_source``).
-    The real functions are replaced by AsyncMock in each test fixture.
+    Problem: api/codebase_analytics/__init__.py eagerly imports routes.py which
+    chains through tasks/__init__.py → services.audit.audit — a path broken by
+    the services stub above.  Any test that does
+    ``from api.codebase_analytics import source_service`` or
+    ``from api.codebase_analytics.source_models import SourceType``
+    would trigger __init__.py and explode.
+
+    Fix: register a package stub whose __path__ points to the real on-disk
+    directory.  Python's import machinery uses __path__ to locate submodules on
+    the filesystem, so ``from api.codebase_analytics.source_models import SourceType``
+    loads the REAL source_models.py without ever executing __init__.py.  The heavy
+    router/tasks chain is never touched.
+
+    The stub is intentionally minimal (no attributes from __init__.py's __all__).
+    The llc_client fixture installs per-test stubs for source_service and
+    source_storage on top of this, and removes them at teardown so the real
+    submodules remain available when analytics tests run afterward.
     """
-    # knowledge.backends — pulled transitively by storage.py
-    kb_backends = types.ModuleType("knowledge.backends")
-    kb_backends.get_async_default_client = MagicMock()  # type: ignore[attr-defined]
-    kb_backends.get_default_client = MagicMock()  # type: ignore[attr-defined]
-    sys.modules.setdefault("knowledge.backends", kb_backends)
-
-    # api.codebase_analytics.source_models
-    src_models = types.ModuleType("api.codebase_analytics.source_models")
-    src_models.SourceAccess = MagicMock()  # type: ignore[attr-defined]
-    sys.modules.setdefault("api.codebase_analytics.source_models", src_models)
-
-    # api.codebase_analytics.source_service (the one LLC code calls)
-    src_svc = types.ModuleType("api.codebase_analytics.source_service")
-    src_svc.create_github_source = AsyncMock()  # type: ignore[attr-defined]
-    sys.modules.setdefault("api.codebase_analytics.source_service", src_svc)
-
-    # api.codebase_analytics.source_storage
-    src_storage = types.ModuleType("api.codebase_analytics.source_storage")
-    src_storage.get_source = AsyncMock()  # type: ignore[attr-defined]
-    src_storage.delete_source = AsyncMock()  # type: ignore[attr-defined]
-    sys.modules.setdefault("api.codebase_analytics.source_storage", src_storage)
-
-    # api.codebase_analytics (package) — must come after sub-modules
+    if "api.codebase_analytics" in sys.modules:
+        return  # real package already loaded — leave it intact
+    # __file__ = .../autobot-backend/llc/tests/conftest.py → parents[2] = .../autobot-backend
+    _pkg_dir = Path(__file__).parents[2] / "api" / "codebase_analytics"
     pkg = types.ModuleType("api.codebase_analytics")
-    pkg.__path__ = []  # type: ignore[attr-defined]
+    pkg.__path__ = [str(_pkg_dir)]  # type: ignore[attr-defined]
     pkg.__package__ = "api.codebase_analytics"
+    sys.modules["api.codebase_analytics"] = pkg
+
+
+_shield_codebase_analytics_package()
+
+
+# ---------------------------------------------------------------------------
+# Scoped stubs for the two functions LLC route-handlers call lazily (#11129)
+# ---------------------------------------------------------------------------
+
+_LLC_ANALYTICS_STUB_KEYS = (
+    "api.codebase_analytics.source_service",
+    "api.codebase_analytics.source_storage",
+)
+
+
+def _install_source_stubs(fake_create: AsyncMock, fake_get: AsyncMock) -> dict:
+    """Install thin stubs for source_service and source_storage submodules.
+
+    Returns a snapshot mapping each key to its previous sys.modules value
+    (None if absent) so _remove_source_stubs can restore exactly the prior state.
+
+    Only source_service and source_storage are stubbed.  source_models is never
+    touched — the real module is always importable and analytics tests import
+    SourceType from it.  The package stub installed by _shield_codebase_analytics_package
+    already allows submodule lookup without running __init__.py.
+    """
+    snapshot = {k: sys.modules.get(k) for k in _LLC_ANALYTICS_STUB_KEYS}
+
+    src_svc = types.ModuleType("api.codebase_analytics.source_service")
+    src_svc.create_github_source = fake_create  # type: ignore[attr-defined]
+    sys.modules["api.codebase_analytics.source_service"] = src_svc
+
+    src_storage = types.ModuleType("api.codebase_analytics.source_storage")
+    src_storage.get_source = fake_get  # type: ignore[attr-defined]
+    src_storage.delete_source = AsyncMock()  # type: ignore[attr-defined]
+    sys.modules["api.codebase_analytics.source_storage"] = src_storage
+
+    # Keep the package-level reference in sync so
+    # ``from api.codebase_analytics import source_service`` resolves to the stub.
+    pkg = sys.modules["api.codebase_analytics"]
     pkg.source_service = src_svc  # type: ignore[attr-defined]
     pkg.source_storage = src_storage  # type: ignore[attr-defined]
-    sys.modules.setdefault("api.codebase_analytics", pkg)
+
+    return snapshot
 
 
-_make_codebase_analytics_stubs()
+def _remove_source_stubs(snapshot: dict) -> None:
+    """Restore sys.modules to the state captured by _install_source_stubs.
+
+    Entries that were absent before the test are deleted (not kept as stubs)
+    so that subsequent test files (e.g. analytics tests) import the real modules.
+    Also cleans up the package-level aliases installed by _install_source_stubs.
+    """
+    for key, prior in snapshot.items():
+        if prior is None:
+            sys.modules.pop(key, None)
+        else:
+            sys.modules[key] = prior
+
+    pkg = sys.modules.get("api.codebase_analytics")
+    if pkg is not None:
+        pkg.__dict__.pop("source_service", None)  # type: ignore[union-attr]
+        pkg.__dict__.pop("source_storage", None)  # type: ignore[union-attr]
 
 
 # ---------------------------------------------------------------------------
@@ -293,9 +345,11 @@ def _build_llc_app(
 async def llc_client() -> AsyncGenerator[AsyncClient, None]:
     """Async HTTP client wired to the sprints router; patches CodeSource calls.
 
-    We replace the stub AsyncMocks installed by _make_codebase_analytics_stubs()
-    directly on the already-registered sys.modules entries so unittest.mock never
-    needs to import api.codebase_analytics (which would trigger the heavy chain).
+    Installs thin stubs for source_service.create_github_source and
+    source_storage.get_source for the duration of each test, then removes them
+    on teardown.  Removal (rather than leaving stubs in sys.modules forever)
+    ensures that analytics test files collected later in the same pytest session
+    always import the real api.codebase_analytics submodules.
     """
     org = _FIXED_ORG_ID
     project = _make_mock_project(org)
@@ -305,17 +359,7 @@ async def llc_client() -> AsyncGenerator[AsyncClient, None]:
     fake_create = AsyncMock(return_value=fake_src)
     fake_get = AsyncMock(return_value=fake_src)
 
-    # Patch directly on the stub modules (already in sys.modules).
-    svc_mod = sys.modules["api.codebase_analytics.source_service"]
-    storage_mod = sys.modules["api.codebase_analytics.source_storage"]
-    orig_create = svc_mod.create_github_source
-    orig_get = storage_mod.get_source
-    svc_mod.create_github_source = fake_create  # type: ignore[attr-defined]
-    storage_mod.get_source = fake_get  # type: ignore[attr-defined]
-    # Also patch the package-level alias that lazy imports inside sprints.py will land on.
-    pkg_mod = sys.modules["api.codebase_analytics"]
-    pkg_mod.source_service = svc_mod  # type: ignore[attr-defined]
-
+    snapshot = _install_source_stubs(fake_create, fake_get)
     app, _patch_kb = _build_llc_app(org, project, project_with_repo)
 
     try:
@@ -325,9 +369,8 @@ async def llc_client() -> AsyncGenerator[AsyncClient, None]:
             client._test_project_with_repo = project_with_repo  # type: ignore[attr-defined]
             yield client
     finally:
-        svc_mod.create_github_source = orig_create  # type: ignore[attr-defined]
-        storage_mod.get_source = orig_get  # type: ignore[attr-defined]
         _patch_kb.stop()
+        _remove_source_stubs(snapshot)
 
 
 @pytest.fixture
