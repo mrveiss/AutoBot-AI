@@ -440,7 +440,13 @@ class ClaudeCodeBackend(ExecutionBackend):
         # the agent's forbidden_work manifest). Each is injection-guarded; a value
         # that could be read as a flag is skipped.
         disallowed = task.metadata.get("disallowed_tools") or []
-        safe_disallowed = [str(t) for t in disallowed if str(t) and not str(t).startswith("-")]
+        # Drop empties, flag-looking values, and any name carrying the comma/newline
+        # join delimiters (a comma-bearing name would otherwise split into two entries).
+        safe_disallowed = [
+            str(t)
+            for t in disallowed
+            if str(t) and not str(t).startswith("-") and "," not in str(t) and "\n" not in str(t)
+        ]
         if safe_disallowed:
             cmd += ["--disallowedTools", ",".join(safe_disallowed)]
 

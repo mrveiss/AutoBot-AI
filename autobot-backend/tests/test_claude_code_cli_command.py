@@ -47,6 +47,13 @@ def test_disallowed_tools_injection_guarded():
     assert cmd[i + 1] == "Bash,Write"
 
 
+def test_disallowed_tools_drops_delimiter_bearing_names():
+    # A comma/newline in a name would corrupt the joined value → dropped.
+    cmd = _build(_task(disallowed_tools=["Bash", "Edit,--evil", "Wr\nite", "Write"]))
+    i = cmd.index("--disallowedTools")
+    assert cmd[i + 1] == "Bash,Write"
+
+
 def test_model_injection_guard_preserved():
     cmd = _build(_task(model="--evil"))
     assert "--model" not in cmd
