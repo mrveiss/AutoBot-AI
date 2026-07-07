@@ -107,12 +107,14 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import Icon from '@/components/ui/Icon.vue'
 import { useDevices } from '@/composables/useDevices'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('DeviceManagementPanel')
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 const {
   devices,
@@ -138,7 +140,7 @@ async function refresh() {
 }
 
 async function deleteDevice(deviceId: string) {
-  if (!confirm(t('devices.confirmDelete', 'Are you sure you want to unpair this device?'))) {
+  if (!(await confirm({ title: t('common.confirm'), message: t('devices.confirmDelete', 'Are you sure you want to unpair this device?') }))) {
     return
   }
 

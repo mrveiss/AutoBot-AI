@@ -179,6 +179,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { useSourcesListEndpoint } from '@/composables/analytics/useSourcesListEndpoint'
 import { usePollingJob } from '@/composables/usePollingJob'
@@ -188,6 +189,7 @@ import AddSourceModal from '@/components/analytics/AddSourceModal.vue'
 const logger = createLogger('CodebaseAnalyticsLanding')
 const router = useRouter()
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 // ---- Types ----------------------------------------------------------------
 
@@ -347,7 +349,7 @@ async function deleteSource(source: CodeSource) {
   const msg = t(
     'analytics.sources.confirmDelete', { name: source.name }
   )
-  if (!confirm(msg)) return
+  if (!(await confirm({ title: t('common.confirm'), message: msg }))) return
   deletingId.value = source.id
   const deleteEndpoint = useFetchEndpoint<unknown, true>({
     path: `/api/analytics/codebase/sources/${source.id}`,

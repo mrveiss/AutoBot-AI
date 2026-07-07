@@ -437,6 +437,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
@@ -465,6 +466,7 @@ type ExportFormat = 'json' | 'csv' | 'markdown'
 
 const logger = createLogger('KnowledgeEntries')
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
@@ -640,7 +642,7 @@ const editEntry = (entry: KnowledgeDocument) => {
 }
 
 const deleteEntry = async (entry: KnowledgeDocument) => {
-  if (!confirm(t('knowledge.entries.confirmDelete', { title: entry.title || t('knowledge.entries.untitled') }))) return
+  if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.entries.confirmDelete', { title: entry.title || t('knowledge.entries.untitled') }) }))) return
 
   try {
     await controller.deleteDocument(entry.id)
@@ -650,7 +652,7 @@ const deleteEntry = async (entry: KnowledgeDocument) => {
 }
 
 const deleteSelected = async () => {
-  if (!confirm(t('knowledge.entries.confirmDeleteSelected', { count: selection.selectedCount.value }))) return
+  if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.entries.confirmDeleteSelected', { count: selection.selectedCount.value }) }))) return
 
   try {
     await controller.bulkDeleteDocuments([...selection.selected.value])

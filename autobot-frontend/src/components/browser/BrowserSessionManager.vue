@@ -220,6 +220,7 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useBrowserAutomation } from '@/composables/useBrowserAutomation'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { BaseModal } from '@autobot/ui'
@@ -242,6 +243,7 @@ export default {
   },
   setup() {
     const { t } = useI18n()
+    const { confirm } = useConfirmDialog()
     const {
       sessions,
       launchSession,
@@ -337,8 +339,8 @@ export default {
       logger.info('Closed session', { id: sessionId })
     }
 
-    const deleteSession = (sessionId: string) => {
-      if (confirm(t('browser.sessionManager.deleteConfirm'))) {
+    const deleteSession = async (sessionId: string) => {
+      if (await confirm({ title: t('common.confirm'), message: t('browser.sessionManager.deleteConfirm') })) {
         deleteSessionHandler(sessionId)
         logger.info('Deleted session', { id: sessionId })
       }

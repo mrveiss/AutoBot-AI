@@ -79,12 +79,14 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { createLogger } from '@/utils/debugUtils'
 import { apiService } from '@/services/api'
 import { getApiBase } from '@/config/ssot-config'
 import { usePollingJob } from '@/composables/usePollingJob'
 
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 const logger = createLogger('WorkflowProgressWidget')
 
@@ -155,7 +157,7 @@ const openFullWorkflowView = () => {
 }
 
 const cancelWorkflow = async () => {
-  if (!confirm(t('workflow.progress.cancelConfirm'))) return
+  if (!(await confirm({ title: t('common.confirm'), message: t('workflow.progress.cancelConfirm') }))) return
 
   try {
     await apiService.delete(`${getApiBase()}/workflow/workflow/${props.workflowId}`)

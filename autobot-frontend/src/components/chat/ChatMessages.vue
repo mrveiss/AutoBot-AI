@@ -559,6 +559,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
@@ -602,6 +603,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 const store = useChatStore()
 const controller = useChatController()
 const { displaySettings } = useDisplaySettings()
@@ -1053,8 +1055,8 @@ const copyMessage = async (message: ChatMessage) => {
   }
 }
 
-const deleteMessage = (message: ChatMessage) => {
-  if (confirm(t('chat.messages.confirmDelete'))) {
+const deleteMessage = async (message: ChatMessage) => {
+  if (await confirm({ title: t('common.confirm'), message: t('chat.messages.confirmDelete') })) {
     controller.deleteMessage(message.id)
   }
 }

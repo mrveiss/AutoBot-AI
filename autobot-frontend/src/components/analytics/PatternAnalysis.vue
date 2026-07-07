@@ -260,9 +260,11 @@
 import Icon from '@/components/ui/Icon.vue'
 import { watch, onMounted, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { usePatternAnalysis, type PatternAnalysisReport, type CodeLocation } from '@/composables/usePatternAnalysis'
 
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 // Props
 const props = defineProps<{
@@ -332,7 +334,7 @@ const runAnalysis = async () => {
 
 // Clear storage handler
 const clearStorage = async () => {
-  if (confirm(t('analytics.patterns.confirmClear'))) {
+  if (await confirm({ title: t('common.confirm'), message: t('analytics.patterns.confirmClear') })) {
     await clearStorageApi()
     await getStorageStats()
   }
