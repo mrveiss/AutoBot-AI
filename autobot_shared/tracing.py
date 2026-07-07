@@ -325,6 +325,80 @@ def instrument_aiohttp() -> bool:
         return False
 
 
+def tool_span(tool_name: str, retry_count: int = 0):
+    """Context manager emitting an ``agent.tool`` span with standard attributes.
+
+    Matches the attribute-naming style of OTELObserver (``llm.*``).  Records the
+    exception and sets ERROR status on exit when the body raises.  Is a no-op when
+    tracing is disabled or the OpenTelemetry SDK is absent — no import penalty.
+
+    Args:
+        tool_name: Name of the tool being invoked (``tool.name`` attribute).
+        retry_count: How many times this call has already been retried (``tool.retry_count``).
+
+    Returns:
+        A synchronous context manager (``start_as_current_span`` is sync-compatible).
+    """
+    try:
+        from opentelemetry.trace import SpanKind
+
+        tracer = get_tracer("autobot.agent_loop")
+        attrs = {"tool.name": tool_name, "tool.retry_count": retry_count}
+        return _RecordingSpan(tracer.start_as_current_span("agent.tool", kind=SpanKind.INTERNAL, attributes=attrs))
+    except ImportError:
+        return _NoopSpan()
+
+
+def step_span(iteration: int, task_id: str | None = None):
+    """Context manager emitting an ``agent.step`` span for a single loop iteration.
+
+    Wraps the full per-step boundary so all child spans (tool calls, LLM calls) are
+    nested beneath it.  Is a no-op when tracing is disabled or the SDK is absent.
+
+    Args:
+        iteration: Current iteration number (``agent.step.iteration`` attribute).
+        task_id: Optional task identifier (``agent.step.task_id`` attribute).
+    """
+    try:
+        from opentelemetry.trace import SpanKind
+
+        tracer = get_tracer("autobot.agent_loop")
+        attrs: dict = {"agent.step.iteration": iteration}
+        if task_id is not None:
+            attrs["agent.step.task_id"] = task_id
+        return _RecordingSpan(tracer.start_as_current_span("agent.step", kind=SpanKind.INTERNAL, attributes=attrs))
+    except ImportError:
+        return _NoopSpan()
+
+
+class _RecordingSpan:
+    """Thin wrapper that records exceptions and sets ERROR status on the inner span.
+
+    Used by tool_span and step_span so callers get automatic error recording without
+    boilerplate.  Only wraps spans returned by real OTel tracers (not noop spans).
+    """
+
+    def __init__(self, ctx):
+        self._ctx = ctx
+        self._span = None
+
+    def __enter__(self):
+        self._span = self._ctx.__enter__()
+        return self._span
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_val is not None and self._span is not None:
+            try:
+                from opentelemetry.trace import Status, StatusCode
+
+                self._span.set_attribute("tool.error", True)
+                self._span.record_exception(exc_val)
+                self._span.set_status(Status(StatusCode.ERROR, str(exc_val)))
+            except Exception:
+                pass
+        return self._ctx.__exit__(exc_type, exc_val, exc_tb)
+
+
 async def shutdown_tracing() -> None:
     """
     Flush and shutdown the tracer provider.

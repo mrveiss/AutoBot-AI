@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.tracing import tool_span
 from code_intelligence.code_generation.diff import DiffGenerator
 from constants.status_enums import TaskStatus
 from constants.threshold_constants import BatchConfig, RetryConfig
@@ -456,9 +457,18 @@ class ParallelToolExecutor:
         capture = self._capture_pre_state(call)  # Issue #4094: pre-execution snapshot
 
         start_time = time.monotonic()
-        result, success, error = await self._execute_tool_with_timeout(call)
-        execution_time = (time.monotonic() - start_time) * 1000
-        call.execution_time_ms = execution_time
+        with tool_span(call.tool_name, retry_count=call.retry_count) as _tspan:
+            result, success, error = await self._execute_tool_with_timeout(call)
+            execution_time = (time.monotonic() - start_time) * 1000
+            call.execution_time_ms = execution_time
+            if _tspan is not None:
+                try:
+                    _tspan.set_attribute("tool.duration_ms", execution_time)
+                    _tspan.set_attribute("tool.success", success)
+                    if not success and error:
+                        _tspan.set_attribute("tool.error", True)
+                except Exception:
+                    pass
 
         # #10552: inspect tool output through the content firewall before it reaches the model
         if success and result is not None:
@@ -514,9 +524,10 @@ class ParallelToolExecutor:
             self.config.max_retries,
         )
 
-        # Reset call status
+        # Reset call status; bump retry_count so the next tool_span records it.
         call.status = TaskStatus.PENDING.value
         call.error = None
+        call.retry_count = retry_count + 1
 
         try:
             result = await self._execute_single(call, task_id)

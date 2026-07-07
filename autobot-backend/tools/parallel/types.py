@@ -51,6 +51,9 @@ class ToolCall:
     # Parallel group
     parallel_group_id: str | None = None
 
+    # Observability — incremented by _retry_call so tool spans carry attempt number
+    retry_count: int = 0
+
     def to_dict(self) -> dict:
         return {
             "call_id": self.call_id,

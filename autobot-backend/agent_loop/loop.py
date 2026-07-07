@@ -48,6 +48,7 @@ from autobot_shared.error_boundaries import (
     classify_error,
 )
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.tracing import step_span
 from events import EventStreamManager, EventType
 from events.bus import PersistStrategy
 from events.bus import publish_event as _bus_publish_event
@@ -669,14 +670,16 @@ class AgentLoop:
         start_time = time.monotonic()
         logger.debug("AgentLoop: Starting iteration %d", self._iteration_count)
 
+        task_id = self._current_context.task_id if self._current_context else None
         result = IterationResult(iteration_number=self._iteration_count)
 
-        try:
-            result = await self._execute_iteration_phases(result)
-        except Exception as e:
-            result.error = str(e)
-            result.should_continue = await self._handle_iteration_error(e)
-            self._current_context.add_error(str(e))
+        with step_span(self._iteration_count, task_id=task_id):
+            try:
+                result = await self._execute_iteration_phases(result)
+            except Exception as e:
+                result.error = str(e)
+                result.should_continue = await self._handle_iteration_error(e)
+                self._current_context.add_error(str(e))
 
         self._log_iteration_completion(start_time, result)
         return result
