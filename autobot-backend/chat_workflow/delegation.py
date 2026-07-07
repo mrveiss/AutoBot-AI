@@ -72,6 +72,9 @@ async def _run_claude_code_subagent(task: str, agent_type: str, depth: int) -> s
     exec_task = ExecutionTask(
         task_id=f"delegate-{agent_type}-d{depth}",
         code=task,
+        # ``delegation_depth`` is informational for the external claude_code engine
+        # (it runs out-of-process, so its own ctx never reads this back). Recursion
+        # depth is only enforced for delegation initiated within one AutoBot process.
         metadata={"disallowed_tools": disallowed, "delegation_depth": depth + 1},
     )
     logger.info("delegation: claude_code subagent agent=%s depth=%d disallowed=%s", agent_type, depth, disallowed)

@@ -27,6 +27,18 @@ def test_forbidden_to_claude_tools_ignores_unmapped():
     assert forbidden_to_claude_tools(["totally_unknown_tool"]) == []
 
 
+def test_shipped_research_agent_has_no_fail_open_tokens():
+    # Governance guard: every token the shipped research_agent forbids must map to a
+    # claude_code --disallowedTools entry, so nothing silently fails open.
+    from chat_workflow.delegation import _CLAUDE_TOOL_FOR
+    from orchestration.agent_registry import resolve_forbidden_tools
+
+    forbidden = resolve_forbidden_tools("research_agent")
+    assert forbidden, "research_agent must declare forbidden_work"
+    unmapped = sorted(t for t in forbidden if t not in _CLAUDE_TOOL_FOR)
+    assert unmapped == [], f"forbidden tokens with no claude_code mapping (fail-open): {unmapped}"
+
+
 # --- run_delegated_subtask dispatch + guards -------------------------------
 
 

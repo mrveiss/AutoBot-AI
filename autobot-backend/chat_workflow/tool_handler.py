@@ -1814,7 +1814,7 @@ class ToolHandlerMixin:
         reason = params.get("reason", "Task delegation")
 
         if not DELEGATION_ENABLED:
-            logger.info("[Issue #657] Delegate tool invoked (record-only): task=%s", task[:100])
+            logger.info("[Issue #657] Delegate tool invoked (record-only): task=%s, reason=%s", task[:100], reason)
             execution_results.append(
                 {
                     "tool": "delegate",
