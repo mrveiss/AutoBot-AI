@@ -111,3 +111,54 @@ def test_pinned_role_blocks_forbidden_tool_end_to_end():
     results: list[dict] = []
     msg = mixin._enforce_forbidden_work({"name": "bash"}, ctx, results)
     assert msg is not None and msg.metadata.get("forbidden_by_manifest") is True
+
+
+# --- GH#11202: session approval categories → pre-execution seam gate --------
+
+
+@pytest.mark.asyncio
+async def test_set_get_clear_approval_categories():
+    redis = _FakeRedis()
+    svc = _svc_with_redis(redis)
+    await svc.set_approval_categories("s1", ["pushing commits", "destructive operations"])
+    assert await svc.get_approval_categories("s1") == ["pushing commits", "destructive operations"]
+    await svc.clear_approval_categories("s1")
+    assert await svc.get_approval_categories("s1") == []
+
+
+@pytest.mark.asyncio
+async def test_set_approval_categories_rejects_unknown():
+    svc = _svc_with_redis(_FakeRedis())
+    with pytest.raises(ValueError):
+        await svc.set_approval_categories("s1", ["pushing commit"])  # typo
+
+
+@pytest.mark.asyncio
+async def test_get_approval_categories_swallows_failure():
+    svc = SessionRoleService()
+    svc._get_redis = AsyncMock(side_effect=RuntimeError("redis down"))
+    assert await svc.get_approval_categories("s3") == []
+
+
+def test_session_categories_hold_tool_at_seam_end_to_end():
+    """Session-declared categories → requires_approval_before (as _apply_session_role
+    overlays) → the PRE-EXECUTION seam gate holds a matching tool (correct stage)."""
+    from types import SimpleNamespace
+
+    from chat_workflow.tool_handler import ToolHandlerMixin
+
+    # What _apply_session_role puts on the context when the gate flag is on.
+    context = {"requires_approval_before": ["pushing commits"]}
+    ctx = SimpleNamespace(
+        agent_context=None,
+        requires_approval_before=context["requires_approval_before"],
+        work_item_id=None,
+    )
+    mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
+    results: list[dict] = []
+    # git_push is in "pushing commits" → held pending approval BEFORE execution.
+    held = mixin._enforce_work_item_approval({"name": "git_push"}, ctx, results)
+    assert held is not None and held.type == "approval_required"
+    assert results[0]["status"] == "pending_approval"
+    # web_search is not in any declared category → not held.
+    assert mixin._enforce_work_item_approval({"name": "web_search"}, ctx, []) is None

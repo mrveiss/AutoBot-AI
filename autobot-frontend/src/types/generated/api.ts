@@ -1187,6 +1187,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat/sessions/{session_id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Session Role
+         * @description Return the session's pinned governed role (or null) plus the valid roles.
+         */
+        get: operations["get_session_role_api_chat_sessions__session_id__role_get"];
+        /**
+         * Set Session Role
+         * @description Pin a chat session to a governed agent role (GH#11186).
+         *
+         *     The role's ``forbidden_work`` manifest is then enforced at the tool seam for
+         *     this session and overrides any client-supplied ``agent_id``.
+         */
+        put: operations["set_session_role_api_chat_sessions__session_id__role_put"];
+        post?: never;
+        /**
+         * Clear Session Role
+         * @description Remove a session's governed-role binding (reverts to ungoverned chat).
+         */
+        delete: operations["clear_session_role_api_chat_sessions__session_id__role_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chat/sessions/{session_id}/approval-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Session Approval Categories
+         * @description Return the session's declared approval categories plus the valid vocabulary.
+         */
+        get: operations["get_session_approval_categories_api_chat_sessions__session_id__approval_categories_get"];
+        /**
+         * Set Session Approval Categories
+         * @description Declare which action categories require approval for this session (GH#11202).
+         *
+         *     Backend-owned permission decision — matching tool calls are held via the chat
+         *     approval interrupt (when the gate flag is enabled). The frontend only calls this.
+         */
+        put: operations["set_session_approval_categories_api_chat_sessions__session_id__approval_categories_put"];
+        post?: never;
+        /**
+         * Clear Session Approval Categories
+         * @description Remove a session's approval-category declaration.
+         */
+        delete: operations["clear_session_approval_categories_api_chat_sessions__session_id__approval_categories_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat/health": {
         parameters: {
             query?: never;
@@ -21727,6 +21789,33 @@ export interface paths {
          *     Issue #744: Requires admin authentication.
          */
         get: operations["get_debt_report_api_debt_report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/quality/remediation-deltas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Remediation Deltas
+         * @description Return recent remediation delta records written by the remediation loop.
+         *
+         *     Issue #11203: Surfaces ``remediation:delta:history`` so the quality
+         *     dashboard can show before/after health-score improvements alongside
+         *     the trend line.  Read-only; returns an empty list on a fresh system.
+         *
+         *     Args:
+         *         limit: Maximum number of recent delta records to return (1-100).
+         */
+        get: operations["get_remediation_deltas_api_quality_remediation_deltas_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -57336,6 +57425,20 @@ export interface components {
              * @default false
              */
             remember_choice: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** Body_set_session_approval_categories_api_chat_sessions__session_id__approval_categories_put */
+        Body_set_session_approval_categories_api_chat_sessions__session_id__approval_categories_put: {
+            /** Categories */
+            categories: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /** Body_set_session_role_api_chat_sessions__session_id__role_put */
+        Body_set_session_role_api_chat_sessions__session_id__role_put: {
+            /** Role */
+            role: string;
         } & {
             [key: string]: unknown;
         };
@@ -101881,6 +101984,200 @@ export interface operations {
             };
         };
     };
+    get_session_role_api_chat_sessions__session_id__role_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_session_role_api_chat_sessions__session_id__role_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_set_session_role_api_chat_sessions__session_id__role_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_session_role_api_chat_sessions__session_id__role_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_session_approval_categories_api_chat_sessions__session_id__approval_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_session_approval_categories_api_chat_sessions__session_id__approval_categories_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_set_session_approval_categories_api_chat_sessions__session_id__approval_categories_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_session_approval_categories_api_chat_sessions__session_id__approval_categories_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     chat_health_check_api_chat_health_get: {
         parameters: {
             query?: never;
@@ -128264,6 +128561,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_AnalyticsDebtReportResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_remediation_deltas_api_quality_remediation_deltas_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
