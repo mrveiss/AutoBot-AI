@@ -25,7 +25,7 @@ describe('CodeCell.vue', () => {
     // Mock clipboard API
     global.navigator.clipboard = {
       writeText: vi.fn().mockResolvedValue(undefined),
-    } as any
+    } as unknown as Clipboard
   })
 
   it('renders loading state when no payload', () => {

@@ -92,7 +92,7 @@ const mockHealthResponse = {
  *   GET /api/system/health       -> loadHealthStatus fallback
  */
 function setupAxiosMocks() {
-  vi.mocked(axios.get).mockImplementation((url: string, ..._args: any[]) => {
+  vi.mocked(axios.get).mockImplementation((url: string, ..._args: unknown[]) => {
     if (url === '/api/settings/') {
       return Promise.resolve({ data: mockSettingsResponse })
     }

@@ -67,7 +67,7 @@ test.describe('Thinking Mode E2E', () => {
     await expect(thinkingToggle).toHaveClass(/active/);
 
     // Set up request interception
-    const requests: any[] = [];
+    const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
     page.on('request', request => {
       if (request.url().includes('/api/chat') && request.method() === 'POST') {
         requests.push({
@@ -171,7 +171,7 @@ test.describe('Thinking Mode E2E', () => {
     await expect(budgetSteps).not.toBeVisible();
 
     // Set up request interception
-    const requests: any[] = [];
+    const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
     page.on('request', request => {
       if (request.url().includes('/api/chat') && request.method() === 'POST') {
         requests.push({

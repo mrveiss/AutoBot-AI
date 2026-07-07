@@ -208,6 +208,31 @@ MAP_SITE_SCHEMA: dict = {
     "required": ["domain"],
 }
 
+CONTENT_REACH_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "source": {
+            "type": "string",
+            "enum": ["web_search", "web_page", "youtube", "reddit", "social"],
+            "description": "Which content source chain to use.",
+        },
+        "query": {
+            "type": "string",
+            "description": "Search query (web_search, reddit, youtube search).",
+        },
+        "url": {
+            "type": "string",
+            "description": "Target URL (web_page, youtube, reddit, social).",
+        },
+        "limit": {
+            "type": "integer",
+            "default": 5,
+            "description": "Max results for search sources.",
+        },
+    },
+    "required": ["source"],
+}
+
 EXTRACT_STRUCTURED_DATA_SCHEMA: dict = {
     "type": "object",
     "properties": {
@@ -323,6 +348,8 @@ _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     "crawl_site": CRAWL_SITE_SCHEMA,
     "map_site": MAP_SITE_SCHEMA,
     "extract_structured_data": EXTRACT_STRUCTURED_DATA_SCHEMA,
+    # #10932: Unified content_reach gateway (5 source chains).
+    "content_reach": CONTENT_REACH_SCHEMA,
 }
 
 

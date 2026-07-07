@@ -87,9 +87,7 @@
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
 import { computed, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
 
-const { t } = useI18n()
 
 interface VideoCellProps {
   richPayload?: Record<string, unknown> | null

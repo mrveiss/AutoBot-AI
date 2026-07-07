@@ -53,11 +53,12 @@ export const fetchBasicStats = async (): Promise<KnowledgeStats | null> => {
  */
 export const fetchCategoryFacts = async (): Promise<Record<string, number> | null> => {
   try {
-    const data = await apiClient.get<Record<string, any>>(`${getApiBase()}/knowledge_base/facts/by_category`)
-    if (!data?.categories) return null
+    const data = await apiClient.get<{ categories?: Record<string, unknown[]> }>(`${getApiBase()}/knowledge_base/facts/by_category`)
+    const categories = data?.categories
+    if (!categories) return null
     const counts: Record<string, number> = {}
-    Object.keys(data.categories).forEach((category: string) => {
-      counts[category] = data.categories[category].length
+    Object.keys(categories).forEach((category: string) => {
+      counts[category] = categories[category].length
     })
     return counts
   } catch {

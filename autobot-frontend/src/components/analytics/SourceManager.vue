@@ -213,7 +213,7 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const emit = defineEmits<{
+defineEmits<{
   (e: 'select-source', source: CodeSource): void
   (e: 'open-add-source'): void
   (e: 'edit-source', source: CodeSource): void

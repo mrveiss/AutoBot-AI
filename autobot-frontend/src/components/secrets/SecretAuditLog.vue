@@ -10,7 +10,7 @@
 
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useSecretsAuditApi, type AuditLogEntry } from '@/composables/useSecretsAuditApi'
+import { useSecretsAuditApi } from '@/composables/useSecretsAuditApi'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SecretAuditLog')

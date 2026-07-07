@@ -189,7 +189,8 @@
     "llcNoCompanies": "No companies yet.",
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
-    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it."
+    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
+    "systemHealth": "בריאות המערכת"
   },
   "llcMembers": {
     "title": "חברים",
@@ -4954,7 +4955,9 @@
       "reliabilityVerified": "Verified",
       "reliabilityMedium": "Medium",
       "knowledgeBase": "Knowledge Base",
-      "model": "Model:"
+      "model": "Model:",
+      "modelOnly": "מודל בלבד",
+      "modelOnlyTooltip": "טענה זו מבוססת על נתוני אימון המודל בלבד — לא אוחזרו מקורות"
     },
     "sidebar": {
       "deletedWithFactsPreserved": "Deleted {count} chats (facts preserved in knowledge base)",
@@ -6634,6 +6637,60 @@
     "presets": {
       "title": "Slash Presets",
       "description": "Create reusable slash commands that expand into full prompts in the chat input. Type / followed by the preset name to trigger them."
+    },
+    "memoryPrivacy": {
+      "title": "שקיפות זיכרון",
+      "description": "כל מה שהסוכן זוכר עליך — בכל מאגרי הזיכרון. תוכל לתקן, לשכוח או להוריד את כל טביעת הזיכרון שלך.",
+      "refresh": "רענון",
+      "loading": "טוען…",
+      "exportJson": "ייצוא (JSON)",
+      "preparing": "מכין…",
+      "itemCount": "{count} פריטים",
+      "emptyState": "לא נמצאו זיכרונות מאוחסנים בחשבונך.",
+      "listLabel": "זיכרונות מאוחסנים",
+      "noPreview": "(אין תצוגה מקדימה)",
+      "provenance": "מקור",
+      "forget": "שכח",
+      "forgetEverywhere": "שכח בכל מקום",
+      "forgetAriaLabel": "שכח זיכרון {store} זה",
+      "forgetEverywhereAriaLabel": "מחק את הזיכרון {id} באופן מדורג מכל המאגרים",
+      "forgetConfirmTitle": "שכיחת זיכרון",
+      "forgetConfirmMessage": "לשכוח זיכרון {store} זה? לא ניתן לבטל פעולה זו.",
+      "forgetEverywhereConfirmTitle": "שכיחה מכל המאגרים",
+      "forgetEverywhereConfirmMessage": "למחוק את הזיכרון באופן מדורג מכל המאגרים? לא ניתן לבטל פעולה זו.",
+      "forgotten": "פריט הזיכרון נשכח.",
+      "forgottenFrom": "נשכח מ: {stores}",
+      "noStores": "ללא",
+      "loadFailed": "טעינת הזיכרונות נכשלה. ייתכן שהשרת אינו זמין.",
+      "forgetFailed": "שכיחת פריט הזיכרון נכשלה.",
+      "forgetEverywhereFailed": "מחיקת פריט הזיכרון באופן מדורג נכשלה.",
+      "exportDownloaded": "ייצוא הזיכרון הורד.",
+      "exportFailed": "הייצוא נכשל. אנא נסה שוב."
+    },
+    "telemetry": {
+      "title": "פרטיות וטלמטריה",
+      "recordLabel": "רישום מדדי שימוש מקומיים",
+      "recordHint": "רשום מדדים תפעוליים אנונימיים — דפוסי קריאות API, מדדי הפעלות קול ושימוש בתכונות — באופן מקומי בתשתית שלך כדי להזין את לוחות הבקרה שלך. נתונים אלה לעולם אינם עוזבים את השרתים שלך ואינם נשלחים לאף אחד.",
+      "toggleAriaLabel": "הפעלת מדדי שימוש מקומיים",
+      "enabled": "מופעל",
+      "disabled": "מושבת",
+      "disclosureSummary": "מה נרשם באופן מקומי?",
+      "recordedTitle": "כאשר מופעל, AutoBot רושם באופן מקומי:",
+      "recordedApiLabel": "ניתוח API:",
+      "recordedApi": "נתיבי נקודות קצה, זמני תגובה, קודי סטטוס",
+      "recordedVoiceLabel": "הפעלות קול:",
+      "recordedVoice": "משך, ספירת אסימונים, אומדני עלות",
+      "recordedFeatureLabel": "שימוש בתכונות:",
+      "recordedFeature": "אילו תכונות בשימוש ובאיזו תדירות",
+      "neverRecordedTitle": "לעולם לא נרשם:",
+      "neverPersonal": "מידע אישי או אסימוני אימות",
+      "neverContent": "תוכן קוד, הנחיות או הודעות צ׳אט",
+      "neverPaths": "נתיבי קבצים, שמות מארח או כתובות IP",
+      "disclosureNote": "כל המדדים נשארים בתשתית שלך (מאוחסנים ב-Redis המקומי שלך) ולעולם אינם מועברים ל-AutoBot או לצד שלישי כלשהו. תוכל להשבית את הרישום בכל עת.",
+      "enabledMessage": "מדדי שימוש מקומיים הופעלו. הנתונים נשארים בתשתית שלך.",
+      "disabledMessage": "מדדי שימוש מקומיים הושבתו. לא יירשמו מדדים.",
+      "loadFailed": "טעינת הגדרות הטלמטריה נכשלה",
+      "updateFailed": "עדכון הגדרות הטלמטריה נכשל"
     }
   },
   "visualizations": {
@@ -7164,7 +7221,8 @@
     "speaking": "Speaking...",
     "custom": "custom",
     "stopListening": "Stop listening",
-    "stop": "Stop"
+    "stop": "Stop",
+    "confirmDeleteVoiceTitle": "מחיקת פרופיל קול"
   },
   "auth": {
     "login": {
@@ -8143,6 +8201,15 @@
         "subtask": "Subtask",
         "risk": "Risk"
       },
+      "workItemStatus": {
+        "backlog": "מאגר משימות",
+        "ready": "מוכן",
+        "in_progress": "בתהליך",
+        "in_review": "בבדיקה",
+        "done": "הושלם",
+        "blocked": "חסום",
+        "cancelled": "בוטל"
+      },
       "priority": {
         "critical": "Critical",
         "high": "High",
@@ -8383,5 +8450,23 @@
     "target": "Target {date}",
     "backlogLink": "Backlog",
     "timelineLink": "Timeline"
+  },
+  "admin": {
+    "systemHealth": {
+      "title": "בריאות המערכת",
+      "subtitle": "נגישות חיה לבק-אנד עבור מקורות תוכן",
+      "status": "סטטוס",
+      "sources": "מקורות",
+      "live": "חי",
+      "backends": "בק-אנד",
+      "healthy": "בריא",
+      "degraded": "מדורדר",
+      "down": "מושבת",
+      "unavailable": "לא זמין",
+      "loading": "טוען נתוני בריאות...",
+      "error": "טעינת בריאות המערכת נכשלה",
+      "refresh": "רענן",
+      "noSources": "לא הוגדרו מקורות תוכן"
+    }
   }
 }

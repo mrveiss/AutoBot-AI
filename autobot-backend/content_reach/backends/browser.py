@@ -18,6 +18,7 @@ from __future__ import annotations
 from urllib.parse import quote_plus
 
 from autobot_shared.logging_manager import get_logger
+from content_reach._url_guard import ensure_public_url, ensure_robots_allowed
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
 from source_attribution import SourceReliability, SourceType
 
@@ -62,6 +63,18 @@ class BrowserBackend(ContentBackend):
         if not request.url:
             raise BackendError("BrowserBackend requires a non-empty url on the request")
 
+        await ensure_public_url(request.url)
+        await ensure_robots_allowed(request.url)
+
+        return await self._navigate(request)
+
+    async def _navigate(self, request: ContentRequest) -> ContentResult:
+        """Issue the browser navigation call and map result to ContentResult.
+
+        Guards (SSRF/robots) are NOT re-checked here — callers must run them
+        before calling _navigate (BrowserBackend.fetch does; BrowserSearchBackend
+        runs SSRF-only before delegating here, skipping robots for search results).
+        """
         manager = _get_manager()
         result = await manager.research_url(
             request.conversation_id,
@@ -92,8 +105,8 @@ class BrowserSearchBackend(BrowserBackend):
     """Browser backend for query-to-search: builds a DDG HTML search URL then delegates.
 
     Encodes request.query into a DuckDuckGo HTML search URL and passes it to the
-    parent BrowserBackend.fetch() so the browser navigates to the results page and
-    extracts content.
+    parent BrowserBackend._navigate() so the browser navigates to the results page and
+    extracts content. robots.txt is intentionally skipped for search-results pages.
     """
 
     def __init__(self, source_type: SourceType) -> None:
@@ -102,6 +115,7 @@ class BrowserSearchBackend(BrowserBackend):
     async def fetch(self, request: ContentRequest) -> ContentResult:
         """Build a DDG search URL from request.query and fetch via browser."""
         search_url = _DDG_SEARCH_URL.format(quote_plus(request.query))
+        await ensure_public_url(search_url)
         search_request = ContentRequest(
             query=request.query,
             url=search_url,
@@ -110,4 +124,4 @@ class BrowserSearchBackend(BrowserBackend):
             conversation_id=request.conversation_id,
             options=request.options,
         )
-        return await super().fetch(search_request)
+        return await self._navigate(search_request)

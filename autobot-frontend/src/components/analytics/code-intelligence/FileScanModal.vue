@@ -63,7 +63,7 @@ import { BaseModal } from '@autobot/ui'
 
 const { t } = useI18n()
 
-const props = defineProps<{
+defineProps<{
   show: boolean
 }>()
 

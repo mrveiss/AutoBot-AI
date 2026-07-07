@@ -12,7 +12,7 @@ Issue #9035: Operator-controlled local usage metrics (never transmitted)
     <div class="panel-header">
       <h3 class="panel-title">
         <Icon name="shield-alt" aria-hidden="true" />
-        Privacy & Telemetry
+        {{ t('settings.telemetry.title') }}
       </h3>
     </div>
 
@@ -21,12 +21,10 @@ Issue #9035: Operator-controlled local usage metrics (never transmitted)
       <fieldset class="preference-section">
         <legend class="preference-label">
           <Icon name="chart-line" aria-hidden="true" />
-          Record Local Usage Metrics
+          {{ t('settings.telemetry.recordLabel') }}
         </legend>
         <p class="preference-hint">
-          Record anonymous operational metrics &mdash; API call patterns, voice session metrics,
-          and feature usage &mdash; locally on your own infrastructure to power your monitoring
-          dashboards. This data never leaves your servers and is never sent to anyone.
+          {{ t('settings.telemetry.recordHint') }}
         </p>
         <div class="toggle-wrapper">
           <label class="toggle-switch">
@@ -34,12 +32,12 @@ Issue #9035: Operator-controlled local usage metrics (never transmitted)
               type="checkbox"
               v-model="telemetryEnabled"
               @change="handleTelemetryToggle"
-              :aria-label="'Enable local usage metrics'"
+              :aria-label="t('settings.telemetry.toggleAriaLabel')"
             />
             <span class="toggle-slider"></span>
           </label>
           <span class="toggle-label">
-            {{ telemetryEnabled ? 'Enabled' : 'Disabled' }}
+            {{ telemetryEnabled ? t('settings.telemetry.enabled') : t('settings.telemetry.disabled') }}
           </span>
         </div>
       </fieldset>
@@ -49,33 +47,26 @@ Issue #9035: Operator-controlled local usage metrics (never transmitted)
         <details class="data-disclosure">
           <summary class="disclosure-summary">
             <Icon name="info-circle" aria-hidden="true" />
-            What is recorded locally?
+            {{ t('settings.telemetry.disclosureSummary') }}
           </summary>
           <div class="disclosure-content">
-            <h4>When enabled, AutoBot records locally:</h4>
+            <h4>{{ t('settings.telemetry.recordedTitle') }}</h4>
             <ul>
-              <li><strong>API Analytics:</strong> Endpoint paths, response times, status codes</li>
-              <li><strong>Voice Sessions:</strong> Duration, token counts, cost estimates</li>
-              <li><strong>Feature Usage:</strong> Which features are used and how often</li>
+              <li><strong>{{ t('settings.telemetry.recordedApiLabel') }}</strong> {{ t('settings.telemetry.recordedApi') }}</li>
+              <li><strong>{{ t('settings.telemetry.recordedVoiceLabel') }}</strong> {{ t('settings.telemetry.recordedVoice') }}</li>
+              <li><strong>{{ t('settings.telemetry.recordedFeatureLabel') }}</strong> {{ t('settings.telemetry.recordedFeature') }}</li>
             </ul>
-            <h4>Never recorded:</h4>
+            <h4>{{ t('settings.telemetry.neverRecordedTitle') }}</h4>
             <ul>
-              <li>Personal information or authentication tokens</li>
-              <li>Code content, prompts, or chat messages</li>
-              <li>File paths, hostnames, or IP addresses</li>
+              <li>{{ t('settings.telemetry.neverPersonal') }}</li>
+              <li>{{ t('settings.telemetry.neverContent') }}</li>
+              <li>{{ t('settings.telemetry.neverPaths') }}</li>
             </ul>
             <p class="disclosure-note">
-              All metrics stay on your own infrastructure (stored in your local Redis) and are
-              never transmitted to AutoBot or any third party. You can disable recording at any time.
+              {{ t('settings.telemetry.disclosureNote') }}
             </p>
           </div>
         </details>
-      </div>
-
-      <!-- Status Message -->
-      <div v-if="statusMessage" class="status-message" :class="statusType">
-        <Icon :name="statusType === 'success' ? 'check-circle' : 'exclamation-circle'" aria-hidden="true" />
-        {{ statusMessage }}
       </div>
     </div>
 
@@ -88,17 +79,19 @@ Issue #9035: Operator-controlled local usage metrics (never transmitted)
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import { createLogger } from '@/utils/debugUtils'
 import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('TelemetrySettingsPanel')
+const { t } = useI18n()
 const api = useApiClient()
+const { showToast } = useNotificationBus()
 
 const telemetryEnabled = ref(true)
 const announcement = ref('')
-const statusMessage = ref('')
-const statusType = ref<'success' | 'error'>('success')
 
 onMounted(async () => {
   await loadTelemetrySettings()
@@ -116,14 +109,11 @@ async function loadTelemetrySettings() {
     logger.debug('Loaded telemetry settings', response)
   } catch (error) {
     logger.error('Failed to load telemetry settings', error)
-    statusMessage.value = 'Failed to load telemetry settings'
-    statusType.value = 'error'
+    showToast(t('settings.telemetry.loadFailed'), 'error')
   }
 }
 
 async function handleTelemetryToggle() {
-  statusMessage.value = ''
-
   try {
     await api.post('/api/settings/telemetry', {
       enabled: telemetryEnabled.value,
@@ -132,17 +122,15 @@ async function handleTelemetryToggle() {
     })
 
     const message = telemetryEnabled.value
-      ? 'Local usage metrics enabled. Data stays on your infrastructure.'
-      : 'Local usage metrics disabled. No metrics will be recorded.'
+      ? t('settings.telemetry.enabledMessage')
+      : t('settings.telemetry.disabledMessage')
 
-    statusMessage.value = message
-    statusType.value = 'success'
+    showToast(message, 'success')
     announceChange(message)
     logger.debug(`Telemetry ${telemetryEnabled.value ? 'enabled' : 'disabled'}`)
   } catch (error) {
     logger.error('Failed to update telemetry settings', error)
-    statusMessage.value = 'Failed to update telemetry settings'
-    statusType.value = 'error'
+    showToast(t('settings.telemetry.updateFailed'), 'error')
 
     // Revert toggle on error
     telemetryEnabled.value = !telemetryEnabled.value
@@ -355,27 +343,5 @@ input:checked + .toggle-slider:before {
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
   border-radius: var(--radius-sm);
-}
-
-.status-message {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-}
-
-.status-message.success {
-  background: var(--color-success-bg);
-  color: var(--color-success);
-  border: 1px solid var(--color-success);
-}
-
-.status-message.error {
-  background: var(--color-error-bg);
-  color: var(--color-error);
-  border: 1px solid var(--color-error);
 }
 </style>

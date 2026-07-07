@@ -104,6 +104,7 @@ jobs:
           GITHUB_REPO: ${{ github.repository }}
 
       - name: Commit changelog files and tag
+        id: commit
         if: steps.check.outputs.release_needed == 'true'
         run: |
           VERSION="${{ steps.check.outputs.version }}"
@@ -112,25 +113,18 @@ jobs:
           git add CHANGELOG.md "changelog/${VERSION}.md" changelog/
           if git diff --staged --quiet; then
             echo "No changelog changes"
+            echo "has_changelog=false" >> "$GITHUB_OUTPUT"
           else
             git commit -m "chore(release): changelog and fragments for ${VERSION}"
+            echo "has_changelog=true" >> "$GITHUB_OUTPUT"
           fi
           git tag -a "${VERSION}" -m "Release ${VERSION}"
           # Push the tag first and on its own. Tags are not branch-protected, so
           # this always lands and guarantees the "Create GitHub Release" step
-          # below has a ref to release from (#10608).
+          # below has a ref to release from (#10608). The changelog commit lands
+          # on main via a PR (see "Open changelog PR to main" below, #10845) —
+          # a direct bot push is rejected by main's required status checks.
           git push origin "refs/tags/${VERSION}"
-          # The changelog commit targets the protected main branch via a direct
-          # bot push, which main's required status checks reject (#10608). That
-          # rejection must NOT abort the job, or the tag exists with no GitHub
-          # Release. Make the changelog push best-effort and surface it as a
-          # warning (not a silent swallow); the changelog is still published on
-          # the Release via body_path below.
-          if git push origin HEAD:main; then
-            echo "Changelog commit landed on main."
-          else
-            echo "::warning::Changelog commit push to main was rejected by branch protection (expected, #10608). Tag ${VERSION} and the GitHub Release are still created; the changelog is attached to the Release. Full fix (bypass token / changelog-PR) tracked in #10608."
-          fi
 
       - name: Create GitHub Release
         if: steps.check.outputs.release_needed == 'true'
@@ -143,3 +137,29 @@ jobs:
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # #10845: a direct bot push of the changelog commit to protected main is
+      # rejected by main's required status checks. Land it via a PR instead so
+      # CHANGELOG.md history on main includes released versions. The tag + Release
+      # are already published above, so this step is non-fatal to the release.
+      - name: Open changelog PR to main
+        if: steps.check.outputs.release_needed == 'true' && steps.commit.outputs.has_changelog == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.check.outputs.version }}
+        run: |
+          BRANCH="release/changelog-${VERSION}"
+          # HEAD holds the changelog commit (made in the commit step). Push it to
+          # a dedicated branch and open/refresh a PR to main.
+          git push origin "HEAD:refs/heads/${BRANCH}" --force
+          if gh pr view "${BRANCH}" --json state --jq '.state' 2>/dev/null | grep -q OPEN; then
+            echo "Changelog PR for ${BRANCH} already open."
+          else
+            gh pr create --base main --head "${BRANCH}" \
+              --title "chore(release): changelog for ${VERSION}" \
+              --body "Automated changelog for release ${VERSION}. Merging lands the CHANGELOG.md history and per-version file on main (#10845). The tag and GitHub Release for ${VERSION} are already published."
+          fi
+          # Land automatically once required checks pass; non-fatal if the token
+          # cannot enable auto-merge (the PR stays open for a manual merge).
+          gh pr merge "${BRANCH}" --squash --auto \
+            || echo "::notice::Auto-merge unavailable for ${BRANCH}; merge the changelog PR manually."

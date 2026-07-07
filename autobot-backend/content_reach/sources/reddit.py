@@ -17,6 +17,7 @@ import logging
 
 import httpx
 
+from content_reach._url_guard import ensure_public_url
 from content_reach.backends.browser import BrowserBackend
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
 from content_reach.chain import ContentSourceChain
@@ -56,6 +57,7 @@ class RedditJsonBackend(ContentBackend):
         headers = {"User-Agent": _USER_AGENT}
 
         if request.url and "reddit.com" in request.url:
+            await ensure_public_url(request.url)
             url = request.url if request.url.endswith(".json") else request.url + ".json"
             try:
                 if self._client is not None:

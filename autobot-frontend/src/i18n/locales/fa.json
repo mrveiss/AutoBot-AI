@@ -189,7 +189,8 @@
     "llcNoCompanies": "No companies yet.",
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
-    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it."
+    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
+    "systemHealth": "سلامت سیستم"
   },
   "llcMembers": {
     "title": "اعضا",
@@ -4954,7 +4955,9 @@
       "reliabilityVerified": "Verified",
       "reliabilityMedium": "Medium",
       "knowledgeBase": "Knowledge Base",
-      "model": "Model:"
+      "model": "Model:",
+      "modelOnly": "فقط مدل",
+      "modelOnlyTooltip": "این ادعا فقط بر اساس داده‌های آموزشی مدل است — هیچ منبعی بازیابی نشد"
     },
     "sidebar": {
       "deletedWithFactsPreserved": "Deleted {count} chats (facts preserved in knowledge base)",
@@ -6634,6 +6637,60 @@
     "presets": {
       "title": "Slash Presets",
       "description": "Create reusable slash commands that expand into full prompts in the chat input. Type / followed by the preset name to trigger them."
+    },
+    "memoryPrivacy": {
+      "title": "شفافیت حافظه",
+      "description": "هر آنچه عامل درباره شما به خاطر می‌سپارد — در تمام حافظه‌ها. می‌توانید کل ردپای حافظه خود را اصلاح، فراموش یا دانلود کنید.",
+      "refresh": "به‌روزرسانی",
+      "loading": "در حال بارگذاری…",
+      "exportJson": "خروجی (JSON)",
+      "preparing": "در حال آماده‌سازی…",
+      "itemCount": "{count} مورد",
+      "emptyState": "هیچ حافظه ذخیره‌شده‌ای برای حساب شما یافت نشد.",
+      "listLabel": "حافظه‌های ذخیره‌شده",
+      "noPreview": "(بدون پیش‌نمایش)",
+      "provenance": "منشأ",
+      "forget": "فراموش کردن",
+      "forgetEverywhere": "فراموش کردن در همه‌جا",
+      "forgetAriaLabel": "فراموش کردن این حافظه {store}",
+      "forgetEverywhereAriaLabel": "حذف آبشاری حافظه {id} از همه حافظه‌ها",
+      "forgetConfirmTitle": "فراموش کردن حافظه",
+      "forgetConfirmMessage": "این حافظه {store} فراموش شود؟ این عمل قابل بازگشت نیست.",
+      "forgetEverywhereConfirmTitle": "فراموش کردن از همه حافظه‌ها",
+      "forgetEverywhereConfirmMessage": "حافظه به‌صورت آبشاری از همه حافظه‌ها حذف شود؟ این عمل قابل بازگشت نیست.",
+      "forgotten": "مورد حافظه فراموش شد.",
+      "forgottenFrom": "فراموش شده از: {stores}",
+      "noStores": "هیچ‌کدام",
+      "loadFailed": "بارگذاری حافظه‌ها ناموفق بود. ممکن است بک‌اند در دسترس نباشد.",
+      "forgetFailed": "فراموش کردن مورد حافظه ناموفق بود.",
+      "forgetEverywhereFailed": "حذف آبشاری مورد حافظه ناموفق بود.",
+      "exportDownloaded": "خروجی حافظه دانلود شد.",
+      "exportFailed": "خروجی گرفتن ناموفق بود. لطفاً دوباره تلاش کنید."
+    },
+    "telemetry": {
+      "title": "حریم خصوصی و تله‌متری",
+      "recordLabel": "ثبت معیارهای استفاده محلی",
+      "recordHint": "معیارهای عملیاتی ناشناس — الگوهای فراخوانی API، معیارهای جلسات صوتی و استفاده از ویژگی‌ها — را به‌صورت محلی روی زیرساخت خودتان ثبت کنید تا داشبوردهای نظارتی شما را تغذیه کند. این داده‌ها هرگز سرورهای شما را ترک نمی‌کنند و به هیچ‌کس ارسال نمی‌شوند.",
+      "toggleAriaLabel": "فعال‌سازی معیارهای استفاده محلی",
+      "enabled": "فعال",
+      "disabled": "غیرفعال",
+      "disclosureSummary": "چه چیزی به‌صورت محلی ثبت می‌شود؟",
+      "recordedTitle": "هنگام فعال بودن، AutoBot به‌صورت محلی ثبت می‌کند:",
+      "recordedApiLabel": "تحلیل API:",
+      "recordedApi": "مسیرهای نقطه پایانی، زمان‌های پاسخ، کدهای وضعیت",
+      "recordedVoiceLabel": "جلسات صوتی:",
+      "recordedVoice": "مدت، تعداد توکن‌ها، برآورد هزینه",
+      "recordedFeatureLabel": "استفاده از ویژگی‌ها:",
+      "recordedFeature": "کدام ویژگی‌ها و با چه تناوبی استفاده می‌شوند",
+      "neverRecordedTitle": "هرگز ثبت نمی‌شود:",
+      "neverPersonal": "اطلاعات شخصی یا توکن‌های احراز هویت",
+      "neverContent": "محتوای کد، دستورها یا پیام‌های گفتگو",
+      "neverPaths": "مسیرهای فایل، نام میزبان‌ها یا آدرس‌های IP",
+      "disclosureNote": "همه معیارها روی زیرساخت خودتان باقی می‌مانند (در Redis محلی شما ذخیره می‌شوند) و هرگز به AutoBot یا هیچ شخص ثالثی ارسال نمی‌شوند. می‌توانید ثبت را در هر زمان غیرفعال کنید.",
+      "enabledMessage": "معیارهای استفاده محلی فعال شد. داده‌ها روی زیرساخت شما باقی می‌مانند.",
+      "disabledMessage": "معیارهای استفاده محلی غیرفعال شد. هیچ معیاری ثبت نخواهد شد.",
+      "loadFailed": "بارگذاری تنظیمات تله‌متری ناموفق بود",
+      "updateFailed": "به‌روزرسانی تنظیمات تله‌متری ناموفق بود"
     }
   },
   "visualizations": {
@@ -7164,7 +7221,8 @@
     "speaking": "Speaking...",
     "custom": "custom",
     "stopListening": "Stop listening",
-    "stop": "Stop"
+    "stop": "Stop",
+    "confirmDeleteVoiceTitle": "حذف نمایه صدا"
   },
   "auth": {
     "login": {
@@ -8143,6 +8201,15 @@
         "subtask": "Subtask",
         "risk": "Risk"
       },
+      "workItemStatus": {
+        "backlog": "بک‌لاگ",
+        "ready": "آماده",
+        "in_progress": "در حال انجام",
+        "in_review": "در حال بررسی",
+        "done": "انجام شده",
+        "blocked": "مسدود",
+        "cancelled": "لغو شده"
+      },
       "priority": {
         "critical": "Critical",
         "high": "High",
@@ -8383,5 +8450,23 @@
     "target": "Target {date}",
     "backlogLink": "Backlog",
     "timelineLink": "Timeline"
+  },
+  "admin": {
+    "systemHealth": {
+      "title": "سلامت سیستم",
+      "subtitle": "دسترسی زنده به بک‌اندها برای منابع محتوا",
+      "status": "وضعیت",
+      "sources": "منابع",
+      "live": "زنده",
+      "backends": "بک‌اندها",
+      "healthy": "سالم",
+      "degraded": "تخریب‌شده",
+      "down": "خاموش",
+      "unavailable": "در دسترس نیست",
+      "loading": "در حال بارگذاری داده‌های سلامت...",
+      "error": "بارگذاری سلامت سیستم ناموفق بود",
+      "refresh": "بازنشانی",
+      "noSources": "هیچ منبع محتوایی پیکربندی نشده است"
+    }
   }
 }

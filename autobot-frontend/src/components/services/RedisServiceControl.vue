@@ -295,7 +295,9 @@ const getHealthCheckVariant = (status) => {
  * Lifecycle: Subscribe to WebSocket updates on mount
  */
 onMounted(() => {
-  subscribeToStatusUpdates()
+  // Subscribe to push updates; the composable also auto-refreshes internally,
+  // so this callback is a no-op subscription marker (param unused by design).
+  subscribeToStatusUpdates((_message) => {})
 })
 
 /**

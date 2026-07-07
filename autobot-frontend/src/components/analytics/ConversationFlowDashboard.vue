@@ -261,13 +261,10 @@
 import Icon from '@/components/ui/Icon.vue'
 import { BaseModal } from '@autobot/ui'
 import { ref, onMounted, computed } from 'vue'
-import { createLogger } from '@/utils/debugUtils'
 import {
   useConversationFlowData,
   type IntentPattern,
 } from '@/composables/analytics/useConversationFlowData'
-
-const logger = createLogger('ConversationFlowDashboard')
 
 // State
 const timeRange = ref(24)

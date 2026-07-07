@@ -381,7 +381,7 @@ interface CrossLanguageAnalysisResult {
   analysis_time_ms: number
 }
 
-const props = defineProps<{
+defineProps<{
   analysis: CrossLanguageAnalysisResult | null
   loading: boolean
   error: string | null

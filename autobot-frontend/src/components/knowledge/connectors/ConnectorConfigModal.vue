@@ -532,10 +532,10 @@ async function testConnection() {
       props.editConnector!.connector_id
     )
     testResult.value = result
-  } catch (error: any) {
+  } catch (error) {
     testResult.value = {
       success: false,
-      message: error.message || 'Test failed'
+      message: (error as Error).message || 'Test failed'
     }
   } finally {
     testing.value = false
@@ -562,8 +562,8 @@ async function handleSave() {
 
     emit('saved', result)
     emit('update:modelValue', false)
-  } catch (error: any) {
-    saveError.value = error.message || t('knowledge.connectors.config.saveFailed')
+  } catch (error) {
+    saveError.value = (error as Error).message || t('knowledge.connectors.config.saveFailed')
     logger.error('Failed to save connector: %s', error)
   } finally {
     saving.value = false

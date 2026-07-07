@@ -67,6 +67,7 @@ import { useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 import Icon from '@/components/ui/Icon.vue'
+import type rumAgent from '@/utils/RumAgent'
 
 const logger = createLogger('AsyncErrorFallback')
 
@@ -93,7 +94,7 @@ const showDetails = ref(false)
 const retrying = ref(false)
 
 // Inject RUM agent if available
-const rum = inject('rum', null) as any
+const rum = inject('rum', null) as typeof rumAgent | null
 
 // Compute user-friendly error message based on error type
 const errorMessage = computed(() => {

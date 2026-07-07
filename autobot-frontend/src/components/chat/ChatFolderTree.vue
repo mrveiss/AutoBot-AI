@@ -45,13 +45,11 @@
 
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
 import FolderNode from './ChatFolderNode.vue'
 import { useFolderStore } from '@/stores/useFolderStore'
 import type { ChatSession } from '@/stores/useChatStore'
 
-const { t } = useI18n()
 
 defineProps<{
   sessions: ChatSession[]

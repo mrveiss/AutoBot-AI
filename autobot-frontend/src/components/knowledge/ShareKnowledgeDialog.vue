@@ -313,7 +313,7 @@ const removeEntity = (entity: ShareEntity) => {
   )
 }
 
-const handlePermissionChange = (entity: ShareEntity) => {
+const handlePermissionChange = (_entity: ShareEntity) => {
   // Permission changes are already bound via v-model
   // Permissions are updated automatically via v-model binding
 }

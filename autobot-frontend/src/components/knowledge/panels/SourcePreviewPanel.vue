@@ -22,10 +22,8 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
-import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('SourcePreviewPanel')
-const { t } = useI18n()
 
 // =============================================================================
 // Type Definitions

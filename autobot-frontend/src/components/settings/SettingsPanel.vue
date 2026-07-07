@@ -92,7 +92,6 @@ import {
 } from '@/types/settings'
 import type {
   SettingsStructure,
-  SettingsTab,
   ChatSettings as ChatSettingsType,
   UISettings as UISettingsType,
   LoggingSettings as LoggingSettingsType,
@@ -119,20 +118,6 @@ const isClearing = ref<boolean>(false)
 const healthStatus = ref<HealthStatus | null>(null)
 const cacheApiAvailable = ref<boolean>(false)
 
-const tabs = ref<SettingsTab[]>([
-  { id: 'user', label: 'User Management' },
-  { id: 'chat', label: 'Chat' },
-  { id: 'backend', label: 'Backend' },
-  { id: 'optimization', label: 'LLM Optimization' },
-  { id: 'ui', label: 'UI' },
-  { id: 'logging', label: 'Logging' },
-  { id: 'log-forwarding', label: 'Log Forwarding' },
-  { id: 'cache', label: 'Cache' },
-  { id: 'prompts', label: 'Prompts' },
-  { id: 'infrastructure', label: 'Infrastructure' },
-  { id: 'developer', label: 'Developer' },
-  { id: 'feature-flags', label: 'Feature Flags' }
-])
 const activeBackendSubTab = ref('agents')
 
 // Cache state

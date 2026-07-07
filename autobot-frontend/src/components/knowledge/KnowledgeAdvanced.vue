@@ -172,7 +172,7 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import ApiClient from '@/utils/ApiClient'
@@ -250,12 +250,6 @@ watch(fakeProgress.progress, (value) => {
   } else {
     estimatedTimeRemaining.value = '<1s'
   }
-})
-
-// Computed
-const progressText = computed(() => {
-  if (!showProgress.value) return ''
-  return `${progressPercentage.value}% (${itemsProcessed.value}/${totalItems.value})`
 })
 
 // Methods

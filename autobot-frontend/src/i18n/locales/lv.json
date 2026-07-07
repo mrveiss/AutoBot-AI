@@ -400,7 +400,9 @@
       "reliabilityLow": "Zems",
       "aiTrainingData": "AI apmācības dati",
       "webSource": "Tīmekļa avots",
-      "knowledgeBase": "Zināšanu bāze"
+      "knowledgeBase": "Zināšanu bāze",
+      "modelOnly": "Tikai modelis",
+      "modelOnlyTooltip": "Šis apgalvojums ir balstīts tikai uz modeļa apmācības datiem — avoti netika iegūti"
     },
     "tabContent": {
       "openInNewWindow": "Atvērt jaunā logā",
@@ -820,6 +822,60 @@
     "presets": {
       "title": "Slash Presets",
       "description": "Create reusable slash commands that expand into full prompts in the chat input. Type / followed by the preset name to trigger them."
+    },
+    "memoryPrivacy": {
+      "title": "Atmiņas caurskatāmība",
+      "description": "Viss, ko aģents par jums atceras — visās atmiņas krātuvēs. Jūs varat labot, aizmirst vai lejupielādēt visu savu atmiņas nospiedumu.",
+      "refresh": "Atsvaidzināt",
+      "loading": "Notiek ielāde…",
+      "exportJson": "Eksportēt (JSON)",
+      "preparing": "Notiek sagatavošana…",
+      "itemCount": "{count} vienumi",
+      "emptyState": "Jūsu kontam netika atrastas saglabātas atmiņas.",
+      "listLabel": "Saglabātās atmiņas",
+      "noPreview": "(nav priekšskatījuma)",
+      "provenance": "Izcelsme",
+      "forget": "Aizmirst",
+      "forgetEverywhere": "Aizmirst visur",
+      "forgetAriaLabel": "Aizmirst šo {store} atmiņu",
+      "forgetEverywhereAriaLabel": "Kaskādes veidā dzēst atmiņu {id} no visām krātuvēm",
+      "forgetConfirmTitle": "Aizmirst atmiņu",
+      "forgetConfirmMessage": "Aizmirst šo {store} atmiņu? To nevar atsaukt.",
+      "forgetEverywhereConfirmTitle": "Aizmirst no visām krātuvēm",
+      "forgetEverywhereConfirmMessage": "Kaskādes veidā dzēst atmiņu no VISĀM krātuvēm? To nevar atsaukt.",
+      "forgotten": "Atmiņas vienums aizmirsts.",
+      "forgottenFrom": "Aizmirsts no: {stores}",
+      "noStores": "nav",
+      "loadFailed": "Neizdevās ielādēt atmiņas. Aizmugursistēma var būt nepieejama.",
+      "forgetFailed": "Neizdevās aizmirst atmiņas vienumu.",
+      "forgetEverywhereFailed": "Neizdevās kaskādes veidā dzēst atmiņas vienumu.",
+      "exportDownloaded": "Atmiņas eksports lejupielādēts.",
+      "exportFailed": "Eksports neizdevās. Lūdzu, mēģiniet vēlreiz."
+    },
+    "telemetry": {
+      "title": "Privātums un telemetrija",
+      "recordLabel": "Reģistrēt vietējos lietojuma rādītājus",
+      "recordHint": "Reģistrējiet anonīmus darbības rādītājus — API izsaukumu modeļus, balss sesiju rādītājus un funkciju lietojumu — lokāli savā infrastruktūrā, lai darbinātu jūsu uzraudzības informācijas paneļus. Šie dati nekad neatstāj jūsu serverus un netiek nevienam nosūtīti.",
+      "toggleAriaLabel": "Iespējot vietējos lietojuma rādītājus",
+      "enabled": "Iespējots",
+      "disabled": "Atspējots",
+      "disclosureSummary": "Kas tiek reģistrēts lokāli?",
+      "recordedTitle": "Kad iespējots, AutoBot lokāli reģistrē:",
+      "recordedApiLabel": "API analītika:",
+      "recordedApi": "Galapunktu ceļi, atbildes laiki, statusa kodi",
+      "recordedVoiceLabel": "Balss sesijas:",
+      "recordedVoice": "Ilgums, marķieru skaits, izmaksu aplēses",
+      "recordedFeatureLabel": "Funkciju lietojums:",
+      "recordedFeature": "Kuras funkcijas tiek izmantotas un cik bieži",
+      "neverRecordedTitle": "Nekad netiek reģistrēts:",
+      "neverPersonal": "Personiskā informācija vai autentifikācijas marķieri",
+      "neverContent": "Koda saturs, uzvednes vai tērzēšanas ziņojumi",
+      "neverPaths": "Failu ceļi, resursdatoru nosaukumi vai IP adreses",
+      "disclosureNote": "Visi rādītāji paliek jūsu pašu infrastruktūrā (glabāti jūsu vietējā Redis) un nekad netiek pārsūtīti uz AutoBot vai kādu trešo pusi. Reģistrēšanu varat atspējot jebkurā laikā.",
+      "enabledMessage": "Vietējie lietojuma rādītāji iespējoti. Dati paliek jūsu infrastruktūrā.",
+      "disabledMessage": "Vietējie lietojuma rādītāji atspējoti. Rādītāji netiks reģistrēti.",
+      "loadFailed": "Neizdevās ielādēt telemetrijas iestatījumus",
+      "updateFailed": "Neizdevās atjaunināt telemetrijas iestatījumus"
     }
   },
   "voice": {
@@ -845,7 +901,8 @@
     "record": "Ieraksts",
     "creating": "Notiek izveide...",
     "confirmDeleteVoice": "Vai dzēst balsi \"{name}\"?",
-    "languageVoicesActive": "{count} valodai konfigurēta balss(-es)."
+    "languageVoicesActive": "{count} valodai konfigurēta balss(-es).",
+    "confirmDeleteVoiceTitle": "Dzēst balss profilu"
   },
   "analytics": {
     "title": "Analytics",
@@ -7614,7 +7671,8 @@
     "llcNoCompanies": "No companies yet.",
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
-    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it."
+    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
+    "systemHealth": "Sistēmas veselība"
   },
   "llcMembers": {
     "title": "Dalibnieki",
@@ -8143,6 +8201,15 @@
         "subtask": "Subtask",
         "risk": "Risk"
       },
+      "workItemStatus": {
+        "backlog": "Uzdevumu saraksts",
+        "ready": "Gatavs",
+        "in_progress": "Procesā",
+        "in_review": "Pārskatīšanā",
+        "done": "Pabeigts",
+        "blocked": "Bloķēts",
+        "cancelled": "Atcelts"
+      },
       "priority": {
         "critical": "Critical",
         "high": "High",
@@ -8383,5 +8450,23 @@
     "target": "Target {date}",
     "backlogLink": "Backlog",
     "timelineLink": "Timeline"
+  },
+  "admin": {
+    "systemHealth": {
+      "title": "Sistēmas veselība",
+      "subtitle": "Tiešsaistes sasniedzamība satura avotu aizmugursistēmām",
+      "status": "Statuss",
+      "sources": "Avoti",
+      "live": "Tiešraidē",
+      "backends": "Aizmugursistēmas",
+      "healthy": "Vesela",
+      "degraded": "Pasliktināta",
+      "down": "Nedarbojas",
+      "unavailable": "Nav pieejama",
+      "loading": "Ielādē veselības datus...",
+      "error": "Neizdevās ielādēt sistēmas veselību",
+      "refresh": "Atsvaidzināt",
+      "noSources": "Nav konfigurētu satura avotu"
+    }
   }
 }
