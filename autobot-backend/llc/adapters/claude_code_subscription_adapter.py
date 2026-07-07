@@ -66,9 +66,6 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
 
         output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
         timeout_sec: int = int(cfg.get("timeout_seconds", 3600))
-        model: Optional[str] = cfg.get("model")
-        max_turns: Optional[int] = cfg.get("max_turns")
-        allowed_tools: Optional[list] = cfg.get("allowed_tools")
 
         session_id = str(uuid.uuid4())
         run_id_placeholder = f"0/{session_id}"
@@ -78,25 +75,18 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
         prompt = self._build_prompt(context)
         resume_session_id = await self._get_resumable_session(agent_id)
 
-        cmd: list[str] = [cli, "--output-format", "stream-json", "--print"]
-
         if resume_session_id:
-            cmd += ["--resume", resume_session_id]
             session_id = resume_session_id
             logger.info(
                 "ClaudeCodeSubscriptionAdapter: resuming session %s for agent %s",
                 session_id,
                 agent_id,
             )
-        else:
-            if model:
-                cmd += ["--model", model]
-            if max_turns is not None:
-                cmd += ["--max-turns", str(max_turns)]
-            if allowed_tools:
-                cmd += ["--allowedTools", ",".join(allowed_tools)]
 
-        cmd.append(prompt)
+        # GH#11186: reuse the parent's governed command builder so this adapter
+        # inherits --disallowedTools (fresh + resume), input sanitization, and the
+        # `--` prompt terminator instead of the old inline build that lacked them.
+        cmd = self._build_command(cli, resume_session_id, cfg, prompt)
 
         workspace_dir: str | None = context.get("workspace_dir")
 
