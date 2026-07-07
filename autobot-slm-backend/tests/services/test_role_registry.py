@@ -240,3 +240,59 @@ def test_optional_roles_are_not_required():
     for name in optional_names:
         role = _role(name)
         assert role["required"] is False, f"{name} should be optional (required=False)"
+
+
+# ---------------------------------------------------------------------------
+# seed_default_roles upsert logic (#11132)
+#
+# The SLM conftest stubs sqlalchemy, so a real-DB test isn't feasible here; this
+# drives seed_default_roles against a mock async session to prove it refreshes a
+# stale registry-owned field on an already-seeded row (the insert-only bug).
+# ---------------------------------------------------------------------------
+import asyncio as _asyncio
+from unittest.mock import AsyncMock as _AsyncMock
+
+
+class _Result:
+    def __init__(self, obj):
+        self._obj = obj
+
+    def scalar_one_or_none(self):
+        return self._obj
+
+
+def test_seed_default_roles_upserts_stale_field_on_existing_row():
+    target_idx, target = next((i, r) for i, r in enumerate(DEFAULT_ROLES) if r.get("post_sync_cmd"))
+    existing = _types.SimpleNamespace(**dict(target))
+    existing.post_sync_cmd = "STALE_BROKEN_CMD"
+    existing.source_paths = ["WRONG/"]
+
+    # execute() is called once per role in order → existing row only at the target index.
+    results = [_Result(existing if i == target_idx else None) for i in range(len(DEFAULT_ROLES))]
+    db = _AsyncMock()
+    db.execute = _AsyncMock(side_effect=results)
+    db.commit = _AsyncMock()
+    db.add = _MagicMock()
+
+    created = _asyncio.run(_rr.seed_default_roles(db))
+
+    # Stale registry-owned fields refreshed from DEFAULT_ROLES; created counts new rows only.
+    assert existing.post_sync_cmd == target["post_sync_cmd"]
+    assert existing.source_paths == target["source_paths"]
+    assert created == len(DEFAULT_ROLES) - 1
+    db.commit.assert_awaited()
+
+
+def test_seed_default_roles_no_write_when_existing_rows_match_registry():
+    # Every role already exists with registry-identical values → no commit, created == 0.
+    existing_rows = [_types.SimpleNamespace(**dict(r)) for r in DEFAULT_ROLES]
+    db = _AsyncMock()
+    db.execute = _AsyncMock(side_effect=[_Result(row) for row in existing_rows])
+    db.commit = _AsyncMock()
+    db.add = _MagicMock()
+
+    created = _asyncio.run(_rr.seed_default_roles(db))
+
+    assert created == 0
+    db.commit.assert_not_awaited()
+    db.add.assert_not_called()

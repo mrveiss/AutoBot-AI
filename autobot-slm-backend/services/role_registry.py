@@ -442,17 +442,38 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
 
 
 async def seed_default_roles(db: AsyncSession) -> int:
-    """Seed default roles if they don't exist."""
+    """Seed default roles, upserting registry-owned fields on existing rows (#11132).
+
+    Previously insert-only, so any edit to ``DEFAULT_ROLES`` (post_sync_cmd,
+    source_paths, health checks, …) reached only a *fresh* DB — an already-seeded
+    SLM DB kept the stale values, silently reverting historical registry fixes
+    (e.g. #11069's post_sync_cmd correction stayed broken). Now every field the
+    registry defines for a role is refreshed on the existing row when it differs;
+    DB-managed columns (``id``/``created_at``) and any column a role doesn't define
+    are left untouched, so operator-set fields outside the registry are preserved.
+
+    Returns the number of roles *created* (new rows), preserving the prior contract.
+    """
     created = 0
+    updated = 0
     for role_data in DEFAULT_ROLES:
         result = await db.execute(select(Role).where(Role.name == role_data["name"]))
-        if not result.scalar_one_or_none():
-            role = Role(**role_data)
-            db.add(role)
+        role = result.scalar_one_or_none()
+        if role is None:
+            db.add(Role(**role_data))
             created += 1
             logger.info("Created default role: %s", role_data["name"])
+            continue
+        # Refresh only the registry-owned fields this role defines, and only when a
+        # value actually changed (avoids spurious updated_at churn).
+        changed = [f for f, v in role_data.items() if getattr(role, f) != v]
+        if changed:
+            for field in changed:
+                setattr(role, field, role_data[field])
+            updated += 1
+            logger.info("Synced default role %s from registry (fields: %s)", role_data["name"], ", ".join(changed))
 
-    if created > 0:
+    if created or updated:
         await db.commit()
 
     return created
