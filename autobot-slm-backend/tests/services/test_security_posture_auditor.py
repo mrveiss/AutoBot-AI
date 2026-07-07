@@ -28,9 +28,7 @@ if str(_slm_root) not in sys.path:
 # but this module's logic depends on the real SecurityEventSeverity enum. Load the
 # real models.database (self-contained: stdlib + sqlalchemy only), swap it in while
 # executing the auditor, then restore the stub so sibling test files are unaffected.
-_real_md_spec = importlib.util.spec_from_file_location(
-    "models.database", _slm_root / "models" / "database.py"
-)
+_real_md_spec = importlib.util.spec_from_file_location("models.database", _slm_root / "models" / "database.py")
 _real_md = importlib.util.module_from_spec(_real_md_spec)
 _orig_md = sys.modules.get("models.database")
 sys.modules["models.database"] = _real_md
@@ -86,10 +84,10 @@ class TestScanNodePorts:
     def test_mixed_list_returns_only_exposed_sensitive(self):
         findings = spa._scan_node_ports(
             [
-                {"port": 6379, "address": "0.0.0.0"},   # exposed redis  -> flag
+                {"port": 6379, "address": "0.0.0.0"},  # exposed redis  -> flag
                 {"port": 5432, "address": "127.0.0.1"},  # loopback pg    -> skip
-                {"port": 443, "address": "0.0.0.0"},     # expected pub   -> skip
-                {"port": 2375, "address": "10.0.0.9"},   # docker api     -> flag
+                {"port": 443, "address": "0.0.0.0"},  # expected pub   -> skip
+                {"port": 2375, "address": "10.0.0.9"},  # docker api     -> flag
             ]
         )
         ports = sorted(f["port"] for f in findings)

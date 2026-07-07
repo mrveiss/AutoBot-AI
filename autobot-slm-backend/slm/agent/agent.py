@@ -240,8 +240,7 @@ class SLMAgent:
         Issue #620; ``address`` added for the security-posture audit (GH#11224).
         """
         return [
-            {"port": p.port, "process": p.process, "pid": p.pid, "address": p.address}
-            for p in get_listening_ports()
+            {"port": p.port, "process": p.process, "pid": p.pid, "address": p.address} for p in get_listening_ports()
         ]
 
     def _build_heartbeat_payload(self, health: dict, os_info: str, code_version: str | None) -> dict:

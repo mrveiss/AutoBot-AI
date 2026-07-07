@@ -38,6 +38,7 @@ def _get_session():
 
     return db_service.session()
 
+
 # Poll interval — configurable per deployment; defaults to hourly.
 _AUDIT_INTERVAL_SECONDS: int = int(os.getenv("SLM_SECURITY_AUDIT_INTERVAL_SECONDS", "3600"))
 
