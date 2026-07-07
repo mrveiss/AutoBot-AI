@@ -20,6 +20,9 @@ content. Override with ``AUTOBOT_ALLOW_CONFIG_EDITS=1``.
 
 import os
 
+from autobot_shared.env_utils import env_flag
+from autobot_shared.tool_args import PATH_KEYS
+
 # Write-side tools whose target path is guarded. Read/list tools are ignored.
 WRITE_TOOLS: frozenset[str] = frozenset(
     {
@@ -33,10 +36,6 @@ WRITE_TOOLS: frozenset[str] = frozenset(
         "copy_file",
     }
 )
-
-# Arg keys under which a write tool carries its target path (see
-# tools/parallel/analyzer.py RESOURCE_EXTRACTORS).
-PATH_KEYS: tuple[str, ...] = ("file_path", "path", "destination", "target_file")
 
 # Dedicated linter/formatter config basenames (exact, case-insensitive).
 _PROTECTED_BASENAMES: frozenset[str] = frozenset(
@@ -90,8 +89,12 @@ def is_protected_config(path: str | None) -> str | None:
 
 
 def config_edits_allowed() -> bool:
-    """True when ``AUTOBOT_ALLOW_CONFIG_EDITS`` opts out of the guard."""
-    return os.environ.get("AUTOBOT_ALLOW_CONFIG_EDITS", "").strip().lower() in {"1", "true", "yes"}
+    """True when ``AUTOBOT_ALLOW_CONFIG_EDITS`` opts out of the guard.
+
+    Uses the shared :func:`env_flag` parser so ``on`` works like every other
+    flag (it previously did not — #11220).
+    """
+    return env_flag("AUTOBOT_ALLOW_CONFIG_EDITS")
 
 
 def protected_config_for(tool_name: str, args: dict) -> str | None:

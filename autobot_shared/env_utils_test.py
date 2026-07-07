@@ -3,7 +3,9 @@
 # AutoBot - AI-Powered Automation Platform
 import os
 
-from autobot_shared.env_utils import env_float, env_int, env_int_clamped
+import pytest
+
+from autobot_shared.env_utils import env_flag, env_float, env_int, env_int_clamped, truthy
 
 _VAR = "TEST_ENV_INT_CLAMPED_XYZ"
 _FLOAT_VAR = "TEST_ENV_FLOAT_XYZ"
@@ -159,3 +161,33 @@ def test_negative_value_allowed_without_bounds():
         assert env_int_clamped(_VAR, 0) == -3
     finally:
         _clean()
+
+
+# ---------------------------------------------------------------------------
+# truthy / env_flag tests (#11220 — one canonical bool parser; "on" works)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("raw", ["1", "true", "TRUE", "yes", "Yes", "on", "On", "  on  "])
+def test_truthy_recognizes_all_forms(raw):
+    assert truthy(raw) is True
+
+
+@pytest.mark.parametrize("raw", [None, "", "0", "false", "no", "off", "onn", "enabled"])
+def test_truthy_rejects_others(raw):
+    assert truthy(raw) is False
+
+
+def test_env_flag_default_when_absent(monkeypatch):
+    monkeypatch.delenv("AUTOBOT_TEST_FLAG_XYZ", raising=False)
+    assert env_flag("AUTOBOT_TEST_FLAG_XYZ") is False
+    assert env_flag("AUTOBOT_TEST_FLAG_XYZ", default=True) is True
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [("on", True), ("On", True), ("1", True), ("yes", True), ("false", False), ("off", False), ("", False)],
+)
+def test_env_flag_reads_value(monkeypatch, raw, expected):
+    monkeypatch.setenv("AUTOBOT_TEST_FLAG_XYZ", raw)
+    assert env_flag("AUTOBOT_TEST_FLAG_XYZ") is expected

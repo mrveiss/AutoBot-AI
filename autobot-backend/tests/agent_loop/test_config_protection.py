@@ -98,9 +98,16 @@ class TestConfigEditsAllowed:
         monkeypatch.delenv("AUTOBOT_ALLOW_CONFIG_EDITS", raising=False)
         assert config_edits_allowed() is False
 
-    def test_env_opt_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("AUTOBOT_ALLOW_CONFIG_EDITS", "1")
+    @pytest.mark.parametrize("value", ["1", "true", "yes", "on", "On", "  on  "])
+    def test_env_opt_out(self, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+        # #11220: ``on`` must opt out like every other truthy form (previously ignored).
+        monkeypatch.setenv("AUTOBOT_ALLOW_CONFIG_EDITS", value)
         assert config_edits_allowed() is True
+
+    @pytest.mark.parametrize("value", ["0", "false", "off", "", "nope"])
+    def test_env_non_truthy_stays_guarded(self, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+        monkeypatch.setenv("AUTOBOT_ALLOW_CONFIG_EDITS", value)
+        assert config_edits_allowed() is False
 
 
 class TestExecuteToolsIntegration:
