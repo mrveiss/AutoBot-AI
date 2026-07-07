@@ -203,6 +203,17 @@ class TaskPatternLearner(AsyncRedisClientMixin):
             logger.warning("Failed to retrieve learned strategy: %s", exc)
         return None
 
+    async def save_strategy(self, strategy: LearnedStrategy) -> None:
+        """Persist an externally-curated strategy for its task type (GH#11151).
+
+        The public import entry point — normalises the task type and reuses the
+        same Redis persistence as learned strategies so a reviewer-edited record
+        is stored identically to a synthesized one.
+        """
+        task_type = self.normalize_task_type(strategy.task_type)
+        strategy.task_type = task_type
+        await self._persist_strategy(task_type, strategy)
+
     async def clear_strategy(self, task_type: str) -> None:
         """Clear the learned strategy for a task type (#2325)."""
         task_type = self.normalize_task_type(task_type)
