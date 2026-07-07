@@ -1,0 +1,59 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# Reusable venv-version enforcement (env-drift fix).
+#
+# Mirrors the ai-stack #3534 pattern, parameterized so every service role can
+# enforce its target interpreter on EVERY deploy — not just on first create.
+# A venv built on the wrong Python (e.g. this box drifted to 3.12 while the
+# fleet moved to 3.14) otherwise survives forever because the role's own
+# `creates:`-guarded create task only checks existence, never version.
+#
+# Callers pass:
+#   venv_path   — absolute venv dir (e.g. "{{ backend_code_dir }}/venv")
+#   venv_python — target interpreter (e.g. "python3.14" or "python3.11")
+#
+# When the venv exists AND its reported version does not match the target, the
+# venv dir is removed so the caller's create task rebuilds it on the right
+# interpreter. Safe/idempotent when the venv is missing (rc != 0 → no-op).
+---
+
+- name: "python314 | Assert ensure_venv_version inputs are defined"
+  ansible.builtin.assert:
+    that:
+      - venv_path is defined and venv_path | length > 0
+      - venv_python is defined and venv_python | length > 0
+    fail_msg: "ensure_venv_version requires non-empty venv_path and venv_python"
+    quiet: true
+
+- name: "python314 | Derive expected venv Python version string"
+  ansible.builtin.set_fact:
+    _ensure_venv_expected: >-
+      Python {{ venv_python | regex_replace('^python', '') }}
+
+- name: "python314 | Check existing venv Python version ({{ venv_path }})"
+  ansible.builtin.command:
+    cmd: "{{ venv_path }}/bin/python --version"
+  register: _ensure_venv_python_version
+  changed_when: false
+  failed_when: false
+
+- name: "python314 | Report venv rebuild reason ({{ venv_path }})"
+  ansible.builtin.debug:
+    msg: >-
+      Removing venv at {{ venv_path }}: found
+      '{{ _ensure_venv_python_version.stdout | default('') | trim }}',
+      expected '{{ _ensure_venv_expected | trim }}'.
+  when:
+    - _ensure_venv_python_version.rc == 0
+    - _ensure_venv_expected | trim not in _ensure_venv_python_version.stdout
+
+- name: "python314 | Remove stale venv on Python version mismatch"
+  ansible.builtin.file:
+    path: "{{ venv_path }}"
+    state: absent
+  when:
+    - _ensure_venv_python_version.rc == 0
+    - _ensure_venv_expected | trim not in _ensure_venv_python_version.stdout

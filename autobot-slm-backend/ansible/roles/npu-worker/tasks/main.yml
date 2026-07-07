@@ -92,6 +92,14 @@
     - "{{ npu_log_dir }}"
     - "{{ npu_models_dir }}"
 
+- name: NPU worker | Enforce venv target Python version (env-drift fix)
+  ansible.builtin.include_role:
+    name: python314
+    tasks_from: ensure_venv_version
+  vars:
+    venv_path: "{{ npu_install_dir }}/venv"
+    venv_python: python3.11
+
 - name: Create Python virtual environment
   ansible.builtin.command:
     cmd: python3 -m venv {{ npu_install_dir }}/venv

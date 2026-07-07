@@ -5,6 +5,14 @@
 ---
 # Set up Python environment
 
+- name: Enforce venv target Python version (env-drift fix)
+  ansible.builtin.include_role:
+    name: python314
+    tasks_from: ensure_venv_version
+  vars:
+    venv_path: "{{ venv_dir }}"
+    venv_python: python3.14
+
 - name: Check if venv exists
   stat:
     path: "{{ venv_dir }}"

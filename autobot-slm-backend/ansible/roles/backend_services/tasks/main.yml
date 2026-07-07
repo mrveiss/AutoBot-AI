@@ -23,6 +23,14 @@
     - /opt/autobot/config
     - /opt/autobot/venv
 
+- name: "Backend Services | Enforce venv target Python version (env-drift fix)"
+  ansible.builtin.include_role:
+    name: python314
+    tasks_from: ensure_venv_version
+  vars:
+    venv_path: /opt/autobot/venv
+    venv_python: python3.14
+
 - name: Install Python dependencies
   pip:
     requirements: /opt/autobot/app/requirements.txt
