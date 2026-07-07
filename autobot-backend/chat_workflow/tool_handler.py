@@ -2465,6 +2465,49 @@ class ToolHandlerMixin:
             metadata={"tool": tool_name, "error": True, "config_protection": True},
         )
 
+    def _enforce_fact_forcing(
+        self,
+        tool_call: dict[str, Any],
+        ctx: "LLMIterationContext" | None,
+        execution_results: list[dict[str, Any]],
+    ) -> WorkflowMessage | None:
+        """Block the first edit to an existing, uninvestigated file (GH#11178).
+
+        Records this call's read/grep target on the turn-scoped investigated set
+        (``ctx.context``), then blocks an edit to an existing file not yet read
+        this turn. New files are never blocked; the block self-clears once the
+        agent reads the file. Off unless ``AUTOBOT_FACT_FORCING`` is set, and a
+        no-op without a ``ctx`` to carry the per-turn state.
+        """
+        from autobot_shared.fact_forcing_guard import (
+            fact_forcing_env_enabled,
+            record_investigation,
+            uninvestigated_edit_path,
+        )
+
+        if not fact_forcing_env_enabled() or ctx is None:
+            return None
+        investigated: set[str] = ctx.context.setdefault("_fact_forcing_investigated", set())
+        name = tool_call.get("name", "")
+        args = tool_call.get("params") or tool_call.get("arguments") or {}
+        record_investigation(name, args, investigated)
+        path = uninvestigated_edit_path(name, args, investigated)
+        if path is None:
+            return None
+        error = (
+            f"Editing '{path}' is blocked (fact-forcing): read the file and its "
+            f"importers/call-sites first so the change is grounded, then retry."
+        )
+        logger.warning("[GH#11178] Blocked fact-forcing edit to '%s' (tool '%s')", path, name)
+        execution_results.append(
+            {"tool": name, "status": "error", "error": error, "fact_forcing": True}
+        )
+        return WorkflowMessage(
+            type="error",
+            content=error,
+            metadata={"tool": name, "error": True, "fact_forcing": True},
+        )
+
     def _enforce_work_item_approval(
         self,
         tool_call: dict[str, Any],
@@ -2545,6 +2588,13 @@ class ToolHandlerMixin:
         config_msg = self._enforce_config_protection(tool_call, execution_results)
         if config_msg is not None:
             yield config_msg
+            return
+
+        # GH#11178: fact-forcing — record reads/greps and block the first edit to
+        # an existing file not yet investigated this turn, at the same seam.
+        fact_msg = self._enforce_fact_forcing(tool_call, ctx, execution_results)
+        if fact_msg is not None:
+            yield fact_msg
             return
 
         # GH#11160: hold a tool the work item declared as approval-gated
