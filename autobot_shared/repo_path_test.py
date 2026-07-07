@@ -14,9 +14,7 @@ class TestToRepoRelative:
 
     def test_production_code_source_absolute_path(self) -> None:
         """Absolute prod path under code_source/ is stripped to repo-relative."""
-        result = to_repo_relative(
-            "/opt/autobot/code_source/autobot-backend/services/x.py"
-        )
+        result = to_repo_relative("/opt/autobot/code_source/autobot-backend/services/x.py")
         assert result == "autobot-backend/services/x.py"
 
     def test_already_relative_path_returned_unchanged(self) -> None:
@@ -40,30 +38,22 @@ class TestToRepoRelative:
 
     def test_site_packages_returns_none(self) -> None:
         """A site-packages path is third-party and must return None."""
-        result = to_repo_relative(
-            "/usr/local/lib/python3.11/site-packages/fastapi/routing.py"
-        )
+        result = to_repo_relative("/usr/local/lib/python3.11/site-packages/fastapi/routing.py")
         assert result is None
 
     def test_venv_path_returns_none(self) -> None:
         """A path inside a .venv is out-of-repo and must return None."""
-        result = to_repo_relative(
-            "/home/user/project/.venv/lib/python3.11/site-packages/starlette/apps.py"
-        )
+        result = to_repo_relative("/home/user/project/.venv/lib/python3.11/site-packages/starlette/apps.py")
         assert result is None
 
     def test_windows_backslash_separator_normalised(self) -> None:
         """Backslash separators are converted to forward slashes before matching."""
-        result = to_repo_relative(
-            "autobot-backend\\services\\failure_pattern_detector.py"
-        )
+        result = to_repo_relative("autobot-backend\\services\\failure_pattern_detector.py")
         assert result == "autobot-backend/services/failure_pattern_detector.py"
 
     def test_code_source_with_nested_segments(self) -> None:
         """code_source/ anchor works even when prefix contains multiple path components."""
-        result = to_repo_relative(
-            "/srv/deploy/release/code_source/autobot_shared/repo_path.py"
-        )
+        result = to_repo_relative("/srv/deploy/release/code_source/autobot_shared/repo_path.py")
         assert result == "autobot_shared/repo_path.py"
 
     def test_empty_string_returns_none(self) -> None:

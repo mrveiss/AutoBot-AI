@@ -20,7 +20,6 @@ from unittest.mock import patch
 from orchestration.workflow_runner import _MAX_FAILURE_FRAMES, _extract_failure_locations
 from services.failure_pattern_detector import FailurePattern
 
-
 # ---------------------------------------------------------------------------
 # FailurePattern serialisation round-trip
 # ---------------------------------------------------------------------------
@@ -37,9 +36,7 @@ def _sample_pattern(**overrides) -> FailurePattern:
         "confidence": 0.8,
         "first_seen": "2026-01-01T00:00:00",
         "last_seen": "2026-01-02T00:00:00",
-        "failure_locations": [
-            {"file": "autobot-backend/services/x.py", "line": 42, "func": "run"}
-        ],
+        "failure_locations": [{"file": "autobot-backend/services/x.py", "line": 42, "func": "run"}],
     }
     base.update(overrides)
     return FailurePattern(**base)
