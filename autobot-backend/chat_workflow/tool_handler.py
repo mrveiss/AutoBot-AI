@@ -1834,11 +1834,20 @@ class ToolHandlerMixin:
         agent_type = params.get("agent_type", "research_agent")
         engine = params.get("engine", "claude_code")
         depth = int((getattr(ctx, "context", None) or {}).get("delegation_depth", 0)) if ctx else 0
-        logger.info("[GH#11207] Delegating to %s subagent (engine=%s, depth=%d): %s", agent_type, engine, depth, task[:100])
+        logger.info(
+            "[GH#11207] Delegating to %s subagent (engine=%s, depth=%d): %s", agent_type, engine, depth, task[:100]
+        )
         try:
             result = await run_delegated_subtask(task, agent_type=agent_type, depth=depth, engine=engine)
             execution_results.append(
-                {"tool": "delegate", "task": task, "agent_type": agent_type, "engine": engine, "status": "completed", "result": result}
+                {
+                    "tool": "delegate",
+                    "task": task,
+                    "agent_type": agent_type,
+                    "engine": engine,
+                    "status": "completed",
+                    "result": result,
+                }
             )
             yield WorkflowMessage(
                 type="delegation",
