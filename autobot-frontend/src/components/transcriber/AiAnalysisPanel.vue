@@ -8,7 +8,7 @@ const props = defineProps<{ recordingId: number; open: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const customQuestion = ref('')
-const { streaming, content, activeAction, ask } = useAiAnalysis(props.recordingId)
+const { streaming, content, ask } = useAiAnalysis(props.recordingId)
 
 function handleAsk(action: AiAnalysisAction) {
   ask({ action, customQuestion: action === 'custom' ? customQuestion.value : undefined })

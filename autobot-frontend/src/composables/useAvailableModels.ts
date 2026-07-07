@@ -58,7 +58,7 @@ export function useAvailableModels() {
     error.value = null
     return wrap(async () => {
       try {
-        const data: AvailableModelsResult = await ApiClient.get<any>(
+        const data = await ApiClient.get<AvailableModelsResult>(
           `${getApiBase()}/models/available`,
         )
         models.value = data.models ?? []

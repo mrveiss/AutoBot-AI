@@ -60,8 +60,14 @@ async def test_social_fetch_carries_social_source_type(monkeypatch):
         }
     )
 
+    import content_reach._url_guard as guard_mod
     import content_reach.backends.browser as browser_mod
 
+    async def _always_public(_url: str) -> bool:
+        return True
+
+    monkeypatch.setattr(guard_mod, "_is_public_url_async", _always_public)
+    monkeypatch.setattr(guard_mod, "_RESPECT_ROBOTS", False)
     monkeypatch.setattr(browser_mod, "_get_manager", lambda: stub_manager)
 
     from content_reach.sources.social import build_social_chain

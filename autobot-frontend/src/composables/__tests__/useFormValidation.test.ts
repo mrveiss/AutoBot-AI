@@ -9,6 +9,7 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { useFormValidation, quickValidate } from '../useFormValidation'
+import type { ValidationRule } from '../useFormValidation'
 
 describe('useFormValidation composable', () => {
   // ========================================
@@ -938,7 +939,7 @@ describe('useFormValidation composable', () => {
       const { validateField } = useFormValidation({
         username: {
           value: 'test',
-          rules: [{ rule: 'unknown' as any }]
+          rules: [{ rule: 'unknown' as unknown as ValidationRule }]
         }
       })
 

@@ -612,10 +612,6 @@ const sortEntries = () => {
   // Sorting is handled in the computed property
 }
 
-const toggleSelection = (id: string) => {
-  selection.toggleByKey(id)
-}
-
 const toggleSelectAll = () => {
   if (selection.allSelected.value) {
     // Deselect all on current page
@@ -662,10 +658,6 @@ const deleteSelected = async () => {
   } catch (error) {
     logger.error('Failed to delete entries:', error)
   }
-}
-
-const exportSelected = async () => {
-  handleExport('json')
 }
 
 // Issue #747: Enhanced export with multiple formats

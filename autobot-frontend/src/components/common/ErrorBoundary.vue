@@ -51,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onErrorCaptured, inject } from 'vue'
+import { ref, computed, onErrorCaptured, inject, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -61,7 +61,7 @@ const logger = createLogger('ErrorBoundary')
 
 interface Props {
   fallback?: string
-  onError?: (error: Error, instance: any, info: string) => void
+  onError?: (error: Error, instance: ComponentPublicInstance | null, info: string) => void
   showRetry?: boolean
   showReload?: boolean
 }
@@ -83,7 +83,10 @@ const showDetails = ref(false)
 const retrying = ref(false)
 
 // Inject RUM agent if available
-const rum = inject('rum', null) as any
+const rum = inject('rum', null) as {
+  trackError: (type: string, data: Record<string, unknown>) => void
+  trackUserInteraction: (name: string, target: unknown, data: Record<string, unknown>) => void
+} | null
 
 // Compute user-friendly error message
 const userFriendlyMessage = computed(() => {
@@ -110,7 +113,7 @@ const userFriendlyMessage = computed(() => {
 })
 
 // Capture errors from child components
-onErrorCaptured((error: Error, instance: any, info: string) => {
+onErrorCaptured((error: Error, instance: ComponentPublicInstance | null, info: string) => {
   // Combine error and info into a single data object for the logger
   logger.error('Error captured by ErrorBoundary:', { error, info })
 

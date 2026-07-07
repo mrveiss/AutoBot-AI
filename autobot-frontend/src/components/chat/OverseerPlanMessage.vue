@@ -51,11 +51,9 @@
  */
 
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import type { OverseerPlan, OverseerStep } from '@/composables/useOverseerAgent'
 import Icon from '@/components/ui/Icon.vue'
 
-const { t } = useI18n()
 
 const props = defineProps<{
   plan: OverseerPlan

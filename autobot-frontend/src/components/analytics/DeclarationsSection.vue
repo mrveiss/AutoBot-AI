@@ -102,7 +102,6 @@
  * Issue #704: Migrated to design tokens
  */
 
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useGroupingMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'

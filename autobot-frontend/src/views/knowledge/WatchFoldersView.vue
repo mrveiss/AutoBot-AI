@@ -268,11 +268,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useWatchFolders, type WatchFolderConfig } from '@/composables/knowledge/useWatchFolders'
-import { createLogger } from '@/utils/debugUtils'
-
-const logger = createLogger('WatchFoldersView')
 
 const {
   watchFolders,

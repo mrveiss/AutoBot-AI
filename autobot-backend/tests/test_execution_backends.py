@@ -314,6 +314,36 @@ class TestSSHBackend:
             pytest.skip("paramiko not installed")
 
 
+def _make_modal_mock() -> MagicMock:
+    """Build a minimal modal module mock that satisfies ModalBackend init checks."""
+    mock_modal = MagicMock()
+
+    # App lookup
+    mock_app = MagicMock()
+    mock_modal.App.lookup.return_value = mock_app
+
+    # Image
+    mock_image = MagicMock()
+    mock_modal.Image.debian_slim.return_value = mock_image
+
+    # Secret
+    mock_modal.Secret.from_dict.return_value = MagicMock()
+
+    # Sandbox + proc
+    mock_proc = MagicMock()
+    mock_proc.stdout.read.return_value = "hello from sandbox\n"
+    mock_proc.stderr.read.return_value = ""
+    mock_proc.wait.return_value = None
+    mock_proc.returncode = 0
+
+    mock_sandbox = MagicMock()
+    mock_sandbox.exec.return_value = mock_proc
+    mock_sandbox.object_id = "sandbox-abc123"
+    mock_modal.Sandbox.create.return_value = mock_sandbox
+
+    return mock_modal
+
+
 class TestModalBackend:
     """Test Modal execution backend."""
 
@@ -352,6 +382,208 @@ class TestModalBackend:
             assert "python" in reason.lower()
         except RuntimeError:
             pytest.skip("modal not installed")
+
+
+# ---------------------------------------------------------------------------
+# Modal Sandbox dispatch tests (Issue #11003)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestModalSandboxDispatch:
+    """Unit tests for real Modal Sandbox dispatch (Issue #11003).
+
+    All tests monkeypatch ``services.execution.modal_backend.modal`` with a
+    MagicMock so no real Modal SDK or network is required.
+    """
+
+    def _make_backend(self, monkeypatch) -> "ModalBackend":
+        mock_modal = _make_modal_mock()
+        monkeypatch.setattr("services.execution.modal_backend.modal", mock_modal)
+        # Supply a fake token so health_check passes
+        return ModalBackend(api_token="test-token"), mock_modal
+
+    # (a) Successful run returns stdout / return_code 0 / status SUCCESS
+    async def test_successful_run(self, monkeypatch):
+        """Sandbox exec with rc=0 produces SUCCESS result with correct stdout."""
+        backend, mock_modal = self._make_backend(monkeypatch)
+        task = ExecutionTask(task_id="sb-1", code="print('hi')", language="python", timeout_seconds=30)
+
+        result = await backend.execute(task)
+
+        assert result.status == ExecutionStatus.SUCCESS
+        assert result.return_code == 0
+        assert "hello from sandbox" in result.stdout
+        assert result.metadata["modal_run_id"] == "sandbox-abc123"
+
+    # (b) Non-zero returncode → FAILED
+    async def test_nonzero_returncode_gives_failed(self, monkeypatch):
+        """Sandbox proc returning rc=1 maps to ExecutionStatus.FAILED."""
+        backend, mock_modal = self._make_backend(monkeypatch)
+        mock_modal.Sandbox.create.return_value.exec.return_value.returncode = 1
+        mock_modal.Sandbox.create.return_value.exec.return_value.stderr.read.return_value = "oops"
+
+        task = ExecutionTask(task_id="sb-2", code="raise SystemExit(1)", language="python")
+
+        result = await backend.execute(task)
+
+        assert result.status == ExecutionStatus.FAILED
+        assert result.return_code == 1
+
+    # (c) modal is None → RuntimeError / health_check False / no code execution
+    async def test_modal_none_raises_runtime_error(self, monkeypatch):
+        """When modal is None, _call_modal_function raises RuntimeError immediately."""
+        monkeypatch.setattr("services.execution.modal_backend.modal", None)
+
+        # health_check must return False
+        # We cannot instantiate ModalBackend with modal=None — verify that too
+        with pytest.raises(RuntimeError, match="modal"):
+            ModalBackend()
+
+    async def test_health_check_false_when_modal_none(self, monkeypatch):
+        """health_check returns False when modal module is absent."""
+        backend, mock_modal = self._make_backend(monkeypatch)
+        # Patch modal away after construction
+        monkeypatch.setattr("services.execution.modal_backend.modal", None)
+        result = await backend.health_check()
+        assert result is False
+
+    async def test_health_check_false_when_no_credentials(self, monkeypatch):
+        """health_check returns False when no api_token and no env vars."""
+        mock_modal = _make_modal_mock()
+        monkeypatch.setattr("services.execution.modal_backend.modal", mock_modal)
+        monkeypatch.delenv("MODAL_TOKEN_ID", raising=False)
+        monkeypatch.delenv("MODAL_TOKEN_SECRET", raising=False)
+
+        backend = ModalBackend(api_token=None)
+        assert await backend.health_check() is False
+
+    async def test_health_check_true_with_api_token(self, monkeypatch):
+        """health_check returns True when api_token is set at construction."""
+        backend, _ = self._make_backend(monkeypatch)
+        assert await backend.health_check() is True
+
+    async def test_health_check_true_with_env_token_id(self, monkeypatch):
+        """health_check returns True when MODAL_TOKEN_ID env var is present."""
+        mock_modal = _make_modal_mock()
+        monkeypatch.setattr("services.execution.modal_backend.modal", mock_modal)
+        monkeypatch.setenv("MODAL_TOKEN_ID", "tid-123")
+        monkeypatch.delenv("MODAL_TOKEN_SECRET", raising=False)
+
+        backend = ModalBackend(api_token=None)
+        assert await backend.health_check() is True
+
+    # (d) Env vars passed via modal.Secret.from_dict; AUTOBOT_*/hijack names stripped
+    async def test_env_vars_passed_via_secret(self, monkeypatch):
+        """Allowed AUTOBOT_* env vars reach modal.Secret.from_dict."""
+        backend, mock_modal = self._make_backend(monkeypatch)
+        task = ExecutionTask(
+            task_id="sb-3",
+            code="print('env')",
+            language="python",
+            env_vars={"AUTOBOT_MY_VAR": "value123", "SECRET_SAUCE": "should-be-dropped"},
+        )
+
+        await backend.execute(task)
+
+        mock_modal.Secret.from_dict.assert_called_once()
+        passed_dict = mock_modal.Secret.from_dict.call_args[0][0]
+        assert "AUTOBOT_MY_VAR" in passed_dict
+        assert passed_dict["AUTOBOT_MY_VAR"] == "value123"
+        assert "SECRET_SAUCE" not in passed_dict
+
+    async def test_hijack_env_vars_stripped(self, monkeypatch):
+        """PYTHONPATH, LD_PRELOAD and other hijack names are stripped."""
+        backend, mock_modal = self._make_backend(monkeypatch)
+        task = ExecutionTask(
+            task_id="sb-4",
+            code="print('safe')",
+            language="python",
+            env_vars={
+                "PYTHONPATH": "/evil",
+                "LD_PRELOAD": "/evil.so",
+                "NODE_OPTIONS": "--require /evil",
+                "AUTOBOT_SAFE": "ok",
+            },
+        )
+
+        await backend.execute(task)
+
+        mock_modal.Secret.from_dict.assert_called_once()
+        passed_dict = mock_modal.Secret.from_dict.call_args[0][0]
+        for bad_key in ("PYTHONPATH", "LD_PRELOAD", "NODE_OPTIONS"):
+            assert bad_key not in passed_dict
+        assert "AUTOBOT_SAFE" in passed_dict
+
+    async def test_no_secret_when_env_vars_empty(self, monkeypatch):
+        """modal.Secret.from_dict is NOT called when env_vars is empty."""
+        backend, mock_modal = self._make_backend(monkeypatch)
+        task = ExecutionTask(task_id="sb-5", code="print('no env')", language="python", env_vars={})
+
+        await backend.execute(task)
+
+        mock_modal.Secret.from_dict.assert_not_called()
+        # Sandbox.create should have been called with secrets=[]
+        call_kwargs = mock_modal.Sandbox.create.call_args[1]
+        assert call_kwargs.get("secrets") == []
+
+    # (e) sandbox.terminate() is always called (finally)
+    async def test_sandbox_terminate_always_called(self, monkeypatch):
+        """sandbox.terminate() is called even when sandbox.exec raises."""
+        backend, mock_modal = self._make_backend(monkeypatch)
+        mock_sandbox = mock_modal.Sandbox.create.return_value
+        mock_sandbox.exec.side_effect = RuntimeError("sandbox exploded")
+
+        task = ExecutionTask(task_id="sb-6", code="bad code", language="python")
+
+        result = await backend.execute(task)
+
+        mock_sandbox.terminate.assert_called_once()
+        assert result.status == ExecutionStatus.FAILED
+
+    async def test_sandbox_terminate_called_on_success(self, monkeypatch):
+        """sandbox.terminate() is called on the happy path too."""
+        backend, mock_modal = self._make_backend(monkeypatch)
+        mock_sandbox = mock_modal.Sandbox.create.return_value
+
+        task = ExecutionTask(task_id="sb-7", code="print('done')", language="python")
+        await backend.execute(task)
+
+        mock_sandbox.terminate.assert_called_once()
+
+    # Assert exec() is NEVER used to run task code in-process
+    async def test_builtin_exec_never_called(self, monkeypatch):
+        """The built-in exec() must not be used to run task code."""
+        backend, _ = self._make_backend(monkeypatch)
+        task = ExecutionTask(task_id="sb-8", code="x = 1 + 1", language="python")
+
+        # Patch builtins.exec to fail hard if called
+        import builtins
+
+        original_exec = builtins.exec
+
+        def _no_exec(code, *args, **kwargs):
+            raise AssertionError("exec() was called with task code — this is the RCE bug!")
+
+        monkeypatch.setattr(builtins, "exec", _no_exec)
+        try:
+            result = await backend.execute(task)
+        finally:
+            monkeypatch.setattr(builtins, "exec", original_exec)
+
+        # If we reach here, exec() was not called in-process
+        assert result.status == ExecutionStatus.SUCCESS
+
+    # App caching
+    async def test_app_lookup_called_only_once(self, monkeypatch):
+        """modal.App.lookup is called once and the result is cached."""
+        backend, mock_modal = self._make_backend(monkeypatch)
+        task = ExecutionTask(task_id="sb-9", code="pass", language="python")
+
+        await backend.execute(task)
+        await backend.execute(task)
+
+        mock_modal.App.lookup.assert_called_once_with(ModalBackend._APP_NAME, create_if_missing=True)
 
 
 class TestExecutionManager:

@@ -597,7 +597,6 @@ const _qualityWsUrl = (() => {
 })();
 const {
   connect: wsConnect,
-  disconnect: wsDisconnect,
 } = useWebSocket(_qualityWsUrl, {
   autoConnect: false,
   autoReconnect: true,

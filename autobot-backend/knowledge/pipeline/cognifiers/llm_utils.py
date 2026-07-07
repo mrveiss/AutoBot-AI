@@ -89,20 +89,26 @@ def build_entity_map(
     return entity_map
 
 
-def build_indexed_chunk_blocks(contents: List[str], max_chars: int) -> str:
+def build_indexed_chunk_blocks(contents: List[str], max_chars: int, aux: List[str] | None = None) -> str:
     """Render chunk texts as ``Chunk N:`` blocks for an index-keyed batch prompt.
 
     Args:
         contents: Per-chunk text, in order.
         max_chars: Truncate each chunk to this many characters (0 = no limit).
+        aux: Optional per-chunk auxiliary text (parallel to ``contents``) folded
+            into each block before the text — e.g. a chunk-relevant entity list
+            for entity-conditioned extraction (#11044).
 
     Returns:
-        Newline-separated ``Chunk i:\\n<text>`` blocks.
+        Newline-separated ``Chunk i:\\n[<aux>\\n]<text>`` blocks.
     """
     parts = []
     for i, text in enumerate(contents):
         body = text[:max_chars] if max_chars and max_chars > 0 else text
-        parts.append(f"Chunk {i}:\n{body}")
+        if aux is not None and aux[i]:
+            parts.append(f"Chunk {i}:\n{aux[i]}\n{body}")
+        else:
+            parts.append(f"Chunk {i}:\n{body}")
     return "\n\n".join(parts)
 
 
@@ -149,6 +155,7 @@ async def batched_chunk_extract(
     convert: Callable[[List[Any], Any], List[_R]],
     extract_one: Callable[[Any], Awaitable[List[_R]]],
     content_of: Callable[[Any], str] = lambda c: c.content,
+    aux_of: Callable[[Any], str] | None = None,
 ) -> List[_R]:
     """Extract items from many chunks in ONE structured LLM call (#10598).
 
@@ -167,6 +174,8 @@ async def batched_chunk_extract(
         convert: ``(raw_items, chunk) -> [domain objects]``.
         extract_one: Per-chunk async fallback returning domain objects.
         content_of: Extract the text of a chunk (default ``chunk.content``).
+        aux_of: Optional per-chunk auxiliary text folded into each indexed block —
+            e.g. a chunk-relevant entity list for entity-conditioned extraction (#11044).
 
     Returns:
         Flattened list of extracted items across all chunks, in chunk order.
@@ -176,7 +185,8 @@ async def batched_chunk_extract(
     if len(chunks) == 1:
         return await extract_one(chunks[0])
     try:
-        blocks = build_indexed_chunk_blocks([content_of(c) for c in chunks], max_chunk_chars)
+        aux = [aux_of(c) for c in chunks] if aux_of is not None else None
+        blocks = build_indexed_chunk_blocks([content_of(c) for c in chunks], max_chunk_chars, aux=aux)
         prompt = batch_prompt_template.format(chunks=blocks)
         batch_max_tokens = min(_BATCH_MAX_TOKENS_PER_CHUNK * len(chunks), _BATCH_MAX_TOKENS_CAP)
         response = await llm.chat(

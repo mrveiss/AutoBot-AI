@@ -40,9 +40,19 @@ COPY autobot-backend/requirements.txt /tmp/requirements.txt
 RUN grep -v -E "(autobot.shared|^-r |^-c |^torch==|^torchvision==)" /tmp/requirements.txt \
         > /app/requirements-filtered.txt \
     && python3 -m pip install --no-cache-dir -c /app/constraints/shared.txt -r /app/requirements-root.txt \
-    && python3 -m pip install --no-cache-dir \
-        torch==2.12.1 torchvision==0.27.1 \
-        --index-url https://download.pytorch.org/whl/cpu \
+    # #11039: download.pytorch.org intermittently drops the TLS handshake
+    # (SSLV3_ALERT_HANDSHAKE_FAILURE), failing the whole build on a transient
+    # network blip. Retry with backoff, then assert the import so an exhausted
+    # loop still fails the build (a bare for-loop exits 0 even if every try failed).
+    && for i in 1 2 3 4 5; do \
+           python3 -m pip install --no-cache-dir --retries 5 --timeout 120 \
+               torch==2.12.1 torchvision==0.27.1 \
+               --index-url https://download.pytorch.org/whl/cpu \
+           && break; \
+           echo "torch install attempt $i failed (network/TLS); retrying in $((i*10))s..."; \
+           sleep $((i*10)); \
+       done \
+    && python3 -c "import torch, torchvision" \
     && python3 -m pip install --no-cache-dir -c /app/constraints/shared.txt -r /app/requirements-filtered.txt
 
 

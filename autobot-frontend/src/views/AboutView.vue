@@ -53,9 +53,6 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-
-const { t } = useI18n()
 
 // Read version from Vite's env injection (set in vite.config.ts via define)
 // Falls back to '—' if not injected

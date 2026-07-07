@@ -103,8 +103,20 @@ _BACKEND_ROLES = [
         "auto_restart": True,
         "health_check_port": 8443,
         "health_check_path": "/api/health",
+        # Install deps into the backend venv, then migrate. Mirrors the backend
+        # ansible role (#11117): filter out the editable autobot_shared + -r
+        # includes, and rewrite -c ../constraints/ to the canonical code_source
+        # path so pip can resolve the #10524 constraints (bare `pip install -r
+        # requirements.txt` errors on the unresolvable -c and, via && short-
+        # circuit, silently skipped alembic every sync — #11069).
         "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-backend && " "pip install -r requirements.txt && " "alembic upgrade head"
+            f"cd {_BASE_DIR}/autobot-backend && "
+            "grep -Ev '^-e.*autobot[-_]shared|^-r' requirements.txt "
+            f"| sed 's|^-c \\.\\./constraints/|-c {_BASE_DIR}/code_source/constraints/|' "
+            "> /tmp/requirements-filtered-slm.txt && "
+            "PIP_USE_DEPRECATED=legacy-resolver PIP_DEFAULT_TIMEOUT=120 "
+            "venv/bin/pip install -r /tmp/requirements-filtered-slm.txt && "
+            "venv/bin/alembic upgrade head"
         ),
         "required": True,
         "degraded_without": [],

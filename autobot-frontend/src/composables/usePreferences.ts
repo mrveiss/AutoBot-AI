@@ -27,6 +27,14 @@ interface AccountAppearance {
   theme_preset: ThemePreset
 }
 
+/** Backend response for the active personality profile (#753 language sync). */
+interface PersonalityActiveResponse {
+  data?: {
+    id?: string
+    language_code?: string
+  }
+}
+
 // Preference types
 export type FontSize = 'small' | 'medium' | 'large'
 export type AccentColor = 'teal' | 'emerald' | 'blue' | 'purple' | 'orange'
@@ -156,7 +164,7 @@ function applyLayoutDensity(density: LayoutDensity): void {
  * Sync language preference to backend personality profile
  */
 function syncLanguageToBackend(code: string): void {
-  apiClient.get<any>(`${getApiBase()}/personality/active`).then((res: any) => {
+  apiClient.get<PersonalityActiveResponse>(`${getApiBase()}/personality/active`).then((res) => {
     if (res.data && res.data.id) {
       apiClient.put(
         `${getApiBase()}/personality/profiles/${res.data.id}`,
@@ -178,7 +186,7 @@ export function usePreferences() {
    */
   async function loadLanguageFromBackend(): Promise<void> {
     try {
-      const res = await apiClient.get<any>(`${getApiBase()}/personality/active`)
+      const res = await apiClient.get<PersonalityActiveResponse>(`${getApiBase()}/personality/active`)
       const code: string | undefined = res.data?.language_code
       if (code && code !== language.value) {
         await setLanguage(code)

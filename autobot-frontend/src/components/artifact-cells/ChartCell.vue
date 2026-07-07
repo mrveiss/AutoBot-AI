@@ -108,7 +108,7 @@ defineEmits<ChartCellEmits>()
 const chartId = ref<string>(`chart-${crypto.randomUUID()}`)
 const hasError = ref<boolean>(false)
 const errorMessage = ref<string>('')
-let vegaEmbed: any = null
+let vegaEmbed: typeof import('vega-embed') | null = null
 
 // Computed
 const chartAriaLabel = computed(() => {
@@ -183,7 +183,8 @@ const renderChart = async () => {
       }
     }
 
-    await vega.embed(containerEl, spec, {
+    const embed = (vega as unknown as { embed: typeof import('vega-embed').default }).embed
+    await embed(containerEl, spec, {
       renderer: props.renderer,
       actions: props.actions
     })

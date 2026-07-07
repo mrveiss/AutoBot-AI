@@ -1,7 +1,15 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import '@testing-library/jest-dom'
-import { vi } from 'vitest'
+import { vi, afterAll } from 'vitest'
+
+// Prevent cross-file pollution: some test files call vi.stubGlobal() (e.g. window,
+// navigator, EventSource) at module scope without restoring. Under parallel file
+// execution these leak into later files' worker context, causing flaky failures
+// (async DOM updates/emits break). Restore all stubbed globals after each file.
+afterAll(() => {
+  vi.unstubAllGlobals()
+})
 
 // Wrap global fetch to resolve relative URLs against document origin (jsdom 29+ compat)
 const originalFetch = global.fetch
@@ -91,7 +99,7 @@ class MockWebSocket {
   })
 
   // Simulate message reception
-  simulateMessage(data: any) {
+  simulateMessage(data: unknown) {
     if (this.onmessage) {
       this.onmessage(new MessageEvent('message', { data: JSON.stringify(data) }))
     }
@@ -106,7 +114,7 @@ class MockWebSocket {
 }
 
 // Replace global WebSocket
-global.WebSocket = MockWebSocket as any
+global.WebSocket = MockWebSocket as unknown as typeof WebSocket
 
 // Global test setup
 beforeEach(() => {

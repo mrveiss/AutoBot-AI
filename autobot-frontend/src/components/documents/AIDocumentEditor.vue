@@ -214,7 +214,7 @@ async function saveChanges() {
     localDoc.value = updated
     isDirty.value = false
     emit('saved', updated)
-  } catch (err) {
+  } catch {
     emit('error', composable.error.value ?? 'Save failed')
   }
 }
@@ -236,7 +236,7 @@ async function submitRefine() {
     refineInstruction.value = ''
     showRefinePanel.value = false
     emit('refined', refined)
-  } catch (err) {
+  } catch {
     emit('error', composable.error.value ?? 'Refinement failed')
   }
 }

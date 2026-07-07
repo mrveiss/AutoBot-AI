@@ -245,7 +245,7 @@ interface LLMFilteringResult {
   filter_priority: string | null
 }
 
-const props = defineProps<{
+defineProps<{
   analysis: EnvironmentAnalysisResult | null
   loading: boolean
   error: string | null

@@ -235,7 +235,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import BaseButton from '@/components/base/BaseButton.vue'
 
@@ -319,20 +319,25 @@ const clearMessages = () => {
 }
 
 // Standard error handler
-const handleError = (error: any, setter: (msg: string) => void) => {
+const handleError = (error: unknown, setter: (msg: string) => void) => {
   logger.error('Terminal modal error:', error)
 
   let errorMessage = 'An unexpected error occurred'
 
-  if (error?.message) {
-    errorMessage = error.message
-  } else if (error?.response?.data?.detail) {
-    errorMessage = error.response.data.detail
-  } else if (error?.response?.status === 408) {
+  const err = error as {
+    message?: string
+    response?: { data?: { detail?: string }; status?: number }
+  }
+
+  if (err?.message) {
+    errorMessage = err.message
+  } else if (err?.response?.data?.detail) {
+    errorMessage = err.response!.data!.detail!
+  } else if (err?.response?.status === 408) {
     errorMessage = 'Request timed out. Please try again.'
-  } else if (error?.response?.status === 500) {
+  } else if (err?.response?.status === 500) {
     errorMessage = 'Server error. Please try again later.'
-  } else if (error?.response?.status === 404) {
+  } else if (err?.response?.status === 404) {
     errorMessage = 'Service not found. Please check your connection.'
   } else if (typeof error === 'string') {
     errorMessage = error

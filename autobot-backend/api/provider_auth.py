@@ -113,7 +113,11 @@ def _validate_outbound_url(url: str) -> None:
         )
 
 
-router = APIRouter(prefix="/api/llm-auth", tags=["llm-auth"])
+# The registry/app-factory prepends "/api" (see feature_routers.py), so this
+# router carries only "/llm-auth" → resolves to /api/llm-auth. A "/api/llm-auth"
+# prefix here would wrongly yield /api/api/llm-auth and 404 every OAuth call
+# (matches the #9864 budget-policies fix; the frontend calls /api/llm-auth/*). #11092
+router = APIRouter(prefix="/llm-auth", tags=["llm-auth"])
 
 # System vault string — provider-level tokens are scoped to the system vault so
 # all authenticated users can use the shared provider connection.

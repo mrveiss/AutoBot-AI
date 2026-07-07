@@ -190,9 +190,9 @@ const runDryScan = async () => {
     } else {
       showStatus('success', t('knowledge.cleanup.noIssuesFound'))
     }
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Failed to scan for issues:', error)
-    showStatus('error', error.message || t('knowledge.cleanup.errorScan'))
+    showStatus('error', (error as Error).message || t('knowledge.cleanup.errorScan'))
   }
 }
 
@@ -224,9 +224,9 @@ const runCleanup = async () => {
     } else {
       throw new Error((data.message as string) || 'Cleanup failed')
     }
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Failed to run cleanup:', error)
-    showStatus('error', error.message || t('knowledge.cleanup.errorCleanup'))
+    showStatus('error', (error as Error).message || t('knowledge.cleanup.errorCleanup'))
   }
 }
 </script>

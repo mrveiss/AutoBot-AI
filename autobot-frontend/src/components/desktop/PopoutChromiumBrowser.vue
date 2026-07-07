@@ -418,7 +418,7 @@
 </template>
 
 <script lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import type { Ref } from 'vue'
 import type { AutomationResults, SearchData, TestData, TestResult, MessageData, TestStep } from '@/types/browser'
 import appConfig from '@/config/AppConfig.js'
@@ -431,7 +431,6 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { NetworkConstants } from '@/constants/network'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'

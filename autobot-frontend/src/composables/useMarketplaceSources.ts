@@ -35,7 +35,7 @@ export function useMarketplaceSources() {
     error.value = null
     loading.value = true
     try {
-      const data = await ApiClient.get<any>(`${getApiBase()}/marketplace-sources`) as ListResponse
+      const data = await ApiClient.get(`${getApiBase()}/marketplace-sources`) as ListResponse
       sources.value = data.sources ?? []
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to list marketplace sources'
@@ -49,7 +49,7 @@ export function useMarketplaceSources() {
   async function addSource(payload: { name: string; url: string; description?: string }): Promise<MarketplaceSource | null> {
     error.value = null
     try {
-      const data = await ApiClient.post<any>(
+      const data = await ApiClient.post(
         `${getApiBase()}/marketplace-sources`,
         payload,
       ) as MarketplaceSource
@@ -66,7 +66,7 @@ export function useMarketplaceSources() {
   async function deleteSource(id: string): Promise<boolean> {
     error.value = null
     try {
-      await ApiClient.delete<any>(`${getApiBase()}/marketplace-sources/${id}`)
+      await ApiClient.delete(`${getApiBase()}/marketplace-sources/${id}`)
       await listSources()
       return true
     } catch (err: unknown) {

@@ -680,9 +680,19 @@ async def list_insights(
     min_confidence: float = Query(default=0.0, ge=0.0, le=1.0),
     _admin: bool = Depends(check_admin_permission),
 ):
-    """List distilled experiment insights."""
+    """List distilled experiment insights.
+
+    Resilient by design (#11081): on a fresh/empty deployment the insights
+    collection may not exist yet (or the vector store is unavailable), which
+    would otherwise 500 and crash the whole Experiments dashboard. Absence of
+    data is not an error — return an empty list instead.
+    """
     synthesizer = _get_synthesizer(request)
-    insights = await synthesizer.query_insights("*", limit=limit)
+    try:
+        insights = await synthesizer.query_insights("*", limit=limit)
+    except Exception as exc:  # noqa: BLE001 — dashboard list must degrade, not 500
+        logger.warning("autoresearch insights unavailable (returning empty): %s", exc)
+        return {"insights": [], "count": 0}
     filtered = [i for i in insights if i.confidence >= min_confidence]
     return {"insights": [i.to_dict() for i in filtered], "count": len(filtered)}
 

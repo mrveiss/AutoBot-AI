@@ -1,0 +1,137 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# Backup Restore-Verification Playbook
+#
+# Proves a node backup produced by backup-node-data.yml is actually RESTORABLE,
+# without touching any production service or datastore. Every artifact is
+# restored into a throwaway scratch dir and health-checked:
+#   - checksums.sha256 verified for the whole backup set
+#   - PostgreSQL dump: gzip integrity + gunzip into scratch + role/database DDL present
+#   - Redis RDB: redis-check-rdb loadability check (real restore validation)
+#   - tar artifacts (chromadb/prometheus/grafana/config/tls): extracted into scratch,
+#     confirmed non-empty
+# The scratch dir is always removed (block/always), so this is safe to run as a
+# scheduled DR drill against a live node.
+#
+# Usage:
+#   ansible-playbook verify-backup-restore.yml \
+#     -e target_host=<host> -e backup_path=/opt/autobot/backups/<node>-<epoch>
+---
+
+- name: Verify Backup Restorability
+  hosts: "{{ target_host }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    # Backup directory produced by backup-node-data.yml (contains checksums.sha256)
+    backup_path: "{{ backup_path | mandatory }}"
+    scratch_dir: "/tmp/autobot-restore-verify-{{ ansible_facts['date_time'].epoch }}"
+
+  tasks:
+    - name: Ensure backup manifest of checksums exists
+      ansible.builtin.stat:
+        path: "{{ backup_path }}/checksums.sha256"
+      register: checksums_file
+      failed_when: not checksums_file.stat.exists
+
+    - name: Create throwaway scratch dir
+      ansible.builtin.file:
+        path: "{{ scratch_dir }}"
+        state: directory
+        mode: '0700'
+
+    - name: Verify backup restorability
+      block:
+        # =====================================================================
+        # 1. Whole-set checksum verification
+        # =====================================================================
+        - name: Verify all artifact checksums (sha256sum -c)
+          ansible.builtin.command:
+            cmd: sha256sum -c checksums.sha256
+            chdir: "{{ backup_path }}"
+          register: checksum_check
+          changed_when: false
+          failed_when: checksum_check.rc != 0
+
+        # =====================================================================
+        # 2. PostgreSQL dump — restore into scratch + structure health-check
+        # =====================================================================
+        - name: Check for PostgreSQL dump
+          ansible.builtin.stat:
+            path: "{{ backup_path }}/postgresql-all.sql.gz"
+          register: pg_dump
+
+        - name: Verify PostgreSQL dump restores and is well-formed
+          when: pg_dump.stat.exists
+          block:
+            - name: Test gzip integrity of PostgreSQL dump
+              ansible.builtin.command:
+                cmd: gzip -t "{{ backup_path }}/postgresql-all.sql.gz"
+              changed_when: false
+
+            - name: Restore PostgreSQL dump into scratch and confirm role/database DDL
+              ansible.builtin.shell:
+                cmd: >
+                  set -o pipefail;
+                  gunzip -c "{{ backup_path }}/postgresql-all.sql.gz"
+                  > "{{ scratch_dir }}/postgresql-all.sql"
+                  && grep -qE 'CREATE (ROLE|DATABASE)' "{{ scratch_dir }}/postgresql-all.sql"
+                executable: /bin/bash
+              changed_when: false
+
+        # =====================================================================
+        # 3. Redis RDB — real loadability check
+        # =====================================================================
+        - name: Check for Redis RDB dump
+          ansible.builtin.stat:
+            path: "{{ backup_path }}/dump.rdb"
+          register: redis_rdb
+
+        - name: Verify Redis RDB is loadable (redis-check-rdb)
+          when: redis_rdb.stat.exists
+          ansible.builtin.command:
+            cmd: redis-check-rdb "{{ backup_path }}/dump.rdb"
+          changed_when: false
+
+        # =====================================================================
+        # 4. Tar artifacts — extract into scratch + confirm non-empty
+        # =====================================================================
+        - name: Find tar.gz artifacts in backup
+          ansible.builtin.find:
+            paths: "{{ backup_path }}"
+            patterns: "*.tar.gz"
+          register: tar_artifacts
+
+        - name: Restore each tar artifact into scratch and confirm non-empty
+          ansible.builtin.shell:
+            cmd: >
+              set -o pipefail;
+              dest="{{ scratch_dir }}/{{ item.path | basename | regex_replace('\\.tar\\.gz$', '') }}";
+              mkdir -p "$dest"
+              && tar -xzf "{{ item.path }}" -C "$dest"
+              && [ -n "$(ls -A "$dest")" ]
+            executable: /bin/bash
+          changed_when: false
+          loop: "{{ tar_artifacts.files }}"
+          loop_control:
+            label: "{{ item.path | basename }}"
+
+        - name: Restore-verification summary
+          ansible.builtin.debug:
+            msg: |
+              ✅ Backup restore-verification PASSED — {{ backup_path }}
+                - checksums.sha256 ......... verified
+                - postgres dump ............ {{ 'restored to scratch, role/database DDL present' if pg_dump.stat.exists else 'not present' }}
+                - redis rdb ................ {{ 'loadable (redis-check-rdb)' if redis_rdb.stat.exists else 'not present' }}
+                - tar artifacts restored ... {{ tar_artifacts.files | length }}
+              Non-destructive: no production service or datastore was modified.
+
+      always:
+        - name: Remove scratch dir
+          ansible.builtin.file:
+            path: "{{ scratch_dir }}"
+            state: absent

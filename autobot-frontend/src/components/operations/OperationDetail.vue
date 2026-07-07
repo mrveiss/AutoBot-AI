@@ -149,7 +149,6 @@
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import type { Operation } from '@/types/operations'
 import {
   STATUS_CONFIG,
@@ -167,7 +166,6 @@ interface Props {
   operation: Operation
 }
 
-const { t } = useI18n()
 const props = defineProps<Props>()
 
 const emit = defineEmits<{

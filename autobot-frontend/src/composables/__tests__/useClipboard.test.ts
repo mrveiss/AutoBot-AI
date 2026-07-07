@@ -19,6 +19,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import type { Ref } from 'vue'
 import {
   useClipboard,
   useClipboardWithMessage,
@@ -490,7 +491,7 @@ describe('useClipboardElement Helper', () => {
 
     const clipboard = useClipboardElement()
 
-    const result = await clipboard.copyElement(elementRef as any)
+    const result = await clipboard.copyElement(elementRef as Ref<HTMLElement | undefined>)
 
     expect(result).toBe(true)
     expect(mockWriteText).toHaveBeenCalledWith('Code content')
@@ -503,7 +504,7 @@ describe('useClipboardElement Helper', () => {
 
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const result = await clipboard.copyElement(elementRef as any)
+    const result = await clipboard.copyElement(elementRef as Ref<HTMLElement | undefined>)
 
     expect(result).toBe(false)
     expect(consoleErrorSpy).toHaveBeenCalled()
@@ -600,7 +601,7 @@ describe('useClipboard - Edge Cases', () => {
   it('should handle copy during pending copy', async () => {
     vi.useFakeTimers()
 
-    let resolveFirst: any
+    let resolveFirst!: (value?: void | PromiseLike<void>) => void
     mockWriteText.mockImplementationOnce(() => {
       return new Promise((resolve) => {
         resolveFirst = resolve

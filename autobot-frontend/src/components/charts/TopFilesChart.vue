@@ -22,7 +22,6 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseChart from './BaseChart.vue'
-import type { ApexOptions } from 'apexcharts'
 import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n()

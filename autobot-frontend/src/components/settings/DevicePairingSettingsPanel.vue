@@ -190,7 +190,7 @@ Allows users to pair mobile devices for push notifications and offline sync
 
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { createLogger } from '@/utils/debugUtils'

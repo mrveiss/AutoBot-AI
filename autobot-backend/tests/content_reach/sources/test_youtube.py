@@ -14,6 +14,12 @@ import pytest
 from content_reach.base import BackendError, ContentRequest
 from source_attribution import SourceType
 
+
+async def _always_public(_url: str) -> bool:
+    """Stub for _is_public_url_async that always returns True."""
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -127,8 +133,10 @@ async def test_ytdlp_probe_false_when_absent(monkeypatch):
 @pytest.mark.asyncio
 async def test_ytdlp_fetch_maps_caption_text(monkeypatch):
     """fetch() returns ContentResult with captions text when subtitles["en"] present."""
+    import content_reach._url_guard as guard_mod
     from content_reach.sources import youtube as yt_mod
 
+    monkeypatch.setattr(guard_mod, "_is_public_url_async", _always_public)
     monkeypatch.setattr(yt_mod, "_ytdlp_extract_info", lambda url: _FAKE_INFO)
 
     mock_response = MagicMock()
@@ -162,8 +170,10 @@ async def test_ytdlp_fetch_falls_back_to_automatic_captions(monkeypatch):
     json3 so the real _json3_to_text path is exercised (not the JSONDecodeError
     fallback that a VTT body would trigger).
     """
+    import content_reach._url_guard as guard_mod
     from content_reach.sources import youtube as yt_mod
 
+    monkeypatch.setattr(guard_mod, "_is_public_url_async", _always_public)
     monkeypatch.setattr(yt_mod, "_ytdlp_extract_info", lambda url: _FAKE_INFO_AUTO)
 
     mock_response = MagicMock()
@@ -195,8 +205,10 @@ async def test_ytdlp_fetch_falls_back_to_automatic_captions(monkeypatch):
 @pytest.mark.asyncio
 async def test_ytdlp_fetch_no_captions_raises(monkeypatch):
     """fetch() raises BackendError when no English captions are available."""
+    import content_reach._url_guard as guard_mod
     from content_reach.sources import youtube as yt_mod
 
+    monkeypatch.setattr(guard_mod, "_is_public_url_async", _always_public)
     monkeypatch.setattr(yt_mod, "_ytdlp_extract_info", lambda url: _FAKE_INFO_NO_CAPTIONS)
 
     from content_reach.sources.youtube import YtDlpCaptionBackend
@@ -215,8 +227,10 @@ async def test_ytdlp_fetch_no_captions_raises(monkeypatch):
 @pytest.mark.asyncio
 async def test_ytdlp_fetch_raises_when_yt_dlp_absent(monkeypatch):
     """fetch() raises BackendError (not ImportError) when yt_dlp is not installed."""
+    import content_reach._url_guard as guard_mod
     from content_reach.sources import youtube as yt_mod
 
+    monkeypatch.setattr(guard_mod, "_is_public_url_async", _always_public)
     monkeypatch.setattr(
         yt_mod,
         "_import_yt_dlp",
@@ -239,8 +253,10 @@ async def test_ytdlp_fetch_raises_when_yt_dlp_absent(monkeypatch):
 @pytest.mark.asyncio
 async def test_ytdlp_fetch_httpx_error_raises_backend_error(monkeypatch):
     """fetch() wraps httpx.HTTPError into BackendError."""
+    import content_reach._url_guard as guard_mod
     from content_reach.sources import youtube as yt_mod
 
+    monkeypatch.setattr(guard_mod, "_is_public_url_async", _always_public)
     monkeypatch.setattr(yt_mod, "_ytdlp_extract_info", lambda url: _FAKE_INFO)
 
     mock_client = AsyncMock(spec=httpx.AsyncClient)
@@ -288,8 +304,10 @@ def test_srv1_track_parsed():
 @pytest.mark.asyncio
 async def test_ytdlp_fetch_srv1_track(monkeypatch):
     """fetch() selects an srv1 track and returns correctly decoded plain text."""
+    import content_reach._url_guard as guard_mod
     from content_reach.sources import youtube as yt_mod
 
+    monkeypatch.setattr(guard_mod, "_is_public_url_async", _always_public)
     monkeypatch.setattr(yt_mod, "_ytdlp_extract_info", lambda url: _FAKE_INFO_SRV1)
 
     mock_response = MagicMock()

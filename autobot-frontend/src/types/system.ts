@@ -31,5 +31,5 @@ export interface ServiceHealth {
   consecutiveFailures?: number;
   error?: string;
   timestamp?: number;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 }
