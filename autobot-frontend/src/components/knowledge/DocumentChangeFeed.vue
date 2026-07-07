@@ -207,11 +207,13 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { createLogger } from '@/utils/debugUtils'
 import { useDocumentChanges } from '@/composables/useDocumentChanges'
 
 const logger = createLogger('DocumentChangeFeed')
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 import type { DocumentChange } from '@/composables/useDocumentChanges'
 import { formatBytes } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -290,8 +292,8 @@ const handleAutoRefreshToggle = () => {
   }
 }
 
-const handleClearChanges = () => {
-  if (confirm(t('knowledge.changeFeed.confirmClearHistory'))) {
+const handleClearChanges = async () => {
+  if (await confirm({ title: t('common.confirm'), message: t('knowledge.changeFeed.confirmClearHistory') })) {
     clearChanges()
     activeFilter.value = 'all'
   }

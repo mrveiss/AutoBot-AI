@@ -183,6 +183,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
@@ -193,6 +194,7 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SourceManager')
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 // ---- Types ----------------------------------------------------------------
 
@@ -331,7 +333,7 @@ async function syncSource(source: CodeSource) {
 }
 
 async function deleteSource(source: CodeSource) {
-  if (!confirm(t('analytics.sources.confirmDelete', { name: source.name }))) return
+  if (!(await confirm({ title: t('common.confirm'), message: t('analytics.sources.confirmDelete', { name: source.name }) }))) return
   deletingId.value = source.id
   try {
     await apiDeleteSource(source.id)

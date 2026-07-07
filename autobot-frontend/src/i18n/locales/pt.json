@@ -4090,6 +4090,9 @@
         "emptyState": "Enter a URL and a JSON Schema, then click Get Data to extract structured information.",
         "resultTitle": "Extracted Data"
       }
+    },
+    "watchFolders": {
+      "confirmDelete": "Tem certeza de que deseja excluir esta pasta monitorada?"
     }
   },
   "workflow": {
@@ -4737,7 +4740,8 @@
       "statusError": "Error",
       "statusUnknown": "Unknown",
       "stepProgress": "Step {current} of {total}",
-      "noStepData": "No step data available."
+      "noStepData": "No step data available.",
+      "closeConfirm": "Tem certeza de que deseja fechar esta janela de terminal?"
     },
     "modal": {
       "editCommandEmpty": "Command cannot be empty.",

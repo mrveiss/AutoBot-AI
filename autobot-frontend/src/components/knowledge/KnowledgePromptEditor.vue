@@ -19,6 +19,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { BaseModal } from '@autobot/ui'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -29,6 +30,7 @@ import type { Prompt, PromptVersion } from '@/composables/knowledge/useKnowledge
 const logger = createLogger('KnowledgePromptEditor')
 
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 // =============================================================================
 // State
@@ -131,9 +133,9 @@ async function loadPrompts(): Promise<void> {
   }
 }
 
-function selectPrompt(prompt: Prompt): void {
+async function selectPrompt(prompt: Prompt): Promise<void> {
   if (hasUnsavedChanges.value) {
-    if (!confirm(t('knowledge.promptEditor.confirmDiscardChanges'))) {
+    if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.promptEditor.confirmDiscardChanges') }))) {
       return
     }
   }
@@ -186,7 +188,7 @@ async function loadHistory(): Promise<void> {
 async function revertToVersion(version: PromptVersion): Promise<void> {
   if (!selectedPrompt.value) return
 
-  if (!confirm(t('knowledge.promptEditor.confirmRevert', { version: version.version }))) {
+  if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.promptEditor.confirmRevert', { version: version.version }) }))) {
     return
   }
 

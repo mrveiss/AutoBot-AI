@@ -283,6 +283,7 @@
 <script>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import { useTerminalService } from '@/services/TerminalService';
 import { useRoute } from 'vue-router';
 import AdvancedStepConfirmationModal from './AdvancedStepConfirmationModal.vue';
@@ -303,6 +304,7 @@ export default {
   },
   setup() {
     const { t } = useI18n();
+    const { confirm } = useConfirmDialog();
     const route = useRoute();
 
     // Get the terminal service with all its methods
@@ -1049,8 +1051,8 @@ export default {
       }
     };
 
-    const closeWindow = () => {
-      if (confirm('Are you sure you want to close this terminal window?')) {
+    const closeWindow = async () => {
+      if (await confirm({ title: t('common.confirm'), message: t('terminal.window.closeConfirm') })) {
         if (isConnected(sessionId.value)) {
           disconnect(sessionId.value);
         }

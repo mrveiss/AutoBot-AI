@@ -401,6 +401,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 
 // #1804: emit close-mobile so ChatInterface can close the mobile overlay
 const emit = defineEmits<{ 'close-mobile': [] }>()
@@ -427,6 +428,7 @@ import { useNotificationBus } from '@/composables/useNotificationBus'
 const logger = createLogger('ChatSidebar')
 
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 const store = useChatStore()
 const controller = useChatController()
 const folderStore = useFolderStore()
@@ -755,7 +757,7 @@ const _toggleSelection = (sessionId: string) => {
 const deleteSelectedSessions = async () => {
   if (sessionSelection.selectedCount.value === 0) return
 
-  const confirmed = confirm(t('chat.sidebar.confirmDeleteSelected', { count: sessionSelection.selectedCount.value }))
+  const confirmed = await confirm({ title: t('common.confirm'), message: t('chat.sidebar.confirmDeleteSelected', { count: sessionSelection.selectedCount.value }) })
   if (!confirmed) return
 
   // Delete all selected sessions in parallel - eliminates N+1 sequential API calls

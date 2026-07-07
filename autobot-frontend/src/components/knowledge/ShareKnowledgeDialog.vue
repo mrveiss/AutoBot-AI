@@ -117,11 +117,13 @@ import Icon from '@/components/ui/Icon.vue'
 import { BaseModal } from '@autobot/ui'
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { apiService } from '@/services/api'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 const logger = createLogger('ShareKnowledgeDialog')
 
 /**
@@ -344,9 +346,9 @@ const saveChanges = async () => {
   }
 }
 
-const closeDialog = () => {
+const closeDialog = async () => {
   if (hasChanges.value) {
-    if (!confirm(t('knowledge.share.unsavedConfirm'))) {
+    if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.share.unsavedConfirm') }))) {
       return
     }
   }

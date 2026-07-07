@@ -87,6 +87,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useUserStore } from '@/stores/useUserStore'
 import { useFileBrowser } from '@/composables/file-browser/useFileBrowser'
 import type { FileBrowserItem, FileBrowserTreeNode, FilePreviewData } from '@/composables/file-browser/useFileBrowser'
@@ -98,6 +99,7 @@ import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
 
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 // Issue #608: Activity logger for session tracking
 const { logFileActivity } = useSessionActivityLogger()
@@ -313,7 +315,7 @@ const { execute: performDelete, loading: _isDeletingFile } = useAsyncHandler(
 const deleteFile = async (file: FileBrowserItem) => {
   const message = t('fileBrowser.browser.deleteConfirm', { name: file.name })
 
-  if (confirm(message)) {
+  if (await confirm({ title: t('common.confirm'), message: message })) {
     await performDelete(file)
   }
 }
