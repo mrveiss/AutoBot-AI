@@ -290,14 +290,9 @@ class EntityExtractor(BaseCognifier):
         """Extract entities for a batch in ONE LLM call when batching is on (#10598).
 
         Routes through ``batched_chunk_extract`` (index-keyed prompt, per-chunk
-        fallback) so K chunks cost one round-trip instead of K. Falls back to the
-        legacy per-chunk loop when the config flag is disabled.
+        fallback) so K chunks cost one round-trip instead of K. The helper runs
+        the legacy per-chunk loop itself when the config flag is disabled (#11090).
         """
-        if not config.cognifier_multichunk_batching:
-            entities = []
-            for chunk in chunks:
-                entities.extend(await self._extract_from_chunk(chunk, context))
-            return entities
         return await batched_chunk_extract(
             chunks,
             llm=self.llm,

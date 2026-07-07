@@ -12,9 +12,10 @@ call keyed by chunk index, with per-chunk fallback (generalizes #10647).
 
 import json
 import os
-from typing import Any, Awaitable, Callable, Dict, List, TypeVar
+from typing import Any, Awaitable, Callable, Dict, List, TypeVar, get_args
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from knowledge.pipeline.models.entity import Entity
 
 logger = get_logger(__name__)
@@ -64,6 +65,48 @@ def parse_llm_json_response(
         if fallback_dict:
             return {"summary": content, "key_topics": [], "key_entities": []}
         return []
+
+
+def literal_prompt_list(literal_type: Any, *, quote: bool = False) -> str:
+    """Render a ``Literal[...]``'s allowed values as a ``', '``-joined prompt fragment.
+
+    Derived from the type via ``get_args`` so the prompt's allowed-value list and
+    the model can never drift (#11017). ``quote=True`` wraps each value in single
+    quotes (fact-type style); the default emits bare values (event/causal style) —
+    the flag makes the fact-vs-event/causal quoting difference explicit instead of
+    an accidental divergence between per-extractor join expressions (#11045).
+
+    Args:
+        literal_type: A ``typing.Literal[...]`` alias whose args are the values.
+        quote: Wrap each value in single quotes.
+
+    Returns:
+        ``"'a', 'b'"`` when quoted, else ``"a, b"``.
+    """
+    values = get_args(literal_type)
+    if quote:
+        return ", ".join(f"'{v}'" for v in values)
+    return ", ".join(str(v) for v in values)
+
+
+def render_prompt_sentinels(template: str, replacements: Dict[str, str]) -> str:
+    """Substitute ``%%NAME%%`` sentinels in a ``str.format``-bearing prompt (#11045).
+
+    Extractor prompts embed literal ``{{`` / ``}}`` JSON braces for a later
+    ``.format(...)`` call, so the allowed-value list can't be injected with
+    ``.format`` without escaping every brace. Sentinels sidestep that: author the
+    type list as ``%%NAME%%`` and replace it here at module load.
+
+    Args:
+        template: Prompt text containing ``%%NAME%%`` sentinels.
+        replacements: Mapping of sentinel name (without the ``%%``) to its value.
+
+    Returns:
+        ``template`` with every ``%%NAME%%`` replaced.
+    """
+    for name, value in replacements.items():
+        template = template.replace(f"%%{name}%%", value)
+    return template
 
 
 def build_entity_map(
@@ -156,6 +199,7 @@ async def batched_chunk_extract(
     extract_one: Callable[[Any], Awaitable[List[_R]]],
     content_of: Callable[[Any], str] = lambda c: c.content,
     aux_of: Callable[[Any], str] | None = None,
+    batching_enabled: bool | None = None,
 ) -> List[_R]:
     """Extract items from many chunks in ONE structured LLM call (#10598).
 
@@ -164,6 +208,11 @@ async def batched_chunk_extract(
     preserving per-chunk mapping and order. On any structural failure (non-object
     response, disjoint keys, or exception) it falls back to ``extract_one(chunk)``
     per chunk so correctness never regresses. A single-chunk batch skips batching.
+
+    When ``cognifier_multichunk_batching`` is disabled (or ``batching_enabled`` is
+    passed ``False``) it runs ``extract_one`` per chunk — the legacy path every
+    extractor used to guard inline before delegating here (#11090). The flag is
+    read at call time, not import, so tests can monkeypatch it.
 
     Args:
         chunks: The chunk objects to process.
@@ -176,14 +225,23 @@ async def batched_chunk_extract(
         content_of: Extract the text of a chunk (default ``chunk.content``).
         aux_of: Optional per-chunk auxiliary text folded into each indexed block —
             e.g. a chunk-relevant entity list for entity-conditioned extraction (#11044).
+        batching_enabled: Override the ``cognifier_multichunk_batching`` config flag;
+            ``None`` (default) reads the flag at call time.
 
     Returns:
         Flattened list of extracted items across all chunks, in chunk order.
     """
     if not chunks:
         return []
-    if len(chunks) == 1:
-        return await extract_one(chunks[0])
+    if batching_enabled is None:
+        batching_enabled = config.cognifier_multichunk_batching
+    # Batching off, or a single chunk (nothing to batch) → extract per chunk. This
+    # is the legacy fallback loop the extractors used to repeat inline (#11090).
+    if not batching_enabled or len(chunks) == 1:
+        results: List[_R] = []
+        for chunk in chunks:
+            results.extend(await extract_one(chunk))
+        return results
     try:
         aux = [aux_of(c) for c in chunks] if aux_of is not None else None
         blocks = build_indexed_chunk_blocks([content_of(c) for c in chunks], max_chunk_chars, aux=aux)

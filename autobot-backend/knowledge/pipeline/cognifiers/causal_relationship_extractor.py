@@ -19,7 +19,9 @@ from autobot_shared.ssot_config import config
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import (
     batched_chunk_extract,
+    literal_prompt_list,
     parse_llm_json_response,
+    render_prompt_sentinels,
 )
 from knowledge.pipeline.models.causal_edge import CausalEdge, EffectType
 from knowledge.pipeline.models.chunk import ProcessedChunk
@@ -32,9 +34,10 @@ logger = get_logger(__name__)
 # Allowed effect-type values derived from the EffectType Literal (#11017) so the
 # prompt fragment and the validation set can never drift from the type.
 _EFFECT_TYPES = tuple(get_args(EffectType))
-_EFFECT_TYPES_STR = ", ".join(_EFFECT_TYPES)
+_EFFECT_TYPES_STR = literal_prompt_list(EffectType)
 
-CAUSAL_EXTRACTION_PROMPT = """Extract CAUSAL relationships from the following text.
+CAUSAL_EXTRACTION_PROMPT = render_prompt_sentinels(
+    """Extract CAUSAL relationships from the following text.
 
 CRITICAL: Distinguish explicit causality from correlation:
 - ACCEPT: "X causes Y", "X leads to Y", "X results in Y", "if X then Y", "because X, Y happens"
@@ -63,9 +66,12 @@ Return empty array [] if no clear causal relationships found.
 
 Text:
 {text}
-""".replace("%%EFFECT_TYPES%%", _EFFECT_TYPES_STR)
+""",
+    {"EFFECT_TYPES": _EFFECT_TYPES_STR},
+)
 
-CAUSAL_EXTRACTION_BATCH_PROMPT = """Extract CAUSAL relationships from each of the following text chunks.
+CAUSAL_EXTRACTION_BATCH_PROMPT = render_prompt_sentinels(
+    """Extract CAUSAL relationships from each of the following text chunks.
 
 CRITICAL: Distinguish explicit causality from correlation:
 - ACCEPT: "X causes Y", "X leads to Y", "X results in Y", "if X then Y", "because X, Y happens"
@@ -89,7 +95,9 @@ no clear causality. Example for two chunks:
 
 Chunks:
 {chunks}
-""".replace("%%EFFECT_TYPES%%", _EFFECT_TYPES_STR)
+""",
+    {"EFFECT_TYPES": _EFFECT_TYPES_STR},
+)
 
 
 # NLP patterns for lightweight causal detection (fallback mode)
@@ -319,14 +327,9 @@ class CausalRelationshipExtractor(BaseCognifier):
         """Extract causal edges for a batch in ONE LLM call when batching is on (#10598).
 
         Routes through ``batched_chunk_extract`` (index-keyed prompt, per-chunk
-        fallback) so K chunks cost one round-trip instead of K. Falls back to the
-        legacy per-chunk loop when the config flag is disabled.
+        fallback) so K chunks cost one round-trip instead of K. The helper runs
+        the legacy per-chunk loop itself when the config flag is disabled (#11090).
         """
-        if not config.cognifier_multichunk_batching:
-            edges = []
-            for chunk in chunks:
-                edges.extend(await self._extract_from_chunk(chunk, context))
-            return edges
         return await batched_chunk_extract(
             chunks,
             llm=self.llm,
