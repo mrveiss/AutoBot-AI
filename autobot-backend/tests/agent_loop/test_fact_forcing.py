@@ -100,9 +100,7 @@ class TestLoopIntegration:
         loop._check_approvals = AsyncMock(return_value={})
         loop.tool_executor = MagicMock()
 
-        result = await loop._execute_tools(
-            [{"tool_name": "edit_file", "args": {"file_path": str(target)}}]
-        )
+        result = await loop._execute_tools([{"tool_name": "edit_file", "args": {"file_path": str(target)}}])
 
         assert str(target) in next(iter(result.values()))["error"]
         assert "fact-forcing" in next(iter(result.values()))["error"].lower()
@@ -139,9 +137,7 @@ class TestLoopIntegration:
         await loop._execute_tools([{"tool_name": "read_file", "args": {"file_path": str(target)}}])
         loop._check_approvals.reset_mock()
         # Later iteration: edit is now allowed.
-        result = await loop._execute_tools(
-            [{"tool_name": "edit_file", "args": {"file_path": str(target)}}]
-        )
+        result = await loop._execute_tools([{"tool_name": "edit_file", "args": {"file_path": str(target)}}])
 
         loop._check_approvals.assert_awaited_once()
         assert result == {"edit_file": {"error": "stop"}}
@@ -153,9 +149,7 @@ class TestLoopIntegration:
         loop._check_tool_call_repetition = MagicMock(return_value=None)
         loop._check_approvals = AsyncMock(return_value={"write_file": {"error": "stop"}})
 
-        result = await loop._execute_tools(
-            [{"tool_name": "write_file", "args": {"file_path": str(new_file)}}]
-        )
+        result = await loop._execute_tools([{"tool_name": "write_file", "args": {"file_path": str(new_file)}}])
 
         loop._check_approvals.assert_awaited_once()
         assert result == {"write_file": {"error": "stop"}}
@@ -168,9 +162,7 @@ class TestLoopIntegration:
         loop._check_tool_call_repetition = MagicMock(return_value=None)
         loop._check_approvals = AsyncMock(return_value={"edit_file": {"error": "stop"}})
 
-        result = await loop._execute_tools(
-            [{"tool_name": "edit_file", "args": {"file_path": str(target)}}]
-        )
+        result = await loop._execute_tools([{"tool_name": "edit_file", "args": {"file_path": str(target)}}])
 
         loop._check_approvals.assert_awaited_once()
         assert result == {"edit_file": {"error": "stop"}}
@@ -185,9 +177,7 @@ class TestLoopIntegration:
         loop._check_approvals = AsyncMock(return_value={})
         loop.tool_executor = MagicMock()
 
-        result = await loop._execute_tools(
-            [{"tool_name": "edit_file", "args": {"file_path": str(target)}}]
-        )
+        result = await loop._execute_tools([{"tool_name": "edit_file", "args": {"file_path": str(target)}}])
 
         assert "fact-forcing" in next(iter(result.values()))["error"].lower()
         loop._check_approvals.assert_not_awaited()
