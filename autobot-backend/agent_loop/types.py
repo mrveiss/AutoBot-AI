@@ -609,3 +609,54 @@ class TaskContext:
             "plan_id": self.plan_id,
             "current_step_id": self.current_step_id,
         }
+
+    #: Snapshot schema version — bump when the durable-core shape changes so a
+    #: resume can reject an incompatible checkpoint rather than mis-restore.
+    SNAPSHOT_VERSION = 1
+
+    def to_snapshot(self) -> dict:
+        """Serialize the durable core needed to resume this run (GH#11175).
+
+        Captures the JSON-serializable progress state — task identity, iteration
+        count, tools/errors/messages so far, plan position, metadata, and the
+        repetition-guard hashes. Transient reasoning/belief state (think_history,
+        observation_fingerprints, steering_events, human_questions, assertions,
+        contradictions, token windows) is intentionally NOT snapshotted; a resumed
+        run rebuilds it as it proceeds.
+        """
+        return {
+            "version": self.SNAPSHOT_VERSION,
+            "task_id": self.task_id,
+            "description": self.description,
+            "started_at": self.started_at.isoformat(),
+            "iteration_count": self.iteration_count,
+            "tools_executed": list(self.tools_executed),
+            "errors": list(self.errors),
+            "user_messages": list(self.user_messages),
+            "plan_id": self.plan_id,
+            "current_step_id": self.current_step_id,
+            "metadata": dict(self.metadata),
+            "tool_call_hashes": dict(self.tool_call_hashes),
+        }
+
+    @classmethod
+    def from_snapshot(cls, data: dict) -> "TaskContext":
+        """Reconstruct a TaskContext from :meth:`to_snapshot` output (GH#11175).
+
+        Raises ``ValueError`` on a missing/incompatible snapshot version so a
+        resume fails loud rather than silently continuing from partial state.
+        """
+        version = data.get("version")
+        if version != cls.SNAPSHOT_VERSION:
+            raise ValueError(f"unsupported TaskContext snapshot version: {version!r}")
+        ctx = cls(task_id=data["task_id"], description=data.get("description", ""))
+        ctx.started_at = datetime.fromisoformat(data["started_at"])
+        ctx.iteration_count = int(data.get("iteration_count", 0))
+        ctx.tools_executed = list(data.get("tools_executed", []))
+        ctx.errors = list(data.get("errors", []))
+        ctx.user_messages = list(data.get("user_messages", []))
+        ctx.plan_id = data.get("plan_id")
+        ctx.current_step_id = data.get("current_step_id")
+        ctx.metadata = dict(data.get("metadata", {}))
+        ctx.tool_call_hashes = dict(data.get("tool_call_hashes", {}))
+        return ctx
