@@ -1,160 +1,168 @@
 # Company OS project ↔ repo linkage, workspace, and archive→dispose lifecycle — design
 
-**Date:** 2026-07-07
+**Date:** 2026-07-07 (revised: reuse codebase-analytics `CodeSource`)
 **Umbrella:** #11129
-**Status:** design — decisions captured; ready for user review → writing-plans
+**Status:** design — decisions captured; ready for writing-plans
 
 ## Goal
 
-Company OS (LLC) projects can attach a GitHub repo (cloned into a persistent per-project workspace,
-surfaced in the UI and as a Codebase Analytics target), and follow an **archive → dispose** lifecycle
-instead of a hard delete, governed by an **SLM-configurable disposal policy** (retention period +
-optional second-pair-of-eyes approval; default immediate).
+Company OS (LLC) projects can attach a GitHub repo (surfaced in the UI, with its managed workspace path,
+and analyzable in codebase analytics), and follow an **archive → dispose** lifecycle instead of a hard
+delete, governed by an **SLM-configurable disposal policy** (retention period + optional
+second-pair-of-eyes approval; default immediate).
+
+## Key reuse decision
+
+The codebase-analytics **`CodeSource`** system (`autobot-backend/api/codebase_analytics/`) already does
+everything the repo/workspace/analytics part needs, so we **link a project to a `CodeSource`** rather than
+build a parallel clone/workspace service:
+
+- `CodeSource` (`source_models.py`): `id`, `name`, `source_type` (github/local), `repo` ("owner/repo"),
+  `branch`, `credential_id` (→ secrets store token), `clone_path`
+  (`/opt/autobot/data/code-sources/<id>/`), `status`, `error_message`, `owner_id`, `access`, `shared_with`.
+- Sources API (`endpoints/sources.py`): `POST /sources` (create + background clone/index via `_do_sync`
+  + `_trigger_indexing`), `GET /sources`, `GET/PATCH/DELETE /sources/{id}`, `POST /sources/{id}/sync`.
+- The source **is** the analytics unit (cloned to `clone_path`, indexed into ChromaDB).
+
+So: **attach repo = create/link a github `CodeSource`; workspace = its `clone_path`; analytics already
+analyzes it; disposal deletes the linked `CodeSource`.** The GitHub repo itself is never deleted.
 
 ## Decisions (brainstorm 2026-07-07)
 
-- **Workspace** = persistent `<projects_root>/<company-slug>/<project-slug>` (root is config/env-driven,
-  never hardcoded). Attaching a repo clones into it; the path is shown in the UI; disposal removes it.
-- **Repo** = attach an EXISTING repo by URL, **one per project**, cloned with AutoBot's connected GitHub
-  credentials. Re-attach to change.
-- **Codebase analytics** consumes the workspace: each project `workspace_path` is a first-class analytics
-  target; the analytics view gets a "Project repos" selector driving the existing indexing endpoint.
-- **Lifecycle**: `active → archived → pending_disposal → disposed`. `DELETE /projects/{id}` stops
-  hard-deleting; deletion routes through this flow.
-- **Disposal scope**: delete AutoBot data (project + its sprints/work-items) + the local workspace folder.
-  **NEVER** delete the GitHub repo — only unlink.
-- **Disposal policy** (SLM-configurable): `{ retention_days:int = 0, require_approval:bool = false }`.
-  Default = immediate disposal, no approval, no retention. Approval via the existing `LLCApproval`;
-  retention via a Celery-beat sweep.
+- **Repo/workspace/analytics** = reuse `CodeSource`. Project gains `code_source_id` (FK-ish string,
+  nullable, references `CodeSource.id`).
+- **Attach** = attach an EXISTING repo by `owner/repo` + a `credential_id` (GitHub token from the secrets
+  store), one per project → create a github `CodeSource` (or link an existing one) → set
+  `project.code_source_id` → trigger sync (clone + index). Re-attach replaces the link.
+- **Workspace path** shown in the UI = the linked source's `clone_path`.
+- **Codebase analytics** already indexes the source; the analytics view groups/labels sources by their
+  owning project (via `code_source_id`), and the project view links to its source's analytics.
+- **Lifecycle**: `active → archived → pending_disposal → disposed`; `DELETE /projects/{id}` routes through
+  this flow.
+- **Disposal scope**: delete AutoBot data (project + its sprints/work-items) + the linked `CodeSource`
+  (which removes its `clone_path` clone + ChromaDB index) — **only if that source isn't `shared_with`
+  other users** (else just unlink). **NEVER** delete the GitHub repo.
+- **Disposal policy** (SLM-configurable): `{ retention_days:int = 0, require_approval:bool = false }`;
+  default immediate/no-approval/no-retention. Approval via existing `LLCApproval`; retention via a
+  Celery-beat sweep.
 
-## Scope
+## Scope / phases
 
-- **Phase 1** — repo linkage + workspace + codebase-analytics integration.
-- **Phase 2** — archive→dispose lifecycle + SLM-configurable disposal (retention + approval).
-- **Phase 3 (own spec, deferred, YAGNI here)** — codebase-analytics findings → project work items that
-  agents pick up.
+- **Phase 1** — project ↔ `CodeSource` linkage (attach/detach) + surface repo/workspace + analytics
+  grouping by project.
+- **Phase 2** — archive→dispose lifecycle + SLM-configurable disposal (retention + approval); disposal
+  deletes the linked `CodeSource`.
+- **Phase 3 (own spec, deferred, YAGNI here)** — analytics findings → project work items agents pick up.
 
-Out of scope: creating new GitHub repos; multiple repos per project; deleting the GitHub repo on
-disposal; per-project retention overrides (policy is global from SLM).
+Out of scope: creating new GitHub repos; multiple repos per project; deleting the GitHub repo on disposal;
+per-project retention overrides (policy is global from SLM); building any new clone/index engine.
 
 ---
 
-## Phase 1 — Repo linkage + workspace + analytics
+## Phase 1 — Project ↔ CodeSource linkage
 
 ### Model (`llc/models/sprint.py` — `LLCProject`)
-Add nullable columns (+ Alembic migration):
-- `github_repo: str | None` — canonical `owner/repo` (or full URL, normalized to `owner/repo`).
-- `workspace_path: str | None` — absolute path to the cloned workspace, once cloned.
-- `repo_attached_at: datetime | None`.
-- `repo_clone_status: str | None` — `pending | cloning | ready | failed` (drives the UI spinner/error);
-  `repo_clone_error: str | None` for the failure message.
-
-### Workspace service (`llc/services/project_workspace.py`, new — one clear responsibility)
-- `projects_root()` → `config`-driven base dir (env var, module-level constant per project convention;
-  e.g. `LLC_PROJECTS_ROOT`, default under `config.path.data_path / "llc-projects"`).
-- `workspace_dir(company_slug, project_slug) -> Path` — deterministic `<root>/<company-slug>/<project-slug>`.
-- `async clone_repo(project, repo_url) -> Path` — validate URL (reuse the strict GitHub URL parsing in
-  `llc/api/github_webhooks.py:validate_github_pr_url`-style helpers; here validate `owner/repo`), clone
-  with AutoBot's connected GitHub credentials (reuse the provider-auth / git-credential mechanism the
-  agents already use), into `workspace_dir`. Idempotent: if the dir exists, `git remote set-url` +
-  `git fetch` rather than re-clone. Returns the path.
-- `remove_workspace(project)` — `rmtree` guarded to be strictly inside `projects_root()` (never escape).
+Add one nullable column (+ Alembic migration): `code_source_id: str | None` (references
+`CodeSource.id`; the source holds repo/branch/clone_path/status). Index it.
 
 ### API (`llc/api/sprints.py`, extends the projects router)
-- `POST /api/llc/projects/{id}/repo` `{ repo_url }` → validate, clone (async; the endpoint returns
-  `202` with a clone status the UI polls, OR runs inline with a bounded timeout — see Data flow), set
-  `github_repo` + `workspace_path` + `repo_attached_at`, return the updated project.
-- `DELETE /api/llc/projects/{id}/repo` → unlink (`github_repo=None`); keep the folder unless the project
-  is later disposed.
-- `GET /api/llc/projects/with-repos` → `[{ project_id, name, company_id, company_slug, github_repo,
-  workspace_path, status }]` for all projects that have a `workspace_path` — feeds the analytics selector.
-- Existing `ProjectResponse` gains `github_repo` + `workspace_path`.
+Reuse the sources service — do NOT reimplement clone/token/index.
+- `POST /api/llc/projects/{id}/repo` `{ repo: "owner/repo", credential_id: str, branch?: str = "main" }`
+  → call the existing source-create path (`create_code_source`-equivalent service function) to make a
+  github `CodeSource` named after the project, set `project.code_source_id`, and trigger sync. Returns the
+  project + a `CodeSourceSummary` (`{ id, repo, branch, clone_path, status, error_message }`). If the
+  project already has a `code_source_id`, unlink first (per re-attach).
+- `DELETE /api/llc/projects/{id}/repo` → clear `code_source_id` (unlink only; the source is left intact
+  for reuse/sharing — it is only deleted on project disposal, see Phase 2).
+- `GET /api/llc/projects/with-repos` → `[{ project_id, name, company_id, code_source_id, repo, clone_path,
+  status }]` for projects with a `code_source_id` (joins the source) — feeds the analytics grouping.
+- `ProjectResponse` gains `code_source_id` + an embedded `CodeSourceSummary | None` (resolved from the
+  sources store).
 
-### Codebase-analytics integration
-- The analytics view (`autobot-frontend/src/components/analytics/CodebaseAnalytics.vue`) gains a
-  "Project repos" selector populated from `GET /api/llc/projects/with-repos`. Selecting one calls the
-  existing `POST /api/analytics/code/index` with `target_path = workspace_path`, and the status/quality
-  panels operate on it. No new analysis engine — the workspace path IS the target the analytics already
-  accepts (`analytics_code.py` `target_path`, validated by `validate_path`).
+The source-create/get/delete must be reachable as **service functions** (not only HTTP handlers). If
+`endpoints/sources.py` only exposes handlers, extract the create/get/delete logic into
+`api/codebase_analytics/source_service.py` (thin, behavior-preserving) and have both the HTTP handlers and
+the LLC layer call it — a targeted improvement that keeps this DRY.
 
-### Frontend (`ProjectBrowserView.vue` + project detail)
-- Show the linked repo (`owner/repo`, link out to GitHub) + the `workspace_path` (copyable) + an
-  "Attach repo" action (input repo URL → POST). Clone status/spinner while cloning.
+### Frontend (`autobot-frontend`)
+- `ProjectBrowserView.vue` + project detail: show the linked repo (`owner/repo`, GitHub link), the
+  `clone_path` (copyable), sync status; an "Attach repo" action (input `owner/repo` + pick a stored
+  GitHub credential → `POST …/repo`), a "Sync" action (calls the source sync), and "Detach".
+- Codebase Analytics view: label/group its source list by owning project (from
+  `GET /api/llc/projects/with-repos` or the source's new project link), so project repos are visible there.
 
 ---
 
 ## Phase 2 — Lifecycle + configurable disposal
 
 ### Model additions (`LLCProject`)
-- Extend the `status` enum with `archived` (keep existing values). Add:
-  `archived_at: datetime | None`, `disposal_scheduled_at: datetime | None`,
-  `disposal_approval_id: uuid | None` (FK to `llc_approvals.id`, SET NULL).
-- Migration adds the enum value + columns.
+Extend `status` enum with `archived`; add `archived_at`, `disposal_scheduled_at`,
+`disposal_approval_id` (nullable, references `llc_approvals.id`). Migration adds the enum value + columns.
 
 ### Endpoints (`llc/api/sprints.py`)
-- `POST /api/llc/projects/{id}/archive` → `status=archived`, `archived_at=now` (reversible).
-- `POST /api/llc/projects/{id}/restore` → archived → `active` (clears disposal fields if pending).
-- `POST /api/llc/projects/{id}/dispose` → **only allowed when `archived`** (else `409`). Reads the SLM
-  disposal policy and:
-  - `require_approval` → create an `LLCApproval` (type = project_disposal), set
-    `status=pending_disposal` + `disposal_approval_id`; disposal proceeds only after approval.
-  - `retention_days > 0` → `status=pending_disposal`, `disposal_scheduled_at = now + retention` (a
-    Celery-beat sweep disposes it when due; restorable until then).
-  - else (immediate, no approval) → dispose now.
-- `DELETE /api/llc/projects/{id}` → **no longer hard-deletes**; returns `409` unless already `archived`,
-  and when archived delegates to the dispose flow (so the UI's delete = "archive then delete" is a real
-  two-step: you must archive first, then dispose).
+- `POST /api/llc/projects/{id}/archive` → `archived` + `archived_at=now` (reversible).
+- `POST /api/llc/projects/{id}/restore` → archived/pending → `active` (clears disposal fields).
+- `POST /api/llc/projects/{id}/dispose` → **only when `archived`** (else `409`); reads the SLM disposal
+  policy and:
+  - `require_approval` → create an `LLCApproval` (type `project_disposal`), `status=pending_disposal`,
+    set `disposal_approval_id`; proceeds only after approval.
+  - `retention_days > 0` → `status=pending_disposal`, `disposal_scheduled_at = now + retention` (sweep
+    disposes when due; restorable until then).
+  - else → dispose now.
+- `DELETE /api/llc/projects/{id}` → no longer hard-deletes; `409` unless `archived`; when archived,
+  delegates to the dispose flow (real two-step archive→delete).
 
 ### Disposal execution (`llc/services/project_disposal.py`, new)
-- `async dispose(project)` — delete the project + its sprints + work-items (DB, in a transaction) and
-  `remove_workspace(project)`. **Never** call the GitHub API to delete the repo. Idempotent + audited
-  (log + optional LLC audit entry).
-- **Celery-beat sweep** `dispose_due_projects` — periodically selects `pending_disposal` projects whose
-  `disposal_scheduled_at <= now` AND (no approval required OR approval `granted`), and disposes them.
-  Registered in `celery_app.py` beat schedule with the interval from a module-level constant/env.
+- `async dispose(project, session)` — in a transaction: delete the project + its sprints + work-items;
+  then if `project.code_source_id` set and that source is **not** `shared_with` others, call the source
+  delete service (removes `clone_path` clone + ChromaDB index); else just unlink. **Never** call the
+  GitHub API. Idempotent + logged.
+- **Celery-beat sweep** `dispose_due_projects` (register in `celery_app.py` beat schedule with an
+  env-driven interval) — selects `pending_disposal` projects where `disposal_scheduled_at <= now` AND
+  (no approval required OR its `LLCApproval` is `granted`), and disposes them.
 
-### Approval integration
-- Reuse `LLCApproval` (models/approval.py). A `project_disposal` approval references the project; on
-  `granted`, the sweep (or an immediate check) proceeds; on `rejected`, the project stays `archived`
-  (disposal cancelled, fields cleared).
-
-### SLM disposal policy (config)
-- Store `{ retention_days, require_approval }` via the SLM settings mechanism
-  (`autobot-slm-backend/api/settings.py`), key e.g. `llc.project_disposal_policy`. Backend reads it at
-  dispose time (with safe defaults `{0, false}` when unset).
-- SLM frontend (`autobot-slm-frontend`) gets a small "Project Disposal Policy" settings panel
-  (retention days + require-approval toggle). Verified locally (npm works; SLM CI gate exists, #10494).
+### SLM disposal policy
+- Persist `{ retention_days, require_approval }` via the SLM settings mechanism
+  (`autobot-slm-backend/api/settings.py`), key `llc.project_disposal_policy`; backend reads it at dispose
+  time with safe defaults `{0, false}` when unset. Small SLM-frontend settings panel (retention days +
+  require-approval toggle). Verified locally (npm works; SLM CI gate #10494).
 
 ### Frontend (Company OS)
-- Project detail/browser: "Archive" button (active→archived); on an archived project, "Delete" →
-  confirm → `dispose`, showing the resulting state (immediate done / pending approval / scheduled for
-  <date>) and a "Restore" affordance while pending.
+- Project detail/browser: "Archive" (active→archived); on archived, "Delete" → confirm → `dispose`,
+  showing the resulting state (done / pending approval / scheduled for a date) + a "Restore" affordance
+  while pending.
 
 ---
 
 ## Data flow
 
-Attach: user enters repo URL → `POST …/repo` → clone into workspace → `github_repo` + `workspace_path`
-surfaced → repo appears in the Codebase Analytics "Project repos" selector → indexable. Lifecycle:
-Archive → (later) Delete → `dispose` consults SLM policy → immediate | approval-gated | retention-scheduled
-→ sweep/immediate deletes DB rows + workspace folder (repo untouched).
+Attach: enter `owner/repo` + credential → create github `CodeSource` (clone + index in background) →
+`project.code_source_id` set → repo/`clone_path`/status surfaced → source appears in codebase analytics
+grouped under the project. Lifecycle: Archive → (later) Delete → `dispose` consults SLM policy →
+immediate | approval-gated | retention-scheduled → sweep/immediate deletes project+sprints+work-items and
+the linked `CodeSource` (clone + index), repo untouched.
 
 ## Error handling
 
-- Clone failure (bad URL / auth / network) → repo NOT linked, workspace cleaned, clear 4xx error.
+- Attach with bad repo / missing credential / clone failure → the `CodeSource` records `status=error` +
+  `error_message` (sanitized, tokens stripped — already done by the sources layer); project link still
+  set so the UI can show + retry sync, or the attach can roll back the link on immediate failure (choose
+  rollback: if create/sync fails synchronously, do not set `code_source_id`).
 - `dispose` on non-archived → `409`. Approval rejected → stays archived, disposal cleared.
-- `rmtree` strictly guarded to the project subtree inside `projects_root()` — refuse anything that
-  resolves outside it.
-- SLM policy unreadable → safe defaults (immediate, no approval, no retention).
-- Re-attach over an existing workspace → fetch/set-url, not a destructive re-clone.
+- Disposal only deletes a `CodeSource` that is not `shared_with` others; shared → unlink only.
+- SLM policy unreadable → safe defaults.
 
 ## Testing
 
-- Workspace service: `workspace_dir` determinism; clone happy-path (mock git) + bad URL + auth fail;
-  `remove_workspace` path-safety (refuses escapes).
-- API: attach/unlink repo; `with-repos` listing; archive/restore; dispose immediate vs retention vs
-  approval-gated (`409` on non-archived); `DELETE` requires archived.
-- Disposal service: deletes project+sprints+work-items+folder, never the repo; idempotent.
-- Sweep: disposes only due + approved `pending_disposal`; skips future-dated / unapproved.
+- API: attach (creates/links source, sets `code_source_id`) + bad repo/credential rollback; detach
+  (unlink only, source survives); `with-repos` listing; `ProjectResponse` includes source summary.
+- Lifecycle: archive/restore; dispose immediate vs retention vs approval-gated (`409` on non-archived);
+  `DELETE` requires archived.
+- Disposal service: deletes project+sprints+work-items; deletes the linked non-shared source; leaves a
+  shared source (unlink only); never the GitHub repo; idempotent.
+- Sweep: disposes only due + approved `pending_disposal`.
 - SLM policy: read + defaults; frontend panel round-trips.
-- Frontend: attach flow, workspace path display, analytics selector, archive/delete/restore states.
+- Frontend: attach/sync/detach flow, repo + clone_path display, analytics grouping, archive/delete/restore
+  states.
+- If `source_service.py` is extracted, add a regression test that the existing sources HTTP endpoints
+  still behave (create/get/delete) via the service.
