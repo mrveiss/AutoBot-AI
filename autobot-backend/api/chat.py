@@ -1163,7 +1163,11 @@ async def get_session_approval_categories(
     await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
     cats = await SessionRoleService().get_approval_categories(session_id)
     return DataResponse(
-        data={"session_id": session_id, "approval_categories": cats, "valid_categories": sorted(valid_approval_categories())}
+        data={
+            "session_id": session_id,
+            "approval_categories": cats,
+            "valid_categories": sorted(valid_approval_categories()),
+        }
     )
 
 
