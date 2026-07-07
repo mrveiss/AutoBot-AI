@@ -20,10 +20,10 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from api.analytics_quality import (
-    QUALITY_HISTORY_MAX_POINTS,
     _DELTA_HISTORY_KEY,
     _HEALTH_HISTORY_KEY,
     _QUALITY_WEIGHTS,
+    QUALITY_HISTORY_MAX_POINTS,
     _build_quality_trends,
     _persist_health_snapshot,
     _read_remediation_deltas,
