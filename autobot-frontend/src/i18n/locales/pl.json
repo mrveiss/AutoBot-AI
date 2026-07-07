@@ -8201,6 +8201,15 @@
         "subtask": "Subtask",
         "risk": "Risk"
       },
+      "workItemStatus": {
+        "backlog": "Backlog",
+        "ready": "Gotowe",
+        "in_progress": "W Toku",
+        "in_review": "W Recenzji",
+        "done": "Ukończone",
+        "blocked": "Zablokowane",
+        "cancelled": "Anulowane"
+      },
       "priority": {
         "critical": "Critical",
         "high": "High",

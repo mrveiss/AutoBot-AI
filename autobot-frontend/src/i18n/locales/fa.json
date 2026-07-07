@@ -8201,6 +8201,15 @@
         "subtask": "Subtask",
         "risk": "Risk"
       },
+      "workItemStatus": {
+        "backlog": "بک‌لاگ",
+        "ready": "آماده",
+        "in_progress": "در حال انجام",
+        "in_review": "در حال بررسی",
+        "done": "انجام شده",
+        "blocked": "مسدود",
+        "cancelled": "لغو شده"
+      },
       "priority": {
         "critical": "Critical",
         "high": "High",

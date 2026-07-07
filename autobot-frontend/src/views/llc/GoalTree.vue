@@ -8,6 +8,7 @@ import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
+import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
 import { markExpanded, buildTreeFromParent } from '@/composables/llc/useLlcTree'
 import GoalTreeNode from './GoalTreeNode.vue'
 import type { Goal } from './GoalTreeNode.vue'
@@ -16,6 +17,7 @@ const logger = createLogger('GoalTree')
 const api = useApiClient()
 const { t } = useI18n()
 const { resolveCompanyId } = useLlcCompanyContext()
+const { workItemStatusLabel } = useWorkItemLabels()
 
 const goals = ref<Goal[]>([])
 const isLoading = ref(false)
@@ -151,7 +153,7 @@ onMounted(fetchGoals)
               <span class="text-xs text-autobot-text-muted mr-1">{{ item.identifier }}</span>
               {{ item.title }}
             </span>
-            <span class="text-xs font-medium" :class="itemStatusColor(item.status)">{{ item.status }}</span>
+            <span class="text-xs font-medium" :class="itemStatusColor(item.status)">{{ workItemStatusLabel(item.status) }}</span>
           </li>
         </ul>
       </div>

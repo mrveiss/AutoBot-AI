@@ -8190,6 +8190,15 @@
         "subtask": "Subtask",
         "risk": "Risk"
       },
+      "workItemStatus": {
+        "backlog": "Backlog",
+        "ready": "Ready",
+        "in_progress": "In Progress",
+        "in_review": "In Review",
+        "done": "Done",
+        "blocked": "Blocked",
+        "cancelled": "Cancelled"
+      },
       "priority": {
         "critical": "Critical",
         "high": "High",
