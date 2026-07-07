@@ -30,13 +30,27 @@ def test_forbidden_to_claude_tools_ignores_unmapped():
 def test_shipped_research_agent_has_no_fail_open_tokens():
     # Governance guard: every token the shipped research_agent forbids must map to a
     # claude_code --disallowedTools entry, so nothing silently fails open.
-    from chat_workflow.delegation import _CLAUDE_TOOL_FOR
+    from chat_workflow.delegation import _claude_tool_for
     from orchestration.agent_registry import resolve_forbidden_tools
 
     forbidden = resolve_forbidden_tools("research_agent")
     assert forbidden, "research_agent must declare forbidden_work"
-    unmapped = sorted(t for t in forbidden if t not in _CLAUDE_TOOL_FOR)
+    unmapped = sorted(t for t in forbidden if _claude_tool_for(t) is None)
     assert unmapped == [], f"forbidden tokens with no claude_code mapping (fail-open): {unmapped}"
+
+
+def test_claude_tool_mapping_derived_from_canonical_atoms():
+    # No duplicated token lists: the mapping must cover every shell/infra/terminal/
+    # delete atom (→ Bash) and the file-write atoms (Write/Edit/Bash) from tool_catalogue.
+    from autobot_shared import tool_catalogue as tc
+    from chat_workflow.delegation import _claude_tool_for
+
+    for token in tc.INFRA_AND_SHELL_TOOLS + tc.TERMINAL_TOOLS + tc.FILE_DELETE_TOOLS:
+        assert _claude_tool_for(token) == "Bash", token
+    assert _claude_tool_for("write_file") == "Write"
+    assert _claude_tool_for("edit_file") == "Edit"
+    for token in set(tc.FILE_WRITE_TOOLS) - {"write_file", "edit_file"}:
+        assert _claude_tool_for(token) == "Bash", token
 
 
 # --- run_delegated_subtask dispatch + guards -------------------------------

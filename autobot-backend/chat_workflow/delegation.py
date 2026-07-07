@@ -26,6 +26,7 @@ until delegation is explicitly enabled and validated.
 import os
 from typing import Awaitable, Callable, Dict, List
 
+from autobot_shared import tool_catalogue as _tc
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -37,34 +38,31 @@ MAX_DELEGATION_DEPTH: int = int(os.environ.get("AUTOBOT_MAX_DELEGATION_DEPTH", "
 
 # AutoBot ``forbidden_work`` token → claude_code CLI tool name to disallow. claude_code
 # exposes coarse tools (Bash/Edit/Write), so shell/infra/file-mutation tokens collapse
-# onto them. An unmapped token is simply not disallowed (fail-open on that token, but
-# the profile's other tokens still constrain the agent).
-_CLAUDE_TOOL_FOR: Dict[str, str] = {
-    "bash": "Bash",
-    "shell": "Bash",
-    "execute_command": "Bash",
-    "run_command": "Bash",
-    "system_exec": "Bash",
-    "terminal": "Bash",
-    "deploy": "Bash",
-    "ansible": "Bash",
-    "docker": "Bash",
-    "kubectl": "Bash",
-    "helm": "Bash",
-    "terraform": "Bash",
-    "delete_file": "Bash",
-    "remove_directory": "Bash",
-    "move_file": "Bash",
-    "copy_file": "Bash",
-    "create_directory": "Bash",
-    "write_file": "Write",
-    "edit_file": "Edit",
-}
+# onto them. The token lists are NOT duplicated here — they are derived from the
+# canonical atoms in ``autobot_shared/tool_catalogue.py`` so a token added there is
+# covered automatically (no drift / fail-open). ``write_file``/``edit_file`` map to the
+# dedicated Write/Edit tools; every other file-mutation + all shell/infra/terminal
+# tokens collapse onto Bash. An unmapped token is simply not disallowed (the profile's
+# other tokens still constrain the agent).
+_FILE_TOOL_FOR: Dict[str, str] = {"write_file": "Write", "edit_file": "Edit"}
+_BASH_TOKENS: "frozenset[str]" = frozenset(
+    _tc.INFRA_AND_SHELL_TOOLS
+    + _tc.TERMINAL_TOOLS
+    + _tc.FILE_DELETE_TOOLS
+    + tuple(t for t in _tc.FILE_WRITE_TOOLS if t not in _FILE_TOOL_FOR)
+)
+
+
+def _claude_tool_for(token: str) -> "str | None":
+    """Canonical ``forbidden_work`` token → claude_code tool name (or ``None``)."""
+    if token in _FILE_TOOL_FOR:
+        return _FILE_TOOL_FOR[token]
+    return "Bash" if token in _BASH_TOKENS else None
 
 
 def forbidden_to_claude_tools(forbidden: "frozenset[str] | list[str]") -> List[str]:
     """Map a profile's ``forbidden_work`` tokens to claude_code ``--disallowedTools``."""
-    return sorted({_CLAUDE_TOOL_FOR[f] for f in forbidden if f in _CLAUDE_TOOL_FOR})
+    return sorted({tool for tool in (_claude_tool_for(f) for f in forbidden) if tool})
 
 
 async def _run_claude_code_subagent(task: str, agent_type: str, depth: int) -> str:
