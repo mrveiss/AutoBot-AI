@@ -37,16 +37,41 @@ import pytest
 # "object MagicMock can't be used in 'await' expression".  Drop the stubs, import the
 # real modules, then restore the exact objects we displaced so process-shared state is
 # left untouched for other test files.
+#
+# Restoration strategy: capture only the EXACT conftest stub entries (by name),
+# displace them, import real implementations, then on teardown re-insert only the
+# displaced stubs and remove any NEW transitive deps added by our real imports.
+#
+# The original broad prefix-based scan (_STUBBED_PREFIXES startswith) was wrong:
+# by the time this module's code runs during collection, the real orchestration
+# package has already been fully imported by earlier test files (e.g.
+# orchestration.success_criteria, orchestration.workflow_runner are all real).
+# The broad scan captured ALL those real modules in _SAVED_STUBS, popped them,
+# and on teardown re-inserted old objects — causing class identity splits and
+# isinstance() failures in later test files.
 # ---------------------------------------------------------------------------
-_STUBBED_PREFIXES = ("orchestration", "agent_loop", "tools.parallel", "code_intelligence")
-_SAVED_STUBS: dict[str, object] = {
-    name: mod
-    for name, mod in list(sys.modules.items())
-    if name == "orchestration"
-    or name.startswith(tuple(f"{p}." for p in _STUBBED_PREFIXES))
-    or name in _STUBBED_PREFIXES
-}
 
+# The exact set of module names that conftest.py replaced with MagicMock stubs.
+# These are the ONLY entries we need to displace and restore.
+_CONFTEST_STUB_NAMES: tuple = (
+    "orchestration.causal_error_recovery",
+    "orchestration.causal_error_analyzer",
+    "orchestration.causal_validator",
+    "agent_loop",
+    "agent_loop.loop",
+    "agent_loop.think_tool",
+    "tools.parallel",
+    "tools.parallel.executor",
+    "code_intelligence",
+)
+
+# Save the current (stub) entries for the specific names we will displace.
+_SAVED_STUBS: dict[str, object] = {name: sys.modules[name] for name in _CONFTEST_STUB_NAMES if name in sys.modules}
+
+# Record all keys present before our real imports so we can compute the delta.
+_KEYS_BEFORE_IMPORT: frozenset = frozenset(sys.modules)
+
+# Displace only the specific stub entries we identified above.
 for _name in _SAVED_STUBS:
     sys.modules.pop(_name, None)
 
@@ -64,6 +89,11 @@ from services.failure_pattern_detector import (  # noqa: E402
     FailurePatternDetector,
 )
 
+# Keys added ONLY by our real imports — these are safe to remove on teardown.
+# Keys that were already in _KEYS_BEFORE_IMPORT (real orchestration modules
+# imported by earlier test files) are excluded and left untouched.
+_KEYS_OUR_IMPORTS_ADDED: frozenset = frozenset(sys.modules) - _KEYS_BEFORE_IMPORT
+
 
 @pytest.fixture(scope="module", autouse=True)
 def _restore_conftest_stubs():
@@ -72,11 +102,16 @@ def _restore_conftest_stubs():
     Keeps the real modules loaded for the duration of this file, then puts the
     original stub objects back so sibling type-only orchestration tests (which
     depend on the stubbed import chain) see the state they expect.
+
+    Only removes new transitive deps added by OUR imports and re-inserts the
+    specific stub entries we displaced — never touches orchestration modules
+    that were already real before this file's module-level code ran.
     """
     yield
-    for _name in list(sys.modules):
-        if _name == "orchestration" or _name.startswith(tuple(f"{_p}." for _p in _STUBBED_PREFIXES)):
-            sys.modules.pop(_name, None)
+    # Remove only the transitive deps that our real imports added.
+    for _name in _KEYS_OUR_IMPORTS_ADDED:
+        sys.modules.pop(_name, None)
+    # Restore the specific stub entries we displaced at import time.
     for _name, _mod in _SAVED_STUBS.items():
         sys.modules[_name] = _mod  # type: ignore[assignment]
 
