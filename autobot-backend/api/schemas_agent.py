@@ -1942,9 +1942,12 @@ class LearnedKnowledgeImport(BaseModel):
     task_type: str
     best_approach: str
     best_prompt_template: str
-    avg_score: float = 0.0
-    sample_size: int = 0
-    confidence: float = 0.0
+    # GH#11179: bound the scoring fields so an import can't inject out-of-range
+    # values into the planner's strategy selection (symmetric with export's
+    # min_confidence ge/le).
+    avg_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    sample_size: int = Field(default=0, ge=0)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     failure_patterns: List[str] = Field(default_factory=list)
 
 

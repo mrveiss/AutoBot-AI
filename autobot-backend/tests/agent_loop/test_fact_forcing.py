@@ -13,6 +13,7 @@ Acceptance criteria:
   - Off by default; enabled by config or AUTOBOT_FACT_FORCING=1.
 """
 
+import os
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -50,9 +51,10 @@ class TestRecordInvestigations:
             ],
             seen,
         )
-        assert "a/b.py" in seen
-        assert "c/d.py" in seen
-        assert "e/f.py" not in seen  # writes are not investigations
+        # Paths are stored realpath-normalized (GH#11179).
+        assert os.path.realpath("a/b.py") in seen
+        assert os.path.realpath("c/d.py") in seen
+        assert os.path.realpath("e/f.py") not in seen  # writes are not investigations
 
 
 class TestFirstUninvestigatedEdit:
@@ -62,7 +64,9 @@ class TestFirstUninvestigatedEdit:
 
     def test_investigated_edit_passes(self) -> None:
         tool = {"tool_name": "edit_file", "args": {"file_path": "x.py"}}
-        assert first_uninvestigated_edit(tool, {"x.py"}, exists_fn=lambda _p: True) is None
+        # The investigated set holds realpath-normalized paths (GH#11179).
+        seen = {os.path.realpath("x.py")}
+        assert first_uninvestigated_edit(tool, seen, exists_fn=lambda _p: True) is None
 
     def test_new_file_is_never_flagged(self) -> None:
         tool = {"tool_name": "write_file", "args": {"file_path": "new.py"}}

@@ -64,7 +64,10 @@ def _extract_path(tool: dict) -> str | None:
 
 
 def _norm(path: str) -> str:
-    return os.path.normpath(path.strip())
+    # realpath (not normpath) so a file read by relative path and edited by
+    # absolute path — or via a symlink — normalize to the SAME key and the read
+    # is credited (GH#11179). Resolves against the process CWD + symlinks.
+    return os.path.realpath(path.strip())
 
 
 def record_investigations(tools: list[dict], investigated: set[str]) -> None:

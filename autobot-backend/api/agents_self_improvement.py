@@ -36,6 +36,9 @@ _DEFAULT_MIN_CONFIDENCE = float(os.environ.get("AUTOBOT_KNOWLEDGE_EXPORT_MIN_CON
 # Max chars kept from untrusted imported free-text (mirrors the learned-template
 # sanitization limit in orchestration/orchestrator_prompts.py, #11060).
 _IMPORT_TEXT_MAX = int(os.environ.get("AUTOBOT_LEARNED_TEMPLATE_MAX", "500"))
+# Max failure patterns scanned for a knowledge export (explicit, not the store's
+# default 50) so a governance export doesn't silently omit patterns (GH#11179).
+_EXPORT_PATTERN_LIMIT = int(os.environ.get("AUTOBOT_KNOWLEDGE_EXPORT_PATTERN_LIMIT", "500"))
 
 # Module-level singletons initialized on first use
 _judge = None
@@ -176,7 +179,7 @@ async def export_agent_knowledge(
     strategy = await learner.get_learned_strategy(effective_type)
     strategy_resp = LearnedStrategyResponse(**strategy.__dict__) if strategy else None
 
-    patterns = await detector.list_known_patterns()
+    patterns = await detector.list_known_patterns(limit=_EXPORT_PATTERN_LIMIT)
     high_conf = [
         FailurePatternRecord(
             pattern_id=p.pattern_id,
