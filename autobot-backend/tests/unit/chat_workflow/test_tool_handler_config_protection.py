@@ -41,27 +41,21 @@ def test_blocks_write_to_config_via_params() -> None:
 def test_blocks_write_to_config_via_arguments() -> None:
     """MCP tools carry the path in `arguments`."""
     results: list[dict] = []
-    msg = _mixin()._enforce_config_protection(
-        {"name": "edit_file", "arguments": {"path": "ruff.toml"}}, results
-    )
+    msg = _mixin()._enforce_config_protection({"name": "edit_file", "arguments": {"path": "ruff.toml"}}, results)
     assert msg is not None
     assert "config-protection" in msg.content.lower()
 
 
 def test_allows_ordinary_write() -> None:
     results: list[dict] = []
-    msg = _mixin()._enforce_config_protection(
-        {"name": "write_file", "params": {"file_path": "src/app.ts"}}, results
-    )
+    msg = _mixin()._enforce_config_protection({"name": "write_file", "params": {"file_path": "src/app.ts"}}, results)
     assert msg is None
     assert results == []
 
 
 def test_allows_read_of_config() -> None:
     results: list[dict] = []
-    msg = _mixin()._enforce_config_protection(
-        {"name": "read_file", "params": {"file_path": ".eslintrc.json"}}, results
-    )
+    msg = _mixin()._enforce_config_protection({"name": "read_file", "params": {"file_path": ".eslintrc.json"}}, results)
     assert msg is None
 
 
@@ -76,7 +70,5 @@ def test_mixed_purpose_manifest_not_blocked() -> None:
 def test_env_optout_allows_config_write(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AUTOBOT_ALLOW_CONFIG_EDITS", "1")
     results: list[dict] = []
-    msg = _mixin()._enforce_config_protection(
-        {"name": "write_file", "params": {"file_path": ".prettierrc"}}, results
-    )
+    msg = _mixin()._enforce_config_protection({"name": "write_file", "params": {"file_path": ".prettierrc"}}, results)
     assert msg is None

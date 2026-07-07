@@ -2421,9 +2421,7 @@ class ToolHandlerMixin:
             f"Set AUTOBOT_ALLOW_CONFIG_EDITS=1 for an intentional change."
         )
         logger.warning("[GH#11177] Blocked config-protection write to '%s' (tool '%s')", matched, tool_name)
-        execution_results.append(
-            {"tool": tool_name, "status": "error", "error": error, "config_protection": True}
-        )
+        execution_results.append({"tool": tool_name, "status": "error", "error": error, "config_protection": True})
         return WorkflowMessage(
             type="error",
             content=error,
