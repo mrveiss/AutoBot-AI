@@ -375,26 +375,29 @@ async def create_work_item(
     body: WorkItemCreate,
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    item = await _service().create(
-        session,
-        company_id=body.company_id,
-        type=body.type,
-        title=body.title,
-        description=body.description,
-        acceptance_criteria=body.acceptance_criteria,
-        priority=body.priority,
-        story_points=body.story_points,
-        parent_id=body.parent_id,
-        project_id=body.project_id,
-        sprint_id=body.sprint_id,
-        goal_id=body.goal_id,
-        assignee_agent_id=body.assignee_agent_id,
-        assignee_user_id=body.assignee_user_id,
-        created_by_agent_id=body.created_by_agent_id,
-        created_by_user_id=body.created_by_user_id,
-        labels=body.labels,
-        requires_approval_before=body.requires_approval_before,
-    )
+    try:
+        item = await _service().create(
+            session,
+            company_id=body.company_id,
+            type=body.type,
+            title=body.title,
+            description=body.description,
+            acceptance_criteria=body.acceptance_criteria,
+            priority=body.priority,
+            story_points=body.story_points,
+            parent_id=body.parent_id,
+            project_id=body.project_id,
+            sprint_id=body.sprint_id,
+            goal_id=body.goal_id,
+            assignee_agent_id=body.assignee_agent_id,
+            assignee_user_id=body.assignee_user_id,
+            created_by_agent_id=body.created_by_agent_id,
+            created_by_user_id=body.created_by_user_id,
+            labels=body.labels,
+            requires_approval_before=body.requires_approval_before,
+        )
+    except ValueError as exc:  # e.g. unknown approval category (GH#11206)
+        raise HTTPException(status_code=400, detail=str(exc))
     await session.commit()
     await _kb_manager.ensure_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
     return await _item_to_dict(item, session)
@@ -464,7 +467,10 @@ async def update_work_item(
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     fields = {k: v for k, v in body.model_dump(exclude_none=True).items()}
-    item = await _service().update(session, work_item_id, **fields)
+    try:
+        item = await _service().update(session, work_item_id, **fields)
+    except ValueError as exc:  # e.g. unknown approval category (GH#11206)
+        raise HTTPException(status_code=400, detail=str(exc))
     if item is None:
         raise HTTPException(status_code=404, detail="Work item not found")
     await session.commit()
