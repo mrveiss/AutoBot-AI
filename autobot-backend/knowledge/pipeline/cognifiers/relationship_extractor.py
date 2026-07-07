@@ -271,10 +271,21 @@ class RelationshipExtractor(BaseCognifier):
             batch_prompt_template=RELATIONSHIP_EXTRACTION_BATCH_PROMPT,
             llm_type=LLMType.EXTRACTION,
             max_chunk_chars=config.cognifier_batch_max_chunk_chars,
-            convert=lambda raw, chunk: self._convert_to_relationships(raw, chunk, entity_map),
+            convert=lambda raw, chunk: self._convert_to_relationships(
+                raw, chunk, self._chunk_scoped_entity_map(entities, chunk)
+            ),
             extract_one=lambda chunk: self._extract_from_chunk(chunk, entities, entity_map),
             aux_of=lambda chunk: "Entities:\n" + self._format_entity_list(entities, chunk),
         )
+
+    def _chunk_scoped_entity_map(self, entities: List[Entity], chunk: ProcessedChunk) -> Dict[str, Entity]:
+        """Entity map restricted to *chunk*'s relevant entities (mirrors
+        ``_format_entity_list``). In the batched path all chunks' entities share one
+        prompt, so scoping conversion per-chunk stops a relationship from resolving
+        across chunk boundaries via the global map (#11070 audit follow-up).
+        """
+        relevant = [e for e in entities if chunk.id in e.source_chunk_ids] or entities[:20]
+        return build_entity_map(relevant)
 
     async def _extract_from_chunk(
         self,

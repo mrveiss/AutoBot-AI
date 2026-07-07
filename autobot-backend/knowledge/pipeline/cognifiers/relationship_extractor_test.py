@@ -361,3 +361,18 @@ async def test_flag_off_uses_per_chunk(monkeypatch):
     )
     await ext._process_batch([c0, c1], ents, emap)
     assert ext.llm.chat.call_count == 2  # legacy per-chunk path
+
+
+def test_chunk_scoped_entity_map_excludes_other_chunk_entities():
+    """#11070 audit: batched conversion is scoped to the chunk's own entities so a
+    relationship can't resolve an entity that belongs only to another chunk."""
+    ext = RelationshipExtractor.__new__(RelationshipExtractor)
+    c0 = _chunk("chunk zero")
+    e_in = _entity("Alpha")
+    e_in.source_chunk_ids = [c0.id]
+    e_other = _entity("Beta")
+    e_other.source_chunk_ids = [uuid4()]  # belongs to a different chunk
+
+    scoped = ext._chunk_scoped_entity_map([e_in, e_other], c0)
+    assert "alpha" in scoped
+    assert "beta" not in scoped  # other-chunk entity excluded

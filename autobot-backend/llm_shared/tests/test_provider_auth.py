@@ -613,3 +613,14 @@ class TestProviderAuthSecurity:
 
         src = inspect.getsource(_pa_module.device_poll)
         assert "allow_redirects=False" in src, "device_poll must pass allow_redirects=False to aiohttp"
+
+    def test_malformed_port_returns_400_not_500(self):
+        """#11066 audit: a malformed port raises ValueError on parsed.port access —
+        must be caught → 400, not an unhandled 500."""
+        from fastapi import HTTPException
+
+        from api.provider_auth import _validate_outbound_url
+
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_outbound_url("https://accounts.google.com:99999/token")
+        assert exc_info.value.status_code == 400

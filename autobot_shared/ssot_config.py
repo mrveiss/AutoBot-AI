@@ -48,6 +48,8 @@ from typing import Dict, List
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from autobot_shared.env_utils import env_int_clamped
+
 
 # Determine project root for .env file location
 def _find_project_root() -> Path:
@@ -81,39 +83,19 @@ INSTRUCTION_MODEL = "mistral:7b-instruct"  # RAG, entity extraction, instruction
 SYSTEM_MODEL = "dolphin-llama3:8b"  # System commands, security (uncensored)
 QUALITY_MODEL = DEFAULT_LLM_MODEL  # User-facing chat, research, code analysis
 
+# Truthy env-var values — shared by every boolean flag below.
+_TRUE_VALUES = {"1", "true", "yes"}
+
 # Best-of-N plan selection (#10583)
 # AUTOBOT_PLAN_BEST_OF_N_ENABLED=true  → opt-in path (default: off)
 # AUTOBOT_PLAN_BEST_OF_N_COUNT=3       → number of candidate plans (default: 3, max: 5)
-PLAN_BEST_OF_N_ENABLED: bool = os.environ.get("AUTOBOT_PLAN_BEST_OF_N_ENABLED", "false").lower() in {
-    "1",
-    "true",
-    "yes",
-}
-
-
-def _env_int(name: str, default: int, *, lo: int | None = None, hi: int | None = None) -> int:
-    """Parse an int env var, falling back to *default* on missing/invalid input.
-
-    Never crash at import (#11022): a non-numeric ``AUTOBOT_PLAN_BEST_OF_N_COUNT``
-    used to raise ``ValueError`` at module import, taking down backend startup.
-    Optionally clamps to ``[lo, hi]``.
-    """
-    try:
-        val = int(os.environ.get(name, str(default)))
-    except (TypeError, ValueError):
-        val = default
-    if lo is not None:
-        val = max(lo, val)
-    if hi is not None:
-        val = min(hi, val)
-    return val
-
-
-PLAN_BEST_OF_N_COUNT: int = _env_int("AUTOBOT_PLAN_BEST_OF_N_COUNT", 3, lo=2, hi=5)
+PLAN_BEST_OF_N_ENABLED: bool = os.environ.get("AUTOBOT_PLAN_BEST_OF_N_ENABLED", "false").lower() in _TRUE_VALUES
+# Reuse the shared env_int_clamped helper (safe-parse — no import-time crash on
+# bad input — + clamp); do NOT reimplement it locally (#11022 audit follow-up).
+PLAN_BEST_OF_N_COUNT: int = env_int_clamped("AUTOBOT_PLAN_BEST_OF_N_COUNT", 3, 2, 5)
 
 # #10602: ClaimVerifier wiring — adds KB RAG + optional research-agent LLM call per claim.
 # Default OFF because it adds latency/cost; set AUTOBOT_CLAIM_VERIFICATION_ENABLED=true to opt in.
-_TRUE_VALUES = {"1", "true", "yes"}
 CLAIM_VERIFICATION_ENABLED: bool = os.environ.get("AUTOBOT_CLAIM_VERIFICATION_ENABLED", "false").lower() in _TRUE_VALUES
 
 # #10602: Self-improvement write path — pure plumbing, no extra LLM calls until outcomes exist.
