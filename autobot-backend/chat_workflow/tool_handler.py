@@ -2355,6 +2355,46 @@ class ToolHandlerMixin:
             metadata={"message_type": "unknown_tool", "tool_name": tool_name},
         )
 
+    def _enforce_forbidden_work(
+        self,
+        tool_call: dict[str, Any],
+        ctx: "LLMIterationContext" | None,
+        execution_results: list[dict[str, Any]],
+    ) -> WorkflowMessage | None:
+        """Hard-block a tool the acting agent's forbidden_work manifest forbids (GH#11145).
+
+        Resolves the acting agent id from ``ctx.agent_context`` and matches the tool
+        against that agent's manifest via the shared ``match_forbidden_tool`` matcher.
+        Records the failure in ``execution_results`` and returns an error
+        ``WorkflowMessage`` when the tool is forbidden, else ``None``. Profile-less
+        agents resolve to an empty manifest and are never blocked here.
+        """
+        from orchestration.agent_registry import match_forbidden_tool, resolve_forbidden_tools
+
+        agent_id = ctx.agent_context.agent_id if (ctx is not None and ctx.agent_context is not None) else None
+        forbidden = resolve_forbidden_tools(agent_id)
+        if not forbidden:
+            return None
+        tool_name = tool_call.get("name", "")
+        matched = match_forbidden_tool(tool_name, forbidden)
+        if matched is None:
+            return None
+        error = f"Tool '{tool_name}' is forbidden by agent '{agent_id}' capability manifest (matched '{matched}')"
+        logger.warning(
+            "[GH#11145] Blocked forbidden tool '%s' for agent '%s' (matched '%s')",
+            tool_name,
+            agent_id,
+            matched,
+        )
+        execution_results.append(
+            {"tool": tool_name, "status": "error", "error": error, "forbidden_by_manifest": True}
+        )
+        return WorkflowMessage(
+            type="error",
+            content=error,
+            metadata={"tool": tool_name, "error": True, "forbidden_by_manifest": True},
+        )
+
     async def _dispatch_tool_call(
         self,
         tool_call: dict[str, Any],
@@ -2373,6 +2413,16 @@ class ToolHandlerMixin:
         for the respond tool. Helpers handle MCP, browser, web_search, and execute_command.
         """
         tool_name = tool_call["name"]
+
+        # GH#11145: enforce the acting agent's forbidden_work manifest at the single
+        # production dispatch seam — before any tool-specific branch. Every tool call
+        # funnels through here, so this is the one place the capability boundary is
+        # applied. No-ops for the plain chat agent (no profile → empty manifest);
+        # bites profile-bound agents (e.g. a delegated research_agent cannot run bash).
+        forbidden_msg = self._enforce_forbidden_work(tool_call, ctx, execution_results)
+        if forbidden_msg is not None:
+            yield forbidden_msg
+            return
 
         if tool_name == "respond":
             if ctx is not None:

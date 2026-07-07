@@ -129,6 +129,25 @@ def get_default_agents() -> List[AgentProfile]:
     ]
 
 
+def match_forbidden_tool(tool_name: str, forbidden: "frozenset[str]") -> "str | None":
+    """Return the ``forbidden_work`` pattern matching *tool_name*, else None (GH#11145).
+
+    Single source for forbidden-tool matching — the agent loop and the production
+    tool-dispatch seam both call this so the exact/prefix rule lives in one place.
+    Matching is case-insensitive; a manifest entry matches by exact name or as a
+    name prefix (e.g. ``deploy`` blocks ``deploy_service``).
+    """
+    if not forbidden:
+        return None
+    name = tool_name.lower()
+    if name in forbidden:
+        return name
+    for pattern in forbidden:
+        if name.startswith(pattern):
+            return pattern
+    return None
+
+
 class AgentRegistry:
     """Static profile registry for orchestration agent capabilities.
 
@@ -351,3 +370,25 @@ class AgentRegistry:
     def __contains__(self, agent_id: str) -> bool:
         """Check if agent is registered."""
         return agent_id in self._agents
+
+
+# GH#11145: process-wide read-only registry of the default capability manifests,
+# seeded once from get_default_agents() (the same SSOT the orchestrator uses, so
+# no drift). Lets the production tool-dispatch seam resolve an agent's boundary
+# cheaply without constructing an Orchestrator on every tool call.
+_default_registry: "AgentRegistry | None" = None
+
+
+def resolve_forbidden_tools(agent_id: "str | None") -> "frozenset[str]":
+    """Resolve *agent_id*'s ``forbidden_work`` manifest from the default profiles.
+
+    Cached, read-only lookup reused by both the agent loop and the production tool
+    dispatch (GH#11145). An unknown or ``None`` ``agent_id`` returns an empty set —
+    no boundary — so callers no-op safely for the plain (profile-less) chat agent.
+    """
+    if not agent_id:
+        return frozenset()
+    global _default_registry  # noqa: PLW0603
+    if _default_registry is None:
+        _default_registry = AgentRegistry(initialize_defaults=True)
+    return _default_registry.forbidden_tools(agent_id)

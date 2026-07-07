@@ -1363,9 +1363,9 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
         try:
             from dataclasses import replace
 
-            from orchestration.agent_registry import AgentRegistry
+            from orchestration.agent_registry import resolve_forbidden_tools
 
-            forbidden = AgentRegistry(initialize_defaults=True).forbidden_tools(agent_id)
+            forbidden = resolve_forbidden_tools(agent_id)
         except Exception as exc:  # pragma: no cover - defensive; registry import/lookup
             logger.warning(
                 "AgentLoop: could not resolve forbidden_work for agent '%s': %s",
@@ -1385,19 +1385,13 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
     def _forbidden_tool_name(self, tool: dict[str, Any]) -> str | None:
         """Return the matched forbidden-tool name for *tool*, else None (GH#11139).
 
-        Uses the same name/prefix matching as ``_sensitive_tool_name`` but against
-        the agent's ``forbidden_work`` manifest (``config.forbidden_tools``).
+        Delegates to the shared ``match_forbidden_tool`` matcher (GH#11145) so the
+        loop and the production tool-dispatch seam apply the identical name/prefix
+        rule against the agent's ``forbidden_work`` manifest.
         """
-        forbidden = self.config.forbidden_tools
-        if not forbidden:
-            return None
-        name = tool.get("tool_name", "").lower()
-        if name in forbidden:
-            return name
-        for f in forbidden:
-            if name.startswith(f):
-                return f
-        return None
+        from orchestration.agent_registry import match_forbidden_tool
+
+        return match_forbidden_tool(tool.get("tool_name", ""), self.config.forbidden_tools)
 
     def _check_forbidden(self, tools: list[dict[str, Any]]) -> dict[str, Any]:
         """Hard-block the first tool the agent's manifest forbids (GH#11139).
