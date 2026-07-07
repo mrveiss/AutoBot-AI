@@ -5,14 +5,16 @@
 """
 Modal Serverless Execution Backend (Issue #4343)
 
-Executes tasks on Modal serverless platform.
+Executes tasks inside real Modal Sandbox isolated containers.
 Supports cost tracking and automatic scaling.
 """
 
+import asyncio
+import os
 from typing import Any, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.time_utils import now_utc, utc_timestamp
+from autobot_shared.time_utils import now_utc
 
 try:
     import modal
@@ -32,37 +34,51 @@ logger = get_logger(__name__)
 
 
 class ModalBackend(ExecutionBackend):
-    """Execute tasks on Modal serverless platform (Issue #4343)."""
+    """Execute tasks inside Modal Sandbox isolated containers (Issue #4343).
+
+    Each call to ``execute()`` spins up a fresh ``modal.Sandbox``, runs the
+    task code with ``sandbox.exec("python", "-c", task.code)``, captures
+    stdout/stderr, and terminates the sandbox in a ``finally`` block.
+
+    Modal SDK calls are blocking; they are offloaded to a thread via
+    ``asyncio.to_thread`` so the event loop is never blocked.
+    """
+
+    _APP_NAME = "autobot-code-execution"
 
     def __init__(self, api_token: str | None = None) -> None:
         """Initialize Modal backend.
 
         Args:
-            api_token: Modal API token (default: from MODAL_TOKEN_ID env var)
+            api_token: Modal API token (default: read from MODAL_TOKEN_ID env var).
 
         Raises:
-            RuntimeError: If Modal SDK is not available
+            RuntimeError: If the Modal SDK is not installed.
         """
         super().__init__(BackendType.MODAL)
 
         if modal is None:
-            raise RuntimeError("modal package not installed. " "Install with: pip install modal")
+            raise RuntimeError("modal package not installed. Install with: pip install modal")
 
         self.api_token = api_token
         self._function_cache: Dict[str, Any] = {}
         self._cost_estimate = 0.0
 
+    # ------------------------------------------------------------------
+    # Public interface
+    # ------------------------------------------------------------------
+
     async def execute(self, task: ExecutionTask) -> ExecutionResult:
-        """Execute task on Modal serverless.
+        """Execute task inside a Modal Sandbox isolated container.
 
         Args:
-            task: ExecutionTask with code
+            task: ExecutionTask with code and parameters.
 
         Returns:
-            ExecutionResult with execution details
+            ExecutionResult with execution details.
 
         Raises:
-            RuntimeError: If Modal execution fails
+            RuntimeError: If Modal backend is unhealthy or execution fails.
         """
         if not await self.is_healthy():
             raise RuntimeError("Modal backend is not healthy")
@@ -77,33 +93,20 @@ class ModalBackend(ExecutionBackend):
             result.started_at = now_utc()
             result.status = ExecutionStatus.RUNNING
 
-            # For this implementation, we simulate Modal execution
-            # In production, you would:
-            # 1. Create a Modal function dynamically
-            # 2. Call modal.client.run() with the function
-            # 3. Track execution cost
+            output = await self._call_modal_function(task)
 
-            # Simulated Modal execution
-            try:
-                # Get or create Modal function
-                func = self._get_or_create_function(task)
+            result.stdout = output.get("stdout", "")
+            result.stderr = output.get("stderr", "")
+            result.return_code = output.get("return_code", 0)
+            result.metadata["modal_run_id"] = output.get("run_id", "")
+            result.metadata["cost_estimate"] = output.get("cost", 0.0)
+            result.status = ExecutionStatus.SUCCESS if result.return_code == 0 else ExecutionStatus.FAILED
 
-                # Execute (simulated)
-                output = await self._call_modal_function(func, task)
-
-                result.stdout = output.get("stdout", "")
-                result.stderr = output.get("stderr", "")
-                result.return_code = output.get("return_code", 0)
-                result.metadata["modal_run_id"] = output.get("run_id", "")
-                result.metadata["cost_estimate"] = output.get("cost", 0.0)
-
-                result.status = ExecutionStatus.SUCCESS if result.return_code == 0 else ExecutionStatus.FAILED
-
-            except Exception as e:
-                result.status = ExecutionStatus.FAILED
-                result.stderr = f"Modal execution failed: {str(e)}"
-                result.return_code = -1
-                logger.exception(f"Error executing task {task.task_id} on Modal: {e}")
+        except Exception as e:
+            result.status = ExecutionStatus.FAILED
+            result.stderr = f"Modal execution failed: {str(e)}"
+            result.return_code = -1
+            logger.exception("Error executing task %s on Modal: %s", task.task_id, e)
 
         finally:
             result.completed_at = now_utc()
@@ -113,121 +116,107 @@ class ModalBackend(ExecutionBackend):
         return result
 
     async def health_check(self) -> bool:
-        """Check if Modal service is accessible.
+        """Return True when Modal is installed and credentials appear configured.
+
+        Does NOT make a network call — checks only that the SDK is present and
+        that at least one of the known token env vars is set (or ``api_token``
+        was supplied at construction).  A real connectivity check happens lazily
+        when ``execute()`` is first called.
 
         Returns:
-            True if Modal is accessible
+            True if Modal can plausibly be reached.
         """
-        try:
-            # In production, make an actual Modal health check
-            # For now, just verify we can import
-            if modal is None:
-                return False
-            return True
-        except Exception as e:
-            logger.warning(f"Modal health check failed: {e}")
+        if modal is None:
             return False
+        if self.api_token:
+            return True
+        return bool(os.environ.get("MODAL_TOKEN_ID") or os.environ.get("MODAL_TOKEN_SECRET"))
 
     async def cleanup(self) -> None:
-        """Clean up Modal resources."""
-        # In production, cancel any pending Modal tasks
+        """Clean up cached Modal resources."""
         self._function_cache.clear()
 
     async def verify_task_compatibility(self, task: ExecutionTask) -> Tuple[bool, str]:
-        """Verify task can run on Modal.
+        """Verify task can run on Modal (Python only).
 
         Args:
-            task: Task to check
+            task: Task to check.
 
         Returns:
-            Tuple of (is_compatible, reason)
+            Tuple of (is_compatible, reason_if_not).
         """
-        supported_languages = ["python"]
-        if task.language.lower() not in supported_languages:
-            return (
-                False,
-                f"Modal only supports Python. Got: {task.language}",
-            )
-
+        if task.language.lower() != "python":
+            return False, f"Modal only supports Python. Got: {task.language}"
         return True, ""
 
-    def _get_or_create_function(self, task: ExecutionTask) -> Any:
-        """Get or create Modal function for task.
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
 
-        Args:
-            task: ExecutionTask
-
-        Returns:
-            Modal function (or stub in simulation)
-        """
-        language = task.language.lower()
-
-        if language not in self._function_cache:
-            # In production, create actual Modal function
-            self._function_cache[language] = {
-                "language": language,
-                "created_at": utc_timestamp(),
-            }
-
-        return self._function_cache[language]
-
-    async def _call_modal_function(self, func: Any, task: ExecutionTask) -> Dict[str, Any]:
-        """Call Modal function with task code (simulated).
-
-        Args:
-            func: Modal function
-            task: ExecutionTask with code
+    def _get_or_create_app(self) -> Any:
+        """Return a cached ``modal.App``, looking it up (or creating) on first call.
 
         Returns:
-            Dictionary with execution results
-
-        Note:
-            In production, this would call modal.client.run(func, ...)
+            A ``modal.App`` instance for ``_APP_NAME``.
         """
-        # Simulate Modal execution
+        if "app" not in self._function_cache:
+            self._function_cache["app"] = modal.App.lookup(self._APP_NAME, create_if_missing=True)
+        return self._function_cache["app"]
+
+    def _run_in_sandbox(self, task: ExecutionTask) -> Dict[str, Any]:
+        """Run ``task.code`` inside a real Modal Sandbox (blocking).
+
+        This method is intentionally synchronous so it can be offloaded to a
+        thread by ``_call_modal_function``.  It NEVER falls back to in-process
+        ``exec``; if Modal is unavailable a ``RuntimeError`` propagates.
+
+        Args:
+            task: ExecutionTask with code, env_vars, and timeout.
+
+        Returns:
+            Dictionary with ``stdout``, ``stderr``, ``return_code``, ``run_id``,
+            and ``cost`` keys.
+        """
+        if modal is None:
+            raise RuntimeError("Modal SDK is not available; cannot execute task")
+
+        sanitized_env = {k: v for k, v in safe_task_env({}, task.env_vars).items() if isinstance(v, str)}
+        app = self._get_or_create_app()
+        image = modal.Image.debian_slim(python_version="3.12")
+        secrets = [modal.Secret.from_dict(sanitized_env)] if sanitized_env else []
+        sandbox = modal.Sandbox.create(
+            app=app,
+            image=image,
+            timeout=task.timeout_seconds or 300,
+            secrets=secrets,
+        )
         try:
-            import io
-            from contextlib import redirect_stderr, redirect_stdout
-
-            # Capture stdout/stderr
-            stdout_capture = io.StringIO()
-            stderr_capture = io.StringIO()
-
-            return_code = 0
-            stdout_output = ""
-            stderr_output = ""
-
+            proc = sandbox.exec("python", "-c", task.code)
+            stdout = proc.stdout.read()
+            stderr = proc.stderr.read()
+            proc.wait()
+            rc = proc.returncode if proc.returncode is not None else 0
+            run_id = getattr(sandbox, "object_id", "") or f"modal-{task.task_id}"
+            return {"stdout": stdout, "stderr": stderr, "return_code": rc, "run_id": run_id, "cost": 0.0}
+        finally:
             try:
-                with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                    # Execute code in isolated namespace. Security: task env
-                    # vars become exec() globals, so filter them through the
-                    # same AUTOBOT_* allowlist to block runtime/loader hijack
-                    # names leaking into the executed code namespace.
-                    namespace = safe_task_env({"__name__": "__modal__"}, task.env_vars)
+                sandbox.terminate()
+            except Exception:
+                pass
 
-                    exec(task.code, namespace)  # nosec B102
+    async def _call_modal_function(self, task: ExecutionTask) -> Dict[str, Any]:
+        """Offload the blocking Modal Sandbox call to a thread.
 
-                stdout_output = stdout_capture.getvalue()
-                stderr_output = stderr_capture.getvalue()
+        Args:
+            task: ExecutionTask.
 
-            except Exception as e:
-                return_code = 1
-                stderr_output = str(e)
+        Returns:
+            Dictionary with ``stdout``, ``stderr``, ``return_code``, ``run_id``,
+            and ``cost`` keys.
 
-            return {
-                "stdout": stdout_output,
-                "stderr": stderr_output,
-                "return_code": return_code,
-                "run_id": f"modal-{task.task_id}",
-                "cost": 0.001,
-            }
-
-        except Exception as e:
-            logger.exception(f"Error calling Modal function: {e}")
-            return {
-                "stdout": "",
-                "stderr": f"Error: {str(e)}",
-                "return_code": -1,
-                "run_id": "",
-                "cost": 0.0,
-            }
+        Raises:
+            RuntimeError: If Modal SDK is not available.
+        """
+        if modal is None:
+            raise RuntimeError("Modal SDK is not available; cannot execute task")
+        return await asyncio.to_thread(self._run_in_sandbox, task)
