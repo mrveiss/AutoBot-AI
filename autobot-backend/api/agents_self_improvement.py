@@ -9,15 +9,16 @@ Endpoints for accessing task outcome history, learned strategies,
 and resetting learning state per agent/task type.
 """
 
-from typing import List
+from typing import Any, List
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from api.schemas_agent import (
     LearnedStrategyResponse,
     ResetLearningResponse,
     TaskOutcomeResponse,
 )
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
@@ -64,6 +65,7 @@ async def get_agent_outcomes(
     agent_id: str,
     task_type: str | None = Query(None, description="Filter by task type"),
     limit: int = Query(20, ge=1, le=100),
+    _user: Any = Depends(get_current_user),
 ) -> List[TaskOutcomeResponse]:
     """Return recent task outcome records for an agent or task type."""
     judge = _get_judge()
@@ -85,6 +87,7 @@ async def get_agent_outcomes(
 async def get_learned_strategies(
     agent_id: str,
     task_type: str | None = Query(None, description="Task type to retrieve"),
+    _user: Any = Depends(get_current_user),
 ) -> LearnedStrategyResponse | None:
     """Return the current learned best strategy for a given task type."""
     learner = _get_learner()
@@ -108,6 +111,7 @@ async def get_learned_strategies(
 async def reset_agent_learning(
     agent_id: str,
     task_type: str | None = Query(None, description="Task type to reset"),
+    _admin: bool = Depends(check_admin_permission),
 ) -> ResetLearningResponse:
     """Clear all learned outcomes and strategies for an agent or task type."""
     judge = _get_judge()
