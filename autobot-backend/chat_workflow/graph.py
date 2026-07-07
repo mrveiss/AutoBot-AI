@@ -384,7 +384,7 @@ def _build_llm_iteration_context(state: ChatState):
     ``initial_prompt`` via ``_inject_mid_conversation_warning``, never via a
     ``SystemMessage``.  See that helper's docstring for the full rationale.
     """
-    from .models import LLMIterationContext
+    from .models import LLMIterationContext, build_governed_identity
 
     initial_prompt = state["llm_params"].get("initial_prompt") or ""
 
@@ -401,6 +401,11 @@ def _build_llm_iteration_context(state: ChatState):
     if loop_warning:
         initial_prompt = _inject_mid_conversation_warning(loop_warning, initial_prompt)
 
+    # GH#11159/#11160: carry governed identity from the request context bag.
+    agent_context, work_item_id, approval_cats = build_governed_identity(
+        state.get("context", {}) or {}, state["session_id"]
+    )
+
     return LLMIterationContext(
         ollama_endpoint=state["llm_params"]["ollama_endpoint"],
         selected_model=state["llm_params"]["selected_model"],
@@ -413,6 +418,9 @@ def _build_llm_iteration_context(state: ChatState):
         system_prompt=state["llm_params"].get("system_prompt"),
         initial_prompt=initial_prompt,
         message=state["user_message"],
+        agent_context=agent_context,
+        work_item_id=work_item_id,
+        requires_approval_before=approval_cats,
     )
 
 

@@ -353,6 +353,29 @@ class LLMIterationContext:
     agent_context: AgentContext | None = None  # Issue #657: Agent hierarchy
     consecutive_invalid_tool_calls: int = 0  # Issue #2310: Track invalid tool calls
     context: Dict[str, Any] = field(default_factory=dict)  # Issue #4264: Request-level context for hooks
+    # GH#11160: work item this run executes + its declared approval-gated action
+    # categories, resolved upstream (where a DB session exists) so the tool seam
+    # can gate on them without a DB round-trip.
+    work_item_id: str | None = None
+    requires_approval_before: List[str] = field(default_factory=list)
+
+
+def build_governed_identity(
+    source: Dict[str, Any], session_id: str
+) -> "tuple[AgentContext | None, str | None, List[str]]":
+    """Extract governed execution identity from a request/state context bag.
+
+    Returns ``(agent_context, work_item_id, requires_approval_before)`` (GH#11159/#11160).
+    ``agent_context`` is built from a governed ``agent_id`` (a registered agent
+    profile id) when present, so the production tool-dispatch seam can enforce that
+    agent's ``forbidden_work`` manifest. The work-item fields carry the declared
+    approval gates resolved upstream. All absent → a plain, ungoverned run.
+    """
+    agent_id = source.get("agent_id")
+    agent_context = AgentContext(agent_id=agent_id, session_id=session_id) if agent_id else None
+    work_item_id = source.get("work_item_id")
+    categories = list(source.get("requires_approval_before", []) or [])
+    return agent_context, work_item_id, categories
 
 
 @dataclass
