@@ -148,6 +148,7 @@ class AgentLoop:
         tool_executor: ParallelToolExecutor | None = None,
         think_tool: ThinkTool | None = None,
         config: AgentLoopConfig | None = None,
+        agent_id: str | None = None,
     ):
         """
         Initialize the agent loop.
@@ -158,12 +159,18 @@ class AgentLoop:
             tool_executor: Optional parallel tool executor
             think_tool: Optional think tool for reasoning
             config: Loop configuration
+            agent_id: Optional agent identity (GH#11145). When set, the agent's
+                ``forbidden_work`` manifest is resolved from ``AgentRegistry`` and
+                applied to ``config.forbidden_tools`` so ``_check_forbidden`` hard-
+                blocks out-of-manifest tools. When unset (the default), the loop
+                runs as no particular agent and the manifest is empty (no change).
         """
         self.event_stream = event_stream
         self.planner = planner
         self.tool_executor = tool_executor
         self.think_tool = think_tool or ThinkTool()
-        self.config = config or AgentLoopConfig()
+        self.agent_id = agent_id
+        self.config = self._resolve_forbidden_tools(config or AgentLoopConfig(), agent_id)
         self._belief_updater = BeliefStateUpdater(
             contradiction_surface_threshold=self.config.contradiction_surface_threshold
         )
@@ -1340,22 +1347,51 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
                 return sensitive
         return None
 
+    @staticmethod
+    def _resolve_forbidden_tools(config: "AgentLoopConfig", agent_id: str | None) -> "AgentLoopConfig":
+        """Populate ``config.forbidden_tools`` from the agent's manifest (GH#11145).
+
+        Reads ``forbidden_work`` off the agent's ``AgentProfile`` via
+        ``AgentRegistry`` and returns a config with those tools hard-blocked. When
+        no ``agent_id`` is given, or the config already carries an explicit
+        ``forbidden_tools`` set, or the agent has no boundary, the config is
+        returned unchanged. Registry resolution never raises into the loop — a
+        lookup failure logs and falls back to the (unbounded) config.
+        """
+        if not agent_id or config.forbidden_tools:
+            return config
+        try:
+            from dataclasses import replace
+
+            from orchestration.agent_registry import resolve_forbidden_tools
+
+            forbidden = resolve_forbidden_tools(agent_id)
+        except Exception as exc:  # pragma: no cover - defensive; registry import/lookup
+            logger.warning(
+                "AgentLoop: could not resolve forbidden_work for agent '%s': %s",
+                agent_id,
+                exc,
+            )
+            return config
+        if not forbidden:
+            return config
+        logger.info(
+            "AgentLoop: agent '%s' forbidden_work manifest active (%d tools)",
+            agent_id,
+            len(forbidden),
+        )
+        return replace(config, forbidden_tools=forbidden)
+
     def _forbidden_tool_name(self, tool: dict[str, Any]) -> str | None:
         """Return the matched forbidden-tool name for *tool*, else None (GH#11139).
 
-        Uses the same name/prefix matching as ``_sensitive_tool_name`` but against
-        the agent's ``forbidden_work`` manifest (``config.forbidden_tools``).
+        Delegates to the shared ``match_forbidden_tool`` matcher (GH#11145) so the
+        loop and the production tool-dispatch seam apply the identical name/prefix
+        rule against the agent's ``forbidden_work`` manifest.
         """
-        forbidden = self.config.forbidden_tools
-        if not forbidden:
-            return None
-        name = tool.get("tool_name", "").lower()
-        if name in forbidden:
-            return name
-        for f in forbidden:
-            if name.startswith(f):
-                return f
-        return None
+        from orchestration.agent_registry import match_forbidden_tool
+
+        return match_forbidden_tool(tool.get("tool_name", ""), self.config.forbidden_tools)
 
     def _check_forbidden(self, tools: list[dict[str, Any]]) -> dict[str, Any]:
         """Hard-block the first tool the agent's manifest forbids (GH#11139).
