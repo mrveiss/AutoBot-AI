@@ -827,6 +827,12 @@ class AgentLoop:
         if forbidden_results:
             return forbidden_results
 
+        # GH#11148: block writes that would weaken a linter/formatter config —
+        # steer the agent to fix the code, not the gate.
+        config_results = self._check_config_protection(tools)
+        if config_results:
+            return config_results
+
         # Issue #4092: Gate sensitive operations behind user approval.
         denied_results = await self._check_approvals(tools)
         if denied_results:
@@ -1377,6 +1383,36 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
                         "error": (
                             f"Tool '{tool_name}' is forbidden by this agent's capability "
                             f"manifest (matched '{matched}')"
+                        )
+                    }
+                }
+        return {}
+
+    def _check_config_protection(self, tools: list[dict[str, Any]]) -> dict[str, Any]:
+        """Block the first write that would weaken a linter/formatter config (GH#11148).
+
+        Returns a denial result dict for the first protected-config write, or
+        ``{}`` when none are protected or ``AUTOBOT_ALLOW_CONFIG_EDITS`` opts out.
+        """
+        from agent_loop.config_protection import config_edits_allowed, protected_config_write
+
+        if config_edits_allowed():
+            return {}
+        for tool in tools:
+            matched = protected_config_write(tool)
+            if matched is not None:
+                tool_name = tool.get("tool_name", "unknown")
+                logger.warning(
+                    "AgentLoop: tool '%s' blocked from editing linter/formatter config '%s' (config-protection)",
+                    tool_name,
+                    matched,
+                )
+                return {
+                    tool_name: {
+                        "error": (
+                            f"Editing linter/formatter config '{matched}' is blocked "
+                            f"(config-protection): fix the code to satisfy the gate instead of "
+                            f"weakening it. Set AUTOBOT_ALLOW_CONFIG_EDITS=1 for an intentional change."
                         )
                     }
                 }
