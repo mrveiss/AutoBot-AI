@@ -11,13 +11,30 @@
  * `column_id` and `assignee_type` are only present on board API responses,
  * hence optional here.
  */
+
+/**
+ * Closed work-item enum sets (#11131). Kept in sync with the `llc.enums.*`
+ * i18n keys and the `<WorkItemBadge>` color classes so the allowed values are
+ * enforced at compile time rather than being bare `string`.
+ */
+export type WorkItemType = 'epic' | 'feature' | 'pbi' | 'task' | 'bug' | 'spike' | 'subtask' | 'risk'
+export type WorkItemPriority = 'critical' | 'high' | 'medium' | 'low'
+export type WorkItemStatus =
+  | 'backlog'
+  | 'ready'
+  | 'in_progress'
+  | 'in_review'
+  | 'done'
+  | 'blocked'
+  | 'cancelled'
+
 export interface WorkItem {
   id: string
   identifier: string
-  type: string
+  type: WorkItemType
   title: string
   description: string
-  priority: string
+  priority: WorkItemPriority
   story_points: number | null
   assignee_name: string | null
   assignee_type?: 'human' | 'agent' | null
@@ -28,7 +45,7 @@ export interface WorkItem {
   reviewer_agent_id?: string | null
   sprint_id: string | null
   column_id?: string
-  status: string
+  status: WorkItemStatus
   labels: string[]
   acceptance_criteria: string[]
   linked_pr_urls?: string[]
