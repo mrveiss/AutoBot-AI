@@ -70,6 +70,8 @@ def migrate(db_url: str) -> None:
       user_management (UUID) table and must NOT be touched. (It should never be
       present on the slm database, but this is a belt-and-braces guard.)
     """
+    from psycopg2 import sql  # noqa: PLC0415
+
     conn = _connect(db_url)
     try:
         with conn.cursor() as cur:
@@ -98,7 +100,12 @@ def migrate(db_url: str) -> None:
                 )
                 return
 
-            cur.execute(f"ALTER TABLE {_OLD_NAME} RENAME TO {_NEW_NAME}")
+            # RENAME targets are SQL identifiers (table/sequence names), which
+            # cannot be bound as query parameters — compose them safely with
+            # psycopg2.sql.Identifier so the names are correctly quoted (#11223).
+            cur.execute(
+                sql.SQL("ALTER TABLE {} RENAME TO {}").format(sql.Identifier(_OLD_NAME), sql.Identifier(_NEW_NAME))
+            )
             logger.info("Renamed table '%s' -> '%s'", _OLD_NAME, _NEW_NAME)
 
             # Rename the default PK sequence if it follows the standard naming.
@@ -110,7 +117,11 @@ def migrate(db_url: str) -> None:
                 (f"{_OLD_NAME}_id_seq",),
             )
             if cur.fetchone():
-                cur.execute(f"ALTER SEQUENCE {_OLD_NAME}_id_seq RENAME TO {_NEW_NAME}_id_seq")
+                cur.execute(
+                    sql.SQL("ALTER SEQUENCE {} RENAME TO {}").format(
+                        sql.Identifier(f"{_OLD_NAME}_id_seq"), sql.Identifier(f"{_NEW_NAME}_id_seq")
+                    )
+                )
                 logger.info("Renamed sequence '%s_id_seq' -> '%s_id_seq'", _OLD_NAME, _NEW_NAME)
 
         conn.commit()
@@ -126,6 +137,8 @@ def downgrade(db_url: str) -> None:
     is safe to re-run and will not clobber a canonical UUID audit table (which,
     in any case, lives in the separate slm_users database).
     """
+    from psycopg2 import sql  # noqa: PLC0415
+
     conn = _connect(db_url)
     try:
         with conn.cursor() as cur:
@@ -142,7 +155,10 @@ def downgrade(db_url: str) -> None:
                 )
                 return
 
-            cur.execute(f"ALTER TABLE {_NEW_NAME} RENAME TO {_OLD_NAME}")
+            # Safe identifier composition — see upgrade() (#11223).
+            cur.execute(
+                sql.SQL("ALTER TABLE {} RENAME TO {}").format(sql.Identifier(_NEW_NAME), sql.Identifier(_OLD_NAME))
+            )
             logger.info("Renamed table '%s' -> '%s'", _NEW_NAME, _OLD_NAME)
 
             cur.execute(
@@ -153,7 +169,11 @@ def downgrade(db_url: str) -> None:
                 (f"{_NEW_NAME}_id_seq",),
             )
             if cur.fetchone():
-                cur.execute(f"ALTER SEQUENCE {_NEW_NAME}_id_seq RENAME TO {_OLD_NAME}_id_seq")
+                cur.execute(
+                    sql.SQL("ALTER SEQUENCE {} RENAME TO {}").format(
+                        sql.Identifier(f"{_NEW_NAME}_id_seq"), sql.Identifier(f"{_OLD_NAME}_id_seq")
+                    )
+                )
                 logger.info("Renamed sequence '%s_id_seq' -> '%s_id_seq'", _NEW_NAME, _OLD_NAME)
 
         conn.commit()
