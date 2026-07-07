@@ -1912,6 +1912,50 @@ class ResetLearningResponse(BaseModel):
     message: str
 
 
+class FailurePatternRecord(BaseModel):
+    """Serialized failure pattern for the knowledge-export document (GH#11151)."""
+
+    pattern_id: str
+    causal_chain: str
+    occurrence_count: int
+    successful_resolutions: List[str]
+    resolution_success_rate: float
+    confidence: float
+
+
+class LearnedKnowledgeExport(BaseModel):
+    """Human-reviewable export of an agent's learned knowledge (GH#11151)."""
+
+    task_type: str
+    learned_strategy: LearnedStrategyResponse | None
+    high_confidence_threshold: float
+    high_confidence_failure_patterns: List[FailurePatternRecord]
+
+
+class LearnedKnowledgeImport(BaseModel):
+    """Operator-curated learned strategy to import (GH#11151).
+
+    ``best_prompt_template`` and ``best_approach`` are treated as untrusted and
+    sanitized before persistence (reuses the #11060 data-only framing).
+    """
+
+    task_type: str
+    best_approach: str
+    best_prompt_template: str
+    avg_score: float = 0.0
+    sample_size: int = 0
+    confidence: float = 0.0
+    failure_patterns: List[str] = Field(default_factory=list)
+
+
+class KnowledgeImportResponse(BaseModel):
+    """Response for a knowledge-import operation (GH#11151)."""
+
+    success: bool
+    message: str
+    task_type: str
+
+
 # ---------------------------------------------------------------------------
 # agent_config.py schemas
 # ---------------------------------------------------------------------------
