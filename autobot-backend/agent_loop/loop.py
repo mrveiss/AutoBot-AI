@@ -49,7 +49,7 @@ from autobot_shared.error_boundaries import (
     classify_error,
 )
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.tool_catalogue import SENSITIVE_TOOLS
+from autobot_shared.tool_catalogue import SENSITIVE_TOOLS, match_tool_name
 from autobot_shared.tracing import step_span
 from events import EventStreamManager, EventType
 from events.bus import PersistStrategy
@@ -1415,15 +1415,9 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
 
     @staticmethod
     def _sensitive_tool_name(tool: dict[str, Any]) -> str | None:
-        """Return the tool name if it is in SENSITIVE_TOOLS, else None."""
-        name = tool.get("tool_name", "").lower()
-        if name in SENSITIVE_TOOLS:
-            return name
-        # Also match by prefix so e.g. "bash_run" → "bash" is caught.
-        for sensitive in SENSITIVE_TOOLS:
-            if name.startswith(sensitive):
-                return sensitive
-        return None
+        """Return the matched SENSITIVE_TOOLS name (exact or prefix, e.g. "bash_run" →
+        "bash"), else None. GH#11206: uses the canonical ``match_tool_name``."""
+        return match_tool_name(tool.get("tool_name", ""), SENSITIVE_TOOLS)
 
     @staticmethod
     def _resolve_forbidden_tools(config: "AgentLoopConfig", agent_id: str | None) -> "AgentLoopConfig":

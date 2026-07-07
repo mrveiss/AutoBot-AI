@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS
+from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
 
@@ -418,15 +418,13 @@ _APPROVAL_CATEGORY_TOOLS: dict[str, tuple[str, ...]] = APPROVAL_CATEGORY_TOOLS
 def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
     """Return the declared category that gates *tool_name*, else None (GH#11160).
 
-    Matches by exact name or ``<gated>_`` word-boundary prefix (so ``deploy`` gates
-    ``deploy_service`` but not ``deployment_status``). A false positive only ever
-    adds an approval hold — the fail-safe direction — never a bypass.
+    GH#11206: uses the canonical ``match_tool_name`` with word-boundary matching
+    (so ``deploy`` gates ``deploy_service`` but not ``deployment_status``). A false
+    positive only ever adds an approval hold — the fail-safe direction — never a bypass.
     """
-    name = tool_name.lower()
     for category in declared:
-        for gated in _APPROVAL_CATEGORY_TOOLS.get(category, ()):
-            if name == gated or name.startswith(gated + "_"):
-                return category
+        if match_tool_name(tool_name, _APPROVAL_CATEGORY_TOOLS.get(category, ()), word_boundary=True):
+            return category
     return None
 
 

@@ -12,7 +12,7 @@ Contains agent registration, lookup, and management functionality.
 from typing import Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.tool_catalogue import INFRA_AND_SHELL_TOOLS
+from autobot_shared.tool_catalogue import INFRA_AND_SHELL_TOOLS, match_tool_name
 
 from .types import AgentCapability, AgentProfile
 
@@ -122,20 +122,12 @@ def get_default_agents() -> List[AgentProfile]:
 def match_forbidden_tool(tool_name: str, forbidden: "frozenset[str]") -> "str | None":
     """Return the ``forbidden_work`` pattern matching *tool_name*, else None (GH#11145).
 
-    Single source for forbidden-tool matching — the agent loop and the production
-    tool-dispatch seam both call this so the exact/prefix rule lives in one place.
-    Matching is case-insensitive; a manifest entry matches by exact name or as a
-    name prefix (e.g. ``deploy`` blocks ``deploy_service``).
+    Thin wrapper over the canonical ``match_tool_name`` (GH#11206) so the agent loop
+    and the production tool-dispatch seam share one exact/prefix rule. Case-insensitive;
+    a manifest entry matches by exact name or as a name prefix (``deploy`` blocks
+    ``deploy_service``).
     """
-    if not forbidden:
-        return None
-    name = tool_name.lower()
-    if name in forbidden:
-        return name
-    for pattern in forbidden:
-        if name.startswith(pattern):
-            return pattern
-    return None
+    return match_tool_name(tool_name, forbidden)
 
 
 class AgentRegistry:

@@ -52,9 +52,7 @@ _bg_tasks: set = set()
 _CHECKOUT_TTL = 1800  # seconds
 
 
-def _validated_approval_categories(
-    values: Optional[List[str]], existing: Optional[List[str]] = None
-) -> List[str]:
+def _validated_approval_categories(values: Optional[List[str]], existing: Optional[List[str]] = None) -> List[str]:
     """Validate ``requires_approval_before`` entries against the controlled vocabulary (GH#11206).
 
     A typo'd category matches no tools at the seam and silently disables the gate,

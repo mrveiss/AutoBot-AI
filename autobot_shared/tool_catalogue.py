@@ -17,6 +17,28 @@ behaviour change.
 """
 
 from enum import Enum
+from typing import Iterable, Optional
+
+
+def match_tool_name(tool_name: str, patterns: Iterable[str], *, word_boundary: bool = False) -> Optional[str]:
+    """Return the pattern in *patterns* that matches *tool_name*, else ``None`` (GH#11206).
+
+    The single canonical tool-name matcher for every governance plane (forbidden_work,
+    sensitive-tool approval, work-item approval categories). Case-insensitive; an exact
+    match anywhere wins, otherwise the first prefix match is returned. *word_boundary*
+    requires a ``<pattern>_`` boundary (``deploy`` matches ``deploy_x`` but not
+    ``deployment``); the default plain prefix keeps the broader, fail-safe denylist
+    behaviour (``deploy`` also matches ``deployment``).
+    """
+    name = tool_name.lower()
+    pats = tuple(patterns)
+    if name in pats:
+        return name
+    for pattern in pats:
+        if name.startswith(f"{pattern}_") if word_boundary else name.startswith(pattern):
+            return pattern
+    return None
+
 
 # --- atoms -----------------------------------------------------------------
 
@@ -78,6 +100,9 @@ class ApprovalCategory(str, Enum):
     ROTATING_CREDENTIALS = "rotating credentials"
 
 
+_VALID_APPROVAL_CATEGORIES = frozenset(c.value for c in ApprovalCategory)
+
+
 def valid_approval_categories() -> "frozenset[str]":
     """Return the set of valid ``requires_approval_before`` category strings."""
-    return frozenset(c.value for c in ApprovalCategory)
+    return _VALID_APPROVAL_CATEGORIES
