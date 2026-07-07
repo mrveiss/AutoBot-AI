@@ -39,7 +39,7 @@ async def http_get(
         kwargs["params"] = params
 
     if client is not None:
-        return await client.get(url, **kwargs)
+        return await client.get(url, timeout=timeout, **kwargs)
 
     async with httpx.AsyncClient(timeout=timeout) as c:
         return await c.get(url, **kwargs)

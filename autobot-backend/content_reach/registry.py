@@ -21,13 +21,18 @@ logger = get_logger(__name__)
 
 
 def _parse_probe_ttl() -> float:
-    """Read AUTOBOT_CONTENT_PROBE_TTL_S from env; fall back to 30.0 on bad value."""
+    """Read AUTOBOT_CONTENT_PROBE_TTL_S from env; fall back to 30.0 on bad or non-positive value."""
     raw = os.environ.get("AUTOBOT_CONTENT_PROBE_TTL_S", "")
     if raw:
         try:
-            return float(raw)
+            value = float(raw)
         except ValueError:
             logger.warning("AUTOBOT_CONTENT_PROBE_TTL_S=%r is not a valid float; using 30.0", raw)
+            return 30.0
+        if value <= 0:
+            logger.warning("AUTOBOT_CONTENT_PROBE_TTL_S=%r is non-positive; using 30.0", raw)
+            return 30.0
+        return value
     return 30.0
 
 

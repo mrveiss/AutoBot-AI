@@ -222,3 +222,38 @@ def test_parse_probe_ttl_invalid_falls_back(monkeypatch):
 
     monkeypatch.setenv("AUTOBOT_CONTENT_PROBE_TTL_S", "notanumber")
     assert reg_mod._parse_probe_ttl() == 30.0
+
+
+def test_parse_probe_ttl_zero_falls_back(monkeypatch):
+    """_parse_probe_ttl falls back to 30.0 when the value is zero."""
+    import content_reach.registry as reg_mod
+
+    monkeypatch.setenv("AUTOBOT_CONTENT_PROBE_TTL_S", "0")
+    assert reg_mod._parse_probe_ttl() == 30.0
+
+
+def test_parse_probe_ttl_negative_falls_back(monkeypatch):
+    """_parse_probe_ttl falls back to 30.0 when the value is negative."""
+    import content_reach.registry as reg_mod
+
+    monkeypatch.setenv("AUTOBOT_CONTENT_PROBE_TTL_S", "-5.0")
+    assert reg_mod._parse_probe_ttl() == 30.0
+
+
+@pytest.mark.asyncio
+async def test_probe_all_all_dead_source_present():
+    """A source whose every backend is dead still appears in probe_all with an empty list."""
+    from content_reach.chain import ContentSourceChain
+    from source_attribution import SourceType
+
+    reg = ContentSourceRegistry()
+    reg.register_chain(
+        ContentSourceChain(
+            source="web_search",
+            source_type=SourceType.WEB_SEARCH,
+            backends=[StubBackend("a", live=False), StubBackend("b", live=False)],
+        )
+    )
+    live = await reg.probe_all()
+    assert "web_search" in live
+    assert live["web_search"] == []
