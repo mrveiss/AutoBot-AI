@@ -12,11 +12,10 @@ Issue #10554: Per-user memory transparency + edit/forget-everywhere + export
     <div class="panel-header">
       <h3 class="panel-title">
         <Icon name="brain" aria-hidden="true" />
-        Memory Transparency
+        {{ t('settings.memoryPrivacy.title') }}
       </h3>
       <p class="panel-desc">
-        Everything the agent remembers about you — across all memory stores.
-        You can correct, forget, or download your complete memory footprint.
+        {{ t('settings.memoryPrivacy.description') }}
       </p>
     </div>
 
@@ -24,23 +23,17 @@ Issue #10554: Per-user memory transparency + edit/forget-everywhere + export
     <div class="toolbar">
       <button class="btn btn-primary" :disabled="loading" @click="loadMemories">
         <Icon :name="loading ? 'sync-alt' : 'sync'" :spin="loading" aria-hidden="true" />
-        {{ loading ? 'Loading…' : 'Refresh' }}
+        {{ loading ? t('settings.memoryPrivacy.loading') : t('settings.memoryPrivacy.refresh') }}
       </button>
       <button class="btn btn-secondary" :disabled="exporting" @click="downloadExport">
         <Icon :name="exporting ? 'sync-alt' : 'download'" :spin="exporting" aria-hidden="true" />
-        {{ exporting ? 'Preparing…' : 'Export (JSON)' }}
+        {{ exporting ? t('settings.memoryPrivacy.preparing') : t('settings.memoryPrivacy.exportJson') }}
       </button>
-    </div>
-
-    <!-- Status message -->
-    <div v-if="statusMsg" class="status-msg" :class="statusType" role="alert">
-      <Icon :name="statusType === 'success' ? 'check-circle' : 'exclamation-circle'" aria-hidden="true" />
-      {{ statusMsg }}
     </div>
 
     <!-- Summary bar -->
     <div v-if="memories.length > 0" class="summary-bar">
-      <span class="total-badge">{{ memories.length }} items</span>
+      <span class="total-badge">{{ t('settings.memoryPrivacy.itemCount', { count: memories.length }) }}</span>
       <span v-for="(count, store) in storeCounts" :key="store" class="store-badge">
         {{ store }}: {{ count }}
       </span>
@@ -49,11 +42,11 @@ Issue #10554: Per-user memory transparency + edit/forget-everywhere + export
     <!-- Empty state -->
     <div v-if="!loading && memories.length === 0 && loaded" class="empty-state">
       <Icon name="check-circle" aria-hidden="true" />
-      No stored memories found for your account.
+      {{ t('settings.memoryPrivacy.emptyState') }}
     </div>
 
     <!-- Memory list -->
-    <ul v-if="memories.length > 0" class="memory-list" aria-label="Stored memories">
+    <ul v-if="memories.length > 0" class="memory-list" :aria-label="t('settings.memoryPrivacy.listLabel')">
       <li
         v-for="item in memories"
         :key="item.memory_id"
@@ -64,9 +57,9 @@ Issue #10554: Per-user memory transparency + edit/forget-everywhere + export
           <span class="store-tag" :data-store="item.store">{{ item.store }}</span>
           <span class="item-ts">{{ formatTs(item.timestamp) }}</span>
         </div>
-        <p class="item-content">{{ item.content || '(no preview)' }}</p>
+        <p class="item-content">{{ item.content || t('settings.memoryPrivacy.noPreview') }}</p>
         <details v-if="item.provenance && Object.keys(item.provenance).length > 0" class="provenance">
-          <summary>Provenance</summary>
+          <summary>{{ t('settings.memoryPrivacy.provenance') }}</summary>
           <pre class="provenance-data">{{ JSON.stringify(item.provenance, null, 2) }}</pre>
         </details>
         <div class="item-actions">
@@ -74,19 +67,19 @@ Issue #10554: Per-user memory transparency + edit/forget-everywhere + export
             class="btn btn-danger btn-sm"
             :disabled="deletingIds.has(item.memory_id)"
             @click="forgetItem(item)"
-            :aria-label="`Forget this ${item.store} memory`"
+            :aria-label="t('settings.memoryPrivacy.forgetAriaLabel', { store: item.store })"
           >
             <Icon name="trash" aria-hidden="true" />
-            Forget
+            {{ t('settings.memoryPrivacy.forget') }}
           </button>
           <button
             class="btn btn-ghost btn-sm"
             :disabled="deletingIds.has(item.memory_id)"
             @click="forgetEverywhere(item)"
-            :aria-label="`Cascade-delete memory ${item.memory_id} from all stores`"
+            :aria-label="t('settings.memoryPrivacy.forgetEverywhereAriaLabel', { id: item.memory_id })"
           >
             <Icon name="times-circle" aria-hidden="true" />
-            Forget everywhere
+            {{ t('settings.memoryPrivacy.forgetEverywhere') }}
           </button>
         </div>
       </li>
@@ -96,13 +89,17 @@ Issue #10554: Per-user memory transparency + edit/forget-everywhere + export
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { useNotificationBus } from '@/composables/useNotificationBus'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import Icon from '@/components/ui/Icon.vue'
 import apiClient from '@/utils/ApiClient'
 
 const logger = createLogger('MemoryPrivacyPanel')
+const { t } = useI18n()
 const { showToast } = useNotificationBus()
+const { confirm } = useConfirmDialog()
 
 // ---------------------------------------------------------------------------
 // State
@@ -121,8 +118,6 @@ const loading = ref(false)
 const exporting = ref(false)
 const loaded = ref(false)
 const deletingIds = ref<Set<string>>(new Set())
-const statusMsg = ref('')
-const statusType = ref<'success' | 'error'>('success')
 
 // ---------------------------------------------------------------------------
 // Computed
@@ -149,12 +144,6 @@ function formatTs(ts: string): string {
   }
 }
 
-function setStatus(msg: string, type: 'success' | 'error' = 'success') {
-  statusMsg.value = msg
-  statusType.value = type
-  setTimeout(() => { statusMsg.value = '' }, 5000)
-}
-
 async function loadMemories() {
   loading.value = true
   loaded.value = false
@@ -165,7 +154,7 @@ async function loadMemories() {
     logger.debug('MemoryPrivacyPanel: loaded %d items', memories.value.length)
   } catch (err) {
     logger.warn('MemoryPrivacyPanel: load failed', err)
-    setStatus('Failed to load memories. The backend may be unavailable.', 'error')
+    showToast(t('settings.memoryPrivacy.loadFailed'), 'error')
     loaded.value = true
   } finally {
     loading.value = false
@@ -173,16 +162,20 @@ async function loadMemories() {
 }
 
 async function forgetItem(item: MemoryItem) {
-  if (!confirm(`Forget this ${item.store} memory? This cannot be undone.`)) return
+  const ok = await confirm({
+    title: t('settings.memoryPrivacy.forgetConfirmTitle'),
+    message: t('settings.memoryPrivacy.forgetConfirmMessage', { store: item.store }),
+  })
+  if (!ok) return
   deletingIds.value = new Set([...deletingIds.value, item.memory_id])
   try {
     await apiClient.delete(`/memory/privacy/${item.store}/${encodeURIComponent(item.memory_id)}`)
     memories.value = memories.value.filter(m => m.memory_id !== item.memory_id)
-    showToast('Memory item forgotten.', 'success')
+    showToast(t('settings.memoryPrivacy.forgotten'), 'success')
     logger.info('MemoryPrivacyPanel: forgot %s from %s', item.memory_id, item.store)
   } catch (err) {
     logger.warn('MemoryPrivacyPanel: forget failed', err)
-    setStatus('Failed to forget memory item.', 'error')
+    showToast(t('settings.memoryPrivacy.forgetFailed'), 'error')
   } finally {
     const next = new Set(deletingIds.value)
     next.delete(item.memory_id)
@@ -191,19 +184,23 @@ async function forgetItem(item: MemoryItem) {
 }
 
 async function forgetEverywhere(item: MemoryItem) {
-  if (!confirm(`Cascade-delete memory from ALL stores? This cannot be undone.`)) return
+  const ok = await confirm({
+    title: t('settings.memoryPrivacy.forgetEverywhereConfirmTitle'),
+    message: t('settings.memoryPrivacy.forgetEverywhereConfirmMessage'),
+  })
+  if (!ok) return
   deletingIds.value = new Set([...deletingIds.value, item.memory_id])
   try {
     const result = await apiClient.delete<{ deleted_from: string[] }>(
       `/memory/privacy/forget-everywhere/${encodeURIComponent(item.memory_id)}`
     )
     memories.value = memories.value.filter(m => m.memory_id !== item.memory_id)
-    const from = (result.deleted_from || []).join(', ') || 'none'
-    showToast(`Forgotten from: ${from}`, 'success')
+    const from = (result.deleted_from || []).join(', ') || t('settings.memoryPrivacy.noStores')
+    showToast(t('settings.memoryPrivacy.forgottenFrom', { stores: from }), 'success')
     logger.info('MemoryPrivacyPanel: forget-everywhere %s → %s', item.memory_id, from)
   } catch (err) {
     logger.warn('MemoryPrivacyPanel: forget-everywhere failed', err)
-    setStatus('Failed to cascade-delete memory item.', 'error')
+    showToast(t('settings.memoryPrivacy.forgetEverywhereFailed'), 'error')
   } finally {
     const next = new Set(deletingIds.value)
     next.delete(item.memory_id)
@@ -223,11 +220,11 @@ async function downloadExport() {
     a.download = 'memory_export.json'
     a.click()
     URL.revokeObjectURL(url)
-    showToast('Memory export downloaded.', 'success')
+    showToast(t('settings.memoryPrivacy.exportDownloaded'), 'success')
     logger.info('MemoryPrivacyPanel: export downloaded')
   } catch (err) {
     logger.warn('MemoryPrivacyPanel: export failed', err)
-    setStatus('Export failed. Please try again.', 'error')
+    showToast(t('settings.memoryPrivacy.exportFailed'), 'error')
   } finally {
     exporting.value = false
   }
@@ -291,17 +288,6 @@ onMounted(loadMemories)
 .btn-danger { background: var(--color-danger, #e24848); color: #fff; }
 .btn-ghost { background: transparent; color: var(--text-secondary, #aaa); border-color: var(--border-color, #444); }
 .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.8rem; }
-
-.status-msg {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-sm, 4px);
-  font-size: 0.875rem;
-}
-.status-msg.success { background: rgba(72, 197, 120, 0.15); color: #48c578; }
-.status-msg.error   { background: rgba(226, 72, 72, 0.15);  color: #e24848; }
 
 .summary-bar {
   display: flex;
