@@ -17,15 +17,13 @@ import re
 import httpx
 
 from autobot_shared.logging_manager import get_logger
+from content_reach._http import http_get
 from content_reach._url_guard import ensure_public_url
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
 from content_reach.chain import ContentSourceChain
 from source_attribution import SourceReliability, SourceType
 
 logger = get_logger(__name__)
-
-# Module-level HTTP timeout constant (seconds).
-_HTTP_TIMEOUT = 15.0
 
 # yt-dlp options used for all caption extractions.
 _YDL_OPTS: dict = {
@@ -196,11 +194,7 @@ class YtDlpCaptionBackend(ContentBackend):
         await ensure_public_url(caption_url)
 
         try:
-            if self._client is not None:
-                response = await self._client.get(caption_url)
-            else:
-                async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-                    response = await client.get(caption_url)
+            response = await http_get(caption_url, client=self._client)
         except httpx.HTTPError as exc:
             logger.debug(
                 "YtDlpCaptionBackend: HTTP error fetching caption track for %r: %s",

@@ -17,6 +17,7 @@ import logging
 
 import httpx
 
+from content_reach._http import http_get
 from content_reach._url_guard import ensure_public_url
 from content_reach.backends.browser import BrowserBackend
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
@@ -24,9 +25,6 @@ from content_reach.chain import ContentSourceChain
 from source_attribution import SourceReliability, SourceType
 
 logger = logging.getLogger(__name__)
-
-# Module-level HTTP timeout constant (seconds).
-_HTTP_TIMEOUT = 15.0
 
 # Reddit API user-agent string.
 _USER_AGENT = "autobot-content-reach/1.0"
@@ -60,29 +58,18 @@ class RedditJsonBackend(ContentBackend):
             await ensure_public_url(request.url)
             url = request.url if request.url.endswith(".json") else request.url + ".json"
             try:
-                if self._client is not None:
-                    response = await self._client.get(url, headers=headers)
-                else:
-                    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-                        response = await client.get(url, headers=headers)
+                response = await http_get(url, client=self._client, headers=headers)
             except httpx.HTTPError as exc:
                 logger.debug("RedditJsonBackend: HTTP error for %r: %s", url, exc)
                 raise BackendError(str(exc)) from exc
         else:
             try:
-                if self._client is not None:
-                    response = await self._client.get(
-                        "https://www.reddit.com/search.json",
-                        params={"q": request.query, "limit": request.limit},
-                        headers=headers,
-                    )
-                else:
-                    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-                        response = await client.get(
-                            "https://www.reddit.com/search.json",
-                            params={"q": request.query, "limit": request.limit},
-                            headers=headers,
-                        )
+                response = await http_get(
+                    "https://www.reddit.com/search.json",
+                    client=self._client,
+                    headers=headers,
+                    params={"q": request.query, "limit": request.limit},
+                )
             except httpx.HTTPError as exc:
                 logger.debug("RedditJsonBackend: HTTP error for query %r: %s", request.query, exc)
                 raise BackendError(str(exc)) from exc
@@ -148,17 +135,11 @@ class HnAlgoliaBackend(ContentBackend):
     async def fetch(self, request: ContentRequest) -> ContentResult:
         """Fetch HN hits from Algolia; raise BackendError on failure."""
         try:
-            if self._client is not None:
-                response = await self._client.get(
-                    "https://hn.algolia.com/api/v1/search",
-                    params={"query": request.query, "hitsPerPage": request.limit},
-                )
-            else:
-                async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-                    response = await client.get(
-                        "https://hn.algolia.com/api/v1/search",
-                        params={"query": request.query, "hitsPerPage": request.limit},
-                    )
+            response = await http_get(
+                "https://hn.algolia.com/api/v1/search",
+                client=self._client,
+                params={"query": request.query, "hitsPerPage": request.limit},
+            )
         except httpx.HTTPError as exc:
             logger.debug("HnAlgoliaBackend: HTTP error for query %r: %s", request.query, exc)
             raise BackendError(str(exc)) from exc

@@ -38,6 +38,9 @@ _ROBOTS_UA = "autobot-content-reach/1.0"
 _robots_cache: dict[str, urllib.robotparser.RobotFileParser] = {}
 _robots_cache_lock = asyncio.Lock()
 
+# Maximum number of domains cached before the whole cache is cleared (simple bound).
+_ROBOTS_CACHE_MAX = 512
+
 # Robots fetch timeout in seconds.
 _ROBOTS_FETCH_TIMEOUT = 10.0
 
@@ -61,7 +64,7 @@ async def _fetch_robots_text(domain: str) -> str:
                     return await resp.text(encoding="utf-8", errors="replace")
         return ""
     except Exception as exc:
-        logger.debug("content_reach robots.txt fetch failed for %s: %s", domain, exc)
+        logger.warning("content_reach robots.txt fetch failed for %s: %s", domain, exc)
         return ""
 
 
@@ -74,9 +77,15 @@ def _parse_robots(text: str, domain: str) -> urllib.robotparser.RobotFileParser:
 
 
 async def _get_robots_parser(domain: str) -> urllib.robotparser.RobotFileParser:
-    """Return cached RobotFileParser for domain, fetching if needed."""
+    """Return cached RobotFileParser for domain, fetching if needed.
+
+    Evicts the entire cache when it exceeds _ROBOTS_CACHE_MAX entries to bound memory.
+    """
     async with _robots_cache_lock:
         if domain not in _robots_cache:
+            if len(_robots_cache) >= _ROBOTS_CACHE_MAX:
+                _robots_cache.clear()
+                logger.debug("content_reach robots cache exceeded %d entries; cleared", _ROBOTS_CACHE_MAX)
             text = await _fetch_robots_text(domain)
             _robots_cache[domain] = _parse_robots(text, domain)
         return _robots_cache[domain]

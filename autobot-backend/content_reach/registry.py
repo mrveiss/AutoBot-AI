@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import os
 import time
 
 from autobot_shared.logging_manager import get_logger
@@ -17,8 +19,20 @@ from source_attribution import SourceType, track_source
 
 logger = get_logger(__name__)
 
-# Liveness-probe cache TTL, matching provider_registry's 30s convention.
-_PROBE_TTL_S = 30.0
+
+def _parse_probe_ttl() -> float:
+    """Read AUTOBOT_CONTENT_PROBE_TTL_S from env; fall back to 30.0 on bad value."""
+    raw = os.environ.get("AUTOBOT_CONTENT_PROBE_TTL_S", "")
+    if raw:
+        try:
+            return float(raw)
+        except ValueError:
+            logger.warning("AUTOBOT_CONTENT_PROBE_TTL_S=%r is not a valid float; using 30.0", raw)
+    return 30.0
+
+
+# Liveness-probe cache TTL — env-overridable per CLAUDE.md "never hard-code cache TTL".
+_PROBE_TTL_S: float = _parse_probe_ttl()
 
 
 class ContentSourceRegistry:
@@ -59,10 +73,22 @@ class ContentSourceRegistry:
         return live
 
     async def probe_all(self) -> dict[str, list[str]]:
-        """Return {source: [live backend names]} — powers the health probe."""
+        """Return {source: [live backend names]} — all (source, backend) pairs probed concurrently."""
+        # Collect all (source, backend) pairs preserving per-source order.
+        pairs: list[tuple[str, object]] = [
+            (source, backend) for source, chain in self._chains.items() for backend in chain.backends
+        ]
+        if not pairs:
+            return {}
+
+        live_flags: list[bool] = await asyncio.gather(*[self._is_live(b) for _, b in pairs])
+
         result: dict[str, list[str]] = {}
-        for source, chain in self._chains.items():
-            result[source] = [b.name for b in chain.backends if await self._is_live(b)]
+        for (source, backend), is_live in zip(pairs, live_flags):
+            if source not in result:
+                result[source] = []
+            if is_live:
+                result[source].append(backend.name)
         return result
 
     async def fetch(self, source: str, request: ContentRequest) -> ContentResult:

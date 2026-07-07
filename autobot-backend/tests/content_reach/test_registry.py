@@ -124,3 +124,101 @@ async def test_probe_all_lists_live_backends():
 def test_list_sources():
     reg = _registry(StubBackend("a"), StubBackend("b"))
     assert reg.list_sources() == {"web_search": ["a", "b"]}
+
+
+# ---------------------------------------------------------------------------
+# probe_all concurrency (#11078) — verify all pairs are probed and ordering
+# is preserved when multiple sources are registered.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_probe_all_concurrent_multi_source():
+    """probe_all with two sources returns correct live maps for both."""
+    from content_reach.chain import ContentSourceChain
+    from source_attribution import SourceType
+
+    reg = ContentSourceRegistry()
+    reg.register_chain(
+        ContentSourceChain(
+            source="web_search",
+            source_type=SourceType.WEB_SEARCH,
+            backends=[StubBackend("a"), StubBackend("b", live=False)],
+        )
+    )
+    reg.register_chain(
+        ContentSourceChain(
+            source="reddit",
+            source_type=SourceType.REDDIT,
+            backends=[StubBackend("c", live=False), StubBackend("d")],
+        )
+    )
+    live = await reg.probe_all()
+    assert live == {"web_search": ["a"], "reddit": ["d"]}
+
+
+@pytest.mark.asyncio
+async def test_probe_all_empty_registry():
+    """probe_all returns {} for an empty registry."""
+    reg = ContentSourceRegistry()
+    assert await reg.probe_all() == {}
+
+
+@pytest.mark.asyncio
+async def test_probe_all_concurrent_probe_count():
+    """All backends are probed concurrently — probe count matches backend count."""
+    probe_calls: list[str] = []
+
+    class CountingBackend(StubBackend):
+        async def probe(self):
+            probe_calls.append(self.name)
+            return await super().probe()
+
+    reg = ContentSourceRegistry()
+    from content_reach.chain import ContentSourceChain
+    from source_attribution import SourceType
+
+    reg.register_chain(
+        ContentSourceChain(
+            source="web_search",
+            source_type=SourceType.WEB_SEARCH,
+            backends=[CountingBackend("x"), CountingBackend("y"), CountingBackend("z")],
+        )
+    )
+    await reg.probe_all()
+    assert sorted(probe_calls) == ["x", "y", "z"]
+
+
+# ---------------------------------------------------------------------------
+# env-overridable TTL (#11078)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_probe_ttl_default():
+    """_parse_probe_ttl returns 30.0 when env var is absent."""
+    import os
+
+    import content_reach.registry as reg_mod
+
+    env_bak = os.environ.pop("AUTOBOT_CONTENT_PROBE_TTL_S", None)
+    try:
+        assert reg_mod._parse_probe_ttl() == 30.0
+    finally:
+        if env_bak is not None:
+            os.environ["AUTOBOT_CONTENT_PROBE_TTL_S"] = env_bak
+
+
+def test_parse_probe_ttl_custom(monkeypatch):
+    """_parse_probe_ttl returns parsed float from env var."""
+    import content_reach.registry as reg_mod
+
+    monkeypatch.setenv("AUTOBOT_CONTENT_PROBE_TTL_S", "60.0")
+    assert reg_mod._parse_probe_ttl() == 60.0
+
+
+def test_parse_probe_ttl_invalid_falls_back(monkeypatch):
+    """_parse_probe_ttl falls back to 30.0 on a non-float env value."""
+    import content_reach.registry as reg_mod
+
+    monkeypatch.setenv("AUTOBOT_CONTENT_PROBE_TTL_S", "notanumber")
+    assert reg_mod._parse_probe_ttl() == 30.0
