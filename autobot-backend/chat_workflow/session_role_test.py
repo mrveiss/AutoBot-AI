@@ -111,3 +111,48 @@ def test_pinned_role_blocks_forbidden_tool_end_to_end():
     results: list[dict] = []
     msg = mixin._enforce_forbidden_work({"name": "bash"}, ctx, results)
     assert msg is not None and msg.metadata.get("forbidden_by_manifest") is True
+
+
+# --- GH#11202: session approval categories + backend gate marking ----------
+
+
+@pytest.mark.asyncio
+async def test_set_get_clear_approval_categories():
+    redis = _FakeRedis()
+    svc = _svc_with_redis(redis)
+    await svc.set_approval_categories("s1", ["pushing commits", "destructive operations"])
+    assert await svc.get_approval_categories("s1") == ["pushing commits", "destructive operations"]
+    await svc.clear_approval_categories("s1")
+    assert await svc.get_approval_categories("s1") == []
+
+
+@pytest.mark.asyncio
+async def test_set_approval_categories_rejects_unknown():
+    svc = _svc_with_redis(_FakeRedis())
+    with pytest.raises(ValueError):
+        await svc.set_approval_categories("s1", ["pushing commit"])  # typo
+
+
+@pytest.mark.asyncio
+async def test_get_approval_categories_swallows_failure():
+    svc = SessionRoleService()
+    svc._get_redis = AsyncMock(side_effect=RuntimeError("redis down"))
+    assert await svc.get_approval_categories("s3") == []
+
+
+def test_mark_tool_calls_needing_approval():
+    from chat_workflow.tool_handler import mark_tool_calls_needing_approval
+
+    calls = [{"name": "git_push"}, {"name": "web_search"}, {"name": "bash"}]
+    mark_tool_calls_needing_approval(calls, ["pushing commits", "destructive operations"])
+    assert calls[0]["needs_approval"] is True and calls[0]["approval_category"] == "pushing commits"
+    assert "needs_approval" not in calls[1]  # web_search not gated
+    assert calls[2]["needs_approval"] is True and calls[2]["approval_category"] == "destructive operations"
+
+
+def test_mark_tool_calls_noop_without_categories():
+    from chat_workflow.tool_handler import mark_tool_calls_needing_approval
+
+    calls = [{"name": "git_push"}]
+    mark_tool_calls_needing_approval(calls, [])
+    assert "needs_approval" not in calls[0]

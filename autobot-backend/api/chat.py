@@ -1126,6 +1126,62 @@ async def clear_session_role(
     return DataResponse(data={"session_id": session_id, "role": None})
 
 
+@router.put("/chat/sessions/{session_id}/approval-categories", response_model=DataResponse[Dict[str, Any]])
+@with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="set_session_approval", error_code_prefix="CHAT")
+async def set_session_approval_categories(
+    session_id: str,
+    categories: List[str] = Body(..., embed=True),
+    current_user: dict = Depends(get_current_user),
+    request: Request = None,
+):
+    """Declare which action categories require approval for this session (GH#11202).
+
+    Backend-owned permission decision — matching tool calls are held via the chat
+    approval interrupt (when the gate flag is enabled). The frontend only calls this.
+    """
+    from chat_workflow.session_role import SessionRoleService
+
+    await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
+    try:
+        await SessionRoleService().set_approval_categories(session_id, categories)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return DataResponse(data={"session_id": session_id, "approval_categories": categories})
+
+
+@router.get("/chat/sessions/{session_id}/approval-categories", response_model=DataResponse[Dict[str, Any]])
+@with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="get_session_approval", error_code_prefix="CHAT")
+async def get_session_approval_categories(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+    request: Request = None,
+):
+    """Return the session's declared approval categories plus the valid vocabulary."""
+    from autobot_shared.tool_catalogue import valid_approval_categories
+    from chat_workflow.session_role import SessionRoleService
+
+    await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
+    cats = await SessionRoleService().get_approval_categories(session_id)
+    return DataResponse(
+        data={"session_id": session_id, "approval_categories": cats, "valid_categories": sorted(valid_approval_categories())}
+    )
+
+
+@router.delete("/chat/sessions/{session_id}/approval-categories", response_model=DataResponse[Dict[str, Any]])
+@with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="clear_session_approval", error_code_prefix="CHAT")
+async def clear_session_approval_categories(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+    request: Request = None,
+):
+    """Remove a session's approval-category declaration."""
+    from chat_workflow.session_role import SessionRoleService
+
+    await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
+    await SessionRoleService().clear_approval_categories(session_id)
+    return DataResponse(data={"session_id": session_id, "approval_categories": []})
+
+
 @router.get("/chat/health", response_model=ChatHealthData)
 @with_error_handling(
     category=ErrorCategory.SERVICE_UNAVAILABLE,

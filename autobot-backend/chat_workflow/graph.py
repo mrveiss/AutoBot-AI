@@ -554,6 +554,20 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
 
         emit_plan(parsed_tool_calls, session_id=session_id)
 
+    # GH#11202: backend-side approval gate (flag OFF by default so it can't hang
+    # prod chat until the frontend renders the interrupt). When a session declares
+    # approval categories, mark matching tool calls so route_after_generation sends
+    # them through the existing request_approval interrupt. The backend decides;
+    # the frontend only renders the interrupt and returns the decision.
+    if parsed_tool_calls:
+        from chat_workflow.session_role import CHAT_APPROVAL_GATE_ENABLED, SessionRoleService
+
+        if CHAT_APPROVAL_GATE_ENABLED:
+            from chat_workflow.tool_handler import mark_tool_calls_needing_approval
+
+            _cats = await SessionRoleService().get_approval_categories(session_id)
+            mark_tool_calls_needing_approval(parsed_tool_calls, _cats)
+
     emit_step_complete(
         step_name,
         _cot_start,
