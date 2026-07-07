@@ -52,6 +52,10 @@ def _project(company_id):
     m.auto_rollover = None
     m.open_work_item_count = 0
     m.active_sprint_name = None
+    # Pin the repo-linkage fields (#11129) so the MagicMock doesn't auto-vivify
+    # them into non-serializable Mocks when ProjectResponse.model_validate reads.
+    m.code_source_id = None
+    m.code_source = None
     return m
 
 

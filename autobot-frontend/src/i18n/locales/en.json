@@ -8453,7 +8453,26 @@
     "velocityAria": "Velocity for {name}",
     "target": "Target {date}",
     "backlogLink": "Backlog",
-    "timelineLink": "Timeline"
+    "timelineLink": "Timeline",
+    "repo": {
+      "linkedLabel": "Repository",
+      "clonePath": "Workspace path",
+      "status": "Status",
+      "attachBtn": "Attach repo",
+      "attachTitle": "Attach GitHub repository",
+      "repoLabel": "owner/repo",
+      "repoPlaceholder": "e.g. acme-org/backend",
+      "credentialLabel": "Credential ID",
+      "credentialPlaceholder": "Stored credential ID",
+      "submitBtn": "Attach",
+      "syncBtn": "Sync",
+      "detachBtn": "Detach",
+      "attachError": "Failed to attach repository.",
+      "detachError": "Failed to detach repository.",
+      "syncError": "Failed to trigger sync.",
+      "syncSuccess": "Sync started.",
+      "copyClonePath": "Copy workspace path"
+    }
   },
   "admin": {
     "systemHealth": {

@@ -133,6 +133,8 @@ class LLCProject(Base):
     lead_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     target_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     env: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    # Company OS project ↔ codebase-analytics CodeSource link (#11129).
+    code_source_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     # Per-project rollover behaviour (overrides company default when set).
     auto_rollover: Mapped[Optional[bool]] = mapped_column(sa.Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=sa.func.now())
