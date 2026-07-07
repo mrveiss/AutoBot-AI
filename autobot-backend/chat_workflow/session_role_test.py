@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Per-session governed role binding (GH#11186)."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 

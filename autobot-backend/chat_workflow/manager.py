@@ -3117,9 +3117,7 @@ before summarizing.
         workflow_messages.append(error_msg)
         return error_msg
 
-    async def _apply_session_role(
-        self, session_id: str, context: Dict[str, Any] | None
-    ) -> Dict[str, Any] | None:
+    async def _apply_session_role(self, session_id: str, context: Dict[str, Any] | None) -> Dict[str, Any] | None:
         """Overlay the trusted per-session governed role onto the chat context (GH#11186).
 
         A server-set session role (via the authenticated role endpoint) overrides
