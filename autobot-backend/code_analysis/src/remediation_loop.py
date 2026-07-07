@@ -2,23 +2,30 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Proposal-only remediation loop for anti-pattern health-score improvement (#11196).
+"""Proposal-only remediation loop for anti-pattern health-score improvement (#11196, #11199).
 
-This module is STRICTLY READ-ONLY.  It NEVER modifies source files, writes
-patches, opens PRs, or dispatches automated fixes.  It only:
+This module is STRICTLY READ-ONLY with respect to source code.  It NEVER
+modifies source files, writes patches, opens PRs, shells out to external
+commands, or dispatches automated fixes.  It only:
 
   1. Snapshots the current health state from an ``AntiPatternReport``.
   2. Selects the top-N ranked findings as a structured proposal.
   3. Records before/after deltas as a trend row in Redis.
+  4. (Gated, default OFF) Prepares work-item descriptors for external filing.
 
-Dispatch of any remediation action is DEFERRED behind a future approval gate
-and is explicitly out of scope for this module.  There is no entry point here
-that mutates code.
+Dispatch gate (#11199):
+  ``dispatch_proposal`` is guarded by ``REMEDIATION_DISPATCH_ENABLED`` (default
+  false).  When false the method is a pure no-op.  When true it prepares
+  structured work-item payloads ``[{title, body, labels}]`` for external filing
+  — it does NOT invoke external commands, write files, or open GitHub issues
+  directly.  No first-class GitHub issue-creation client exists in app code
+  without external commands; callers or an external process consume the payloads.
 
 Guardrail constants (all env-backed with safe defaults):
-  REMEDIATION_MAX_BATCH     — max findings per proposal batch (default 5).
-  REMEDIATION_MIN_CONFIDENCE — reserved for a future dispatch confidence gate
-                               (default 0.0, unused here).
+  REMEDIATION_MAX_BATCH       — max findings per proposal batch (default 5).
+  REMEDIATION_MIN_CONFIDENCE  — reserved for a future dispatch confidence gate
+                                (default 0.0, unused here).
+  REMEDIATION_DISPATCH_ENABLED — enable work-item preparation (default false).
 """
 
 from __future__ import annotations
@@ -41,13 +48,19 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 # Maximum number of findings returned by select_targets() per batch.
-# Dispatch gate (deferred) must also respect this limit before acting.
+# dispatch_proposal also defensively re-caps at this limit.
 REMEDIATION_MAX_BATCH: int = int(os.environ.get("REMEDIATION_MAX_BATCH", "5"))
 
 # Minimum confidence threshold reserved for a future dispatch approval gate.
 # Currently unused — recorded here so the constant is discoverable when
 # the gate is implemented.  At 0.0 all proposals pass (no filtering).
 REMEDIATION_MIN_CONFIDENCE: float = float(os.environ.get("REMEDIATION_MIN_CONFIDENCE", "0.0"))
+
+# Master gate for dispatch_proposal.  Default is false — the safe path is
+# always the disabled one.  Set REMEDIATION_DISPATCH_ENABLED=true to enable
+# work-item preparation.  This never enables code mutation; it only controls
+# whether structured work-item payloads are returned for external filing.
+REMEDIATION_DISPATCH_ENABLED: bool = os.environ.get("REMEDIATION_DISPATCH_ENABLED", "false").lower() == "true"
 
 # Redis sorted-set key for persisting remediation deltas (analytics DB).
 # Score = timestamp-ms; value = JSON-encoded delta record.
@@ -122,6 +135,36 @@ class RemediationLoop:
             for ap in targets
         ]
 
+    def dispatch_proposal(
+        self,
+        proposal: list[dict[str, Any]],
+        report: "AntiPatternReport | None" = None,
+    ) -> dict[str, Any]:
+        """Prepare work-item payloads for external filing (gated by REMEDIATION_DISPATCH_ENABLED).
+
+        When REMEDIATION_DISPATCH_ENABLED is false (the default), this method is
+        a pure no-op and returns immediately with status "disabled".  No I/O,
+        no side effects, no code mutation occurs on this path.
+
+        When enabled, proposal entries are defensively re-capped at
+        REMEDIATION_MAX_BATCH and deduped by (file, pattern_type) — within-batch
+        only.  No first-class GitHub issue-creation client exists in app code
+        without invoking external commands; therefore this method returns the
+        prepared work-item payloads for the caller or an external process to file.
+
+        Args:
+            proposal: List of target dicts from select_targets().
+            report:   Unused; accepted for forward-compatibility only.
+
+        Returns:
+            {"status": "disabled", "dispatched": 0} when the gate is off.
+            {"status": "prepared", "dispatched": N, "items": [...]} when on.
+        """
+        if not REMEDIATION_DISPATCH_ENABLED:
+            return {"status": "disabled", "dispatched": 0}
+
+        return _prepare_work_items(proposal)
+
     async def record_delta(
         self,
         before: dict[str, Any],
@@ -151,6 +194,40 @@ class RemediationLoop:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+
+def _prepare_work_items(proposal: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build work-item payloads from a proposal, capped and deduped by (file, pattern_type).
+
+    Deduplication is within-batch only.  Callers or an external process are
+    responsible for filing the returned payloads; this function never performs
+    network I/O or shell calls.
+    """
+    capped = proposal[:REMEDIATION_MAX_BATCH]
+    seen: set[tuple[str, str]] = set()
+    items: list[dict[str, Any]] = []
+    for target in capped:
+        key = (target.get("file", ""), target.get("pattern_type", ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(_build_work_item(target))
+    logger.info("dispatch_proposal: prepared %d work-item(s) for external filing", len(items))
+    return {"status": "prepared", "dispatched": len(items), "items": items}
+
+
+def _build_work_item(target: dict[str, Any]) -> dict[str, Any]:
+    """Render one proposal target as a {title, body, labels} work-item payload."""
+    title = f"[anti-pattern] {target.get('pattern_type', 'unknown')} in {target.get('file', 'unknown')}"
+    body = (
+        f"**File:** `{target.get('file', 'unknown')}` (line {target.get('line', '?')})\n"
+        f"**Pattern:** {target.get('pattern_type', 'unknown')}\n"
+        f"**Severity:** {target.get('severity', 'unknown')}\n"
+        f"**Runtime risk:** {target.get('runtime_risk', 0.0):.2f}\n\n"
+        f"**Suggestion:** {target.get('suggestion', 'No suggestion provided.')}"
+    )
+    labels = ["anti-pattern", f"severity:{target.get('severity', 'unknown')}"]
+    return {"title": title, "body": body, "labels": labels}
 
 
 def _build_delta_record(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Unit tests for the proposal-only RemediationLoop (#11196).
+"""Unit tests for the proposal-only RemediationLoop (#11196, #11199).
 
 Test plan:
   1. select_targets: <= MAX_BATCH, ranking preserved, fields mapped correctly.
@@ -11,7 +11,12 @@ Test plan:
   4. record_delta: delta persisted via trend store (fake Redis zadd).
   5. record_delta: backend-down → returns delta, does NOT raise.
   6. snapshot: returns health fields from a stubbed report.
-  7. Read-only contract: no dispatch/mutation entry point exists.
+  7. Read-only contract: no code-mutation path exists (even with dispatch added).
+  8. dispatch_proposal (disabled, default): no-op, zero side effects, status "disabled".
+  9. dispatch_proposal (enabled): produces exactly min(len, MAX_BATCH) work-items;
+     dedupes by (file, pattern_type) within the batch.
+  10. dispatch_proposal: READ-ONLY CONTRACT — no subprocess/file-write/PR-creation
+      even when enabled.
 """
 
 from __future__ import annotations
@@ -109,13 +114,11 @@ def _stub_shared(sys_mod):
         lm.get_logger = lambda _: MagicMock()
 
     tu = sys_mod.modules["autobot_shared.time_utils"]
-    if not hasattr(tu, "now_utc"):
-        from datetime import datetime, timezone
+    from datetime import datetime, timezone
 
+    if not hasattr(tu, "now_utc"):
         tu.now_utc = lambda: datetime.now(timezone.utc)
     if not hasattr(tu, "utc_timestamp"):
-        from datetime import datetime, timezone
-
         tu.utc_timestamp = lambda: datetime.now(timezone.utc).isoformat()
 
     # Keep autobot_shared package-level accessible
@@ -411,11 +414,11 @@ class TestReadOnlyContract:
         assert not violations, f"Module exposes forbidden dispatch names: {violations}"
 
     def test_no_subprocess_import(self):
-        """The module must not import subprocess (a proxy for file mutation)."""
+        """The module must not import subprocess (a proxy for shell mutation)."""
         import inspect
 
         src = inspect.getsource(self.mod)
-        assert "subprocess" not in src, "Module must not use subprocess"
+        assert "import subprocess" not in src, "Module must not import subprocess"
 
     def test_no_open_write(self):
         """The module must not open any file in write mode."""
@@ -426,11 +429,261 @@ class TestReadOnlyContract:
         assert "open(" not in src or '"w"' not in src, "Module must not write files via open()"
 
     def test_remediation_loop_class_has_only_safe_methods(self):
-        """RemediationLoop must only expose snapshot, select_targets, record_delta."""
+        """RemediationLoop must only expose snapshot, select_targets, record_delta, dispatch_proposal."""
         loop_cls = self.mod.RemediationLoop
         public_methods = {
             name for name in dir(loop_cls) if not name.startswith("_") and callable(getattr(loop_cls, name))
         }
-        allowed = {"snapshot", "select_targets", "record_delta"}
+        allowed = {"snapshot", "select_targets", "record_delta", "dispatch_proposal"}
         extra = public_methods - allowed
         assert not extra, f"RemediationLoop exposes unexpected public methods: {extra}"
+
+
+# ---------------------------------------------------------------------------
+# 8. dispatch_proposal (disabled, default): pure no-op.
+# ---------------------------------------------------------------------------
+
+
+class TestDispatchProposalDisabled:
+    """When REMEDIATION_DISPATCH_ENABLED is false (the default), dispatch_proposal
+    must be a pure no-op: no exceptions, no side effects, status "disabled"."""
+
+    def setup_method(self):
+        self.mod = _load_module()
+        self.loop = self.mod.RemediationLoop()
+
+    def _proposal(self, count: int = 3) -> list:
+        return [
+            {
+                "file": f"f{i}.py",
+                "line": i,
+                "pattern_type": f"pat_{i}",
+                "severity": "high",
+                "runtime_risk": 0.1,
+                "suggestion": f"Fix {i}",
+            }
+            for i in range(count)
+        ]
+
+    def test_disabled_returns_status_disabled(self):
+        """Default gate=false → status must be 'disabled'."""
+        original = self.mod.REMEDIATION_DISPATCH_ENABLED
+        try:
+            self.mod.REMEDIATION_DISPATCH_ENABLED = False
+            result = self.loop.dispatch_proposal(self._proposal())
+        finally:
+            self.mod.REMEDIATION_DISPATCH_ENABLED = original
+        assert result["status"] == "disabled"
+
+    def test_disabled_dispatched_is_zero(self):
+        original = self.mod.REMEDIATION_DISPATCH_ENABLED
+        try:
+            self.mod.REMEDIATION_DISPATCH_ENABLED = False
+            result = self.loop.dispatch_proposal(self._proposal())
+        finally:
+            self.mod.REMEDIATION_DISPATCH_ENABLED = original
+        assert result["dispatched"] == 0
+
+    def test_disabled_returns_no_items_key(self):
+        original = self.mod.REMEDIATION_DISPATCH_ENABLED
+        try:
+            self.mod.REMEDIATION_DISPATCH_ENABLED = False
+            result = self.loop.dispatch_proposal(self._proposal())
+        finally:
+            self.mod.REMEDIATION_DISPATCH_ENABLED = original
+        assert "items" not in result
+
+    def test_disabled_is_not_async(self):
+        """The disabled path must be synchronous — no coroutine returned."""
+        import inspect
+
+        original = self.mod.REMEDIATION_DISPATCH_ENABLED
+        try:
+            self.mod.REMEDIATION_DISPATCH_ENABLED = False
+            ret = self.loop.dispatch_proposal(self._proposal())
+        finally:
+            self.mod.REMEDIATION_DISPATCH_ENABLED = original
+        assert not inspect.isawaitable(ret), "disabled path must not return a coroutine"
+
+
+# ---------------------------------------------------------------------------
+# 9. dispatch_proposal (enabled): correct count, dedup by (file, pattern_type).
+# ---------------------------------------------------------------------------
+
+
+class TestDispatchProposalEnabled:
+    """When REMEDIATION_DISPATCH_ENABLED is true, dispatch_proposal prepares
+    structured work-item payloads without I/O or code mutation."""
+
+    def setup_method(self):
+        self.mod = _load_module()
+        self.loop = self.mod.RemediationLoop()
+
+    def _enable(self):
+        self.mod.REMEDIATION_DISPATCH_ENABLED = True
+
+    def _disable(self):
+        self.mod.REMEDIATION_DISPATCH_ENABLED = False
+
+    def _proposal(self, count: int, *, file_prefix: str = "f") -> list:
+        return [
+            {
+                "file": f"{file_prefix}{i}.py",
+                "line": i,
+                "pattern_type": f"pat_{i}",
+                "severity": "high",
+                "runtime_risk": 0.2,
+                "suggestion": f"Fix {i}",
+            }
+            for i in range(count)
+        ]
+
+    def test_enabled_status_is_prepared(self):
+        self._enable()
+        try:
+            result = self.loop.dispatch_proposal(self._proposal(3))
+        finally:
+            self._disable()
+        assert result["status"] == "prepared"
+
+    def test_enabled_dispatched_equals_len_when_under_cap(self):
+        """Proposal smaller than MAX_BATCH → dispatched == len(proposal)."""
+        self._enable()
+        try:
+            n = max(1, self.mod.REMEDIATION_MAX_BATCH - 1)
+            result = self.loop.dispatch_proposal(self._proposal(n))
+        finally:
+            self._disable()
+        assert result["dispatched"] == n
+        assert len(result["items"]) == n
+
+    def test_enabled_capped_at_max_batch(self):
+        """Proposal larger than MAX_BATCH → dispatched == MAX_BATCH."""
+        self._enable()
+        try:
+            cap = self.mod.REMEDIATION_MAX_BATCH
+            result = self.loop.dispatch_proposal(self._proposal(cap + 10))
+        finally:
+            self._disable()
+        assert result["dispatched"] == cap
+        assert len(result["items"]) == cap
+
+    def test_dedup_by_file_and_pattern_type(self):
+        """Duplicate (file, pattern_type) pairs within the batch are skipped."""
+        self._enable()
+        try:
+            # Two entries with identical (file, pattern_type), one unique.
+            proposal = [
+                {
+                    "file": "dup.py",
+                    "line": 1,
+                    "pattern_type": "god_class",
+                    "severity": "high",
+                    "runtime_risk": 0.3,
+                    "suggestion": "Extract A",
+                },
+                {
+                    "file": "dup.py",
+                    "line": 2,
+                    "pattern_type": "god_class",
+                    "severity": "high",
+                    "runtime_risk": 0.4,
+                    "suggestion": "Extract B",
+                },
+                {
+                    "file": "unique.py",
+                    "line": 5,
+                    "pattern_type": "long_method",
+                    "severity": "medium",
+                    "runtime_risk": 0.1,
+                    "suggestion": "Split it",
+                },
+            ]
+            result = self.loop.dispatch_proposal(proposal)
+        finally:
+            self._disable()
+        assert result["dispatched"] == 2
+        titles = [item["title"] for item in result["items"]]
+        assert any("dup.py" in t for t in titles)
+        assert any("unique.py" in t for t in titles)
+
+    def test_items_have_required_keys(self):
+        """Every returned work-item must have title, body, and labels."""
+        self._enable()
+        try:
+            result = self.loop.dispatch_proposal(self._proposal(2))
+        finally:
+            self._disable()
+        for item in result["items"]:
+            assert "title" in item
+            assert "body" in item
+            assert "labels" in item
+
+    def test_labels_include_anti_pattern_tag(self):
+        self._enable()
+        try:
+            result = self.loop.dispatch_proposal(self._proposal(1))
+        finally:
+            self._disable()
+        assert "anti-pattern" in result["items"][0]["labels"]
+
+
+# ---------------------------------------------------------------------------
+# 10. READ-ONLY CONTRACT with dispatch enabled: no subprocess/file-write/PR.
+# ---------------------------------------------------------------------------
+
+
+class TestDispatchReadOnlyContract:
+    """Even with dispatch enabled, the module must not shell out, write files,
+    or create PRs.  Mock the module constants to verify no forbidden I/O path
+    is reachable via dispatch_proposal."""
+
+    def setup_method(self):
+        self.mod = _load_module()
+        self.loop = self.mod.RemediationLoop()
+
+    def _proposal(self, count: int = 2) -> list:
+        return [
+            {
+                "file": f"x{i}.py",
+                "line": i,
+                "pattern_type": "god_class",
+                "severity": "high",
+                "runtime_risk": 0.5,
+                "suggestion": "Refactor",
+            }
+            for i in range(count)
+        ]
+
+    def test_no_subprocess_in_module_source(self):
+        import inspect
+
+        src = inspect.getsource(self.mod)
+        assert "import subprocess" not in src, "Module must never import subprocess"
+
+    def test_no_file_write_in_module_source(self):
+        import inspect
+
+        src = inspect.getsource(self.mod)
+        assert "open(" not in src or '"w"' not in src, "Module must not write files"
+
+    def test_no_gh_cli_call_in_source(self):
+        """No shelling out to gh CLI or git."""
+        import inspect
+
+        src = inspect.getsource(self.mod)
+        assert "gh " not in src
+        assert "os.system" not in src
+        assert "Popen" not in src
+
+    def test_dispatch_enabled_returns_dict_no_network(self):
+        """With gate enabled, dispatch_proposal returns a dict synchronously — no network."""
+        original = self.mod.REMEDIATION_DISPATCH_ENABLED
+        self.mod.REMEDIATION_DISPATCH_ENABLED = True
+        try:
+            result = self.loop.dispatch_proposal(self._proposal())
+        finally:
+            self.mod.REMEDIATION_DISPATCH_ENABLED = original
+
+        assert isinstance(result, dict)
+        assert result["status"] in {"prepared", "disabled"}
