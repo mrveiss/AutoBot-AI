@@ -20,6 +20,7 @@ Design decisions:
 """
 
 import asyncio
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List
@@ -31,6 +32,36 @@ logger = get_logger(__name__)
 _COLLECTION_NAME = "autobot_verbatim"
 _DEFAULT_LIMIT = 10
 _DEFAULT_RETENTION_DAYS: int = 90  # override via memory.verbatim.retention_days config
+
+# Recency-weighted re-ranking (GH#11163). Verbatim recall blends semantic
+# similarity with an exponential recency decay so recent turns surface over
+# equally-similar stale ones. Tunable per deployment; weight 0.0 disables the
+# blend entirely (pure semantic order — prior behaviour).
+_RECENCY_WEIGHT: float = float(os.environ.get("AUTOBOT_VERBATIM_RECENCY_WEIGHT", "0.2"))
+_RECENCY_HALFLIFE_SECONDS: float = float(
+    os.environ.get("AUTOBOT_VERBATIM_RECENCY_HALFLIFE_SECONDS", str(7 * 24 * 3600))
+)
+
+
+def _recency_factor(timestamp_iso: str | None, now: datetime) -> float | None:
+    """Exponential-decay recency score in ``[0, 1]`` from an ISO timestamp.
+
+    ``1.0`` for a just-now turn, halving every ``_RECENCY_HALFLIFE_SECONDS``.
+    Returns ``None`` when the timestamp is missing or unparseable so the caller
+    falls back to the pure semantic score for that chunk.
+    """
+    if not timestamp_iso:
+        return None
+    try:
+        ts = datetime.fromisoformat(timestamp_iso)
+    except (ValueError, TypeError):
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    age = (now - ts).total_seconds()
+    if age <= 0:
+        return 1.0
+    return 0.5 ** (age / _RECENCY_HALFLIFE_SECONDS)
 
 
 class VerbatimStore:
@@ -170,16 +201,28 @@ class VerbatimStore:
         metas = results.get("metadatas", [[]])[0]
         distances = results.get("distances", [[]])[0]
 
+        now = datetime.now(tz=timezone.utc)
         chunks = []
         for chunk_id, doc, meta, dist in zip(ids, docs, metas, distances):
+            semantic = 1.0 - dist
+            score = semantic
+            # GH#11163: blend recency so newer turns beat equally-similar stale
+            # ones. Skipped when disabled (weight 0) or the timestamp is absent.
+            if _RECENCY_WEIGHT > 0.0:
+                recency = _recency_factor((meta or {}).get("timestamp"), now)
+                if recency is not None:
+                    score = (1.0 - _RECENCY_WEIGHT) * semantic + _RECENCY_WEIGHT * recency
             chunks.append(
                 {
                     "id": chunk_id,
                     "text": doc,
-                    "score": 1.0 - dist,
+                    "score": score,
                     "metadata": meta,
                 }
             )
+        # ChromaDB returns distance order; the recency blend can reorder, so
+        # re-rank by the final score (stable no-op when weight is 0).
+        chunks.sort(key=lambda c: c["score"], reverse=True)
         return chunks
 
     async def delete_session(self, session_id: str) -> int:
