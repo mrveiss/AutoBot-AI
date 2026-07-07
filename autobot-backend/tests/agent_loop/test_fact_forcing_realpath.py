@@ -21,12 +21,7 @@ def test_relative_read_then_absolute_edit_is_credited(tmp_path, monkeypatch) -> 
     # Read by RELATIVE path...
     record_investigations([{"tool_name": "read_file", "args": {"file_path": "mod.py"}}], seen)
     # ...edit by ABSOLUTE path — same real file, so not flagged.
-    assert (
-        first_uninvestigated_edit(
-            {"tool_name": "edit_file", "args": {"file_path": str(target)}}, seen
-        )
-        is None
-    )
+    assert first_uninvestigated_edit({"tool_name": "edit_file", "args": {"file_path": str(target)}}, seen) is None
 
 
 def test_symlink_read_then_target_edit_is_credited(tmp_path) -> None:
@@ -37,21 +32,13 @@ def test_symlink_read_then_target_edit_is_credited(tmp_path) -> None:
 
     seen: set[str] = set()
     record_investigations([{"tool_name": "read_file", "args": {"file_path": str(link)}}], seen)
-    assert (
-        first_uninvestigated_edit(
-            {"tool_name": "edit_file", "args": {"file_path": str(target)}}, seen
-        )
-        is None
-    )
+    assert first_uninvestigated_edit({"tool_name": "edit_file", "args": {"file_path": str(target)}}, seen) is None
 
 
 def test_unread_existing_file_still_blocked(tmp_path) -> None:
     target = tmp_path / "mod.py"
     target.write_text("x = 1\n", encoding="utf-8")
     # No read recorded → still flagged.
-    assert (
-        first_uninvestigated_edit(
-            {"tool_name": "edit_file", "args": {"file_path": str(target)}}, set()
-        )
-        == str(target)
+    assert first_uninvestigated_edit({"tool_name": "edit_file", "args": {"file_path": str(target)}}, set()) == str(
+        target
     )
