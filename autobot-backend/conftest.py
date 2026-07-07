@@ -555,6 +555,14 @@ for _ci_sub in [
     if _ci_sub not in sys.modules:
         sys.modules[_ci_sub] = _make_pkg_stub(_ci_sub)
 
+# cross_language_patterns stub — endpoints/cross_language_patterns.py imports
+# CrossLanguagePatternDetector at module level; without this stub, all
+# api.codebase_analytics colocated tests fail to collect (#11129).
+if "code_intelligence.cross_language_patterns" not in sys.modules:
+    _ci_clp_stub = _make_pkg_stub("code_intelligence.cross_language_patterns")
+    _ci_clp_stub.CrossLanguagePatternDetector = MagicMock()  # type: ignore[attr-defined]
+    sys.modules["code_intelligence.cross_language_patterns"] = _ci_clp_stub
+
 # Ensure CausalErrorRecovery / RecoveryPlan / get_recovery_recommender are
 # resolvable from the stub so orchestration/__init__.py's wildcard import
 # (`from .causal_error_recovery import CausalErrorRecovery, ...`) succeeds.

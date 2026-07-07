@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
+from .. import source_service
 from ..source_models import (
     CodeSource,
     CodeSourceCreateRequest,
@@ -251,30 +252,28 @@ async def list_code_sources():
 )
 async def create_code_source(request: CodeSourceCreateRequest):
     """Register a new code source."""
-    source = CodeSource(
-        name=request.name,
-        source_type=request.source_type,
-        repo=request.repo,
-        branch=request.branch,
-        credential_id=request.credential_id,
-        access=request.access,
-    )
-    if source.source_type == "github" and source.repo:
-        source.clone_path = _make_clone_path(source.id)
-    elif source.source_type == "local" and source.repo:
-        source.clone_path = source.repo
-    await save_source(source)
-    logger.info("Created code source %s (%s)", source.id, source.name)
-
-    # Auto-sync GitHub sources on creation (#1715)
-    if source.source_type == "github" and source.repo:
-        from ..scanner import _active_tasks
-
-        sync_task_id = str(uuid.uuid4())
-        task = asyncio.create_task(_do_sync(source))
-        _active_tasks[sync_task_id] = task
-        task.add_done_callback(_create_sync_cleanup(sync_task_id))
-        logger.info("Auto-sync started for new source %s", source.id)
+    if request.source_type == "github" and request.repo:
+        source = await source_service.create_github_source(
+            name=request.name,
+            repo=request.repo,
+            credential_id=request.credential_id,
+            branch=request.branch,
+            access=request.access,
+            auto_sync=True,
+        )
+    else:
+        source = CodeSource(
+            name=request.name,
+            source_type=request.source_type,
+            repo=request.repo,
+            branch=request.branch,
+            credential_id=request.credential_id,
+            access=request.access,
+        )
+        if source.source_type == "local" and source.repo:
+            source.clone_path = source.repo
+        await save_source(source)
+        logger.info("Created code source %s (%s)", source.id, source.name)
 
     return JSONResponse(source.model_dump(), status_code=201)
 
