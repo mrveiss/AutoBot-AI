@@ -18,7 +18,7 @@ from typing import Any, Iterable, List, Optional
 def sanitize_tool_names(values: Optional[Iterable[Any]]) -> List[str]:
     """Return the safe subset of *values* usable in a comma-joined tool flag."""
     return [
-        str(v)
+        s
         for v in (values or [])
-        if str(v) and not str(v).startswith("-") and "," not in str(v) and "\n" not in str(v)
+        if (s := str(v)) and not s.startswith("-") and "," not in s and "\n" not in s
     ]

@@ -35,3 +35,33 @@ def test_both_allowed_and_disallowed():
 def test_sanitizes_injection_and_delimiters():
     out = _args({"disallowed_tools": ["Bash", "--evil", "Edit,x", "Write"]})
     assert out == ["--disallowedTools", "Bash,Write"]
+
+
+def _cmd(resume, cfg, prompt="do it"):
+    return ClaudeCodeAdapter._build_command("claude", resume, cfg, prompt)
+
+
+def test_fresh_session_command_has_model_and_tools_and_terminator():
+    cmd = _cmd(None, {"model": "opus", "max_turns": 5, "disallowed_tools": ["Bash"]})
+    assert cmd[:4] == ["claude", "--output-format", "stream-json", "--print"]
+    assert cmd[cmd.index("--model") + 1] == "opus"
+    assert "--disallowedTools" in cmd
+    assert cmd[-2] == "--" and cmd[-1] == "do it"
+
+
+def test_resumed_session_still_enforces_disallowed_tools():
+    # GH#11186: the governance flags MUST apply on resume, not just fresh sessions.
+    cmd = _cmd("sess-123", {"disallowed_tools": ["Bash", "Edit"]})
+    assert cmd[cmd.index("--resume") + 1] == "sess-123"
+    assert cmd[cmd.index("--disallowedTools") + 1] == "Bash,Edit"
+    # session-establishment options are NOT re-sent on resume
+    assert "--model" not in cmd and "--max-turns" not in cmd
+    assert cmd[-2] == "--" and cmd[-1] == "do it"
+
+
+def test_prompt_is_positional_after_terminator():
+    # A prompt starting with '-' can never be parsed as an option.
+    cmd = _cmd(None, {}, prompt="--dangerously-skip-permissions")
+    assert cmd[-2] == "--"
+    assert cmd[-1] == "--dangerously-skip-permissions"
+    assert cmd.count("--dangerously-skip-permissions") == 1
