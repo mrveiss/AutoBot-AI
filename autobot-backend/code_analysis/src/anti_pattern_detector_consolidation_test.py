@@ -614,3 +614,191 @@ async def test_composable_opportunity_excludes_composables_dir(tmp_path):
 
     composable = [f for f in findings if f.pattern_type.value == "composable_opportunity"]
     assert not composable, "composables/ dir is excluded; only 3 real components remain — below threshold"
+
+
+# ---------------------------------------------------------------------------
+# #11171: frequency-weighted systemic ranking and systemic_patterns rollup
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_frequency_weighted_ranking_outranks_single_high_severity(fixture_root):
+    """A lower-severity pattern that appears many times outranks a single
+    higher-severity one-off when freq × severity is larger (#11171).
+
+    Scenario:
+    - 1 GOD_CLASS (score=100, freq=1) → effective rank = 100
+    - 5 LAZY_CLASS  (score=25,  freq=5) → effective rank = 125
+
+    The 5 lazy-class findings must all appear before the god-class finding
+    in report.anti_patterns (the stored sorted list).
+    """
+    apd = _load_detector_module()
+    # God-class: one very large class with many methods (>20) and attributes (>15).
+    methods = "\n".join(f"    def method_{i}(self): pass" for i in range(25))
+    attrs = "\n".join(f"        self.attr_{i} = {i}" for i in range(20))
+    god_body = f"""
+class BigGodClass:
+    def __init__(self):
+{attrs}
+{methods}
+"""
+    _write_module(fixture_root, "big_god", god_body)
+
+    # Lazy-class: five tiny classes with only 1 public method and <20 LOC.
+    for i in range(5):
+        lazy_body = f"""
+class TinyLazy{i}:
+    def do_it(self): pass
+"""
+        _write_module(fixture_root, f"lazy_{i}", lazy_body)
+
+    detector = apd.AntiPatternDetector()
+    report = await detector.analyze(
+        root_path=str(fixture_root),
+        patterns=["*.py"],
+        exclude_patterns=["__pycache__"],
+    )
+
+    god_indices = [i for i, ap in enumerate(report.anti_patterns) if ap.pattern_type.value == "god_class"]
+    lazy_indices = [i for i, ap in enumerate(report.anti_patterns) if ap.pattern_type.value == "lazy_class"]
+
+    assert god_indices, "expected at least one god_class finding"
+    assert len(lazy_indices) >= 5, f"expected 5 lazy_class findings, got {len(lazy_indices)}"
+    # The last lazy-class index must appear before (lower index = higher rank)
+    # OR at the same position group as the god-class.
+    # freq×score for lazy = 5×25=125 > 1×100=100 → lazy ranks first.
+    assert max(lazy_indices) < min(god_indices), (
+        f"lazy_class (freq×sev=125) should outrank god_class (freq×sev=100); "
+        f"lazy indices={lazy_indices}, god index={god_indices}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_frequency_weighted_ranking_tie_breaking_stability(fixture_root):
+    """Within a tie (same freq × sev), secondary sort on severity keeps
+    higher individual severity first — result must be stable (#11171).
+    """
+    apd = _load_detector_module()
+    # Two classes each appear once: one god-class (HIGH sev expected),
+    # one lazy-class (LOW sev).  Both freq=1.
+    # god_class effective rank = 1×100 = 100 (CRITICAL or HIGH)
+    # lazy_class effective rank = 1×25  = 25
+    # god_class must appear first even with freq=1.
+    methods = "\n".join(f"    def method_{i}(self): pass" for i in range(22))
+    attrs = "\n".join(f"        self.attr_{i} = {i}" for i in range(16))
+    _write_module(
+        fixture_root,
+        "tie_god",
+        f"""
+class TieGod:
+    def __init__(self):
+{attrs}
+{methods}
+""",
+    )
+    _write_module(
+        fixture_root,
+        "tie_lazy",
+        """
+class TieLazy:
+    def do_it(self): pass
+""",
+    )
+
+    detector = apd.AntiPatternDetector()
+    report = await detector.analyze(
+        root_path=str(fixture_root),
+        patterns=["*.py"],
+        exclude_patterns=["__pycache__"],
+    )
+
+    god_idx = next((i for i, ap in enumerate(report.anti_patterns) if ap.pattern_type.value == "god_class"), None)
+    lazy_idx = next((i for i, ap in enumerate(report.anti_patterns) if ap.pattern_type.value == "lazy_class"), None)
+
+    assert god_idx is not None, "god_class finding expected"
+    assert lazy_idx is not None, "lazy_class finding expected"
+    assert god_idx < lazy_idx, (
+        f"god_class (higher severity) must precede lazy_class; got god={god_idx}, lazy={lazy_idx}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_systemic_patterns_rollup_contents(fixture_root):
+    """systemic_patterns lists types with count >= 3, sorted by count desc (#11171)."""
+    apd = _load_detector_module()
+    # Create 4 lazy classes (count=4 >= threshold of 3) and 1 god class (count=1).
+    for i in range(4):
+        _write_module(
+            fixture_root,
+            f"sys_lazy_{i}",
+            f"""
+class SysLazy{i}:
+    def do_it(self): pass
+""",
+        )
+    methods = "\n".join(f"    def method_{i}(self): pass" for i in range(22))
+    attrs = "\n".join(f"        self.attr_{i} = {i}" for i in range(16))
+    _write_module(
+        fixture_root,
+        "sys_god",
+        f"""
+class SysGod:
+    def __init__(self):
+{attrs}
+{methods}
+""",
+    )
+
+    detector = apd.AntiPatternDetector()
+    report = await detector.analyze(
+        root_path=str(fixture_root),
+        patterns=["*.py"],
+        exclude_patterns=["__pycache__"],
+    )
+
+    sp = report.systemic_patterns
+    # lazy_class should appear in systemic_patterns (count=4 >= 3)
+    lazy_entry = next((e for e in sp if e["pattern_type"] == "lazy_class"), None)
+    assert lazy_entry is not None, "lazy_class (count=4) must appear in systemic_patterns"
+    assert lazy_entry["count"] >= 4
+    assert lazy_entry["top_severity_score"] == 25  # LOW score
+
+    # god_class count=1 is below threshold — must NOT be in systemic_patterns
+    god_entry = next((e for e in sp if e["pattern_type"] == "god_class"), None)
+    assert god_entry is None, "god_class (count=1) must not appear in systemic_patterns (below threshold=3)"
+
+    # systemic_patterns must be sorted by count desc
+    counts = [e["count"] for e in sp]
+    assert counts == sorted(counts, reverse=True), "systemic_patterns must be sorted by count desc"
+
+    # to_dict() must include systemic_patterns key
+    d = report.to_dict()
+    assert "systemic_patterns" in d, "to_dict() must include systemic_patterns key"
+    assert isinstance(d["systemic_patterns"], list)
+
+
+@pytest.mark.asyncio
+async def test_systemic_patterns_below_threshold_empty(fixture_root):
+    """When no pattern_type reaches the threshold, systemic_patterns is empty (#11171)."""
+    apd = _load_detector_module()
+    # Two lazy classes — count=2 is below threshold=3
+    for i in range(2):
+        _write_module(
+            fixture_root,
+            f"below_{i}",
+            f"""
+class BelowLazy{i}:
+    def do_it(self): pass
+""",
+        )
+
+    detector = apd.AntiPatternDetector()
+    report = await detector.analyze(
+        root_path=str(fixture_root),
+        patterns=["*.py"],
+        exclude_patterns=["__pycache__"],
+    )
+    assert report.systemic_patterns == [], (
+        f"count=2 is below threshold=3; expected [], got {report.systemic_patterns}"
+    )

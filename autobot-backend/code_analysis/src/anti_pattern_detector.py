@@ -41,29 +41,39 @@ _ANTI_PATTERN_SCORES: Dict[Severity, int] = {
     Severity.LOW: 25,
 }
 
-
-def anti_pattern_score(severity: Severity) -> int:
-    """Numeric anti-pattern score for `severity` (higher = worse, 0-100 scale)."""
-    return _ANTI_PATTERN_SCORES[severity]
-
-
-from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.status_enums import Severity  # #7253: consolidated onto canonical (#6689)
-
-# Anti-pattern severity → 0-100 integer score. Kept as a module-level helper
-# rather than an enum method so the canonical `Severity` enum stays clean
-# (canonical `to_score()` returns 0.0–0.9 floats, a different scale).
-_ANTI_PATTERN_SCORES: Dict[Severity, int] = {
-    Severity.CRITICAL: 100,
-    Severity.HIGH: 75,
-    Severity.MEDIUM: 50,
-    Severity.LOW: 25,
-}
+# Minimum occurrences of a pattern_type to be included in the systemic rollup.
+_SYSTEMIC_THRESHOLD = 3
 
 
 def anti_pattern_score(severity: Severity) -> int:
     """Numeric anti-pattern score for `severity` (higher = worse, 0-100 scale)."""
     return _ANTI_PATTERN_SCORES[severity]
+
+
+def _build_systemic_rollup(
+    sorted_patterns: "List[Any]",
+    summary_by_type: Dict[str, int],
+) -> "List[Dict[str, Any]]":
+    """Return systemic pattern entries for types with count >= _SYSTEMIC_THRESHOLD.
+
+    Each entry is {pattern_type, count, top_severity} where top_severity is the
+    highest-scoring severity seen for that type.  Result is sorted by count desc
+    so callers get "god_class ×14" style summaries first (#11171).
+    """
+    top_severity: Dict[str, int] = {}
+    for ap in sorted_patterns:
+        pt = ap.pattern_type.value
+        score = anti_pattern_score(ap.severity)
+        if score > top_severity.get(pt, 0):
+            top_severity[pt] = score
+
+    result = [
+        {"pattern_type": pt, "count": cnt, "top_severity_score": top_severity.get(pt, 0)}
+        for pt, cnt in summary_by_type.items()
+        if cnt >= _SYSTEMIC_THRESHOLD
+    ]
+    result.sort(key=lambda e: e["count"], reverse=True)
+    return result
 
 
 # Initialize configuration
@@ -341,6 +351,9 @@ class AntiPatternReport:
     summary_by_type: Dict[str, int]
     recommendations: List[str]
     analysis_time_seconds: float
+    # #11171: systemic rollup — pattern types with count >= _SYSTEMIC_THRESHOLD,
+    # sorted by count desc.  Each entry: {pattern_type, count, top_severity}.
+    systemic_patterns: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -355,6 +368,7 @@ class AntiPatternReport:
             "summary_by_type": self.summary_by_type,
             "recommendations": self.recommendations,
             "analysis_time_seconds": round(self.analysis_time_seconds, 3),
+            "systemic_patterns": self.systemic_patterns,
         }
 
     # === Issue #372: Feature Envy Reduction Methods ===
@@ -2013,8 +2027,12 @@ class AntiPatternDetector:
     # ========== Report Generation ==========
 
     def _generate_report(self, anti_patterns: List[AntiPatternInstance], analysis_time: float) -> AntiPatternReport:
-        """Generate comprehensive anti-pattern report"""
+        """Generate comprehensive anti-pattern report.
 
+        Findings are ranked by prevalence × severity so a pattern_type that
+        appears many times across the codebase rises above a single one-off
+        finding of nominally higher severity (#11171).
+        """
         # Count by severity
         critical_count = sum(1 for ap in anti_patterns if ap.severity == Severity.CRITICAL)
         high_count = sum(1 for ap in anti_patterns if ap.severity == Severity.HIGH)
@@ -2027,12 +2045,25 @@ class AntiPatternDetector:
             pattern_type = ap.pattern_type.value
             summary_by_type[pattern_type] = summary_by_type.get(pattern_type, 0) + 1
 
+        # #11171: rank each finding by freq(pattern_type) × severity_score.
+        # Stable secondary sort on severity_score keeps same-rank entries ordered
+        # by their individual severity (highest first).
+        sorted_patterns = sorted(
+            anti_patterns,
+            key=lambda x: (
+                summary_by_type[x.pattern_type.value] * anti_pattern_score(x.severity),
+                anti_pattern_score(x.severity),
+            ),
+            reverse=True,
+        )
+
+        # #11171: systemic rollup — types exceeding _SYSTEMIC_THRESHOLD occurrences.
+        systemic_patterns = _build_systemic_rollup(sorted_patterns, summary_by_type)
+
         # Calculate health score (0-100, higher is better)
-        # Weighted penalty for each severity level
         total_penalty = critical_count * 20 + high_count * 10 + medium_count * 5 + low_count * 2
         health_score = max(0, 100 - total_penalty)
 
-        # Generate recommendations
         recommendations = self._generate_recommendations(anti_patterns, summary_by_type)
 
         return AntiPatternReport(
@@ -2042,10 +2073,11 @@ class AntiPatternDetector:
             medium_count=medium_count,
             low_count=low_count,
             health_score=health_score,
-            anti_patterns=anti_patterns,
+            anti_patterns=sorted_patterns,
             summary_by_type=summary_by_type,
             recommendations=recommendations,
             analysis_time_seconds=analysis_time,
+            systemic_patterns=systemic_patterns,
         )
 
     # Issue #372: Class-level recommendation mapping reduces feature envy
