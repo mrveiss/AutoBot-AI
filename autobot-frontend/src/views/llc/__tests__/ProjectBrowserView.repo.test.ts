@@ -185,4 +185,21 @@ describe('ProjectBrowserView repo linkage (GH#11129)', () => {
 
     expect(del).toHaveBeenCalledWith('/api/llc/projects/p2/repo')
   })
+
+  it('GH#11129: renders a copy button with aria-label next to clone_path', async () => {
+    get.mockImplementation((url?: string) => {
+      if (url?.endsWith('/projects')) return Promise.resolve([PROJECT_WITH_REPO])
+      if (url?.includes('/velocity')) return Promise.resolve({ sprints: [] })
+      return Promise.resolve([])
+    })
+
+    const wrapper = mount(ProjectBrowserView, mountOpts)
+    await flushPromises()
+
+    const copyBtn = wrapper.find('button[aria-label]')
+    expect(copyBtn.exists()).toBe(true)
+    // The aria-label contains the i18n key text for copy clone path
+    const ariaLabel = copyBtn.attributes('aria-label') ?? ''
+    expect(ariaLabel.length).toBeGreaterThan(0)
+  })
 })

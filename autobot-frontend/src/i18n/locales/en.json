@@ -8470,7 +8470,8 @@
       "attachError": "Failed to attach repository.",
       "detachError": "Failed to detach repository.",
       "syncError": "Failed to trigger sync.",
-      "syncSuccess": "Sync started."
+      "syncSuccess": "Sync started.",
+      "copyClonePath": "Copy workspace path"
     }
   },
   "admin": {

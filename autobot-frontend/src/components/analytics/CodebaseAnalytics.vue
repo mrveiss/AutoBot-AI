@@ -331,6 +331,7 @@
       v-if="showSourceManager"
       :selected-source-id="selectedSource?.id ?? null"
       :visible="showSourceManager"
+      :project-labels="codeSourceProjectMap"
       @select-source="handleSelectSource"
       @open-add-source="showAddSourceModal = true; showSourceManager = false"
       @edit-source="handleEditSource"
@@ -952,14 +953,16 @@ onMounted(async () => {
     return
   }
 
+  // GH#11129: load project→source map unconditionally so labels populate
+  // regardless of whether the source-load guard returns early.
+  void loadProjectRepoMap()
+
   // Load source metadata from backend (#6068: extracted to useSourceRegistry)
   const loaded = await loadSourceById(sourceId)
   if (!loaded) {
     analyticsRouter.replace({ name: 'analytics-codebase' })
     return
   }
-
-  void loadProjectRepoMap()
   await checkCurrentIndexingJob()
   loadCachedAnalyticsData(codeIntelExtraScans())
   // #2390: Auto-load overview dashboard cards on page visit

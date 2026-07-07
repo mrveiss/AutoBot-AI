@@ -68,6 +68,15 @@
           <div class="repo-row">
             <span class="repo-label">{{ t('llcBrowser.repo.clonePath') }}</span>
             <code class="repo-path">{{ p.code_source.clone_path }}</code>
+            <!-- GH#11129: copy clone_path to clipboard -->
+            <button
+              v-if="p.code_source.clone_path"
+              class="clone-copy-btn"
+              :aria-label="t('llcBrowser.repo.copyClonePath')"
+              @click="copyClonePath(p.code_source.clone_path)"
+            >
+              <Icon name="copy" />
+            </button>
           </div>
           <div class="repo-row">
             <span class="repo-label">{{ t('llcBrowser.repo.status') }}</span>
@@ -203,6 +212,8 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useClipboard } from '@/composables/useClipboard'
+import Icon from '@/components/ui/Icon.vue'
 import LlcBreadcrumb, { type BreadcrumbItem } from '@/components/llc/LlcBreadcrumb.vue'
 import Sparkline from '@/components/llc/Sparkline.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -246,6 +257,12 @@ interface VelocityHistory {
 }
 
 const logger = createLogger('ProjectBrowserView')
+
+// GH#11129: clipboard for clone_path copy button
+const { copy: copyToClipboard } = useClipboard()
+function copyClonePath(path: string): void {
+  void copyToClipboard(path)
+}
 const api = useApiClient()
 const route = useRoute()
 const { t } = useI18n()
@@ -682,5 +699,22 @@ onMounted(loadProjects)
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+/* GH#11129: copy clone_path button */
+.clone-copy-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.125rem 0.25rem;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm, 4px);
+  transition: color var(--duration-200);
+}
+
+.clone-copy-btn:hover {
+  color: var(--text-primary);
 }
 </style>
