@@ -1836,7 +1836,37 @@
       "score": "Score",
       "topIssue": "Top Issue",
       "close": "إغلاق",
-      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard."
+      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard.",
+      "dimensions": {
+        "maintainability": {
+          "label": "قابلية الصيانة",
+          "description": "الحالة بناءً على سهولة تغيير الكود وتوسيعه."
+        },
+        "reliability": {
+          "label": "الموثوقية",
+          "description": "الحالة بناءً على مدى ثبات عمل الكود دون أعطال."
+        },
+        "security": {
+          "label": "الأمان",
+          "description": "الحالة بناءً على التعرض للثغرات المعروفة والأنماط غير الآمنة."
+        },
+        "performance": {
+          "label": "الأداء",
+          "description": "الحالة بناءً على كفاءة التشغيل واستخدام الموارد."
+        },
+        "testability": {
+          "label": "قابلية الاختبار",
+          "description": "الحالة بناءً على مدى تغطية الكود بالاختبارات."
+        },
+        "documentation": {
+          "label": "التوثيق",
+          "description": "الحالة بناءً على مدى جودة توثيق الكود."
+        },
+        "runtime_risk": {
+          "label": "مخاطر وقت التشغيل",
+          "description": "الحالة بناءً على المواضع التي يفشل فيها الكود فعليًا أثناء التشغيل."
+        }
+      }
     },
     "bugPrediction": {
       "title": "Bug Prediction Dashboard",

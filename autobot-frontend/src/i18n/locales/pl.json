@@ -1836,7 +1836,37 @@
       "score": "Score",
       "topIssue": "Top Issue",
       "close": "Close",
-      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard."
+      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard.",
+      "dimensions": {
+        "maintainability": {
+          "label": "Łatwość utrzymania",
+          "description": "Kondycja oparta na tym, jak łatwo można zmieniać i rozszerzać kod."
+        },
+        "reliability": {
+          "label": "Niezawodność",
+          "description": "Kondycja oparta na tym, jak niezawodnie kod działa bez usterek."
+        },
+        "security": {
+          "label": "Bezpieczeństwo",
+          "description": "Kondycja oparta na podatności na znane luki i niebezpieczne wzorce."
+        },
+        "performance": {
+          "label": "Wydajność",
+          "description": "Kondycja oparta na wydajności w czasie działania i zużyciu zasobów."
+        },
+        "testability": {
+          "label": "Testowalność",
+          "description": "Kondycja oparta na tym, jak dobrze kod jest pokryty testami."
+        },
+        "documentation": {
+          "label": "Dokumentacja",
+          "description": "Kondycja oparta na tym, jak dobrze kod jest udokumentowany."
+        },
+        "runtime_risk": {
+          "label": "Ryzyko w czasie działania",
+          "description": "Kondycja oparta na tym, gdzie kod faktycznie zawodzi w czasie działania."
+        }
+      }
     },
     "bugPrediction": {
       "title": "Bug Prediction Dashboard",

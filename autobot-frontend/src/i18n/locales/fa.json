@@ -1239,7 +1239,37 @@
       "score": "Score",
       "topIssue": "Top Issue",
       "close": "Close",
-      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard."
+      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard.",
+      "dimensions": {
+        "maintainability": {
+          "label": "قابلیت نگهداری",
+          "description": "سلامت بر پایه سهولت تغییر و توسعه کد."
+        },
+        "reliability": {
+          "label": "قابلیت اطمینان",
+          "description": "سلامت بر پایه پایداری عملکرد کد بدون خطا."
+        },
+        "security": {
+          "label": "امنیت",
+          "description": "سلامت بر پایه میزان در معرض آسیب‌پذیری‌های شناخته‌شده و الگوهای ناامن بودن."
+        },
+        "performance": {
+          "label": "کارایی",
+          "description": "سلامت بر پایه کارایی زمان اجرا و مصرف منابع."
+        },
+        "testability": {
+          "label": "قابلیت آزمون",
+          "description": "سلامت بر پایه میزان پوشش کد توسط آزمون‌ها."
+        },
+        "documentation": {
+          "label": "مستندسازی",
+          "description": "سلامت بر پایه کیفیت مستندسازی کد."
+        },
+        "runtime_risk": {
+          "label": "ریسک زمان اجرا",
+          "description": "سلامت بر پایه جایی که کد واقعاً در زمان اجرا شکست می‌خورد."
+        }
+      }
     },
     "bugPrediction": {
       "title": "Bug Prediction Dashboard",

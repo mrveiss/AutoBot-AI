@@ -96,11 +96,12 @@
         :key="metric.category"
         class="metric-card"
         :class="{ 'low-score': metric.value < 60 }"
+        :title="getMetricDescription(metric.category)"
         @click="drillDown(metric.category)"
       >
         <div class="metric-header">
           <span class="metric-icon">{{ getMetricIcon(metric.category) }}</span>
-          <span class="metric-name">{{ metric.name }}</span>
+          <span class="metric-name">{{ getMetricLabel(metric.category, metric.name) }}</span>
         </div>
         <div class="metric-body">
           <div class="metric-score">
@@ -450,6 +451,7 @@ import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
 import type { DirectiveBinding } from 'vue';
 import { BaseModal } from '@autobot/ui'
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { getCssVar } from '@/composables/useCssVars';
 import { useWebSocket } from '@/composables/useWebSocket';
@@ -460,6 +462,7 @@ import UnwiredTrackerTile from '@/components/analytics/UnwiredTrackerTile.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 
 const logger = createLogger('CodeQualityDashboard');
+const { t, te } = useI18n();
 
 // Issue #3436: read sourceId from route param set by codebase/:sourceId parent
 const route = useRoute();
@@ -899,6 +902,7 @@ const METRIC_ICONS: Record<string, string> = {
   performance: '⚡',
   testability: '🧪',
   documentation: '📝',
+  runtime_risk: '⚠️',
 };
 
 // Pattern severity icons - static, created once
@@ -937,6 +941,19 @@ function getGradeDescription(grade: string): string {
 
 function getMetricIcon(category: string): string {
   return METRIC_ICONS[category] || '📊';
+}
+
+// Localised label for a quality dimension. Falls back to the backend-provided
+// display name when no i18n label is defined for the category.
+function getMetricLabel(category: string, fallback: string): string {
+  const key = `analytics.codeQuality.dimensions.${category}.label`;
+  return te(key) ? t(key) : fallback;
+}
+
+// Localised description for a quality dimension, or empty string when absent.
+function getMetricDescription(category: string): string {
+  const key = `analytics.codeQuality.dimensions.${category}.description`;
+  return te(key) ? t(key) : '';
 }
 
 function getPatternIcon(severity: string): string {
