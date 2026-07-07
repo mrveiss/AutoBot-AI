@@ -30,7 +30,12 @@ from slash_command_handler import get_slash_command_handler
 
 from .conversation import ConversationHandlerMixin
 from .llm_handler import LLMHandlerMixin, _emit_after_continuation, _emit_before_continuation
-from .models import LLMIterationContext, StreamingMessage, WorkflowSession
+from .models import (
+    LLMIterationContext,
+    StreamingMessage,
+    WorkflowSession,
+    build_governed_identity,
+)
 from .session_handler import SessionHandlerMixin
 from .tool_handler import ToolHandlerMixin
 
@@ -2919,6 +2924,11 @@ before summarizing.
         if "lightweight_mode_used" in llm_params:
             merged_context["lightweight_mode_used"] = llm_params["lightweight_mode_used"]
 
+        # GH#11159/#11160: lift governed identity (agent role + work item + declared
+        # approval gates) from the request context so the tool-dispatch seam can
+        # enforce forbidden_work and approval categories.
+        agent_context, work_item_id, approval_cats = build_governed_identity(merged_context, session_id)
+
         return LLMIterationContext(
             ollama_endpoint=llm_params["endpoint"],
             selected_model=llm_params["model"],
@@ -2931,6 +2941,9 @@ before summarizing.
             initial_prompt=llm_params["prompt"],
             message=message,
             context=merged_context,
+            agent_context=agent_context,
+            work_item_id=work_item_id,
+            requires_approval_before=approval_cats,
         )
 
     async def _execute_llm_workflow(

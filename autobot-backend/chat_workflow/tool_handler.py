@@ -406,6 +406,43 @@ BROWSER_TOOL_NAMES: frozenset[str] = frozenset(
     }
 )
 
+# GH#11160: maps a declared approval category (a work item's
+# ``requires_approval_before`` entry) to the tools that constitute that action. A
+# tool is approval-gated only when the work item declared its category; names
+# match by exact or prefix (e.g. ``deploy`` gates ``deploy_service``).
+_APPROVAL_CATEGORY_TOOLS: dict[str, tuple[str, ...]] = {
+    "pushing commits": ("git_push", "git_commit", "git_merge", "git_rebase", "git_force_push"),
+    "publishing": ("deploy", "publish", "content_reach"),
+    "destructive operations": (
+        "delete_file",
+        "remove_directory",
+        "bash",
+        "shell",
+        "execute_command",
+        "run_command",
+        "docker",
+        "kubectl",
+        "terraform",
+    ),
+    "rotating credentials": ("rotate_credentials", "rotate_key", "vault_rotate"),
+}
+
+
+def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
+    """Return the declared category that gates *tool_name*, else None (GH#11160).
+
+    Matches by exact name or ``<gated>_`` word-boundary prefix (so ``deploy`` gates
+    ``deploy_service`` but not ``deployment_status``). A false positive only ever
+    adds an approval hold — the fail-safe direction — never a bypass.
+    """
+    name = tool_name.lower()
+    for category in declared:
+        for gated in _APPROVAL_CATEGORY_TOOLS.get(category, ()):
+            if name == gated or name.startswith(gated + "_"):
+                return category
+    return None
+
+
 # Issue #650: Pre-compiled regex for tool call parsing (performance optimization)
 # Handles both uppercase and lowercase TOOL_CALL tags with nested JSON in params
 _TOOL_CALL_PATTERN = re.compile(
@@ -2428,6 +2465,52 @@ class ToolHandlerMixin:
             metadata={"tool": tool_name, "error": True, "config_protection": True},
         )
 
+    def _enforce_work_item_approval(
+        self,
+        tool_call: dict[str, Any],
+        ctx: "LLMIterationContext" | None,
+        execution_results: list[dict[str, Any]],
+    ) -> WorkflowMessage | None:
+        """Hold a tool the work item declared as approval-gated (GH#11160).
+
+        When the run carries a work item whose ``requires_approval_before`` names
+        the action category of this tool, the action is held pending approval — the
+        declared gate is honored at the production seam. No work item / no matching
+        category → ``None``. Categories are resolved onto the context upstream, so
+        this needs no DB round-trip.
+        """
+        if ctx is None or not getattr(ctx, "requires_approval_before", None):
+            return None
+        tool_name = tool_call.get("name", "")
+        category = _approval_category_for(tool_name, ctx.requires_approval_before)
+        if category is None:
+            return None
+        work_item_id = getattr(ctx, "work_item_id", None)
+        msg = (
+            f"Action '{tool_name}' requires approval before proceeding — the work item "
+            f"declares '{category}' as approval-gated (requires_approval_before)."
+        )
+        logger.warning("[GH#11160] Held tool '%s' pending approval — declared category '%s'", tool_name, category)
+        execution_results.append(
+            {
+                "tool": tool_name,
+                "status": "pending_approval",
+                "reason": msg,
+                "approval_category": category,
+                "work_item_id": work_item_id,
+            }
+        )
+        return WorkflowMessage(
+            type="approval_required",
+            content=msg,
+            metadata={
+                "tool": tool_name,
+                "approval_required": True,
+                "category": category,
+                "work_item_id": work_item_id,
+            },
+        )
+
     async def _dispatch_tool_call(
         self,
         tool_call: dict[str, Any],
@@ -2462,6 +2545,13 @@ class ToolHandlerMixin:
         config_msg = self._enforce_config_protection(tool_call, execution_results)
         if config_msg is not None:
             yield config_msg
+            return
+
+        # GH#11160: hold a tool the work item declared as approval-gated
+        # (requires_approval_before) pending approval, at the same seam.
+        approval_msg = self._enforce_work_item_approval(tool_call, ctx, execution_results)
+        if approval_msg is not None:
+            yield approval_msg
             return
 
         if tool_name == "respond":
