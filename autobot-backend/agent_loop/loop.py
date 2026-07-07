@@ -1348,9 +1348,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
         return None
 
     @staticmethod
-    def _resolve_forbidden_tools(
-        config: "AgentLoopConfig", agent_id: str | None
-    ) -> "AgentLoopConfig":
+    def _resolve_forbidden_tools(config: "AgentLoopConfig", agent_id: str | None) -> "AgentLoopConfig":
         """Populate ``config.forbidden_tools`` from the agent's manifest (GH#11145).
 
         Reads ``forbidden_work`` off the agent's ``AgentProfile`` via
