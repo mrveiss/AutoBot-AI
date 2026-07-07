@@ -29645,7 +29645,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/api/llm-auth/oauth/callback": {
+    "/api/llm-auth/oauth/callback": {
         parameters: {
             query?: never;
             header?: never;
@@ -29664,14 +29664,14 @@ export interface paths {
          *
          *     Requires admin — stored credential is system-wide (shared by all users).
          */
-        post: operations["oauth_callback_api_api_llm_auth_oauth_callback_post"];
+        post: operations["oauth_callback_api_llm_auth_oauth_callback_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/api/llm-auth/device/initiate": {
+    "/api/llm-auth/device/initiate": {
         parameters: {
             query?: never;
             header?: never;
@@ -29690,14 +29690,14 @@ export interface paths {
          *
          *     Requires admin — stored credential is system-wide (shared by all users).
          */
-        post: operations["device_initiate_api_api_llm_auth_device_initiate_post"];
+        post: operations["device_initiate_api_llm_auth_device_initiate_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/api/llm-auth/device/poll": {
+    "/api/llm-auth/device/poll": {
         parameters: {
             query?: never;
             header?: never;
@@ -29715,14 +29715,14 @@ export interface paths {
          *
          *     Requires admin — stored credential is system-wide (shared by all users).
          */
-        post: operations["device_poll_api_api_llm_auth_device_poll_post"];
+        post: operations["device_poll_api_llm_auth_device_poll_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/api/llm-auth/status/{provider_name}": {
+    "/api/llm-auth/status/{provider_name}": {
         parameters: {
             query?: never;
             header?: never;
@@ -29733,7 +29733,7 @@ export interface paths {
          * Provider Auth Status
          * @description Return the auth connection status for a provider.
          */
-        get: operations["provider_auth_status_api_api_llm_auth_status__provider_name__get"];
+        get: operations["provider_auth_status_api_llm_auth_status__provider_name__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -29742,7 +29742,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/api/llm-auth/{provider_name}": {
+    "/api/llm-auth/{provider_name}": {
         parameters: {
             query?: never;
             header?: never;
@@ -29758,7 +29758,7 @@ export interface paths {
          *
          *     Requires admin — credential is system-wide (shared by all users).
          */
-        delete: operations["revoke_provider_auth_api_api_llm_auth__provider_name__delete"];
+        delete: operations["revoke_provider_auth_api_llm_auth__provider_name__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -46620,6 +46620,11 @@ export interface paths {
         /**
          * List Insights
          * @description List distilled experiment insights.
+         *
+         *     Resilient by design (#11081): on a fresh/empty deployment the insights
+         *     collection may not exist yet (or the vector store is unavailable), which
+         *     would otherwise 500 and crash the whole Experiments dashboard. Absence of
+         *     data is not an error — return an empty list instead.
          */
         get: operations["list_insights_api_autoresearch_insights_get"];
         put?: never;
@@ -60946,7 +60951,7 @@ export interface components {
             /**
              * Codebase Path
              * @description Path to codebase to index
-             * @default /home/runner/work/AutoBot-AI/AutoBot-AI
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-apidrift
              */
             codebase_path: string;
             /**
@@ -72344,7 +72349,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /opt/autobot
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI
              */
             repo_path: string;
             /**
@@ -72373,7 +72378,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /opt/autobot
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI
              */
             repo_path: string;
             /**
@@ -72393,7 +72398,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /opt/autobot
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI
              */
             repo_path: string;
             /**
@@ -72625,7 +72630,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /opt/autobot
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI
              */
             repo_path: string;
             /**
@@ -72715,7 +72720,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /opt/autobot
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI
              */
             repo_path: string;
             /**
@@ -72735,7 +72740,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path (must be whitelisted)
-             * @default /opt/autobot
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI
              */
             repo_path: string;
             /**
@@ -74988,7 +74993,7 @@ export interface components {
              * Source Paths
              * @description Paths to populate from
              * @default [
-             *       "/home/runner/work/AutoBot-AI/AutoBot-AI"
+             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-apidrift"
              *     ]
              */
             source_paths: string[];
@@ -81838,7 +81843,7 @@ export interface components {
          *       "name": "Primary NPU Worker",
          *       "platform": "linux",
          *       "priority": 8,
-         *       "url": "http://127.0.0.1:8081",
+         *       "url": "http://YOUR_BACKEND_IP:8081",
          *       "weight": 2
          *     }
          */
@@ -81902,7 +81907,7 @@ export interface components {
          *         "name": "Primary NPU Worker",
          *         "platform": "linux",
          *         "priority": 8,
-         *         "url": "http://127.0.0.1:8081",
+         *         "url": "http://YOUR_BACKEND_IP:8081",
          *         "weight": 2
          *       },
          *       "metrics": {
@@ -83150,7 +83155,7 @@ export interface components {
             /**
              * Path
              * @description Path to analyze (defaults to project root)
-             * @default /home/runner/work/AutoBot-AI/AutoBot-AI
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-apidrift
              */
             path: string;
             /**
@@ -89656,7 +89661,7 @@ export interface components {
              * Scan Paths
              * @description Paths to scan
              * @default [
-             *       "/home/runner/work/AutoBot-AI/AutoBot-AI"
+             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-apidrift"
              *     ]
              */
             scan_paths: string[];
@@ -94722,7 +94727,7 @@ export interface components {
             /**
              * Test Path
              * @description Path to test directory
-             * @default /home/runner/work/AutoBot-AI/AutoBot-AI/autobot-backend
+             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-apidrift/autobot-backend
              */
             test_path: string;
             /**
@@ -98507,7 +98512,7 @@ export interface components {
          *       "total_tasks_completed": 42,
          *       "total_tasks_failed": 2,
          *       "uptime_seconds": 3600.5,
-         *       "url": "http://127.0.0.1:8081",
+         *       "url": "http://YOUR_NPU_WORKER_IP:8081",
          *       "worker_id": "windows_npu_worker_abc123"
          *     }
          */
@@ -138219,7 +138224,7 @@ export interface operations {
             };
         };
     };
-    oauth_callback_api_api_llm_auth_oauth_callback_post: {
+    oauth_callback_api_llm_auth_oauth_callback_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -138252,7 +138257,7 @@ export interface operations {
             };
         };
     };
-    device_initiate_api_api_llm_auth_device_initiate_post: {
+    device_initiate_api_llm_auth_device_initiate_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -138285,7 +138290,7 @@ export interface operations {
             };
         };
     };
-    device_poll_api_api_llm_auth_device_poll_post: {
+    device_poll_api_llm_auth_device_poll_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -138318,7 +138323,7 @@ export interface operations {
             };
         };
     };
-    provider_auth_status_api_api_llm_auth_status__provider_name__get: {
+    provider_auth_status_api_llm_auth_status__provider_name__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -138349,7 +138354,7 @@ export interface operations {
             };
         };
     };
-    revoke_provider_auth_api_api_llm_auth__provider_name__delete: {
+    revoke_provider_auth_api_llm_auth__provider_name__delete: {
         parameters: {
             query?: never;
             header?: never;
