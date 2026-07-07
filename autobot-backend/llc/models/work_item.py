@@ -77,6 +77,17 @@ class LLCWorkItem(Base):
         server_default=sa.text("'[]'::jsonb"),
     )
 
+    # Declarative approval requirements (GH#11140): action categories that must be
+    # approved before the agent performs them (e.g. "pushing commits", "publishing",
+    # "destructive operations"). Makes governance visible at plan time; enforcement
+    # stays in the existing runtime approval flow. Empty list = no declared gates.
+    requires_approval_before: Mapped[list] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=sa.text("'[]'::jsonb"),
+    )
+
     # Status / priority
     status: Mapped[str] = mapped_column(
         sa.Enum(WorkItemStatus, name="workitemstatus", create_type=False, values_callable=pg_enum_values),

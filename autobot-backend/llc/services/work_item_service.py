@@ -247,6 +247,7 @@ class WorkItemService(LLCServiceBase):
         created_by_agent_id: Optional[str] = None,
         created_by_user_id: Optional[str] = None,
         labels: Optional[List[str]] = None,
+        requires_approval_before: Optional[List[str]] = None,
     ) -> LLCWorkItem:
         # GH#6469: inherit goal_id from parent when not explicitly provided
         resolved_goal_id: Optional[uuid.UUID] = uuid.UUID(goal_id) if goal_id else None
@@ -275,6 +276,7 @@ class WorkItemService(LLCServiceBase):
             created_by_agent_id=uuid.UUID(created_by_agent_id) if created_by_agent_id else None,
             created_by_user_id=uuid.UUID(created_by_user_id) if created_by_user_id else None,
             labels=labels or [],
+            requires_approval_before=requires_approval_before or [],
         )
         session.add(item)
         await session.flush()
@@ -300,6 +302,7 @@ class WorkItemService(LLCServiceBase):
             "priority",
             "story_points",
             "labels",
+            "requires_approval_before",
             "parent_id",
             "sprint_id",
             "goal_id",

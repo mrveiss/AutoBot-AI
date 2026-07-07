@@ -154,6 +154,8 @@ class WorkItemCreate(BaseModel):
     created_by_agent_id: Optional[str] = None
     created_by_user_id: Optional[str] = None
     labels: Optional[List[str]] = None
+    # GH#11140: declarative approval-gated action categories (plan-time visibility).
+    requires_approval_before: Optional[List[str]] = None
 
 
 class WorkItemUpdate(BaseModel):
@@ -168,6 +170,8 @@ class WorkItemUpdate(BaseModel):
     goal_id: Optional[str] = None
     assignee_agent_id: Optional[str] = None
     assignee_user_id: Optional[str] = None
+    # GH#11140: declarative approval-gated action categories.
+    requires_approval_before: Optional[List[str]] = None
     # GH#9020: planned schedule for the Gantt/timeline view.
     scheduled_start: Optional[datetime] = None
     scheduled_end: Optional[datetime] = None
@@ -331,6 +335,7 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
         "story_points": item.story_points,
         "labels": item.labels,
         "linked_pr_urls": item.linked_pr_urls or [],  # GH#9625
+        "requires_approval_before": item.requires_approval_before or [],  # GH#11140
         "parent_id": str(item.parent_id) if item.parent_id else None,
         "project_id": str(item.project_id) if item.project_id else None,
         "sprint_id": str(item.sprint_id) if item.sprint_id else None,
@@ -388,6 +393,7 @@ async def create_work_item(
         created_by_agent_id=body.created_by_agent_id,
         created_by_user_id=body.created_by_user_id,
         labels=body.labels,
+        requires_approval_before=body.requires_approval_before,
     )
     await session.commit()
     await _kb_manager.ensure_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
