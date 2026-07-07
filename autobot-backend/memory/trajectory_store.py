@@ -53,7 +53,7 @@ import json
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Literal, Optional, Sequence
 
 from autobot_shared.logging_manager import get_logger
 
@@ -107,7 +107,7 @@ class Trajectory:
         task_text: str,
         start_state_hash: str,
         action_sequence: List[Dict[str, Any]],
-        outcome: str,
+        outcome: Literal["success", "partial", "failure"],
         reward: float,
         duration: float,
         agent_id: str,
@@ -222,7 +222,7 @@ class TrajectoryStore:
         self,
         task_text: str,
         action_sequence: Sequence[Dict[str, Any]],
-        outcome: str,
+        outcome: Literal["success", "partial", "failure"],
         reward: float,
         duration: float,
         agent_id: str = "",
