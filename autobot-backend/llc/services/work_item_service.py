@@ -51,6 +51,22 @@ _bg_tasks: set = set()
 
 _CHECKOUT_TTL = 1800  # seconds
 
+
+def _validated_approval_categories(values: Optional[List[str]]) -> List[str]:
+    """Validate ``requires_approval_before`` entries against the controlled vocabulary (GH#11206).
+
+    A typo'd category matches no tools at the seam and silently disables the gate,
+    so reject unknown values here (fail-fast) rather than let governance no-op.
+    """
+    from autobot_shared.tool_catalogue import valid_approval_categories
+
+    vals = list(values or [])
+    valid = valid_approval_categories()
+    unknown = [v for v in vals if v not in valid]
+    if unknown:
+        raise ValueError(f"unknown approval categories: {unknown} (valid: {sorted(valid)})")
+    return vals
+
 # Allowed status transitions: from → {to, ...}
 _ALLOWED_TRANSITIONS: Dict[WorkItemStatus, set] = {
     WorkItemStatus.BACKLOG: {WorkItemStatus.READY, WorkItemStatus.BLOCKED, WorkItemStatus.CANCELLED},
@@ -276,7 +292,7 @@ class WorkItemService(LLCServiceBase):
             created_by_agent_id=uuid.UUID(created_by_agent_id) if created_by_agent_id else None,
             created_by_user_id=uuid.UUID(created_by_user_id) if created_by_user_id else None,
             labels=labels or [],
-            requires_approval_before=requires_approval_before or [],
+            requires_approval_before=_validated_approval_categories(requires_approval_before),
         )
         session.add(item)
         await session.flush()
@@ -320,6 +336,8 @@ class WorkItemService(LLCServiceBase):
         elif fields.get("assignee_agent_id"):
             item.assignee_user_id = None
             fields.setdefault("assignee_type", "agent")
+        if "requires_approval_before" in fields:
+            fields["requires_approval_before"] = _validated_approval_categories(fields["requires_approval_before"])
         for key, val in fields.items():
             if key not in allowed:
                 raise ValueError(f"Field '{key}' is not updatable via WorkItemService.update()")
