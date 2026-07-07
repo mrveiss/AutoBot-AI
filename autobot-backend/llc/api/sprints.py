@@ -35,7 +35,7 @@ from datetime import date, datetime
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -119,6 +119,15 @@ class ProgramResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CodeSourceSummary(BaseModel):
+    id: str
+    repo: Optional[str] = None
+    branch: Optional[str] = None
+    clone_path: Optional[str] = None
+    status: Optional[str] = None
+    error_message: Optional[str] = None
+
+
 class ProjectCreate(BaseModel):
     company_id: uuid.UUID
     program_id: Optional[uuid.UUID] = None
@@ -160,6 +169,9 @@ class ProjectResponse(BaseModel):
     # Card enrichment (#10232) — populated by list endpoints; defaults on detail reads.
     open_work_item_count: int = 0
     active_sprint_name: Optional[str] = None
+    # Company OS ↔ codebase-analytics link (#11129).
+    code_source_id: Optional[str] = None
+    code_source: Optional[CodeSourceSummary] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -284,6 +296,31 @@ async def _enrich_projects(session: AsyncSession, projects: List[LLCProject]) ->
         )
         for p in projects
     ]
+
+
+async def _project_source_summary(code_source_id: Optional[str]) -> Optional[CodeSourceSummary]:
+    """Resolve a CodeSource to a summary DTO; returns None when id is absent or source missing."""
+    if not code_source_id:
+        return None
+    from api.codebase_analytics.source_storage import get_source  # noqa: PLC0415 — lazy to avoid heavy __init__
+
+    src = await get_source(code_source_id)
+    if not src:
+        return None
+    return CodeSourceSummary(
+        id=src.id,
+        repo=src.repo,
+        branch=src.branch,
+        clone_path=src.clone_path,
+        status=str(src.status),
+        error_message=src.error_message,
+    )
+
+
+class AttachRepoRequest(BaseModel):
+    repo: str = Field(..., pattern=r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+    credential_id: Optional[str] = None
+    branch: str = "main"
 
 
 @router.get("/companies/{company_id}/portfolios", response_model=List[PortfolioResponse])
@@ -535,6 +572,29 @@ async def create_project(
     return project
 
 
+@router.get("/projects/with-repos", response_model=List[ProjectResponse])
+async def list_projects_with_repos(
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> List[ProjectResponse]:
+    """Return all projects in the caller's org that have a code source linked (#11129)."""
+    rows = (
+        await session.execute(
+            select(LLCProject).where(
+                LLCProject.company_id == ctx.org_id,
+                LLCProject.code_source_id.isnot(None),
+            )
+        )
+    ).scalars().all()
+    out: List[ProjectResponse] = []
+    for p in rows:
+        resp = ProjectResponse.model_validate(p)
+        resp.code_source = await _project_source_summary(p.code_source_id)
+        out.append(resp)
+    return out
+
+
 @router.get("/projects/{project_id}", response_model=ProjectResponse)
 async def get_project(
     project_id: uuid.UUID,
@@ -548,6 +608,54 @@ async def get_project(
     if project is None or str(project.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+@router.post("/projects/{project_id}/repo", response_model=ProjectResponse)
+async def attach_project_repo(
+    project_id: uuid.UUID,
+    body: AttachRepoRequest,
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> ProjectResponse:
+    """Attach a GitHub repo to a project by creating a CodeSource and storing its id (#11129)."""
+    project = (await session.execute(select(LLCProject).where(LLCProject.id == project_id))).scalar_one_or_none()
+    if project is None or str(project.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    # Re-attach: previous source link is overwritten; the old source object is left intact
+    # (lifecycle disposal is handled in Phase 2).
+    from api.codebase_analytics import source_service  # noqa: PLC0415 — lazy to avoid heavy __init__
+
+    src = await source_service.create_github_source(
+        name=f"{project.name} ({body.repo})",
+        repo=body.repo,
+        credential_id=body.credential_id,
+        branch=body.branch,
+        owner_id=str(_current_user.get("id") or _current_user.get("user_id") or ""),
+    )
+    project.code_source_id = src.id
+    await session.commit()
+    await session.refresh(project)
+    resp = ProjectResponse.model_validate(project)
+    resp.code_source = await _project_source_summary(project.code_source_id)
+    return resp
+
+
+@router.delete("/projects/{project_id}/repo", response_model=ProjectResponse)
+async def detach_project_repo(
+    project_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> ProjectResponse:
+    """Unlink the repo from a project; the CodeSource record survives (#11129)."""
+    project = (await session.execute(select(LLCProject).where(LLCProject.id == project_id))).scalar_one_or_none()
+    if project is None or str(project.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    project.code_source_id = None  # unlink only; source survives (deleted on disposal, Phase 2)
+    await session.commit()
+    await session.refresh(project)
+    return ProjectResponse.model_validate(project)
 
 
 @router.patch("/projects/{project_id}", response_model=ProjectResponse)
