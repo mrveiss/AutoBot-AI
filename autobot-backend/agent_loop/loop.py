@@ -139,6 +139,7 @@ def _run_checkpoint_key(task_id: str) -> str:
     """Redis key for a run's durable progress snapshot (GH#11175)."""
     return f"autobot:run:checkpoint:{task_id}"
 
+
 # =============================================================================
 # Agent Loop
 # =============================================================================
