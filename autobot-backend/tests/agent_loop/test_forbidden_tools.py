@@ -52,9 +52,7 @@ class TestForbiddenToolMatching:
 class TestCheckForbidden:
     def test_blocks_first_forbidden_tool(self) -> None:
         loop = _make_loop(frozenset({"ansible"}))
-        result = loop._check_forbidden(
-            [{"tool_name": "read_file"}, {"tool_name": "ansible"}]
-        )
+        result = loop._check_forbidden([{"tool_name": "read_file"}, {"tool_name": "ansible"}])
         assert "ansible" in result
         assert "forbidden" in result["ansible"]["error"].lower()
 
