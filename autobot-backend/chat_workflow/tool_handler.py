@@ -437,6 +437,7 @@ def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
                 return category
     return None
 
+
 # Issue #650: Pre-compiled regex for tool call parsing (performance optimization)
 # Handles both uppercase and lowercase TOOL_CALL tags with nested JSON in params
 _TOOL_CALL_PATTERN = re.compile(
