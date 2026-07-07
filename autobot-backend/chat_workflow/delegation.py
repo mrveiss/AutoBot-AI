@@ -10,9 +10,14 @@ manifest constrains it — agent autonomy with backend-enforced oversight, witho
 re-entering the chat pipeline.
 
 Provider-agnostic by design: ``run_delegated_subtask`` dispatches to a named
-engine. This module ships the **claude_code** engine (an ``ExecutionBackend`` that
-runs its own tool loop, governed via ``--disallowedTools`` from the profile — see
-GH#11188); the in-process internal-LLM engine is a follow-up that registers here.
+engine. Two engines ship:
+
+- **claude_code** — an ``ExecutionBackend`` that runs its own tool loop out of
+  process, governed via ``--disallowedTools`` mapped from the profile (GH#11188).
+- **internal** — AutoBot's own LLM driving the production continuation loop, so
+  the subagent's tools flow through the ``_dispatch_tool_call`` seam and inherit
+  ``forbidden_work`` enforcement for free. Runs in process, so it also threads an
+  incremented ``delegation_depth`` — a nested ``delegate`` is depth-bounded.
 
 OFF by default (``AUTOBOT_DELEGATION_ENABLED``) so the live chat path is unchanged
 until delegation is explicitly enabled and validated.
@@ -82,9 +87,54 @@ async def _run_claude_code_subagent(task: str, agent_type: str, depth: int) -> s
     return result.stdout or result.stderr or ""
 
 
-# Engine registry — the internal-LLM engine registers here in a follow-up (GH#11207).
+async def _run_internal_subagent(task: str, agent_type: str, depth: int) -> str:
+    """Run *task* as a governed **internal-LLM** subagent; return its final text.
+
+    Drives the production continuation loop (``_execute_llm_continuation_loop``) with
+    a governed ``LLMIterationContext``: setting ``agent_context.agent_id`` makes every
+    tool the subagent calls pass through ``_dispatch_tool_call``'s ``forbidden_work``
+    enforcement. ``delegation_depth`` is placed on the ctx so an in-loop ``delegate``
+    call is depth-bounded. No DB/session is created — the loop runs on the bare ctx.
+    """
+    from autobot_shared.ssot_config import config
+    from chat_workflow import get_chat_workflow_manager
+    from chat_workflow.models import LLMIterationContext, build_governed_identity
+
+    session_id = f"delegate-{agent_type}-d{depth}"
+    agent_ctx, work_item_id, approval_categories = build_governed_identity({"agent_id": agent_type}, session_id)
+    ctx = LLMIterationContext(
+        ollama_endpoint=config.ollama_endpoint,
+        selected_model=config.llm.default_model,
+        session_id=session_id,
+        terminal_session_id=session_id,
+        used_knowledge=False,
+        rag_citations=[],
+        workflow_messages=[],
+        initial_prompt=task,
+        message=task,
+        agent_context=agent_ctx,
+        work_item_id=work_item_id,
+        requires_approval_before=approval_categories,
+        context={"delegation_depth": depth + 1},
+    )
+    logger.info("delegation: internal subagent agent=%s depth=%d model=%s", agent_type, depth, ctx.selected_model)
+    responses: List[str] = []
+    # Uses the shared ChatWorkflowManager singleton — safe because the loop keys all
+    # state off the per-call ctx (sessions/history never touched). The lone shared
+    # instance var it toggles, ``_current_lightweight_mode``, only tags stream-cost
+    # metadata (best-effort; GH#11216 tracks moving it onto ctx for full isolation).
+    async for item in get_chat_workflow_manager()._execute_llm_continuation_loop(ctx):
+        # The loop streams WorkflowMessages, then yields a final
+        # ``(all_llm_responses, execution_history, error)`` tuple.
+        if isinstance(item, tuple) and len(item) == 3:
+            responses = item[0] or responses
+    return "\n".join(r for r in responses if r)
+
+
+# Engine registry — provider-agnostic dispatch; new engines register a name here.
 _ENGINES: Dict[str, Callable[[str, str, int], Awaitable[str]]] = {
     "claude_code": _run_claude_code_subagent,
+    "internal": _run_internal_subagent,
 }
 
 

@@ -77,6 +77,43 @@ async def test_claude_code_engine_passes_disallowed_from_forbidden_work():
     assert "Bash" in task.metadata["disallowed_tools"]
 
 
+# --- internal-LLM engine ---------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_internal_engine_governs_and_bounds_depth():
+    # The internal engine drives the production loop with a governed ctx: agent_id
+    # set (→ forbidden_work enforced at the seam) and delegation_depth incremented
+    # (→ an in-loop delegate is bounded). It returns the joined LLM responses.
+    captured = {}
+
+    async def _fake_loop(ctx):
+        captured["ctx"] = ctx
+        yield ("progress message — ignored")  # non-tuple stream item
+        yield (["part one", "", "part two"], [], None)  # final (responses, history, error)
+
+    import chat_workflow
+
+    fake_mgr = type("M", (), {"_execute_llm_continuation_loop": staticmethod(_fake_loop)})()
+    with patch.object(chat_workflow, "get_chat_workflow_manager", return_value=fake_mgr):
+        out = await delegation._run_internal_subagent("do the thing", "research_agent", 1)
+
+    assert out == "part one\npart two"  # empty parts dropped, rest joined
+    ctx = captured["ctx"]
+    assert ctx.agent_context is not None and ctx.agent_context.agent_id == "research_agent"
+    assert ctx.context["delegation_depth"] == 2  # depth 1 → subagent sees 2
+    assert ctx.initial_prompt == "do the thing"
+
+
+@pytest.mark.asyncio
+async def test_internal_engine_registered_and_dispatches():
+    engine = AsyncMock(return_value="internal result")
+    with patch.dict(delegation._ENGINES, {"internal": engine}):
+        out = await run_delegated_subtask("t", agent_type="research_agent", depth=0, engine="internal")
+    assert out == "internal result"
+    engine.assert_awaited_once_with("t", "research_agent", 0)
+
+
 # --- _handle_delegate_tool: flag off = unchanged, on = runs subagent -------
 
 
