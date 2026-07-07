@@ -283,9 +283,10 @@ def _build_llc_app(
         org_id=org_id, user_id=_FIXED_USER_ID, is_platform_admin=False
     )
 
-    patch("llc.kb.collections.KbCollectionManager.ensure_collection", new=AsyncMock(return_value=None)).start()
+    _patch_kb = patch("llc.kb.collections.KbCollectionManager.ensure_collection", new=AsyncMock(return_value=None))
+    _patch_kb.start()
 
-    return app
+    return app, _patch_kb
 
 
 @pytest.fixture
@@ -315,7 +316,7 @@ async def llc_client() -> AsyncGenerator[AsyncClient, None]:
     pkg_mod = sys.modules["api.codebase_analytics"]
     pkg_mod.source_service = svc_mod  # type: ignore[attr-defined]
 
-    app = _build_llc_app(org, project, project_with_repo)
+    app, _patch_kb = _build_llc_app(org, project, project_with_repo)
 
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -326,7 +327,7 @@ async def llc_client() -> AsyncGenerator[AsyncClient, None]:
     finally:
         svc_mod.create_github_source = orig_create  # type: ignore[attr-defined]
         storage_mod.get_source = orig_get  # type: ignore[attr-defined]
-        patch.stopall()
+        _patch_kb.stop()
 
 
 @pytest.fixture
