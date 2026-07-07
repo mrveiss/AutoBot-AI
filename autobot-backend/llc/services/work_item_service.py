@@ -67,6 +67,7 @@ def _validated_approval_categories(values: Optional[List[str]]) -> List[str]:
         raise ValueError(f"unknown approval categories: {unknown} (valid: {sorted(valid)})")
     return vals
 
+
 # Allowed status transitions: from → {to, ...}
 _ALLOWED_TRANSITIONS: Dict[WorkItemStatus, set] = {
     WorkItemStatus.BACKLOG: {WorkItemStatus.READY, WorkItemStatus.BLOCKED, WorkItemStatus.CANCELLED},
