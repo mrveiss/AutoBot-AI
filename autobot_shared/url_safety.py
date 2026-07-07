@@ -211,9 +211,24 @@ def require_allowlisted_https(url: str, allowed_hosts: Collection[str]) -> None:
         raise ValueError("Only the standard https port (443) is permitted")
 
 
+def host_matches(host: str, domain: str) -> bool:
+    """Return True iff *host* is exactly *domain* or a subdomain of it (#11226).
+
+    Domain-boundary-aware trust check. Unlike a substring test (``domain in host``)
+    or an unanchored ``host.endswith(domain)``, this cannot be fooled by an
+    attacker-controlled name that merely *contains* or *ends with* a trusted label:
+    ``evilgithub.com`` does NOT match ``github.com``, while ``github.com`` and
+    ``sub.github.com`` do. Case-insensitive and tolerant of a trailing FQDN dot.
+    """
+    host = host.lower().rstrip(".")
+    domain = domain.lower().rstrip(".")
+    return host == domain or host.endswith("." + domain)
+
+
 __all__ = [
     "is_public_url",
     "is_public_url_async",
     "resolve_safe_ip_async",
     "require_allowlisted_https",
+    "host_matches",
 ]
