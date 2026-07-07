@@ -89,3 +89,25 @@ async def test_get_role_swallows_redis_failure():
     svc = SessionRoleService()
     svc._get_redis = AsyncMock(side_effect=RuntimeError("redis down"))
     assert await svc.get_role("s3") is None  # must not raise into chat
+
+
+# --- end-to-end: pinned role → forbidden tool blocked at the seam ----------
+
+
+def test_pinned_role_blocks_forbidden_tool_end_to_end():
+    """apply_role → build_governed_identity → _enforce_forbidden_work must block."""
+    from types import SimpleNamespace
+
+    from chat_workflow.models import build_governed_identity
+    from chat_workflow.tool_handler import ToolHandlerMixin
+
+    # A session pinned to research_agent (which forbids infra/shell tools).
+    context = apply_role({"agent_id": "client_supplied_ignored"}, "research_agent")
+    agent_context, _, _ = build_governed_identity(context, "sess-e2e")
+    assert agent_context.agent_id == "research_agent"  # trusted role won
+
+    mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
+    ctx = SimpleNamespace(agent_context=agent_context, requires_approval_before=[], work_item_id=None)
+    results: list[dict] = []
+    msg = mixin._enforce_forbidden_work({"name": "bash"}, ctx, results)
+    assert msg is not None and msg.metadata.get("forbidden_by_manifest") is True

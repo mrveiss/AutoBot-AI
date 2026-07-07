@@ -72,7 +72,7 @@ class SessionRoleService(AsyncRedisClientMixin):
             if raw is None:
                 return None
             return raw.decode() if isinstance(raw, bytes) else str(raw)
-        except Exception as exc:  # pragma: no cover - defensive; resolution must not break chat
+        except Exception as exc:  # defensive; resolution must never break chat
             logger.warning("session_role.get failed for session=%s: %s", session_id, exc)
             return None
 
