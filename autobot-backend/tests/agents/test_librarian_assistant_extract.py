@@ -224,6 +224,38 @@ def test_source_for_url_no_scheme_generic():
     assert _source_for_url("example.com/page") == "web_page"
 
 
+def test_source_for_url_mobile_youtube():
+    assert _source_for_url("https://m.youtube.com/watch?v=abc") == "youtube"
+
+
+def test_source_for_url_old_youtube():
+    assert _source_for_url("https://old.youtube.com/watch?v=abc") == "youtube"
+
+
+def test_source_for_url_youtu_be_exact():
+    assert _source_for_url("https://youtu.be/abc123") == "youtube"
+
+
+def test_source_for_url_notyoutube_com_is_web_page():
+    assert _source_for_url("https://notyoutube.com/watch") == "web_page"
+
+
+def test_source_for_url_fakeyoutube_com_is_web_page():
+    assert _source_for_url("https://fakeyoutube.com/watch") == "web_page"
+
+
+def test_source_for_url_notyoutu_be_is_web_page():
+    assert _source_for_url("https://notyoutu.be/abc") == "web_page"
+
+
+def test_source_for_url_myreddit_com_is_web_page():
+    assert _source_for_url("https://myreddit.com/r/python") == "web_page"
+
+
+def test_source_for_url_example_is_web_page():
+    assert _source_for_url("https://example.com/page") == "web_page"
+
+
 # ---------------------------------------------------------------------------
 # extract_content routing tests
 # ---------------------------------------------------------------------------
@@ -466,3 +498,106 @@ def test_research_query_has_no_playwright_check():
     assert not hasattr(
         LibrarianAssistant, "_check_playwright_service"
     ), "_check_playwright_service was not removed from LibrarianAssistant"
+
+
+# ---------------------------------------------------------------------------
+# Fix 1: Bootstrap guard checks routed source, not hardcoded "web_page"
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_extract_content_bootstrap_guard_on_routed_source():
+    """Bootstrap guard must trigger based on the routed source (e.g. 'youtube'),
+    not hardcoded 'web_page'.  A registry missing only 'youtube' must still call
+    register_default_sources when a YouTube URL is requested.
+    """
+    assistant = _make_assistant()
+    result = _make_content_result(
+        url="https://www.youtube.com/watch?v=test",
+        text="video transcript here",
+        structured={"title": "Test Video"},
+    )
+
+    reg = MagicMock()
+    # 'youtube' chain is missing; 'web_page' chain is present
+    reg.get_chain = MagicMock(side_effect=lambda name: None if name == "youtube" else MagicMock())
+    reg.fetch = AsyncMock(return_value=result)
+
+    bootstrap_called = []
+
+    def _fake_register(r):
+        bootstrap_called.append(True)
+
+    with patch.dict(
+        sys.modules,
+        {
+            "content_reach.registry": types.SimpleNamespace(get_content_source_registry=lambda: reg),
+            "content_reach.base": types.SimpleNamespace(ContentRequest=MagicMock(side_effect=lambda **kw: kw)),
+            "content_reach.bootstrap": types.SimpleNamespace(register_default_sources=_fake_register),
+        },
+    ):
+        content = await assistant.extract_content("https://www.youtube.com/watch?v=test")
+
+    assert bootstrap_called, "register_default_sources must be called when 'youtube' chain is missing"
+    assert content is not None
+    assert reg.fetch.call_args[0][0] == "youtube"
+
+
+# ---------------------------------------------------------------------------
+# Fix 2: is_trusted uses subdomain-safe matching
+# ---------------------------------------------------------------------------
+
+
+def test_is_trusted_exact_domain_match():
+    """Exact match on a trusted entry must yield is_trusted=True."""
+    assistant = _make_assistant()
+    result = _make_content_result(url="https://github.com/foo", text="body", structured={})
+    data = assistant._content_data_from_result(result, "https://github.com/foo")
+    assert data["is_trusted"] is True
+
+
+def test_is_trusted_subdomain_match():
+    """A subdomain of a trusted entry must yield is_trusted=True."""
+    assistant = _make_assistant()
+    result = _make_content_result(url="https://sub.github.com/foo", text="body", structured={})
+    data = assistant._content_data_from_result(result, "https://sub.github.com/foo")
+    assert data["is_trusted"] is True
+
+
+def test_is_trusted_evil_prefix_not_trusted():
+    """evilgithub.com must NOT be trusted even though it ends with 'github.com'."""
+    assistant = _make_assistant()
+    result = _make_content_result(url="https://evilgithub.com/foo", text="body", structured={})
+    data = assistant._content_data_from_result(result, "https://evilgithub.com/foo")
+    assert data["is_trusted"] is False
+
+
+# ---------------------------------------------------------------------------
+# Fix 3: Degraded summary when search produced results but extraction failed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_finalize_research_results_degraded_summary():
+    """When search_results is non-empty but extracted_content is empty,
+    summary must be the degraded human-readable note, not an empty string.
+    """
+    assistant = _make_assistant()
+    assistant.llm = MagicMock()
+
+    research_results = {
+        "summary": "",
+        "sources": [],
+        "stored_in_kb": [],
+        "search_results": [
+            {"url": "https://example.com/a", "title": "A"},
+            {"url": "https://example.com/b", "title": "B"},
+        ],
+        "content_extracted": [],
+        "error": None,
+    }
+
+    await assistant._finalize_research_results("test query", [], research_results)
+
+    assert research_results["summary"] != "", "summary must not be empty when search results were found"
+    assert "2" in research_results["summary"] or "result" in research_results["summary"].lower()

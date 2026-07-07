@@ -26,18 +26,27 @@ from services.llm_service import get_llm_service
 logger = get_logger(__name__)
 
 
+def _host_matches(host: str, domain: str) -> bool:
+    """Return True iff *host* is exactly *domain* or a subdomain of it.
+
+    Prevents partial-suffix attacks (e.g. ``notyoutube.com`` matching ``youtube.com``).
+    """
+    return host == domain or host.endswith("." + domain)
+
+
 def _source_for_url(url: str) -> str:
     """Route a URL to the appropriate content_reach source name.
 
     Returns "youtube" for YouTube URLs, "reddit" for Reddit URLs,
     "web_page" for everything else.  Robust to missing scheme.
+    Uses domain-boundary matching so ``notyoutube.com`` → "web_page".
     """
     if "://" not in url:
         url = "https://" + url
     host = urlparse(url).netloc.lower()
-    if "youtube.com" in host or "youtu.be" in host:
+    if _host_matches(host, "youtube.com") or _host_matches(host, "youtu.be"):
         return "youtube"
-    if "reddit.com" in host:
+    if _host_matches(host, "reddit.com"):
         return "reddit"
     return "web_page"
 
@@ -146,21 +155,20 @@ class LibrarianAssistant:
         """
         effective_url = result.url or url
         content = result.text or ""
-        structured = result.structured if result.structured else {}
-        netloc = urlparse(effective_url).netloc
+        structured = result.structured or {}
+        netloc = urlparse(effective_url).netloc.lower()
 
         title = structured.get("title") or netloc
         description = structured.get("description") or content[:200]
-        domain = netloc
 
-        is_trusted = any(domain.endswith(td) for td in self.trusted_domains) if domain else False
+        is_trusted = any(_host_matches(netloc, td) for td in self.trusted_domains) if netloc else False
 
         return {
             "url": effective_url,
             "title": title,
             "description": description,
             "content": content,
-            "domain": domain,
+            "domain": netloc,
             "is_trusted": is_trusted,
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "content_length": len(content),
@@ -182,23 +190,24 @@ class LibrarianAssistant:
         from content_reach.registry import get_content_source_registry
 
         reg = get_content_source_registry()
-        if reg.get_chain("web_page") is None:
+        source = _source_for_url(url)
+        if reg.get_chain(source) is None:
             from content_reach.bootstrap import register_default_sources
 
             register_default_sources(reg)
 
-        source = _source_for_url(url)
         try:
             result = await reg.fetch(source, ContentRequest(url=url, query=url, source=source))
         except Exception as exc:
             logger.error("content_reach extract failed for %s (%s): %s", url, source, exc)
             return None
 
-        if not result.success or not (result.text or "").strip():
+        text = result.text or ""
+        if not result.success or not text.strip():
             logger.info("No content extracted for %s via %s", url, source)
             return None
 
-        logger.info("Extracted %d characters from %s via %s", len(result.text or ""), url, source)
+        logger.info("Extracted %d characters from %s via %s", len(text), url, source)
         return self._content_data_from_result(result, url)
 
     def _build_fallback_assessment(self, content_data: Dict[str, Any], error_msg: str | None = None) -> Dict[str, Any]:
@@ -540,6 +549,9 @@ class LibrarianAssistant:
         if extracted_content:
             research_results["summary"] = await self._create_research_summary(query, extracted_content)
             research_results["sources"] = [self._build_source_entry(c) for c in extracted_content]
+        elif research_results.get("search_results"):
+            n = len(research_results["search_results"])
+            research_results["summary"] = f"Found {n} result(s) but could not extract content."
 
         logger.info(
             "Research completed: %d sources analyzed, %d stored in KB",
