@@ -1836,7 +1836,37 @@
       "score": "Score",
       "topIssue": "Top Issue",
       "close": "Close",
-      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard."
+      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard.",
+      "dimensions": {
+        "maintainability": {
+          "label": "Maintainability",
+          "description": "Health based on how easy the code is to change and extend."
+        },
+        "reliability": {
+          "label": "Reliability",
+          "description": "Health based on how consistently the code behaves without faults."
+        },
+        "security": {
+          "label": "Security",
+          "description": "Health based on exposure to known vulnerabilities and unsafe patterns."
+        },
+        "performance": {
+          "label": "Performance",
+          "description": "Health based on runtime efficiency and resource usage."
+        },
+        "testability": {
+          "label": "Testability",
+          "description": "Health based on how well the code is covered by tests."
+        },
+        "documentation": {
+          "label": "Documentation",
+          "description": "Health based on how well the code is documented."
+        },
+        "runtime_risk": {
+          "label": "Runtime Risk",
+          "description": "Health based on where code actually fails at runtime."
+        }
+      }
     },
     "bugPrediction": {
       "title": "Bug Prediction Dashboard",

@@ -1836,7 +1836,37 @@
       "score": "Bewertung",
       "topIssue": "Hauptproblem",
       "close": "Schließen",
-      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard."
+      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard.",
+      "dimensions": {
+        "maintainability": {
+          "label": "Wartbarkeit",
+          "description": "Zustand basierend darauf, wie leicht sich der Code ändern und erweitern lässt."
+        },
+        "reliability": {
+          "label": "Zuverlässigkeit",
+          "description": "Zustand basierend darauf, wie fehlerfrei sich der Code konstant verhält."
+        },
+        "security": {
+          "label": "Sicherheit",
+          "description": "Zustand basierend auf der Anfälligkeit für bekannte Schwachstellen und unsichere Muster."
+        },
+        "performance": {
+          "label": "Leistung",
+          "description": "Zustand basierend auf Laufzeiteffizienz und Ressourcennutzung."
+        },
+        "testability": {
+          "label": "Testbarkeit",
+          "description": "Zustand basierend darauf, wie gut der Code durch Tests abgedeckt ist."
+        },
+        "documentation": {
+          "label": "Dokumentation",
+          "description": "Zustand basierend darauf, wie gut der Code dokumentiert ist."
+        },
+        "runtime_risk": {
+          "label": "Laufzeitrisiko",
+          "description": "Zustand basierend darauf, wo der Code zur Laufzeit tatsächlich fehlschlägt."
+        }
+      }
     },
     "bugPrediction": {
       "title": "Fehlervorhersage",

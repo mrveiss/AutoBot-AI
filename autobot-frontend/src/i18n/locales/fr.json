@@ -1836,7 +1836,37 @@
       "score": "Score",
       "topIssue": "Top Issue",
       "close": "Close",
-      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard."
+      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard.",
+      "dimensions": {
+        "maintainability": {
+          "label": "Maintenabilité",
+          "description": "Santé basée sur la facilité à modifier et à étendre le code."
+        },
+        "reliability": {
+          "label": "Fiabilité",
+          "description": "Santé basée sur la régularité avec laquelle le code fonctionne sans défaut."
+        },
+        "security": {
+          "label": "Sécurité",
+          "description": "Santé basée sur l'exposition aux vulnérabilités connues et aux motifs non sûrs."
+        },
+        "performance": {
+          "label": "Performance",
+          "description": "Santé basée sur l'efficacité à l'exécution et l'utilisation des ressources."
+        },
+        "testability": {
+          "label": "Testabilité",
+          "description": "Santé basée sur la couverture du code par les tests."
+        },
+        "documentation": {
+          "label": "Documentation",
+          "description": "Santé basée sur la qualité de la documentation du code."
+        },
+        "runtime_risk": {
+          "label": "Risque à l'exécution",
+          "description": "Santé basée sur les endroits où le code échoue réellement à l'exécution."
+        }
+      }
     },
     "bugPrediction": {
       "title": "Bug Prediction Dashboard",

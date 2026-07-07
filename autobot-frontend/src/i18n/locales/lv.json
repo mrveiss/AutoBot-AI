@@ -1836,7 +1836,37 @@
       "score": "Score",
       "topIssue": "Top Issue",
       "close": "Close",
-      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard."
+      "noScanData": "No analysis data yet — run a codebase scan to populate the quality dashboard.",
+      "dimensions": {
+        "maintainability": {
+          "label": "Uzturamība",
+          "description": "Stāvoklis, kas balstīts uz to, cik viegli kodu mainīt un paplašināt."
+        },
+        "reliability": {
+          "label": "Uzticamība",
+          "description": "Stāvoklis, kas balstīts uz to, cik konsekventi kods darbojas bez kļūdām."
+        },
+        "security": {
+          "label": "Drošība",
+          "description": "Stāvoklis, kas balstīts uz pakļautību zināmām ievainojamībām un nedrošiem paraugiem."
+        },
+        "performance": {
+          "label": "Veiktspēja",
+          "description": "Stāvoklis, kas balstīts uz izpildes efektivitāti un resursu izmantošanu."
+        },
+        "testability": {
+          "label": "Testējamība",
+          "description": "Stāvoklis, kas balstīts uz to, cik labi kodu pārklāj testi."
+        },
+        "documentation": {
+          "label": "Dokumentācija",
+          "description": "Stāvoklis, kas balstīts uz to, cik labi kods ir dokumentēts."
+        },
+        "runtime_risk": {
+          "label": "Izpildlaika risks",
+          "description": "Stāvoklis, kas balstīts uz to, kur kods patiešām sabrūk izpildes laikā."
+        }
+      }
     },
     "bugPrediction": {
       "title": "Bug Prediction Dashboard",
