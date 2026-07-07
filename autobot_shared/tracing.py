@@ -339,12 +339,15 @@ def tool_span(tool_name: str, retry_count: int = 0):
     Returns:
         A synchronous context manager (``start_as_current_span`` is sync-compatible).
     """
+    if not _is_otel_enabled():
+        return _NoopSpan()
     try:
         from opentelemetry.trace import SpanKind
 
         tracer = get_tracer("autobot.agent_loop")
         attrs = {"tool.name": tool_name, "tool.retry_count": retry_count}
-        return _RecordingSpan(tracer.start_as_current_span("agent.tool", kind=SpanKind.INTERNAL, attributes=attrs))
+        span_cm = tracer.start_as_current_span("agent.tool", kind=SpanKind.INTERNAL, attributes=attrs)
+        return _RecordingSpan(span_cm, error_attr="tool.error")
     except ImportError:
         return _NoopSpan()
 
@@ -359,6 +362,8 @@ def step_span(iteration: int, task_id: str | None = None):
         iteration: Current iteration number (``agent.step.iteration`` attribute).
         task_id: Optional task identifier (``agent.step.task_id`` attribute).
     """
+    if not _is_otel_enabled():
+        return _NoopSpan()
     try:
         from opentelemetry.trace import SpanKind
 
@@ -366,7 +371,8 @@ def step_span(iteration: int, task_id: str | None = None):
         attrs: dict = {"agent.step.iteration": iteration}
         if task_id is not None:
             attrs["agent.step.task_id"] = task_id
-        return _RecordingSpan(tracer.start_as_current_span("agent.step", kind=SpanKind.INTERNAL, attributes=attrs))
+        span_cm = tracer.start_as_current_span("agent.step", kind=SpanKind.INTERNAL, attributes=attrs)
+        return _RecordingSpan(span_cm, error_attr="agent.step.error")
     except ImportError:
         return _NoopSpan()
 
@@ -378,9 +384,10 @@ class _RecordingSpan:
     boilerplate.  Only wraps spans returned by real OTel tracers (not noop spans).
     """
 
-    def __init__(self, ctx):
+    def __init__(self, ctx, error_attr: str = "error"):
         self._ctx = ctx
         self._span = None
+        self._error_attr = error_attr
 
     def __enter__(self):
         self._span = self._ctx.__enter__()
@@ -391,7 +398,7 @@ class _RecordingSpan:
             try:
                 from opentelemetry.trace import Status, StatusCode
 
-                self._span.set_attribute("tool.error", True)
+                self._span.set_attribute(self._error_attr, True)
                 self._span.record_exception(exc_val)
                 self._span.set_status(Status(StatusCode.ERROR, str(exc_val)))
             except Exception:

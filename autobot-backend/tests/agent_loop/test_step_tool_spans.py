@@ -49,16 +49,21 @@ def _make_in_memory_provider():
 class TestToolSpanEnabled:
     """tool_span emits expected span attributes when tracing is active."""
 
+    @pytest.fixture(autouse=True)
+    def _enable_otel(self):
+        """Tracing helpers no-op unless AUTOBOT_OTEL_ENABLED=true (hot-path guard)."""
+        with patch.dict(os.environ, {"AUTOBOT_OTEL_ENABLED": "true"}):
+            yield
+
     def test_tool_span_emits_span_name(self):
         from opentelemetry import trace
 
         provider, exporter = _make_in_memory_provider()
-        with patch.dict(os.environ, {"AUTOBOT_OTEL_ENABLED": "true"}):
-            with patch.object(trace, "get_tracer", wraps=provider.get_tracer):
-                from autobot_shared.tracing import tool_span
+        with patch.object(trace, "get_tracer", wraps=provider.get_tracer):
+            from autobot_shared.tracing import tool_span
 
-                with tool_span("web_search"):
-                    pass
+            with tool_span("web_search"):
+                pass
 
         spans = exporter.get_finished_spans()
         assert len(spans) == 1
@@ -153,6 +158,12 @@ class TestToolSpanEnabled:
 class TestStepSpanEnabled:
     """step_span emits expected span attributes when tracing is active."""
 
+    @pytest.fixture(autouse=True)
+    def _enable_otel(self):
+        """Tracing helpers no-op unless AUTOBOT_OTEL_ENABLED=true (hot-path guard)."""
+        with patch.dict(os.environ, {"AUTOBOT_OTEL_ENABLED": "true"}):
+            yield
+
     def test_step_span_emits_span_name(self):
         from opentelemetry import trace
 
@@ -229,6 +240,26 @@ class TestStepSpanEnabled:
 
 class TestSpanHelpersDisabled:
     """Helpers must not raise when tracing is disabled or SDK is absent."""
+
+    def test_tool_span_noop_when_disabled_but_sdk_present(self):
+        """SDK installed but AUTOBOT_OTEL_ENABLED=false → no-op, zero spans emitted.
+
+        This is the common production path (OTel installed, tracing off) and must
+        not allocate or export spans on the per-tool-call hot path.
+        """
+        from opentelemetry import trace
+
+        provider, exporter = _make_in_memory_provider()
+        with patch.dict(os.environ, {"AUTOBOT_OTEL_ENABLED": "false"}):
+            with patch.object(trace, "get_tracer", wraps=provider.get_tracer):
+                from autobot_shared.tracing import step_span, tool_span
+
+                with tool_span("web_search"):
+                    pass
+                with step_span(iteration=1, task_id="t1"):
+                    pass
+
+        assert len(exporter.get_finished_spans()) == 0
 
     def test_tool_span_noop_when_import_error(self):
         """When OTel SDK is absent, tool_span returns _NoopSpan — no error."""
