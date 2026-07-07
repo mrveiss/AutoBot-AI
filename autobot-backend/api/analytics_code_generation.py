@@ -52,6 +52,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_constants import TTL_30_DAYS
+from llm_shared.types import LLMType
 
 # LLM Service for real code generation
 from services.llm_service import get_llm_service
@@ -532,7 +533,7 @@ class CodeGenerationEngine:
             # Call LLM via chat
             response = await llm_client.chat(
                 messages=messages,
-                llm_type="task",  # Use task-optimized model
+                llm_type=LLMType.TASK,  # Use task-optimized model
                 temperature=0.2,  # Lower temperature for code generation
                 max_tokens=4096,
             )

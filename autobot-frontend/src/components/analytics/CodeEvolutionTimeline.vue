@@ -340,7 +340,7 @@ async function exportData() {
     URL.revokeObjectURL(url)
 
     showToast(t('analytics.codeEvolution.exportSuccess'), 'success')
-  } catch (e) {
+  } catch {
     showToast(t('analytics.codeEvolution.exportFailed'), 'error')
   }
 }

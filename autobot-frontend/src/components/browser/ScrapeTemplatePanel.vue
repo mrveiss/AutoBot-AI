@@ -264,9 +264,9 @@ export default {
       try {
         const resp = await api.runTemplate(runDialog.value.template.id, runDialog.value.url.trim())
         runDialog.value.results = resp.results
-      } catch (err: any) {
+      } catch (err) {
         logger.warn('Template run failed', err)
-        runDialog.value.error = err?.message ?? String(err)
+        runDialog.value.error = (err as { message?: string })?.message ?? String(err)
       } finally {
         isRunning.value = false
       }

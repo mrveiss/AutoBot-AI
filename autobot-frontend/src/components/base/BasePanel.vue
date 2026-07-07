@@ -69,7 +69,7 @@ const contentClasses = computed(() => [
   }
 ])
 
-const toggleCollapse = () => {
+const _toggleCollapse = () => {
   if (props.collapsible) {
     emit('toggle', !props.collapsed)
   }

@@ -9,7 +9,7 @@
         <div class="header-left">
           <span class="item-identifier">{{ item.identifier }}</span>
           <span class="type-badge" :class="`type-${item.type}`">{{ workItemTypeLabel(item.type) }}</span>
-          <span class="status-badge" :class="`status-${item.status}`">{{ item.status.replace('_', ' ') }}</span>
+          <span class="status-badge" :class="`status-${item.status}`">{{ workItemStatusLabel(item.status) }}</span>
         </div>
         <button class="close-btn" @click="$emit('close')" :aria-label="$t('common.close')">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="close-icon">
@@ -245,7 +245,7 @@ import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
 const logger = createLogger('WorkItemDetail')
 const api = useApiClient()
 const { t } = useI18n()
-const { workItemTypeLabel } = useWorkItemLabels()
+const { workItemTypeLabel, workItemStatusLabel } = useWorkItemLabels()
 
 import type { WorkItem } from './workItemTypes'
 

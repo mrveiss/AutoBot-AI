@@ -24,6 +24,7 @@ from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.event import EventType, TemporalEvent, TemporalType
 from knowledge.pipeline.registry import TaskRegistry
+from llm_shared.types import LLMType
 from services.llm_service import get_llm_service
 
 logger = get_logger(__name__)
@@ -137,7 +138,7 @@ class EventExtractor(BaseCognifier):
             chunks,
             llm=self.llm,
             batch_prompt_template=EVENT_EXTRACTION_BATCH_PROMPT,
-            llm_type="extraction",
+            llm_type=LLMType.EXTRACTION,
             max_chunk_chars=config.cognifier_batch_max_chunk_chars,
             convert=lambda raw, chunk: self._convert_to_events(raw, chunk, entity_map, context),
             extract_one=lambda chunk: self._extract_from_chunk(chunk, entity_map, context),
@@ -157,7 +158,7 @@ class EventExtractor(BaseCognifier):
         prompt = EVENT_EXTRACTION_PROMPT.format(text=chunk.content)
         try:
             response = await self.llm.chat(
-                [{"role": "user", "content": prompt}], llm_type="extraction", structured_output=True
+                [{"role": "user", "content": prompt}], llm_type=LLMType.EXTRACTION, structured_output=True
             )
         except Exception as e:
             logger.error("Event extraction LLM call failed (transient): %s", e)

@@ -318,7 +318,6 @@
 <script>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for ManPageManager

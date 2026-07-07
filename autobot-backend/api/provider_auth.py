@@ -12,8 +12,7 @@ vault (``services.envelope_secrets_service``).
 
 Routes
 ------
-POST /api/llm-auth/oauth/initiate          — begin authorization-code flow
-POST /api/llm-auth/oauth/callback          — exchange code + persist tokens
+POST /api/llm-auth/oauth/callback          — exchange authorization code + persist tokens
 POST /api/llm-auth/device/initiate         — begin device-code flow
 POST /api/llm-auth/device/poll             — poll for device-code approval + persist
 GET  /api/llm-auth/status/{provider_name}  — check whether a provider has a stored token
@@ -104,8 +103,21 @@ def _validate_outbound_url(url: str) -> None:
             detail=f"Host '{host}' is not in the provider OAuth allowlist",
         )
 
+    # Port pinning (#11022): only the standard https port is allowed, so an
+    # allowlisted host can't be used to reach a non-HTTPS service on another port
+    # (e.g. https://api.github.com:22/...).
+    if parsed.port not in (None, 443):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only the standard https port (443) is permitted",
+        )
 
-router = APIRouter(prefix="/api/llm-auth", tags=["llm-auth"])
+
+# The registry/app-factory prepends "/api" (see feature_routers.py), so this
+# router carries only "/llm-auth" → resolves to /api/llm-auth. A "/api/llm-auth"
+# prefix here would wrongly yield /api/api/llm-auth and 404 every OAuth call
+# (matches the #9864 budget-policies fix; the frontend calls /api/llm-auth/*). #11092
+router = APIRouter(prefix="/llm-auth", tags=["llm-auth"])
 
 # System vault string — provider-level tokens are scoped to the system vault so
 # all authenticated users can use the shared provider connection.

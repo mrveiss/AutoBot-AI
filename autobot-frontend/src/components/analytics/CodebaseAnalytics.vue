@@ -448,9 +448,9 @@ import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
 import { useNotificationBus } from '@/composables/useNotificationBus'
-import { getCssVar } from '@/composables/useCssVars'
 import { useCodebaseExport, type SectionType } from '@/composables/analytics/useCodebaseExport'
 import type { ScanDefinition } from '@/composables/useAnalyticsScanRunner'
+import type { PatternAnalysisReport } from '@/composables/usePatternAnalysis'
 import { useIndexingJob } from '@/composables/analytics/useIndexingJob'
 import { useDashboardLoaders } from '@/composables/analytics/useDashboardLoaders'
 import { useSourceRegistry } from '@/composables/analytics/useSourceRegistry'
@@ -904,7 +904,7 @@ const runFullAnalysis = async () => {
 }
 
 // Pattern analysis event handlers
-const onPatternAnalysisComplete = (report: any) => {
+const onPatternAnalysisComplete = (report: PatternAnalysisReport) => {
   logger.info('Pattern analysis complete:', report?.analysis_summary)
   notify(t('analytics.codebase.notify.patternAnalysisComplete', { count: report?.analysis_summary?.total_patterns_found || 0 }), 'success')
 }

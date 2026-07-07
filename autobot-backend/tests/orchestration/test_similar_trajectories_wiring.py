@@ -111,20 +111,21 @@ def test_build_planning_prompt_without_trajectories_unchanged():
 
 
 @pytest.mark.asyncio
-async def test_annotate_context_populates_similar_trajectories():
+async def test_annotate_context_populates_similar_trajectories(monkeypatch):
     """High-reward trajectories from the store → context['similar_trajectories'] set."""
     import types as _types
 
     # Inject a hollow memory.trajectory_store stub so the local import inside
     # _annotate_context_with_trajectories resolves without ChromaDB.
+    # monkeypatch.setitem auto-restores the entry after the test so the real
+    # sys.modules is left untouched for other files.
     fake_traj = _make_trajectory("Past task", "sequential", 0.9)
     fake_store = AsyncMock()
     fake_store.find_similar_trajectories = AsyncMock(return_value=[fake_traj])
 
     _traj_mod = _types.ModuleType("memory.trajectory_store")
     _traj_mod.get_trajectory_store = AsyncMock(return_value=fake_store)  # type: ignore[attr-defined]
-    sys.modules.setdefault("memory.trajectory_store", _traj_mod)
-    sys.modules["memory.trajectory_store"].get_trajectory_store = AsyncMock(return_value=fake_store)
+    monkeypatch.setitem(sys.modules, "memory.trajectory_store", _traj_mod)
 
     from orchestration.workflow_planner import WorkflowPlanner
 
@@ -143,7 +144,7 @@ async def test_annotate_context_populates_similar_trajectories():
 
 
 @pytest.mark.asyncio
-async def test_annotate_context_no_trajectories_context_unchanged():
+async def test_annotate_context_no_trajectories_context_unchanged(monkeypatch):
     """No matching trajectories → context left unchanged (no key inserted)."""
     import types as _types
 
@@ -152,7 +153,7 @@ async def test_annotate_context_no_trajectories_context_unchanged():
 
     _traj_mod = _types.ModuleType("memory.trajectory_store")
     _traj_mod.get_trajectory_store = AsyncMock(return_value=fake_store)  # type: ignore[attr-defined]
-    sys.modules["memory.trajectory_store"] = _traj_mod
+    monkeypatch.setitem(sys.modules, "memory.trajectory_store", _traj_mod)
 
     from orchestration.workflow_planner import WorkflowPlanner
 
@@ -170,13 +171,13 @@ async def test_annotate_context_no_trajectories_context_unchanged():
 
 
 @pytest.mark.asyncio
-async def test_annotate_context_store_failure_nonfatal():
+async def test_annotate_context_store_failure_nonfatal(monkeypatch):
     """Store failure must not propagate — planning continues, context unchanged."""
     import types as _types
 
     _traj_mod = _types.ModuleType("memory.trajectory_store")
     _traj_mod.get_trajectory_store = AsyncMock(side_effect=RuntimeError("ChromaDB down"))  # type: ignore[attr-defined]
-    sys.modules["memory.trajectory_store"] = _traj_mod
+    monkeypatch.setitem(sys.modules, "memory.trajectory_store", _traj_mod)
 
     from orchestration.workflow_planner import WorkflowPlanner
 

@@ -636,7 +636,7 @@ const deleteCurrentSession = () => {
   }
 }
 
-const handleDeleteConfirm = async (fileAction: string, fileOptions: Record<string, unknown>, selectedFactIds: string[] = []) => {
+const handleDeleteConfirm = async (fileAction: string, fileOptions: Record<string, unknown> | undefined, selectedFactIds: string[] = []) => {
   if (!deleteTargetSessionId.value) return
   const sessionId = deleteTargetSessionId.value
 
@@ -748,7 +748,7 @@ const cancelSelection = () => {
   sessionSelection.clear()
 }
 
-const toggleSelection = (sessionId: string) => {
+const _toggleSelection = (sessionId: string) => {
   sessionSelection.toggleByKey(sessionId)
 }
 

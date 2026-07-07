@@ -190,6 +190,46 @@ class ToolRegistry:
 
     # Issue #7509: Web research tools — direct internal dispatch via web_fetch package.
 
+    async def content_reach(self, source: str, query: str = "", url: str = "", limit: int = 5) -> Dict[str, Any]:
+        """Fetch external content via a Content Reach source chain (#10932)."""
+        from content_reach.base import BackendError, ContentRequest
+        from content_reach.registry import get_content_source_registry
+
+        args: Dict[str, Any] = {"source": source, "query": query, "url": url}
+        # C3 belt-and-suspenders: SSRF-guard any explicit URL before dispatching.
+        if url:
+            try:
+                from content_reach._url_guard import ensure_public_url
+
+                await ensure_public_url(url)
+            except BackendError as guard_exc:
+                return {
+                    "tool_name": "content_reach",
+                    "tool_args": args,
+                    "result": f"Blocked: {guard_exc}",
+                    "status": "error",
+                }
+        try:
+            req = ContentRequest(query=query, url=url, source=source, limit=limit)
+            result = await get_content_source_registry().fetch(source, req)
+            if not result.success:
+                return {
+                    "tool_name": "content_reach",
+                    "tool_args": args,
+                    "result": f"No content: {result.metadata.get('error', 'unknown')}",
+                    "status": "error",
+                }
+            header = f"## {source} via {result.backend_used}" + (f" ({result.url})" if result.url else "")
+            return {
+                "tool_name": "content_reach",
+                "tool_args": args,
+                "result": f"{header}\n\n{result.text or '*(no content)*'}",
+                "status": "success",
+            }
+        except Exception as exc:
+            self.logger.error("content_reach failed for %s: %s", source, exc)
+            return {"tool_name": "content_reach", "tool_args": args, "result": f"Error: {exc}", "status": "error"}
+
     async def scrape_url(self, url: str, render: str = "auto") -> Dict[str, Any]:
         """Fetch a URL and return its markdown content."""
         from web_fetch import RenderMode, WebFetcher
@@ -594,6 +634,13 @@ class ToolRegistry:
             ),
             # Issue #7509: Web research tools
             "scrapeurl": lambda args: self.scrape_url(args.get("url", ""), args.get("render", "auto")),
+            # #10932: Unified content_reach gateway
+            "contentreach": lambda args: self.content_reach(
+                args.get("source", ""),
+                args.get("query", ""),
+                args.get("url", ""),
+                args.get("limit", 5),
+            ),
             "crawlsite": lambda args: self.crawl_site(
                 args.get("seed_urls", []),
                 args.get("max_depth", 1),
@@ -766,6 +813,8 @@ class ToolRegistry:
             "crawl_site",
             "map_site",
             "extract_structured_data",
+            # #10932: Unified content_reach gateway
+            "content_reach",
         ]
         # Issue #1368/#2609: Browser tools are defined once in BROWSER_TOOL_NAMES
         # and imported here so the two lists cannot drift independently.

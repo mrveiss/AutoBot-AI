@@ -324,7 +324,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { createLogger } from '@/utils/debugUtils'
 import { useExpansion } from '@/composables/useExpansion'
 import {
   useLLMPatternData,
@@ -335,8 +334,6 @@ import {
   type LLMPatternCacheOpportunity,
   type LLMPatternAnalysisResult
 } from '@/composables/analytics/useLLMPatternData'
-
-const logger = createLogger('LLMPatternDashboard')
 
 // Types (aliases for component-local readability)
 type Stats = LLMPatternStats

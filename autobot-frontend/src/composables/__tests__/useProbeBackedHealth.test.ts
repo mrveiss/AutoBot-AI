@@ -191,3 +191,82 @@ describe('useProbeBackedHealth', () => {
     expect(result?.status).toBe('unavailable')
   })
 })
+
+describe('useProbeBackedHealth — renderNonOkFromProbe option', () => {
+  it('calls buildHealthy (not buildUnavailable) for a degraded probe when renderNonOkFromProbe is true', async () => {
+    apiGetSpy.mockResolvedValue({
+      probes: [
+        {
+          name: 'batch_jobs',
+          status: 'degraded',
+          data: { redis_connected: false },
+          detail: 'redis is slow',
+        },
+      ],
+    })
+
+    const buildHealthySpy = vi.fn(buildHealthy)
+    const buildUnavailableSpy = vi.fn(buildUnavailable)
+
+    const getHealth = useProbeBackedHealth<TestHealthResponse>({
+      probeName: 'batch_jobs',
+      buildHealthy: buildHealthySpy,
+      buildUnavailable: buildUnavailableSpy,
+      renderNonOkFromProbe: true,
+    })
+
+    const result = await getHealth()
+    expect(buildHealthySpy).toHaveBeenCalledOnce()
+    expect(buildUnavailableSpy).not.toHaveBeenCalled()
+    expect(result?.status).toBe('healthy')
+    expect(result?.message).toBe('redis is slow')
+  })
+
+  it('still calls buildUnavailable for a missing probe even when renderNonOkFromProbe is true', async () => {
+    apiGetSpy.mockResolvedValue({ probes: [] })
+
+    const buildHealthySpy = vi.fn(buildHealthy)
+    const buildUnavailableSpy = vi.fn(buildUnavailable)
+
+    const getHealth = useProbeBackedHealth<TestHealthResponse>({
+      probeName: 'batch_jobs',
+      buildHealthy: buildHealthySpy,
+      buildUnavailable: buildUnavailableSpy,
+      renderNonOkFromProbe: true,
+    })
+
+    const result = await getHealth()
+    expect(buildUnavailableSpy).toHaveBeenCalledOnce()
+    expect(buildHealthySpy).not.toHaveBeenCalled()
+    expect(result?.status).toBe('unavailable')
+    expect(result?.message).toBe('batch_jobs probe not registered')
+  })
+
+  it('default behavior (renderNonOkFromProbe absent) still routes degraded → buildUnavailable', async () => {
+    apiGetSpy.mockResolvedValue({
+      probes: [
+        {
+          name: 'batch_jobs',
+          status: 'degraded',
+          detail: 'degraded detail',
+        },
+      ],
+    })
+
+    const buildHealthySpy = vi.fn(buildHealthy)
+    const buildUnavailableSpy = vi.fn(buildUnavailable)
+
+    const getHealth = useProbeBackedHealth<TestHealthResponse>({
+      probeName: 'batch_jobs',
+      buildHealthy: buildHealthySpy,
+      buildUnavailable: buildUnavailableSpy,
+      // renderNonOkFromProbe not set → legacy behavior
+    })
+
+    const result = await getHealth()
+    expect(buildUnavailableSpy).toHaveBeenCalledOnce()
+    expect(buildHealthySpy).not.toHaveBeenCalled()
+    expect(result?.status).toBe('unavailable')
+    expect(result?.message).toBe('degraded detail')
+  })
+})

@@ -189,7 +189,8 @@
     "llcNoCompanies": "No companies yet.",
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
-    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it."
+    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
+    "systemHealth": "سسٹم کی صحت"
   },
   "llcMembers": {
     "title": "اراکین",
@@ -4954,7 +4955,9 @@
       "reliabilityVerified": "Verified",
       "reliabilityMedium": "Medium",
       "knowledgeBase": "Knowledge Base",
-      "model": "Model:"
+      "model": "Model:",
+      "modelOnly": "صرف ماڈل",
+      "modelOnlyTooltip": "یہ دعوی صرف ماڈل کے تربیتی ڈیٹا پر مبنی ہے — کوئی ذریعہ نہیں ملا"
     },
     "sidebar": {
       "deletedWithFactsPreserved": "Deleted {count} chats (facts preserved in knowledge base)",
@@ -6634,6 +6637,60 @@
     "presets": {
       "title": "Slash Presets",
       "description": "Create reusable slash commands that expand into full prompts in the chat input. Type / followed by the preset name to trigger them."
+    },
+    "memoryPrivacy": {
+      "title": "میموری کی شفافیت",
+      "description": "ہر وہ چیز جو ایجنٹ آپ کے بارے میں یاد رکھتا ہے — تمام میموری اسٹورز میں۔ آپ اپنے مکمل میموری نقش کو درست، فراموش یا ڈاؤن لوڈ کر سکتے ہیں۔",
+      "refresh": "ریفریش کریں",
+      "loading": "لوڈ ہو رہا ہے…",
+      "exportJson": "برآمد (JSON)",
+      "preparing": "تیار ہو رہا ہے…",
+      "itemCount": "{count} اشیاء",
+      "emptyState": "آپ کے اکاؤنٹ کے لیے کوئی محفوظ شدہ یادداشت نہیں ملی۔",
+      "listLabel": "محفوظ شدہ یادداشتیں",
+      "noPreview": "(کوئی پیش نظارہ نہیں)",
+      "provenance": "ماخذ",
+      "forget": "فراموش کریں",
+      "forgetEverywhere": "ہر جگہ فراموش کریں",
+      "forgetAriaLabel": "اس {store} یادداشت کو فراموش کریں",
+      "forgetEverywhereAriaLabel": "یادداشت {id} کو تمام اسٹورز سے سلسلہ وار حذف کریں",
+      "forgetConfirmTitle": "یادداشت فراموش کریں",
+      "forgetConfirmMessage": "اس {store} یادداشت کو فراموش کریں؟ اسے واپس نہیں کیا جا سکتا۔",
+      "forgetEverywhereConfirmTitle": "تمام اسٹورز سے فراموش کریں",
+      "forgetEverywhereConfirmMessage": "یادداشت کو تمام اسٹورز سے سلسلہ وار حذف کریں؟ اسے واپس نہیں کیا جا سکتا۔",
+      "forgotten": "یادداشت کی شے فراموش کر دی گئی۔",
+      "forgottenFrom": "یہاں سے فراموش کیا گیا: {stores}",
+      "noStores": "کوئی نہیں",
+      "loadFailed": "یادداشتیں لوڈ کرنے میں ناکام۔ بیک اینڈ دستیاب نہیں ہو سکتا۔",
+      "forgetFailed": "یادداشت کی شے فراموش کرنے میں ناکام۔",
+      "forgetEverywhereFailed": "یادداشت کی شے کو سلسلہ وار حذف کرنے میں ناکام۔",
+      "exportDownloaded": "میموری برآمد ڈاؤن لوڈ ہو گئی۔",
+      "exportFailed": "برآمد ناکام ہو گئی۔ براہ کرم دوبارہ کوشش کریں۔"
+    },
+    "telemetry": {
+      "title": "رازداری اور ٹیلی میٹری",
+      "recordLabel": "مقامی استعمال کے میٹرکس ریکارڈ کریں",
+      "recordHint": "گمنام آپریشنل میٹرکس — API کال پیٹرن، صوتی سیشن میٹرکس، اور فیچر استعمال — کو اپنے مانیٹرنگ ڈیش بورڈز کو چلانے کے لیے اپنے انفراسٹرکچر پر مقامی طور پر ریکارڈ کریں۔ یہ ڈیٹا کبھی آپ کے سرورز سے باہر نہیں جاتا اور کسی کو نہیں بھیجا جاتا۔",
+      "toggleAriaLabel": "مقامی استعمال کے میٹرکس فعال کریں",
+      "enabled": "فعال",
+      "disabled": "غیر فعال",
+      "disclosureSummary": "مقامی طور پر کیا ریکارڈ ہوتا ہے؟",
+      "recordedTitle": "فعال ہونے پر، AutoBot مقامی طور پر ریکارڈ کرتا ہے:",
+      "recordedApiLabel": "API تجزیات:",
+      "recordedApi": "اینڈ پوائنٹ راستے، جوابی اوقات، اسٹیٹس کوڈز",
+      "recordedVoiceLabel": "صوتی سیشنز:",
+      "recordedVoice": "دورانیہ، ٹوکن گنتی، لاگت کے تخمینے",
+      "recordedFeatureLabel": "فیچر کا استعمال:",
+      "recordedFeature": "کون سے فیچرز استعمال ہوتے ہیں اور کتنی بار",
+      "neverRecordedTitle": "کبھی ریکارڈ نہیں ہوتا:",
+      "neverPersonal": "ذاتی معلومات یا توثیق کے ٹوکن",
+      "neverContent": "کوڈ مواد، پرامپٹس، یا چیٹ پیغامات",
+      "neverPaths": "فائل راستے، ہوسٹ نام، یا IP پتے",
+      "disclosureNote": "تمام میٹرکس آپ کے اپنے انفراسٹرکچر پر رہتے ہیں (آپ کے مقامی Redis میں محفوظ) اور کبھی AutoBot یا کسی تیسرے فریق کو منتقل نہیں ہوتے۔ آپ کسی بھی وقت ریکارڈنگ غیر فعال کر سکتے ہیں۔",
+      "enabledMessage": "مقامی استعمال کے میٹرکس فعال ہو گئے۔ ڈیٹا آپ کے انفراسٹرکچر پر رہتا ہے۔",
+      "disabledMessage": "مقامی استعمال کے میٹرکس غیر فعال ہو گئے۔ کوئی میٹرکس ریکارڈ نہیں ہوں گے۔",
+      "loadFailed": "ٹیلی میٹری ترتیبات لوڈ کرنے میں ناکام",
+      "updateFailed": "ٹیلی میٹری ترتیبات اپ ڈیٹ کرنے میں ناکام"
     }
   },
   "visualizations": {
@@ -7164,7 +7221,8 @@
     "speaking": "Speaking...",
     "custom": "custom",
     "stopListening": "Stop listening",
-    "stop": "Stop"
+    "stop": "Stop",
+    "confirmDeleteVoiceTitle": "صوتی پروفائل حذف کریں"
   },
   "auth": {
     "login": {
@@ -8143,6 +8201,15 @@
         "subtask": "Subtask",
         "risk": "Risk"
       },
+      "workItemStatus": {
+        "backlog": "بیک لاگ",
+        "ready": "تیار",
+        "in_progress": "جاری",
+        "in_review": "زیر جائزہ",
+        "done": "مکمل",
+        "blocked": "مسدود",
+        "cancelled": "منسوخ"
+      },
       "priority": {
         "critical": "Critical",
         "high": "High",
@@ -8383,5 +8450,23 @@
     "target": "Target {date}",
     "backlogLink": "Backlog",
     "timelineLink": "Timeline"
+  },
+  "admin": {
+    "systemHealth": {
+      "title": "سسٹم کی صحت",
+      "subtitle": "مواد کے ذرائع کے لیے بیک اینڈ کی براہ راست رسائی",
+      "status": "حیثیت",
+      "sources": "ذرائع",
+      "live": "براہ راست",
+      "backends": "بیک اینڈ",
+      "healthy": "صحت مند",
+      "degraded": "کمزور",
+      "down": "بند",
+      "unavailable": "دستیاب نہیں",
+      "loading": "صحت کا ڈیٹا لوڈ ہو رہا ہے...",
+      "error": "سسٹم کی صحت لوڈ کرنے میں ناکامی",
+      "refresh": "تازہ کریں",
+      "noSources": "کوئی مواد کا ذریعہ ترتیب نہیں دیا گیا"
+    }
   }
 }

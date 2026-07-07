@@ -60,8 +60,6 @@ const props = withDefaults(defineProps<Props>(), {
   showStep: true
 })
 
-const isRunning = computed(() => props.status === 'running')
-
 const progressClasses = computed(() => [
   `progress-${props.size}`,
   `status-${props.status}`

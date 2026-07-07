@@ -695,7 +695,6 @@ import {
   useWorkflowBuilder,
   type WorkflowNode,
   type WorkflowTemplate,
-  type ExecutionStrategy,
 } from '@/composables/useWorkflowBuilder';
 import type { WorkflowTemplateSummary } from '@/types/workflowTemplates';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';

@@ -400,7 +400,9 @@
       "reliabilityLow": "Niski",
       "aiTrainingData": "Dane szkoleniowe AI",
       "webSource": "Źródło internetowe",
-      "knowledgeBase": "Baza wiedzy"
+      "knowledgeBase": "Baza wiedzy",
+      "modelOnly": "Tylko model",
+      "modelOnlyTooltip": "To twierdzenie jest oparte wyłącznie na danych treningowych modelu — nie pobrano żadnych źródeł"
     },
     "tabContent": {
       "openInNewWindow": "Otwórz w nowym oknie",
@@ -820,6 +822,60 @@
     "presets": {
       "title": "Slash Presets",
       "description": "Create reusable slash commands that expand into full prompts in the chat input. Type / followed by the preset name to trigger them."
+    },
+    "memoryPrivacy": {
+      "title": "Przejrzystość pamięci",
+      "description": "Wszystko, co agent pamięta o Tobie — we wszystkich magazynach pamięci. Możesz poprawić, zapomnieć lub pobrać cały ślad pamięci.",
+      "refresh": "Odśwież",
+      "loading": "Ładowanie…",
+      "exportJson": "Eksportuj (JSON)",
+      "preparing": "Przygotowywanie…",
+      "itemCount": "{count} elementów",
+      "emptyState": "Nie znaleziono zapisanych wspomnień dla Twojego konta.",
+      "listLabel": "Zapisane wspomnienia",
+      "noPreview": "(brak podglądu)",
+      "provenance": "Pochodzenie",
+      "forget": "Zapomnij",
+      "forgetEverywhere": "Zapomnij wszędzie",
+      "forgetAriaLabel": "Zapomnij tę pamięć {store}",
+      "forgetEverywhereAriaLabel": "Kaskadowo usuń pamięć {id} ze wszystkich magazynów",
+      "forgetConfirmTitle": "Zapomnij pamięć",
+      "forgetConfirmMessage": "Zapomnieć tę pamięć {store}? Tej operacji nie można cofnąć.",
+      "forgetEverywhereConfirmTitle": "Zapomnij ze wszystkich magazynów",
+      "forgetEverywhereConfirmMessage": "Kaskadowo usunąć pamięć ze WSZYSTKICH magazynów? Tej operacji nie można cofnąć.",
+      "forgotten": "Element pamięci zapomniany.",
+      "forgottenFrom": "Zapomniano z: {stores}",
+      "noStores": "brak",
+      "loadFailed": "Nie udało się załadować wspomnień. Backend może być niedostępny.",
+      "forgetFailed": "Nie udało się zapomnieć elementu pamięci.",
+      "forgetEverywhereFailed": "Nie udało się kaskadowo usunąć elementu pamięci.",
+      "exportDownloaded": "Eksport pamięci pobrany.",
+      "exportFailed": "Eksport nie powiódł się. Spróbuj ponownie."
+    },
+    "telemetry": {
+      "title": "Prywatność i telemetria",
+      "recordLabel": "Rejestruj lokalne metryki użycia",
+      "recordHint": "Rejestruj anonimowe metryki operacyjne — wzorce wywołań API, metryki sesji głosowych i użycie funkcji — lokalnie we własnej infrastrukturze, aby zasilać pulpity monitorowania. Te dane nigdy nie opuszczają Twoich serwerów i nigdy nie są nikomu wysyłane.",
+      "toggleAriaLabel": "Włącz lokalne metryki użycia",
+      "enabled": "Włączone",
+      "disabled": "Wyłączone",
+      "disclosureSummary": "Co jest rejestrowane lokalnie?",
+      "recordedTitle": "Po włączeniu AutoBot rejestruje lokalnie:",
+      "recordedApiLabel": "Analityka API:",
+      "recordedApi": "Ścieżki punktów końcowych, czasy odpowiedzi, kody statusu",
+      "recordedVoiceLabel": "Sesje głosowe:",
+      "recordedVoice": "Czas trwania, liczba tokenów, szacunki kosztów",
+      "recordedFeatureLabel": "Użycie funkcji:",
+      "recordedFeature": "Które funkcje są używane i jak często",
+      "neverRecordedTitle": "Nigdy nierejestrowane:",
+      "neverPersonal": "Dane osobowe lub tokeny uwierzytelniające",
+      "neverContent": "Treść kodu, prompty lub wiadomości czatu",
+      "neverPaths": "Ścieżki plików, nazwy hostów lub adresy IP",
+      "disclosureNote": "Wszystkie metryki pozostają we własnej infrastrukturze (przechowywane w lokalnym Redis) i nigdy nie są przesyłane do AutoBot ani żadnej strony trzeciej. Rejestrowanie możesz wyłączyć w dowolnym momencie.",
+      "enabledMessage": "Lokalne metryki użycia włączone. Dane pozostają w Twojej infrastrukturze.",
+      "disabledMessage": "Lokalne metryki użycia wyłączone. Żadne metryki nie będą rejestrowane.",
+      "loadFailed": "Nie udało się załadować ustawień telemetrii",
+      "updateFailed": "Nie udało się zaktualizować ustawień telemetrii"
     }
   },
   "voice": {
@@ -845,7 +901,8 @@
     "record": "Nagrywać",
     "creating": "Tworzenie...",
     "confirmDeleteVoice": "Usunąć głos „{name}”?",
-    "languageVoicesActive": "Skonfigurowano głosy specyficzne dla języka {count}"
+    "languageVoicesActive": "Skonfigurowano głosy specyficzne dla języka {count}",
+    "confirmDeleteVoiceTitle": "Usuń profil głosu"
   },
   "analytics": {
     "title": "Analityka",
@@ -7614,7 +7671,8 @@
     "llcNoCompanies": "No companies yet.",
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
-    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it."
+    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
+    "systemHealth": "Kondycja systemu"
   },
   "llcMembers": {
     "title": "Czlonkowie",
@@ -8143,6 +8201,15 @@
         "subtask": "Subtask",
         "risk": "Risk"
       },
+      "workItemStatus": {
+        "backlog": "Backlog",
+        "ready": "Gotowe",
+        "in_progress": "W Toku",
+        "in_review": "W Recenzji",
+        "done": "Ukończone",
+        "blocked": "Zablokowane",
+        "cancelled": "Anulowane"
+      },
       "priority": {
         "critical": "Critical",
         "high": "High",
@@ -8383,5 +8450,23 @@
     "target": "Target {date}",
     "backlogLink": "Backlog",
     "timelineLink": "Timeline"
+  },
+  "admin": {
+    "systemHealth": {
+      "title": "Kondycja systemu",
+      "subtitle": "Dostępność na żywo backendów dla źródeł treści",
+      "status": "Status",
+      "sources": "Źródła",
+      "live": "Na żywo",
+      "backends": "Backendy",
+      "healthy": "Zdrowy",
+      "degraded": "Obniżona jakość",
+      "down": "Niedostępny",
+      "unavailable": "Niedostępny",
+      "loading": "Ładowanie danych kondycji...",
+      "error": "Nie udało się załadować kondycji systemu",
+      "refresh": "Odśwież",
+      "noSources": "Brak skonfigurowanych źródeł treści"
+    }
   }
 }

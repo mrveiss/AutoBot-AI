@@ -400,7 +400,9 @@
       "reliabilityLow": "Bajo",
       "aiTrainingData": "Datos de entrenamiento de IA",
       "webSource": "Fuente web",
-      "knowledgeBase": "Base de conocimientos"
+      "knowledgeBase": "Base de conocimientos",
+      "modelOnly": "Solo modelo",
+      "modelOnlyTooltip": "Esta afirmación se basa únicamente en datos de entrenamiento del modelo — no se recuperaron fuentes"
     },
     "tabContent": {
       "openInNewWindow": "Abrir en nueva ventana",
@@ -820,6 +822,60 @@
     "presets": {
       "title": "Slash Presets",
       "description": "Create reusable slash commands that expand into full prompts in the chat input. Type / followed by the preset name to trigger them."
+    },
+    "memoryPrivacy": {
+      "title": "Transparencia de memoria",
+      "description": "Todo lo que el agente recuerda sobre usted, en todos los almacenes de memoria. Puede corregir, olvidar o descargar toda su huella de memoria.",
+      "refresh": "Actualizar",
+      "loading": "Cargando…",
+      "exportJson": "Exportar (JSON)",
+      "preparing": "Preparando…",
+      "itemCount": "{count} elementos",
+      "emptyState": "No se encontraron memorias almacenadas para su cuenta.",
+      "listLabel": "Memorias almacenadas",
+      "noPreview": "(sin vista previa)",
+      "provenance": "Procedencia",
+      "forget": "Olvidar",
+      "forgetEverywhere": "Olvidar en todas partes",
+      "forgetAriaLabel": "Olvidar esta memoria de {store}",
+      "forgetEverywhereAriaLabel": "Eliminar en cascada la memoria {id} de todos los almacenes",
+      "forgetConfirmTitle": "Olvidar memoria",
+      "forgetConfirmMessage": "¿Olvidar esta memoria de {store}? Esto no se puede deshacer.",
+      "forgetEverywhereConfirmTitle": "Olvidar en todos los almacenes",
+      "forgetEverywhereConfirmMessage": "¿Eliminar en cascada la memoria de TODOS los almacenes? Esto no se puede deshacer.",
+      "forgotten": "Elemento de memoria olvidado.",
+      "forgottenFrom": "Olvidado de: {stores}",
+      "noStores": "ninguno",
+      "loadFailed": "No se pudieron cargar las memorias. Es posible que el backend no esté disponible.",
+      "forgetFailed": "No se pudo olvidar el elemento de memoria.",
+      "forgetEverywhereFailed": "No se pudo eliminar en cascada el elemento de memoria.",
+      "exportDownloaded": "Exportación de memoria descargada.",
+      "exportFailed": "La exportación falló. Inténtelo de nuevo."
+    },
+    "telemetry": {
+      "title": "Privacidad y telemetría",
+      "recordLabel": "Registrar métricas de uso local",
+      "recordHint": "Registre métricas operativas anónimas —patrones de llamadas API, métricas de sesiones de voz y uso de funciones— localmente en su propia infraestructura para alimentar sus paneles de monitoreo. Estos datos nunca salen de sus servidores ni se envían a nadie.",
+      "toggleAriaLabel": "Habilitar métricas de uso local",
+      "enabled": "Habilitado",
+      "disabled": "Deshabilitado",
+      "disclosureSummary": "¿Qué se registra localmente?",
+      "recordedTitle": "Cuando está habilitado, AutoBot registra localmente:",
+      "recordedApiLabel": "Análisis de API:",
+      "recordedApi": "Rutas de endpoint, tiempos de respuesta, códigos de estado",
+      "recordedVoiceLabel": "Sesiones de voz:",
+      "recordedVoice": "Duración, recuentos de tokens, estimaciones de costo",
+      "recordedFeatureLabel": "Uso de funciones:",
+      "recordedFeature": "Qué funciones se usan y con qué frecuencia",
+      "neverRecordedTitle": "Nunca se registra:",
+      "neverPersonal": "Información personal o tokens de autenticación",
+      "neverContent": "Contenido de código, prompts o mensajes de chat",
+      "neverPaths": "Rutas de archivos, nombres de host o direcciones IP",
+      "disclosureNote": "Todas las métricas permanecen en su propia infraestructura (almacenadas en su Redis local) y nunca se transmiten a AutoBot ni a terceros. Puede deshabilitar el registro en cualquier momento.",
+      "enabledMessage": "Métricas de uso local habilitadas. Los datos permanecen en su infraestructura.",
+      "disabledMessage": "Métricas de uso local deshabilitadas. No se registrarán métricas.",
+      "loadFailed": "No se pudieron cargar los ajustes de telemetría",
+      "updateFailed": "No se pudieron actualizar los ajustes de telemetría"
     }
   },
   "voice": {
@@ -845,7 +901,8 @@
     "record": "Registro",
     "creating": "Creando...",
     "confirmDeleteVoice": "¿Eliminar la voz \"{name}\"?",
-    "languageVoicesActive": "Voces específicas del idioma {count} configuradas"
+    "languageVoicesActive": "Voces específicas del idioma {count} configuradas",
+    "confirmDeleteVoiceTitle": "Eliminar perfil de voz"
   },
   "analytics": {
     "title": "Analítica",
@@ -7614,7 +7671,8 @@
     "llcNoCompanies": "No companies yet.",
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
-    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it."
+    "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
+    "systemHealth": "Salud del sistema"
   },
   "llcMembers": {
     "title": "Miembros",
@@ -8143,6 +8201,15 @@
         "subtask": "Subtarea",
         "risk": "Riesgo"
       },
+      "workItemStatus": {
+        "backlog": "Pendientes",
+        "ready": "Listo",
+        "in_progress": "En Progreso",
+        "in_review": "En Revisión",
+        "done": "Hecho",
+        "blocked": "Bloqueado",
+        "cancelled": "Cancelado"
+      },
       "priority": {
         "critical": "Crítica",
         "high": "Alta",
@@ -8383,5 +8450,23 @@
     "target": "Objetivo {date}",
     "backlogLink": "Backlog",
     "timelineLink": "Cronograma"
+  },
+  "admin": {
+    "systemHealth": {
+      "title": "Salud del sistema",
+      "subtitle": "Disponibilidad en vivo de backends para fuentes de contenido",
+      "status": "Estado",
+      "sources": "Fuentes",
+      "live": "En vivo",
+      "backends": "Backends",
+      "healthy": "Saludable",
+      "degraded": "Degradado",
+      "down": "Caído",
+      "unavailable": "No disponible",
+      "loading": "Cargando datos de salud...",
+      "error": "Error al cargar la salud del sistema",
+      "refresh": "Actualizar",
+      "noSources": "No hay fuentes de contenido configuradas"
+    }
   }
 }

@@ -19,6 +19,7 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from constants.threshold_constants import LLMDefaults
+from llm_shared.types import LLMType
 from prompt_manager import get_language_instruction, resolve_language
 from services.llm_service import get_llm_service
 
@@ -169,7 +170,7 @@ class ChatAgent(StandardizedAgent):
             # Generate response using optimized settings for chat
             response = await self.llm_interface.chat(
                 messages=messages,
-                llm_type="chat",  # This will use the chat-specific model
+                llm_type=LLMType.CHAT,  # This will use the chat-specific model
                 temperature=LLMDefaults.DEFAULT_TEMPERATURE,
                 max_tokens=LLMDefaults.CHAT_MAX_TOKENS,
                 top_p=LLMDefaults.DEFAULT_TOP_P,

@@ -285,3 +285,79 @@ class TestDeduplicationByEntityPair:
 
         assert len(rels) == 1
         assert chunk.id in rels[0].source_chunk_ids
+
+
+# ---------------------------------------------------------------------------
+# #11044 — multi-chunk batching (entity-conditioned via aux_of)
+# ---------------------------------------------------------------------------
+
+
+def _rel(src: str, tgt: str) -> dict:
+    return {
+        "source": src,
+        "target": tgt,
+        "type": "USES",
+        "description": "",
+        "bidirectional": False,
+        "confidence": 0.9,
+    }
+
+
+def _llm_extractor():
+    ext = RelationshipExtractor.__new__(RelationshipExtractor)
+    ext.batch_size = 5
+    ext.min_confidence = 0.0
+    return ext
+
+
+@pytest.mark.asyncio
+async def test_batched_relationship_extraction_one_call(monkeypatch):
+    import json
+    import types
+    from unittest.mock import AsyncMock
+
+    import knowledge.pipeline.cognifiers.relationship_extractor as rex
+
+    monkeypatch.setattr(rex.config, "cognifier_multichunk_batching", True)
+    c0, c1 = _chunk("A uses B"), _chunk("C uses D")
+    ents = [_entity("A"), _entity("B"), _entity("C"), _entity("D")]
+    emap = {e.name.lower(): e for e in ents}
+
+    resp = json.dumps({"0": [_rel("A", "B")], "1": [_rel("C", "D")]})
+    ext = _llm_extractor()
+    ext.llm = types.SimpleNamespace(chat=AsyncMock(return_value=types.SimpleNamespace(content=resp)))
+
+    rels = await ext._process_batch([c0, c1], ents, emap)
+
+    assert ext.llm.chat.call_count == 1  # ONE batched call, not one per chunk
+    assert len(rels) == 2
+    # the batched prompt folds each chunk's entity list in via aux_of
+    _, kwargs = ext.llm.chat.call_args
+    sent = ext.llm.chat.call_args[0][0][0]["content"]
+    assert "Entities:" in sent and "Chunk 0:" in sent and "Chunk 1:" in sent
+
+
+@pytest.mark.asyncio
+async def test_flag_off_uses_per_chunk(monkeypatch):
+    import json
+    import types
+    from unittest.mock import AsyncMock
+
+    import knowledge.pipeline.cognifiers.relationship_extractor as rex
+
+    monkeypatch.setattr(rex.config, "cognifier_multichunk_batching", False)
+    c0, c1 = _chunk("A uses B"), _chunk("C uses D")
+    ents = [_entity("A"), _entity("B")]
+    emap = {e.name.lower(): e for e in ents}
+
+    ext = _llm_extractor()
+    ext.llm = types.SimpleNamespace(
+        chat=AsyncMock(
+            side_effect=[
+                types.SimpleNamespace(content=json.dumps([_rel("A", "B")])),
+                types.SimpleNamespace(content=json.dumps([])),
+            ]
+        )
+    )
+    await ext._process_batch([c0, c1], ents, emap)
+    assert ext.llm.chat.call_count == 2  # legacy per-chunk path

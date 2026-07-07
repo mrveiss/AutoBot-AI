@@ -92,7 +92,7 @@ interface Props {
   showLabel?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   mode: 'dropdown',
   compact: false,
   showLabel: true

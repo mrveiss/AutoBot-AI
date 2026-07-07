@@ -43,7 +43,7 @@ export interface CheckUrlResult {
 export function useThreatIntelligence() {
   /** Fetch threat-intelligence service status. */
   async function fetchThreatIntelStatus(): Promise<ThreatIntelStatus> {
-    const response = await apiClient.get<any>(`${getApiBase()}/security/threat-intel/status`)
+    const response = await apiClient.get(`${getApiBase()}/security/threat-intel/status`)
     const data = (response as { data?: Record<string, unknown> }).data
     return {
       any_service_configured: (data?.any_service_configured as boolean) ?? false,
@@ -55,7 +55,7 @@ export function useThreatIntelligence() {
 
   /** Fetch domain-security statistics. */
   async function fetchDomainSecurityStats(): Promise<DomainSecurityStats> {
-    const response = await apiClient.get<any>(`${getApiBase()}/security/domain-security/stats`)
+    const response = await apiClient.get(`${getApiBase()}/security/domain-security/stats`)
     const data = (response as { data?: Record<string, unknown> }).data
     const stats = (data?.success ? (data.stats as Record<string, unknown>) : null) ?? {}
     return {
@@ -69,7 +69,7 @@ export function useThreatIntelligence() {
 
   /** Check a URL against threat-intelligence services. */
   async function checkUrl(url: string): Promise<CheckUrlResult> {
-    const response = await apiClient.post<any>(`${getApiBase()}/security/threat-intel/check-url`, { url })
+    const response = await apiClient.post(`${getApiBase()}/security/threat-intel/check-url`, { url })
     const data = (response as { data?: CheckUrlResult }).data
     if (!data) {
       throw new Error('Empty response from threat-intel check-url')

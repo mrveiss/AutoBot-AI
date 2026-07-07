@@ -74,7 +74,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 
 /**
  * Knowledge Scope Selector Component

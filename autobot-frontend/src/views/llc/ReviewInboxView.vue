@@ -23,7 +23,7 @@
         <button type="button" class="review-row" @click="detailItem = item">
           <span class="review-identifier">{{ item.identifier }}</span>
           <span class="review-title">{{ item.title }}</span>
-          <span class="review-type">{{ item.type }}</span>
+          <span class="review-type">{{ workItemTypeLabel(item.type) }}</span>
         </button>
       </li>
     </ul>
@@ -48,10 +48,12 @@ import { createLogger } from '@/utils/debugUtils'
 import LlcBreadcrumb, { type BreadcrumbItem } from '@/components/llc/LlcBreadcrumb.vue'
 import WorkItemDetail from './WorkItemDetail.vue'
 import type { WorkItem } from './workItemTypes'
+import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
 
 const route = useRoute()
 const api = useApiClient()
 const { t } = useI18n()
+const { workItemTypeLabel } = useWorkItemLabels()
 const userStore = useUserStore()
 const logger = createLogger('ReviewInboxView')
 

@@ -22,6 +22,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watchEffect, useSlots, Comment } from 'vue'
+import type { VNode } from 'vue'
 import type { ButtonVariant, ComponentSize } from '@/types/component-props'
 import { size as SIZE_VALUES } from '@/design-tokens/tokens'
 import { createLogger } from '@/utils/debugUtils'
@@ -69,7 +70,7 @@ const slots = useSlots()
 if (import.meta.env.DEV) {
   watchEffect(() => {
     const hasVisibleText = !!props.label || !!slots.default?.()?.some(
-      (vnode: any) => vnode.type !== Comment && vnode.children
+      (vnode: VNode) => vnode.type !== Comment && vnode.children
     )
     if (!hasVisibleText && !props.ariaLabel) {
       logger.warn(

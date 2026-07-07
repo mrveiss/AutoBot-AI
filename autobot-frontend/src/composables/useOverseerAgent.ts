@@ -86,6 +86,17 @@ export interface OverseerUpdate {
   timestamp?: string
 }
 
+export interface OverseerStepContent {
+  status?: string
+  command?: string | null
+  command_explanation?: CommandExplanation | null
+  output?: string
+  output_explanation?: OutputExplanation | null
+  return_code?: number | null
+  execution_time?: number
+  error?: string | null
+}
+
 export interface StreamChunk {
   task_id: string
   step_number: number
@@ -243,7 +254,7 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
     // #7275: content is `string | OverseerPlanContent | StreamChunk`; for step-start
     // events it carries StreamChunk-like fields. Cast at boundary; type-narrow guards
     // would be cleaner but add 4x lines for the same runtime behavior.
-    const content = update.content as Record<string, any> | undefined
+    const content = update.content as OverseerStepContent | undefined
 
     // Update step status
     const step = steps.value.find(s => s.step_number === stepNumber)
@@ -285,7 +296,7 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
   const handleStepComplete = (update: OverseerUpdate): void => {
     const stepNumber = update.step_number || 0
     // #7275: same boundary cast as handleStepStart (see note above)
-    const content = update.content as Record<string, any> | undefined
+    const content = update.content as OverseerStepContent | undefined
 
     // Update step with final results
     const step = steps.value.find(s => s.step_number === stepNumber)
@@ -323,7 +334,7 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
    */
   const handleError = (update: OverseerUpdate): void => {
     // #7275: content union narrowed at boundary (same pattern as other handlers)
-    const content = update.content as Record<string, any> | undefined
+    const content = update.content as OverseerStepContent | undefined
     const errorMsg = content?.error || 'Unknown error'
     error.value = errorMsg
     status.value = 'error'
@@ -348,7 +359,7 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
   /**
    * Submit a query to the overseer
    */
-  const submitQuery = (query: string, context?: Record<string, any>): void => {
+  const submitQuery = (query: string, context?: Record<string, unknown>): void => {
     if (!isConnected.value) {
       error.value = 'Not connected to overseer'
       onError?.('Not connected to overseer')

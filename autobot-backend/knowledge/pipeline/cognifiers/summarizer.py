@@ -24,6 +24,7 @@ from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.summary import Summary, SummaryLevel
 from knowledge.pipeline.registry import TaskRegistry
+from llm_shared.types import LLMType
 from services.llm_service import get_llm_service
 
 logger = get_logger(__name__)
@@ -216,7 +217,7 @@ class HierarchicalSummarizer(BaseCognifier):
         """Summarize text using LLM."""
         try:
             prompt = SUMMARY_PROMPT.format(max_words=max_words, text=text)
-            response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type="analysis")
+            response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type=LLMType.ANALYSIS)
             raw = parse_llm_json_response(response.content, fallback_dict=True)
             parsed = raw if isinstance(raw, dict) else {"summary": "", "key_topics": [], "key_entities": []}
 

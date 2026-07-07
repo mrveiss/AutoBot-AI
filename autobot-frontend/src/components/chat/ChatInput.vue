@@ -1100,7 +1100,7 @@ const uploadFile = async (upload: UploadItem, file: File): Promise<void> => {
             }, 2000)
 
             resolve(response.file_info?.file_id || '')
-          } catch (e) {
+          } catch {
             reject(new Error('Invalid response from server'))
           }
         } else {

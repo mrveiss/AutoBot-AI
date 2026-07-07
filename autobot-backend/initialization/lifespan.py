@@ -1744,6 +1744,21 @@ async def _init_plugin_manager(app: FastAPI) -> None:
         logger.warning("Plugin manager startup failed (non-critical): %s", pm_err, exc_info=True)
 
 
+async def _init_content_reach_registry(app: FastAPI) -> None:
+    """Register default Content Reach sources and expose via app.state (#10932). NON-CRITICAL."""
+    try:
+        from content_reach.bootstrap import register_default_sources
+        from content_reach.registry import get_content_source_registry
+
+        registry = get_content_source_registry()
+        register_default_sources(registry)  # SYNC — do NOT await
+        app.state.content_reach_registry = registry
+        logger.info("Content Reach: registered %d default sources", len(registry.list_sources()))
+    except Exception as exc:
+        logger.warning("Content Reach registry init failed (non-critical): %s", exc)
+        app.state.content_reach_registry = None
+
+
 async def initialize_background_services(app: FastAPI):
     """
     Phase 2: Initialize background services (NON-BLOCKING).
@@ -1806,6 +1821,7 @@ async def initialize_background_services(app: FastAPI):
         await _start_autonomous_loop(app)
         await _start_community_clustering_loop(app)
         await _start_llc_notification_router(app)
+        await _init_content_reach_registry(app)
 
         await update_app_state_multi(
             initialization_status="ready",

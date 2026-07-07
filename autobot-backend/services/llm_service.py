@@ -88,14 +88,24 @@ _TASK_TYPE_DEFAULTS: Dict[str, Dict[str, Any]] = {
 
 
 def _normalize_llm_type(llm_type: str | LLMType | None) -> LLMType:
-    """Coerce string or None to an LLMType enum value."""
+    """Coerce string or None to an LLMType enum value.
+
+    An unrecognized string (e.g. a typo like ``"anaylsis"`` or a non-existent tier
+    like ``"summarization"``) is logged and mapped to ``GENERAL`` rather than
+    silently misrouting the model tier (#11019). Callers should pass ``LLMType.X``
+    so typos become AttributeErrors at author time.
+    """
     if isinstance(llm_type, LLMType):
         return llm_type
     if isinstance(llm_type, str):
         try:
             return LLMType(llm_type.lower())
         except ValueError:
-            pass
+            logger.warning(
+                "Unknown llm_type %r — routing to GENERAL tier. Use an LLMType member; valid: %s",
+                llm_type,
+                ", ".join(t.value for t in LLMType),
+            )
     return LLMType.GENERAL
 
 

@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from llm_shared.types import LLMType
 from orchestration.primitives import bounded_gather
 
 logger = get_logger(__name__)
@@ -192,7 +193,7 @@ class SubagentDispatcher:
         try:
             response = await llm.chat(
                 messages=[{"role": "user", "content": prompt}],
-                llm_type="analysis",
+                llm_type=LLMType.ANALYSIS,
                 temperature=0.1,
                 max_tokens=256,
             )
@@ -221,7 +222,7 @@ class SubagentDispatcher:
         try:
             response = await llm.chat(
                 messages=[{"role": "user", "content": prompt}],
-                llm_type="analysis",
+                llm_type=LLMType.ANALYSIS,
                 temperature=0.3,
                 max_tokens=1024,
             )

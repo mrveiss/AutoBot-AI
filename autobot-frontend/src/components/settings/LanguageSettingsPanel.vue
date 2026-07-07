@@ -43,11 +43,6 @@ Issue #1330: Language switcher component in Settings
           <Icon name="chevron-down" class="select-icon" aria-hidden="true" />
         </div>
       </fieldset>
-
-      <div v-if="statusMessage" class="status-message" :class="statusType">
-        <Icon :name="statusType === 'success' ? 'check-circle' : 'exclamation-circle'" aria-hidden="true" />
-        {{ statusMessage }}
-      </div>
     </div>
 
     <!-- Screen reader announcements -->
@@ -63,6 +58,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePreferences } from '@/composables/usePreferences'
 import { useAvailableLanguages } from '@/composables/useAvailableLanguages'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import { createLogger } from '@/utils/debugUtils'
 import Icon from '@/components/ui/Icon.vue'
 
@@ -70,6 +66,7 @@ const logger = createLogger('LanguageSettingsPanel')
 const { t } = useI18n()
 const { language, setLanguage } = usePreferences()
 const { languages: availableLanguages } = useAvailableLanguages()
+const { showToast } = useNotificationBus()
 
 const selectedLanguage = ref(language.value)
 // Convert to Record<string,string> for the existing template's v-for="(name, code) in languages"
@@ -77,24 +74,19 @@ const languages = computed<Record<string, string>>(() =>
   Object.fromEntries(availableLanguages.value.map(l => [l.code, l.name]))
 )
 const announcement = ref('')
-const statusMessage = ref('')
-const statusType = ref<'success' | 'error'>('success')
 
 async function handleLanguageChange() {
   const locale = selectedLanguage.value
-  statusMessage.value = ''
 
   try {
     await setLanguage(locale)
 
-    statusMessage.value = t('settings.languageChanged')
-    statusType.value = 'success'
+    showToast(t('settings.languageChanged'), 'success')
     announceChange(t('settings.languageChanged'))
     logger.debug(`Language changed to: ${locale}`)
   } catch (error) {
     logger.error('Failed to change language', error)
-    statusMessage.value = t('settings.languageChangeFailed')
-    statusType.value = 'error'
+    showToast(t('settings.languageChangeFailed'), 'error')
   }
 }
 
@@ -225,25 +217,6 @@ function announceChange(message: string): void {
   color: var(--text-tertiary);
   font-size: var(--font-size-xs);
   pointer-events: none;
-}
-
-.status-message {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-}
-
-.status-message.success {
-  background: var(--color-success-bg, rgba(16, 185, 129, 0.1));
-  color: var(--color-success, #10b981);
-}
-
-.status-message.error {
-  background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
-  color: var(--color-error, #ef4444);
 }
 
 @media (max-width: 768px) {

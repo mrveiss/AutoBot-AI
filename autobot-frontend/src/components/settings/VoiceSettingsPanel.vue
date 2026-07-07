@@ -148,15 +148,16 @@ import VoiceBundleInfo from '@/views/voice/VoiceBundleInfo.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('VoiceSettingsPanel')
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 const {
   voices,
   selectedVoiceId,
-  effectiveVoiceId,
   personalityVoiceId,
   personalityVoiceIds,
   loading,
@@ -247,7 +248,11 @@ function closeDialog() {
 }
 
 async function handleDelete(voiceId: string, name: string) {
-  if (!confirm(t('voice.confirmDeleteVoice', { name }))) return
+  const ok = await confirm({
+    title: t('voice.confirmDeleteVoiceTitle'),
+    message: t('voice.confirmDeleteVoice', { name }),
+  })
+  if (!ok) return
   await deleteVoice(voiceId)
 }
 </script>

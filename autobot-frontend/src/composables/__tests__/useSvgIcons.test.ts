@@ -84,7 +84,7 @@ describe('useSvgIcons', () => {
     it('should return default icon for invalid name', () => {
       const { icon } = useSvgIcons()
       // TypeScript should prevent invalid names, but JS fallback is safe
-      expect(icon('info' as any)).toBe('icon-info')
+      expect(icon('info' as unknown as keyof typeof ICON_IDS)).toBe('icon-info')
     })
 
     it('should return status ID for valid status name', () => {
@@ -97,7 +97,7 @@ describe('useSvgIcons', () => {
     it('should return default status for invalid status name', () => {
       const { status } = useSvgIcons()
       // TypeScript should prevent invalid names, but JS fallback is safe
-      expect(status('offline' as any)).toBe('status-offline')
+      expect(status('offline' as unknown as keyof typeof STATUS_IDS)).toBe('status-offline')
     })
 
     it('should return iconHref for icon name', () => {

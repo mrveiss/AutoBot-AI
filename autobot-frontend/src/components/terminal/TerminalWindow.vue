@@ -284,7 +284,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useTerminalService } from '@/services/TerminalService';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import AdvancedStepConfirmationModal from './AdvancedStepConfirmationModal.vue';
 import CompletionSuggestions from './CompletionSuggestions.vue';
 import TerminalHeader from './TerminalHeader.vue';
@@ -304,7 +304,6 @@ export default {
   setup() {
     const { t } = useI18n();
     const route = useRoute();
-    const router = useRouter();
 
     // Get the terminal service with all its methods
     const {
@@ -314,9 +313,7 @@ export default {
       isConnected,
       resize,
       connect: connectToService,
-      disconnect,
-      createSession,
-      closeSession
+      disconnect
     } = useTerminalService();
 
     // Get current chat ID from parent or route params
@@ -1099,7 +1096,7 @@ export default {
         try {
           await navigator.clipboard.writeText(url);
           alert('Terminal URL copied to clipboard!');
-        } catch (error) {
+        } catch {
           prompt('Copy this URL:', url);
         }
       }

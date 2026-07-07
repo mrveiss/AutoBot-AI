@@ -117,6 +117,17 @@ const props = withDefaults(defineProps<Props>(), {
   chatSessionId: null
 })
 
+// Incoming terminal WebSocket message shape (backend sends heterogeneous
+// payloads keyed by `type`; fields are optional per message type).
+interface TerminalWsMessage {
+  type: string
+  data?: string
+  message?: string
+  completions?: string[]
+  prefix?: string
+  error?: string
+}
+
 // State
 // CRITICAL: Session ID will be retrieved from backend (for chat) or generated (for system terminal)
 const sessionId = ref<string | null>(null)
@@ -158,8 +169,8 @@ const { isConnected, isConnecting, send: wsSend, connect: wsConnect, disconnect:
     },
     onMessage: (data) => {
       try {
-        handleTerminalMessage(data)
-      } catch (error) {
+        handleTerminalMessage(data as TerminalWsMessage)
+      } catch {
         // Handle plain text messages
         addTerminalLine('', String(data), 'output')
       }
@@ -354,23 +365,25 @@ const sendCommand = (command: string) => {
   }
 }
 
-const handleTerminalMessage = (data: any) => {
+const handleTerminalMessage = (data: TerminalWsMessage) => {
   switch (data.type) {
     case 'output':
-      addTerminalLine('', data.data, 'output')
+      addTerminalLine('', data.data as string, 'output')
       break
     case 'error':
-      addTerminalLine('', data.data, 'error')
+      addTerminalLine('', data.data as string, 'error')
       break
     case 'prompt':
       currentPrompt.value = data.data || '$ '
       break
     case 'status':
-      statusMessage.value = data.message
+      statusMessage.value = data.message as string
       break
     // Issue #756: Handle tab completion response
     case 'tab_completion':
-      handleTabCompletionResponse(data)
+      handleTabCompletionResponse(
+        data as { completions: string[]; prefix: string; error?: string },
+      )
       break
     default:
       addTerminalLine('', JSON.stringify(data), 'info')
@@ -458,7 +471,7 @@ const copyTerminalOutput = async () => {
 
     await navigator.clipboard.writeText(output)
     addTerminalLine('system', t('terminal.terminal.outputCopied'), 'info')
-  } catch (error) {
+  } catch {
     addTerminalLine('system', t('terminal.terminal.copyFailed'), 'error')
   }
 }

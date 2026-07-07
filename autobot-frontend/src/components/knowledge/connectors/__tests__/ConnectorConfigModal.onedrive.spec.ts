@@ -11,6 +11,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import type { App } from 'vue'
 
 import ConnectorConfigModal from '../ConnectorConfigModal.vue'
 import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
@@ -45,7 +46,7 @@ function mountModal() {
       },
       plugins: [
         {
-          install(app: any) {
+          install(app: App) {
             app.config.globalProperties.$t = (k: string) => k
           }
         }
@@ -96,7 +97,7 @@ describe('ConnectorConfigModal — OneDrive / SharePoint (#9004)', () => {
     await flushPromises()
 
     // Drive the component to call createConnector via its save handler.
-    const vm = wrapper.vm as any
+    const vm = wrapper.vm as unknown as { connectorName: string; handleSave: () => Promise<void> }
     vm.connectorName = 'My OneDrive'
     await vm.handleSave()
     await flushPromises()
