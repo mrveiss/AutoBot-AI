@@ -229,6 +229,10 @@ class AgentLoopConfig:
     # Approval workflow (Issue #4092)
     require_approval_for_sensitive: bool = True  # Gate sensitive ops behind user approval
     approval_timeout_seconds: int = 300  # Max seconds to wait for user response
+    # GH#11139: per-agent forbidden_work manifest (AgentProfile.forbidden_work).
+    # Tools matching these names are hard-blocked BEFORE the approval gate — the
+    # loop runs as no particular agent by default, so this is empty (no change).
+    forbidden_tools: frozenset[str] = frozenset()
 
     # First-turn priming (Issue #4481)
     first_turn_priming_enabled: bool = True  # Inject context note on first iteration

@@ -820,6 +820,13 @@ class AgentLoop:
             self._halted_on_repetition = True
             return halt_results
 
+        # GH#11139: hard-block tools outside this agent's capability manifest
+        # (forbidden_work) BEFORE the approval gate — a forbidden tool is never
+        # offered for approval.
+        forbidden_results = self._check_forbidden(tools)
+        if forbidden_results:
+            return forbidden_results
+
         # Issue #4092: Gate sensitive operations behind user approval.
         denied_results = await self._check_approvals(tools)
         if denied_results:
@@ -1332,6 +1339,48 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
             if name.startswith(sensitive):
                 return sensitive
         return None
+
+    def _forbidden_tool_name(self, tool: dict[str, Any]) -> str | None:
+        """Return the matched forbidden-tool name for *tool*, else None (GH#11139).
+
+        Uses the same name/prefix matching as ``_sensitive_tool_name`` but against
+        the agent's ``forbidden_work`` manifest (``config.forbidden_tools``).
+        """
+        forbidden = self.config.forbidden_tools
+        if not forbidden:
+            return None
+        name = tool.get("tool_name", "").lower()
+        if name in forbidden:
+            return name
+        for f in forbidden:
+            if name.startswith(f):
+                return f
+        return None
+
+    def _check_forbidden(self, tools: list[dict[str, Any]]) -> dict[str, Any]:
+        """Hard-block the first tool the agent's manifest forbids (GH#11139).
+
+        Returns a denial result dict (same shape as a user-denied approval) for
+        the first forbidden tool, or ``{}`` when none are forbidden.
+        """
+        for tool in tools:
+            matched = self._forbidden_tool_name(tool)
+            if matched is not None:
+                tool_name = tool.get("tool_name", "unknown")
+                logger.warning(
+                    "AgentLoop: tool '%s' blocked by agent forbidden_work manifest (matched '%s')",
+                    tool_name,
+                    matched,
+                )
+                return {
+                    tool_name: {
+                        "error": (
+                            f"Tool '{tool_name}' is forbidden by this agent's capability "
+                            f"manifest (matched '{matched}')"
+                        )
+                    }
+                }
+        return {}
 
     def _requires_approval(self, tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Return the subset of *tools* that require user approval.

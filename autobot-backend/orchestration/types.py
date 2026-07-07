@@ -108,6 +108,12 @@ class AgentProfile:
 
     Distinct from ``AgentCapabilityDescriptor`` (agents.agent_orchestration.types),
     which is a static per-type descriptor (model_size, strengths, limitations).
+
+    ``allowed_work``/``forbidden_work`` (GH#11139) are the declarative capability
+    manifest — the single source for an agent's least-privilege boundary. Routing
+    (orchestrator ``agent_capabilities``) and tool enforcement (agent loop
+    ``forbidden_tools``) both derive from this profile rather than duplicating the
+    boundary in separate places.
     """
 
     agent_id: str
@@ -121,6 +127,10 @@ class AgentProfile:
     success_rate: float = 1.0
     average_completion_time: float = 0.0
     preferred_task_types: List[str] = field(default_factory=list)
+    # GH#11139: declarative capability manifest — tool names this agent may / may
+    # not invoke. ``forbidden_work`` is hard-blocked before approval in the loop.
+    allowed_work: List[str] = field(default_factory=list)
+    forbidden_work: List[str] = field(default_factory=list)
 
 
 @dataclass
