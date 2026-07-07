@@ -32,7 +32,7 @@ class _FakeDetector:
             return None
         return types.SimpleNamespace(pattern_id="p1", occurrence_count=self.prior, resolution_success_rate=0.5)
 
-    async def learn_pattern(self, causal_chain: str, error_type: str, successful_action=None):
+    async def learn_pattern(self, causal_chain: str, error_type: str, successful_action=None, failure_locations=None):
         self.learned.append((causal_chain, error_type))
         return None
 

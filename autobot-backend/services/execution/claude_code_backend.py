@@ -410,13 +410,16 @@ class ClaudeCodeBackend(ExecutionBackend):
             except OSError:
                 pass
 
-    async def _run_cli_with_config(
-        self,
-        task: ExecutionTask,
-        cli: str,
-        mcp_cfg_path: str,
-    ) -> tuple[str, str, bool]:
-        """Spawn and stream from the Claude CLI subprocess."""
+    @staticmethod
+    def _build_cli_command(task: ExecutionTask, cli: str, mcp_cfg_path: str) -> list[str]:
+        """Build the ``claude`` CLI argv for *task* (GH#11186).
+
+        Pure and side-effect-free so the argv (incl. the governance flag below) is
+        unit-testable without spawning a subprocess. Every value-carrying flag is
+        guarded against option injection: a value that could be parsed as a flag
+        (starts with ``-``) is dropped, and the prompt is passed positionally after
+        ``--`` so it can never be read as an option.
+        """
         cmd = [
             cli,
             "--output-format",
@@ -432,10 +435,35 @@ class ClaudeCodeBackend(ExecutionBackend):
         if max_turns is not None:
             cmd += ["--max-turns", str(int(max_turns))]
 
+        # GH#11186: enforce a governed agent's forbidden tools on the external CLI.
+        # ``disallowed_tools`` holds claude_code tool names (resolved upstream from
+        # the agent's forbidden_work manifest). Each is injection-guarded; a value
+        # that could be read as a flag is skipped.
+        disallowed = task.metadata.get("disallowed_tools") or []
+        # Drop empties, flag-looking values, and any name carrying the comma/newline
+        # join delimiters (a comma-bearing name would otherwise split into two entries).
+        safe_disallowed = [
+            str(t)
+            for t in disallowed
+            if str(t) and not str(t).startswith("-") and "," not in str(t) and "\n" not in str(t)
+        ]
+        if safe_disallowed:
+            cmd += ["--disallowedTools", ",".join(safe_disallowed)]
+
         # Security: `--` ends option parsing so a prompt starting with `-`/`--`
         # (e.g. "--dangerously-skip-permissions") can NOT be parsed as a flag.
         cmd.append("--")
         cmd.append(task.code)  # prompt is the task code/description (positional only)
+        return cmd
+
+    async def _run_cli_with_config(
+        self,
+        task: ExecutionTask,
+        cli: str,
+        mcp_cfg_path: str,
+    ) -> tuple[str, str, bool]:
+        """Spawn and stream from the Claude CLI subprocess."""
+        cmd = self._build_cli_command(task, cli, mcp_cfg_path)
 
         # Security: task-supplied env_vars are semi-untrusted. Start from the
         # trusted parent env, then contribute ONLY allowlisted AUTOBOT_* task
