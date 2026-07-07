@@ -20,6 +20,7 @@ and Think Tool into a cohesive execution system.
 import asyncio
 import hashlib
 import json
+import os
 import time
 import uuid
 from typing import Any
@@ -127,6 +128,16 @@ _HALT_SENTINEL = "__repetition_halt__"
 
 # Sentinel key for stagnation halts (Issue #6627).
 _STAGNATION_SENTINEL = "__stagnation_halt__"
+
+# Durable run checkpointing (GH#11175). A run's progress snapshot is persisted to
+# Redis after each iteration so a crashed/restarted process can resume via
+# resume_run(). TTL is env-tunable so stale checkpoints self-expire.
+_RUN_CHECKPOINT_TTL_SECONDS: int = int(os.environ.get("AUTOBOT_RUN_CHECKPOINT_TTL_SECONDS", str(24 * 3600)))
+
+
+def _run_checkpoint_key(task_id: str) -> str:
+    """Redis key for a run's durable progress snapshot (GH#11175)."""
+    return f"autobot:run:checkpoint:{task_id}"
 
 # =============================================================================
 # Agent Loop
@@ -300,6 +311,9 @@ class AgentLoop:
             iteration_result = await self._run_iteration()
             results.append(iteration_result)
 
+            # GH#11175: persist progress so a crash/restart can resume_run().
+            await self._checkpoint_run()
+
             if not iteration_result.should_continue:
                 break
 
@@ -404,6 +418,9 @@ class AgentLoop:
             # Issue #620: Use helper for task finalization
             result = await self._finalize_task(results)
 
+            # GH#11175: run reached a terminal state — drop its resume checkpoint.
+            await self._clear_run_checkpoint(task_id)
+
             # Issue #4308: notify Slack on successful task completion
             duration = time.monotonic() - _task_start
             await slack.post_task_completion(
@@ -441,6 +458,31 @@ class AgentLoop:
 
         finally:
             self._current_phase = LoopPhase.STANDBY
+
+    async def resume_run(self, task_id: str) -> dict[str, Any]:
+        """Resume a crashed/restarted run from its last persisted checkpoint (GH#11175).
+
+        Loads the Redis snapshot written by :meth:`_checkpoint_run`, restores the
+        task context and iteration counter, and continues the main loop to a
+        terminal state. Raises ``ValueError`` when no checkpoint exists for
+        *task_id* (nothing to resume).
+        """
+        snapshot = await self.load_run_snapshot(task_id)
+        if snapshot is None:
+            raise ValueError(f"no run checkpoint found for task_id: {task_id}")
+
+        self._current_context = TaskContext.from_snapshot(snapshot)
+        self._iteration_count = self._current_context.iteration_count
+        logger.info(
+            "AgentLoop: resuming task %s from iteration %d",
+            task_id,
+            self._iteration_count,
+        )
+
+        results = await self._execute_main_loop()
+        result = await self._finalize_task(results)
+        await self._clear_run_checkpoint(task_id)
+        return result
 
     async def cancel(self) -> None:
         """Cancel the current task."""
@@ -1176,6 +1218,43 @@ class AgentLoop:
             await redis_delete(key)
         except Exception as exc:
             logger.warning("AgentLoop: ask_human checkpoint clear failed (non-critical): %s", exc)
+
+    async def _checkpoint_run(self) -> None:
+        """Persist the current run's progress snapshot to Redis (GH#11175).
+
+        Called after each iteration so a crashed/restarted process can resume via
+        :meth:`resume_run`. Best-effort — a checkpoint failure logs and never
+        interrupts the run.
+        """
+        if self._current_context is None:
+            return
+        try:
+            from autobot_shared.redis_client import redis_set
+
+            key = _run_checkpoint_key(self._current_context.task_id)
+            snapshot = self._current_context.to_snapshot()
+            await redis_set(key, json.dumps(snapshot), expire=_RUN_CHECKPOINT_TTL_SECONDS)
+        except Exception as exc:
+            logger.warning("AgentLoop: run checkpoint failed (non-critical): %s", exc)
+
+    async def _clear_run_checkpoint(self, task_id: str) -> None:
+        """Remove a run's Redis checkpoint once the run completes (GH#11175)."""
+        try:
+            from autobot_shared.redis_client import redis_delete
+
+            await redis_delete(_run_checkpoint_key(task_id))
+        except Exception as exc:
+            logger.warning("AgentLoop: run checkpoint clear failed (non-critical): %s", exc)
+
+    @staticmethod
+    async def load_run_snapshot(task_id: str) -> dict | None:
+        """Load a run's persisted progress snapshot, or None if absent (GH#11175)."""
+        from autobot_shared.redis_client import redis_get
+
+        raw = await redis_get(_run_checkpoint_key(task_id))
+        if not raw:
+            return None
+        return json.loads(raw)
 
     # =========================================================================
     # Think Tool Integration
