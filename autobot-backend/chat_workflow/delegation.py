@@ -119,6 +119,10 @@ async def _run_internal_subagent(task: str, agent_type: str, depth: int) -> str:
     )
     logger.info("delegation: internal subagent agent=%s depth=%d model=%s", agent_type, depth, ctx.selected_model)
     responses: List[str] = []
+    # Uses the shared ChatWorkflowManager singleton — safe because the loop keys all
+    # state off the per-call ctx (sessions/history never touched). The lone shared
+    # instance var it toggles, ``_current_lightweight_mode``, only tags stream-cost
+    # metadata (best-effort; GH#11216 tracks moving it onto ctx for full isolation).
     async for item in get_chat_workflow_manager()._execute_llm_continuation_loop(ctx):
         # The loop streams WorkflowMessages, then yields a final
         # ``(all_llm_responses, execution_history, error)`` tuple.
