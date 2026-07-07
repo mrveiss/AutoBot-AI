@@ -45,7 +45,6 @@ function toSourceMap(v: unknown): Record<string, string[]> {
 
 const getHealth = useProbeBackedHealth<ContentReachHealth>({
   probeName: PROBE_NAMES.CONTENT_REACH,
-  renderNonOkFromProbe: true,
   buildHealthy: (probe, data) => ({
     status: probe.status ?? 'unavailable',
     detail: probe.detail,

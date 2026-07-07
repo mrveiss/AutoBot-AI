@@ -67,16 +67,6 @@ export interface ProbeBackedHealthOptions<R> {
 
   /** Error toast message when the underlying fetch fails. */
   errorMessage?: string
-
-  /**
-   * When true, calls `buildHealthy` for ANY status where the probe was FOUND
-   * (ok/degraded/down/etc.), reserving `buildUnavailable` only for a missing
-   * probe or fetch error. Defaults to false (legacy behavior: only `ok` calls
-   * `buildHealthy`).
-   *
-   * Opt-in only — existing callers are unaffected.
-   */
-  renderNonOkFromProbe?: boolean
 }
 
 /**
@@ -86,6 +76,12 @@ export interface ProbeBackedHealthOptions<R> {
  * The returned function ALWAYS resolves to `R` and never throws: on a fetch
  * error (or any failure) it returns `options.buildUnavailable(...)` rather
  * than `null`, so consumers never need a null branch (#10119).
+ *
+ * Any FOUND probe — whatever its status — is passed to `buildHealthy` so the
+ * consumer can render the real ok/degraded/down status. `buildUnavailable` is
+ * reserved for the cases where we genuinely couldn't get the probe: it isn't
+ * registered, or the fetch failed. "Unavailable" means "no probe", not "the
+ * probe reported a problem" (#11227).
  */
 export function useProbeBackedHealth<R>(
   options: ProbeBackedHealthOptions<R>,
@@ -101,10 +97,9 @@ export function useProbeBackedHealth<R>(
         return options.buildUnavailable(`${options.probeName} probe not registered`)
       }
       const data = probe.data ?? {}
-      if (probe.status === 'ok' || options.renderNonOkFromProbe) {
-        return options.buildHealthy(probe, data)
-      }
-      return options.buildUnavailable(probe.detail ?? 'Service unavailable')
+      // Probe was found — render its real status (ok/degraded/down) via
+      // buildHealthy. buildUnavailable is only for missing-probe/fetch-error.
+      return options.buildHealthy(probe, data)
     } catch (error: unknown) {
       logger.error(errorMessage, error)
       return options.buildUnavailable('Service unavailable')
