@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
 
@@ -410,22 +411,8 @@ BROWSER_TOOL_NAMES: frozenset[str] = frozenset(
 # ``requires_approval_before`` entry) to the tools that constitute that action. A
 # tool is approval-gated only when the work item declared its category; names
 # match by exact or prefix (e.g. ``deploy`` gates ``deploy_service``).
-_APPROVAL_CATEGORY_TOOLS: dict[str, tuple[str, ...]] = {
-    "pushing commits": ("git_push", "git_commit", "git_merge", "git_rebase", "git_force_push"),
-    "publishing": ("deploy", "publish", "content_reach"),
-    "destructive operations": (
-        "delete_file",
-        "remove_directory",
-        "bash",
-        "shell",
-        "execute_command",
-        "run_command",
-        "docker",
-        "kubectl",
-        "terraform",
-    ),
-    "rotating credentials": ("rotate_credentials", "rotate_key", "vault_rotate"),
-}
+# GH#11206: sourced from the canonical tool catalogue (SSOT).
+_APPROVAL_CATEGORY_TOOLS: dict[str, tuple[str, ...]] = APPROVAL_CATEGORY_TOOLS
 
 
 def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
