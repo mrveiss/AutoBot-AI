@@ -77,8 +77,9 @@ class TestSerialization:
         item.linked_pr_urls = []
         item.labels = []
         session = AsyncMock()
-        with patch.object(work_items, "_assignee_display", new=AsyncMock(return_value=None)), patch.object(
-            work_items, "_relations_to_list", return_value=[]
+        with (
+            patch.object(work_items, "_assignee_display", new=AsyncMock(return_value=None)),
+            patch.object(work_items, "_relations_to_list", return_value=[]),
         ):
             result = await work_items._item_to_dict(item, session)
         assert result["requires_approval_before"] == ["pushing commits"]
