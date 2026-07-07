@@ -296,3 +296,18 @@ def test_seed_default_roles_no_write_when_existing_rows_match_registry():
     assert created == 0
     db.commit.assert_not_awaited()
     db.add.assert_not_called()
+
+
+def test_backend_post_sync_rewrites_root_requirements_not_strips_it():
+    """The backend post_sync_cmd must REWRITE `-r ../requirements.txt` to the
+    code_source path (so the root runtime deps install on deploy), not strip it
+    like the old `grep -Ev '...|^-r'` did — #11135."""
+    backend = next(r for r in DEFAULT_ROLES if r["name"] == "backend")
+    cmd = backend["post_sync_cmd"]
+    # rewrite present (sed maps the sibling include to code_source)
+    assert "s|^-r \\.\\./requirements.txt|-r " in cmd
+    assert "/code_source/requirements.txt|" in cmd
+    # and the grep no longer drops -r lines
+    assert "^-r" not in cmd.split("| sed")[0]
+    # the -c constraints rewrite (#11117) is preserved
+    assert "s|^-c \\.\\./constraints/|-c " in cmd
