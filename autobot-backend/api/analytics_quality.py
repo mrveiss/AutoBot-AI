@@ -44,6 +44,19 @@ logger = get_logger(__name__)
 
 router = APIRouter(tags=["code-quality", "analytics"])  # Prefix set in router_registry
 
+# Single source of truth for quality dimension weights (must sum to 1.0).
+# runtime_risk funded by -0.05 maintainability and -0.05 testability (#11184).
+_QUALITY_WEIGHTS: dict[str, float] = {
+    "maintainability": 0.20,
+    "reliability": 0.20,
+    "security": 0.20,
+    "performance": 0.15,
+    "testability": 0.05,
+    "documentation": 0.10,
+    "runtime_risk": 0.10,
+}
+assert abs(sum(_QUALITY_WEIGHTS.values()) - 1.0) < 1e-9, "Quality weights must sum to 1.0"
+
 
 # ============================================================================
 # Models
@@ -70,16 +83,7 @@ def get_grade(score: float) -> QualityGrade:
 
 def calculate_health_score(metrics: dict[str, float]) -> HealthScore:
     """Calculate overall health score from individual metrics."""
-    weights = {
-        "maintainability": 0.25,
-        "reliability": 0.20,
-        "security": 0.20,
-        "performance": 0.15,
-        "testability": 0.10,
-        "documentation": 0.10,
-    }
-
-    weighted_sum = sum(metrics.get(category, 70) * weight for category, weight in weights.items())
+    weighted_sum = sum(metrics.get(category, 70) * weight for category, weight in _QUALITY_WEIGHTS.items())
 
     overall = min(100, max(0, weighted_sum))
     grade = get_grade(overall)
@@ -453,6 +457,21 @@ def _calculate_documentation_score(stats: dict[str, Any]) -> float:
     return max(0.0, min(100.0, scaled_score))
 
 
+def _calculate_runtime_risk_score(runtime_risk_map: dict[str, float]) -> float:
+    """Return a HEALTH score (higher = better) from the runtime-risk map.
+
+    Inverts the mean risk across all known files: score = 100 * (1 - mean_risk).
+    When the map is empty (Redis unavailable or no failure data), returns 100.0
+    as a neutral signal so this dimension never degrades the health score without
+    real evidence (#11184).
+    """
+    if not runtime_risk_map:
+        logger.info("runtime_risk: no failure data — returning neutral 100.0")
+        return 100.0
+    mean_risk = sum(runtime_risk_map.values()) / len(runtime_risk_map)
+    return 100.0 * (1.0 - mean_risk)
+
+
 def _categorize_problems_for_patterns(
     problems: list[dict],
 ) -> list[dict[str, Any]]:
@@ -563,17 +582,7 @@ def _build_quality_trends(metrics: dict[str, float], days: int = 30) -> list[dic
     Returns:
         List of trend data points with date and weighted score
     """
-    # Weights for calculating overall weighted score
-    weights = {
-        "maintainability": 0.25,
-        "reliability": 0.20,
-        "security": 0.20,
-        "performance": 0.15,
-        "testability": 0.10,
-        "documentation": 0.10,
-    }
-
-    weighted_score = sum(metrics.get(category, 0) * weight for category, weight in weights.items())
+    weighted_score = sum(metrics.get(category, 0) * weight for category, weight in _QUALITY_WEIGHTS.items())
 
     return [
         {
@@ -588,19 +597,19 @@ def _calculate_all_quality_scores(
     problems: list[dict],
     stats: dict[str, Any],
     total_files: int,
+    runtime_risk_map: dict[str, float] | None = None,
 ) -> dict[str, float]:
-    """
-    Calculate all quality metric scores from problems and stats.
+    """Calculate all quality metric scores from problems, stats, and runtime risk.
 
     Issue #620: Extracted from calculate_real_quality_metrics.
+    Issue #11184: Added runtime_risk dimension (health-inverted, neutral when empty).
 
     Args:
         problems: List of problem dictionaries from analysis
         stats: Codebase statistics from analysis
         total_files: Total number of files in codebase
-
-    Returns:
-        Dictionary mapping metric categories to scores
+        runtime_risk_map: Per-file runtime_risk scores from build_runtime_risk_map();
+                          pass None or empty dict when unavailable — returns neutral 100.
     """
     metrics = {
         "maintainability": _calculate_maintainability_score(problems, total_files),
@@ -609,17 +618,20 @@ def _calculate_all_quality_scores(
         "performance": _calculate_performance_score(problems),
         "testability": _calculate_testability_score(stats, total_files),
         "documentation": _calculate_documentation_score(stats),
+        "runtime_risk": _calculate_runtime_risk_score(runtime_risk_map or {}),
     }
 
     logger.info(
         "Calculated quality metrics: maintainability=%.1f, reliability=%.1f, "
-        "security=%.1f, performance=%.1f, testability=%.1f, documentation=%.1f",
+        "security=%.1f, performance=%.1f, testability=%.1f, documentation=%.1f, "
+        "runtime_risk=%.1f",
         metrics["maintainability"],
         metrics["reliability"],
         metrics["security"],
         metrics["performance"],
         metrics["testability"],
         metrics["documentation"],
+        metrics["runtime_risk"],
     )
 
     return metrics
@@ -658,8 +670,14 @@ async def calculate_real_quality_metrics(
     total_files = int(stats.get("total_files", 0)) or 100  # Default estimate
     total_lines = int(stats.get("total_lines", 0)) or 10000
 
-    # Calculate metrics using helper (Issue #620)
-    metrics = _calculate_all_quality_scores(problems, stats, total_files)
+    # Resolve runtime-risk map once (async) then pass into the sync helper (#11184).
+    # Awaited here so the sync helper never touches async infrastructure.
+    from code_analysis.src.runtime_risk import build_runtime_risk_map
+
+    runtime_risk_map = await build_runtime_risk_map()
+
+    # Calculate metrics using helper (Issue #620, #11184)
+    metrics = _calculate_all_quality_scores(problems, stats, total_files, runtime_risk_map)
 
     return {
         "metrics": {k: round(v, 1) for k, v in metrics.items()},
@@ -985,14 +1003,7 @@ async def get_quality_metrics(
                     "value": value,
                     "grade": get_grade(value).value,
                     "trend": 0,  # Would be calculated from historical data
-                    "weight": {
-                        "maintainability": 0.25,
-                        "reliability": 0.20,
-                        "security": 0.20,
-                        "performance": 0.15,
-                        "testability": 0.10,
-                        "documentation": 0.10,
-                    }.get(cat, 0.1),
+                    "weight": _QUALITY_WEIGHTS.get(cat, 0.0),
                 }
             )
         except ValueError:
@@ -1291,6 +1302,27 @@ async def get_quality_snapshot(
     }
 
 
+async def _drill_down_runtime_risk(limit: int = 50) -> dict[str, Any]:
+    """Return top files by runtime_risk score, sorted descending (#11184).
+
+    Each entry: {file: str, runtime_risk: float}.  Returns no_data shape when
+    Redis is unavailable or no failure patterns are recorded.
+    """
+    from code_analysis.src.runtime_risk import build_runtime_risk_map
+
+    risk_map = await build_runtime_risk_map()
+    if not risk_map:
+        return _no_data_response("No runtime failure data available.")
+    sorted_files = sorted(risk_map.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+    return {
+        "status": "success",
+        "category": "runtime_risk",
+        "display_name": "Runtime Risk",
+        "files": [{"file": f, "runtime_risk": round(r, 4)} for f, r in sorted_files],
+        "total_files": len(sorted_files),
+    }
+
+
 @router.get("/drill-down/{category}", response_model=QualityDrillDownResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1316,6 +1348,11 @@ async def drill_down_category(
     project's clone directory so only files under source_root contribute.
     """
     source_root = await _resolve_source_root_or_404(source_id)
+
+    # Issue #11184: runtime_risk category resolves via the dedicated risk map.
+    if category.lower() == "runtime_risk":
+        return await _drill_down_runtime_risk(limit=limit)
+
     problems, stats = await _get_problems_from_chromadb(source_root=source_root)
 
     if not problems:
