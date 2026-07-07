@@ -36646,6 +36646,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/{agent_id}/knowledge-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export an agent's learned strategy + high-confidence failure patterns
+         * @description Render an agent's opaque learned knowledge as a human-reviewable document (GH#11151).
+         */
+        get: operations["export_agent_knowledge_api_agents__agent_id__knowledge_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{agent_id}/knowledge-import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import an operator-curated learned strategy
+         * @description Persist a reviewer-curated strategy, sanitizing untrusted free-text first (GH#11151).
+         */
+        post: operations["import_agent_knowledge_api_agents__agent_id__knowledge_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/analytics/code/code/index": {
         parameters: {
             query?: never;
@@ -71191,6 +71231,26 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * FailurePatternRecord
+         * @description Serialized failure pattern for the knowledge-export document (GH#11151).
+         */
+        FailurePatternRecord: {
+            /** Pattern Id */
+            pattern_id: string;
+            /** Causal Chain */
+            causal_chain: string;
+            /** Occurrence Count */
+            occurrence_count: number;
+            /** Successful Resolutions */
+            successful_resolutions: string[];
+            /** Resolution Success Rate */
+            resolution_success_rate: number;
+            /** Confidence */
+            confidence: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * FeatureCategory
          * @description Categories of enterprise features
          * @enum {string}
@@ -76090,6 +76150,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * KnowledgeImportResponse
+         * @description Response for a knowledge-import operation (GH#11151).
+         */
+        KnowledgeImportResponse: {
+            /** Success */
+            success: boolean;
+            /** Message */
+            message: string;
+            /** Task Type */
+            task_type: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * KnowledgeMainCategoriesResponse
          * @description Shape of ``GET /api/knowledge_base/categories/main``.
          *
@@ -78150,6 +78224,55 @@ export interface components {
             count: number;
             /** Messages */
             messages: components["schemas"]["ServiceMessageResponse"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * LearnedKnowledgeExport
+         * @description Human-reviewable export of an agent's learned knowledge (GH#11151).
+         */
+        LearnedKnowledgeExport: {
+            /** Task Type */
+            task_type: string;
+            learned_strategy: components["schemas"]["LearnedStrategyResponse"] | null;
+            /** High Confidence Threshold */
+            high_confidence_threshold: number;
+            /** High Confidence Failure Patterns */
+            high_confidence_failure_patterns: components["schemas"]["FailurePatternRecord"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * LearnedKnowledgeImport
+         * @description Operator-curated learned strategy to import (GH#11151).
+         *
+         *     ``best_prompt_template`` and ``best_approach`` are treated as untrusted and
+         *     sanitized before persistence (reuses the #11060 data-only framing).
+         */
+        LearnedKnowledgeImport: {
+            /** Task Type */
+            task_type: string;
+            /** Best Approach */
+            best_approach: string;
+            /** Best Prompt Template */
+            best_prompt_template: string;
+            /**
+             * Avg Score
+             * @default 0
+             */
+            avg_score: number;
+            /**
+             * Sample Size
+             * @default 0
+             */
+            sample_size: number;
+            /**
+             * Confidence
+             * @default 0
+             */
+            confidence: number;
+            /** Failure Patterns */
+            failure_patterns?: string[];
         } & {
             [key: string]: unknown;
         };
@@ -98462,6 +98585,8 @@ export interface components {
             created_by_user_id?: string | null;
             /** Labels */
             labels?: string[] | null;
+            /** Requires Approval Before */
+            requires_approval_before?: string[] | null;
         } & {
             [key: string]: unknown;
         };
@@ -98546,6 +98671,8 @@ export interface components {
             assignee_agent_id?: string | null;
             /** Assignee User Id */
             assignee_user_id?: string | null;
+            /** Requires Approval Before */
+            requires_approval_before?: string[] | null;
             /** Scheduled Start */
             scheduled_start?: string | null;
             /** Scheduled End */
@@ -148096,6 +148223,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResetLearningResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_agent_knowledge_api_agents__agent_id__knowledge_export_get: {
+        parameters: {
+            query?: {
+                /** @description Task type to export */
+                task_type?: string | null;
+                /** @description Only export failure patterns at or above this confidence */
+                min_confidence?: number;
+            };
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnedKnowledgeExport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_agent_knowledge_api_agents__agent_id__knowledge_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearnedKnowledgeImport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeImportResponse"];
                 };
             };
             /** @description Validation Error */
