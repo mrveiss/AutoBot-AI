@@ -257,6 +257,11 @@ class AgentLoopConfig:
     # Enable independent second-model refutation before consequential actions.
     pre_action_verifier_enabled: bool = True
 
+    # Fact-forcing gate (GH#11149) — block the first edit to an existing file
+    # until it has been read/grepped this task. Off by default (opt-in); also
+    # force-enabled by AUTOBOT_FACT_FORCING=1.
+    fact_forcing_enabled: bool = False
+
     # Logging
     log_iterations: bool = True  # Log each iteration
     log_tool_results: bool = True  # Log tool execution results
