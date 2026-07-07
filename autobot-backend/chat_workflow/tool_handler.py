@@ -2386,9 +2386,7 @@ class ToolHandlerMixin:
             agent_id,
             matched,
         )
-        execution_results.append(
-            {"tool": tool_name, "status": "error", "error": error, "forbidden_by_manifest": True}
-        )
+        execution_results.append({"tool": tool_name, "status": "error", "error": error, "forbidden_by_manifest": True})
         return WorkflowMessage(
             type="error",
             content=error,
