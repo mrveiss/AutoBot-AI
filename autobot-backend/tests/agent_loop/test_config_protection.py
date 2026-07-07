@@ -107,18 +107,14 @@ class TestExecuteToolsIntegration:
     """End-to-end: a protected-config write is blocked before approval."""
 
     @pytest.mark.asyncio
-    async def test_config_write_blocked_before_approval(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_config_write_blocked_before_approval(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("AUTOBOT_ALLOW_CONFIG_EDITS", raising=False)
         loop = _make_loop()
         loop._check_tool_call_repetition = MagicMock(return_value=None)
         loop._check_approvals = AsyncMock(return_value={})
         loop.tool_executor = MagicMock()
 
-        result = await loop._execute_tools(
-            [{"tool_name": "write_file", "args": {"file_path": ".prettierrc"}}]
-        )
+        result = await loop._execute_tools([{"tool_name": "write_file", "args": {"file_path": ".prettierrc"}}])
 
         assert "write_file" in result
         assert "config-protection" in result["write_file"]["error"].lower()
@@ -133,25 +129,19 @@ class TestExecuteToolsIntegration:
         # Stop right after the config check to prove the write passed it.
         loop._check_approvals = AsyncMock(return_value={"write_file": {"error": "stop"}})
 
-        result = await loop._execute_tools(
-            [{"tool_name": "write_file", "args": {"file_path": "src/app.ts"}}]
-        )
+        result = await loop._execute_tools([{"tool_name": "write_file", "args": {"file_path": "src/app.ts"}}])
 
         loop._check_approvals.assert_awaited_once()
         assert result == {"write_file": {"error": "stop"}}
 
     @pytest.mark.asyncio
-    async def test_env_override_lets_config_write_through(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_env_override_lets_config_write_through(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AUTOBOT_ALLOW_CONFIG_EDITS", "1")
         loop = _make_loop()
         loop._check_tool_call_repetition = MagicMock(return_value=None)
         loop._check_approvals = AsyncMock(return_value={"write_file": {"error": "stop"}})
 
-        result = await loop._execute_tools(
-            [{"tool_name": "write_file", "args": {"file_path": ".prettierrc"}}]
-        )
+        result = await loop._execute_tools([{"tool_name": "write_file", "args": {"file_path": ".prettierrc"}}])
 
         loop._check_approvals.assert_awaited_once()
         assert result == {"write_file": {"error": "stop"}}
