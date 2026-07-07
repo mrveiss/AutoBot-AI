@@ -2393,6 +2393,43 @@ class ToolHandlerMixin:
             metadata={"tool": tool_name, "error": True, "forbidden_by_manifest": True},
         )
 
+    def _enforce_config_protection(
+        self,
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
+    ) -> WorkflowMessage | None:
+        """Block a write that would weaken a linter/formatter config (GH#11177).
+
+        Reuses the dependency-free ``autobot_shared.config_guard`` matcher against
+        the tool's target path (``params`` for built-in tools, ``arguments`` for
+        MCP). Records the failure and returns an error ``WorkflowMessage`` when the
+        target is a protected config, else ``None``. ``AUTOBOT_ALLOW_CONFIG_EDITS``
+        opts out.
+        """
+        from autobot_shared.config_guard import config_edits_allowed, protected_config_for
+
+        if config_edits_allowed():
+            return None
+        args = tool_call.get("params") or tool_call.get("arguments") or {}
+        matched = protected_config_for(tool_call.get("name", ""), args)
+        if matched is None:
+            return None
+        tool_name = tool_call.get("name", "")
+        error = (
+            f"Editing linter/formatter config '{matched}' is blocked (config-protection): "
+            f"fix the code to satisfy the gate instead of weakening it. "
+            f"Set AUTOBOT_ALLOW_CONFIG_EDITS=1 for an intentional change."
+        )
+        logger.warning("[GH#11177] Blocked config-protection write to '%s' (tool '%s')", matched, tool_name)
+        execution_results.append(
+            {"tool": tool_name, "status": "error", "error": error, "config_protection": True}
+        )
+        return WorkflowMessage(
+            type="error",
+            content=error,
+            metadata={"tool": tool_name, "error": True, "config_protection": True},
+        )
+
     async def _dispatch_tool_call(
         self,
         tool_call: dict[str, Any],
@@ -2420,6 +2457,13 @@ class ToolHandlerMixin:
         forbidden_msg = self._enforce_forbidden_work(tool_call, ctx, execution_results)
         if forbidden_msg is not None:
             yield forbidden_msg
+            return
+
+        # GH#11177: block writes that would weaken a linter/formatter config at the
+        # same production seam — steer the agent to fix the code, not the gate.
+        config_msg = self._enforce_config_protection(tool_call, execution_results)
+        if config_msg is not None:
+            yield config_msg
             return
 
         if tool_name == "respond":
