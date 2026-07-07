@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -38,9 +39,26 @@ from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.time_utils import parse_utc_iso
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 logger = get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# History persistence constants — env-backed (chat_history/cache.py pattern).
+# ---------------------------------------------------------------------------
+
+# Redis sorted-set key for quality health-score history (analytics DB).
+# Score = timestamp-ms; value = JSON-encoded snapshot.
+_HEALTH_HISTORY_KEY = "quality:health:history"
+
+# Maximum snapshots to retain (~2 years of daily metric computations).
+QUALITY_HISTORY_MAX_POINTS: int = int(os.environ.get("QUALITY_HISTORY_MAX_POINTS", "730"))
+
+# Redis sorted-set key for remediation delta history (written by remediation_loop).
+_DELTA_HISTORY_KEY = "remediation:delta:history"
+
+# Maximum remediation delta rows to surface on the read endpoint.
+_DELTA_READ_LIMIT: int = 100
 
 router = APIRouter(tags=["code-quality", "analytics"])  # Prefix set in router_registry
 
@@ -569,21 +587,69 @@ def _calculate_complexity_metrics(
     }
 
 
-def _build_quality_trends(metrics: dict[str, float], days: int = 30) -> list[dict]:
-    """
-    Build quality trend data for the specified number of days.
+async def _persist_health_snapshot(score: float, metrics: dict[str, float]) -> None:
+    """Write one health-score point to the analytics Redis sorted set.
 
-    Issue #620: Extracted from calculate_real_quality_metrics to reduce function length.
+    Mirrors the zadd/zremrangebyrank pattern from
+    ``analytics_bug_prediction._persist_prediction_to_redis``.
+    Degrades gracefully on Redis failure — logs a warning and returns.
 
     Args:
-        metrics: Dictionary of metric scores (maintainability, reliability, etc.)
-        days: Number of days of trend data to generate
+        score:   Weighted health score (0-100).
+        metrics: Per-dimension metric scores used to compute *score*.
+    """
+    try:
+        from autobot_shared.redis_client import get_async_redis_client
+
+        redis = await get_async_redis_client(database="analytics")
+        ts = now_utc()
+        ts_ms = int(ts.timestamp() * 1000)
+        payload = json.dumps({"ts": ts.isoformat(), "score": round(score, 2), "metrics": metrics})
+        await redis.zadd(_HEALTH_HISTORY_KEY, {payload: ts_ms})
+        await redis.zremrangebyrank(_HEALTH_HISTORY_KEY, 0, -(QUALITY_HISTORY_MAX_POINTS + 1))
+        logger.debug("quality health snapshot persisted (score=%.2f, ts_ms=%d)", score, ts_ms)
+    except Exception as exc:
+        logger.warning("quality health snapshot: Redis unavailable, skipping persist: %s", exc)
+
+
+async def _build_quality_trends(metrics: dict[str, float], days: int = 30) -> list[dict]:
+    """Return quality trend data points for the last *days* days.
+
+    Issue #620: Extracted from calculate_real_quality_metrics.
+    Issue #11203: Now reads REAL history from Redis sorted set
+    ``quality:health:history``.  Falls back to the previous flat-line
+    behaviour when Redis is unavailable or the history is empty, so a
+    fresh system always returns a valid (if monotonic) response.
+
+    Args:
+        metrics: Current metric scores used for the flat fallback only.
+        days:    Maximum age of points to return.
 
     Returns:
-        List of trend data points with date and weighted score
+        List of ``{date, score}`` dicts ordered oldest-first.
     """
-    weighted_score = sum(metrics.get(category, 0) * weight for category, weight in _QUALITY_WEIGHTS.items())
+    try:
+        from autobot_shared.redis_client import get_async_redis_client
 
+        redis = await get_async_redis_client(database="analytics")
+        cutoff_ms = int((now_utc() - timedelta(days=days)).timestamp() * 1000)
+        now_ms = int(now_utc().timestamp() * 1000)
+        raw_entries = await redis.zrangebyscore(_HEALTH_HISTORY_KEY, cutoff_ms, now_ms)
+        if raw_entries:
+            points = []
+            for entry in raw_entries:
+                try:
+                    rec = json.loads(entry)
+                    points.append({"date": rec["ts"], "score": rec["score"]})
+                except (json.JSONDecodeError, KeyError):
+                    continue
+            if points:
+                return points
+    except Exception as exc:
+        logger.warning("quality trends: Redis unavailable, using flat fallback: %s", exc)
+
+    # Fallback: flat line at current weighted score (original behaviour).
+    weighted_score = sum(metrics.get(category, 0) * weight for category, weight in _QUALITY_WEIGHTS.items())
     return [
         {
             "date": (datetime.now(tz=timezone.utc) - timedelta(days=i)).isoformat(),
@@ -678,6 +744,11 @@ async def calculate_real_quality_metrics(
 
     # Calculate metrics using helper (Issue #620, #11184)
     metrics = _calculate_all_quality_scores(problems, stats, total_files, runtime_risk_map)
+    weighted_score = sum(metrics.get(c, 0) * w for c, w in _QUALITY_WEIGHTS.items())
+
+    # Issue #11203: Persist real health snapshot + build real trend series.
+    await _persist_health_snapshot(weighted_score, metrics)
+    trends = await _build_quality_trends(metrics)
 
     return {
         "metrics": {k: round(v, 1) for k, v in metrics.items()},
@@ -688,7 +759,7 @@ async def calculate_real_quality_metrics(
             "line_count": total_lines,
             "issues_count": len(problems),
         },
-        "trends": _build_quality_trends(metrics),
+        "trends": trends,
         "source": "calculated",
         "calculated_at": datetime.now(tz=timezone.utc).isoformat(),
     }
@@ -833,6 +904,69 @@ def _build_quality_export_report(format_type: str, health: Any, metrics: dict, d
         "stats": data.get("stats", {}),
         "recommendations": health.recommendations,
     }
+
+
+async def _read_remediation_deltas(limit: int) -> list[dict]:
+    """Read recent remediation delta records from Redis sorted set.
+
+    Reads from ``remediation:delta:history`` (analytics DB, written by
+    ``code_analysis.src.remediation_loop._persist_delta``).  Returns at
+    most *limit* records ordered newest-first.  Returns [] on Redis error
+    or when the set is empty — never raises.
+
+    Args:
+        limit: Maximum number of records to return.
+
+    Returns:
+        List of delta dicts each containing ts, health_delta, findings_delta.
+    """
+    try:
+        from autobot_shared.redis_client import get_async_redis_client
+
+        redis = await get_async_redis_client(database="analytics")
+        raw = await redis.zrevrange(_DELTA_HISTORY_KEY, 0, limit - 1)
+        deltas = []
+        for entry in raw:
+            try:
+                rec = json.loads(entry)
+                deltas.append(
+                    {
+                        "ts": rec.get("timestamp", ""),
+                        "health_delta": rec.get("health_delta", 0.0),
+                        "findings_delta": rec.get("findings_delta", 0),
+                        "before_health": rec.get("before_health", 0.0),
+                        "after_health": rec.get("after_health", 0.0),
+                    }
+                )
+            except (json.JSONDecodeError, KeyError):
+                continue
+        return deltas
+    except Exception as exc:
+        logger.warning("remediation-deltas: Redis unavailable: %s", exc)
+        return []
+
+
+@router.get("/remediation-deltas")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_remediation_deltas",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
+async def get_remediation_deltas(
+    limit: int = Query(50, ge=1, le=_DELTA_READ_LIMIT),
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict[str, Any]:
+    """Return recent remediation delta records written by the remediation loop.
+
+    Issue #11203: Surfaces ``remediation:delta:history`` so the quality
+    dashboard can show before/after health-score improvements alongside
+    the trend line.  Read-only; returns an empty list on a fresh system.
+
+    Args:
+        limit: Maximum number of recent delta records to return (1-100).
+    """
+    deltas = await _read_remediation_deltas(limit)
+    return {"status": "success", "count": len(deltas), "deltas": deltas}
 
 
 def _export_quality_as_csv(health: Any, metrics: dict) -> str:
