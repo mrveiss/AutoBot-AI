@@ -2499,9 +2499,7 @@ class ToolHandlerMixin:
             f"importers/call-sites first so the change is grounded, then retry."
         )
         logger.warning("[GH#11178] Blocked fact-forcing edit to '%s' (tool '%s')", path, name)
-        execution_results.append(
-            {"tool": name, "status": "error", "error": error, "fact_forcing": True}
-        )
+        execution_results.append({"tool": name, "status": "error", "error": error, "fact_forcing": True})
         return WorkflowMessage(
             type="error",
             content=error,
