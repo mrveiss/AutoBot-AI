@@ -190,6 +190,8 @@ class AgentLoop:
         self._current_context: TaskContext | None = None
         self._iteration_count = 0
         self._consecutive_errors = 0
+        # GH#11149: files read/grepped this task, for the fact-forcing gate.
+        self._investigated_files: set[str] = set()
         # Steering inbox: human guidance messages queued for the next iteration (#10543)
         self._steering_inbox: asyncio.Queue[SteeringEntry] = asyncio.Queue()
         # Human-answer inbox: answers arrive here via answer() and resolve ask_human() waits (#10553)
@@ -267,6 +269,7 @@ class AgentLoop:
         self._state = LoopState.INITIALIZING
         self._iteration_count = 0
         self._consecutive_errors = 0
+        self._investigated_files = set()  # GH#11149: reset fact-forcing state per task
         self._halted_on_repetition = False
         self._abstained = False
         self._abstention_reason = None
@@ -843,6 +846,13 @@ class AgentLoop:
         config_results = self._check_config_protection(tools)
         if config_results:
             return config_results
+
+        # GH#11149: fact-forcing — block the first edit to an existing file until
+        # it has been read/grepped this task. Records reads in this batch first so
+        # a read+edit of the same file in one turn is allowed.
+        fact_results = self._check_fact_forcing(tools)
+        if fact_results:
+            return fact_results
 
         # Issue #4092: Gate sensitive operations behind user approval.
         denied_results = await self._check_approvals(tools)
@@ -1453,6 +1463,42 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
                             f"Editing linter/formatter config '{matched}' is blocked "
                             f"(config-protection): fix the code to satisfy the gate instead of "
                             f"weakening it. Set AUTOBOT_ALLOW_CONFIG_EDITS=1 for an intentional change."
+                        )
+                    }
+                }
+        return {}
+
+    def _check_fact_forcing(self, tools: list[dict[str, Any]]) -> dict[str, Any]:
+        """Block the first edit to an existing, uninvestigated file (GH#11149).
+
+        Records this batch's investigations first (so read+edit in one turn is
+        allowed), then blocks the first edit to an existing file not yet read this
+        task. New files are never blocked. Self-clearing: the agent reads the file
+        and retries. Returns ``{}`` when disabled or nothing is gated.
+        """
+        from agent_loop.fact_forcing import (
+            fact_forcing_env_enabled,
+            first_uninvestigated_edit,
+            record_investigations,
+        )
+
+        if not (self.config.fact_forcing_enabled or fact_forcing_env_enabled()):
+            return {}
+        record_investigations(tools, self._investigated_files)
+        for tool in tools:
+            path = first_uninvestigated_edit(tool, self._investigated_files)
+            if path is not None:
+                tool_name = tool.get("tool_name", "unknown")
+                logger.warning(
+                    "AgentLoop: edit to '%s' blocked by fact-forcing gate — read it first (%s)",
+                    path,
+                    tool_name,
+                )
+                return {
+                    tool_name: {
+                        "error": (
+                            f"Editing '{path}' is blocked (fact-forcing): read the file and "
+                            f"its importers/call-sites first so the change is grounded, then retry."
                         )
                     }
                 }
