@@ -103,9 +103,7 @@ class TestImportSanitization:
             confidence=0.7,
         )
         with patch.object(api_mod, "_get_learner", return_value=learner):
-            resp = await api_mod.import_agent_knowledge(
-                agent_id="research_agent", payload=payload, _admin=True
-            )
+            resp = await api_mod.import_agent_knowledge(agent_id="research_agent", payload=payload, _admin=True)
 
         saved = captured["strategy"]
         # Marker delimiters stripped; newlines collapsed → cannot escape the frame.
