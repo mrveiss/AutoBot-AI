@@ -17,7 +17,12 @@ from unittest.mock import patch
 
 import pytest
 
-from autobot_shared.url_safety import is_public_url, is_public_url_async, resolve_safe_ip_async
+from autobot_shared.url_safety import (
+    is_public_url,
+    is_public_url_async,
+    require_allowlisted_https,
+    resolve_safe_ip_async,
+)
 
 # ---------------------------------------------------------------------------
 # Scheme/host rejection
@@ -188,6 +193,45 @@ async def test_resolve_safe_ip_no_usable_ip() -> None:
 # ---------------------------------------------------------------------------
 # Import-isolation contract (the whole point of #7477)
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# require_allowlisted_https — allowlist + port-pinning SSRF guard (#11091)
+# ---------------------------------------------------------------------------
+
+_ALLOW = frozenset({"accounts.google.com", "github.com", "api.anthropic.com"})
+
+
+def test_allowlisted_https_host_passes() -> None:
+    # Standard https on an allowlisted host (port None or explicit 443) is allowed.
+    require_allowlisted_https("https://accounts.google.com/o/oauth2/token", _ALLOW)
+    require_allowlisted_https("https://github.com:443/login/oauth/access_token", _ALLOW)
+
+
+@pytest.mark.parametrize(
+    "url, reason",
+    [
+        ("http://accounts.google.com/token", "https"),  # non-https scheme
+        ("https://169.254.169.254/latest/meta-data/", "IP-literal"),  # IMDS via IPv4 literal
+        ("https://127.0.0.1/token", "IP-literal"),
+        ("https://[::1]/token", "IP-literal"),  # IPv6 loopback literal
+        ("https://10.0.0.1/token", "IP-literal"),  # private range literal
+        ("https://evil-attacker.example.com/token", "allowlist"),  # not allowlisted
+        ("https://accounts.google.com:22/token", "port"),  # allowlisted host, non-443 port
+        ("https:///token", "host"),  # no host
+    ],
+)
+def test_require_allowlisted_https_rejects(url: str, reason: str) -> None:
+    with pytest.raises(ValueError) as exc:
+        require_allowlisted_https(url, _ALLOW)
+    assert reason.lower() in str(exc.value).lower()
+
+
+def test_malformed_port_raises_valueerror_not_unhandled() -> None:
+    # urlparse defers port parsing; an out-of-range port must surface as ValueError.
+    with pytest.raises(ValueError) as exc:
+        require_allowlisted_https("https://accounts.google.com:99999/token", _ALLOW)
+    assert "port" in str(exc.value).lower()
 
 
 def test_module_has_zero_autobot_dependencies() -> None:
