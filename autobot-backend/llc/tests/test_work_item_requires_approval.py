@@ -83,3 +83,65 @@ class TestSerialization:
         ):
             result = await work_items._item_to_dict(item, session)
         assert result["requires_approval_before"] == ["pushing commits"]
+
+
+class TestApprovalCategoryValidation:
+    """GH#11206: reject unknown approval categories (typo → silent gate bypass)."""
+
+    async def test_create_accepts_valid_categories(self, service, mock_session):
+        with patch.object(service, "_next_identifier", new=AsyncMock(return_value="PRJ-9")):
+            item = await service.create(
+                mock_session,
+                company_id=str(uuid.uuid4()),
+                type=WorkItemType.TASK,
+                title="Valid",
+                requires_approval_before=["pushing commits", "destructive operations"],
+            )
+        assert item.requires_approval_before == ["pushing commits", "destructive operations"]
+
+    async def test_create_rejects_unknown_category(self, service, mock_session):
+        with patch.object(service, "_next_identifier", new=AsyncMock(return_value="PRJ-10")):
+            with pytest.raises(ValueError):
+                await service.create(
+                    mock_session,
+                    company_id=str(uuid.uuid4()),
+                    type=WorkItemType.TASK,
+                    title="Typo",
+                    requires_approval_before=["pushing commit"],  # typo → not a real category
+                )
+
+    async def test_update_rejects_unknown_category(self, service, mock_session):
+        item = MagicMock()
+        with patch.object(service, "get", new=AsyncMock(return_value=item)):
+            with pytest.raises(ValueError):
+                await service.update(
+                    mock_session,
+                    str(uuid.uuid4()),
+                    requires_approval_before=["not_a_category"],
+                )
+
+    async def test_update_accepts_valid_categories(self, service, mock_session):
+        item = MagicMock()
+        item.requires_approval_before = []
+        with patch.object(service, "get", new=AsyncMock(return_value=item)):
+            await service.update(
+                mock_session, str(uuid.uuid4()), requires_approval_before=["publishing"]
+            )
+        assert item.requires_approval_before == ["publishing"]
+
+    async def test_update_exempts_preexisting_legacy_value(self, service, mock_session):
+        # A legacy free-text value already on the item is exempt (won't block an edit),
+        # but a genuinely-new unknown category is still rejected.
+        item = MagicMock()
+        item.requires_approval_before = ["legacy_freetext"]
+        with patch.object(service, "get", new=AsyncMock(return_value=item)):
+            await service.update(
+                mock_session, str(uuid.uuid4()),
+                requires_approval_before=["legacy_freetext", "pushing commits"],
+            )
+            assert item.requires_approval_before == ["legacy_freetext", "pushing commits"]
+            with pytest.raises(ValueError):
+                await service.update(
+                    mock_session, str(uuid.uuid4()),
+                    requires_approval_before=["legacy_freetext", "brand_new_typo"],
+                )

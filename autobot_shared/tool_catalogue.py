@@ -16,6 +16,8 @@ catalogues exactly (asserted by parity tests) — this is a consolidation, not a
 behaviour change.
 """
 
+from enum import Enum
+
 # --- atoms -----------------------------------------------------------------
 
 SHELL_EXEC_TOOLS = ("bash", "shell", "execute_command", "run_command")
@@ -60,3 +62,22 @@ APPROVAL_CATEGORY_TOOLS = {
     "destructive operations": FILE_DELETE_TOOLS + SHELL_EXEC_TOOLS + CONTAINER_ORCH_TOOLS,
     "rotating credentials": ("rotate_credentials", "rotate_key", "vault_rotate"),
 }
+
+
+class ApprovalCategory(str, Enum):
+    """Controlled vocabulary for a work item's ``requires_approval_before`` (GH#11206).
+
+    Values match ``APPROVAL_CATEGORY_TOOLS`` keys exactly (enforced by test). A
+    declared category outside this set matches no tools at the seam and silently
+    disables the gate, so callers should validate against these values at set time.
+    """
+
+    PUSHING_COMMITS = "pushing commits"
+    PUBLISHING = "publishing"
+    DESTRUCTIVE_OPERATIONS = "destructive operations"
+    ROTATING_CREDENTIALS = "rotating credentials"
+
+
+def valid_approval_categories() -> "frozenset[str]":
+    """Return the set of valid ``requires_approval_before`` category strings."""
+    return frozenset(c.value for c in ApprovalCategory)

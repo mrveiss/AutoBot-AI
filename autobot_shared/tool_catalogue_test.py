@@ -13,6 +13,8 @@ from autobot_shared.tool_catalogue import (
     APPROVAL_CATEGORY_TOOLS,
     INFRA_AND_SHELL_TOOLS,
     SENSITIVE_TOOLS,
+    ApprovalCategory,
+    valid_approval_categories,
 )
 
 # --- frozen snapshots of the original literals (pre-#11206) -----------------
@@ -96,6 +98,13 @@ def test_approval_categories_parity():
     assert set(APPROVAL_CATEGORY_TOOLS) == set(_ORIG_APPROVAL)
     for category, tools in _ORIG_APPROVAL.items():
         assert set(APPROVAL_CATEGORY_TOOLS[category]) == tools, category
+
+
+def test_approval_category_enum_matches_catalogue_keys():
+    # The controlled vocabulary must stay in sync with the tool catalogue keys,
+    # else a valid category could match no tools (silent gate bypass).
+    assert valid_approval_categories() == set(APPROVAL_CATEGORY_TOOLS)
+    assert {c.value for c in ApprovalCategory} == set(APPROVAL_CATEGORY_TOOLS)
 
 
 def test_consumers_reexport_the_catalogue():
