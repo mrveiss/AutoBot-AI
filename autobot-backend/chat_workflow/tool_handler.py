@@ -428,23 +428,6 @@ def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
     return None
 
 
-def mark_tool_calls_needing_approval(tool_calls: list[dict], categories: list[str]) -> None:
-    """Flag tool calls whose action is in a session's declared approval categories (GH#11202).
-
-    The **backend** permission decision: sets ``needs_approval`` (and the matched
-    ``approval_category``) in-place, which routes the call through the LangGraph
-    approval interrupt. The frontend only renders that interrupt and returns the
-    decision — it never decides what needs approval.
-    """
-    if not categories:
-        return
-    for tc in tool_calls:
-        category = _approval_category_for(tc.get("name", ""), categories)
-        if category:
-            tc["needs_approval"] = True
-            tc.setdefault("approval_category", category)
-
-
 # Issue #650: Pre-compiled regex for tool call parsing (performance optimization)
 # Handles both uppercase and lowercase TOOL_CALL tags with nested JSON in params
 _TOOL_CALL_PATTERN = re.compile(

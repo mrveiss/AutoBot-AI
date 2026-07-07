@@ -3118,18 +3118,25 @@ before summarizing.
         return error_msg
 
     async def _apply_session_role(self, session_id: str, context: Dict[str, Any] | None) -> Dict[str, Any] | None:
-        """Overlay the trusted per-session governed role onto the chat context (GH#11186).
+        """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202).
 
-        A server-set session role (via the authenticated role endpoint) overrides
-        any client-supplied ``agent_id`` so the pinned agent's ``forbidden_work``
-        manifest is enforced at the tool seam and cannot be lifted by the caller.
-        No role set → context is returned unchanged (a client-supplied ``agent_id``
-        may still only further-restrict the caller's own run).
+        A server-set session role overrides any client-supplied ``agent_id`` so the
+        pinned agent's ``forbidden_work`` is enforced at the tool seam and cannot be
+        lifted by the caller. GH#11202: when the approval gate flag is on and the
+        session declares approval categories, they are overlaid as
+        ``requires_approval_before`` so the existing ``_enforce_work_item_approval``
+        seam gate holds matching tools BEFORE they execute — the correct
+        pre-execution stage. Backend decides; the frontend only calls the endpoints.
         """
-        from chat_workflow.session_role import SessionRoleService, apply_role
+        from chat_workflow.session_role import CHAT_APPROVAL_GATE_ENABLED, SessionRoleService, apply_role
 
-        role = await SessionRoleService().get_role(session_id)
-        return apply_role(context, role)
+        svc = SessionRoleService()
+        context = apply_role(context, await svc.get_role(session_id))
+        if CHAT_APPROVAL_GATE_ENABLED:
+            categories = await svc.get_approval_categories(session_id)
+            if categories:
+                context = {**(context or {}), "requires_approval_before": categories}
+        return context
 
     async def process_message_stream(self, session_id: str, message: str, context: Dict[str, Any] | None = None):
         """Process a message via LangGraph StateGraph.

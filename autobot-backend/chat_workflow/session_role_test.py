@@ -113,7 +113,7 @@ def test_pinned_role_blocks_forbidden_tool_end_to_end():
     assert msg is not None and msg.metadata.get("forbidden_by_manifest") is True
 
 
-# --- GH#11202: session approval categories + backend gate marking ----------
+# --- GH#11202: session approval categories → pre-execution seam gate --------
 
 
 @pytest.mark.asyncio
@@ -140,19 +140,25 @@ async def test_get_approval_categories_swallows_failure():
     assert await svc.get_approval_categories("s3") == []
 
 
-def test_mark_tool_calls_needing_approval():
-    from chat_workflow.tool_handler import mark_tool_calls_needing_approval
+def test_session_categories_hold_tool_at_seam_end_to_end():
+    """Session-declared categories → requires_approval_before (as _apply_session_role
+    overlays) → the PRE-EXECUTION seam gate holds a matching tool (correct stage)."""
+    from types import SimpleNamespace
 
-    calls = [{"name": "git_push"}, {"name": "web_search"}, {"name": "bash"}]
-    mark_tool_calls_needing_approval(calls, ["pushing commits", "destructive operations"])
-    assert calls[0]["needs_approval"] is True and calls[0]["approval_category"] == "pushing commits"
-    assert "needs_approval" not in calls[1]  # web_search not gated
-    assert calls[2]["needs_approval"] is True and calls[2]["approval_category"] == "destructive operations"
+    from chat_workflow.tool_handler import ToolHandlerMixin
 
-
-def test_mark_tool_calls_noop_without_categories():
-    from chat_workflow.tool_handler import mark_tool_calls_needing_approval
-
-    calls = [{"name": "git_push"}]
-    mark_tool_calls_needing_approval(calls, [])
-    assert "needs_approval" not in calls[0]
+    # What _apply_session_role puts on the context when the gate flag is on.
+    context = {"requires_approval_before": ["pushing commits"]}
+    ctx = SimpleNamespace(
+        agent_context=None,
+        requires_approval_before=context["requires_approval_before"],
+        work_item_id=None,
+    )
+    mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
+    results: list[dict] = []
+    # git_push is in "pushing commits" → held pending approval BEFORE execution.
+    held = mixin._enforce_work_item_approval({"name": "git_push"}, ctx, results)
+    assert held is not None and held.type == "approval_required"
+    assert results[0]["status"] == "pending_approval"
+    # web_search is not in any declared category → not held.
+    assert mixin._enforce_work_item_approval({"name": "web_search"}, ctx, []) is None
