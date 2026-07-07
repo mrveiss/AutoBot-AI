@@ -8483,7 +8483,26 @@
     "velocityAria": "Velocidade de {name}",
     "target": "Meta {date}",
     "backlogLink": "Backlog",
-    "timelineLink": "Linha do tempo"
+    "timelineLink": "Linha do tempo",
+    "repo": {
+      "linkedLabel": "Repositório",
+      "clonePath": "Caminho do espaço de trabalho",
+      "status": "Estado",
+      "attachBtn": "Anexar repo",
+      "attachTitle": "Anexar repositório do GitHub",
+      "repoLabel": "owner/repo",
+      "repoPlaceholder": "ex.: acme-org/backend",
+      "credentialLabel": "ID de credencial",
+      "credentialPlaceholder": "ID de credencial armazenada",
+      "submitBtn": "Anexar",
+      "syncBtn": "Sincronizar",
+      "detachBtn": "Desanexar",
+      "attachError": "Falha ao anexar o repositório.",
+      "detachError": "Falha ao desanexar o repositório.",
+      "syncError": "Falha ao acionar a sincronização.",
+      "syncSuccess": "Sincronização iniciada.",
+      "copyClonePath": "Copiar caminho do espaço de trabalho"
+    }
   },
   "admin": {
     "systemHealth": {
