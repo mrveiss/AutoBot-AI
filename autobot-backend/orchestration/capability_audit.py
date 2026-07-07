@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from typing import List
 
 from autobot_shared.logging_manager import get_logger
-
 from orchestration.agent_registry import (
     _INFRA_AND_SHELL_TOOLS,
     AgentRegistry,
@@ -144,7 +143,6 @@ def run_capability_audit() -> dict:
         "error_count": len(errors),
         "warning_count": len(warnings),
         "findings": [
-            {"agent_id": f.agent_id, "severity": f.severity, "code": f.code, "message": f.message}
-            for f in findings
+            {"agent_id": f.agent_id, "severity": f.severity, "code": f.code, "message": f.message} for f in findings
         ],
     }

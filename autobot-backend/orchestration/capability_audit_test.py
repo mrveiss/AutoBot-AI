@@ -4,11 +4,11 @@
 # Author: mrveiss
 """Tests for the capability-manifest consistency audit (GH#11165)."""
 
+from orchestration.agent_registry import get_default_agents
 from orchestration.capability_audit import (
     audit_agent_manifests,
     run_capability_audit,
 )
-from orchestration.agent_registry import get_default_agents
 from orchestration.types import AgentCapability, AgentProfile
 
 
