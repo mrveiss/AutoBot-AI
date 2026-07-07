@@ -18,6 +18,23 @@ from .types import AgentCapability, AgentProfile
 logger = get_logger(__name__)
 
 
+# GH#11139: infra/shell tools that non-executor agents may not invoke. The system
+# agent is the designated executor and is intentionally excluded from this boundary.
+_INFRA_AND_SHELL_TOOLS: List[str] = [
+    "bash",
+    "shell",
+    "execute_command",
+    "run_command",
+    "system_exec",
+    "deploy",
+    "ansible",
+    "docker",
+    "kubectl",
+    "helm",
+    "terraform",
+]
+
+
 def _create_research_agent() -> AgentProfile:
     """Create the research agent profile. Issue #620."""
     return AgentProfile(
@@ -27,6 +44,8 @@ def _create_research_agent() -> AgentProfile:
         specializations=["web_search", "data_analysis", "information_synthesis"],
         max_concurrent_tasks=5,
         preferred_task_types=["research", "information_gathering", "analysis"],
+        allowed_work=["web_search", "http_get", "read_file"],
+        forbidden_work=list(_INFRA_AND_SHELL_TOOLS),
     )
 
 
@@ -46,11 +65,17 @@ def _create_documentation_agent() -> AgentProfile:
         ],
         max_concurrent_tasks=3,
         preferred_task_types=["documentation", "knowledge_management"],
+        allowed_work=["write_file", "edit_file", "read_file"],
+        forbidden_work=list(_INFRA_AND_SHELL_TOOLS),
     )
 
 
 def _create_system_agent() -> AgentProfile:
-    """Create the system agent profile. Issue #620."""
+    """Create the system agent profile. Issue #620.
+
+    The designated executor — no ``forbidden_work`` boundary; shell/infra tools
+    remain gated by the loop's global SENSITIVE_TOOLS approval flow (GH#11139).
+    """
     return AgentProfile(
         agent_id="system_agent",
         agent_type="system_commands",
@@ -61,11 +86,15 @@ def _create_system_agent() -> AgentProfile:
         specializations=["command_execution", "system_administration", "automation"],
         max_concurrent_tasks=2,
         preferred_task_types=["system_operations", "command_execution"],
+        allowed_work=list(_INFRA_AND_SHELL_TOOLS),
     )
 
 
 def _create_coordination_agent() -> AgentProfile:
-    """Create the coordination agent profile. Issue #620."""
+    """Create the coordination agent profile. Issue #620.
+
+    Plans and routes; it must not execute infra/shell tools itself (GH#11139).
+    """
     return AgentProfile(
         agent_id="coordination_agent",
         agent_type="orchestrator",
@@ -80,6 +109,7 @@ def _create_coordination_agent() -> AgentProfile:
         ],
         max_concurrent_tasks=10,
         preferred_task_types=["coordination", "planning", "optimization"],
+        forbidden_work=list(_INFRA_AND_SHELL_TOOLS),
     )
 
 
@@ -164,6 +194,28 @@ class AgentRegistry:
     def get_all(self) -> Dict[str, AgentProfile]:
         """Get all registered agents."""
         return self._agents.copy()
+
+    def forbidden_tools(self, agent_id: str) -> "frozenset[str]":
+        """Return the tool names *agent_id* is forbidden to invoke (GH#11139).
+
+        Reads the declarative ``forbidden_work`` manifest off the agent's profile.
+        Unknown agents return an empty set (no boundary → falls back to the loop's
+        global SENSITIVE_TOOLS approval gate).
+        """
+        agent = self._agents.get(agent_id)
+        return frozenset(agent.forbidden_work) if agent is not None else frozenset()
+
+    def work_boundary(self, agent_id: str) -> "tuple[List[str], List[str]]":
+        """Return ``(allowed_work, forbidden_work)`` for *agent_id* (GH#11139).
+
+        The single query point for an agent's capability boundary — callers read
+        this instead of reconstructing the boundary from RBAC + sensitive-tool +
+        vault state separately.
+        """
+        agent = self._agents.get(agent_id)
+        if agent is None:
+            return ([], [])
+        return (list(agent.allowed_work), list(agent.forbidden_work))
 
     def find_by_capability(self, capability: AgentCapability) -> List[AgentProfile]:
         """Find all agents with a specific capability."""

@@ -63,6 +63,7 @@ from orchestration import (
     WorkflowPlan,
     WorkflowPlanner,
     WorkflowRunner,
+    get_default_agents,
     get_recovery_recommender,
 )
 from orchestration.causal_error_analyzer import (  # noqa: F401 (GH #6816)
@@ -158,7 +159,9 @@ class Orchestrator(_DeprecatedRequestMixin):
         self.agent_registry: Dict[str, AgentProfile] = {}
         # GH #6820: AgentRegistry — structured profile store with capability-based lookup.
         # Runs alongside the plain-dict self.agent_registry for structured queries.
-        self._profile_registry = AgentRegistry(initialize_defaults=True)
+        # GH#11139: seeded by _initialize_default_agents() (called later in __init__)
+        # via register(), so skip the built-in defaults to avoid double instantiation.
+        self._profile_registry = AgentRegistry(initialize_defaults=False)
         self.workflow_documentation: Dict[str, WorkflowDocumentation] = {}
         self.agent_interactions: List[AgentInteraction] = []
         self.knowledge_base = KnowledgeBase() if KNOWLEDGE_BASE_AVAILABLE else None
@@ -199,6 +202,14 @@ class Orchestrator(_DeprecatedRequestMixin):
             "json_formatter": {AgentCapability.VALIDATION, AgentCapability.SYNTHESIS},
             "llm_failsafe": {AgentCapability.SYNTHESIS},
         }
+        # GH#11139: the registered agent profiles are the capability manifest SSOT.
+        # Overlay their capabilities onto the routing map so any agent that also has
+        # a profile has ONE source of truth for its capabilities (no drift between
+        # this literal and the profile registry). Only overlays existing keys, so
+        # the routing candidate set is unchanged.
+        for agent_id, profile in self._profile_registry.get_all().items():
+            if agent_id in self.agent_capabilities:
+                self.agent_capabilities[agent_id] = set(profile.capabilities)
 
         # Workflow tracking
         self.active_workflows: Dict[str, WorkflowPlan] = {}
@@ -256,69 +267,23 @@ class Orchestrator(_DeprecatedRequestMixin):
     # ------------------------------------------------------- agent registration
 
     def _initialize_default_agents(self) -> None:
-        profiles = [
-            AgentProfile(
-                agent_id="research_agent",
-                agent_type="research",
-                capabilities={AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
-                specializations=[
-                    "web_search",
-                    "data_analysis",
-                    "information_synthesis",
-                ],
-                max_concurrent_tasks=5,
-                preferred_task_types=["research", "information_gathering", "analysis"],
-            ),
-            AgentProfile(
-                agent_id="documentation_agent",
-                agent_type="librarian",
-                capabilities={
-                    AgentCapability.DOCUMENTATION,
-                    AgentCapability.KNOWLEDGE_MANAGEMENT,
-                },
-                specializations=[
-                    "auto_documentation",
-                    "knowledge_extraction",
-                    "content_organization",
-                ],
-                max_concurrent_tasks=3,
-                preferred_task_types=["documentation", "knowledge_management"],
-            ),
-            AgentProfile(
-                agent_id="system_agent",
-                agent_type="system_commands",
-                capabilities={
-                    AgentCapability.SYSTEM_OPERATIONS,
-                    AgentCapability.CODE_GENERATION,
-                },
-                specializations=[
-                    "command_execution",
-                    "system_administration",
-                    "automation",
-                ],
-                max_concurrent_tasks=2,
-                preferred_task_types=["system_operations", "command_execution"],
-            ),
-            AgentProfile(
-                agent_id="coordination_agent",
-                agent_type="orchestrator",
-                capabilities={
-                    AgentCapability.WORKFLOW_COORDINATION,
-                    AgentCapability.ANALYSIS,
-                },
-                specializations=[
-                    "workflow_management",
-                    "resource_allocation",
-                    "decision_making",
-                ],
-                max_concurrent_tasks=10,
-                preferred_task_types=["coordination", "planning", "optimization"],
-            ),
-        ]
+        # GH#11139: single source — the same default profiles (incl. the
+        # allowed_work/forbidden_work manifest) that seed self._profile_registry.
+        # Previously duplicated inline here, which let the two populations drift.
+        profiles = get_default_agents()
         for profile in profiles:
             self.agent_registry[profile.agent_id] = profile
             self._profile_registry.register(profile)
         logger.info("Initialized %d default agent profiles", len(profiles))
+
+    def get_agent_work_boundary(self, agent_id: str) -> "tuple[list[str], list[str]]":
+        """Return ``(allowed_work, forbidden_work)`` for *agent_id* (GH#11139).
+
+        Single accessor onto the declarative capability manifest carried by the
+        agent profile — routing and tool enforcement both derive from here rather
+        than re-deriving the boundary from separate RBAC/sensitive-tool state.
+        """
+        return self._profile_registry.work_boundary(agent_id)
 
     async def register_agent(self, agent_profile: AgentProfile) -> bool:
         try:
