@@ -124,9 +124,7 @@ class TestApprovalCategoryValidation:
         item = MagicMock()
         item.requires_approval_before = []
         with patch.object(service, "get", new=AsyncMock(return_value=item)):
-            await service.update(
-                mock_session, str(uuid.uuid4()), requires_approval_before=["publishing"]
-            )
+            await service.update(mock_session, str(uuid.uuid4()), requires_approval_before=["publishing"])
         assert item.requires_approval_before == ["publishing"]
 
     async def test_update_exempts_preexisting_legacy_value(self, service, mock_session):
@@ -136,12 +134,14 @@ class TestApprovalCategoryValidation:
         item.requires_approval_before = ["legacy_freetext"]
         with patch.object(service, "get", new=AsyncMock(return_value=item)):
             await service.update(
-                mock_session, str(uuid.uuid4()),
+                mock_session,
+                str(uuid.uuid4()),
                 requires_approval_before=["legacy_freetext", "pushing commits"],
             )
             assert item.requires_approval_before == ["legacy_freetext", "pushing commits"]
             with pytest.raises(ValueError):
                 await service.update(
-                    mock_session, str(uuid.uuid4()),
+                    mock_session,
+                    str(uuid.uuid4()),
                     requires_approval_before=["legacy_freetext", "brand_new_typo"],
                 )

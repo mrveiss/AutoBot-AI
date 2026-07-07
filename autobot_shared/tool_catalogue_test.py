@@ -18,7 +18,6 @@ from autobot_shared.tool_catalogue import (
     valid_approval_categories,
 )
 
-
 # --- match_tool_name (canonical matcher) -----------------------------------
 
 
@@ -70,12 +69,23 @@ def test_match_tool_name_parity_with_original_matchers():
     forbidden = frozenset(INFRA_AND_SHELL_TOOLS)
     cats = list(APPROVAL_CATEGORY_TOOLS)
     names = [
-        "bash", "BASH", "bash_run", "deploy", "deployment", "deploy_service",
-        "git_push", "git_pusher", "web_search", "docker_compose", "unknown_tool", "",
+        "bash",
+        "BASH",
+        "bash_run",
+        "deploy",
+        "deployment",
+        "deploy_service",
+        "git_push",
+        "git_pusher",
+        "web_search",
+        "docker_compose",
+        "unknown_tool",
+        "",
     ]
     for n in names:
         assert match_forbidden_tool(n, forbidden) == _orig_forbidden(n, forbidden), n
         assert _approval_category_for(n, cats) == _orig_approval(n, cats), n
+
 
 # --- frozen snapshots of the original literals (pre-#11206) -----------------
 
