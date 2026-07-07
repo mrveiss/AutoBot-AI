@@ -49,6 +49,10 @@ class FailurePattern:
     confidence: float = 0.8  # How confident in this pattern's recovery strategy
     first_seen: str = field(default_factory=lambda: now_utc().isoformat())
     last_seen: str = field(default_factory=lambda: now_utc().isoformat())
+    # In-repo traceback frames captured when the pattern was first recorded
+    # (#11182).  Each entry: {"file": <repo-relative str>, "line": int,
+    # "func": str}.  Empty list for patterns recorded before this field existed.
+    failure_locations: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dict."""
@@ -62,6 +66,7 @@ class FailurePattern:
             "confidence": self.confidence,
             "first_seen": self.first_seen,
             "last_seen": self.last_seen,
+            "failure_locations": self.failure_locations,
         }
 
     @classmethod
@@ -77,6 +82,7 @@ class FailurePattern:
             confidence=data.get("confidence", 0.8),
             first_seen=data.get("first_seen", ""),
             last_seen=data.get("last_seen", ""),
+            failure_locations=data.get("failure_locations", []),
         )
 
 
@@ -148,6 +154,7 @@ class FailurePatternDetector(AsyncRedisClientMixin):
         causal_chain: str,
         error_type: str,
         successful_action: str | None = None,
+        failure_locations: List[Dict[str, Any]] | None = None,
     ) -> FailurePattern:
         """
         Learn/update a pattern from error experience.
@@ -156,6 +163,8 @@ class FailurePatternDetector(AsyncRedisClientMixin):
             causal_chain: The causal chain
             error_type: The error type
             successful_action: If provided, update resolution stats
+            failure_locations: In-repo traceback frames from the error (#11182).
+                Stored only on the first occurrence; ignored on subsequent ones.
 
         Returns:
             Updated FailurePattern
@@ -174,6 +183,9 @@ class FailurePatternDetector(AsyncRedisClientMixin):
                     pattern = self._create_new_pattern(pattern_hash, causal_chain)
             else:
                 pattern = self._create_new_pattern(pattern_hash, causal_chain)
+                # Attach locations on first-time recording only.
+                if failure_locations:
+                    pattern.failure_locations = failure_locations
 
             if error_type not in pattern.error_types:
                 pattern.error_types.append(error_type)

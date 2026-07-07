@@ -21,9 +21,11 @@ Moved from enhanced_orchestration.workflow_runner to orchestration.workflow_runn
 import asyncio
 import os
 import time
+import traceback
 from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.repo_path import to_repo_relative
 from autobot_shared.ssot_config import SELF_IMPROVEMENT_ENABLED
 from events.bus import PersistStrategy, publish_event
 
@@ -71,6 +73,33 @@ from orchestration.types import AgentTask, WorkflowDependencies, WorkflowPlan
 from orchestration.workflow_planning import StrategyPlanner
 
 logger = get_logger("workflow_runner")
+
+# Maximum in-repo frames to retain (innermost / "blame" frames).
+_MAX_FAILURE_FRAMES = 5
+
+
+def _extract_failure_locations(error: Exception) -> list[dict]:
+    """Extract in-repo traceback frames from *error* for pattern storage (#11182).
+
+    Returns at most ``_MAX_FAILURE_FRAMES`` innermost in-repo frames as a list
+    of dicts with keys ``file``, ``line``, ``func``.  Frames from stdlib,
+    site-packages, or venvs are excluded.  Returns ``[]`` if the traceback is
+    absent or extraction fails — never raises.
+    """
+    try:
+        tb = error.__traceback__
+        if tb is None:
+            return []
+        frames = traceback.extract_tb(tb)
+        in_repo = []
+        for f in frames:
+            rel = to_repo_relative(f.filename)
+            if rel is not None:
+                in_repo.append({"file": rel, "line": f.lineno, "func": f.name})
+        return in_repo[-_MAX_FAILURE_FRAMES:]
+    except Exception as exc:
+        logger.debug("Frame extraction failed (non-fatal): %s", exc)
+        return []
 
 
 class WorkflowRunner:
@@ -433,7 +462,8 @@ class WorkflowRunner:
             causal_chain = f"workflow:{plan.strategy.value}:{error_type}"
             detector = get_pattern_detector()
             known = await detector.detect_pattern(causal_chain, error_type)
-            await detector.learn_pattern(causal_chain, error_type)
+            locations = _extract_failure_locations(error)
+            await detector.learn_pattern(causal_chain, error_type, failure_locations=locations)
             if known and known.occurrence_count > 0:
                 return {
                     "pattern_id": known.pattern_id,
