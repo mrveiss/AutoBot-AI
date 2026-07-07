@@ -2840,6 +2840,7 @@ class MetricCategory(str, Enum):
     PERFORMANCE = "performance"
     TESTABILITY = "testability"
     DOCUMENTATION = "documentation"
+    RUNTIME_RISK = "runtime_risk"
 
 
 class QualityMetric(BaseModel):
