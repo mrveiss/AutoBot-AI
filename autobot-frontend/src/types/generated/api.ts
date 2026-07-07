@@ -80938,7 +80938,7 @@ export interface components {
          * @description Categories of quality metrics.
          * @enum {string}
          */
-        MetricCategory: "maintainability" | "reliability" | "security" | "performance" | "testability" | "documentation";
+        MetricCategory: "maintainability" | "reliability" | "security" | "performance" | "testability" | "documentation" | "runtime_risk";
         /**
          * MetricsDashboardResponse
          * @description Response for GET /dashboard.
