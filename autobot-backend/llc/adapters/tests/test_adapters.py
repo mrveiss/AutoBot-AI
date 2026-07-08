@@ -72,8 +72,9 @@ class TestProcessAdapter:
         fake_proc = MagicMock()
         fake_proc.pid = 12345
 
-        with patch("llc.adapters.process_adapter._process_adapter_enabled", return_value=True), patch(
-            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=fake_proc
+        with (
+            patch("llc.adapters.process_adapter._process_adapter_enabled", return_value=True),
+            patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=fake_proc),
         ):
             run_id = await adapter.invoke({"command": "echo hello"}, {"key": "value"})
 
@@ -91,9 +92,11 @@ class TestProcessAdapter:
             captured_argv.extend(argv)
             return fake_proc
 
-        with patch("llc.adapters.process_adapter._process_adapter_enabled", return_value=True), patch(
-            "asyncio.create_subprocess_shell"
-        ) as shell, patch("asyncio.create_subprocess_exec", side_effect=mock_exec):
+        with (
+            patch("llc.adapters.process_adapter._process_adapter_enabled", return_value=True),
+            patch("asyncio.create_subprocess_shell") as shell,
+            patch("asyncio.create_subprocess_exec", side_effect=mock_exec),
+        ):
             await adapter.invoke({"command": "python run_agent.py --flag"}, {})
 
         assert captured_argv == ["python", "run_agent.py", "--flag"]
@@ -110,8 +113,9 @@ class TestProcessAdapter:
             captured_env.update(env)
             return fake_proc
 
-        with patch("llc.adapters.process_adapter._process_adapter_enabled", return_value=True), patch(
-            "asyncio.create_subprocess_exec", side_effect=mock_exec
+        with (
+            patch("llc.adapters.process_adapter._process_adapter_enabled", return_value=True),
+            patch("asyncio.create_subprocess_exec", side_effect=mock_exec),
         ):
             await adapter.invoke({"command": "x"}, {"task_id": "t1"})
 
@@ -134,8 +138,9 @@ class TestProcessAdapter:
             captured_env.update(env)
             return fake_proc
 
-        with patch("llc.adapters.process_adapter._process_adapter_enabled", return_value=True), patch(
-            "asyncio.create_subprocess_exec", side_effect=mock_exec
+        with (
+            patch("llc.adapters.process_adapter._process_adapter_enabled", return_value=True),
+            patch("asyncio.create_subprocess_exec", side_effect=mock_exec),
         ):
             await adapter.invoke({"command": "x"}, {})
 
