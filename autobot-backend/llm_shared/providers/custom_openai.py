@@ -113,7 +113,7 @@ class CustomOpenAIProvider(BaseProvider):
                 params["tool_choice"] = request.tool_choice
         return params
 
-    async def chat_completion(self, request: LLMRequest) -> LLMResponse:
+    async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
         """Execute a non-streaming chat completion via the custom endpoint."""
         self._total_requests += 1
         start = time.time()
