@@ -693,17 +693,21 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         knowledge_context: str,
         conversation_context: str,
         message: str,
+        trajectory_context: str = "",
     ) -> str:
-        """Build full prompt with optional knowledge context.
+        """Build full prompt with optional knowledge and trajectory context.
 
         system_prompt is sent via the Ollama ``system`` field — not embedded here
-        to avoid double-injection and context-window waste.
+        to avoid double-injection and context-window waste. ``trajectory_context``
+        (#11261) is an untrusted reference block of similar past turns, prepended
+        so the model can reuse prior solutions without treating them as commands.
         """
+        prefix = ""
         if knowledge_context:
-            return (
-                knowledge_context + "\n" + conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
-            )
-        return conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
+            prefix += knowledge_context + "\n"
+        if trajectory_context:
+            prefix += trajectory_context + "\n"
+        return prefix + conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
 
     def _get_selected_model(self) -> str:
         """Get selected LLM model from config with fallback."""
@@ -800,7 +804,20 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         else:
             session.metadata["used_knowledge"] = False
 
-        full_prompt = self._build_full_prompt(knowledge_context, conversation_context, message)
+        # #11261: search-before — inject similar high-reward past turns as an
+        # untrusted reference block. User/tenant-scoped by the store; skipped in
+        # lightweight mode and fully non-fatal.
+        trajectory_context = ""
+        if not lightweight_mode:
+            from chat_workflow.trajectory_context import retrieve_trajectory_context
+
+            trajectory_context = await retrieve_trajectory_context(
+                message,
+                user_id=str(session.metadata.get("user_id") or ""),
+                tenant_id=str(session.metadata.get("tenant_id") or ""),
+            )
+
+        full_prompt = self._build_full_prompt(knowledge_context, conversation_context, message, trajectory_context)
 
         # Issue #4265: Emit AFTER_PROMPT_BUILD hook after full prompt is built
         full_prompt = await _emit_after_prompt_build(
