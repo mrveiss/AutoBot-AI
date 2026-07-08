@@ -22,7 +22,7 @@ import logging
 from datetime import datetime, timezone
 
 from celery import shared_task
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from llc.models.approval import LLCApproval
 from llc.models.enums import ApprovalStatus
@@ -50,10 +50,16 @@ async def _async_sweep() -> int:
     factory = get_async_session_factory()
     disposed = 0
     async with factory() as session:
+        # A NULL disposal_scheduled_at means "no retention window" (approval-only
+        # path): treat it as immediately due. A bare ``<= now`` would exclude NULL
+        # rows via SQL three-valued logic, stranding approval-only projects forever.
         result = await session.execute(
             select(LLCProject).where(
                 LLCProject.lifecycle_state == "pending_disposal",
-                LLCProject.disposal_scheduled_at <= datetime.now(timezone.utc),
+                or_(
+                    LLCProject.disposal_scheduled_at.is_(None),
+                    LLCProject.disposal_scheduled_at <= datetime.now(timezone.utc),
+                ),
             )
         )
         for project in result.scalars().all():
@@ -77,4 +83,4 @@ async def _is_disposal_allowed(project: LLCProject, session: object) -> bool:
     return approval is not None and approval.status == ApprovalStatus.APPROVED.value
 
 
-__all__ = ["run_disposal_sweep", "_async_sweep", "_is_disposal_allowed"]
+__all__ = ["run_disposal_sweep"]
