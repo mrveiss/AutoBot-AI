@@ -115,6 +115,10 @@ async def scan_findings(
         return await scan(project, session)
     except FindingsDisabledError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        # The linked source was deleted / left "ready" between the check above and
+        # the scan (gather/clone-path resolution) — treat as a 409, not a 500.
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/projects/{project_id}/findings/proposals", response_model=List[FindingProposalResponse])

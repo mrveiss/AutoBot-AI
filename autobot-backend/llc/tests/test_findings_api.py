@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -176,6 +175,20 @@ def test_scan_success_returns_counts():
         resp = client.post(f"/projects/{project.id}/findings/scan")
     assert resp.status_code == 200
     assert resp.json() == counts
+
+
+def test_scan_409_when_source_not_ready():
+    """scan raising ValueError (source deleted/not-ready mid-request) → 409, not 500."""
+    from llc.services.findings_policy import FindingsPolicy  # noqa: PLC0415
+
+    project = _mk_project(code_source_id="src-001")
+    client, _ = _mk_client(project)
+    with (
+        patch("llc.api.findings.get_findings_policy", AsyncMock(return_value=FindingsPolicy(enabled=True))),
+        patch("llc.api.findings.scan", AsyncMock(side_effect=ValueError("CodeSource not ready"))),
+    ):
+        resp = client.post(f"/projects/{project.id}/findings/scan")
+    assert resp.status_code == 409
 
 
 def test_list_proposals_returns_proposals():
