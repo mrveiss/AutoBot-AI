@@ -538,7 +538,10 @@ services:
       interval: 20s
       timeout: 10s
       retries: 5
-      start_period: 60s
+      # #11283: SLM (FastAPI + model/registry init) can exceed 60s on a busy CI
+      # runner, so it was intermittently marked unhealthy before ready, failing
+      # smoke-test's compose startup ~60% of the time. Match autobot-backend's 120s.
+      start_period: 120s
     deploy:
       resources:
         limits:
