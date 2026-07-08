@@ -17,16 +17,20 @@ from .source_storage import save_source
 logger = get_logger(__name__)
 
 
-async def delete_source_and_cleanup(source_id: str) -> bool:
+async def delete_source_and_cleanup(source_id: str, source: CodeSource | None = None) -> bool:
     """Delete a CodeSource: its clone dir (only under CODE_SOURCES_BASE), its
-    ChromaDB documents, and its Redis record. Idempotent; returns Redis-delete result."""
+    ChromaDB documents, and its Redis record. Idempotent; returns Redis-delete result.
+
+    Callers that already loaded the record (e.g. the DELETE handler's 404 check) may
+    pass ``source`` to avoid a redundant Redis read."""
     import shutil  # noqa: PLC0415
     from pathlib import Path  # noqa: PLC0415
 
     from .source_paths import CODE_SOURCES_BASE  # noqa: PLC0415
     from .source_storage import delete_source, get_source  # noqa: PLC0415
 
-    source = await get_source(source_id)
+    if source is None:
+        source = await get_source(source_id)
     if source is None:
         return False
     if source.clone_path and Path(source.clone_path).exists():

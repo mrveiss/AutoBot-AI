@@ -341,7 +341,7 @@ async def delete_code_source(source_id: str):
     source = await get_source(source_id)
     if source is None:
         raise HTTPException(status_code=404, detail=f"Source {source_id} not found")
-    ok = await delete_source_and_cleanup(source_id)
+    ok = await delete_source_and_cleanup(source_id, source=source)
     return JSONResponse({"success": ok, "source_id": source_id})
 
 
