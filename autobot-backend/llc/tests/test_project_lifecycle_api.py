@@ -122,6 +122,7 @@ def test_dispose_pending_approval_when_policy_requires_it():
     approval_id = uuid.uuid4()
     fake_svc = MagicMock()
     fake_svc.request_approval = AsyncMock(return_value=SimpleNamespace(id=approval_id))
+    fake_svc.publish_requested = AsyncMock()
     with patch("llc.api.sprints.get_disposal_policy", AsyncMock(return_value=_policy(0, True))), patch(
         "llc.api.sprints.dispose", AsyncMock()
     ) as disp, patch("llc.api.sprints._approval_svc", fake_svc):
@@ -134,6 +135,7 @@ def test_dispose_pending_approval_when_policy_requires_it():
     assert p.lifecycle_state == "pending_disposal"
     assert p.disposal_approval_id == approval_id
     fake_svc.request_approval.assert_awaited_once()
+    fake_svc.publish_requested.assert_awaited_once()
 
 
 def _policy(days, approval):

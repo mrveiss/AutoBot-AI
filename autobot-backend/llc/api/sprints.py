@@ -764,6 +764,8 @@ async def _apply_disposal(project: LLCProject, session: AsyncSession, ctx: Tenan
         if policy.retention_days > 0:
             project.disposal_scheduled_at = datetime.now(timezone.utc) + timedelta(days=policy.retention_days)
         await session.commit()
+        # Notify reviewers the disposal gate is pending (Redis event, post-commit).
+        await _approval_svc.publish_requested(approval)
         return {"result": "pending_approval", "approval_id": str(approval.id)}
     if policy.retention_days > 0:
         project.lifecycle_state = "pending_disposal"
