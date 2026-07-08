@@ -69,6 +69,7 @@ from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
 from api.voice_proxy import router as voice_proxy_router
+from autobot_shared.integrity_manifest import verify_integrity_at_startup
 from config import settings
 from middleware import ApiRequestCounterMiddleware, SecurityHeadersMiddleware
 from services.a2a_card_fetcher import start_card_refresh_task
@@ -87,7 +88,6 @@ from services.security_posture_auditor import (
     start_security_posture_auditor,
     stop_security_posture_auditor,
 )
-from autobot_shared.integrity_manifest import verify_integrity_at_startup
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,

@@ -51,6 +51,7 @@ def _manifest_path() -> str:
 # Core helpers
 # ---------------------------------------------------------------------------
 
+
 def _sha256_file(path: str) -> str:
     """Return the hex SHA-256 digest of *path* (reads raw bytes)."""
     h = hashlib.sha256()
@@ -82,6 +83,7 @@ def _default_fileset(root: str) -> list[str]:
 # Manifest compute
 # ---------------------------------------------------------------------------
 
+
 def compute_manifest(files: Iterable[str], root: str = "") -> dict[str, str]:
     """Return ``{relative_path: sha256hex}`` for each existing file in *files*.
 
@@ -111,6 +113,7 @@ def write_manifest(manifest: dict[str, str], dest: str) -> None:
 # ---------------------------------------------------------------------------
 # Verify result
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class VerifyResult:
@@ -156,6 +159,7 @@ def verify_manifest(
 # Startup entrypoint
 # ---------------------------------------------------------------------------
 
+
 def verify_integrity_at_startup(root: str = "") -> None:
     """Non-fatal startup integrity check.
 
@@ -192,9 +196,7 @@ def verify_integrity_at_startup(root: str = "") -> None:
     result = verify_manifest(manifest, root=root)
 
     if result.clean:
-        logger.info(
-            "integrity_manifest: all %d tracked files verified OK", len(result.ok)
-        )
+        logger.info("integrity_manifest: all %d tracked files verified OK", len(result.ok))
         return
 
     if result.modified:

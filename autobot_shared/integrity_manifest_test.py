@@ -7,22 +7,19 @@
 from __future__ import annotations
 
 import json
-import os
 
-import pytest
 
 from autobot_shared.integrity_manifest import (
-    VerifyResult,
     compute_manifest,
     verify_integrity_at_startup,
     verify_manifest,
     write_manifest,
 )
 
-
 # ---------------------------------------------------------------------------
 # compute_manifest
 # ---------------------------------------------------------------------------
+
 
 class TestComputeManifest:
     def test_deterministic(self, tmp_path):
@@ -72,6 +69,7 @@ class TestComputeManifest:
 # write_manifest + round-trip
 # ---------------------------------------------------------------------------
 
+
 class TestWriteManifest:
     def test_round_trip(self, tmp_path):
         f = tmp_path / "ruff.toml"
@@ -90,6 +88,7 @@ class TestWriteManifest:
 # ---------------------------------------------------------------------------
 # verify_manifest
 # ---------------------------------------------------------------------------
+
 
 class TestVerifyManifest:
     def _make_manifest(self, files: dict[str, bytes], tmp_path) -> dict[str, str]:
@@ -146,6 +145,7 @@ class TestVerifyManifest:
 # verify_integrity_at_startup
 # ---------------------------------------------------------------------------
 
+
 class TestVerifyIntegrityAtStartup:
     def test_disabled_flag_short_circuits(self, monkeypatch, tmp_path, caplog):
         """When AUTOBOT_INTEGRITY_CHECK_ENABLED is absent/false nothing happens."""
@@ -171,9 +171,7 @@ class TestVerifyIntegrityAtStartup:
 
     def test_missing_manifest_file_is_nonfatal(self, monkeypatch, tmp_path, caplog):
         monkeypatch.setenv("AUTOBOT_INTEGRITY_CHECK_ENABLED", "1")
-        monkeypatch.setenv(
-            "AUTOBOT_INTEGRITY_MANIFEST_PATH", str(tmp_path / "nonexistent.json")
-        )
+        monkeypatch.setenv("AUTOBOT_INTEGRITY_MANIFEST_PATH", str(tmp_path / "nonexistent.json"))
         import logging
 
         with caplog.at_level(logging.WARNING):
