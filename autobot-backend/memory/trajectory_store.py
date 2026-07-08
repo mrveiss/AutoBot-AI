@@ -55,6 +55,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional, Sequence
 
+from autobot_shared.env_utils import env_flag
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -62,6 +63,13 @@ logger = get_logger(__name__)
 _COLLECTION_NAME = "trajectories"
 _DEFAULT_TOP_K = 5
 _MIN_REWARD_DEFAULT = 0.7
+
+# #11089: retrieval scoping. tenant_id alone is insufficient in single-company
+# deployments (org_id is frequently empty/identical across all users), so a
+# low-privilege user's trajectory could still be retrieved into another user's
+# plan within the same org. Default to strict per-user isolation; an org can
+# opt back into shared org-level learning by setting this flag false.
+_USER_SCOPED_RETRIEVAL = env_flag("AUTOBOT_TRAJECTORY_USER_SCOPED", default=True)
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +318,7 @@ class TrajectoryStore:
         top_k: int = _DEFAULT_TOP_K,
         min_reward: float = _MIN_REWARD_DEFAULT,
         tenant_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Return the *top_k* most-similar past trajectories above *min_reward*.
 
@@ -322,6 +331,11 @@ class TrajectoryStore:
             top_k: Maximum number of trajectories to return.  The store queries
                 ``top_k * 4`` candidates internally to absorb reward filtering.
             min_reward: Only return trajectories with ``reward >= min_reward``.
+            tenant_id: When set, restrict matches to this tenant (#11015).
+            user_id: When set and ``AUTOBOT_TRAJECTORY_USER_SCOPED`` is enabled
+                (default), also restrict matches to this user — strict
+                intra-tenant isolation so one user's trajectory cannot surface in
+                another's plan (#11089).
 
         Returns:
             List of dicts (subset of :class:`Trajectory`.to_dict()) plus a
@@ -340,13 +354,24 @@ class TrajectoryStore:
         # one org's trajectories can never surface in another's plan. A None/empty
         # tenant_id keeps the un-scoped behaviour (backward compatible for callers
         # and legacy trajectories that predate tenant tagging).
+        # #11089: additionally scope by user_id when supplied and user-scoping is
+        # enabled (default) — closes intra-tenant cross-user leakage, which
+        # tenant-only scoping misses when org_id is empty/shared.
         query_kwargs: Dict[str, Any] = {
             "query_texts": [task_text],
             "n_results": fetch_k,
             "include": ["documents", "metadatas", "distances"],
         }
+        scope_user = bool(user_id) and _USER_SCOPED_RETRIEVAL
+        where_conditions: List[Dict[str, Any]] = []
         if tenant_id:
-            query_kwargs["where"] = {"tenant_id": tenant_id}
+            where_conditions.append({"tenant_id": tenant_id})
+        if scope_user:
+            where_conditions.append({"user_id": user_id})
+        if len(where_conditions) == 1:
+            query_kwargs["where"] = where_conditions[0]
+        elif len(where_conditions) > 1:
+            query_kwargs["where"] = {"$and": where_conditions}
         t0 = time.perf_counter()
         try:
             raw = await collection.query(**query_kwargs)
@@ -369,10 +394,13 @@ class TrajectoryStore:
 
         results = []
         for traj_id, doc, meta, dist in zip(ids, docs, metas, distances):
-            # Client-side tenant backstop — the ChromaDB `where` filter is the
+            # Client-side tenant/user backstop — the ChromaDB `where` filter is the
             # primary guard, but enforce again here so a version whose metadata
-            # filter is lenient can never leak another tenant's trajectory (#11015).
+            # filter is lenient can never leak another tenant's (#11015) or another
+            # user's (#11089) trajectory.
             if tenant_id and meta.get("tenant_id", "") != tenant_id:
+                continue
+            if scope_user and meta.get("user_id", "") != user_id:
                 continue
             reward = float(meta.get("reward", 0.0))
             if reward < min_reward:

@@ -292,9 +292,13 @@ class WorkflowPlanner:
 
             # #11015: scope to the caller's tenant so one org's trajectories can't
             # surface in another's plan. Absent tenant → un-scoped (legacy).
+            # #11089: also scope to the caller's user (strict intra-tenant isolation).
             tenant_id = str(context.get("tenant_id") or "") or None
+            user_id = str(context.get("user_id") or "") or None
             store = await get_trajectory_store()
-            similar = await store.find_similar_trajectories(user_request, top_k=5, min_reward=0.7, tenant_id=tenant_id)
+            similar = await store.find_similar_trajectories(
+                user_request, top_k=5, min_reward=0.7, tenant_id=tenant_id, user_id=user_id
+            )
             if similar:
                 context["similar_trajectories"] = similar
                 logger.debug(
