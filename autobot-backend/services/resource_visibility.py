@@ -10,9 +10,9 @@ spec's company-keyed cache — invalidated on grant/scope change via invalidate(
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import services.resource_grant_store as store
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.scoping.visibility import Principal, ResourceDescriptor, is_visible
-import services.resource_grant_store as store
 
 logger = get_logger(__name__)
 

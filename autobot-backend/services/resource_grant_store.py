@@ -77,9 +77,7 @@ async def has_grant(
     principal: Principal,
 ) -> bool:
     """True if any grant row matches the principal's user or a group they're in."""
-    grantee_clauses = [
-        and_(ResourceGrant.grantee_type == "user", ResourceGrant.grantee_id == principal.user_id)
-    ]
+    grantee_clauses = [and_(ResourceGrant.grantee_type == "user", ResourceGrant.grantee_id == principal.user_id)]
     if principal.group_ids:
         grantee_clauses.append(
             and_(
@@ -89,11 +87,13 @@ async def has_grant(
         )
     row = (
         await session.execute(
-            select(ResourceGrant.id).where(
+            select(ResourceGrant.id)
+            .where(
                 ResourceGrant.resource_type == resource_type,
                 ResourceGrant.resource_id == resource_id,
                 or_(*grantee_clauses),
-            ).limit(1)
+            )
+            .limit(1)
         )
     ).first()
     return row is not None

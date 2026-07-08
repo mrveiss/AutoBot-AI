@@ -32,7 +32,10 @@ class ResourceGrant(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "resource_type", "resource_id", "grantee_type", "grantee_id",
+            "resource_type",
+            "resource_id",
+            "grantee_type",
+            "grantee_id",
             name="uq_resource_grants_target",
         ),
     )

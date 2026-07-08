@@ -9,8 +9,14 @@ def test_resource_grant_table_and_columns():
     assert ResourceGrant.__tablename__ == "resource_grants"
     cols = set(ResourceGrant.__table__.columns.keys())
     assert cols == {
-        "id", "resource_type", "resource_id", "grantee_type",
-        "grantee_id", "permission", "created_by", "created_at",
+        "id",
+        "resource_type",
+        "resource_id",
+        "grantee_type",
+        "grantee_id",
+        "permission",
+        "created_by",
+        "created_at",
         "updated_at",  # inherited from Base (DeclarativeBase adds this automatically)
     }
 

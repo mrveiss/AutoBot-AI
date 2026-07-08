@@ -29,7 +29,10 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.UniqueConstraint(
-            "resource_type", "resource_id", "grantee_type", "grantee_id",
+            "resource_type",
+            "resource_id",
+            "grantee_type",
+            "grantee_id",
             name="uq_resource_grants_target",
         ),
     )

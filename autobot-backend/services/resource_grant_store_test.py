@@ -7,7 +7,6 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import services.resource_grant_store as store  # dotted import bypasses the MagicMock services stub
-
 from autobot_shared.scoping.visibility import Principal
 from models.resource_grant import ResourceGrant
 

@@ -39,5 +39,4 @@ def test_user_scope_hidden_from_non_owner_without_grant():
 
 
 def test_explicit_grant_overrides_scope():
-    assert is_visible(_p(user="stranger", company="c2"),
-                      _r(owner="owner", scope=ScopeLevel.USER, company="c1"), True)
+    assert is_visible(_p(user="stranger", company="c2"), _r(owner="owner", scope=ScopeLevel.USER, company="c1"), True)
