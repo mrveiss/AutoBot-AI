@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Governed subagent delegation runner (GH#11207)."""
+"""Governed subagent delegation runner (GH#11207, GH#11266)."""
 
 from unittest.mock import AsyncMock, patch
 
@@ -11,6 +11,7 @@ import pytest
 from chat_workflow import delegation
 from chat_workflow.delegation import (
     MAX_DELEGATION_DEPTH,
+    MAX_DELEGATIONS_PER_TURN,
     forbidden_to_claude_tools,
     run_delegated_subtask,
 )
@@ -163,3 +164,145 @@ async def test_delegate_tool_on_runs_governed_subagent():
         ]
     assert results[0]["status"] == "completed" and results[0]["result"] == "done"
     assert msgs[0].type == "delegation"
+
+
+# --- GH#11266: env_flag / env_int usage (canonical truthy set) ---------------
+
+
+def test_delegation_enabled_default_is_false():
+    """DELEGATION_ENABLED must default OFF — no side-effects on import."""
+    import importlib
+    import sys
+
+    # Reload with env cleared to confirm default.
+    saved = delegation.DELEGATION_ENABLED
+    with patch.dict("os.environ", {}, clear=False):
+        import os
+
+        os.environ.pop("AUTOBOT_DELEGATION_ENABLED", None)
+        # Re-evaluate the flag via env_flag to confirm semantics.
+        from autobot_shared.env_utils import env_flag
+
+        assert env_flag("AUTOBOT_DELEGATION_ENABLED", default=False) is False
+    # Module-level constant must also be False (loaded without the env var set).
+    assert saved is False, "DELEGATION_ENABLED must be OFF by default"
+
+
+def test_max_delegation_depth_from_env_int():
+    """MAX_DELEGATION_DEPTH is read via env_int so invalid values fall back gracefully."""
+    from autobot_shared.env_utils import env_int
+
+    assert env_int("AUTOBOT_MAX_DELEGATION_DEPTH", default=2) == MAX_DELEGATION_DEPTH
+
+
+def test_max_delegations_per_turn_exported():
+    """MAX_DELEGATIONS_PER_TURN constant is exported and positive."""
+    assert MAX_DELEGATIONS_PER_TURN > 0
+
+
+# --- GH#11266: run_delegated_subtask — parent_agent_id observability ---------
+
+
+@pytest.mark.asyncio
+async def test_run_delegated_subtask_logs_parent_agent_id(caplog):
+    """Dispatch must emit an INFO log containing parent_agent_id."""
+    import logging
+
+    engine = AsyncMock(return_value="result")
+    with patch.dict(delegation._ENGINES, {"claude_code": engine}):
+        with caplog.at_level(logging.INFO, logger="chat_workflow.delegation"):
+            await run_delegated_subtask("task", agent_type="research_agent", depth=0, parent_agent_id="root_agent")
+    assert any("root_agent" in r.message for r in caplog.records), "parent_agent_id must appear in INFO log"
+    assert any("research_agent" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_run_delegated_subtask_logs_root_when_no_parent(caplog):
+    """When parent_agent_id is None the log must show 'root'."""
+    import logging
+
+    engine = AsyncMock(return_value="result")
+    with patch.dict(delegation._ENGINES, {"claude_code": engine}):
+        with caplog.at_level(logging.INFO, logger="chat_workflow.delegation"):
+            await run_delegated_subtask("task", depth=0)
+    assert any("root" in r.message for r in caplog.records)
+
+
+# --- GH#11266: per-turn delegation fan-out limit ----------------------------
+
+
+@pytest.mark.asyncio
+async def test_delegate_tool_per_turn_limit_blocks_excess():
+    """After MAX_DELEGATIONS_PER_TURN calls the next one is rejected with an error."""
+    from types import SimpleNamespace
+
+    mixin = _mixin()
+    # Fabricate a minimal ctx with context dict already at limit.
+    ctx = SimpleNamespace(
+        context={"delegations_this_turn": MAX_DELEGATIONS_PER_TURN},
+        agent_context=None,
+    )
+    results = []
+    with patch.object(delegation, "DELEGATION_ENABLED", True):
+        msgs = [
+            m
+            async for m in mixin._handle_delegate_tool({"params": {"task": "overflow"}}, results, ctx)
+        ]
+    assert results[0]["status"] == "error"
+    assert "limit" in results[0]["error"]
+    assert msgs[0].type == "error"
+
+
+@pytest.mark.asyncio
+async def test_delegate_tool_per_turn_counter_increments():
+    """Each successful delegation increments delegations_this_turn on ctx."""
+    from types import SimpleNamespace
+
+    mixin = _mixin()
+    ctx = SimpleNamespace(context={"delegations_this_turn": 0}, agent_context=None)
+    results = []
+    with (
+        patch.object(delegation, "DELEGATION_ENABLED", True),
+        patch.object(delegation, "run_delegated_subtask", new=AsyncMock(return_value="ok")),
+    ):
+        _ = [m async for m in mixin._handle_delegate_tool({"params": {"task": "t"}}, results, ctx)]
+    assert ctx.context["delegations_this_turn"] == 1
+
+
+@pytest.mark.asyncio
+async def test_delegate_tool_passes_parent_agent_id_to_runner():
+    """The parent agent_id from ctx.agent_context must reach run_delegated_subtask."""
+    from types import SimpleNamespace
+
+    mixin = _mixin()
+    agent_ctx = SimpleNamespace(agent_id="the_parent")
+    ctx = SimpleNamespace(context={"delegations_this_turn": 0, "delegation_depth": 0}, agent_context=agent_ctx)
+    captured = {}
+    mock_run = AsyncMock(side_effect=lambda *a, **kw: captured.update(kw) or "done")
+
+    with (
+        patch.object(delegation, "DELEGATION_ENABLED", True),
+        patch.object(delegation, "run_delegated_subtask", new=mock_run),
+    ):
+        _ = [m async for m in mixin._handle_delegate_tool({"params": {"task": "t"}}, [], ctx)]
+    assert captured.get("parent_agent_id") == "the_parent"
+
+
+# --- GH#11266: env_flag covers "on" (canonical truthy) ----------------------
+
+
+def test_env_flag_covers_on_truthy():
+    """env_flag('AUTOBOT_DELEGATION_ENABLED') must accept 'on' as truthy."""
+    from autobot_shared.env_utils import env_flag
+
+    with patch.dict("os.environ", {"AUTOBOT_DELEGATION_ENABLED": "on"}):
+        assert env_flag("AUTOBOT_DELEGATION_ENABLED") is True
+
+    with patch.dict("os.environ", {"AUTOBOT_DELEGATION_ENABLED": "yes"}):
+        assert env_flag("AUTOBOT_DELEGATION_ENABLED") is True
+
+    with patch.dict("os.environ", {"AUTOBOT_DELEGATION_ENABLED": "1"}):
+        assert env_flag("AUTOBOT_DELEGATION_ENABLED") is True
+
+    with patch.dict("os.environ", {"AUTOBOT_DELEGATION_ENABLED": "false"}):
+        assert env_flag("AUTOBOT_DELEGATION_ENABLED") is False
