@@ -20,7 +20,7 @@ from typing import Any, Dict, List
 import xxhash
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 
@@ -196,7 +196,7 @@ class LLMResponseCache:
         Returns:
             CachedResponse if found, None otherwise
         """
-        redis_client = get_redis_client(async_client=True, database=self._redis_database)
+        redis_client = await get_async_redis_client(database=self._redis_database)
         if not redis_client:
             return None
 
@@ -296,7 +296,7 @@ class LLMResponseCache:
 
         # Store in L2 Redis cache
         try:
-            redis_client = get_redis_client(async_client=True, database=self._redis_database)
+            redis_client = await get_async_redis_client(database=self._redis_database)
             if redis_client:
                 # Optimize metadata storage - only keep essential data
                 essential_metadata = {
@@ -388,7 +388,7 @@ class LLMResponseCache:
             Number of entries deleted
         """
         try:
-            redis_client = get_redis_client(async_client=True, database=self._redis_database)
+            redis_client = await get_async_redis_client(database=self._redis_database)
             if redis_client:
                 keys = []
                 async for key in redis_client.scan_iter(match=pattern):
