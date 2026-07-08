@@ -69,6 +69,7 @@ from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
 from api.voice_proxy import router as voice_proxy_router
+from autobot_shared.integrity_manifest import verify_integrity_at_startup
 from config import settings
 from middleware import ApiRequestCounterMiddleware, SecurityHeadersMiddleware
 from services.a2a_card_fetcher import start_card_refresh_task
@@ -170,6 +171,11 @@ async def lifespan(app: FastAPI):
     )
     logger.info("Starting SLM Backend v1.0.0")
     logger.info("Debug mode: %s", settings.debug)
+
+    # Non-fatal file-integrity check — detects out-of-band tampering of
+    # security-critical config files (#11265).  No-op unless
+    # AUTOBOT_INTEGRITY_CHECK_ENABLED=1 and AUTOBOT_INTEGRITY_MANIFEST_PATH are set.
+    verify_integrity_at_startup()
 
     # Validate that the two Base MetaData objects share no tablenames (#1878).
     # Must run before create_all / migrations so conflicts are caught immediately.
