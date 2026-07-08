@@ -52,10 +52,10 @@ import hashlib
 import json
 import time
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Literal, Optional, Sequence
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
 
-from autobot_shared.env_utils import env_flag
+from autobot_shared.env_utils import env_flag, env_float, env_int
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -63,6 +63,13 @@ logger = get_logger(__name__)
 _COLLECTION_NAME = "trajectories"
 _DEFAULT_TOP_K = 5
 _MIN_REWARD_DEFAULT = 0.7
+
+# #11263: consolidation defaults. Duplicate near-identical tasks hurt retrieval
+# precision, and stale low-reward failures are noise. Both thresholds are env-tunable.
+_CONSOLIDATE_MIN_REWARD_FLOOR = env_float("AUTOBOT_TRAJECTORY_PRUNE_REWARD_FLOOR", default=0.4)
+_CONSOLIDATE_MAX_AGE_DAYS = env_int("AUTOBOT_TRAJECTORY_PRUNE_MAX_AGE_DAYS", default=30)
+# Upper bound on rows scanned per pass so consolidation stays bounded on huge stores.
+_CONSOLIDATE_SCAN_LIMIT = env_int("AUTOBOT_TRAJECTORY_CONSOLIDATE_SCAN_LIMIT", default=50000)
 
 # #11089: retrieval scoping. tenant_id alone is insufficient in single-company
 # deployments (org_id is frequently empty/identical across all users), so a
@@ -180,6 +187,51 @@ def reward_from_execution(result: Dict[str, Any]) -> float:
     if isinstance(criteria, dict) and criteria.get("overall") == "partial":
         return 0.5
     return 0.0
+
+
+def _parse_ts(raw: str) -> Optional[datetime]:
+    """Parse a stored ISO timestamp, returning None when absent/malformed."""
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except (ValueError, TypeError):
+        return None
+
+
+def _dedup_delete_ids(ids: List[str], docs: List[str], metas: List[Dict[str, Any]]) -> set:
+    """IDs of duplicate trajectories to drop, keeping the best per (task, user, tenant).
+
+    Two entries collide when their task_text (normalised) and owner match. The
+    survivor is the highest reward, ties broken by the most recent timestamp.
+    """
+    groups: Dict[Tuple[str, str, str], List[Tuple[str, float, str]]] = {}
+    for tid, doc, meta in zip(ids, docs, metas):
+        key = ((doc or "").strip().lower(), meta.get("user_id", ""), meta.get("tenant_id", ""))
+        groups.setdefault(key, []).append((tid, float(meta.get("reward", 0.0)), meta.get("timestamp", "")))
+    drop: set = set()
+    for entries in groups.values():
+        if len(entries) < 2:
+            continue
+        ranked = sorted(entries, key=lambda e: (e[1], e[2]), reverse=True)
+        drop.update(tid for tid, _, _ in ranked[1:])
+    return drop
+
+
+def _stale_delete_ids(
+    ids: List[str], metas: List[Dict[str, Any]], reward_floor: float, cutoff: datetime, skip: set
+) -> set:
+    """IDs of low-reward trajectories older than *cutoff* (excludes already-dropped)."""
+    drop: set = set()
+    for tid, meta in zip(ids, metas):
+        if tid in skip:
+            continue
+        if float(meta.get("reward", 0.0)) >= reward_floor:
+            continue
+        ts = _parse_ts(meta.get("timestamp", ""))
+        if ts is not None and ts < cutoff:
+            drop.add(tid)
+    return drop
 
 
 # ---------------------------------------------------------------------------
@@ -426,6 +478,60 @@ class TrajectoryStore:
                 break
 
         return results
+
+    # ------------------------------------------------------------------
+    # Public API: maintenance path
+    # ------------------------------------------------------------------
+
+    async def consolidate(
+        self,
+        reward_floor: float = _CONSOLIDATE_MIN_REWARD_FLOOR,
+        max_age_days: int = _CONSOLIDATE_MAX_AGE_DAYS,
+        now: Optional[datetime] = None,
+    ) -> Dict[str, int]:
+        """Compact the ``trajectories`` collection (#11263).
+
+        Two passes, both delete-only so retrieval quality can only improve:
+        1. **dedup** — collapse near-identical (task, user, tenant) entries to the
+           single highest-reward survivor.
+        2. **prune** — drop low-reward (``< reward_floor``) entries older than
+           ``max_age_days``.
+
+        Returns a summary dict ``{scanned, duplicates_removed, pruned, remaining}``.
+        Non-fatal: on any read error an empty summary is returned and logged.
+        """
+        collection = await self._get_collection()
+        try:
+            raw = await collection.get(include=["documents", "metadatas"], limit=_CONSOLIDATE_SCAN_LIMIT)
+        except Exception as exc:
+            logger.warning("TrajectoryStore.consolidate: read failed (non-fatal): %s", exc)
+            return {"scanned": 0, "duplicates_removed": 0, "pruned": 0, "remaining": 0}
+
+        ids = raw.get("ids", []) or []
+        docs = raw.get("documents", []) or []
+        metas = raw.get("metadatas", []) or []
+
+        dup_ids = _dedup_delete_ids(ids, docs, metas)
+        cutoff = (now or datetime.now(tz=timezone.utc)) - timedelta(days=max_age_days)
+        stale_ids = _stale_delete_ids(ids, metas, reward_floor, cutoff, skip=dup_ids)
+
+        to_delete = list(dup_ids | stale_ids)
+        if to_delete:
+            await collection.delete(ids=to_delete)
+        summary = {
+            "scanned": len(ids),
+            "duplicates_removed": len(dup_ids),
+            "pruned": len(stale_ids),
+            "remaining": len(ids) - len(to_delete),
+        }
+        logger.info(
+            "TrajectoryStore.consolidate: scanned=%d dedup=%d pruned=%d remaining=%d",
+            summary["scanned"],
+            summary["duplicates_removed"],
+            summary["pruned"],
+            summary["remaining"],
+        )
+        return summary
 
 
 # ---------------------------------------------------------------------------

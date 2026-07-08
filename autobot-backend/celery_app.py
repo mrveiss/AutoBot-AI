@@ -237,6 +237,12 @@ celery_app.conf.beat_schedule = {
         "task": "workers.audit_claims",
         "schedule": crontab(hour=3, minute=0, day_of_week=1),  # Monday 03:00 UTC
     },
+    # GH#11263: nightly trajectory-store consolidation (dedupe + prune) so
+    # retrieval precision holds as the store grows. NORMAL priority (GH#11262).
+    "memory-consolidate-trajectories-daily": {
+        "task": "memory.consolidate_trajectories",
+        "schedule": crontab(hour=4, minute=0),  # 04:00 UTC, after nightly cleanup
+    },
     # GH#6471: nightly eviction of stale per-task git worktree workspaces
     "workspace-cleanup-nightly": {
         "task": "tasks.cleanup_stale_workspaces",
