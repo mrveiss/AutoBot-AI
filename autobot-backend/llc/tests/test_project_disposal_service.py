@@ -35,8 +35,8 @@ async def test_dispose_deletes_children_then_project_and_source():
     ) as del_src:
         await dispose(project, session)
     del_src.assert_awaited_once_with("src-1")
-    # work-items + sprints deleted via bulk delete statements, then project.
-    assert session.execute.await_count >= 2
+    # Exactly three bulk-delete statements: work-items, sprints, then project.
+    assert session.execute.await_count == 3
 
 
 @pytest.mark.asyncio
