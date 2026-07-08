@@ -15,14 +15,52 @@ This module provides comprehensive prompt injection detection for:
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List
 
+from autobot_shared.env_utils import env_flag, env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# Hard-block feature flags (issue #11264)
+# ---------------------------------------------------------------------------
+
+# Enable hard-block mode: when ON and confidence >= threshold, raise HardBlockError.
+# Default OFF so existing quarantine/flag behaviour is fully preserved.
+HARDBLOCK_ENABLED: bool = env_flag("AUTOBOT_INJECTION_HARDBLOCK_ENABLED", default=False)
+
+# Float threshold in [0.0, 1.0] mapped to normalised risk order.
+# Default 0.75 → HIGH (3/4 steps above SAFE).  CRITICAL = 1.0.
+HARDBLOCK_THRESHOLD: float = env_float("AUTOBOT_INJECTION_HARDBLOCK_THRESHOLD", default=0.75)
+
+# Risk-level → normalised confidence score (0.0–1.0)
+_RISK_CONFIDENCE: dict[str, float] = {
+    "safe": 0.0,
+    "low": 0.25,
+    "moderate": 0.5,
+    "high": 0.75,
+    "critical": 1.0,
+}
+
+
+class HardBlockError(RuntimeError):
+    """Raised when hard-block mode is enabled and injection confidence exceeds threshold.
+
+    Callers (e.g. ContentFirewall) catch this to reject content before tool execution.
+    """
+
+    def __init__(self, confidence: float, risk: "InjectionRisk", patterns: List[str]) -> None:
+        self.confidence = confidence
+        self.risk = risk
+        self.patterns = patterns
+        super().__init__(
+            f"Hard-block: injection confidence {confidence:.2f} >= threshold "
+            f"{HARDBLOCK_THRESHOLD:.2f} (risk={risk.value})"
+        )
 
 # Issue #380: Pre-compiled regex patterns for sanitize_input()
 # These are called on every input sanitization, so pre-compilation is important
@@ -183,6 +221,10 @@ class InjectionDetectionResult:
     sanitized_text: str
     blocked: bool
     metadata: Dict[str, Any]
+    # issue #11264: normalised confidence score (0.0–1.0) derived from risk level
+    confidence_score: float = field(default=0.0)
+    # True only when hard-block mode is ON and confidence >= HARDBLOCK_THRESHOLD
+    hard_blocked: bool = field(default=False)
 
 
 class PromptInjectionDetector:
@@ -392,8 +434,14 @@ class PromptInjectionDetector:
         metadata["sanitized_length"] = len(sanitized_text)
         blocked = max_risk in {InjectionRisk.HIGH, InjectionRisk.CRITICAL}
 
+        # issue #11264: compute confidence and evaluate hard-block
+        confidence = _RISK_CONFIDENCE.get(max_risk.value, 0.0)
+        hard_blocked = self._check_hard_block(confidence, max_risk, detected_patterns)
+        metadata["confidence_score"] = confidence
+        metadata["hard_blocked"] = hard_blocked
+
         # Log detection results
-        self._log_detection_result(max_risk, blocked, detected_patterns)
+        self._log_detection_result(max_risk, blocked or hard_blocked, detected_patterns)
 
         return InjectionDetectionResult(
             risk_level=max_risk,
@@ -401,6 +449,8 @@ class PromptInjectionDetector:
             sanitized_text=sanitized_text,
             blocked=blocked,
             metadata=metadata,
+            confidence_score=confidence,
+            hard_blocked=hard_blocked,
         )
 
     def validate_conversation_context(self, conversation_history: List[Dict[str, str]]) -> bool:
@@ -483,6 +533,44 @@ class PromptInjectionDetector:
                 sanitized[key] = value
 
         return sanitized
+
+    def _check_hard_block(
+        self,
+        confidence: float,
+        risk: InjectionRisk,
+        detected_patterns: List[str],
+    ) -> bool:
+        """Evaluate hard-block decision for issue #11264.
+
+        Returns True and raises HardBlockError when:
+          - HARDBLOCK_ENABLED is True, AND
+          - confidence >= HARDBLOCK_THRESHOLD.
+
+        Returns False (no-op) when the feature is disabled — existing
+        quarantine/flag behaviour is fully preserved in that case.
+
+        Args:
+            confidence:        Normalised confidence score (0.0–1.0).
+            risk:              Detected InjectionRisk level.
+            detected_patterns: Pattern list forwarded to HardBlockError.
+
+        Returns:
+            True if hard-blocked; False otherwise.
+
+        Raises:
+            HardBlockError: When hard-block fires.
+        """
+        if not HARDBLOCK_ENABLED:
+            return False
+        if confidence < HARDBLOCK_THRESHOLD:
+            return False
+        logger.warning(
+            "HARD-BLOCK: injection confidence %.2f >= threshold %.2f (risk=%s)",
+            confidence,
+            HARDBLOCK_THRESHOLD,
+            risk.value,
+        )
+        raise HardBlockError(confidence=confidence, risk=risk, patterns=detected_patterns)
 
     def _detect_invisible_unicode(self, text: str) -> tuple[bool, List[str]]:
         """

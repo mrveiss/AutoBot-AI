@@ -32,7 +32,7 @@ from typing import Any
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from security.prompt_injection_detector import InjectionRisk, PromptInjectionDetector
+from security.prompt_injection_detector import HardBlockError, InjectionRisk, PromptInjectionDetector
 
 logger = get_logger(__name__)
 
@@ -164,7 +164,25 @@ class ContentFirewall:
         if not content or not content.strip():
             return FirewallVerdict(content=content, action=FirewallAction.PASS, risk=InjectionRisk.SAFE, source=source)
 
-        detection = self._detector.detect_injection(content, context=f"untrusted_{source.value}")
+        # issue #11264: HardBlockError is raised inside detect_injection when
+        # HARDBLOCK_ENABLED=true and confidence >= HARDBLOCK_THRESHOLD.  Catch it
+        # here so the block is enforced before any tool execution proceeds.
+        try:
+            detection = self._detector.detect_injection(content, context=f"untrusted_{source.value}")
+        except HardBlockError as exc:
+            verdict = FirewallVerdict(
+                content="[FIREWALL: content hard-blocked — injection confidence too high]",
+                action=FirewallAction.BLOCK,
+                risk=exc.risk,
+                source=source,
+                detected_patterns=exc.patterns,
+                blocked=True,
+                metadata={"hard_blocked": True, "confidence": exc.confidence},
+            )
+            self._log_verdict(verdict, context_label)
+            await self._record_trajectory(verdict, task_id)
+            return verdict
+
         risk = detection.risk_level
         verdict = self._apply_policy(content, detection.sanitized_text, risk, source, detection.detected_patterns)
 
