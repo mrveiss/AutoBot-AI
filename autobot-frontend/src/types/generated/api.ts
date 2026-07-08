@@ -21272,7 +21272,7 @@ export interface paths {
         post?: never;
         /**
          * Delete Code Source
-         * @description Delete a code source and remove its clone directory if present.
+         * @description Delete a code source and remove its clone directory + index if present.
          */
         delete: operations["delete_code_source_api_analytics_codebase_sources__source_id__delete"];
         options?: never;
@@ -49087,7 +49087,10 @@ export interface paths {
         get: operations["get_project_api_llc_projects__project_id__get"];
         put?: never;
         post?: never;
-        /** Delete Project */
+        /**
+         * Delete Project
+         * @description Delete a project — must be archived first; routes through the disposal workflow (#11129 P2).
+         */
         delete: operations["delete_project_api_llc_projects__project_id__delete"];
         options?: never;
         head?: never;
@@ -49114,6 +49117,66 @@ export interface paths {
          * @description Unlink the repo from a project; the CodeSource record survives (#11129).
          */
         delete: operations["detach_project_repo_api_llc_projects__project_id__repo_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/projects/{project_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Project
+         * @description Move a project to the archived lifecycle state (#11129 P2).
+         */
+        post: operations["archive_project_api_llc_projects__project_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/projects/{project_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Project
+         * @description Restore an archived / pending-disposal project to active (#11129 P2).
+         */
+        post: operations["restore_project_api_llc_projects__project_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/projects/{project_id}/dispose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dispose Project
+         * @description Dispose an archived project (immediate / scheduled / approval-gated per SLM policy; #11129 P2).
+         */
+        post: operations["dispose_project_api_llc_projects__project_id__dispose_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -85604,6 +85667,17 @@ export interface components {
             /** Code Source Id */
             code_source_id?: string | null;
             code_source?: components["schemas"]["CodeSourceSummary"] | null;
+            /**
+             * Lifecycle State
+             * @default active
+             */
+            lifecycle_state: string;
+            /** Archived At */
+            archived_at?: string | null;
+            /** Disposal Scheduled At */
+            disposal_scheduled_at?: string | null;
+            /** Disposal Approval Id */
+            disposal_approval_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -100140,7 +100214,7 @@ export interface components {
          * @description Gate type for a board approval request (GH#8214).
          * @enum {string}
          */
-        llc__models__enums__ApprovalType: "hire" | "strategy" | "budget_override" | "sprint_close";
+        llc__models__enums__ApprovalType: "hire" | "strategy" | "budget_override" | "sprint_close" | "project_disposal";
         /**
          * TemplateSearchResponse
          * @description Response for GET /llc/templates/search (GH#8260).
@@ -165708,6 +165782,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_project_api_llc_projects__project_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_project_api_llc_projects__project_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dispose_project_api_llc_projects__project_id__dispose_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
