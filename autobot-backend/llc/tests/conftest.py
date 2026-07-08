@@ -134,6 +134,14 @@ def _shield_codebase_analytics_package() -> None:
     pkg.__path__ = [str(_pkg_dir)]  # type: ignore[attr-defined]
     pkg.__package__ = "api.codebase_analytics"
     sys.modules["api.codebase_analytics"] = pkg
+    # Expose as an attribute on the parent ``api`` package so that
+    # ``mock.patch("api.codebase_analytics.<submodule>.<attr>")`` — whose dotted
+    # lookup runs ``getattr(api, "codebase_analytics")`` — resolves to this shield
+    # (#11129 P2). Without it, patching a lazily-imported analytics helper raises
+    # ``AttributeError: module 'api' has no attribute 'codebase_analytics'``.
+    import importlib  # noqa: PLC0415
+
+    importlib.import_module("api").codebase_analytics = pkg  # type: ignore[attr-defined]
 
 
 _shield_codebase_analytics_package()
