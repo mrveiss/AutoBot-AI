@@ -287,6 +287,13 @@ const router = createRouter({
           component: () => import('@/views/settings/admin/SSOSettings.vue'),
           meta: { title: 'SSO / OIDC', parent: 'settings', admin: true }
         },
+        {
+          // Issue #11129 P2: Company OS project disposal policy (SLM operator panel)
+          path: 'disposal-policy',
+          name: 'settings-disposal-policy',
+          component: () => import('@/views/settings/DisposalPolicySettings.vue'),
+          meta: { title: 'Disposal Policy', parent: 'settings' }
+        },
       ]
     },
     {
