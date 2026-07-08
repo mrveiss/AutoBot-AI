@@ -191,6 +191,26 @@ for _svc_mod in [
         _svc_stub.pytest_plugins = []  # type: ignore[attr-defined]
         sys.modules[_svc_mod] = _svc_stub
 
+# #11248: tool_output_filter is lightweight (stdlib + yaml + autobot_shared; Redis
+# is only touched lazily inside methods, not at import), so its unit tests exercise
+# the *real* pure helper (_strip_ansi). Load it real — overwriting the package stub
+# above — so those tests don't get a MagicMock. Other tests that patch this module
+# still work (patch targets a real module just as well).
+import importlib.util as _svc_ilu  # noqa: E402
+
+for _real_svc, _real_rel in [
+    ("services.tool_output_filter", "services/tool_output_filter.py"),
+]:
+    _rspec = _svc_ilu.spec_from_file_location(_real_svc, str(backend_root / _real_rel))
+    if _rspec and _rspec.loader:
+        _rmod = _svc_ilu.module_from_spec(_rspec)
+        sys.modules[_real_svc] = _rmod
+        try:
+            _rspec.loader.exec_module(_rmod)
+        except Exception:
+            # Fall back to the stub if the real module can't load in this env.
+            sys.modules[_real_svc] = _make_pkg_stub(_real_svc)
+
 # npu_pipeline — stub the package and its sub-modules so that the __init__.py
 # import chain (which pulls in Redis/config) doesn't break test collection.
 # pytest_plugins must be explicitly set to [] so that pytest doesn't call
