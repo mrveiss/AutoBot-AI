@@ -29,7 +29,10 @@ def _resolve_web_fetch_cache_ttl() -> int:
     Override via AUTOBOT_WEB_FETCH_CACHE_TTL.  Falls back to 24h (86400s).
     """
     raw = config.misc.web_fetch_cache_ttl
-    if raw is None:
+    # Unset is the common case: the field defaults to "" (str). Treat empty/None as
+    # "use default" WITHOUT logging — only a non-empty, non-integer value is a
+    # misconfiguration worth warning about (previously int("") warned on every call).
+    if raw is None or raw == "":
         return TTL_24_HOURS
     try:
         value = int(raw)
