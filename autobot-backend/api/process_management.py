@@ -23,6 +23,7 @@ from api.schemas_system import (
     SpawnRequest,
     SpawnResponse,
 )
+from api.ws_security import enforce_ws_origin
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
@@ -183,6 +184,8 @@ async def stream_process_logs(
     Tails the log file and pushes new lines to the client every 500ms.
     Closes when the process completes or the client disconnects.
     """
+    if not await enforce_ws_origin(websocket):
+        return
     import asyncio
 
     await websocket.accept()

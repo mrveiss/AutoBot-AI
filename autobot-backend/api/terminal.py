@@ -120,8 +120,6 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
-# Import models from dedicated module (Issue #185 - split oversized files)
-# Response schemas for OpenAPI documentation and response validation
 from api.schemas_terminal import (
     AdminExecuteRequest,
     AdminExecuteResponse,
@@ -152,6 +150,10 @@ from api.schemas_terminal import (
     TerminalSystemStatusResponse,
 )
 from api.system_health import ComponentHealth, register_health_probe
+
+# Import models from dedicated module (Issue #185 - split oversized files)
+# Response schemas for OpenAPI documentation and response validation
+from api.ws_security import enforce_ws_origin
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
@@ -906,6 +908,8 @@ async def terminal_websocket(websocket: WebSocket, session_id: str):
     Issue #1088: Extracted _init_terminal_handler and _run_terminal_message_loop
     helpers to reduce to <=65 lines.
     """
+    if not await enforce_ws_origin(websocket):
+        return
     await websocket.accept()
 
     try:
@@ -1034,6 +1038,8 @@ async def ssh_terminal_websocket(
     This endpoint remains for backward compatibility but returns a deprecation
     message directing clients to use SLM for infrastructure connections.
     """
+    if not await enforce_ws_origin(websocket):
+        return
     await websocket.accept()
     session_id = f"ssh-{host_id}-{uuid.uuid4().hex[:8]}"
 

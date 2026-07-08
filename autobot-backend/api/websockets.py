@@ -17,6 +17,7 @@ from typing import Callable, Dict, Optional, Tuple
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from api.ws_security import enforce_ws_origin
 from auth_middleware import authenticate_websocket
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -579,6 +580,8 @@ _canvas_tasks_lock = asyncio.Lock()
 )
 async def websocket_test_endpoint(websocket: WebSocket):
     """Simple test WebSocket endpoint without event manager integration."""
+    if not await enforce_ws_origin(websocket):
+        return
     # Issue #2818: Authenticate before accepting connection
     user = await authenticate_websocket(websocket)
     if user is None:
@@ -678,6 +681,8 @@ async def websocket_endpoint(websocket: WebSocket):
     Issue #665: Refactored to use extracted helper methods.
     Issue #2818: Authenticate before accepting connection.
     """
+    if not await enforce_ws_origin(websocket):
+        return
     # Issue #2818: Authenticate before accepting connection
     user = await authenticate_websocket(websocket)
     if user is None:
@@ -739,6 +744,8 @@ async def npu_workers_websocket_endpoint(websocket: WebSocket):
 
     Issue #2818: Authenticate before accepting connection.
     """
+    if not await enforce_ws_origin(websocket):
+        return
     # Issue #2818: Authenticate before accepting connection
     user = await authenticate_websocket(websocket)
     if user is None:

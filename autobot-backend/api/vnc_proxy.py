@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from fastapi.responses import Response
 
 from api.schemas_system import VncProxyStatusResponse
+from api.ws_security import enforce_ws_origin
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
@@ -245,6 +246,8 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     Args:
         vnc_type: 'desktop' or 'browser'
     """
+    if not await enforce_ws_origin(websocket):
+        return
     if vnc_type not in VNC_ENDPOINTS:
         await websocket.close(code=1003, reason=f"Unknown VNC type: {vnc_type}")
         return

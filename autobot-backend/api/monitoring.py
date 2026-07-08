@@ -26,7 +26,6 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 
-# Hardware monitor moved to monitoring_hardware.py (Issue #213)
 from api.monitoring_hardware import local_hardware_monitor
 
 # Import monitoring utility functions
@@ -53,6 +52,9 @@ from api.schemas_system import (
     ThresholdUpdate,
     ThresholdUpdateResponse,
 )
+
+# Hardware monitor moved to monitoring_hardware.py (Issue #213)
+from api.ws_security import enforce_ws_origin
 from auth_middleware import check_admin_permission
 
 # Import AutoBot monitoring system
@@ -1133,6 +1135,8 @@ async def realtime_monitoring_websocket(websocket: WebSocket):
 
     Issue #315: Refactored to use dictionary dispatch for command handling.
     """
+    if not await enforce_ws_origin(websocket):
+        return
     await ws_manager.connect(websocket)
     try:
         while True:
