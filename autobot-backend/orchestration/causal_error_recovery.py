@@ -230,6 +230,9 @@ class CausalErrorRecovery:
         """Check if a pattern is known and return frequency."""
         try:
             redis = self._get_redis()
+            if redis is None:
+                logger.warning("Pattern-frequency check degraded — Redis unavailable (hash=%s)", pattern_hash)
+                return 0, False
             count_key = f"{FAILURE_PATTERN_PREFIX}{pattern_hash}{FAILURE_PATTERN_COUNT_SUFFIX}"
             count = redis.get(count_key)
             if count:
@@ -415,6 +418,9 @@ class CausalErrorRecovery:
 
         try:
             redis = self._get_redis()
+            if redis is None:
+                logger.warning("Recovery-attempt recording degraded — Redis unavailable (hash=%s)", pattern_hash)
+                return
 
             # Increment pattern count
             count_key = f"{FAILURE_PATTERN_PREFIX}{pattern_hash}{FAILURE_PATTERN_COUNT_SUFFIX}"

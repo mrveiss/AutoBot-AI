@@ -122,6 +122,9 @@ class FailurePatternDetector(AsyncRedisClientMixin):
 
         try:
             redis = await self._get_redis()
+            if redis is None:
+                logger.warning("Pattern detection degraded — Redis unavailable (hash=%s)", pattern_hash)
+                return None
             pattern_key = f"{PATTERN_KEY_PREFIX}{pattern_hash}"
 
             pattern_data = await asyncio.wait_for(redis.get(pattern_key), timeout=_REDIS_OP_TIMEOUT)
@@ -173,6 +176,9 @@ class FailurePatternDetector(AsyncRedisClientMixin):
 
         try:
             redis = await self._get_redis()
+            if redis is None:
+                logger.warning("Pattern learning degraded — Redis unavailable (hash=%s)", pattern_hash)
+                return self._degraded_pattern(pattern_hash, causal_chain, error_type)
             pattern_key = f"{PATTERN_KEY_PREFIX}{pattern_hash}"
 
             pattern_data = await asyncio.wait_for(redis.get(pattern_key), timeout=_REDIS_OP_TIMEOUT)
@@ -214,13 +220,21 @@ class FailurePatternDetector(AsyncRedisClientMixin):
 
         except Exception as exc:
             logger.warning("Failed to learn pattern: %s", exc)
-            return FailurePattern(
-                pattern_id=pattern_hash,
-                causal_chain=causal_chain,
-                error_types=[error_type],
-                occurrence_count=1,
-                confidence=0.5,
-            )
+            return self._degraded_pattern(pattern_hash, causal_chain, error_type)
+
+    def _degraded_pattern(self, pattern_hash: str, causal_chain: str, error_type: str) -> FailurePattern:
+        """Unpersisted fallback pattern returned when Redis is unavailable.
+
+        Keeps ``learn_pattern`` returning a usable (low-confidence) pattern so the
+        error-recovery path degrades gracefully instead of raising.
+        """
+        return FailurePattern(
+            pattern_id=pattern_hash,
+            causal_chain=causal_chain,
+            error_types=[error_type],
+            occurrence_count=1,
+            confidence=0.5,
+        )
 
     def _create_new_pattern(self, pattern_hash: str, causal_chain: str) -> FailurePattern:
         """Create a new failure pattern."""
@@ -238,6 +252,9 @@ class FailurePatternDetector(AsyncRedisClientMixin):
         """Store a pattern to Redis (async-native, bounded by _REDIS_OP_TIMEOUT)."""
         try:
             redis = await self._get_redis()
+            if redis is None:
+                logger.warning("Pattern persistence degraded — Redis unavailable (hash=%s)", pattern_hash)
+                return
             pattern_key = f"{PATTERN_KEY_PREFIX}{pattern_hash}"
 
             await asyncio.wait_for(
@@ -262,8 +279,17 @@ class FailurePatternDetector(AsyncRedisClientMixin):
 
     async def get_pattern_statistics(self) -> Dict[str, Any]:
         """Get overall statistics about learned patterns."""
+        _empty_stats = {
+            "total_patterns": 0,
+            "total_occurrences": 0,
+            "average_success_rate": 0.0,
+            "high_confidence_patterns": 0,
+        }
         try:
             redis = await self._get_redis()
+            if redis is None:
+                logger.warning("Pattern statistics degraded — Redis unavailable")
+                return dict(_empty_stats)
 
             raw = await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT)
             pattern_hashes = self._decode_members(raw or set())
@@ -325,6 +351,9 @@ class FailurePatternDetector(AsyncRedisClientMixin):
         """
         try:
             redis = await self._get_redis()
+            if redis is None:
+                logger.warning("Listing known patterns degraded — Redis unavailable")
+                return []
             raw = await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT)
             pattern_hashes = self._decode_members(raw or set())
 
