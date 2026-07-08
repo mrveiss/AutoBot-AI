@@ -135,6 +135,24 @@ class LLCProject(Base):
     env: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     # Company OS project ↔ codebase-analytics CodeSource link (#11129).
     code_source_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    # Archive→dispose lifecycle, orthogonal to work-status `status` (#11129 P2).
+    lifecycle_state: Mapped[str] = mapped_column(
+        sa.Enum(
+            "active",
+            "archived",
+            "pending_disposal",
+            "disposed",
+            name="projectlifecyclestate",
+            create_type=True,
+        ),
+        nullable=False,
+        server_default="active",
+        default="active",
+        index=True,
+    )
+    archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    disposal_scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    disposal_approval_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     # Per-project rollover behaviour (overrides company default when set).
     auto_rollover: Mapped[Optional[bool]] = mapped_column(sa.Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=sa.func.now())
