@@ -64,8 +64,23 @@ rum_config = {
 # Lock for thread-safe access to RUM state
 _rum_lock = asyncio.Lock()
 
-# Issue #380: Module-level frozenset for error event types
-_ERROR_EVENT_TYPES = frozenset({"error", "promise_rejection"})
+# Issue #380 / #10938: event types logged at ERROR level. Must match the type
+# strings the frontend RumAgent/ErrorBoundary actually send (javascript_error,
+# unhandled_promise_rejection, component_error) — the old {"error",
+# "promise_rejection"} matched none of them, so every client error was logged at
+# INFO and indistinguishable from perf/interaction events. Network/http/timeout
+# events stay at INFO: they're transient (backend restarts) and already
+# noise-managed + circuit-broken on the client.
+_ERROR_EVENT_TYPES = frozenset(
+    {
+        "javascript_error",
+        "unhandled_promise_rejection",
+        "component_error",
+        # Generic aliases kept for back-compat with any other producer.
+        "error",
+        "promise_rejection",
+    }
+)
 
 # In-memory storage for RUM events (in production, this would use Redis or database)
 rum_events = []

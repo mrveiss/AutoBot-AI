@@ -110,36 +110,80 @@ class TestLogRumEventHandler:
     def _run(self, coro):
         return asyncio.get_event_loop().run_until_complete(coro)
 
-    def test_handler_logs_when_enabled(self):
-        """Handler must log the event at some level when rum_config['enabled'] is True.
+    def test_handler_logs_frontend_error_at_error_level(self):
+        """#10938: a frontend `javascript_error` must be logged at ERROR level.
 
-        javascript_error is not in _ERROR_EVENT_TYPES (which only has "error" and
-        "promise_rejection") so _log_rum_event_by_type falls through to info-level.
-        We assert that at least one logging call was made and that the session ID
-        and error message appear in it.
+        Previously `_ERROR_EVENT_TYPES` only held {"error","promise_rejection"},
+        which matched none of the type strings the frontend actually sends, so
+        every client error fell through to INFO and was indistinguishable from
+        perf/interaction events.
         """
         import api.rum as rum_module
 
         original_enabled = rum_module.rum_config["enabled"]
-        logged_calls: list = []
-
-        def capture_any(msg, *args, **kwargs):
-            logged_calls.append(msg)
-
         try:
             rum_module.rum_config["enabled"] = True
             mock_logger = MagicMock()
-            # Capture both .info and .error calls
-            mock_logger.info.side_effect = capture_any
-            mock_logger.error.side_effect = capture_any
             rum_module.rum_logger = mock_logger
 
             result = self._run(rum_module.log_rum_event(self._VALID_EVENT))
 
             assert result["status"] == "success", f"Expected success, got: {result}"
-            assert len(logged_calls) == 1, f"Expected exactly 1 log call, got {len(logged_calls)}: {logged_calls}"
-            assert "SESSION=rum_test_session" in logged_calls[0]
-            assert "test error" in logged_calls[0]
+            # Routed to ERROR, not INFO.
+            mock_logger.error.assert_called_once()
+            mock_logger.info.assert_not_called()
+            msg = mock_logger.error.call_args.args[0]
+            assert "SESSION=rum_test_session" in msg
+            assert "test error" in msg
+        finally:
+            rum_module.rum_config["enabled"] = original_enabled
+            rum_module.rum_logger = rum_module.setup_rum_logger()
+
+    def test_all_frontend_error_types_route_to_error_level(self):
+        """#10938: every genuine frontend error type maps to ERROR level."""
+        import api.rum as rum_module
+
+        original_enabled = rum_module.rum_config["enabled"]
+        try:
+            rum_module.rum_config["enabled"] = True
+            for etype in ("javascript_error", "unhandled_promise_rejection", "component_error"):
+                mock_logger = MagicMock()
+                rum_module.rum_logger = mock_logger
+                event = RumEvent(
+                    type=etype,
+                    timestamp="2026-07-05T12:00:00.000Z",
+                    sessionId="s",
+                    url="http://localhost/",
+                    userAgent="pytest",
+                    data={"message": "boom"},
+                )
+                self._run(rum_module.log_rum_event(event))
+                mock_logger.error.assert_called_once()
+                mock_logger.info.assert_not_called()
+        finally:
+            rum_module.rum_config["enabled"] = original_enabled
+            rum_module.rum_logger = rum_module.setup_rum_logger()
+
+    def test_performance_event_routes_to_info_level(self):
+        """A non-error type (performance) must stay at INFO, not ERROR."""
+        import api.rum as rum_module
+
+        original_enabled = rum_module.rum_config["enabled"]
+        try:
+            rum_module.rum_config["enabled"] = True
+            mock_logger = MagicMock()
+            rum_module.rum_logger = mock_logger
+            event = RumEvent(
+                type="performance",
+                timestamp="2026-07-05T12:00:00.000Z",
+                sessionId="s",
+                url="http://localhost/",
+                userAgent="pytest",
+                data={"metric": "lcp", "value": 1200},
+            )
+            self._run(rum_module.log_rum_event(event))
+            mock_logger.info.assert_called_once()
+            mock_logger.error.assert_not_called()
         finally:
             rum_module.rum_config["enabled"] = original_enabled
             rum_module.rum_logger = rum_module.setup_rum_logger()
