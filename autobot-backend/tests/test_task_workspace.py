@@ -235,6 +235,15 @@ def test_sandbox_security_memory_limit():
     assert kwargs["mem_limit"] == _WORKSPACE_MEMORY_LIMIT
 
 
+def test_sandbox_security_pids_limited():
+    """GH#11059: workspace containers cap PIDs to survive a fork-bomb."""
+    from services.docker_task_workspace import _WORKSPACE_PIDS_LIMIT
+
+    kwargs = _apply_sandbox_security("task-abc", "vol-abc")
+    assert kwargs["pids_limit"] == _WORKSPACE_PIDS_LIMIT
+    assert kwargs["pids_limit"] > 0
+
+
 # ---------------------------------------------------------------------------
 # TaskWorkspaceManager.create — idempotent
 # ---------------------------------------------------------------------------
