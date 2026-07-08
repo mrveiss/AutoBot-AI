@@ -4,7 +4,6 @@
 import json
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 from services.slm_client import get_slm_client
 
@@ -19,7 +18,7 @@ class DisposalPolicy:
     require_approval: bool = False
 
 
-async def _fetch_policy_json() -> Optional[dict]:
+async def _fetch_policy_json() -> dict | None:
     """GET the policy setting from the SLM settings API; None on any failure."""
     client = get_slm_client()
     if client is None:
@@ -32,6 +31,9 @@ async def _fetch_policy_json() -> Optional[dict]:
                 return None
             setting = await response.json()
             raw = setting.get("value")
+            # ``value`` is stored as an escaped JSON string; if the SLM API is ever
+            # changed to return it pre-decoded (a dict), json.loads raises TypeError
+            # and the outer except returns None → get_disposal_policy uses defaults.
             return json.loads(raw) if raw else None
     except Exception as exc:  # noqa: BLE001 — policy read is best-effort
         logger.warning("Disposal policy read failed: %s", exc)
