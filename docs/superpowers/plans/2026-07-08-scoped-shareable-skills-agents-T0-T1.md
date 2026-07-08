@@ -259,9 +259,9 @@ git commit -m "fix(skills): re-register custom/hub skills at boot so they surviv
 
 ## Task 3: `ScopeLevel` enum (T1 core)
 
-**Files:**
-- Create: `autobot-backend/autobot_shared/scoping/scope_level.py` (if `autobot_shared/scoping/` doesn't exist, create it with an empty `__init__.py`)
-- Test: `autobot-backend/autobot_shared/scoping/scope_level_test.py`
+**Files** (NOTE: canonical `autobot_shared/` is the repo-root copy — `autobot-backend/autobot_shared/` is empty and NOT on the import path; `conftest.py` adds repo-root `autobot_shared/`):
+- Create: `autobot_shared/scoping/scope_level.py` (create the package with an empty `__init__.py` if missing)
+- Test: `autobot_shared/scoping/scope_level_test.py`
 
 **Interfaces:**
 - Produces: `ScopeLevel(str, Enum)` with members `USER, SESSION, SHARED, GROUP, ORGANIZATION`; `ScopeLevel.default() -> ScopeLevel` returning `ORGANIZATION`.
@@ -500,9 +500,9 @@ git commit -m "feat(scoping): add resource_grants table + model + migration (#11
 
 Reason: the core visibility decision, testable in isolation before any DB wiring. Later tasks (T2/T3) call it with resource rows and grant lookups.
 
-**Files:**
-- Create: `autobot-backend/autobot_shared/scoping/visibility.py`
-- Test: `autobot-backend/autobot_shared/scoping/visibility_test.py`
+**Files** (canonical repo-root `autobot_shared/`, next to `scope_level.py`):
+- Create: `autobot_shared/scoping/visibility.py`
+- Test: `autobot_shared/scoping/visibility_test.py`
 
 **Interfaces:**
 - Consumes: `ScopeLevel` (Task 3).
