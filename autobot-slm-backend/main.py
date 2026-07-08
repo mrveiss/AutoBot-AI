@@ -87,6 +87,7 @@ from services.security_posture_auditor import (
     start_security_posture_auditor,
     stop_security_posture_auditor,
 )
+from autobot_shared.integrity_manifest import verify_integrity_at_startup
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -170,6 +171,11 @@ async def lifespan(app: FastAPI):
     )
     logger.info("Starting SLM Backend v1.0.0")
     logger.info("Debug mode: %s", settings.debug)
+
+    # Non-fatal file-integrity check — detects out-of-band tampering of
+    # security-critical config files (#11265).  No-op unless
+    # AUTOBOT_INTEGRITY_CHECK_ENABLED=1 and AUTOBOT_INTEGRITY_MANIFEST_PATH are set.
+    verify_integrity_at_startup()
 
     # Validate that the two Base MetaData objects share no tablenames (#1878).
     # Must run before create_all / migrations so conflicts are caught immediately.
