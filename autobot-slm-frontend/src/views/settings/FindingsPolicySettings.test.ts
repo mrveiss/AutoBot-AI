@@ -46,4 +46,44 @@ describe('FindingsPolicySettings', () => {
     expect(putCall).toBeTruthy()
     expect(putCall![0]).toContain('/api/settings/llc.findings_policy')
   })
+
+  it('falls back to POST when PUT returns 404', async () => {
+    let callCount = 0
+    global.fetch = vi.fn(async (url, opts) => {
+      callCount++
+      if (opts?.method === 'PUT') {
+        return { ok: false, status: 404, json: async () => ({}) } as Response
+      }
+      if (opts?.method === 'POST') {
+        return { ok: true, status: 201, json: async () => ({}) } as Response
+      }
+      // GET on mount
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          value: JSON.stringify({
+            enabled: false,
+            min_severity: 'medium',
+            require_approval_to_promote: false,
+            run_on_index: false,
+            verify_batch_size: 10,
+          }),
+        }),
+      } as Response
+    }) as unknown as typeof fetch
+
+    const wrapper = mount(FindingsPolicySettings)
+    await flushPromises()
+    await wrapper.find('button[data-test="save-policy"]').trigger('click')
+    await flushPromises()
+
+    const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls
+    const putCall = calls.find((c) => c[1]?.method === 'PUT')
+    const postCall = calls.find((c) => c[1]?.method === 'POST')
+    expect(putCall).toBeTruthy()
+    expect(putCall![0]).toContain('/api/settings/llc.findings_policy')
+    expect(postCall).toBeTruthy()
+    expect(postCall![0]).toContain('/api/settings/llc.findings_policy')
+  })
 })

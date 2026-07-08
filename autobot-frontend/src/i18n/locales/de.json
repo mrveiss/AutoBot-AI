@@ -8534,6 +8534,7 @@
       "verdictReal": "Urteil: real",
       "verdictRationale": "Begründung",
       "disabled": "Befundsuche ist deaktiviert.",
+      "actionError": "Aktion fehlgeschlagen, bitte erneut versuchen.",
       "severity": "Schweregrad"
     }
   },

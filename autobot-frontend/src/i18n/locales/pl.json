@@ -8534,6 +8534,7 @@
       "verdictReal": "Werdykt: prawdziwy",
       "verdictRationale": "Uzasadnienie",
       "disabled": "Skanowanie wyników jest wyłączone.",
+      "actionError": "Akcja nie powiodła się, spróbuj ponownie.",
       "severity": "Powaga"
     }
   },
