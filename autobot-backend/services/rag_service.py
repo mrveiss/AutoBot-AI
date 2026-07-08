@@ -511,7 +511,7 @@ class RAGService:
     ) -> None:
         """Publish a rag_retrieval live event after each search. Issue #1516.
 
-        Fires publish_live_event("global", RAG_RETRIEVAL, ...) so that
+        Fires publish_event("global", RAG_RETRIEVAL, ...) so that
         Neural Mesh RAG (#1994) consumers can observe retrieval patterns in
         real time via the /ws/live WebSocket endpoint.
 
