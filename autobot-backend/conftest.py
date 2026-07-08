@@ -532,6 +532,7 @@ try:
 except Exception:
     pass
 
+
 # orchestration.causal_error_recovery / causal_error_analyzer stubs (#7431).
 # orchestration/__init__.py imports CausalErrorRecovery from causal_error_recovery,
 # which cascades through agent_loop → tools → code_intelligence — a chain of
@@ -819,3 +820,29 @@ def set_test_environment():
 
     os.environ.clear()
     os.environ.update(original_env)
+
+
+def pytest_configure(config):  # noqa: ANN001
+    """#11248: real-load lightweight service modules whose unit tests need the real
+    helpers, AFTER every module-level stub above is in place.
+
+    ``services.llm_api_key_service`` imports ``autobot_shared.redis_client`` /
+    ``logging_manager`` / ``singleton_factory`` at module top — all stubbed/patched
+    during conftest import — so it can only be real-loaded once conftest import has
+    fully completed. pytest_configure runs after that and before collection, so the
+    real module (LLMApiKeyRecord, model_allowed, _parse_key_id_from_bearer, …) is in
+    place when tests/services/test_llm_api_key_service.py is imported. Overwrites the
+    services-package MagicMock stub; falls back to the stub if it can't load here.
+    """
+    import importlib.util as _cfg_ilu
+
+    _spec = _cfg_ilu.spec_from_file_location(
+        "services.llm_api_key_service", str(backend_root / "services" / "llm_api_key_service.py")
+    )
+    if _spec and _spec.loader:
+        _mod = _cfg_ilu.module_from_spec(_spec)
+        sys.modules["services.llm_api_key_service"] = _mod
+        try:
+            _spec.loader.exec_module(_mod)
+        except Exception:
+            sys.modules["services.llm_api_key_service"] = _make_pkg_stub("services.llm_api_key_service")
