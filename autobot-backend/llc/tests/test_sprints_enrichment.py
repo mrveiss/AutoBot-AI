@@ -56,6 +56,11 @@ def _project(company_id):
     # them into non-serializable Mocks when ProjectResponse.model_validate reads.
     m.code_source_id = None
     m.code_source = None
+    # Pin lifecycle fields (#11129 P2) — must not auto-vivify into Mocks.
+    m.lifecycle_state = "active"
+    m.archived_at = None
+    m.disposal_scheduled_at = None
+    m.disposal_approval_id = None
     return m
 
 

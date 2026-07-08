@@ -247,6 +247,11 @@ def _make_mock_project(company_id: uuid.UUID, code_source_id: str | None = None)
     proj.open_work_item_count = 0
     proj.created_at = datetime.now(timezone.utc)
     proj.updated_at = datetime.now(timezone.utc)
+    # Pin lifecycle fields (#11129 P2) so model_validate doesn't auto-vivify Mocks.
+    proj.lifecycle_state = "active"
+    proj.archived_at = None
+    proj.disposal_scheduled_at = None
+    proj.disposal_approval_id = None
     return proj
 
 

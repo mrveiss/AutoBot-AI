@@ -31,7 +31,7 @@ Routes:
 """
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -45,10 +45,12 @@ from llc.deps import get_session
 from user_management.services import TenantContext
 
 from ..kb.collections import KbCollectionManager
-from ..models.enums import SprintStatus, WorkItemRelationType, WorkItemStatus
+from ..models.enums import ApprovalType, SprintStatus, WorkItemRelationType, WorkItemStatus
 from ..models.sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from ..models.work_item import LLCWorkItem, LLCWorkItemRelation
 from ..services.approval import ApprovalNotFoundError, ApprovalService, ApprovalStateError
+from ..services.disposal_policy import get_disposal_policy
+from ..services.project_disposal import dispose
 from ..services.sprint_autoclose import SprintAutoCloseService
 from ..services.sprint_planning import SprintNotFound, SprintPlanningService
 from ..services.timeline import compute_critical_path, duration_days
@@ -172,6 +174,11 @@ class ProjectResponse(BaseModel):
     # Company OS ↔ codebase-analytics link (#11129).
     code_source_id: Optional[str] = None
     code_source: Optional[CodeSourceSummary] = None
+    # Archive→dispose lifecycle (#11129 P2).
+    lifecycle_state: str = "active"
+    archived_at: Optional[datetime] = None
+    disposal_scheduled_at: Optional[datetime] = None
+    disposal_approval_id: Optional[uuid.UUID] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -682,20 +689,102 @@ async def update_project(
     return project
 
 
-@router.delete("/projects/{project_id}", status_code=204)
-async def delete_project(
+async def _load_owned_project(project_id: uuid.UUID, session: AsyncSession, ctx: TenantContext) -> LLCProject:
+    """Load project by id; 404 when missing or owned by a different org (IDOR guard)."""
+    result = await session.execute(select(LLCProject).where(LLCProject.id == project_id))
+    project = result.scalar_one_or_none()
+    if project is None or str(project.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+@router.post("/projects/{project_id}/archive", response_model=ProjectResponse)
+async def archive_project(
     project_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> None:
-    result = await session.execute(select(LLCProject).where(LLCProject.id == project_id))
-    project = result.scalar_one_or_none()
-    # IDOR guard (#10148).
-    if project is None or str(project.company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=404, detail="Project not found")
-    await session.delete(project)
+) -> ProjectResponse:
+    """Move a project to the archived lifecycle state (#11129 P2)."""
+    project = await _load_owned_project(project_id, session, ctx)
+    project.lifecycle_state = "archived"
+    project.archived_at = datetime.now(timezone.utc)
     await session.commit()
+    return ProjectResponse.model_validate(project)
+
+
+@router.post("/projects/{project_id}/restore", response_model=ProjectResponse)
+async def restore_project(
+    project_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> ProjectResponse:
+    """Restore an archived / pending-disposal project to active (#11129 P2)."""
+    project = await _load_owned_project(project_id, session, ctx)
+    if project.lifecycle_state not in ("archived", "pending_disposal"):
+        raise HTTPException(status_code=409, detail="Project is not archived")
+    project.lifecycle_state = "active"
+    project.archived_at = None
+    project.disposal_scheduled_at = None
+    project.disposal_approval_id = None
+    await session.commit()
+    return ProjectResponse.model_validate(project)
+
+
+@router.post("/projects/{project_id}/dispose")
+async def dispose_project(
+    project_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> dict:
+    """Dispose an archived project (immediate / scheduled / approval-gated per SLM policy; #11129 P2)."""
+    project = await _load_owned_project(project_id, session, ctx)
+    if project.lifecycle_state != "archived":
+        raise HTTPException(status_code=409, detail="Project must be archived before disposal")
+    return await _apply_disposal(project, session, ctx, current_user)
+
+
+async def _apply_disposal(project: LLCProject, session: AsyncSession, ctx: TenantContext, current_user: dict) -> dict:
+    """Consult the SLM disposal policy and dispose immediately / schedule / gate on approval."""
+    policy = await get_disposal_policy()
+    if policy.require_approval:
+        approval = await ApprovalService().request_approval(
+            session,
+            company_id=ctx.org_id,
+            gate_type=ApprovalType.PROJECT_DISPOSAL,
+            payload={"project_id": str(project.id)},
+            requested_by=uuid.UUID(str(current_user["id"])),
+        )
+        project.lifecycle_state = "pending_disposal"
+        project.disposal_approval_id = approval.id
+        if policy.retention_days > 0:
+            project.disposal_scheduled_at = datetime.now(timezone.utc) + timedelta(days=policy.retention_days)
+        await session.commit()
+        return {"result": "pending_approval", "approval_id": str(approval.id)}
+    if policy.retention_days > 0:
+        project.lifecycle_state = "pending_disposal"
+        project.disposal_scheduled_at = datetime.now(timezone.utc) + timedelta(days=policy.retention_days)
+        await session.commit()
+        return {"result": "scheduled", "disposal_scheduled_at": project.disposal_scheduled_at.isoformat()}
+    await dispose(project, session)
+    await session.commit()
+    return {"result": "disposed"}
+
+
+@router.delete("/projects/{project_id}", status_code=204)
+async def delete_project(
+    project_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> None:
+    """Delete a project — must be archived first; routes through the disposal workflow (#11129 P2)."""
+    project = await _load_owned_project(project_id, session, ctx)
+    if project.lifecycle_state != "archived":
+        raise HTTPException(status_code=409, detail="Archive the project before deleting")
+    await _apply_disposal(project, session, ctx, current_user)
 
 
 # ------------------------------------------------------------------ Sprint routes
