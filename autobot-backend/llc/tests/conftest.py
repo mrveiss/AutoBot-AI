@@ -50,6 +50,16 @@ def _make_knowledge_submodule_stubs() -> None:
     ku.sanitize_metadata_for_chromadb = MagicMock(return_value={})  # type: ignore[attr-defined]
     sys.modules["knowledge.utils"] = ku
 
+    # codebase_analytics/storage.py does ``from knowledge.backends import
+    # get_async_default_client, get_default_client`` at module level. Without a
+    # backends stub, the bare ``knowledge`` stub above shadows the real package and
+    # any cross-suite run (llc tests collected before analytics tests) fails to
+    # collect them with ModuleNotFoundError: No module named 'knowledge.backends' (#11256).
+    kb = types.ModuleType("knowledge.backends")
+    kb.get_default_client = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
+    kb.get_async_default_client = AsyncMock(return_value=MagicMock())  # type: ignore[attr-defined]
+    sys.modules["knowledge.backends"] = kb
+
 
 # The ``knowledge`` module imports lazily but fails when attributes are accessed
 # because chromadb → opentelemetry has a broken dependency in the dev venv.
