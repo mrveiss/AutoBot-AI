@@ -88,6 +88,14 @@ celery_app = Celery(
     backend=ssot_config.celery_result_backend or _default_backend_url,
 )
 
+# GH#11262: priority tiers live in celery_priority (plain data so they can be
+# unit-tested without importing this heavy, pytest-stubbed module, issue #7766).
+from celery_priority import (  # noqa: E402
+    MAX_PRIORITY as _MAX_PRIORITY,
+    PRIORITY_NORMAL as _PRIORITY_NORMAL,
+    PRIORITY_TASK_ROUTES as _PRIORITY_TASK_ROUTES,
+)
+
 # Celery configuration
 celery_app.conf.update(
     # Serialization settings
@@ -99,6 +107,9 @@ celery_app.conf.update(
     enable_utc=True,
     # Task tracking
     task_track_started=True,
+    # GH#11262: enable priority queues so audit preempts low-priority maintenance.
+    task_queue_max_priority=_MAX_PRIORITY,
+    task_default_priority=_PRIORITY_NORMAL,
     # Task routing - route tasks to appropriate queues
     task_routes={
         "tasks.deploy_host": {"queue": "deployments"},
@@ -122,6 +133,8 @@ celery_app.conf.update(
         "analytics.run_bug_prediction_analysis": {"queue": "analytics"},
         "analytics.run_security_analysis": {"queue": "analytics"},
         "analytics.run_dashboard_analysis": {"queue": "analytics"},
+        # GH#11262: priority tiers on the shared default queue (audit > maintenance).
+        **_PRIORITY_TASK_ROUTES,
     },
     # Worker configuration for long-running Ansible playbooks
     # Uses centralized config from unified_config_manager
@@ -131,6 +144,9 @@ celery_app.conf.update(
     # Issue #725: Include SSL options when TLS is enabled
     broker_transport_options={
         "visibility_timeout": _visibility_timeout,
+        # GH#11262: drain higher-priority messages first so critical audit work
+        # is not stuck behind a backlog of low-priority cleanup on the same queue.
+        "queue_order_strategy": "priority",
         **(_broker_ssl_options or {}),
     },
     result_backend_transport_options={
