@@ -68,9 +68,11 @@ async def test_retrieve_returns_empty_on_timeout():
 
     store = AsyncMock()
     store.find_similar_trajectories = _slow
-    with patch.object(tc, "TRAJECTORY_CONTEXT_ENABLED", True), patch.object(
-        tc, "_RETRIEVE_TIMEOUT_S", 0.01
-    ), patch("memory.trajectory_store.get_trajectory_store", AsyncMock(return_value=store)):
+    with (
+        patch.object(tc, "TRAJECTORY_CONTEXT_ENABLED", True),
+        patch.object(tc, "_RETRIEVE_TIMEOUT_S", 0.01),
+        patch("memory.trajectory_store.get_trajectory_store", AsyncMock(return_value=store)),
+    ):
         assert await tc.retrieve_trajectory_context("q", user_id="u1") == ""
 
 
