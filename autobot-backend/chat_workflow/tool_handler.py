@@ -1807,7 +1807,11 @@ class ToolHandlerMixin:
         the subtask as a governed subagent (its ``forbidden_work`` constrains it) via
         the selected engine and returns the result. Yields WorkflowMessage(s).
         """
-        from chat_workflow.delegation import DELEGATION_ENABLED, run_delegated_subtask
+        from chat_workflow.delegation import (
+            DELEGATION_ENABLED,
+            MAX_DELEGATIONS_PER_TURN,
+            run_delegated_subtask,
+        )
 
         params = tool_call.get("params", {})
         task = params.get("task", "")
@@ -1831,14 +1835,34 @@ class ToolHandlerMixin:
             )
             return
 
+        # GH#11266: enforce per-turn delegation fan-out limit.
+        ctx_dict = (getattr(ctx, "context", None) or {}) if ctx else {}
+        delegations_this_turn: int = ctx_dict.get("delegations_this_turn", 0)
+        if delegations_this_turn >= MAX_DELEGATIONS_PER_TURN:
+            error = f"per-turn delegation limit ({MAX_DELEGATIONS_PER_TURN}) reached"
+            logger.warning("[GH#11266] %s", error)
+            execution_results.append({"tool": "delegate", "task": task, "status": "error", "error": error})
+            yield WorkflowMessage(
+                type="error",
+                content=f"Delegation blocked: {error}",
+                metadata={"message_type": "delegate_tool", "error": True},
+            )
+            return
+        if ctx is not None and ctx.context is not None:
+            ctx.context["delegations_this_turn"] = delegations_this_turn + 1
+
         agent_type = params.get("agent_type", "research_agent")
         engine = params.get("engine", "claude_code")
-        depth = int((getattr(ctx, "context", None) or {}).get("delegation_depth", 0)) if ctx else 0
-        logger.info(
-            "[GH#11207] Delegating to %s subagent (engine=%s, depth=%d): %s", agent_type, engine, depth, task[:100]
-        )
+        depth = int(ctx_dict.get("delegation_depth", 0))
+        parent_agent_id = ctx.agent_context.agent_id if ctx and ctx.agent_context else None
         try:
-            result = await run_delegated_subtask(task, agent_type=agent_type, depth=depth, engine=engine)
+            result = await run_delegated_subtask(
+                task,
+                agent_type=agent_type,
+                depth=depth,
+                engine=engine,
+                parent_agent_id=parent_agent_id,
+            )
             execution_results.append(
                 {
                     "tool": "delegate",

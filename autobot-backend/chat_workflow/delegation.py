@@ -14,27 +14,61 @@ engine. Two engines ship:
 
 - **claude_code** — an ``ExecutionBackend`` that runs its own tool loop out of
   process, governed via ``--disallowedTools`` mapped from the profile (GH#11188).
+  NOTE: this engine is out-of-process; ``delegation_depth`` is passed as metadata
+  but cannot be enforced inside the subprocess. The depth bound therefore only
+  prevents *this process* from initiating a delegation beyond MAX_DELEGATION_DEPTH.
+  Recursive delegation inside the claude_code subprocess is blocked by the
+  ``--disallowedTools`` list NOT including a ``delegate`` tool (it is an AutoBot
+  internal, not a claude_code native tool), so the subprocess cannot self-delegate.
 - **internal** — AutoBot's own LLM driving the production continuation loop, so
   the subagent's tools flow through the ``_dispatch_tool_call`` seam and inherit
   ``forbidden_work`` enforcement for free. Runs in process, so it also threads an
-  incremented ``delegation_depth`` — a nested ``delegate`` is depth-bounded.
+  incremented ``delegation_depth`` — a nested ``delegate`` is depth-bounded here.
 
 OFF by default (``AUTOBOT_DELEGATION_ENABLED``) so the live chat path is unchanged
 until delegation is explicitly enabled and validated.
+
+Enablement / validation plan
+-----------------------------
+Check all items before flipping ``AUTOBOT_DELEGATION_ENABLED=true`` in production:
+
+- [ ] Flag: ``AUTOBOT_DELEGATION_ENABLED`` remains OFF (default); enable per-env.
+- [ ] Depth bound: ``AUTOBOT_MAX_DELEGATION_DEPTH`` (default 2) is enforced in
+      ``run_delegated_subtask`` before any engine is invoked.  Verify via the
+      ``test_run_delegated_subtask_depth_guard`` test.
+- [ ] Per-turn subtask limit: ``AUTOBOT_MAX_DELEGATIONS_PER_TURN`` (default 5)
+      is enforced in ``_handle_delegate_tool`` (tool_handler.py) before calling
+      ``run_delegated_subtask``.  Verify via ``test_delegate_tool_per_turn_limit``.
+- [ ] Forbidden-work on internal engine: ``agent_context.agent_id`` is set on the
+      ``LLMIterationContext`` so every tool call goes through ``_enforce_forbidden_work``
+      at the ``_dispatch_tool_call`` seam. Verified by ``test_internal_engine_governs_and_bounds_depth``.
+- [ ] Forbidden-work on claude_code engine: ``forbidden_to_claude_tools`` maps tokens
+      to ``--disallowedTools``; out-of-process subprocess cannot call AutoBot's
+      ``delegate`` tool (it is not a claude_code native tool, so no recursive loop).
+      Verified by ``test_claude_code_engine_passes_disallowed_from_forbidden_work`` and
+      ``test_shipped_research_agent_has_no_fail_open_tokens``.
+- [ ] Observability: delegation dispatch emits an INFO log with engine, depth,
+      parent_agent_id, and child agent_type (in ``run_delegated_subtask``).  Check
+      log output for the ``[GH#11266]`` tag before enabling.
+- [ ] Smoke-test: enable flag in staging, send one research task, confirm INFO log
+      appears, depth-limit rejects a manually crafted depth=MAX request, and the
+      per-turn limit fires after MAX delegations in a single turn.
 """
 
-import os
 from typing import Awaitable, Callable, Dict, List
 
 from autobot_shared import tool_catalogue as _tc
+from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
 # Master switch — delegate tool keeps its current (record-only) behaviour when off.
-DELEGATION_ENABLED: bool = os.environ.get("AUTOBOT_DELEGATION_ENABLED", "").lower() in ("1", "true", "yes")
+DELEGATION_ENABLED: bool = env_flag("AUTOBOT_DELEGATION_ENABLED", default=False)
 # Bound on how deep delegation may nest (defence against runaway delegation).
-MAX_DELEGATION_DEPTH: int = int(os.environ.get("AUTOBOT_MAX_DELEGATION_DEPTH", "2"))
+MAX_DELEGATION_DEPTH: int = env_int("AUTOBOT_MAX_DELEGATION_DEPTH", default=2)
+# Max number of ``delegate`` calls allowed per LLM turn (defence against fan-out).
+MAX_DELEGATIONS_PER_TURN: int = env_int("AUTOBOT_MAX_DELEGATIONS_PER_TURN", default=5)
 
 # AutoBot ``forbidden_work`` token → claude_code CLI tool name to disallow. claude_code
 # exposes coarse tools (Bash/Edit/Write), so shell/infra/file-mutation tokens collapse
@@ -137,15 +171,29 @@ _ENGINES: Dict[str, Callable[[str, str, int], Awaitable[str]]] = {
 
 
 async def run_delegated_subtask(
-    task: str, agent_type: str = "research_agent", depth: int = 0, engine: str = "claude_code"
+    task: str,
+    agent_type: str = "research_agent",
+    depth: int = 0,
+    engine: str = "claude_code",
+    parent_agent_id: str | None = None,
 ) -> str:
     """Run a delegated subtask as a governed subagent (GH#11207).
 
     Raises ``ValueError`` past ``MAX_DELEGATION_DEPTH`` or for an unknown engine.
+    Emits an INFO log with engine, depth, parent_agent_id, and child agent_type
+    for observability (GH#11266 validation plan gate).
     """
     if depth >= MAX_DELEGATION_DEPTH:
         raise ValueError(f"max delegation depth {MAX_DELEGATION_DEPTH} reached (depth={depth})")
     runner = _ENGINES.get(engine)
     if runner is None:
         raise ValueError(f"unknown delegation engine: {engine!r} (available: {sorted(_ENGINES)})")
+    logger.info(
+        "[GH#11266] delegation dispatch: parent=%s engine=%s child=%s depth=%d task=%.80r",
+        parent_agent_id or "root",
+        engine,
+        agent_type,
+        depth,
+        task,
+    )
     return await runner(task, agent_type, depth)
