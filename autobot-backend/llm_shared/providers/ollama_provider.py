@@ -78,7 +78,7 @@ class OllamaProvider(BaseProvider):
         self._delegate.ollama_host = self._resolve_base_url()
         return self._delegate
 
-    async def chat_completion(self, request: LLMRequest) -> LLMResponse:
+    async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
         """Delegate to llm_shared OllamaProvider (carries OTel tracing + circuit breaker).
 
         When ``request.metadata["chat_template"]`` is set the messages are

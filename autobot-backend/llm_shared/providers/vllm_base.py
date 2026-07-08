@@ -60,7 +60,7 @@ class VLLMBaseProvider(BaseProvider):
                 logger.error("Failed to initialize vLLM provider: %s", exc)
                 raise
 
-    async def chat_completion(self, request: LLMRequest) -> LLMResponse:
+    async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
         """Execute a chat completion request via vLLM."""
         try:
             self._total_requests += 1

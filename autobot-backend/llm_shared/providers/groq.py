@@ -92,7 +92,7 @@ class GroqProvider(BaseProvider):
         self._client = groq.AsyncGroq(api_key=api_key)
         return self._client
 
-    async def chat_completion(self, request: LLMRequest) -> LLMResponse:
+    async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
         """Execute a non-streaming chat completion via Groq."""
         self._total_requests += 1
         start = time.time()
