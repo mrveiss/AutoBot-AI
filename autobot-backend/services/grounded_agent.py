@@ -28,6 +28,7 @@ Data flow:
 7. Return GroundedResponse with full provenance
 """
 
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -522,11 +523,16 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
 
         for verified in verified_claims:
             if verified.kb_source and verified.confidence > 0.7:
-                # Find claim text in response and annotate it
+                # Find claim text in response and annotate it. Match
+                # case-insensitively — LLM-extracted claims routinely differ in
+                # case from the source text — but keep the response's original
+                # casing in the output so the text isn't rewritten (#11248).
                 claim_text = verified.claim.claim_text
-                if claim_text in reconstructed:
-                    annotation = f"{claim_text} [KB source, {verified.confidence:.0%} confidence]"
-                    reconstructed = reconstructed.replace(claim_text, annotation)
+                match = re.search(re.escape(claim_text), reconstructed, re.IGNORECASE)
+                if match:
+                    matched = match.group(0)
+                    annotation = f"{matched} [KB source, {verified.confidence:.0%} confidence]"
+                    reconstructed = reconstructed[: match.start()] + annotation + reconstructed[match.end() :]
 
         return reconstructed
 

@@ -412,17 +412,22 @@ class TestSeverityAssessment:
             confidence=0.85,
         )
 
+        # _assess_severity intentionally downgrades CRITICAL→DEGRADED when a
+        # high-confidence fix exists (predicted_success_rate>=0.8 AND
+        # confidence>=0.8). To verify the CRITICAL classification path itself
+        # (deep chain + high report confidence), use an intervention below that
+        # threshold so the downgrade doesn't fire. (#11248)
         interventions = [
             Intervention(
                 name="Fix",
                 description="",
                 mechanism="",
-                predicted_success_rate=0.9,
+                predicted_success_rate=0.6,
                 cost_level="low",
                 risk_level="low",
                 recommendation_type=RecommendationType.IMMEDIATE,
                 impact_rank=1,
-                confidence=0.9,
+                confidence=0.6,
             )
         ]
 

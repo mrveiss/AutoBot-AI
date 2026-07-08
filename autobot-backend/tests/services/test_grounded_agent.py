@@ -243,11 +243,15 @@ async def test_reconstruct_response_with_annotation(grounded_agent):
         confidence=0.95,
     )
 
+    # The claim ("Latency increased") differs in case from the response
+    # ("the latency increased"); reconstruction matches case-insensitively and
+    # annotates it while preserving the response's original casing (#11248).
     original = "The latency increased by 15%."
     reconstructed = await grounded_agent._reconstruct_response(original, [verified])
 
-    assert "Latency increased" in reconstructed
-    assert reconstructed != original or "[KB source" in reconstructed
+    assert "latency increased" in reconstructed.lower()
+    assert "[KB source" in reconstructed
+    assert reconstructed != original
 
 
 @pytest.mark.asyncio
