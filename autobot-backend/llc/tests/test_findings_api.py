@@ -293,3 +293,37 @@ def test_scan_idor_404_wrong_org():
     with patch("llc.api.findings.get_findings_policy", AsyncMock(return_value=FindingsPolicy(enabled=True))):
         resp = idor_client.post(f"/projects/{project.id}/findings/scan")
     assert resp.status_code == 404
+
+
+def test_promote_idor_404_wrong_org():
+    """POST /findings/proposals/{id}/promote → 404 when proposal.company_id != ctx.org_id."""
+    project = _mk_project(company_id=_ORG_ID)  # ctx org = _ORG_ID
+    foreign = _mk_proposal(company_id=_OTHER_ORG_ID)
+    client, _ = _mk_client(project, proposals=[foreign])
+    with patch("llc.api.findings.promote", AsyncMock()) as prom:
+        resp = client.post(f"/findings/proposals/{foreign.id}/promote")
+    assert resp.status_code == 404
+    prom.assert_not_awaited()  # never reached the service
+
+
+def test_dismiss_idor_404_wrong_org():
+    """POST /findings/proposals/{id}/dismiss → 404 when proposal.company_id != ctx.org_id."""
+    project = _mk_project(company_id=_ORG_ID)
+    foreign = _mk_proposal(company_id=_OTHER_ORG_ID)
+    client, _ = _mk_client(project, proposals=[foreign])
+    with patch("llc.api.findings.dismiss", AsyncMock()) as dis:
+        resp = client.post(f"/findings/proposals/{foreign.id}/dismiss", json={"reason": "x"})
+    assert resp.status_code == 404
+    dis.assert_not_awaited()
+
+
+def test_promote_conflict_when_non_pending():
+    """Promoting a non-pending proposal → 409 (ProposalStateError), not 500."""
+    from llc.services.finding_proposal_service import ProposalStateError  # noqa: PLC0415
+
+    project = _mk_project()
+    proposal = _mk_proposal()
+    client, _ = _mk_client(project, proposals=[proposal])
+    with patch("llc.api.findings.promote", AsyncMock(side_effect=ProposalStateError("already promoted"))):
+        resp = client.post(f"/findings/proposals/{proposal.id}/promote")
+    assert resp.status_code == 409

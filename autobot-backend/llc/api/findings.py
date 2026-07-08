@@ -24,6 +24,7 @@ from llc.models.finding_proposal import LLCFindingProposal
 from llc.models.sprint import LLCProject
 from llc.services.finding_proposal_service import (
     FindingsDisabledError,
+    ProposalStateError,
     dismiss,
     promote,
     scan,
@@ -143,7 +144,10 @@ async def promote_proposal(
     """Promote a pending proposal to a work item (or gate on approval)."""
     proposal = await _load_owned_proposal(proposal_id, session, ctx)
     actor_id = uuid.UUID(str(current_user.get("id") or current_user.get("user_id")))
-    result = await promote(proposal, session, actor_id)
+    try:
+        result = await promote(proposal, session, actor_id)
+    except ProposalStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if isinstance(result, dict):
         return result
     # Return a summary of the created work item.
@@ -165,5 +169,8 @@ async def dismiss_proposal(
 ) -> dict:
     """Dismiss a pending proposal with a reason."""
     proposal = await _load_owned_proposal(proposal_id, session, ctx)
-    await dismiss(proposal, session, body.reason)
+    try:
+        await dismiss(proposal, session, body.reason)
+    except ProposalStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"result": "dismissed"}
