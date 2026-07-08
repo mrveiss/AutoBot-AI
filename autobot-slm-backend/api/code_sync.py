@@ -834,7 +834,14 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> None:
     Mirrors the ensure_venv_version Ansible role: runs `<venv>/bin/python --version`,
     compares against _COMPONENT_PYTHON_TARGET, and if mismatched removes the venv
     so the subsequent `pythonX.Y -m venv` call rebuilds it on the right interpreter.
+
+    Safety: verifies the target interpreter is present on PATH (shutil.which) BEFORE
+    removing anything. If absent, the existing venv is left intact and a skip step is
+    recorded — the service stays running; operators must provision the interpreter
+    first (Ansible python314 role). (#11327 review)
     """
+    import shutil
+
     target = _COMPONENT_PYTHON_TARGET.get(component)
     paths = _COMPONENT_PIP_PATHS.get(component)
     if target is None or paths is None:
@@ -842,6 +849,13 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> None:
     _, pip_bin = paths
     venv_python = str(Path(pip_bin).parent / "python")
     if not Path(venv_python).exists():
+        if not shutil.which(target):
+            logger.warning("drift resolve: %s not on PATH — skipping venv create for %s", target, component)
+            steps.append(
+                f"venv: {venv_python} missing and {target} not installed"
+                " — skipping recreation; provision the interpreter first (Ansible python314 role)"
+            )
+            return
         steps.append(f"venv: {venv_python} missing — will create with {target}")
         await _recreate_venv(component, target, pip_bin, steps)
         return
@@ -856,10 +870,23 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> None:
         version_out = stdout.decode(errors="replace").strip() if stdout else ""
         expected_fragment = target.replace("python", "")  # "3.14" or "3.11"
         if expected_fragment not in version_out:
+            if not shutil.which(target):
+                logger.warning(
+                    "drift resolve: venv mismatch for %s (have %s, need %s) "
+                    "but %s not on PATH — leaving existing venv intact",
+                    component,
+                    version_out,
+                    expected_fragment,
+                    target,
+                )
+                steps.append(
+                    f"venv: mismatch (have '{version_out}', need {expected_fragment})"
+                    f" but {target} not installed — skipping recreation;"
+                    " provision the interpreter first (Ansible python314 role)"
+                )
+                return
             steps.append(f"venv: mismatch (have '{version_out}', need {expected_fragment}) — recreating")
             venv_dir = str(Path(pip_bin).parents[1])
-            import shutil
-
             shutil.rmtree(venv_dir, ignore_errors=True)
             await _recreate_venv(component, target, pip_bin, steps)
         else:

@@ -276,7 +276,7 @@ def test_ensure_venv_python_noop_when_version_matches(tmp_path) -> None:
 
 
 def test_ensure_venv_python_recreates_on_version_mismatch(tmp_path) -> None:
-    """When the venv reports the wrong version, _recreate_venv is called."""
+    """When the venv reports the wrong version AND target is installed, _recreate_venv is called."""
     pip_bin = tmp_path / "venv" / "bin" / "pip"
     pip_bin.parent.mkdir(parents=True)
     py_bin = pip_bin.parent / "python"
@@ -302,15 +302,17 @@ def test_ensure_venv_python_recreates_on_version_mismatch(tmp_path) -> None:
         with (
             patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
             patch("api.code_sync._recreate_venv", side_effect=_fake_recreate),
+            # simulate host where python3.14 IS installed
+            patch("shutil.which", return_value="/usr/bin/python3.14"),
         ):
             _run(_ensure_venv_python("autobot-backend", steps))
 
-    assert recreated, "venv must be recreated on mismatch"
+    assert recreated, "venv must be recreated on mismatch when target is installed"
     assert any("mismatch" in s for s in steps)
 
 
 def test_ensure_venv_python_creates_when_missing(tmp_path) -> None:
-    """When <venv>/bin/python is absent, _recreate_venv is called."""
+    """When <venv>/bin/python is absent but target is installed, _recreate_venv is called."""
     pip_bin = tmp_path / "venv" / "bin" / "pip"
     # Do NOT create py_bin — simulates missing venv
 
@@ -324,10 +326,14 @@ def test_ensure_venv_python_creates_when_missing(tmp_path) -> None:
         async def _fake_recreate(*args, **kw):
             recreated.append(True)
 
-        with patch("api.code_sync._recreate_venv", side_effect=_fake_recreate):
+        with (
+            patch("api.code_sync._recreate_venv", side_effect=_fake_recreate),
+            # target interpreter is present on PATH
+            patch("shutil.which", return_value="/usr/bin/python3.14"),
+        ):
             _run(_ensure_venv_python("autobot-backend", steps))
 
-    assert recreated, "venv must be created when python binary is missing"
+    assert recreated, "venv must be created when python binary is missing and target is installed"
 
 
 def test_ensure_venv_python_skipped_for_unknown_component() -> None:
@@ -335,3 +341,74 @@ def test_ensure_venv_python_skipped_for_unknown_component() -> None:
     steps: list[str] = []
     _run(_ensure_venv_python("autobot-frontend", steps))
     assert steps == []
+
+
+# ---------------------------------------------------------------------------
+# #11327 safety guard — target interpreter absent: never destroy existing venv
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_venv_python_skips_recreation_when_target_not_installed_mismatch(tmp_path) -> None:
+    """Venv with wrong Python version is NOT removed when target interpreter is absent.
+
+    Scenario: venv reports Python 3.12 but target is python3.14 and python3.14 is
+    not installed on this host.  The existing venv must survive intact so the
+    service can keep running.  A skip step is recorded instead.
+    """
+    pip_bin = tmp_path / "venv" / "bin" / "pip"
+    pip_bin.parent.mkdir(parents=True)
+    py_bin = pip_bin.parent / "python"
+    py_bin.touch()
+    venv_dir = tmp_path / "venv"
+
+    with patch(
+        "api.code_sync._COMPONENT_PIP_PATHS",
+        {"autobot-backend": (str(tmp_path / "requirements.txt"), str(pip_bin))},
+    ):
+
+        async def _fake_exec(*cmd, **kw):
+            proc = MagicMock()
+            proc.returncode = 0
+            proc.communicate = AsyncMock(return_value=(b"Python 3.12.13", b""))
+            return proc
+
+        steps: list[str] = []
+        with (
+            patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+            # target interpreter is NOT on PATH
+            patch("shutil.which", return_value=None),
+        ):
+            _run(_ensure_venv_python("autobot-backend", steps))
+
+    # venv dir must still exist — rmtree must NOT have been called
+    assert venv_dir.exists(), "existing venv must not be removed when target interpreter is absent"
+    assert any("not installed" in s or "skipping" in s.lower() for s in steps), f"expected a skip step, got: {steps}"
+
+
+def test_ensure_venv_python_skips_creation_when_target_not_installed_missing(tmp_path) -> None:
+    """When <venv>/bin/python is absent AND the target interpreter is absent, skip gracefully.
+
+    Neither rmtree nor _recreate_venv should be called — a skip step is recorded.
+    """
+    pip_bin = tmp_path / "venv" / "bin" / "pip"
+    # Do NOT create py_bin — simulates missing venv
+
+    with patch(
+        "api.code_sync._COMPONENT_PIP_PATHS",
+        {"autobot-backend": (str(tmp_path / "requirements.txt"), str(pip_bin))},
+    ):
+        steps: list[str] = []
+        recreated: list[bool] = []
+
+        async def _fake_recreate(*args, **kw):
+            recreated.append(True)
+
+        with (
+            patch("api.code_sync._recreate_venv", side_effect=_fake_recreate),
+            # target interpreter is NOT on PATH
+            patch("shutil.which", return_value=None),
+        ):
+            _run(_ensure_venv_python("autobot-backend", steps))
+
+    assert not recreated, "must not attempt to recreate venv when target interpreter is absent"
+    assert any("not installed" in s or "skipping" in s.lower() for s in steps), f"expected a skip step, got: {steps}"
