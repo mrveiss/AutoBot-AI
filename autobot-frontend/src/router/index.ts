@@ -27,6 +27,7 @@ import { createRouter, createWebHistory, type RouteLocationNormalized, type Rout
 import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
 import { setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'
+import { isChunkLoadError } from '@/utils/chunkLoadError'
 import { createLogger } from '@/utils/debugUtils'
 import { getBackendUrl, getSLMAdminUrl } from '@/config/ssot-config'
 import { llcCompanyParamGuard } from './llcGuards'
@@ -1245,9 +1246,7 @@ router.onError((error) => {
   logger.error('Navigation error:', error)
 
   // Handle chunk loading failures with enhanced error recovery
-  if (error.message.includes('Loading chunk') ||
-      error.message.includes('Loading CSS chunk') ||
-      error.message.includes('ChunkLoadError')) {
+  if (isChunkLoadError(error)) {
 
     logger.warn('Chunk loading failed, attempting recovery...', {
       error: error.message,

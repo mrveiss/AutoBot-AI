@@ -6,6 +6,7 @@ import AsyncErrorFallback from '@/components/async/AsyncErrorFallback.vue'
 // Issue #156 Fix: Import RumAgent to get complete Window.rum type
 import '../utils/RumAgent'
 import { createLogger } from '@/utils/debugUtils'
+import { isChunkLoadError } from '@/utils/chunkLoadError'
 
 // Create scoped logger for asyncComponentHelpers
 const logger = createLogger('AsyncComponent')
@@ -136,9 +137,7 @@ export function defineRobustAsyncComponent(
       const errorMessage = (error as Error | undefined)?.message || String(error)
 
       // Check if this is a chunk loading error
-      const isChunkError = errorMessage.includes('Loading chunk') ||
-                           errorMessage.includes('ChunkLoadError') ||
-                           errorMessage.includes('Loading CSS chunk')
+      const isChunkError = isChunkLoadError(errorMessage)
 
       if (isChunkError) {
         logger.warn(`Chunk loading error detected for ${name}, using cache management...`)
@@ -243,9 +242,7 @@ export function createLazyComponent(
         return (module as { default?: Component }).default || (module as Component)
       } catch (error) {
         // Handle specific chunk loading errors
-        if ((error as Error)?.message?.includes('Loading chunk') ||
-            (error as Error)?.message?.includes('ChunkLoadError') ||
-            (error as Error)?.message?.includes('Loading CSS chunk')) {
+        if (isChunkLoadError(error)) {
 
           logger.warn(`Chunk loading failed for ${componentName}, attempting cache bust...`)
 
@@ -361,9 +358,7 @@ export function setupAsyncComponentErrorHandler() {
   window.addEventListener('unhandledrejection', async (event) => {
     const error = event.reason
 
-    if (error?.message?.includes('Loading chunk') ||
-        error?.message?.includes('ChunkLoadError') ||
-        error?.message?.includes('Loading CSS chunk')) {
+    if (isChunkLoadError(error)) {
 
       logger.warn('Detected chunk loading failure:', error)
 
