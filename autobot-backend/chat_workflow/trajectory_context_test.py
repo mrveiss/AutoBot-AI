@@ -59,6 +59,22 @@ async def test_retrieve_scopes_by_user_and_formats_hits():
 
 
 @pytest.mark.asyncio
+async def test_retrieve_returns_empty_on_timeout():
+    async def _slow(*_a, **_k):
+        import asyncio
+
+        await asyncio.sleep(1.0)
+        return [{"task_text": "x", "outcome": "success", "reward": 0.9}]
+
+    store = AsyncMock()
+    store.find_similar_trajectories = _slow
+    with patch.object(tc, "TRAJECTORY_CONTEXT_ENABLED", True), patch.object(
+        tc, "_RETRIEVE_TIMEOUT_S", 0.01
+    ), patch("memory.trajectory_store.get_trajectory_store", AsyncMock(return_value=store)):
+        assert await tc.retrieve_trajectory_context("q", user_id="u1") == ""
+
+
+@pytest.mark.asyncio
 async def test_retrieve_is_non_fatal_on_store_error():
     with (
         patch.object(tc, "TRAJECTORY_CONTEXT_ENABLED", True),

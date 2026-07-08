@@ -25,7 +25,7 @@ store itself (#11089), so no cross-user leakage is possible here.
 
 import asyncio
 
-from autobot_shared.env_utils import env_flag, env_int
+from autobot_shared.env_utils import env_flag, env_float, env_int
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -41,9 +41,24 @@ _MIN_REWARD = 0.7
 _CHAT_TASK_TYPE = "chat_turn"
 _CHAT_STRATEGY = "chat"
 
+# Search-before rides the response hot path, so cap it: a cold/slow Chroma
+# collection must never delay first token. Retrieval returns "" on timeout.
+_RETRIEVE_TIMEOUT_S = env_float("AUTOBOT_CHAT_TRAJECTORY_TIMEOUT_S", default=0.15)
+
 # Bound concurrent judge calls so a burst of turns can't stampede the LLM.
 _CAPTURE_CONCURRENCY = env_int("AUTOBOT_CHAT_TRAJECTORY_CAPTURE_CONCURRENCY", default=2)
-_capture_semaphore = asyncio.Semaphore(_CAPTURE_CONCURRENCY)
+# Lazily created inside the running loop — a module-import-time Semaphore binds to
+# whatever loop is current at import and raises "bound to a different event loop"
+# when awaited from the serving loop (or across loops in tests/Celery).
+_capture_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_capture_semaphore() -> asyncio.Semaphore:
+    """Return the capture semaphore, creating it on the running loop on first use."""
+    global _capture_semaphore
+    if _capture_semaphore is None:
+        _capture_semaphore = asyncio.Semaphore(_CAPTURE_CONCURRENCY)
+    return _capture_semaphore
 
 
 def _format_trajectory_block(trajectories: list) -> str:
@@ -89,12 +104,16 @@ async def retrieve_trajectory_context(
         from memory.trajectory_store import get_trajectory_store
 
         store = await get_trajectory_store()
-        similar = await store.find_similar_trajectories(
-            message,
-            top_k=top_k,
-            min_reward=_MIN_REWARD,
-            tenant_id=tenant_id or None,
-            user_id=user_id or None,
+        # Bounded so a cold/slow collection can't delay first token (review #11261).
+        similar = await asyncio.wait_for(
+            store.find_similar_trajectories(
+                message,
+                top_k=top_k,
+                min_reward=_MIN_REWARD,
+                tenant_id=tenant_id or None,
+                user_id=user_id or None,
+            ),
+            timeout=_RETRIEVE_TIMEOUT_S,
         )
         if not similar:
             return ""
@@ -133,7 +152,7 @@ async def capture_chat_trajectory(
     if not assistant_response or not assistant_response.strip():
         return
     try:
-        async with _capture_semaphore:
+        async with _get_capture_semaphore():
             from judges.task_outcome_judge import TaskOutcomeJudge
             from memory.trajectory_store import get_trajectory_store
 

@@ -48,20 +48,6 @@ async def on_turn_complete(
         turn_number: Zero-based turn counter within the session.
         tenant_id: Optional tenant/org identifier for trajectory scoping (#11261).
     """
-    # #11261: store-after — score and capture this turn as a trajectory so future
-    # turns can retrieve it. Gated by SELF_IMPROVEMENT_ENABLED and fully non-fatal.
-    try:
-        from chat_workflow.trajectory_context import capture_chat_trajectory
-
-        await capture_chat_trajectory(
-            user_message=user_message,
-            assistant_response=assistant_response,
-            user_id=user_id or "",
-            tenant_id=tenant_id or "",
-            session_id=session_id,
-        )
-    except Exception as exc:  # noqa: BLE001 — fire-and-forget by contract
-        logger.debug("stop_hook: trajectory capture skipped (non-fatal): %s", exc)
     # Late imports keep this module free of circular deps at load time.
     # Test code may patch ``stop_hook.write_verbatim_task`` /
     # ``stop_hook.extract_facts_task`` by assigning to this module's namespace.
@@ -102,6 +88,22 @@ async def on_turn_complete(
             turn_number,
             exc,
         )
+
+    # #11261: store-after — score and capture this turn as a trajectory so future
+    # turns can retrieve it. Runs after the memory enqueues (a slow judge call must
+    # not delay durable writes). Gated by SELF_IMPROVEMENT_ENABLED and non-fatal.
+    try:
+        from chat_workflow.trajectory_context import capture_chat_trajectory
+
+        await capture_chat_trajectory(
+            user_message=user_message,
+            assistant_response=assistant_response,
+            user_id=user_id or "",
+            tenant_id=tenant_id or "",
+            session_id=session_id,
+        )
+    except Exception as exc:  # noqa: BLE001 — fire-and-forget by contract
+        logger.debug("stop_hook: trajectory capture skipped (non-fatal): %s", exc)
 
 
 __all__ = ["on_turn_complete"]
