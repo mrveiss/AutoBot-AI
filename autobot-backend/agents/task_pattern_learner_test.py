@@ -56,7 +56,8 @@ class TestTaskPatternLearner:
     @pytest.mark.asyncio
     async def test_learn_from_outcomes_triggers_synthesis(self, learner, sample_outcomes):
         mock_llm = AsyncMock()
-        mock_llm.chat_completion = AsyncMock(
+        # The learner calls ``llm.chat(...)`` (not chat_completion).
+        mock_llm.chat = AsyncMock(
             return_value=json.dumps(
                 {
                     "best_approach": "use step-by-step",
@@ -83,7 +84,7 @@ class TestTaskPatternLearner:
     @pytest.mark.asyncio
     async def test_learn_from_outcomes_fallback_on_llm_error(self, learner, sample_outcomes):
         mock_llm = AsyncMock()
-        mock_llm.chat_completion = AsyncMock(side_effect=Exception("LLM down"))
+        mock_llm.chat = AsyncMock(side_effect=Exception("LLM down"))
         learner._llm = mock_llm
 
         mock_redis = AsyncMock()
