@@ -76,6 +76,15 @@ def _get_detector():
     return _detector
 
 
+def _caller_tenant(user: Any) -> str:
+    """Tenant (org) scope for the authenticated caller (GH#11071).
+
+    Learned-strategy/outcome reads and writes are keyed by this so one org can
+    never see or mutate another org's learned state through the API.
+    """
+    return str((user or {}).get("org_id") or "")
+
+
 @router.get(
     "/{agent_id}/outcomes",
     response_model=List[TaskOutcomeResponse],
@@ -90,12 +99,12 @@ async def get_agent_outcomes(
     agent_id: str,
     task_type: str | None = Query(None, description="Filter by task type"),
     limit: int = Query(20, ge=1, le=100),
-    _user: Any = Depends(get_current_user),
+    current_user: Any = Depends(get_current_user),
 ) -> List[TaskOutcomeResponse]:
     """Return recent task outcome records for an agent or task type."""
     judge = _get_judge()
     effective_type = task_type or agent_id
-    outcomes = await judge.get_outcomes(effective_type, limit=limit)
+    outcomes = await judge.get_outcomes(effective_type, limit=limit, tenant_id=_caller_tenant(current_user))
     return [TaskOutcomeResponse(**o.__dict__) for o in outcomes]
 
 
@@ -112,12 +121,12 @@ async def get_agent_outcomes(
 async def get_learned_strategies(
     agent_id: str,
     task_type: str | None = Query(None, description="Task type to retrieve"),
-    _user: Any = Depends(get_current_user),
+    current_user: Any = Depends(get_current_user),
 ) -> LearnedStrategyResponse | None:
     """Return the current learned best strategy for a given task type."""
     learner = _get_learner()
     effective_type = task_type or agent_id
-    strategy = await learner.get_learned_strategy(effective_type)
+    strategy = await learner.get_learned_strategy(effective_type, tenant_id=_caller_tenant(current_user))
     if not strategy:
         return None
     return LearnedStrategyResponse(**strategy.__dict__)
@@ -137,13 +146,15 @@ async def reset_agent_learning(
     agent_id: str,
     task_type: str | None = Query(None, description="Task type to reset"),
     _admin: bool = Depends(check_admin_permission),
+    current_user: Any = Depends(get_current_user),
 ) -> ResetLearningResponse:
     """Clear all learned outcomes and strategies for an agent or task type."""
     judge = _get_judge()
     learner = _get_learner()
     effective_type = task_type or agent_id
-    await judge.clear_outcomes(effective_type)
-    await learner.clear_strategy(effective_type)
+    tenant_id = _caller_tenant(current_user)
+    await judge.clear_outcomes(effective_type, tenant_id=tenant_id)
+    await learner.clear_strategy(effective_type, tenant_id=tenant_id)
     return ResetLearningResponse(
         success=True,
         message=f"Learning state cleared for task type '{effective_type}'",
@@ -169,14 +180,14 @@ async def export_agent_knowledge(
         le=1.0,
         description="Only export failure patterns at or above this confidence",
     ),
-    _user: Any = Depends(get_current_user),
+    current_user: Any = Depends(get_current_user),
 ) -> LearnedKnowledgeExport:
     """Render an agent's opaque learned knowledge as a human-reviewable document (GH#11151)."""
     learner = _get_learner()
     detector = _get_detector()
     effective_type = task_type or agent_id
 
-    strategy = await learner.get_learned_strategy(effective_type)
+    strategy = await learner.get_learned_strategy(effective_type, tenant_id=_caller_tenant(current_user))
     strategy_resp = LearnedStrategyResponse(**strategy.__dict__) if strategy else None
 
     patterns = await detector.list_known_patterns(limit=_EXPORT_PATTERN_LIMIT)
@@ -214,6 +225,7 @@ async def import_agent_knowledge(
     agent_id: str,
     payload: LearnedKnowledgeImport,
     _admin: bool = Depends(check_admin_permission),
+    current_user: Any = Depends(get_current_user),
 ) -> KnowledgeImportResponse:
     """Persist a reviewer-curated strategy, sanitizing untrusted free-text first (GH#11151)."""
     from agents.task_pattern_learner import LearnedStrategy, TaskPatternLearner
@@ -232,7 +244,7 @@ async def import_agent_knowledge(
         confidence=payload.confidence,
         failure_patterns=[_sanitize_injected(fp, _IMPORT_TEXT_MAX) for fp in payload.failure_patterns],
     )
-    await learner.save_strategy(strategy)
+    await learner.save_strategy(strategy, tenant_id=_caller_tenant(current_user))
     return KnowledgeImportResponse(
         success=True,
         message=f"Imported curated strategy for task type '{strategy.task_type}'",

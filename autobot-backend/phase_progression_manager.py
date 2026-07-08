@@ -728,33 +728,19 @@ class PhaseProgressionManager:
     async def _enable_self_improvement(self):
         """Enable self-improvement when idle (Issue #930).
 
-        Reviews recent low-score task outcomes and triggers pattern learning
-        so future tasks benefit from accumulated execution history.
+        GH#11071: the previous implementation swept ``get_all_task_types()`` and
+        re-learned globally — but the learned-strategy stores are now
+        tenant-scoped, so a tenant-less global sweep would read/write across org
+        boundaries (the exact cross-tenant bleed being closed) and now fails
+        closed. Per-tenant learning is already driven online by the tenant-aware
+        writers (``WorkflowRunner._record_outcome_for_learning`` and the LLC
+        diary writer), so this idle hook no longer runs a global sweep. A
+        per-tenant background re-learn pass is tracked as a follow-up.
         """
-        from agents.task_pattern_learner import TaskPatternLearner
-        from judges.task_outcome_judge import TaskOutcomeJudge
-
-        judge = TaskOutcomeJudge()
-        learner = TaskPatternLearner()
-        try:
-            task_types = await learner.get_all_task_types()
-            for task_type in task_types:
-                outcomes = await judge.get_outcomes(task_type, limit=20)
-                if not outcomes:
-                    continue
-                outcome_dicts = [o.__dict__ for o in outcomes]
-                low_score_count = sum(1 for o in outcome_dicts if o.get("score", 1.0) < 0.6)
-                if low_score_count > 0:
-                    await learner.learn_from_outcomes(task_type, outcome_dicts)
-                    logger.info(
-                        "Self-improvement: learned from %d outcomes " "(%d low-score) for task type '%s'",
-                        len(outcome_dicts),
-                        low_score_count,
-                        task_type,
-                    )
-        except Exception as exc:
-            logger.error("Self-improvement activation error: %s", exc)
-        logger.info("🧠 Self-improvement capability enabled and active")
+        logger.info(
+            "🧠 Self-improvement active — per-tenant learning runs online via the "
+            "tenant-scoped outcome writers (global idle sweep retired, GH#11071)"
+        )
 
     async def _enable_error_recovery(self):
         """Enable error recovery from failed subtasks"""

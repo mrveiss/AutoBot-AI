@@ -238,6 +238,9 @@ class AgentDiaryKbWriter:
             snap = context_snapshot or {}
             task_type = snap.get("task_type", "llc_heartbeat")
             outcomes = snap.get("outcomes", [])
+            # GH#11071: scope learning to the owning company/tenant; absent → the
+            # learner fails closed (skips) rather than writing a shared strategy.
+            tenant_id = str(snap.get("tenant_id") or snap.get("company_id") or "")
 
             if not outcomes:
                 return
@@ -245,7 +248,7 @@ class AgentDiaryKbWriter:
             from agents.task_pattern_learner import TaskPatternLearner
 
             learner = TaskPatternLearner()
-            strategy = await learner.learn_from_outcomes(task_type, outcomes)
+            strategy = await learner.learn_from_outcomes(task_type, outcomes, tenant_id=tenant_id)
             if strategy is None:
                 return
 

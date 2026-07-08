@@ -659,7 +659,9 @@ class Orchestrator(_DeprecatedRequestMixin):
             if task_type:
                 learner = TaskPatternLearner()
                 task_type = learner.normalize_task_type(task_type)
-                strategy = await learner.get_learned_strategy(task_type)
+                # GH#11071: scope the learned-strategy read to the caller's tenant so
+                # one org's synthesized template can't be injected into another's plan.
+                strategy = await learner.get_learned_strategy(task_type, tenant_id=tenant_id)
                 if strategy and strategy.confidence > LEARNED_STRATEGY_CONFIDENCE and strategy.best_prompt_template:
                     result["learned_prompt_template"] = strategy.best_prompt_template
                     logger.info(
@@ -710,11 +712,15 @@ class Orchestrator(_DeprecatedRequestMixin):
             from judges.task_outcome_judge import TaskOutcomeJudge
 
             judge = TaskOutcomeJudge()
+            # GH#11071: scope planning-outcome persistence to the plan's tenant; the
+            # score is returned regardless, but the write stays tenant-isolated.
+            tenant_id = str((getattr(plan, "metadata", None) or {}).get("tenant_id") or "")
             result = await judge.evaluate_task_outcome(
                 task_type="planning",
                 goal=goal,
                 output=str(plan.tasks),
                 strategy_used=str(plan.execution_strategy),
+                tenant_id=tenant_id,
             )
             return result.overall_score
         except Exception as exc:
