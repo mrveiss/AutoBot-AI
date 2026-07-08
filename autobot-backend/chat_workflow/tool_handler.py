@@ -1888,13 +1888,19 @@ class ToolHandlerMixin:
             )
 
     def _validate_browser_params(self, tool_name: str, params: dict[str, Any]) -> str | None:
-        """Validate browser tool params. Returns error message or None. #1368."""
+        """Validate browser tool params. Returns a user-friendly block notice or None.
+
+        #1368 / #10914: a disallowed URL or unsafe script is an *expected* policy
+        outcome, so the returned text reads as a friendly notice (rendered as a
+        normal assistant message, not a scary error banner — see _handle_browser_tool).
+        """
         from api.browser_mcp import is_script_safe, is_url_allowed
 
         if tool_name == "navigate" and not is_url_allowed(params.get("url", "")):
-            return f"URL not allowed: {params.get('url', '')}"
+            url = params.get("url", "")
+            return f"I can't open that link ({url}) — it isn't on the list of sites I'm allowed to browse."
         if tool_name == "evaluate" and not is_script_safe(params.get("script", "")):
-            return "JavaScript blocked by security policy"
+            return "I can't run that browser action — it was blocked by the security policy."
         return None
 
     async def _handle_browser_tool(
@@ -1927,11 +1933,15 @@ class ToolHandlerMixin:
         try:
             validation_error = self._validate_browser_params(tool_name, params)
             if validation_error:
+                # Keep status="error" so the agent loop still knows the tool didn't run.
                 execution_results.append({"tool": tool_name, "status": "error", "error": validation_error})
+                # #10914: a disallowed URL / unsafe script is an expected policy block,
+                # not a system failure — surface it to the user as a normal assistant
+                # notice (tool_result) so the UI doesn't render a scary red "Error:" banner.
                 yield WorkflowMessage(
-                    type="error",
+                    type="tool_result",
                     content=validation_error,
-                    metadata={"tool": tool_name, "error": True},
+                    metadata={"tool": tool_name, "blocked": True},
                 )
                 return
 
