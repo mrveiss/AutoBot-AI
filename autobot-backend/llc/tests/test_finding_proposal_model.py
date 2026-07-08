@@ -27,6 +27,8 @@ def test_finding_proposal_has_all_columns():
         "status",
         "work_item_id",
         "dismiss_reason",
+        "created_at",
+        "updated_at",
     ]
     for col in expected:
         assert col in cols, f"Missing column: {col}"

@@ -51,7 +51,7 @@ class LLCFindingProposal(Base):
         sa.Enum(
             FindingProposalStatus,
             name="findingproposalstatus",
-            create_type=True,
+            create_type=False,
             values_callable=pg_enum_values,
         ),
         nullable=False,
