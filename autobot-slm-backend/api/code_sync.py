@@ -799,6 +799,86 @@ async def _install_pip_deps_for_component(component: str, steps: List[str]) -> N
         steps.append(f"pip: install error: {exc}")
 
 
+# Components whose deployed tree ships Alembic migrations, keyed to the
+# alembic.ini path RELATIVE to the deployed dir. `upgrade heads` (plural)
+# tolerates multiple heads from parallel branch migrations.
+_COMPONENT_MIGRATION_CONFIG: Dict[str, str] = {
+    "autobot-backend": "migrations/alembic.ini",
+}
+
+
+def _load_env_file(env_path: Path) -> Dict[str, str]:
+    """Parse a deployed KEY=VALUE .env into a dict (for subprocess env)."""
+    env: Dict[str, str] = {}
+    if not env_path.exists():
+        return env
+    for raw in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        env[key.strip()] = value.strip().strip('"').strip("'")
+    return env
+
+
+async def _run_alembic_migrations(component: str, deployed_dir: str, steps: List[str]) -> None:
+    """Apply Alembic migrations (`upgrade heads`) so the schema matches synced code (#11255).
+
+    Runs BEFORE the service restart. Non-fatal to the sync, but surfaces failures
+    loudly in the step log + backend logs so schema drift can't hide (code-sync
+    previously skipped this entirely → Company OS 500'd on unapplied columns).
+    """
+    cfg_rel = _COMPONENT_MIGRATION_CONFIG.get(component)
+    paths = _COMPONENT_PIP_PATHS.get(component)
+    if cfg_rel is None or paths is None:
+        return
+    _, pip_bin = paths
+    alembic_bin = str(Path(pip_bin).with_name("alembic"))
+    cfg_path = str(Path(deployed_dir) / cfg_rel)
+    if not Path(alembic_bin).exists() or not Path(cfg_path).exists():
+        steps.append(f"alembic: binary or config missing for {component} — skipped")
+        return
+
+    # alembic env.py resolves DATABASE_URL from the environment; load the
+    # component's deployed .env so migrations hit the right database.
+    env = dict(os.environ)
+    env.update(_load_env_file(Path(deployed_dir) / ".env"))
+    env.setdefault("PYTHONPATH", deployed_dir)
+
+    steps.append(f"alembic: upgrade heads ({cfg_rel})")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            alembic_bin,
+            "-c",
+            cfg_path,
+            "upgrade",
+            "heads",
+            cwd=deployed_dir,
+            env=env,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+        out = stdout.decode(errors="replace") if stdout else ""
+        if proc.returncode == 0:
+            logger.info("drift resolve: alembic upgrade ok for %s", component)
+            steps.append("alembic: upgrade succeeded")
+        else:
+            logger.error(
+                "drift resolve: alembic upgrade FAILED (%d) for %s: %s",
+                proc.returncode,
+                component,
+                out[-400:],
+            )
+            steps.append(f"alembic: upgrade FAILED (rc={proc.returncode}): {out[-200:]}")
+    except asyncio.TimeoutError:
+        logger.error("drift resolve: alembic upgrade timed out for %s", component)
+        steps.append("alembic: upgrade timed out after 300s")
+    except Exception as exc:
+        logger.error("drift resolve: alembic upgrade error for %s: %s", component, exc)
+        steps.append(f"alembic: upgrade error: {exc}")
+
+
 async def _build_npm_frontend_for_component(component: str, steps: List[str]) -> None:
     """Run npm ci + npm run build for a frontend component (#9982).
 
@@ -969,6 +1049,11 @@ async def _run_post_sync_steps(
 
     if component in _COMPONENT_PIP_PATHS:
         await _install_pip_deps_for_component(component, steps)
+        # Apply DB migrations BEFORE restart so the app starts against the
+        # correct schema. Code-sync previously skipped Alembic, so a merge that
+        # added columns 500'd (e.g. Company OS) until migrations were run by
+        # hand — the update procedure must include them (#11255).
+        await _run_alembic_migrations(component, deployed_dir, steps)
         # Restore symlink BEFORE restart so the process imports the correct shared
         # code the moment it starts (#10912).
         await _ensure_autobot_shared_symlink(component, steps)
