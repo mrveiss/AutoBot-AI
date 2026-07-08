@@ -78,6 +78,7 @@ All docs in `docs/developer/`. Every doc listed here; missing entry = orphan or 
 
 | Doc | What it covers |
 |---|---|
+| [[AGENT_MATURITY_LEVELS]] | One agent → specialists → orchestrator → automated team, mapped to code |
 | [[AGENT_OPTIMIZATION]] | Agent performance optimisation |
 | [[HEARTBEAT_SYSTEM]] | LLC heartbeat and quota monitoring |
 | [[THINKING_TOOLS_CONFIGURATION]] | Think Tool configuration |
