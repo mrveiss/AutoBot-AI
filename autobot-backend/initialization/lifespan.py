@@ -2072,6 +2072,14 @@ def create_lifespan_manager():
         configure_logging()
         logger.info("🚀 AutoBot Backend starting up...")
 
+        # #11279: run the non-fatal startup file-integrity check (mirrors the
+        # autobot-slm-backend lifespan wiring). No-op unless
+        # AUTOBOT_INTEGRITY_CHECK_ENABLED=1; logs a WARNING on any manifest
+        # mismatch and never raises, so it can't block startup.
+        from autobot_shared.integrity_manifest import verify_integrity_at_startup
+
+        verify_integrity_at_startup()
+
         # Create bounded thread pool executor to prevent thread explosion
         # This replaces the default unbounded asyncio executor
         _executor = ThreadPoolExecutor(max_workers=MAX_WORKER_THREADS, thread_name_prefix="autobot_worker")
