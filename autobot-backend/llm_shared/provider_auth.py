@@ -276,7 +276,15 @@ class OAuthAuth(ProviderAuthStrategy):
         return await self._refresh(session, token_data, refresh_token)
 
     async def _refresh(self, session: Any, old_data: dict, refresh_token: str) -> str:
+        from autobot_shared.url_safety import get_oauth_allowed_hosts, require_allowlisted_https  # noqa: PLC0415
         from knowledge.connectors.oauth_flow import refresh_access_token  # noqa: PLC0415
+
+        try:
+            require_allowlisted_https(self._token_url, get_oauth_allowed_hosts())
+        except ValueError as exc:
+            raise ProviderAuthError(
+                f"OAuth refresh blocked: unsafe token_url for {self._provider_name!r}: {exc}"
+            ) from exc
 
         logger.info("Refreshing OAuth token for provider %s", self._provider_name)
         try:
