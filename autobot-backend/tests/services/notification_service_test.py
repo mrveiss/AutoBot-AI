@@ -360,12 +360,21 @@ class TestSendWebhook:
     @pytest.mark.asyncio
     async def test_raises_on_4xx_response(self):
         import aiohttp as _aiohttp
+        from multidict import CIMultiDict
+        from yarl import URL
 
         svc = self._svc()
         mock_resp = AsyncMock()
         mock_resp.status = 400
         mock_resp.text = AsyncMock(return_value="Bad Request")
-        mock_resp.raise_for_status = MagicMock(side_effect=_aiohttp.ClientResponseError(None, None, status=400))
+        # Build a well-formed ClientResponseError: passing request_info=None makes
+        # str(exc) raise (it reads request_info.real_url), which crashed the
+        # except-block logger.error() before the real re-raise reached the caller.
+        _req_url = URL("https://example.com/hook")
+        _req_info = _aiohttp.RequestInfo(_req_url, "POST", CIMultiDict(), _req_url)
+        mock_resp.raise_for_status = MagicMock(
+            side_effect=_aiohttp.ClientResponseError(_req_info, (), status=400, message="Bad Request")
+        )
         mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
         mock_resp.__aexit__ = AsyncMock(return_value=False)
 
