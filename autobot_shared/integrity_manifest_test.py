@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 
-
 from autobot_shared.integrity_manifest import (
     compute_manifest,
     verify_integrity_at_startup,
