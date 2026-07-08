@@ -36,7 +36,9 @@ def _discover_scheduler_files() -> list[str]:
     """Return background scheduler implementation paths relative to the backend root.
 
     Excludes __pycache__, test files (test_*.py and *_test.py), api/ endpoint
-    modules, and the registry file itself — only actual scheduler implementations.
+    modules, Alembic migrations (migrations/versions/*scheduler*.py are DB
+    migrations, not scheduler implementations), and the registry file itself —
+    only actual scheduler implementations.
     """
     return [
         str(p.relative_to(_BACKEND_ROOT))
@@ -45,6 +47,7 @@ def _discover_scheduler_files() -> list[str]:
         and not p.name.startswith("test_")
         and not p.name.endswith("_test.py")
         and "autobot-backend/api/" not in str(p).replace("\\", "/")
+        and "/migrations/" not in str(p).replace("\\", "/")
         and p.resolve() != _REGISTRY_PATH.resolve()
     ]
 

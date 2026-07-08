@@ -125,4 +125,28 @@ REGISTRY: list[ScheduledJob] = [
             "ssot_config.knowledge_sync_queue_prune_schedule (crontab)."
         ),
     ),
+    ScheduledJob(
+        name="LLCHeartbeatScheduler",
+        interval_seconds=5,
+        owner_file="llc/scheduler/heartbeat_scheduler.py",
+        runtime="asyncio_per_worker",
+        description=(
+            "Preferred agent-heartbeat dispatcher (GH#8225). Polls the "
+            "llc:heartbeat:schedule Redis sorted set every 5 s and fires due "
+            "agent heartbeat runs. Started in initialization/lifespan."
+            "_init_heartbeat_scheduler; the legacy services/heartbeat_scheduler.py "
+            "is the fallback when the LLC package is unavailable."
+        ),
+    ),
+    ScheduledJob(
+        name="LLCRoutineScheduler",
+        interval_seconds=5,
+        owner_file="llc/scheduler/routine_scheduler.py",
+        runtime="asyncio_per_worker",
+        description=(
+            "Fires cron-based routines (GH#8229). Loads ACTIVE routines into the "
+            "llc:heartbeat:schedule sorted set and polls every 5 s for due entries. "
+            "Started in initialization/lifespan._init_llc_routine_scheduler."
+        ),
+    ),
 ]
