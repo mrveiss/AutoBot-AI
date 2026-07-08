@@ -38,6 +38,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shlex
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -56,6 +57,9 @@ _DISK_QUOTA_MB: int = int(os.environ.get("AUTOBOT_WORKSPACE_DISK_MB", "2048"))
 _IDLE_EXPIRY_SECONDS: int = int(os.environ.get("AUTOBOT_WORKSPACE_IDLE_SECONDS", str(4 * 3600)))
 _WORKSPACE_MEMORY_LIMIT: str = os.environ.get("AUTOBOT_WORKSPACE_MEM_LIMIT", "512m")
 _WORKSPACE_CPU_QUOTA: int = int(os.environ.get("AUTOBOT_WORKSPACE_CPU_QUOTA", "100000"))
+# GH#11059: cap process count so a fork-bomb in the workspace can't exhaust host
+# PIDs. Universally supported by the Linux pids cgroup controller.
+_WORKSPACE_PIDS_LIMIT: int = int(os.environ.get("AUTOBOT_WORKSPACE_PIDS_LIMIT", "512"))
 _WORKSPACE_IMAGE: str = os.environ.get("AUTOBOT_WORKSPACE_IMAGE", "alpine:3.18")
 _CONTAINER_PREFIX: str = "autobot-workspace-"
 _REDIS_KEY_PREFIX: str = "autobot:workspace:"
@@ -204,7 +208,9 @@ class TaskWorkspaceManager:
         rejected before any Docker call is made.
         """
         _validate_task_id(task_id)
-        cmd_list = command if isinstance(command, list) else command.split()
+        # GH#11059: shlex.split (not str.split) so quoted args tokenize correctly
+        # and the base-command denylist check sees the real argv[0].
+        cmd_list = command if isinstance(command, list) else shlex.split(command)
         if not validate_exec_command(cmd_list):
             logger.warning("workspace: exec blocked for task=%s cmd=%s", task_id, cmd_list)
             return ExecResult(
@@ -470,6 +476,7 @@ def _apply_sandbox_security(task_id: str, volume_name: str) -> dict[str, Any]:
         "memswap_limit": _WORKSPACE_MEMORY_LIMIT,
         "cpu_quota": _WORKSPACE_CPU_QUOTA,
         "cpu_period": 100000,
+        "pids_limit": _WORKSPACE_PIDS_LIMIT,  # GH#11059: fork-bomb / host-PID exhaustion guard
         "volumes": {volume_name: {"bind": "/workspace", "mode": "rw"}},
         "working_dir": "/workspace",
         "environment": {
