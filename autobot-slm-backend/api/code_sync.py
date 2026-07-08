@@ -497,7 +497,18 @@ async def resolve_drift(
         )
 
     # --- Post-sync: install deps / rebuild / restart so synced code goes live (#9982) ---
-    deps_changed, post_steps = await _run_post_sync_steps(request.component, source_dir, deployed_dir)
+    deps_changed, post_steps, pip_ok = await _run_post_sync_steps(request.component, source_dir, deployed_dir)
+
+    if not pip_ok:
+        return DriftResolveResponse(
+            success=False,
+            component=request.component,
+            message="Resynced from code_source but pip install failed — see post_steps",
+            source_dir=source_dir,
+            deployed_dir=deployed_dir,
+            deps_changed=deps_changed,
+            post_steps=post_steps,
+        )
 
     return DriftResolveResponse(
         success=True,
@@ -732,6 +743,22 @@ _COMPONENT_PIP_PATHS: Dict[str, Tuple[str, str]] = {
     ),
 }
 
+# Target CPython interpreter per backend component (#11323).
+# NPU worker uses py3.11 (OpenVINO ABI); every other Python service uses py3.14.
+# This is the single authoritative mapping — do not hardcode elsewhere.
+_COMPONENT_PYTHON_TARGET: Dict[str, str] = {
+    "autobot-backend": "python3.14",
+    "autobot-slm-backend": "python3.14",
+    "autobot-npu-worker": "python3.11",
+}
+
+# Deployed path for the top-level constraints/ dir (#11322).
+# `autobot-backend/requirements.txt` uses `-c ../constraints/shared.txt` so the
+# relative path resolves to /opt/autobot/constraints/ at runtime.  Code-sync
+# only rsyncs component subdirs, so the constraints dir must be deployed
+# explicitly before pip runs.
+_CONSTRAINTS_SOURCE_SUBDIR: str = "constraints"
+
 # Maps component name → deployed frontend directory for npm rebuild.
 _COMPONENT_FRONTEND_DIRS: Dict[str, str] = {
     "autobot-frontend": "/opt/autobot/autobot-frontend",
@@ -767,19 +794,122 @@ _COMPONENT_SERVICES: Dict[str, List[str]] = {
 }
 
 
-async def _install_pip_deps_for_component(component: str, steps: List[str]) -> None:
+async def _deploy_constraints_dir(source_root: str, steps: List[str]) -> None:
+    """Rsync top-level constraints/ to /opt/autobot/constraints/ before pip (#11322).
+
+    autobot-backend/requirements.txt uses `-c ../constraints/shared.txt` so the
+    relative reference resolves to /opt/autobot/constraints/shared.txt at deploy
+    time. Code-sync only rsyncs component subdirs, so this helper deploys the
+    constraints dir explicitly — preventing the silent pip failure that occurred
+    when the file was absent.
+    """
+    src = f"{source_root}/{_CONSTRAINTS_SOURCE_SUBDIR}/"
+    dst = f"/opt/autobot/{_CONSTRAINTS_SOURCE_SUBDIR}/"
+    if not Path(src).exists():
+        steps.append(f"constraints: source {src} not found — skipped")
+        return
+    steps.append(f"constraints: deploying {src} -> {dst}")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "rsync",
+            "-avz",
+            "--delete",
+            src,
+            dst,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        _, _ = await asyncio.wait_for(proc.communicate(), timeout=30.0)
+        if proc.returncode == 0:
+            steps.append("constraints: deployed ok")
+        else:
+            steps.append(f"constraints: rsync failed (rc={proc.returncode})")
+    except Exception as exc:
+        steps.append(f"constraints: deploy error: {exc}")
+
+
+async def _ensure_venv_python(component: str, steps: List[str]) -> None:
+    """Recreate the venv if its Python version doesn't match the target (#11323).
+
+    Mirrors the ensure_venv_version Ansible role: runs `<venv>/bin/python --version`,
+    compares against _COMPONENT_PYTHON_TARGET, and if mismatched removes the venv
+    so the subsequent `pythonX.Y -m venv` call rebuilds it on the right interpreter.
+    """
+    target = _COMPONENT_PYTHON_TARGET.get(component)
+    paths = _COMPONENT_PIP_PATHS.get(component)
+    if target is None or paths is None:
+        return
+    _, pip_bin = paths
+    venv_python = str(Path(pip_bin).parent / "python")
+    if not Path(venv_python).exists():
+        steps.append(f"venv: {venv_python} missing — will create with {target}")
+        await _recreate_venv(component, target, pip_bin, steps)
+        return
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            venv_python,
+            "--version",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10.0)
+        version_out = stdout.decode(errors="replace").strip() if stdout else ""
+        expected_fragment = target.replace("python", "")  # "3.14" or "3.11"
+        if expected_fragment not in version_out:
+            steps.append(f"venv: mismatch (have '{version_out}', need {expected_fragment}) — recreating")
+            venv_dir = str(Path(pip_bin).parents[1])
+            import shutil
+
+            shutil.rmtree(venv_dir, ignore_errors=True)
+            await _recreate_venv(component, target, pip_bin, steps)
+        else:
+            steps.append(f"venv: python version ok ({version_out})")
+    except Exception as exc:
+        logger.error("drift resolve: venv version check failed for %s: %s", component, exc)
+        steps.append(f"venv: version check error: {exc}")
+
+
+async def _recreate_venv(component: str, python_bin: str, pip_bin: str, steps: List[str]) -> None:
+    """Create a fresh venv using the target python interpreter (#11323)."""
+    venv_dir = str(Path(pip_bin).parents[1])
+    steps.append(f"venv: creating with {python_bin} at {venv_dir}")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            python_bin,
+            "-m",
+            "venv",
+            venv_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120.0)
+        if proc.returncode == 0:
+            logger.info("drift resolve: recreated venv for %s with %s", component, python_bin)
+            steps.append(f"venv: recreated ok ({python_bin})")
+        else:
+            out = stdout.decode(errors="replace")[:200] if stdout else ""
+            logger.error("drift resolve: venv create failed (%d) for %s: %s", proc.returncode, component, out)
+            steps.append(f"venv: create failed (rc={proc.returncode}): {out}")
+    except Exception as exc:
+        logger.error("drift resolve: venv create error for %s: %s", component, exc)
+        steps.append(f"venv: create error: {exc}")
+
+
+async def _install_pip_deps_for_component(component: str, steps: List[str]) -> bool:
     """Install Python deps from the component's requirements.txt into its venv (#9982).
 
     Unconditional — pip is fast when nothing changed (same rationale as #1603).
     Appends human-readable step notes to *steps*.
+    Returns True on success, False when pip exits non-zero so callers can surface
+    the failure (previously the non-zero rc was swallowed — #11322).
     """
     paths = _COMPONENT_PIP_PATHS.get(component)
     if paths is None:
-        return
+        return True
     req_path, pip_bin = paths
     if not Path(req_path).exists():
         steps.append(f"pip: no requirements.txt at {req_path} — skipped")
-        return
+        return True
     steps.append(f"pip: installing {req_path} into {Path(pip_bin).parent}")
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -795,16 +925,19 @@ async def _install_pip_deps_for_component(component: str, steps: List[str]) -> N
         if proc.returncode == 0:
             logger.info("drift resolve: pip install ok for %s", component)
             steps.append("pip: install succeeded")
-        else:
-            out = stdout.decode(errors="replace")[:300] if stdout else ""
-            logger.error("drift resolve: pip install failed (%d) for %s: %s", proc.returncode, component, out)
-            steps.append(f"pip: install failed (rc={proc.returncode}): {out[:150]}")
+            return True
+        out = stdout.decode(errors="replace")[:300] if stdout else ""
+        logger.error("drift resolve: pip install failed (%d) for %s: %s", proc.returncode, component, out)
+        steps.append(f"pip: install failed (rc={proc.returncode}): {out[:150]}")
+        return False
     except asyncio.TimeoutError:
         logger.error("drift resolve: pip install timed out for %s", component)
         steps.append("pip: install timed out after 300s")
+        return False
     except Exception as exc:
         logger.error("drift resolve: pip install error for %s: %s", component, exc)
         steps.append(f"pip: install error: {exc}")
+        return False
 
 
 # Components whose deployed tree ships Alembic migrations, keyed to the
@@ -1034,21 +1167,22 @@ async def _run_post_sync_steps(
     component: str,
     source_dir: str,
     deployed_dir: str,
-) -> Tuple[bool, List[str]]:
+) -> Tuple[bool, List[str], bool]:
     """Run dep-install / rebuild / restart after a per-component rsync (#9982).
 
-    Returns (deps_changed, steps_log) where deps_changed mirrors the
-    _compute_deps_changed check (requirements.txt / package-lock.json hash delta)
-    detected BEFORE the rsync overwrote the deployed copy — but here we check
-    post-rsync to reflect what the operator sees after the sync.
+    Returns (deps_changed, steps_log, pip_ok).
+    pip_ok is False when pip exits non-zero so resolve_drift can surface the
+    failure via success=False rather than silently returning success=True (#11322).
 
     Component routing:
-      - Python backend (autobot-backend, autobot-slm-backend): pip install +
-        symlink restore (#10912) + restart
+      - Python backend (autobot-backend, autobot-slm-backend):
+          constraints deploy (#11322) + venv version check (#11323) +
+          pip install + symlink restore (#10912) + alembic + restart
       - Frontend (autobot-frontend, autobot-slm-frontend): npm ci + build + nginx reload
       - autobot_shared: restore BOTH backends' symlinks (#10912) + restart dependents
     """
     steps: List[str] = []
+    pip_ok = True
 
     # Compute deps_changed post-rsync (source == deployed now; any prior delta
     # is gone, so this is always False after a successful rsync — but we check
@@ -1057,7 +1191,12 @@ async def _run_post_sync_steps(
     deps_changed = await _compute_deps_changed(component)
 
     if component in _COMPONENT_PIP_PATHS:
-        await _install_pip_deps_for_component(component, steps)
+        # Deploy constraints dir so `-c ../constraints/shared.txt` resolves (#11322).
+        source_root = str(Path(source_dir).parent)
+        await _deploy_constraints_dir(source_root, steps)
+        # Recreate venv if its Python version doesn't match the target (#11323).
+        await _ensure_venv_python(component, steps)
+        pip_ok = await _install_pip_deps_for_component(component, steps)
         # Apply DB migrations BEFORE restart so the app starts against the
         # correct schema. Code-sync previously skipped Alembic, so a merge that
         # added columns 500'd (e.g. Company OS) until migrations were run by
@@ -1080,7 +1219,7 @@ async def _run_post_sync_steps(
     else:
         steps.append(f"post-sync: no service or build step for {component}")
 
-    return deps_changed, steps
+    return deps_changed, steps, pip_ok
 
 
 async def _build_slm_frontend() -> None:
