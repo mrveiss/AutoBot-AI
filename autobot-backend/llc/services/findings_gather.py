@@ -17,6 +17,7 @@ Patch targets for tests:
 
 import asyncio
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ def _at_or_above(sev: str) -> tuple[str, ...]:
     try:
         idx = _SEVERITY_ORDER.index(sev)
     except ValueError:
+        logger.warning("gather_findings: unknown min_severity %r — keeping all findings", sev)
         return _SEVERITY_ORDER  # unknown severity → keep all
     return _SEVERITY_ORDER[: idx + 1]
 
@@ -73,7 +75,12 @@ async def gather_findings(project, min_severity: str, session) -> list[dict]:
     if status_val != "ready":
         raise ValueError(f"CodeSource {code_source_id!r} is not ready (status={status_val!r})")
 
-    raw = await _fetch_all_problems(code_source_id)
+    # Pass the source's checkout as source_root so the analytics query's
+    # file-existence filter (#2724) drops findings referencing files that no
+    # longer exist in THIS source — matching the /problems endpoint.
+    clone_path = getattr(source, "clone_path", None)
+    source_root = Path(clone_path) if clone_path else None
+    raw = await _fetch_all_problems(code_source_id, source_root)
     keep = set(_at_or_above(min_severity))
     filtered = [f for f in raw if f.get("severity", "").lower() in keep]
     _sev_rank = {s: i for i, s in enumerate(_SEVERITY_ORDER)}
@@ -96,12 +103,13 @@ async def _get_source(code_source_id: str):
     return await get_source(code_source_id)
 
 
-async def _fetch_all_problems(source_id: str) -> list[dict]:
+async def _fetch_all_problems(source_id: str, source_root: Path | None) -> list[dict]:
     """Lazy-import ChromaDB helpers and return all problems for *source_id*.
 
     Mirrors the /problems endpoint (stats.py):
       1. get_code_collection()  — sync, run in thread
-      2. _fetch_problems_from_chromadb(collection, problem_type=None, source_id=source_id)
+      2. _fetch_problems_from_chromadb(collection, problem_type=None, source_id=source_id,
+         source_root=source_root)  — source_root drives the file-existence filter (#2724)
     Returns an empty list when ChromaDB is unavailable.
     """
     from api.codebase_analytics.endpoints.stats import (  # noqa: PLC0415
@@ -113,4 +121,4 @@ async def _fetch_all_problems(source_id: str) -> list[dict]:
     if not collection:
         logger.warning("_fetch_all_problems: ChromaDB collection unavailable for source=%s", source_id)
         return []
-    return _fetch_problems_from_chromadb(collection, problem_type=None, source_id=source_id)
+    return _fetch_problems_from_chromadb(collection, problem_type=None, source_id=source_id, source_root=source_root)
