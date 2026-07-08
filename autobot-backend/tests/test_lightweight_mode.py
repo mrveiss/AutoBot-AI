@@ -78,15 +78,20 @@ class TestLightweightMode:
     @pytest.mark.asyncio
     async def test_prepare_llm_params_skips_rag_in_lightweight_mode(self):
         """Verify RAG is skipped when lightweight_mode=True."""
-        from chat_workflow.llm_handler import LLMHandler
+        from chat_workflow.llm_handler import LLMHandlerMixin
 
-        handler = LLMHandler()
+        # LLMHandlerMixin is mixed into ChatWorkflowManager; the test mocks every
+        # method it touches, so a bare instance exercises _prepare_llm_request_params
+        # in isolation (#11244 — class was renamed from the removed LLMHandler).
+        handler = LLMHandlerMixin.__new__(LLMHandlerMixin)
         handler.knowledge_service = MagicMock()
         handler._get_selected_model = MagicMock(return_value="test-model")
         handler._get_ollama_endpoint_for_model = MagicMock(return_value="http://test")
         handler._get_system_prompt = MagicMock(return_value="System prompt")
         handler._build_conversation_context = MagicMock(return_value="")
         handler._build_full_prompt = MagicMock(return_value="Full prompt")
+        # No SLM fleet endpoint in the unit test → fall back to the mocked endpoint.
+        handler._discover_ollama_from_slm = AsyncMock(return_value=None)
 
         mock_session = MagicMock()
         mock_session.session_id = "test-session"
@@ -124,9 +129,12 @@ class TestLightweightMode:
     @pytest.mark.asyncio
     async def test_prepare_llm_params_skips_memory_in_lightweight_mode(self):
         """Verify memory graph lookup is skipped when lightweight_mode=True."""
-        from chat_workflow.llm_handler import LLMHandler
+        from chat_workflow.llm_handler import LLMHandlerMixin
 
-        handler = LLMHandler()
+        # LLMHandlerMixin is mixed into ChatWorkflowManager; the test mocks every
+        # method it touches, so a bare instance exercises _prepare_llm_request_params
+        # in isolation (#11244 — class was renamed from the removed LLMHandler).
+        handler = LLMHandlerMixin.__new__(LLMHandlerMixin)
         handler.knowledge_service = None
         handler.memory_graph = MagicMock()
         handler._get_selected_model = MagicMock(return_value="test-model")
@@ -134,6 +142,8 @@ class TestLightweightMode:
         handler._get_system_prompt = MagicMock(return_value="System prompt")
         handler._build_conversation_context = MagicMock(return_value="")
         handler._build_full_prompt = MagicMock(return_value="Full prompt")
+        # No SLM fleet endpoint in the unit test → fall back to the mocked endpoint.
+        handler._discover_ollama_from_slm = AsyncMock(return_value=None)
 
         mock_session = MagicMock()
         mock_session.session_id = "test-session"
