@@ -59,6 +59,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30  # #11077: fail fast (self-hosted); not GitHub's 24h default
     # vue-tsc (the `type-check` and `check-ts-delta` steps) is near the default
     # V8 old-space ceiling on this project and intermittently OOMs
     # ("Reached heap limit … JavaScript heap out of memory"), flaking this
@@ -184,6 +185,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 20  # #11077: fail fast (self-hosted); not GitHub's 24h default
 
     steps:
       - name: Checkout code
@@ -228,6 +230,7 @@ jobs:
   build-test:
     name: Build Test
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30  # #11077: fail fast (self-hosted); not GitHub's 24h default
     # `changes` added so the dependency graph is consistent; build-test already
     # self-skips when unit-tests skips (path-untouched PRs).
     needs: [changes, unit-tests]
@@ -268,6 +271,7 @@ jobs:
   test-summary:
     name: Test Summary
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15  # #11077: fail fast (self-hosted); not GitHub's 24h default
     needs: [unit-tests, security-scan, build-test]
     if: always()
 
