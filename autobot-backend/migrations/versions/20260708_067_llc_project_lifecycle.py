@@ -6,8 +6,11 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
+# Merge migration: unifies the two dangling heads left by Phase 1 (#11129) —
+# 20260707_066 (project_code_source) and 20260701_066 (requires_approval_before)
+# both descended from 20260630_065, creating "Multiple head revisions". See #11253.
 revision: str = "20260708_067"
-down_revision: Union[str, None] = "20260707_066"
+down_revision: Union[str, Sequence[str], None] = ("20260707_066", "20260701_066")
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
