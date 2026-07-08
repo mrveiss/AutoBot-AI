@@ -62,6 +62,7 @@ class HardBlockError(RuntimeError):
             f"{HARDBLOCK_THRESHOLD:.2f} (risk={risk.value})"
         )
 
+
 # Issue #380: Pre-compiled regex patterns for sanitize_input()
 # These are called on every input sanitization, so pre-compilation is important
 _SANITIZE_COMMAND_RE = re.compile(r"COMMAND\s*:", re.IGNORECASE)

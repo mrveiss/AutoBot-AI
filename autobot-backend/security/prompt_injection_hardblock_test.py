@@ -20,10 +20,10 @@ import pytest
 
 from security.content_firewall import ContentFirewall, ContentSource, FirewallAction
 from security.prompt_injection_detector import (
+    _RISK_CONFIDENCE,
     HardBlockError,
     InjectionRisk,
     PromptInjectionDetector,
-    _RISK_CONFIDENCE,
 )
 
 # ---------------------------------------------------------------------------
