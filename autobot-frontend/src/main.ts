@@ -6,6 +6,7 @@ import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import App from './App.vue'
 import router from './router/index'
 import { createLogger } from '@/utils/debugUtils'
+import { isChunkLoadError } from '@/utils/chunkLoadError'
 
 const logger = createLogger('main');
 
@@ -111,9 +112,7 @@ app.config.errorHandler = (err, _instance, info) => {
 
   // Check if this is a chunk loading error
   const error = err as Error
-  if (error?.message?.includes('Loading chunk') ||
-      error?.message?.includes('ChunkLoadError') ||
-      error?.message?.includes('Loading CSS chunk')) {
+  if (isChunkLoadError(error)) {
     logger.warn('Chunk loading error detected, initiating cache clear...')
 
     // Import and use cache management

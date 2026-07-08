@@ -8,6 +8,7 @@
 import type { App } from 'vue'
 import rumAgent from '../utils/RumAgent'
 import { createLogger } from '@/utils/debugUtils'
+import { isChunkLoadError } from '@/utils/chunkLoadError'
 
 // Create scoped logger for errorHandler
 const logger = createLogger('errorHandler')
@@ -226,14 +227,16 @@ class GlobalErrorHandler {
   private getUnhandledRejectionMessage(reason: unknown): string {
     const message = (reason as { message?: unknown })?.message
     if (typeof message === 'string') {
+      // Check chunk failures first: a stale-deploy dynamic-import error also
+      // contains "Failed to fetch", so this must precede that generic branch.
+      if (isChunkLoadError(message)) {
+        return 'Application update detected. Please reload the page.'
+      }
       if (message.includes('Failed to fetch')) {
         return 'Connection failed. Please check your internet connection and try again.'
       }
       if (message.includes('NetworkError')) {
         return 'Network error occurred. Please try again.'
-      }
-      if (message.includes('ChunkLoadError')) {
-        return 'Application update detected. Please reload the page.'
       }
     }
 
@@ -242,7 +245,7 @@ class GlobalErrorHandler {
 
   private getJavaScriptErrorMessage(error: Error, _filename?: string, _lineno?: number): string {
     if (error?.message) {
-      if (error.message.includes('ChunkLoadError')) {
+      if (isChunkLoadError(error)) {
         return 'Application files failed to load. Please reload the page.'
       }
       if (error.message.includes('ResizeObserver loop limit exceeded')) {
