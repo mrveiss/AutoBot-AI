@@ -275,13 +275,14 @@ async def test_rag_query_graceful_failure(svc: CeoChatService) -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_via_llm_malformed_json(svc: CeoChatService) -> None:
-    """_resolve_via_llm falls back to 'clarify' on malformed LLM output."""
+    """_resolve_via_llm falls back to 'clarify' on malformed LLM output (both attempts)."""
     mock_response = MagicMock()
     mock_response.content = "NOT JSON"
+    mock_response.error = None
     mock_svc = MagicMock()
     mock_svc.chat = AsyncMock(return_value=mock_response)
 
-    with patch("llc.services.ceo_chat.get_llm_service", return_value=mock_svc, create=True):
+    with patch("llc.services.ceo_chat._llm_service_mod.get_llm_service", return_value=mock_svc):
         resolution = await svc._resolve_via_llm(
             message="hello",
             kb_chunks=[],
@@ -290,3 +291,121 @@ async def test_resolve_via_llm_malformed_json(svc: CeoChatService) -> None:
         )
 
     assert resolution["intent"] == "clarify"
+    # Friendly message — not a raw exception string.
+    assert "exception" not in resolution["summary"].lower()
+    assert resolution["summary"]
+
+
+# --------------------------------- _extract_json parser
+
+
+def test_extract_json_clean() -> None:
+    raw = '{"intent":"create_task","summary":"ok","entity":{}}'
+    result = CeoChatService._extract_json(raw)
+    assert result["intent"] == "create_task"
+
+
+def test_extract_json_think_block_stripped() -> None:
+    raw = "<think>I should parse this carefully.</think>\n" '{"intent":"create_task","summary":"ok","entity":{}}'
+    result = CeoChatService._extract_json(raw)
+    assert result["intent"] == "create_task"
+
+
+def test_extract_json_prose_wrapper() -> None:
+    raw = (
+        'Here is my answer:\n```json\n{"intent":"update_goal","summary":"raise target","entity":{"goal_id":"g1"}}\n```'
+    )
+    result = CeoChatService._extract_json(raw)
+    assert result["intent"] == "update_goal"
+
+
+def test_extract_json_think_plus_prose() -> None:
+    """Models that emit <think> blocks AND wrap in prose are handled correctly."""
+    raw = (
+        "<think>Let me think step by step.</think>\n"
+        "Sure! Here is the JSON:\n"
+        '{"intent":"record_decision","summary":"approved","entity":{}}\n'
+        "That should be all."
+    )
+    result = CeoChatService._extract_json(raw)
+    assert result["intent"] == "record_decision"
+
+
+def test_extract_json_no_object_raises() -> None:
+    import pytest as _pytest
+
+    with _pytest.raises((ValueError, Exception)):
+        CeoChatService._extract_json("no json here at all")
+
+
+# --------------------------------- _resolve_via_llm retry path
+
+
+@pytest.mark.asyncio
+async def test_resolve_via_llm_recovers_on_retry(svc: CeoChatService) -> None:
+    """First response has think block + prose; second attempt returns clean JSON."""
+    first = MagicMock()
+    first.content = "<think>thinking…</think>\nHere you go: some prose before the JSON"
+    first.error = None
+
+    second = MagicMock()
+    second.content = '{"intent":"create_task","summary":"Write Q3 report","entity":{"title":"Q3 report"}}'
+    second.error = None
+
+    mock_svc = MagicMock()
+    mock_svc.chat = AsyncMock(side_effect=[first, second])
+
+    with patch("llc.services.ceo_chat._llm_service_mod.get_llm_service", return_value=mock_svc):
+        result = await svc._resolve_via_llm(
+            message="Create a task to write the Q3 report",
+            kb_chunks=[],
+            company_name="TestCo",
+            conversation_id="verify",
+        )
+
+    assert result["intent"] == "create_task"
+    assert mock_svc.chat.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_resolve_via_llm_think_block_recovered_first_pass(svc: CeoChatService) -> None:
+    """Think block on first response — parser should extract JSON without needing retry."""
+    resp = MagicMock()
+    resp.content = (
+        "<think>I should figure out the intent.</think>"
+        '{"intent":"create_task","summary":"Draft Q3 report","entity":{"title":"Q3 report"}}'
+    )
+    resp.error = None
+    mock_svc = MagicMock()
+    mock_svc.chat = AsyncMock(return_value=resp)
+
+    with patch("llc.services.ceo_chat._llm_service_mod.get_llm_service", return_value=mock_svc):
+        result = await svc._resolve_via_llm(
+            message="Create a task to write the Q3 report",
+            kb_chunks=[],
+            company_name="TestCo",
+            conversation_id="verify",
+        )
+
+    assert result["intent"] == "create_task"
+    # Only one LLM call needed — parser succeeded first pass.
+    assert mock_svc.chat.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_resolve_via_llm_unknown_intent_becomes_clarify(svc: CeoChatService) -> None:
+    resp = MagicMock()
+    resp.content = '{"intent":"do_something_weird","summary":"x","entity":{}}'
+    resp.error = None
+    mock_svc = MagicMock()
+    mock_svc.chat = AsyncMock(return_value=resp)
+
+    with patch("llc.services.ceo_chat._llm_service_mod.get_llm_service", return_value=mock_svc):
+        result = await svc._resolve_via_llm(
+            message="Do something weird",
+            kb_chunks=[],
+            company_name="Acme",
+            conversation_id="t",
+        )
+
+    assert result["intent"] == "clarify"

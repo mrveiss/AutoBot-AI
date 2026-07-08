@@ -21,11 +21,16 @@ Resolution intents:
 
 import json
 import logging
+import re
 import uuid
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+
+import services.llm_service as _llm_service_mod
+from autobot_shared.ssot_config import config as _cfg
+from llm_shared.types import LLMType
 
 from ..models.ceo_chat import LLCCeoChatMessage, LLCCeoChatThread
 from .base import LLCServiceBase
@@ -37,9 +42,19 @@ _BOARD_SYSTEM_PROMPT = (
     "Your goal is to resolve this message into one of: "
     "[create_task, update_goal, request_approval, record_decision, clarify]. "
     "Return structured JSON with keys: "
-    '{"intent": "<one of the above>", "summary": "<brief>", "entity": {<relevant fields>}}. '
-    "Respond ONLY with valid JSON."
+    '{{"intent": "<one of the above>", "summary": "<brief>", "entity": {{<relevant fields>}}}}. '
+    "Respond ONLY with valid JSON. Do NOT include any explanation, markdown, or thinking text."
 )
+
+_BOARD_RETRY_PROMPT = (
+    "Your previous response could not be parsed as JSON. "
+    "You MUST reply with ONLY a raw JSON object — no markdown, no explanation. "
+    'Example: {"intent":"create_task","summary":"Write Q3 report","entity":{"title":"Q3 report"}}'
+)
+
+_VALID_INTENTS = frozenset({"create_task", "update_goal", "request_approval", "record_decision", "clarify"})
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_CEO_CHAT_TIMEOUT = 30  # seconds — fast model; qwen3.5:9b was hanging >60s
 
 _AUTHOR_HUMAN = "human"
 _AUTHOR_SYSTEM = "system"
@@ -204,6 +219,31 @@ class CeoChatService(LLCServiceBase):
             logger.warning("Decisions RAG query failed for company %s: %s", company_id, exc)
             return []
 
+    @staticmethod
+    def _extract_json(raw: str) -> Dict[str, Any]:
+        """Strip think blocks + prose and extract the first balanced JSON object."""
+        # Remove <think>…</think> reasoning blocks emitted by some models.
+        cleaned = _THINK_RE.sub("", raw).strip()
+        # Strip markdown fences.
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE).strip()
+        # Find the first balanced { … } block.
+        start = cleaned.find("{")
+        if start == -1:
+            raise ValueError("No JSON object found in LLM response")
+        depth, end = 0, -1
+        for i, ch in enumerate(cleaned[start:], start):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        if end == -1:
+            raise ValueError("Unbalanced JSON braces in LLM response")
+        return json.loads(cleaned[start : end + 1])
+
     async def _resolve_via_llm(
         self,
         *,
@@ -212,37 +252,61 @@ class CeoChatService(LLCServiceBase):
         company_name: str,
         conversation_id: str,
     ) -> Dict[str, Any]:
-        """Call the LLM and return parsed resolution dict."""
-        try:
-            from llm_shared.types import LLMType
-            from services.llm_service import get_llm_service
+        """Call the LLM and return parsed resolution dict.
 
-            svc = get_llm_service()
+        Uses a fast non-thinking model (light_processing_model, default phi3:mini)
+        with Ollama JSON mode (structured_output=True) so responses are reliably
+        machine-parseable.  Falls back to clarify only after one retry.
+        """
+        try:
+            svc = _llm_service_mod.get_llm_service()
+            fast_model: str = _cfg.light_processing_model  # phi3:mini by default
             context = "\n".join(kb_chunks) if kb_chunks else ""
             system_prompt = _BOARD_SYSTEM_PROMPT.format(company_name=company_name)
 
-            messages: List[Dict[str, str]] = []
-            if context:
-                messages.append({"role": "system", "content": f"{system_prompt}\n\nContext:\n{context}"})
-            else:
-                messages.append({"role": "system", "content": system_prompt})
-            messages.append({"role": "user", "content": message})
+            messages: List[Dict[str, str]] = [
+                {
+                    "role": "system",
+                    "content": f"{system_prompt}\n\nContext:\n{context}" if context else system_prompt,
+                },
+                {"role": "user", "content": message},
+            ]
 
-            response = await svc.chat(
-                messages=messages,
-                conversation_id=conversation_id,
-                llm_type=LLMType.EXTRACTION,
-            )
+            async def _call(msgs: List[Dict[str, str]]) -> str:
+                resp = await svc.chat(
+                    messages=msgs,
+                    conversation_id=conversation_id,
+                    llm_type=LLMType.EXTRACTION,
+                    model_name=fast_model,
+                    structured_output=True,  # → Ollama format:"json"
+                    timeout=_CEO_CHAT_TIMEOUT,
+                    use_cache=False,  # don't serve stale/empty cached failures
+                )
+                if resp.error:
+                    raise RuntimeError(f"LLM provider error: {resp.error}")
+                return (resp.content or "").strip()
 
-            raw = (response.content or "").strip()
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-            return json.loads(raw)
+            # First attempt.
+            raw = await _call(messages)
+            try:
+                parsed = self._extract_json(raw)
+            except (ValueError, json.JSONDecodeError):
+                # Retry once with an explicit reminder to return only JSON.
+                logger.debug("CEO chat JSON parse failed on first attempt, retrying")
+                messages.append({"role": "assistant", "content": raw})
+                messages.append({"role": "user", "content": _BOARD_RETRY_PROMPT})
+                raw = await _call(messages)
+                parsed = self._extract_json(raw)
+
+            intent = parsed.get("intent", "clarify")
+            if intent not in _VALID_INTENTS:
+                logger.warning("CEO chat: unknown intent %r — treating as clarify", intent)
+                parsed["intent"] = "clarify"
+            return parsed
+
         except Exception as exc:
             logger.warning("LLM resolution failed: %s", exc)
-            return {"intent": "clarify", "summary": str(exc), "entity": {}}
+            return {"intent": "clarify", "summary": "I couldn't understand that — could you rephrase?", "entity": {}}
 
     async def _dispatch_intent(
         self,
