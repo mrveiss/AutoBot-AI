@@ -8534,6 +8534,7 @@
       "verdictReal": "Verdict: real",
       "verdictRationale": "Rationale",
       "disabled": "Findings scanning is disabled.",
+      "actionError": "Action failed, please try again.",
       "severity": "Severity"
     }
   },

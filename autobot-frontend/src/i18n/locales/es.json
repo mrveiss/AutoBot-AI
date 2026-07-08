@@ -8534,6 +8534,7 @@
       "verdictReal": "Veredicto: real",
       "verdictRationale": "Justificación",
       "disabled": "La búsqueda de hallazgos está deshabilitada.",
+      "actionError": "Acción fallida, por favor inténtelo de nuevo.",
       "severity": "Severidad"
     }
   },

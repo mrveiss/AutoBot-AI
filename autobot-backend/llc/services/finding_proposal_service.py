@@ -233,7 +233,11 @@ async def promote(proposal: LLCFindingProposal, session: AsyncSession, actor_use
             session,
             company_id=uuid.UUID(str(proposal.company_id)),
             gate_type=ApprovalType.FINDING_PROMOTION,
-            payload={"proposal_id": str(proposal.id), "finding_key": proposal.finding_key},
+            payload={
+                "proposal_id": str(proposal.id),
+                "finding_key": proposal.finding_key,
+                "requested_by_user_id": str(actor_user_id),
+            },
             requested_by=uuid.UUID(str(actor_user_id)),
         )
         await session.flush()

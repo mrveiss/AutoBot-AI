@@ -8534,6 +8534,7 @@
       "verdictReal": "Verdict : réel",
       "verdictRationale": "Justification",
       "disabled": "La recherche de résultats est désactivée.",
+      "actionError": "Échec de l'action, veuillez réessayer.",
       "severity": "Sévérité"
     }
   },

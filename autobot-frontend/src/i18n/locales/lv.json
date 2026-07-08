@@ -8534,6 +8534,7 @@
       "verdictReal": "Spriedums: īsts",
       "verdictRationale": "Pamatojums",
       "disabled": "Atklājumu meklēšana ir atspējota.",
+      "actionError": "Darbība neizdevās, lūdzu mēģiniet vēlreiz.",
       "severity": "Nopietnība"
     }
   },

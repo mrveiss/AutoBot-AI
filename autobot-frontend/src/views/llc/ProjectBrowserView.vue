@@ -353,7 +353,7 @@ interface FindingProposal {
   line_number: number | null
   description: string
   suggestion: string | null
-  verdict_is_real: boolean
+  verdict_is_real: boolean | null
   verdict_confidence: number | null
   verdict_rationale: string | null
   status: string
@@ -499,12 +499,22 @@ async function loadProjects(): Promise<void> {
   }
 }
 
+// Track which projects have had proposals loaded at least once.
+const loadedProposalProjects = ref(new Set<string>())
+
+async function loadProposalsLazy(projectId: string): Promise<void> {
+  if (loadedProposalProjects.value.has(projectId)) return
+  loadedProposalProjects.value.add(projectId)
+  await loadProposals(projectId)
+}
+
 async function loadAllProposals(): Promise<void> {
-  await Promise.all(
-    projects.value
-      .filter(p => p.code_source_id)
-      .map(p => loadProposals(p.id)),
-  )
+  // Cap concurrency: load 3 projects' proposals at a time to avoid N parallel GETs on mount.
+  const withRepo = projects.value.filter(p => p.code_source_id)
+  const BATCH = 3
+  for (let i = 0; i < withRepo.length; i += BATCH) {
+    await Promise.all(withRepo.slice(i, i + BATCH).map(p => loadProposalsLazy(p.id)))
+  }
 }
 
 // Fetch each project's velocity history in parallel (reuses the #9861 endpoint).
@@ -730,10 +740,13 @@ async function scanFindings(project: ProjectResponse): Promise<void> {
   findingsError.value = { ...findingsError.value, [project.id]: '' }
   try {
     await api.post(`/api/llc/projects/${project.id}/findings/scan`)
+    loadedProposalProjects.value.add(project.id)
     await loadProposals(project.id)
   } catch (err) {
     logger.error('Failed to scan findings', err)
-    findingsError.value = { ...findingsError.value, [project.id]: t('llcBrowser.findings.disabled') }
+    const status = (err as { status?: number })?.status
+    const msg = status === 403 ? t('llcBrowser.findings.disabled') : t('llcBrowser.findings.actionError')
+    findingsError.value = { ...findingsError.value, [project.id]: msg }
   } finally {
     scanningProject.value = null
   }
@@ -745,7 +758,7 @@ async function promoteProposal(project: ProjectResponse, proposal: FindingPropos
     await loadProposals(project.id)
   } catch (err) {
     logger.error('Failed to promote proposal', err)
-    findingsError.value = { ...findingsError.value, [project.id]: t('llcBrowser.findings.disabled') }
+    findingsError.value = { ...findingsError.value, [project.id]: t('llcBrowser.findings.actionError') }
   }
 }
 
@@ -757,7 +770,7 @@ async function dismissProposal(project: ProjectResponse, proposal: FindingPropos
     await loadProposals(project.id)
   } catch (err) {
     logger.error('Failed to dismiss proposal', err)
-    findingsError.value = { ...findingsError.value, [project.id]: t('llcBrowser.findings.disabled') }
+    findingsError.value = { ...findingsError.value, [project.id]: t('llcBrowser.findings.actionError') }
   }
 }
 

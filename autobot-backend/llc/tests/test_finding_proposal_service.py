@@ -243,7 +243,10 @@ async def test_promote_approval_required_returns_pending():
     session = AsyncMock()
     actor_id = uuid.uuid4()
 
+    captured_payload: dict = {}
+
     async def fake_request(sess, *, company_id, gate_type, payload, requested_by):
+        captured_payload.update(payload)
         return fake_approval
 
     with (
@@ -257,6 +260,8 @@ async def test_promote_approval_required_returns_pending():
     assert result["approval_id"] == str(fake_approval.id)
     # Status must NOT be promoted yet
     assert proposal.status == FindingProposalStatus.PENDING
+    # Attribution: payload must carry the promoting user's UUID for correct semantics
+    assert captured_payload.get("requested_by_user_id") == str(actor_id)
 
 
 # ---------------------------------------------------------------------------

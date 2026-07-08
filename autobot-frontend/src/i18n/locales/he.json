@@ -8534,6 +8534,7 @@
       "verdictReal": "פסיקה: אמיתי",
       "verdictRationale": "נימוק",
       "disabled": "סריקת ממצאים מושבתת.",
+      "actionError": "הפעולה נכשלה, אנא נסה שוב.",
       "severity": "חומרה"
     }
   },
