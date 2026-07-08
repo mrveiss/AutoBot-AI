@@ -16,6 +16,7 @@ import asyncio
 import json
 import re
 import uuid
+from contextvars import ContextVar
 from typing import Any, Dict, FrozenSet, List
 
 from async_chat_workflow import WorkflowMessage
@@ -40,6 +41,13 @@ from .session_handler import SessionHandlerMixin
 from .tool_handler import ToolHandlerMixin
 
 logger = get_logger(__name__)
+
+# #11216 (MVA-1993): lightweight-mode cost indicator for the stream-metadata badge.
+# Held in a task-local ContextVar rather than shared instance state, so two
+# concurrent drivers of _execute_llm_continuation_loop (e.g. a real lightweight
+# chat and the internal delegation subagent) cannot clobber each other's flag.
+# Token-based set/reset also restores the caller's value for nested/inline drives.
+_current_lightweight_mode: ContextVar[bool] = ContextVar("current_lightweight_mode", default=False)
 
 # Issue #380: Module-level frozenset for terminal message types
 _TERMINAL_MESSAGE_TYPES: FrozenSet[str] = frozenset({"terminal_command", "terminal_output", "error"})
@@ -575,8 +583,9 @@ class ChatWorkflowManager(
             "used_knowledge": used_knowledge,
             "citations": self._build_source_list(used_knowledge, rag_citations, selected_model),
         }
-        # MVA-1993: Add lightweight mode indicator from instance variable or parameter
-        lw_mode = lightweight_mode_used or getattr(self, "_current_lightweight_mode", False)
+        # MVA-1993 / #11216: lightweight indicator from the explicit parameter or the
+        # task-local ContextVar (no longer shared instance state).
+        lw_mode = lightweight_mode_used or _current_lightweight_mode.get()
         if lw_mode:
             metadata["lightweight_mode_used"] = True
         streaming_msg.merge_metadata(metadata)
@@ -2642,8 +2651,9 @@ before summarizing.
 
         from autobot_shared.http_client import get_http_client
 
-        # MVA-1993: Store lightweight_mode_used from context for response metadata
-        self._current_lightweight_mode = ctx.context.get("lightweight_mode_used", False)
+        # MVA-1993 / #11216: store lightweight_mode_used in a task-local ContextVar
+        # (not on the shared singleton) for the response-metadata badge.
+        _lw_token = _current_lightweight_mode.set(ctx.context.get("lightweight_mode_used", False))
 
         try:
             http_client = get_http_client()
@@ -2661,8 +2671,8 @@ before summarizing.
             yield ([], [], error_msg)
 
         finally:
-            # MVA-1993: Clean up temporary flag
-            self._current_lightweight_mode = False
+            # MVA-1993 / #11216: restore the caller's task-local value (token reset).
+            _current_lightweight_mode.reset(_lw_token)
 
     async def _persist_workflow_messages(
         self,
