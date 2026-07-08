@@ -191,8 +191,8 @@ def get_slack_hook() -> Any:
         _hook = _NullSlackHook()
         return _hook
 
-    notifications_channel = config.slack_notifications_channel.strip()
-    approvals_channel = config.slack_approvals_channel.strip()
+    notifications_channel = config.slack_notifications_channel.strip() or _SLACK_NOTIFICATIONS_CHANNEL_DEFAULT
+    approvals_channel = config.slack_approvals_channel.strip() or notifications_channel
 
     logger.info(
         "Slack notifications enabled (channel=%s, approvals=%s)",
