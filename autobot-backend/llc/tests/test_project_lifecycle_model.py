@@ -12,6 +12,9 @@ def test_project_has_lifecycle_columns():
     assert "disposal_scheduled_at" in cols
     assert "disposal_approval_id" in cols
     assert cols["lifecycle_state"].default.arg == "active"
+    # server_default (DDL-level) protects existing rows during the migration.
+    assert cols["lifecycle_state"].server_default is not None
+    assert "active" in str(cols["lifecycle_state"].server_default.arg)
 
 
 def test_approval_type_has_project_disposal():
