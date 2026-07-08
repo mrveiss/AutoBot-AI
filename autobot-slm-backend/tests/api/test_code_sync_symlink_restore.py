@@ -264,10 +264,14 @@ def test_pip_backend_emits_symlink_step(tmp_path) -> None:
             patch("api.code_sync._get_deploy_base", return_value=tmp_path),
             patch("api.code_sync._ensure_autobot_shared_symlink", side_effect=_fake_ensure),
             patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
-            patch("api.code_sync._install_pip_deps_for_component", AsyncMock()),
+            # _install_pip_deps_for_component now returns bool (#11322)
+            patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=True)),
+            patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
+            patch("api.code_sync._ensure_venv_python", AsyncMock()),
+            patch("api.code_sync._run_alembic_migrations", AsyncMock()),
             patch("api.code_sync._restart_component_services", AsyncMock()),
         ):
-            _, steps = _run(_run_post_sync_steps(component, f"/src/{component}", f"/opt/autobot/{component}"))
+            _, steps, _ = _run(_run_post_sync_steps(component, f"/src/{component}", f"/opt/autobot/{component}"))
             steps_collected.extend(steps)
 
         assert any(
