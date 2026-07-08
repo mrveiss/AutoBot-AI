@@ -90,11 +90,9 @@ celery_app = Celery(
 
 # GH#11262: priority tiers live in celery_priority (plain data so they can be
 # unit-tested without importing this heavy, pytest-stubbed module, issue #7766).
-from celery_priority import (  # noqa: E402
-    MAX_PRIORITY as _MAX_PRIORITY,
-    PRIORITY_NORMAL as _PRIORITY_NORMAL,
-    PRIORITY_TASK_ROUTES as _PRIORITY_TASK_ROUTES,
-)
+from celery_priority import MAX_PRIORITY as _MAX_PRIORITY  # noqa: E402
+from celery_priority import PRIORITY_NORMAL as _PRIORITY_NORMAL
+from celery_priority import PRIORITY_TASK_ROUTES as _PRIORITY_TASK_ROUTES
 
 # Celery configuration
 celery_app.conf.update(
