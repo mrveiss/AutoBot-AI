@@ -8463,7 +8463,14 @@
       "loadError": "Failed to load projects.",
       "create": "New Project",
       "createTitle": "Create Project",
-      "createError": "Failed to create project."
+      "createError": "Failed to create project.",
+      "archive": "ארכיון",
+      "restore": "שחזור",
+      "delete": "מחיקה",
+      "confirmDelete": "למחוק את הפרויקט הממוקם בארכיון ואת הספרינטים שלו? לא ניתן לבטל פעולה זו.",
+      "archiveError": "כשל בארכיון הפרויקט.",
+      "restoreError": "כשל בשחזור הפרויקט.",
+      "deleteError": "כשל במחיקת הפרויקט."
     },
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."
@@ -8502,6 +8509,12 @@
       "syncError": "Failed to trigger sync.",
       "syncSuccess": "Sync started.",
       "copyClonePath": "Copy workspace path"
+    },
+    "lifecycle": {
+      "active": "פעיל",
+      "archived": "בארכיון",
+      "pending_disposal": "ממתין למחיקה",
+      "disposed": "נמחק"
     }
   },
   "admin": {

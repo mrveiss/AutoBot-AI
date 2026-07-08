@@ -8463,7 +8463,14 @@
       "loadError": "Failed to load projects.",
       "create": "New Project",
       "createTitle": "Create Project",
-      "createError": "Failed to create project."
+      "createError": "Failed to create project.",
+      "archive": "Archive",
+      "restore": "Restore",
+      "delete": "Delete",
+      "confirmDelete": "Delete this archived project and its sprints? This cannot be undone.",
+      "archiveError": "Failed to archive project.",
+      "restoreError": "Failed to restore project.",
+      "deleteError": "Failed to delete project."
     },
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."
@@ -8502,6 +8509,12 @@
       "syncError": "Failed to trigger sync.",
       "syncSuccess": "Sync started.",
       "copyClonePath": "Copy workspace path"
+    },
+    "lifecycle": {
+      "active": "Active",
+      "archived": "Archived",
+      "pending_disposal": "Pending disposal",
+      "disposed": "Disposed"
     }
   },
   "admin": {

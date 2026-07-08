@@ -7,6 +7,7 @@
   the company-scoped Backlog and Timeline views. A header "Create" action opens
   a modal that POSTs a new project and prepends it to the list (#10750 B1).
   GH#11129: repo linkage UI — Attach / Sync / Detach a GitHub repo per project.
+  GH#11129 P2: lifecycle badge + Archive / Delete / Restore affordances.
 -->
 <template>
   <div class="llc-browser">
@@ -41,7 +42,15 @@
       <article v-for="p in projects" :key="p.id" class="entity-card">
         <div class="card-top">
           <h3 class="card-name">{{ p.name }}</h3>
-          <span class="status-badge" :class="`status-${p.status}`">{{ p.status }}</span>
+          <div class="card-badges">
+            <span class="status-badge" :class="`status-${p.status}`">{{ p.status }}</span>
+            <!-- GH#11129 P2: lifecycle state badge -->
+            <span
+              v-if="p.lifecycle_state"
+              class="lifecycle-badge"
+              :class="`lifecycle-${p.lifecycle_state}`"
+            >{{ t(`llcBrowser.lifecycle.${p.lifecycle_state}`) }}</span>
+          </div>
         </div>
         <p v-if="p.description" class="card-desc">{{ p.description }}</p>
         <div class="card-stats">
@@ -114,6 +123,45 @@
           >
             {{ t('llcBrowser.repo.attachBtn') }}
           </BaseButton>
+        </div>
+
+        <!-- GH#11129 P2: lifecycle actions -->
+        <div class="card-lifecycle-actions">
+          <BaseButton
+            v-if="p.lifecycle_state === 'active' || !p.lifecycle_state"
+            variant="secondary"
+            size="sm"
+            :loading="archivingProject === p.id"
+            :disabled="archivingProject === p.id"
+            @click="archiveProject(p)"
+          >
+            {{ t('llcBrowser.projects.archive') }}
+          </BaseButton>
+          <template v-if="p.lifecycle_state === 'archived' || p.lifecycle_state === 'pending_disposal'">
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :loading="restoringProject === p.id"
+              :disabled="restoringProject === p.id"
+              @click="restoreProject(p)"
+            >
+              {{ t('llcBrowser.projects.restore') }}
+            </BaseButton>
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :loading="deletingProject === p.id"
+              :disabled="deletingProject === p.id"
+              @click="deleteProject(p)"
+            >
+              {{ t('llcBrowser.projects.delete') }}
+            </BaseButton>
+          </template>
+          <ErrorBanner
+            v-if="lifecycleError[p.id]"
+            :message="lifecycleError[p.id]"
+            class="browser-error"
+          />
         </div>
 
         <div class="card-actions">
@@ -250,6 +298,8 @@ interface ProjectResponse {
   // GH#11129: repo linkage fields (present when backend Task 1-3 is active)
   code_source_id?: string | null
   code_source?: CodeSourceSummary | null
+  // GH#11129 P2: lifecycle state (active | archived | pending_disposal | disposed)
+  lifecycle_state?: string | null
 }
 
 interface VelocityHistory {
@@ -290,6 +340,13 @@ const detachingRepo = ref<string | null>(null)
 const syncingRepo = ref<string | null>(null)
 // per-project error messages (keyed by project id)
 const repoError = ref<Record<string, string>>({})
+
+// GH#11129 P2: lifecycle action state
+const archivingProject = ref<string | null>(null)
+const restoringProject = ref<string | null>(null)
+const deletingProject = ref<string | null>(null)
+// per-project lifecycle error messages (keyed by project id)
+const lifecycleError = ref<Record<string, string>>({})
 
 function velocityFor(projectId: string): number[] {
   return velocities.value[projectId] ?? []
@@ -440,6 +497,51 @@ async function syncRepo(project: ProjectResponse): Promise<void> {
     repoError.value = { ...repoError.value, [project.id]: t('llcBrowser.repo.syncError') }
   } finally {
     syncingRepo.value = null
+  }
+}
+
+// GH#11129 P2: lifecycle actions -------------------------------------------
+
+async function archiveProject(project: ProjectResponse): Promise<void> {
+  archivingProject.value = project.id
+  lifecycleError.value = { ...lifecycleError.value, [project.id]: '' }
+  try {
+    await api.post(`/api/llc/projects/${project.id}/archive`)
+    await loadProjects()
+  } catch (err) {
+    logger.error('Failed to archive project', err)
+    lifecycleError.value = { ...lifecycleError.value, [project.id]: t('llcBrowser.projects.archiveError') }
+  } finally {
+    archivingProject.value = null
+  }
+}
+
+async function restoreProject(project: ProjectResponse): Promise<void> {
+  restoringProject.value = project.id
+  lifecycleError.value = { ...lifecycleError.value, [project.id]: '' }
+  try {
+    await api.post(`/api/llc/projects/${project.id}/restore`)
+    await loadProjects()
+  } catch (err) {
+    logger.error('Failed to restore project', err)
+    lifecycleError.value = { ...lifecycleError.value, [project.id]: t('llcBrowser.projects.restoreError') }
+  } finally {
+    restoringProject.value = null
+  }
+}
+
+async function deleteProject(project: ProjectResponse): Promise<void> {
+  if (!window.confirm(t('llcBrowser.projects.confirmDelete'))) return
+  deletingProject.value = project.id
+  lifecycleError.value = { ...lifecycleError.value, [project.id]: '' }
+  try {
+    await api.post(`/api/llc/projects/${project.id}/dispose`)
+    await loadProjects()
+  } catch (err) {
+    logger.error('Failed to delete project', err)
+    lifecycleError.value = { ...lifecycleError.value, [project.id]: t('llcBrowser.projects.deleteError') }
+  } finally {
+    deletingProject.value = null
   }
 }
 
@@ -716,5 +818,55 @@ onMounted(loadProjects)
 
 .clone-copy-btn:hover {
   color: var(--text-primary);
+}
+
+/* GH#11129 P2: card top badge row */
+.card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+/* GH#11129 P2: lifecycle badge */
+.lifecycle-badge {
+  flex: none;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.lifecycle-active {
+  color: var(--color-success, #16a34a);
+  background: var(--color-success-bg, #dcfce7);
+}
+
+.lifecycle-archived {
+  color: var(--color-warning, #d97706);
+  background: var(--color-warning-bg, #fef3c7);
+}
+
+.lifecycle-pending_disposal {
+  color: var(--color-error, #dc2626);
+  background: var(--color-error-bg, #fee2e2);
+}
+
+.lifecycle-disposed {
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+
+/* GH#11129 P2: lifecycle action buttons row */
+.card-lifecycle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-default);
 }
 </style>
