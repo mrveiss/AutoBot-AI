@@ -111,7 +111,11 @@ class LLMApiKeyService:
     """Manages virtual LLM API keys backed by Redis MAIN database."""
 
     async def _r(self):
-        redis = await get_async_redis_client(database="main")
+        # Honor an injected handle (self._redis) when present; production uses the
+        # lazy-singleton accessor and never sets it, so it resolves via the factory.
+        redis = getattr(self, "_redis", None)
+        if redis is None:
+            redis = await get_async_redis_client(database="main")
         if redis is None:
             raise RuntimeError("Redis MAIN unavailable")
         return redis

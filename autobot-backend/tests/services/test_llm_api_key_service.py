@@ -103,19 +103,15 @@ def test_model_allowed_prefix():
 @pytest.mark.asyncio
 async def test_issue_key():
     mock_redis = AsyncMock()
-    mock_pipe = AsyncMock()
-    mock_redis.pipeline.return_value.__aenter__ = AsyncMock(return_value=mock_pipe)
-    mock_redis.pipeline.return_value.__aexit__ = AsyncMock(return_value=False)
-    mock_pipe.execute = AsyncMock(return_value=[True, True, True])
 
     svc = LLMApiKeyService.__new__(LLMApiKeyService)
     svc._redis = mock_redis
 
-    # pipeline() is used as a context manager in issue_key — but actually it's
-    # called synchronously; use the non-context-manager approach
-    mock_pipe2 = MagicMock()
-    mock_pipe2.execute = AsyncMock(return_value=[1, 1, 1])
-    mock_redis.pipeline.return_value = mock_pipe2
+    # issue_key uses redis.pipeline() synchronously (redis-py returns a Pipeline
+    # even for async clients); only pipe.execute() is awaited.
+    mock_pipe = MagicMock()
+    mock_pipe.execute = AsyncMock(return_value=[1, 1, 1])
+    mock_redis.pipeline = MagicMock(return_value=mock_pipe)
 
     record, raw_key = await svc.issue_key(team_id="t1", label="test", monthly_budget_usd=5.0, allowed_models=["gpt-4"])
     assert raw_key.startswith("sk-")
