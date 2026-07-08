@@ -21,7 +21,6 @@ DELETE /api/llm-auth/{provider_name}       — revoke / delete stored tokens
 
 from __future__ import annotations
 
-import os
 import time
 from typing import Any
 
@@ -32,7 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.url_safety import require_allowlisted_https
+from autobot_shared.url_safety import get_oauth_allowed_hosts, require_allowlisted_https
 from llm_shared.provider_auth import (
     _vault_read,
     _vault_write,
@@ -43,29 +42,9 @@ logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # SSRF allowlist — hosts that provider OAuth/token endpoints may live on.
-# Override via AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS (comma-separated hostnames).
+# The list lives in autobot_shared.url_safety (single source of truth).
+# Override at runtime via AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS (comma-separated).
 # ---------------------------------------------------------------------------
-
-_DEFAULT_ALLOWED_HOSTS: frozenset[str] = frozenset(
-    {
-        "accounts.google.com",
-        "oauth2.googleapis.com",
-        "github.com",
-        "api.github.com",
-        "huggingface.co",
-        "login.microsoftonline.com",
-        "api.openai.com",
-        "auth.openai.com",
-        "api.anthropic.com",
-        "api.mistral.ai",
-    }
-)
-
-_ALLOWED_OAUTH_HOSTS: frozenset[str] = (
-    frozenset(h.strip().lower() for h in os.environ["AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS"].split(",") if h.strip())
-    if os.environ.get("AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS")
-    else _DEFAULT_ALLOWED_HOSTS
-)
 
 
 def _validate_outbound_url(url: str) -> None:
@@ -74,11 +53,11 @@ def _validate_outbound_url(url: str) -> None:
     Delegates the https / IP-literal / allowlist / port-pinning rules to the shared
     ``require_allowlisted_https`` guard in ``autobot_shared.url_safety`` so there is
     a single SSRF module (#11091 item 3), translating its ``ValueError`` into an
-    HTTP 400. Behaviour is unchanged; ``_ALLOWED_OAUTH_HOSTS`` remains the
-    provider-OAuth allowlist passed to the shared check.
+    HTTP 400. The allowlist is evaluated at call time via ``get_oauth_allowed_hosts()``
+    so AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS env-var overrides are always respected.
     """
     try:
-        require_allowlisted_https(url, _ALLOWED_OAUTH_HOSTS)
+        require_allowlisted_https(url, get_oauth_allowed_hosts())
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -346,6 +325,7 @@ async def provider_auth_status(
     provider_name: str,
     session: AsyncSession = Depends(get_db_session),
     _: Any = Depends(get_current_user),
+    _admin: bool = Depends(check_admin_permission),
 ) -> ProviderAuthStatus:
     """Return the auth connection status for a provider."""
     token_data = await _vault_read(

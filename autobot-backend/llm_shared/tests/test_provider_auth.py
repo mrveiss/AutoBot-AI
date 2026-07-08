@@ -624,3 +624,146 @@ class TestProviderAuthSecurity:
         with pytest.raises(HTTPException) as exc_info:
             _validate_outbound_url("https://accounts.google.com:99999/token")
         assert exc_info.value.status_code == 400
+
+    def test_status_endpoint_requires_admin(self):
+        """provider_auth_status must declare check_admin_permission (MED finding #11061)."""
+        from api.provider_auth import provider_auth_status
+        from auth_middleware import check_admin_permission
+
+        deps = self._get_endpoint_dependencies(provider_auth_status)
+        assert check_admin_permission in deps, "provider_auth_status missing check_admin_permission dependency"
+
+
+# ---------------------------------------------------------------------------
+# #11061: get_oauth_allowed_hosts — shared SSRF allowlist (url_safety)
+# ---------------------------------------------------------------------------
+
+
+class TestGetOauthAllowedHosts:
+    """Verify get_oauth_allowed_hosts() single-source-of-truth behaviour."""
+
+    def test_default_includes_known_providers(self):
+        import os
+
+        from autobot_shared.url_safety import get_oauth_allowed_hosts
+
+        env_key = "AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS"
+        old = os.environ.pop(env_key, None)
+        try:
+            hosts = get_oauth_allowed_hosts()
+            assert "accounts.google.com" in hosts
+            assert "github.com" in hosts
+            assert "api.anthropic.com" in hosts
+            assert "login.microsoftonline.com" in hosts
+        finally:
+            if old is not None:
+                os.environ[env_key] = old
+
+    def test_env_override_replaces_defaults(self):
+        import os
+
+        from autobot_shared.url_safety import get_oauth_allowed_hosts
+
+        env_key = "AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS"
+        old = os.environ.get(env_key)
+        os.environ[env_key] = "custom.provider.com, other.example.com"
+        try:
+            hosts = get_oauth_allowed_hosts()
+            assert "custom.provider.com" in hosts
+            assert "other.example.com" in hosts
+            assert "accounts.google.com" not in hosts
+        finally:
+            if old is None:
+                del os.environ[env_key]
+            else:
+                os.environ[env_key] = old
+
+    def test_allowlisted_host_passes_require_allowlisted_https(self):
+        from autobot_shared.url_safety import get_oauth_allowed_hosts, require_allowlisted_https
+
+        # Should not raise for a default-allowlisted host.
+        require_allowlisted_https("https://accounts.google.com/o/oauth2/token", get_oauth_allowed_hosts())
+
+    def test_non_allowlisted_host_raises_value_error(self):
+        from autobot_shared.url_safety import get_oauth_allowed_hosts, require_allowlisted_https
+
+        with pytest.raises(ValueError, match="allowlist"):
+            require_allowlisted_https("https://evil.example.com/token", get_oauth_allowed_hosts())
+
+
+# ---------------------------------------------------------------------------
+# #11061 HIGH: OAuthAuth._refresh validates token_url before outbound POST
+# ---------------------------------------------------------------------------
+
+
+class TestOAuthRefreshSsrfGuard:
+    """Verify the SSRF guard fires in _refresh before any network call."""
+
+    _BAD_URL = "https://internal.corp/steal-tokens"
+    _GOOD_URL = "https://accounts.google.com/o/oauth2/token"
+
+    def _make_auth(self, token_url: str) -> OAuthAuth:
+        return OAuthAuth(
+            provider_name="test_provider",
+            token_url=token_url,
+            client_id="cid",
+            client_secret="csec",
+            owner_vault_str="system",
+            subject="global",
+        )
+
+    def _expired_token_data(self) -> dict:
+        return {
+            "access_token": "at-expired",
+            "refresh_token": "rt-valid",
+            "expires_at": time.time() - 1,
+            "created_by": "00000000-0000-0000-0000-000000000000",
+        }
+
+    def test_bad_token_url_raises_provider_auth_error(self):
+        """_refresh must raise ProviderAuthError for a non-allowlisted token_url."""
+        auth = self._make_auth(self._BAD_URL)
+        expired = self._expired_token_data()
+        session = AsyncMock()
+
+        with (
+            patch.object(_PA_MOD, "_vault_read", new=AsyncMock(return_value=expired)),
+            patch(
+                "knowledge.connectors.oauth_flow.refresh_access_token",
+                new=AsyncMock(return_value={}),
+            ) as mock_post,
+        ):
+            with pytest.raises(ProviderAuthError, match="OAuth refresh blocked"):
+                _sync(auth.resolve_token(session))
+            # The outbound call must NOT have been made.
+            mock_post.assert_not_awaited()
+
+    def test_bad_token_url_error_message_names_provider(self):
+        """Error message must include the provider name for debuggability."""
+        auth = self._make_auth(self._BAD_URL)
+        expired = self._expired_token_data()
+        session = AsyncMock()
+
+        with patch.object(_PA_MOD, "_vault_read", new=AsyncMock(return_value=expired)):
+            with pytest.raises(ProviderAuthError, match="test_provider"):
+                _sync(auth.resolve_token(session))
+
+    def test_allowlisted_token_url_proceeds_to_network(self):
+        """A valid token_url still reaches the downstream refresh call."""
+        auth = self._make_auth(self._GOOD_URL)
+        expired = self._expired_token_data()
+        refreshed = {"access_token": "at-new", "expires_in": 3600}
+        session = AsyncMock()
+
+        with (
+            patch.object(_PA_MOD, "_vault_read", new=AsyncMock(return_value=expired)),
+            patch.object(_PA_MOD, "_vault_write", new=AsyncMock()),
+            patch(
+                "knowledge.connectors.oauth_flow.refresh_access_token",
+                new=AsyncMock(return_value=refreshed),
+            ) as mock_post,
+        ):
+            result = _sync(auth.resolve_token(session))
+
+        assert result == "at-new"
+        mock_post.assert_awaited_once()

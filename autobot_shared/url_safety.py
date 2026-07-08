@@ -34,9 +34,45 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import os
 import socket
 from collections.abc import Collection
 from urllib.parse import urlparse
+
+# ---------------------------------------------------------------------------
+# OAuth provider allowlist — single source of truth for SSRF-safe OAuth hosts.
+# Shared by api/provider_auth.py and llm_shared/provider_auth.py so neither
+# duplicates the list.  Override at runtime via AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS.
+# ---------------------------------------------------------------------------
+
+_DEFAULT_OAUTH_ALLOWED_HOSTS: frozenset[str] = frozenset(
+    {
+        "accounts.google.com",
+        "oauth2.googleapis.com",
+        "github.com",
+        "api.github.com",
+        "huggingface.co",
+        "login.microsoftonline.com",
+        "api.openai.com",
+        "auth.openai.com",
+        "api.anthropic.com",
+        "api.mistral.ai",
+    }
+)
+
+
+def get_oauth_allowed_hosts() -> frozenset[str]:
+    """Return the OAuth provider SSRF allowlist.
+
+    Uses AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS (comma-separated hostnames) when
+    set and non-empty; falls back to ``_DEFAULT_OAUTH_ALLOWED_HOSTS`` otherwise.
+    Evaluated at call time so runtime env-var changes are reflected without restart.
+    """
+    raw = os.environ.get("AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS", "")
+    if raw.strip():
+        return frozenset(h.strip().lower() for h in raw.split(",") if h.strip())
+    return _DEFAULT_OAUTH_ALLOWED_HOSTS
+
 
 # TLDs that are never public — rejected before DNS resolution.
 _PRIVATE_TLDS = (".onion", ".internal", ".local", ".localhost", ".lan", ".home", ".corp")
@@ -230,5 +266,6 @@ __all__ = [
     "is_public_url_async",
     "resolve_safe_ip_async",
     "require_allowlisted_https",
+    "get_oauth_allowed_hosts",
     "host_matches",
 ]
