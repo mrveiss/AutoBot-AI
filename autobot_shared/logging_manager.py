@@ -31,11 +31,31 @@ def _get_config_manager() -> "ConfigManager":
     logging_manager -> config -> manager -> loader -> model_constants -> (back).
     Ref: issue #1862.
     """
-    from config import (  # type: ignore[attr-defined]  # GH#7105: local backend import  # noqa: PLC0415
-        config_manager as _cm,
-    )
+    try:
+        from config import (  # type: ignore[attr-defined]  # GH#7105: local backend import  # noqa: PLC0415
+            config_manager as _cm,
+        )
+    except ImportError:
+        # Some backends (e.g. autobot-slm-backend) don't expose `config_manager`
+        # on their local `config` module. Logging is foundational infra imported
+        # at startup — it must NOT crash the app. Fall back to a stub whose
+        # .get(key, default) returns the caller's default, so file-handler/format
+        # setup uses the built-in defaults instead of raising ImportError (#11283).
+        return _ConfigManagerFallback()
 
     return _cm
+
+
+class _ConfigManagerFallback:
+    """Config-manager stub for backends whose `config` module has no config_manager.
+
+    Every logging call site passes a default (or handles ``None``), so returning
+    the default keeps logging working without the real config manager (#11283).
+    """
+
+    @staticmethod
+    def get(key, default=None):  # noqa: ANN001, ANN205
+        return default
 
 
 class LoggingManager:
