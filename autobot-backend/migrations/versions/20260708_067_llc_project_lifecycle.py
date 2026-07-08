@@ -1,6 +1,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """Add project archive→dispose lifecycle columns + PROJECT_DISPOSAL approval type (#11129 P2)."""
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -16,9 +17,7 @@ down_revision: Union[str, Sequence[str], None] = ("20260707_066", "20260701_066"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_LIFECYCLE = sa.Enum(
-    "active", "archived", "pending_disposal", "disposed", name="projectlifecyclestate"
-)
+_LIFECYCLE = sa.Enum("active", "archived", "pending_disposal", "disposed", name="projectlifecyclestate")
 
 
 def upgrade() -> None:
@@ -35,9 +34,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_llc_projects_lifecycle_state", "llc_projects", ["lifecycle_state"])
     op.add_column("llc_projects", sa.Column("archived_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column(
-        "llc_projects", sa.Column("disposal_scheduled_at", sa.DateTime(timezone=True), nullable=True)
-    )
+    op.add_column("llc_projects", sa.Column("disposal_scheduled_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column(
         "llc_projects",
         sa.Column("disposal_approval_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=True),

@@ -1,6 +1,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """delete_source_and_cleanup removes clone dir + index + record (#11129 P2)."""
+
 import ast
 from pathlib import Path
 

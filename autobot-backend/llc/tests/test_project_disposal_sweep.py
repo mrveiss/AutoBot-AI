@@ -1,6 +1,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """Beat sweep disposes only due + approved pending_disposal projects (#11129 P2)."""
+
 import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -38,10 +39,10 @@ def _sweep_session(due):
 async def test_sweep_disposes_due_projects():
     due = [SimpleNamespace(id=uuid.uuid4(), code_source_id=None, disposal_approval_id=None)]
     session = _sweep_session(due)
-    with patch(
-        "llc.scheduler.project_disposal_sweep.get_async_session_factory", return_value=_factory_for(session)
-    ), patch("llc.scheduler.project_disposal_sweep.dispose", AsyncMock()) as disp, patch(
-        "llc.scheduler.project_disposal_sweep._is_disposal_allowed", AsyncMock(return_value=True)
+    with (
+        patch("llc.scheduler.project_disposal_sweep.get_async_session_factory", return_value=_factory_for(session)),
+        patch("llc.scheduler.project_disposal_sweep.dispose", AsyncMock()) as disp,
+        patch("llc.scheduler.project_disposal_sweep._is_disposal_allowed", AsyncMock(return_value=True)),
     ):
         count = await _async_sweep()
     assert count == 1
@@ -52,10 +53,10 @@ async def test_sweep_disposes_due_projects():
 async def test_sweep_skips_unapproved_projects():
     due = [SimpleNamespace(id=uuid.uuid4(), code_source_id=None, disposal_approval_id=uuid.uuid4())]
     session = _sweep_session(due)
-    with patch(
-        "llc.scheduler.project_disposal_sweep.get_async_session_factory", return_value=_factory_for(session)
-    ), patch("llc.scheduler.project_disposal_sweep.dispose", AsyncMock()) as disp, patch(
-        "llc.scheduler.project_disposal_sweep._is_disposal_allowed", AsyncMock(return_value=False)
+    with (
+        patch("llc.scheduler.project_disposal_sweep.get_async_session_factory", return_value=_factory_for(session)),
+        patch("llc.scheduler.project_disposal_sweep.dispose", AsyncMock()) as disp,
+        patch("llc.scheduler.project_disposal_sweep._is_disposal_allowed", AsyncMock(return_value=False)),
     ):
         count = await _async_sweep()
     assert count == 0

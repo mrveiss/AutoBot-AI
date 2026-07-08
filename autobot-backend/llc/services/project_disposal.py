@@ -10,6 +10,7 @@ them at their source modules:
   patch("api.codebase_analytics.source_storage.get_source", ...)
   patch("api.codebase_analytics.source_service.delete_source_and_cleanup", ...)
 """
+
 import logging
 
 from sqlalchemy import delete
@@ -39,8 +40,8 @@ async def dispose(project: LLCProject, session: AsyncSession) -> None:
 
 async def _dispose_source(code_source_id: str) -> None:
     """Delete the linked source's clone+index only when it is not shared with others."""
-    from api.codebase_analytics.source_storage import get_source  # noqa: PLC0415
     from api.codebase_analytics.source_service import delete_source_and_cleanup  # noqa: PLC0415
+    from api.codebase_analytics.source_storage import get_source  # noqa: PLC0415
 
     source = await get_source(code_source_id)
     if source is None:

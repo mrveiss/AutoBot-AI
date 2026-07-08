@@ -1,6 +1,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """SLM-configurable disposal policy read + safe defaults (#11129 P2)."""
+
 from unittest.mock import AsyncMock, patch
 
 import pytest

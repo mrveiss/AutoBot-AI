@@ -1,6 +1,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """Archive→dispose lifecycle endpoints (#11129 P2)."""
+
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -92,9 +93,10 @@ def test_delete_requires_archived():
 def test_dispose_immediate_when_policy_default():
     p = _project("archived")
     client, _ = _mk_client(p)
-    with patch("llc.api.sprints.get_disposal_policy", AsyncMock(return_value=_policy(0, False))), patch(
-        "llc.api.sprints.dispose", AsyncMock()
-    ) as disp:
+    with (
+        patch("llc.api.sprints.get_disposal_policy", AsyncMock(return_value=_policy(0, False))),
+        patch("llc.api.sprints.dispose", AsyncMock()) as disp,
+    ):
         resp = client.post(f"/projects/{p.id}/dispose")
     assert resp.status_code == 200
     disp.assert_awaited_once()
@@ -104,9 +106,10 @@ def test_dispose_immediate_when_policy_default():
 def test_dispose_schedules_when_retention():
     p = _project("archived")
     client, _ = _mk_client(p)
-    with patch("llc.api.sprints.get_disposal_policy", AsyncMock(return_value=_policy(7, False))), patch(
-        "llc.api.sprints.dispose", AsyncMock()
-    ) as disp:
+    with (
+        patch("llc.api.sprints.get_disposal_policy", AsyncMock(return_value=_policy(7, False))),
+        patch("llc.api.sprints.dispose", AsyncMock()) as disp,
+    ):
         resp = client.post(f"/projects/{p.id}/dispose")
     assert resp.status_code == 200
     disp.assert_not_awaited()
@@ -123,9 +126,11 @@ def test_dispose_pending_approval_when_policy_requires_it():
     fake_svc = MagicMock()
     fake_svc.request_approval = AsyncMock(return_value=SimpleNamespace(id=approval_id))
     fake_svc.publish_requested = AsyncMock()
-    with patch("llc.api.sprints.get_disposal_policy", AsyncMock(return_value=_policy(0, True))), patch(
-        "llc.api.sprints.dispose", AsyncMock()
-    ) as disp, patch("llc.api.sprints._approval_svc", fake_svc):
+    with (
+        patch("llc.api.sprints.get_disposal_policy", AsyncMock(return_value=_policy(0, True))),
+        patch("llc.api.sprints.dispose", AsyncMock()) as disp,
+        patch("llc.api.sprints._approval_svc", fake_svc),
+    ):
         resp = client.post(f"/projects/{p.id}/dispose")
     assert resp.status_code == 200
     disp.assert_not_awaited()

@@ -17,6 +17,7 @@ Beat schedule entry:
 
 The schedule is registered in celery_app.py so that beat picks it up.
 """
+
 import asyncio
 import logging
 from datetime import datetime, timezone
@@ -76,9 +77,7 @@ async def _is_disposal_allowed(project: LLCProject, session: object) -> bool:
     """Approval-gated projects dispose only once their LLCApproval is APPROVED."""
     if project.disposal_approval_id is None:
         return True
-    result = await session.execute(
-        select(LLCApproval).where(LLCApproval.id == project.disposal_approval_id)
-    )
+    result = await session.execute(select(LLCApproval).where(LLCApproval.id == project.disposal_approval_id))
     approval = result.scalar_one_or_none()
     return approval is not None and approval.status == ApprovalStatus.APPROVED.value
 

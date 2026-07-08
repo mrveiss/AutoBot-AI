@@ -1,6 +1,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """Model contract for the project archive→dispose lifecycle (#11129 P2)."""
+
 from llc.models.enums import ApprovalType
 from llc.models.sprint import LLCProject
 

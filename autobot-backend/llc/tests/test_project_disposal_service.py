@@ -9,6 +9,7 @@ hook registers a package stub whose __path__ points at the real directory, so
 (without running the heavy __init__.py) and auto-restores at the end of each ``with`` —
 no module-level sys.modules surgery, so nothing leaks into sibling analytics suites.
 """
+
 import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -28,11 +29,12 @@ async def test_dispose_deletes_children_then_project_and_source():
     session = AsyncMock()
     session.execute = AsyncMock()
     non_shared_source = SimpleNamespace(id="src-1", shared_with=[])
-    with patch(
-        "api.codebase_analytics.source_storage.get_source", AsyncMock(return_value=non_shared_source)
-    ), patch(
-        "api.codebase_analytics.source_service.delete_source_and_cleanup", AsyncMock(return_value=True)
-    ) as del_src:
+    with (
+        patch("api.codebase_analytics.source_storage.get_source", AsyncMock(return_value=non_shared_source)),
+        patch(
+            "api.codebase_analytics.source_service.delete_source_and_cleanup", AsyncMock(return_value=True)
+        ) as del_src,
+    ):
         await dispose(project, session)
     del_src.assert_awaited_once_with("src-1")
     # Exactly three bulk-delete statements: work-items, sprints, then project.
@@ -45,11 +47,10 @@ async def test_dispose_keeps_shared_source():
     session = AsyncMock()
     session.execute = AsyncMock()
     shared = SimpleNamespace(id="src-2", shared_with=["someone-else"])
-    with patch(
-        "api.codebase_analytics.source_storage.get_source", AsyncMock(return_value=shared)
-    ), patch(
-        "api.codebase_analytics.source_service.delete_source_and_cleanup", AsyncMock()
-    ) as del_src:
+    with (
+        patch("api.codebase_analytics.source_storage.get_source", AsyncMock(return_value=shared)),
+        patch("api.codebase_analytics.source_service.delete_source_and_cleanup", AsyncMock()) as del_src,
+    ):
         await dispose(project, session)
     del_src.assert_not_awaited()
 
@@ -59,8 +60,6 @@ async def test_dispose_no_source_is_noop_on_source():
     project = _project(code_source_id=None)
     session = AsyncMock()
     session.execute = AsyncMock()
-    with patch(
-        "api.codebase_analytics.source_service.delete_source_and_cleanup", AsyncMock()
-    ) as del_src:
+    with patch("api.codebase_analytics.source_service.delete_source_and_cleanup", AsyncMock()) as del_src:
         await dispose(project, session)
     del_src.assert_not_awaited()

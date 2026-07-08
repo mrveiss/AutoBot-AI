@@ -276,11 +276,11 @@ celery_app.conf.beat_schedule = {
     },
 }
 
+import llc.scheduler.project_disposal_sweep  # noqa: F401
 import tasks.audit_log_retention  # noqa: F401
 
 # GH#8995: import retention tasks so Celery registers them at worker startup
 import tasks.chat_retention  # noqa: F401
-import llc.scheduler.project_disposal_sweep  # noqa: F401
 import tasks.file_retention  # noqa: F401
 import tasks.knowledge_retention  # noqa: F401
 

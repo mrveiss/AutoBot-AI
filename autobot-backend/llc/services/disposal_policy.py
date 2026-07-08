@@ -1,6 +1,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """Read the SLM-configured project disposal policy with safe defaults (#11129 P2)."""
+
 import json
 import logging
 from dataclasses import dataclass
