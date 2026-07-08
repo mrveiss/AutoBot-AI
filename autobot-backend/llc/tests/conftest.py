@@ -69,9 +69,15 @@ def _make_services_stub() -> types.ModuleType:
     llm_mod.__package__ = "services"
     llm_mod.get_llm_service = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
 
+    slm_mod = types.ModuleType("services.slm_client")
+    slm_mod.__package__ = "services"
+    slm_mod.get_slm_client = MagicMock(return_value=None)  # type: ignore[attr-defined]
+
     services_mod.llm_service = llm_mod  # type: ignore[attr-defined]
+    services_mod.slm_client = slm_mod  # type: ignore[attr-defined]
     sys.modules["services"] = services_mod
     sys.modules["services.llm_service"] = llm_mod
+    sys.modules["services.slm_client"] = slm_mod
     return services_mod
 
 
