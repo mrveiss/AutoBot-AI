@@ -12,6 +12,7 @@ from llc.models.enums import FindingProposalStatus
 from llc.services.finding_proposal_service import (
     FindingsDisabledError,
     ProposalStateError,
+    _upsert_proposal,
     dismiss,
     promote,
     scan,
@@ -290,3 +291,34 @@ async def test_promote_from_non_pending_raises():
 
     with pytest.raises(ProposalStateError):
         await promote(proposal, session, uuid.uuid4())
+
+
+@pytest.mark.asyncio
+async def test_dismiss_from_non_pending_raises():
+    proposal = MagicMock()
+    proposal.status = FindingProposalStatus.PROMOTED
+    session = AsyncMock()
+
+    with pytest.raises(ProposalStateError):
+        await dismiss(proposal, session, "already promoted")
+
+
+@pytest.mark.asyncio
+async def test_upsert_does_not_regress_terminal_proposal():
+    """A re-scan must NOT reset a PROMOTED/DISMISSED proposal back to PENDING."""
+    project = _make_project()
+    finding = _make_finding()
+    verdict = SimpleNamespace(is_real=True, confidence=0.9, rationale="real")
+    session = AsyncMock()
+
+    terminal = MagicMock()
+    terminal.status = FindingProposalStatus.DISMISSED
+
+    with patch(
+        "llc.services.finding_proposal_service._lookup_existing",
+        AsyncMock(return_value=terminal),
+    ):
+        await _upsert_proposal(project, finding, "k1", verdict, session)
+
+    assert terminal.status == FindingProposalStatus.DISMISSED  # unchanged
+    session.add.assert_not_called()  # no new row inserted

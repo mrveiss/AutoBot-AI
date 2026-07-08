@@ -56,3 +56,23 @@ async def test_defaults_on_malformed():
         run_on_index=False,
         verify_batch_size=10,
     )
+
+
+@pytest.mark.asyncio
+async def test_unknown_min_severity_coerces_to_medium():
+    """An unknown/invalid min_severity is coerced to 'medium' (not passed through)."""
+    for bad in ("critical", "", 1, None):
+        with patch(
+            "llc.services.findings_policy._fetch_policy_json",
+            AsyncMock(
+                return_value={
+                    "enabled": True,
+                    "min_severity": bad,
+                    "require_approval_to_promote": False,
+                    "run_on_index": False,
+                    "verify_batch_size": 3,
+                }
+            ),
+        ):
+            policy = await get_findings_policy()
+        assert policy.min_severity == "medium", f"min_severity={bad!r} should coerce to medium"

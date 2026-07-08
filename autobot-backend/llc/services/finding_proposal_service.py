@@ -69,6 +69,8 @@ async def _get_clone_path(project) -> str:
     from api.codebase_analytics.source_storage import get_source  # noqa: PLC0415
 
     source = await get_source(str(project.code_source_id))
+    if source is None:
+        raise ValueError(f"CodeSource {project.code_source_id!r} not found for project {project.id!r}")
     return getattr(source, "clone_path", "") or ""
 
 
@@ -129,6 +131,11 @@ async def _upsert_proposal(project, finding: dict, key: str, verdict, session: A
     """Insert or update a pending LLCFindingProposal with verdict fields."""
     existing = await _lookup_existing(project.id, key, session)
     if existing is not None:
+        # Never regress a terminal proposal: a PROMOTED/DISMISSED row must not be
+        # reset to PENDING by a re-scan (guards the race where the scan-level dedup
+        # missed a concurrently-inserted terminal row).
+        if existing.status != FindingProposalStatus.PENDING:
+            return
         existing.verdict_is_real = verdict.is_real
         existing.verdict_confidence = float(verdict.confidence)
         existing.verdict_rationale = verdict.rationale
