@@ -8523,6 +8523,18 @@
       "archived": "آرکائیو شدہ",
       "pending_disposal": "حذف کا انتظار",
       "disposed": "حذف شدہ"
+    },
+    "findings": {
+      "scan": "نتائج تلاش کریں",
+      "scanning": "اسکین ہو رہا ہے…",
+      "empty": "کوئی زیر التواء نتیجہ نہیں۔",
+      "promote": "ترقی دیں",
+      "dismiss": "مسترد کریں",
+      "dismissReason": "مسترد کرنے کی وجہ",
+      "verdictReal": "فیصلہ: حقیقی",
+      "verdictRationale": "دلیل",
+      "disabled": "نتائج کا اسکین غیر فعال ہے۔",
+      "severity": "شدت"
     }
   },
   "admin": {

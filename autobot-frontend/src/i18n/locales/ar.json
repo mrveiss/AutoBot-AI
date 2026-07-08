@@ -8523,6 +8523,18 @@
       "archived": "مؤرشف",
       "pending_disposal": "في انتظار الحذف",
       "disposed": "محذوف"
+    },
+    "findings": {
+      "scan": "البحث عن النتائج",
+      "scanning": "جارٍ الفحص…",
+      "empty": "لا توجد نتائج معلقة.",
+      "promote": "ترقية",
+      "dismiss": "رفض",
+      "dismissReason": "سبب الرفض",
+      "verdictReal": "الحكم: حقيقي",
+      "verdictRationale": "المبرر",
+      "disabled": "البحث عن النتائج معطّل.",
+      "severity": "الخطورة"
     }
   },
   "admin": {

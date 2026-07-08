@@ -294,6 +294,13 @@ const router = createRouter({
           component: () => import('@/views/settings/DisposalPolicySettings.vue'),
           meta: { title: 'Disposal Policy', parent: 'settings' }
         },
+        {
+          // Issue #11271 P3: Company OS findings policy (SLM operator panel)
+          path: 'findings-policy',
+          name: 'settings-findings-policy',
+          component: () => import('@/views/settings/FindingsPolicySettings.vue'),
+          meta: { title: 'Findings Policy', parent: 'settings' }
+        },
       ]
     },
     {

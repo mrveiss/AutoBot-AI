@@ -8523,6 +8523,18 @@
       "archived": "בארכיון",
       "pending_disposal": "ממתין למחיקה",
       "disposed": "נמחק"
+    },
+    "findings": {
+      "scan": "סריקת ממצאים",
+      "scanning": "סורק…",
+      "empty": "אין ממצאים ממתינים.",
+      "promote": "קדם",
+      "dismiss": "דחה",
+      "dismissReason": "סיבת הדחייה",
+      "verdictReal": "פסיקה: אמיתי",
+      "verdictRationale": "נימוק",
+      "disabled": "סריקת ממצאים מושבתת.",
+      "severity": "חומרה"
     }
   },
   "admin": {

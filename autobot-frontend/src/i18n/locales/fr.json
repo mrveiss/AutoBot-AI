@@ -8523,6 +8523,18 @@
       "archived": "Archivé",
       "pending_disposal": "Suppression en attente",
       "disposed": "Supprimé"
+    },
+    "findings": {
+      "scan": "Rechercher des résultats",
+      "scanning": "Analyse en cours…",
+      "empty": "Aucun résultat en attente.",
+      "promote": "Promouvoir",
+      "dismiss": "Rejeter",
+      "dismissReason": "Motif du rejet",
+      "verdictReal": "Verdict : réel",
+      "verdictRationale": "Justification",
+      "disabled": "La recherche de résultats est désactivée.",
+      "severity": "Sévérité"
     }
   },
   "admin": {

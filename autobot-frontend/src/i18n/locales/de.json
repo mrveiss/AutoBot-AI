@@ -8523,6 +8523,18 @@
       "archived": "Archiviert",
       "pending_disposal": "Ausstehende Löschung",
       "disposed": "Gelöscht"
+    },
+    "findings": {
+      "scan": "Nach Befunden suchen",
+      "scanning": "Wird gescannt…",
+      "empty": "Keine ausstehenden Befunde.",
+      "promote": "Hochstufen",
+      "dismiss": "Verwerfen",
+      "dismissReason": "Grund für Verwerfung",
+      "verdictReal": "Urteil: real",
+      "verdictRationale": "Begründung",
+      "disabled": "Befundsuche ist deaktiviert.",
+      "severity": "Schweregrad"
     }
   },
   "admin": {

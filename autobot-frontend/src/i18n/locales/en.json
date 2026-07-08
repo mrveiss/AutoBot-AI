@@ -8523,6 +8523,18 @@
       "archived": "Archived",
       "pending_disposal": "Pending disposal",
       "disposed": "Disposed"
+    },
+    "findings": {
+      "scan": "Scan for findings",
+      "scanning": "Scanning…",
+      "empty": "No pending findings.",
+      "promote": "Promote",
+      "dismiss": "Dismiss",
+      "dismissReason": "Reason for dismissal",
+      "verdictReal": "Verdict: real",
+      "verdictRationale": "Rationale",
+      "disabled": "Findings scanning is disabled.",
+      "severity": "Severity"
     }
   },
   "admin": {

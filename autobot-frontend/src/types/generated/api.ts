@@ -48943,6 +48943,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/projects/{project_id}/findings/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan Findings
+         * @description Scan a project's linked repo for findings and queue real ones as proposals.
+         */
+        post: operations["scan_findings_api_llc_projects__project_id__findings_scan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/projects/{project_id}/findings/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Proposals
+         * @description List finding proposals for a project, optionally filtered by status.
+         */
+        get: operations["list_proposals_api_llc_projects__project_id__findings_proposals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/findings/proposals/{proposal_id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Promote Proposal
+         * @description Promote a pending proposal to a work item (or gate on approval).
+         */
+        post: operations["promote_proposal_api_llc_findings_proposals__proposal_id__promote_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/findings/proposals/{proposal_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Proposal
+         * @description Dismiss a pending proposal with a reason.
+         */
+        post: operations["dismiss_proposal_api_llc_findings_proposals__proposal_id__dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/companies/{company_id}/portfolios": {
         parameters: {
             query?: never;
@@ -69497,6 +69577,13 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DismissRequest */
+        DismissRequest: {
+            /** Reason */
+            reason: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * DockerContainerSpec
          * @description Specification for a single Docker container to deploy.
@@ -72388,6 +72475,54 @@ export interface components {
              * @default []
              */
             orphaned_facts: unknown[];
+        } & {
+            [key: string]: unknown;
+        };
+        /** FindingProposalResponse */
+        FindingProposalResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Source Id */
+            source_id: string;
+            /** Finding Key */
+            finding_key: string;
+            /** Finding Type */
+            finding_type: string;
+            /** Severity */
+            severity: string;
+            /** File Path */
+            file_path: string;
+            /** Line Number */
+            line_number: number | null;
+            /** Description */
+            description: string;
+            /** Suggestion */
+            suggestion: string | null;
+            /** Verdict Is Real */
+            verdict_is_real: boolean | null;
+            /** Verdict Confidence */
+            verdict_confidence: number | null;
+            /** Verdict Rationale */
+            verdict_rationale: string | null;
+            /** Status */
+            status: string;
+            /** Work Item Id */
+            work_item_id: string | null;
+            /** Dismiss Reason */
+            dismiss_reason: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -100214,7 +100349,7 @@ export interface components {
          * @description Gate type for a board approval request (GH#8214).
          * @enum {string}
          */
-        llc__models__enums__ApprovalType: "hire" | "strategy" | "budget_override" | "sprint_close" | "project_disposal";
+        llc__models__enums__ApprovalType: "hire" | "strategy" | "budget_override" | "sprint_close" | "project_disposal" | "finding_promotion";
         /**
          * TemplateSearchResponse
          * @description Response for GET /llc/templates/search (GH#8260).
@@ -165183,6 +165318,142 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_findings_api_llc_projects__project_id__findings_scan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_proposals_api_llc_projects__project_id__findings_proposals_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingProposalResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    promote_proposal_api_llc_findings_proposals__proposal_id__promote_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_proposal_api_llc_findings_proposals__proposal_id__dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DismissRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
             /** @description Validation Error */
             422: {

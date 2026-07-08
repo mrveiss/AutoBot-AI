@@ -8523,6 +8523,18 @@
       "archived": "Arhivēts",
       "pending_disposal": "Gaida dzēšanu",
       "disposed": "Dzēsts"
+    },
+    "findings": {
+      "scan": "Meklēt atklājumus",
+      "scanning": "Skenēšana…",
+      "empty": "Nav neviena gaidāmā atklājuma.",
+      "promote": "Veicināt",
+      "dismiss": "Noraidīt",
+      "dismissReason": "Noraidīšanas iemesls",
+      "verdictReal": "Spriedums: īsts",
+      "verdictRationale": "Pamatojums",
+      "disabled": "Atklājumu meklēšana ir atspējota.",
+      "severity": "Nopietnība"
     }
   },
   "admin": {

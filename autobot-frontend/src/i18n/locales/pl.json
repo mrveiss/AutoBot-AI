@@ -8523,6 +8523,18 @@
       "archived": "Zarchiwizowany",
       "pending_disposal": "Oczekuje na usunięcie",
       "disposed": "Usunięty"
+    },
+    "findings": {
+      "scan": "Skanuj w poszukiwaniu wyników",
+      "scanning": "Skanowanie…",
+      "empty": "Brak oczekujących wyników.",
+      "promote": "Promuj",
+      "dismiss": "Odrzuć",
+      "dismissReason": "Powód odrzucenia",
+      "verdictReal": "Werdykt: prawdziwy",
+      "verdictRationale": "Uzasadnienie",
+      "disabled": "Skanowanie wyników jest wyłączone.",
+      "severity": "Powaga"
     }
   },
   "admin": {
