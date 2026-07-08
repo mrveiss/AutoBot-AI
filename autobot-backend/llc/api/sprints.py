@@ -710,6 +710,7 @@ async def archive_project(
     project.lifecycle_state = "archived"
     project.archived_at = datetime.now(timezone.utc)
     await session.commit()
+    await session.refresh(project)
     return ProjectResponse.model_validate(project)
 
 
@@ -729,6 +730,7 @@ async def restore_project(
     project.disposal_scheduled_at = None
     project.disposal_approval_id = None
     await session.commit()
+    await session.refresh(project)
     return ProjectResponse.model_validate(project)
 
 
@@ -750,7 +752,7 @@ async def _apply_disposal(project: LLCProject, session: AsyncSession, ctx: Tenan
     """Consult the SLM disposal policy and dispose immediately / schedule / gate on approval."""
     policy = await get_disposal_policy()
     if policy.require_approval:
-        approval = await ApprovalService().request_approval(
+        approval = await _approval_svc.request_approval(
             session,
             company_id=ctx.org_id,
             gate_type=ApprovalType.PROJECT_DISPOSAL,

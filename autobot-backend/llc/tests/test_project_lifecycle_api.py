@@ -114,6 +114,28 @@ def test_dispose_schedules_when_retention():
     assert p.lifecycle_state == "pending_disposal"
 
 
+def test_dispose_pending_approval_when_policy_requires_it():
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    p = _project("archived")
+    client, _ = _mk_client(p)
+    approval_id = uuid.uuid4()
+    fake_svc = MagicMock()
+    fake_svc.request_approval = AsyncMock(return_value=SimpleNamespace(id=approval_id))
+    with patch("llc.api.sprints.get_disposal_policy", AsyncMock(return_value=_policy(0, True))), patch(
+        "llc.api.sprints.dispose", AsyncMock()
+    ) as disp, patch("llc.api.sprints._approval_svc", fake_svc):
+        resp = client.post(f"/projects/{p.id}/dispose")
+    assert resp.status_code == 200
+    disp.assert_not_awaited()
+    body = resp.json()
+    assert body["result"] == "pending_approval"
+    assert body["approval_id"] == str(approval_id)
+    assert p.lifecycle_state == "pending_disposal"
+    assert p.disposal_approval_id == approval_id
+    fake_svc.request_approval.assert_awaited_once()
+
+
 def _policy(days, approval):
     from llc.services.disposal_policy import DisposalPolicy  # noqa: PLC0415
 
