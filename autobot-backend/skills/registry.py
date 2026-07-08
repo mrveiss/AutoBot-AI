@@ -62,6 +62,21 @@ class SkillRegistry:
         self._publish_skill_promoted(name, manifest.tools)
         self._rebuild_routing_index()
 
+    def register_declarative(self, manifest: "SkillManifest") -> bool:
+        """Register a SKILL.md-style manifest as a DeclarativeSkill.
+
+        Returns True if newly registered, False if a skill of that name exists.
+        Used by builtin Pass-2 discovery and by boot-time custom-skill reload.
+        """
+        with self._lock:
+            if manifest.name in self._skills:
+                return False
+            self._skills[manifest.name] = DeclarativeSkill(manifest)
+        self._rebuild_routing_index()
+        self._publish_skill_promoted(manifest.name, manifest.tools)
+        logger.info("Registered declarative skill: %s v%s", manifest.name, manifest.version)
+        return True
+
     def _rebuild_routing_index(self) -> None:
         """Rebuild the pre-tokenized skill routing index from current registry state.
 
@@ -308,19 +323,8 @@ class SkillRegistry:
                 manifest = _parse_skill_md(skill_md)
                 if manifest is None:
                     continue
-                # Skip if already registered (e.g. by a Python module of the same name)
-                if self._skills.get(manifest.name):
-                    continue
-                instance = DeclarativeSkill(manifest)
-                with self._lock:
-                    self._skills[manifest.name] = instance
-                logger.info(
-                    "Registered declarative skill: %s v%s (SKILL.md-only)",
-                    manifest.name,
-                    manifest.version,
-                )
-                self._publish_skill_promoted(manifest.name, manifest.tools)
-                count += 1
+                if self.register_declarative(manifest):
+                    count += 1
 
         self._rebuild_routing_index()
         logger.info("Discovered %d builtin skills", count)
