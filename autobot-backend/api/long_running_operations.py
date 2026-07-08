@@ -46,6 +46,7 @@ from api.schemas_workflows import (
     TestSuiteRequest,
 )
 from api.system_health import ComponentHealth, KnownProbes, register_health_probe
+from api.ws_security import enforce_ws_origin
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
@@ -498,6 +499,8 @@ async def resume_operation(operation_id: str, manager=Depends(get_operation_mana
 )
 async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
     """WebSocket endpoint for real-time progress updates"""
+    if not await enforce_ws_origin(websocket):
+        return
     if not _OPERATIONS_AVAILABLE:
         await websocket.close(code=1003, reason="Service not available")
         return

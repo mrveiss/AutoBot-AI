@@ -35,7 +35,9 @@
     default_data_dirs:
       - /var/lib/redis
       - /var/lib/postgresql
-      - /var/lib/chromadb
+      - /var/lib/chromadb  # legacy path (kept so old nodes are still cleaned)
+      # Real ChromaDB data dir (#11099) — /var/lib/chromadb alone left it behind.
+      - "{{ chromadb_data_dir | default('/opt/autobot/autobot-db-stack/chromadb/data') }}"
       - /var/lib/autobot
       - /usr/share/ollama/.ollama
       - /var/lib/ollama
@@ -234,7 +236,9 @@
             state: absent
           loop:
             - /var/lib/autobot
-            - /var/lib/chromadb
+            - /var/lib/chromadb  # legacy path (kept so old nodes are still cleaned)
+            # Real ChromaDB data dir (#11099).
+            - "{{ chromadb_data_dir | default('/opt/autobot/autobot-db-stack/chromadb/data') }}"
             - /var/lib/ollama
             - /usr/share/ollama
             - /var/log/autobot

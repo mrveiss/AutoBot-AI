@@ -329,13 +329,92 @@ class TestCausalErrorRecovery:
 # =============================================================================
 
 
+class _FakeAsyncRedis:
+    """Minimal in-memory async Redis stand-in for the pattern-detector tests.
+
+    Implements only the ops ``FailurePatternDetector`` uses
+    (get/set/sadd/smembers/expire) so the learn→detect→statistics roundtrip
+    works without a live Redis. Previously these tests hit the real client,
+    whose circuit breaker is open in CI, so every op returned ``None`` and the
+    detector silently no-opped — 4 tests failed on ``assert ... is not None``
+    (#11144).
+    """
+
+    def __init__(self):
+        self._kv = {}
+        self._sets = {}
+
+    async def get(self, key):
+        return self._kv.get(key)
+
+    async def set(self, key, value, ex=None):
+        self._kv[key] = value
+        return True
+
+    async def sadd(self, key, *members):
+        self._sets.setdefault(key, set()).update(members)
+        return len(members)
+
+    async def smembers(self, key):
+        return set(self._sets.get(key, set()))
+
+    async def expire(self, key, ttl):
+        return True
+
+    async def delete(self, key):
+        self._kv.pop(key, None)
+        self._sets.pop(key, None)
+        return True
+
+
+class _FakeSyncRedis:
+    """Minimal in-memory *sync* Redis stand-in for ``CausalErrorRecovery``.
+
+    ``CausalErrorRecovery`` uses a synchronous client (get/incr/expire/set/hset);
+    like the detector it silently no-ops when the real client's circuit breaker
+    is open, which broke the feedback-loop integration test (#11144).
+    """
+
+    def __init__(self):
+        self._kv = {}
+        self._hashes = {}
+
+    def get(self, key):
+        return self._kv.get(key)
+
+    def set(self, key, value, ex=None):
+        self._kv[key] = value
+        return True
+
+    def incr(self, key):
+        self._kv[key] = str(int(self._kv.get(key, 0)) + 1)
+        return int(self._kv[key])
+
+    def expire(self, key, ttl):
+        return True
+
+    def hset(self, key, *args, **kwargs):
+        mapping = kwargs.get("mapping") or {}
+        if len(args) >= 2:
+            mapping[args[0]] = args[1]
+        self._hashes.setdefault(key, {}).update(mapping)
+        return len(mapping)
+
+
+def _make_detector_with_fake_redis() -> FailurePatternDetector:
+    """A detector wired to an in-memory Redis so persistence roundtrips (#11144)."""
+    detector = FailurePatternDetector()
+    detector._redis = _FakeAsyncRedis()
+    return detector
+
+
 class TestFailurePatternDetector:
     """Test failure pattern detection and learning."""
 
     @pytest.fixture
     def detector(self):
-        """Create a pattern detector instance."""
-        return FailurePatternDetector()
+        """Create a pattern detector instance backed by an in-memory Redis."""
+        return _make_detector_with_fake_redis()
 
     def test_hash_causal_chain_consistency(self, detector):
         """Test that hashing is consistent."""
@@ -513,8 +592,9 @@ class TestCausalErrorRecoveryIntegration:
     @pytest.mark.asyncio
     async def test_pattern_feedback_improves_confidence(self):
         """Test that feedback loops improve confidence in recommendations."""
-        detector = FailurePatternDetector()
+        detector = _make_detector_with_fake_redis()
         recovery_sys = CausalErrorRecovery()
+        recovery_sys._redis = _FakeSyncRedis()  # in-memory sync Redis so feedback roundtrips (#11144)
 
         causal_chain = "Pool exhaustion → Connection denied"
         error = RuntimeError("Connection denied")

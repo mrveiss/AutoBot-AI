@@ -34,6 +34,7 @@ from api.schemas_workflows import (
     AdvancedControlTakeoverSessionStatusResponse,
     AdvancedControlTakeoverSystemStatusResponse,
 )
+from api.ws_security import enforce_ws_origin
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -509,6 +510,8 @@ async def get_system_health(
 )
 async def monitoring_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time system monitoring"""
+    if not await enforce_ws_origin(websocket):
+        return
     await websocket.accept()
     logger.info("Monitoring WebSocket client connected")
 
@@ -547,6 +550,8 @@ async def monitoring_websocket(websocket: WebSocket):
 )
 async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for desktop streaming control"""
+    if not await enforce_ws_origin(websocket):
+        return
     await websocket.accept()
 
     try:

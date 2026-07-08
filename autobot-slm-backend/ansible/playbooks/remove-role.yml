@@ -40,7 +40,10 @@
       postgresql:
         - /var/lib/postgresql
       ai-stack:
-        - /var/lib/chromadb
+        - /var/lib/chromadb  # legacy path (kept so old nodes are still cleaned)
+        # Real ChromaDB data dir (#11099) — /var/lib/chromadb alone left the
+        # live vector store behind on 'remove ai-stack'.
+        - "{{ chromadb_data_dir | default('/opt/autobot/autobot-db-stack/chromadb/data') }}"
         # Issue #3097: ai-stack data moved to /var/lib/autobot-ai
         - /var/lib/autobot-ai
       llm:

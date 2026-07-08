@@ -18,6 +18,7 @@ from unittest.mock import patch
 import pytest
 
 from autobot_shared.url_safety import (
+    host_matches,
     is_public_url,
     is_public_url_async,
     require_allowlisted_https,
@@ -232,6 +233,40 @@ def test_malformed_port_raises_valueerror_not_unhandled() -> None:
     with pytest.raises(ValueError) as exc:
         require_allowlisted_https("https://accounts.google.com:99999/token", _ALLOW)
     assert "port" in str(exc.value).lower()
+
+
+# ---------------------------------------------------------------------------
+# host_matches — domain-boundary trust check (#11226)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "host, domain",
+    [
+        ("github.com", "github.com"),  # exact
+        ("sub.github.com", "github.com"),  # subdomain
+        ("a.b.github.com", "github.com"),  # deep subdomain
+        ("GitHub.com", "github.com"),  # case-insensitive
+        ("github.com.", "github.com"),  # trailing FQDN dot
+    ],
+)
+def test_host_matches_true(host: str, domain: str) -> None:
+    assert host_matches(host, domain) is True
+
+
+@pytest.mark.parametrize(
+    "host, domain",
+    [
+        ("evilgithub.com", "github.com"),  # substring-prefix attack
+        ("github.com.evil.com", "github.com"),  # trusted label as a subdomain of attacker
+        ("notstackoverflow.com", "stackoverflow.com"),
+        ("fakewikipedia.org", "wikipedia.org"),
+        ("mygithub.com", "github.com"),
+        ("", "github.com"),  # empty host
+    ],
+)
+def test_host_matches_false(host: str, domain: str) -> None:
+    assert host_matches(host, domain) is False
 
 
 def test_module_has_zero_autobot_dependencies() -> None:

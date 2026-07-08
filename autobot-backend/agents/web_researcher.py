@@ -25,6 +25,7 @@ from urllib.parse import urlparse
 from pydantic import BaseModel
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.url_safety import host_matches
 from circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from constants.security_constants import SecurityConstants
 from constants.threshold_constants import CircuitBreakerDefaults, TimingConstants
@@ -853,7 +854,9 @@ class WebResearcher:
         """Calculate quality score for search result."""
         score = 0.5
         domain = result.get("domain", "")
-        if any(t in domain for t in self._TRUSTED_DOMAINS):
+        # Domain-boundary match so a hostile name that merely contains a trusted
+        # label (e.g. ``evilgithub.com``) doesn't earn the trust boost (#11226).
+        if domain and any(host_matches(domain, t) for t in self._TRUSTED_DOMAINS):
             score += 0.3
         content_length = result.get("content_length", 0)
         if content_length > 2000:
