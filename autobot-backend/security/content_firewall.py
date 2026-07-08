@@ -32,7 +32,7 @@ from typing import Any
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from security.prompt_injection_detector import HardBlockError, InjectionRisk, PromptInjectionDetector
+from security.prompt_injection_detector import InjectionRisk, PromptInjectionDetector
 
 logger = get_logger(__name__)
 
@@ -164,20 +164,21 @@ class ContentFirewall:
         if not content or not content.strip():
             return FirewallVerdict(content=content, action=FirewallAction.PASS, risk=InjectionRisk.SAFE, source=source)
 
-        # issue #11264: HardBlockError is raised inside detect_injection when
-        # HARDBLOCK_ENABLED=true and confidence >= HARDBLOCK_THRESHOLD.  Catch it
-        # here so the block is enforced before any tool execution proceeds.
-        try:
-            detection = self._detector.detect_injection(content, context=f"untrusted_{source.value}")
-        except HardBlockError as exc:
+        detection = self._detector.detect_injection(content, context=f"untrusted_{source.value}")
+
+        # issue #11264 / #11278: when HARDBLOCK_ENABLED=true and confidence >=
+        # HARDBLOCK_THRESHOLD, detect_injection now flags result.hard_blocked
+        # (it no longer raises — see #11278). Enforce the hard block here before
+        # any tool execution proceeds.
+        if detection.hard_blocked:
             verdict = FirewallVerdict(
                 content="[FIREWALL: content hard-blocked — injection confidence too high]",
                 action=FirewallAction.BLOCK,
-                risk=exc.risk,
+                risk=detection.risk_level,
                 source=source,
-                detected_patterns=exc.patterns,
+                detected_patterns=detection.detected_patterns,
                 blocked=True,
-                metadata={"hard_blocked": True, "confidence": exc.confidence},
+                metadata={"hard_blocked": True, "confidence": detection.confidence_score},
             )
             self._log_verdict(verdict, context_label)
             await self._record_trajectory(verdict, task_id)
