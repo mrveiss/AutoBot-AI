@@ -675,7 +675,10 @@ class Orchestrator(_DeprecatedRequestMixin):
             from memory.trajectory_store import get_trajectory_store
 
             store = await get_trajectory_store()
-            similar = await store.find_similar_trajectories(goal, top_k=5, min_reward=0.7, tenant_id=tenant_id or None)
+            user_id = str(ctx.get("user_id") or "")
+            similar = await store.find_similar_trajectories(
+                goal, top_k=5, min_reward=0.7, tenant_id=tenant_id or None, user_id=user_id or None
+            )
             if similar:
                 result["similar_trajectories"] = similar
         except Exception as exc:
