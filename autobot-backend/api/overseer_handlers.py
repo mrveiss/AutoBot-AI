@@ -27,6 +27,7 @@ from agents.overseer.types import (
 from api.schemas_agent import OverseerQueryData
 from api.schemas_common import DataResponse
 from api.schemas_system import OverseerStatusResponse
+from api.ws_security import enforce_ws_origin
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -447,6 +448,8 @@ async def overseer_websocket(websocket: WebSocket, session_id: str):
     - Automatic command explanations (Part 1: what it does)
     - Automatic output explanations (Part 2: what we're looking at)
     """
+    if not await enforce_ws_origin(websocket):
+        return
     handler = OverseerWebSocketHandler(websocket, session_id)
 
     if not await handler.connect():

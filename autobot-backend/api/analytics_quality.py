@@ -36,6 +36,7 @@ from api.schemas_analytics import (
     QualityTrendsResponse,
 )
 from api.schemas_common import DataResponse
+from api.ws_security import enforce_ws_origin
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -1600,6 +1601,8 @@ async def websocket_quality_updates(websocket: WebSocket):
     Clients receive updates when quality metrics change.
     Issue #315: Refactored to use dictionary dispatch for message handling.
     """
+    if not await enforce_ws_origin(websocket):
+        return
     await manager.connect(websocket)
 
     # Send initial snapshot
