@@ -1854,7 +1854,7 @@ class ToolHandlerMixin:
         agent_type = params.get("agent_type", "research_agent")
         engine = params.get("engine", "claude_code")
         depth = int(ctx_dict.get("delegation_depth", 0))
-        parent_agent_id = (ctx.agent_context.agent_id if ctx and ctx.agent_context else None)
+        parent_agent_id = ctx.agent_context.agent_id if ctx and ctx.agent_context else None
         try:
             result = await run_delegated_subtask(
                 task,

@@ -171,8 +171,6 @@ async def test_delegate_tool_on_runs_governed_subagent():
 
 def test_delegation_enabled_default_is_false():
     """DELEGATION_ENABLED must default OFF — no side-effects on import."""
-    import importlib
-    import sys
 
     # Reload with env cleared to confirm default.
     saved = delegation.DELEGATION_ENABLED
@@ -244,10 +242,7 @@ async def test_delegate_tool_per_turn_limit_blocks_excess():
     )
     results = []
     with patch.object(delegation, "DELEGATION_ENABLED", True):
-        msgs = [
-            m
-            async for m in mixin._handle_delegate_tool({"params": {"task": "overflow"}}, results, ctx)
-        ]
+        msgs = [m async for m in mixin._handle_delegate_tool({"params": {"task": "overflow"}}, results, ctx)]
     assert results[0]["status"] == "error"
     assert "limit" in results[0]["error"]
     assert msgs[0].type == "error"
