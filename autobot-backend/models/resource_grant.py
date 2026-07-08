@@ -9,9 +9,8 @@ a row; revoking = delete a row. Authorization only — no crypto envelope.
 """
 
 import uuid
-from datetime import datetime
 
-from sqlalchemy import DateTime, String, UniqueConstraint, func
+from sqlalchemy import String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
@@ -30,9 +29,6 @@ class ResourceGrant(Base):
     grantee_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     permission: Mapped[str] = mapped_column(String(16), nullable=False, default="use")  # view|use|manage
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
 
     __table_args__ = (
         UniqueConstraint(
