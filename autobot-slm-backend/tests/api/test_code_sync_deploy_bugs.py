@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tests for drift/resolve deploy bugs fixed in #11322 and #11323.
+"""Tests for drift/resolve deploy bugs fixed in #11322, #11323, and #11336.
 
 #11322 — constraints dir not deployed before pip:
   _deploy_constraints_dir rsyncs constraints/ to /opt/autobot/constraints/ before pip
@@ -12,6 +12,10 @@
 #11323 — code-sync didn't enforce target Python version in venvs:
   _ensure_venv_python checks <venv>/bin/python --version and recreates the venv
   via `pythonX.Y -m venv` when there is a version mismatch.
+
+#11336 — top-level requirements.txt not deployed before pip:
+  _deploy_repo_root_requirements copies repo-root files (e.g. requirements.txt)
+  to /opt/autobot/ before pip runs, so `-r ../requirements.txt` resolves.
 """
 
 from __future__ import annotations
@@ -68,7 +72,9 @@ import asyncio  # noqa: E402
 from api.code_sync import (  # noqa: E402
     _COMPONENT_PYTHON_TARGET,
     _CONSTRAINTS_SOURCE_SUBDIR,
+    _REPO_ROOT_REQUIREMENT_FILES,
     _deploy_constraints_dir,
+    _deploy_repo_root_requirements,
     _ensure_venv_python,
     _install_pip_deps_for_component,
     _run_post_sync_steps,
@@ -210,6 +216,7 @@ def test_run_post_sync_steps_pip_ok_false_on_pip_failure() -> None:
     with (
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
         patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
+        patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
         patch("api.code_sync._ensure_venv_python", AsyncMock()),
         patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=False)),
         patch("api.code_sync._run_alembic_migrations", AsyncMock()),
@@ -227,6 +234,7 @@ def test_run_post_sync_steps_pip_ok_true_on_success() -> None:
     with (
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
         patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
+        patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
         patch("api.code_sync._ensure_venv_python", AsyncMock()),
         patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=True)),
         patch("api.code_sync._run_alembic_migrations", AsyncMock()),
@@ -412,3 +420,96 @@ def test_ensure_venv_python_skips_creation_when_target_not_installed_missing(tmp
 
     assert not recreated, "must not attempt to recreate venv when target interpreter is absent"
     assert any("not installed" in s or "skipping" in s.lower() for s in steps), f"expected a skip step, got: {steps}"
+
+
+# ---------------------------------------------------------------------------
+# #11336 — _deploy_repo_root_requirements
+# ---------------------------------------------------------------------------
+
+
+def test_repo_root_requirement_files_constant() -> None:
+    """_REPO_ROOT_REQUIREMENT_FILES must include requirements.txt."""
+    assert "requirements.txt" in _REPO_ROOT_REQUIREMENT_FILES
+
+
+def test_deploy_repo_root_requirements_skipped_when_file_missing(tmp_path) -> None:
+    """Step says 'not found' when the source file doesn't exist."""
+    steps: list[str] = []
+    with patch("api.code_sync._get_deploy_base", return_value=tmp_path):
+        _run(_deploy_repo_root_requirements(str(tmp_path / "no_such_root"), steps))
+    assert any("not found" in s for s in steps)
+
+
+def test_deploy_repo_root_requirements_calls_cp(tmp_path) -> None:
+    """cp is called when the source file exists."""
+    src_root = tmp_path / "code_source"
+    src_root.mkdir()
+    (src_root / "requirements.txt").write_text("paramiko>=5.0.0\n", encoding="utf-8")
+    dst_base = tmp_path / "opt_autobot"
+    dst_base.mkdir()
+
+    steps: list[str] = []
+    captured: list = []
+
+    async def _fake_exec(*cmd, **kw):
+        captured.extend(cmd)
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    with (
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        patch("api.code_sync._get_deploy_base", return_value=dst_base),
+    ):
+        _run(_deploy_repo_root_requirements(str(src_root), steps))
+
+    assert "cp" in captured
+    assert any("deployed ok" in s for s in steps)
+
+
+def test_deploy_repo_root_requirements_records_cp_failure(tmp_path) -> None:
+    """Non-zero cp rc is recorded in steps."""
+    src_root = tmp_path / "code_source"
+    src_root.mkdir()
+    (src_root / "requirements.txt").write_text("paramiko>=5.0.0\n", encoding="utf-8")
+    dst_base = tmp_path / "opt_autobot"
+    dst_base.mkdir()
+
+    steps: list[str] = []
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.returncode = 1
+        proc.communicate = AsyncMock(return_value=(b"permission denied", b""))
+        return proc
+
+    with (
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        patch("api.code_sync._get_deploy_base", return_value=dst_base),
+    ):
+        _run(_deploy_repo_root_requirements(str(src_root), steps))
+
+    assert any("failed" in s for s in steps)
+
+
+def test_run_post_sync_steps_calls_deploy_repo_root_requirements() -> None:
+    """_deploy_repo_root_requirements is called for pip backend components."""
+    called: list[bool] = []
+
+    async def _fake_deploy(source_root: str, steps: list) -> None:
+        called.append(True)
+
+    with (
+        patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
+        patch("api.code_sync._deploy_repo_root_requirements", side_effect=_fake_deploy),
+        patch("api.code_sync._ensure_venv_python", AsyncMock()),
+        patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=True)),
+        patch("api.code_sync._run_alembic_migrations", AsyncMock()),
+        patch("api.code_sync._ensure_autobot_shared_symlink", AsyncMock()),
+        patch("api.code_sync._restart_component_services", AsyncMock()),
+    ):
+        _run(_run_post_sync_steps("autobot-backend", "/src/autobot-backend", "/opt/autobot/autobot-backend"))
+
+    assert called, "_deploy_repo_root_requirements must be called for pip backend components"

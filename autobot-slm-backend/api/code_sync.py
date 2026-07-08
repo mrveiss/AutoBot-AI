@@ -759,6 +759,13 @@ _COMPONENT_PYTHON_TARGET: Dict[str, str] = {
 # explicitly before pip runs.
 _CONSTRAINTS_SOURCE_SUBDIR: str = "constraints"
 
+# Repo-root files referenced via `-r ../X` in component requirements (#11336).
+# `autobot-backend/requirements.txt` uses `-r ../requirements.txt` which from
+# /opt/autobot/autobot-backend/ resolves to /opt/autobot/requirements.txt — a
+# path code-sync never writes.  This tuple lists the bare filenames (relative to
+# the repo root) that must be copied to /opt/autobot/ before pip runs.
+_REPO_ROOT_REQUIREMENT_FILES: tuple[str, ...] = ("requirements.txt",)
+
 # Maps component name → deployed frontend directory for npm rebuild.
 _COMPONENT_FRONTEND_DIRS: Dict[str, str] = {
     "autobot-frontend": "/opt/autobot/autobot-frontend",
@@ -826,6 +833,41 @@ async def _deploy_constraints_dir(source_root: str, steps: List[str]) -> None:
             steps.append(f"constraints: rsync failed (rc={proc.returncode})")
     except Exception as exc:
         steps.append(f"constraints: deploy error: {exc}")
+
+
+async def _deploy_repo_root_requirements(source_root: str, steps: List[str]) -> None:
+    """Copy top-level repo-root files to /opt/autobot/ before pip (#11336).
+
+    autobot-backend/requirements.txt uses `-r ../requirements.txt` so the
+    relative reference resolves to /opt/autobot/requirements.txt at deploy time.
+    Code-sync only rsyncs component subdirs, so each file listed in
+    _REPO_ROOT_REQUIREMENT_FILES is copied explicitly from source_root.
+    Skips gracefully when the source file is absent (non-fatal).
+    """
+    base = _get_deploy_base()
+    for filename in _REPO_ROOT_REQUIREMENT_FILES:
+        src = Path(source_root) / filename
+        dst = base / filename
+        if not src.exists():
+            steps.append(f"root-reqs: {src} not found — skipped")
+            continue
+        steps.append(f"root-reqs: copying {src} -> {dst}")
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "cp",
+                "--",
+                str(src),
+                str(dst),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            _, _ = await asyncio.wait_for(proc.communicate(), timeout=10.0)
+            if proc.returncode == 0:
+                steps.append(f"root-reqs: {filename} deployed ok")
+            else:
+                steps.append(f"root-reqs: cp {filename} failed (rc={proc.returncode})")
+        except Exception as exc:
+            steps.append(f"root-reqs: {filename} deploy error: {exc}")
 
 
 async def _ensure_venv_python(component: str, steps: List[str]) -> None:
@@ -1221,6 +1263,8 @@ async def _run_post_sync_steps(
         # Deploy constraints dir so `-c ../constraints/shared.txt` resolves (#11322).
         source_root = str(Path(source_dir).parent)
         await _deploy_constraints_dir(source_root, steps)
+        # Deploy repo-root files so `-r ../requirements.txt` resolves (#11336).
+        await _deploy_repo_root_requirements(source_root, steps)
         # Recreate venv if its Python version doesn't match the target (#11323).
         await _ensure_venv_python(component, steps)
         pip_ok = await _install_pip_deps_for_component(component, steps)
@@ -1460,7 +1504,7 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
     if is_local_source:
         logger.info("SLM self-sync: code source is local at %s, using direct rsync", repo_path)
     else:
-        ssh_key = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
+        ssh_key = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")
         if not Path(ssh_key).exists():
             logger.error("SLM self-sync failed: SSH key not found at %s", ssh_key)
             return
@@ -2720,7 +2764,7 @@ async def sync_role(
 # One-Click Full-Pipeline Update (Issue #9971)
 # =============================================================================
 
-import json as _json
+import json as _json  # noqa: E402
 
 _UPDATE_ALL_RESUME_KEY = "slm_update_all_resume"
 _DEPS_FILES = ["requirements.txt", "package-lock.json"]

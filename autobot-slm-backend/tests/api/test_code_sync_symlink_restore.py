@@ -267,6 +267,7 @@ def test_pip_backend_emits_symlink_step(tmp_path) -> None:
             # _install_pip_deps_for_component now returns bool (#11322)
             patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=True)),
             patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
+            patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
             patch("api.code_sync._ensure_venv_python", AsyncMock()),
             patch("api.code_sync._run_alembic_migrations", AsyncMock()),
             patch("api.code_sync._restart_component_services", AsyncMock()),
