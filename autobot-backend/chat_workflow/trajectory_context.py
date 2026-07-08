@@ -161,6 +161,7 @@ async def capture_chat_trajectory(
                 goal=user_message,
                 output=assistant_response[:500],
                 strategy_used=_CHAT_STRATEGY,
+                tenant_id=tenant_id,  # GH#11071: keep chat-outcome persistence tenant-isolated
             )
             # overall_score is already normalised to [0.0, 1.0].
             reward = max(0.0, min(1.0, float(getattr(judgment, "overall_score", 0.0))))

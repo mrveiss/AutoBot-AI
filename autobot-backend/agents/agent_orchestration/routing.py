@@ -59,7 +59,7 @@ class AgentRouter:
         self.llm_interface = llm_interface
         # Issue #2209: in-memory TTL cache for learned strategies.
         # Avoids Redis GET + TaskPatternLearner instantiation per routing call.
-        self._strategy_cache: Dict[str, tuple] = {}  # task_type -> (strategy, expires)
+        self._strategy_cache: Dict[tuple, tuple] = {}  # (tenant_id, task_type) -> (strategy, expires)  # GH#11071
         self._strategy_cache_ttl = 60  # seconds
         # Issue #2092: Q-learning RL router (lazy-initialised on first use).
         self._rl_router = None
@@ -82,6 +82,10 @@ class AgentRouter:
         task type derived from context or quick-route analysis.
         """
         task_type = (context or {}).get("task_type")
+        # GH#11071: scope the learned-strategy read AND its in-memory cache to the
+        # caller's tenant, so one org's strategy can't be served to another via
+        # Redis or the process-local cache.
+        tenant_id = str((context or {}).get("tenant_id") or "")
         if not task_type:
             quick = self.quick_route_analysis(request)
             agent = quick.get("primary_agent")
@@ -95,10 +99,11 @@ class AgentRouter:
 
             learner = TaskPatternLearner()
             task_type = learner.normalize_task_type(task_type)
+            cache_key = (tenant_id, task_type)
 
             # Issue #2209: check in-memory cache before hitting Redis.
             now = time.monotonic()
-            cached = self._strategy_cache.get(task_type)
+            cached = self._strategy_cache.get(cache_key)
             if cached is not None:
                 strategy, expires = cached
                 if now < expires:
@@ -106,8 +111,8 @@ class AgentRouter:
                         return self._build_learned_result(strategy, task_type)
                     return None
 
-            strategy = await learner.get_learned_strategy(task_type)
-            self._strategy_cache[task_type] = (strategy, now + self._strategy_cache_ttl)
+            strategy = await learner.get_learned_strategy(task_type, tenant_id=tenant_id)
+            self._strategy_cache[cache_key] = (strategy, now + self._strategy_cache_ttl)
 
             if strategy and strategy.confidence > LEARNED_STRATEGY_CONFIDENCE:
                 return self._build_learned_result(strategy, task_type)

@@ -19,8 +19,26 @@ from autobot_shared.time_utils import utc_timestamp
 
 logger = get_logger(__name__)
 
-REDIS_PATTERNS_KEY = "task:patterns:{task_type}"
+# GH#11071: keys are tenant-scoped so one org's synthesized strategy can never be
+# read into another org's planning prompt. An empty tenant_id fails closed
+# (retrieval/persistence is skipped) rather than falling back to a shared bucket.
+REDIS_PATTERNS_KEY = "task:patterns:{tenant_id}:{task_type}"
 REDIS_PATTERNS_TTL = 60 * 60 * 24 * 7  # 7 days
+
+
+def _scoped_tenant(tenant_id: str, op: str) -> str | None:
+    """Return the normalized tenant_id, or None (fail-closed) when it is empty.
+
+    GH#11071: learned-strategy reads/writes must be tenant-scoped. A missing
+    tenant_id is a misconfiguration, not a licence to touch a shared bucket, so
+    the caller skips the Redis op and logs a warning.
+    """
+    tid = (tenant_id or "").strip()
+    if not tid:
+        logger.warning("TaskPatternLearner.%s: empty tenant_id — skipping (fail-closed, GH#11071)", op)
+        return None
+    return tid
+
 
 # Minimum outcomes required before learning is triggered
 MIN_OUTCOMES_TO_LEARN = 3
@@ -74,16 +92,22 @@ class TaskPatternLearner(AsyncRedisClientMixin):
         """
         return task_type.strip().lower().replace("-", "_").replace(" ", "_")
 
-    async def learn_from_outcomes(self, task_type: str, outcomes: List[Dict]) -> LearnedStrategy | None:
+    async def learn_from_outcomes(
+        self, task_type: str, outcomes: List[Dict], tenant_id: str = ""
+    ) -> LearnedStrategy | None:
         """Analyze recent outcomes and extract the best strategy.
 
         Args:
             task_type: Task category to analyze (normalised to AgentType vocab)
             outcomes: List of outcome dicts with score, strategy_used, rationale
+            tenant_id: Owning tenant — the learned strategy is stored under it
+                so it can never be read into another tenant's plan (GH#11071).
 
         Returns:
             LearnedStrategy if enough data, else None
         """
+        if _scoped_tenant(tenant_id, "learn_from_outcomes") is None:
+            return None
         task_type = self.normalize_task_type(task_type)
         if len(outcomes) < MIN_OUTCOMES_TO_LEARN:
             logger.debug("Not enough outcomes to learn from for %s", task_type)
@@ -92,7 +116,7 @@ class TaskPatternLearner(AsyncRedisClientMixin):
         best_outcome = max(recent, key=lambda o: o.get("score", 0.0))
         strategy = await self._synthesize_strategy(task_type, recent, best_outcome)
         if strategy:
-            await self._persist_strategy(task_type, strategy)
+            await self._persist_strategy(task_type, strategy, tenant_id)
         return strategy
 
     async def _synthesize_strategy(
@@ -181,21 +205,27 @@ class TaskPatternLearner(AsyncRedisClientMixin):
             confidence=0.3,
         )
 
-    async def _persist_strategy(self, task_type: str, strategy: LearnedStrategy) -> None:
-        """Persist learned strategy to Redis."""
+    async def _persist_strategy(self, task_type: str, strategy: LearnedStrategy, tenant_id: str = "") -> None:
+        """Persist learned strategy to Redis, scoped to *tenant_id* (GH#11071)."""
+        tid = _scoped_tenant(tenant_id, "_persist_strategy")
+        if tid is None:
+            return
         try:
             redis = await self._get_redis()
-            key = REDIS_PATTERNS_KEY.format(task_type=task_type)
+            key = REDIS_PATTERNS_KEY.format(tenant_id=tid, task_type=task_type)
             await redis.set(key, json.dumps(strategy.__dict__), ex=REDIS_PATTERNS_TTL)
         except Exception as exc:
             logger.warning("Failed to persist learned strategy: %s", exc)
 
-    async def get_learned_strategy(self, task_type: str) -> LearnedStrategy | None:
-        """Retrieve persisted learned strategy for a task type (#2208)."""
+    async def get_learned_strategy(self, task_type: str, tenant_id: str = "") -> LearnedStrategy | None:
+        """Retrieve persisted learned strategy for a task type, scoped to *tenant_id* (#2208, GH#11071)."""
+        tid = _scoped_tenant(tenant_id, "get_learned_strategy")
+        if tid is None:
+            return None
         task_type = self.normalize_task_type(task_type)
         try:
             redis = await self._get_redis()
-            key = REDIS_PATTERNS_KEY.format(task_type=task_type)
+            key = REDIS_PATTERNS_KEY.format(tenant_id=tid, task_type=task_type)
             raw = await redis.get(key)
             if raw:
                 return LearnedStrategy(**json.loads(raw))
@@ -203,39 +233,50 @@ class TaskPatternLearner(AsyncRedisClientMixin):
             logger.warning("Failed to retrieve learned strategy: %s", exc)
         return None
 
-    async def save_strategy(self, strategy: LearnedStrategy) -> None:
+    async def save_strategy(self, strategy: LearnedStrategy, tenant_id: str = "") -> None:
         """Persist an externally-curated strategy for its task type (GH#11151).
 
         The public import entry point — normalises the task type and reuses the
         same Redis persistence as learned strategies so a reviewer-edited record
-        is stored identically to a synthesized one.
+        is stored identically to a synthesized one. Scoped to *tenant_id* (GH#11071).
         """
         task_type = self.normalize_task_type(strategy.task_type)
         strategy.task_type = task_type
-        await self._persist_strategy(task_type, strategy)
+        await self._persist_strategy(task_type, strategy, tenant_id)
 
-    async def clear_strategy(self, task_type: str) -> None:
-        """Clear the learned strategy for a task type (#2325)."""
+    async def clear_strategy(self, task_type: str, tenant_id: str = "") -> None:
+        """Clear the learned strategy for a task type, scoped to *tenant_id* (#2325, GH#11071)."""
+        tid = _scoped_tenant(tenant_id, "clear_strategy")
+        if tid is None:
+            return
         task_type = self.normalize_task_type(task_type)
         try:
             redis = await self._get_redis()
-            key = REDIS_PATTERNS_KEY.format(task_type=task_type)
+            key = REDIS_PATTERNS_KEY.format(tenant_id=tid, task_type=task_type)
             await redis.delete(key)
         except Exception as exc:
             logger.warning("Failed to clear learned strategy: %s", exc)
 
-    async def get_all_task_types(self) -> List[str]:
-        """List all task types that have stored outcomes in Redis."""
+    async def get_all_task_types(self, tenant_id: str = "") -> List[str]:
+        """List task types that have stored outcomes for *tenant_id* (GH#11071).
+
+        Scoped by tenant so a caller can only enumerate its own task types; an
+        empty tenant_id fails closed (returns []), mirroring the store keys.
+        """
+        tid = _scoped_tenant(tenant_id, "get_all_task_types")
+        if tid is None:
+            return []
         try:
             redis = await self._get_redis()
-            pattern = "task:outcomes:*"
+            prefix = f"task:outcomes:{tid}:"
+            pattern = f"{prefix}*"
             cursor = 0
             types: List[str] = []
             while True:
                 cursor, keys = await redis.scan(cursor, match=pattern, count=100)
                 for k in keys:
-                    task_type = k.decode() if isinstance(k, bytes) else k
-                    types.append(task_type.replace("task:outcomes:", ""))
+                    key = k.decode() if isinstance(k, bytes) else k
+                    types.append(key.replace(prefix, "", 1))
                 if cursor == 0:
                     break
             return types

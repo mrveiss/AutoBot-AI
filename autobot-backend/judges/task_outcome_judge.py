@@ -19,10 +19,21 @@ from judges import BaseLLMJudge, JudgmentDimension, JudgmentResult
 
 logger = get_logger(__name__)
 
-# Redis key pattern for task outcomes
-REDIS_OUTCOMES_KEY = "task:outcomes:{task_type}"
+# GH#11071: outcome keys are tenant-scoped so one org's task history can never be
+# read into another org's learning/plan. Empty tenant_id fails closed (the Redis
+# read/write is skipped) rather than touching a shared cross-tenant bucket.
+REDIS_OUTCOMES_KEY = "task:outcomes:{tenant_id}:{task_type}"
 REDIS_OUTCOMES_TTL = 60 * 60 * 24 * 30  # 30 days
 MAX_OUTCOMES_PER_TYPE = 100
+
+
+def _scoped_tenant(tenant_id: str, op: str) -> str | None:
+    """Return the normalized tenant_id, or None (fail-closed) when empty (GH#11071)."""
+    tid = (tenant_id or "").strip()
+    if not tid:
+        logger.warning("TaskOutcomeJudge.%s: empty tenant_id — skipping (fail-closed, GH#11071)", op)
+        return None
+    return tid
 
 
 @dataclass
@@ -63,6 +74,7 @@ class TaskOutcomeJudge(BaseLLMJudge):
         goal: str,
         output: str,
         strategy_used: str = "default",
+        tenant_id: str = "",
     ) -> JudgmentResult:
         """Evaluate quality of a task output and persist to Redis.
 
@@ -71,6 +83,9 @@ class TaskOutcomeJudge(BaseLLMJudge):
             goal: The original task goal/objective
             output: The task's actual output
             strategy_used: Description of the strategy/approach used
+            tenant_id: Owning tenant — persistence is scoped to it (GH#11071).
+                The judgment result is always returned (used for plan scoring)
+                even when tenant_id is empty; only the Redis write is skipped.
 
         Returns:
             JudgmentResult with quality assessment
@@ -90,7 +105,7 @@ class TaskOutcomeJudge(BaseLLMJudge):
             criteria=criteria,
             context=context,
         )
-        await self._persist_outcome(task_type, goal, output, strategy_used, result)
+        await self._persist_outcome(task_type, goal, output, strategy_used, result, tenant_id)
         return result
 
     async def _persist_outcome(
@@ -100,11 +115,15 @@ class TaskOutcomeJudge(BaseLLMJudge):
         output: str,
         strategy_used: str,
         result: JudgmentResult,
+        tenant_id: str = "",
     ) -> None:
-        """Store outcome in Redis list, keeping only the last MAX_OUTCOMES_PER_TYPE."""
+        """Store outcome in Redis list (scoped to *tenant_id*), keeping the last MAX_OUTCOMES_PER_TYPE."""
+        tid = _scoped_tenant(tenant_id, "_persist_outcome")
+        if tid is None:
+            return
         try:
             redis = await self._get_redis()
-            key = REDIS_OUTCOMES_KEY.format(task_type=task_type)
+            key = REDIS_OUTCOMES_KEY.format(tenant_id=tid, task_type=task_type)
             record = TaskOutcomeRecord(
                 task_type=task_type,
                 goal=goal[:200],
@@ -119,30 +138,37 @@ class TaskOutcomeJudge(BaseLLMJudge):
         except Exception as exc:
             logger.warning("Failed to persist task outcome: %s", exc)
 
-    async def get_outcomes(self, task_type: str, limit: int = 20) -> List[TaskOutcomeRecord]:
-        """Retrieve recent outcomes for a task type from Redis.
+    async def get_outcomes(self, task_type: str, limit: int = 20, tenant_id: str = "") -> List[TaskOutcomeRecord]:
+        """Retrieve recent outcomes for a task type from Redis, scoped to *tenant_id* (GH#11071).
 
         Args:
             task_type: Task category to retrieve outcomes for
             limit: Maximum number of outcomes to return
+            tenant_id: Owning tenant; empty fails closed (returns []).
 
         Returns:
             List of TaskOutcomeRecord sorted newest-first
         """
+        tid = _scoped_tenant(tenant_id, "get_outcomes")
+        if tid is None:
+            return []
         try:
             redis = await self._get_redis()
-            key = REDIS_OUTCOMES_KEY.format(task_type=task_type)
+            key = REDIS_OUTCOMES_KEY.format(tenant_id=tid, task_type=task_type)
             raw = await redis.lrange(key, 0, limit - 1)
             return [TaskOutcomeRecord(**json.loads(r)) for r in raw]
         except Exception as exc:
             logger.warning("Failed to retrieve task outcomes: %s", exc)
             return []
 
-    async def clear_outcomes(self, task_type: str) -> None:
-        """Clear all stored outcomes for a task type."""
+    async def clear_outcomes(self, task_type: str, tenant_id: str = "") -> None:
+        """Clear all stored outcomes for a task type, scoped to *tenant_id* (GH#11071)."""
+        tid = _scoped_tenant(tenant_id, "clear_outcomes")
+        if tid is None:
+            return
         try:
             redis = await self._get_redis()
-            key = REDIS_OUTCOMES_KEY.format(task_type=task_type)
+            key = REDIS_OUTCOMES_KEY.format(tenant_id=tid, task_type=task_type)
             await redis.delete(key)
         except Exception as exc:
             logger.warning("Failed to clear task outcomes: %s", exc)

@@ -423,19 +423,26 @@ class WorkflowRunner:
             async with self._learning_semaphore:
                 task_type = getattr(plan, "task_type", None) or plan.strategy.value
                 output_summary = str(result.get("results", ""))[:500]
+                # GH#11071: scope outcome persistence + learning to the owning tenant
+                # so a synthesized strategy never crosses into another org's plan.
+                plan_meta = getattr(plan, "metadata", None) or {}
+                tenant_id = str(plan_meta.get("tenant_id") or "")
                 judge = _get_task_outcome_judge()
                 await judge.evaluate_task_outcome(
                     task_type=task_type,
                     goal=plan.goal,
                     output=output_summary,
                     strategy_used=plan.strategy.value,
+                    tenant_id=tenant_id,
                 )
 
                 # Trigger learning when enough outcomes have accumulated.
                 min_outcomes, learner = _get_task_pattern_learner()
-                outcomes = await judge.get_outcomes(task_type, limit=min_outcomes + 1)
+                outcomes = await judge.get_outcomes(task_type, limit=min_outcomes + 1, tenant_id=tenant_id)
                 if len(outcomes) >= min_outcomes:
-                    await learner.learn_from_outcomes(task_type, [_outcome_to_dict(o) for o in outcomes])
+                    await learner.learn_from_outcomes(
+                        task_type, [_outcome_to_dict(o) for o in outcomes], tenant_id=tenant_id
+                    )
                     logger.info(
                         "Self-improvement: learned from %d outcomes for task_type='%s'",
                         len(outcomes),
