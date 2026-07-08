@@ -19,19 +19,12 @@ from urllib.parse import urlparse
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.url_safety import host_matches
 from config import config
 from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
 
 logger = get_logger(__name__)
-
-
-def _host_matches(host: str, domain: str) -> bool:
-    """Return True iff *host* is exactly *domain* or a subdomain of it.
-
-    Prevents partial-suffix attacks (e.g. ``notyoutube.com`` matching ``youtube.com``).
-    """
-    return host == domain or host.endswith("." + domain)
 
 
 def _source_for_url(url: str) -> str:
@@ -44,9 +37,9 @@ def _source_for_url(url: str) -> str:
     if "://" not in url:
         url = "https://" + url
     host = urlparse(url).netloc.lower()
-    if _host_matches(host, "youtube.com") or _host_matches(host, "youtu.be"):
+    if host_matches(host, "youtube.com") or host_matches(host, "youtu.be"):
         return "youtube"
-    if _host_matches(host, "reddit.com"):
+    if host_matches(host, "reddit.com"):
         return "reddit"
     return "web_page"
 
@@ -161,7 +154,7 @@ class LibrarianAssistant:
         title = structured.get("title") or netloc
         description = structured.get("description") or content[:200]
 
-        is_trusted = any(_host_matches(netloc, td) for td in self.trusted_domains) if netloc else False
+        is_trusted = any(host_matches(netloc, td) for td in self.trusted_domains) if netloc else False
 
         return {
             "url": effective_url,

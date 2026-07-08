@@ -28,6 +28,7 @@ from api.schemas_transcripts import (
     TranscriptKBPushRequest,
     TranscriptKBPushResponse,
 )
+from api.ws_security import enforce_ws_origin
 from auth_middleware import authenticate_websocket, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -163,6 +164,8 @@ async def analyze_transcript_ws(websocket: WebSocket, transcript_id: str):
 
     Security: Requires JWT authentication (Issue #2818 handshake-level rejection).
     """
+    if not await enforce_ws_origin(websocket):
+        return
     user = await authenticate_websocket(websocket)
     if user is None:
         await websocket.close(code=4001, reason="Unauthorized")

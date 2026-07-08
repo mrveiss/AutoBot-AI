@@ -43,6 +43,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
 
+from api.ws_security import validate_ws_origin as _validate_ws_origin
 from auth_middleware import (
     check_admin_permission,
     get_auth_middleware,
@@ -366,31 +367,6 @@ async def _ws_send(websocket: WebSocket, msg_type: str, content: str) -> None:
 
 async def _ws_error(websocket: WebSocket, content: str) -> None:
     await _ws_send(websocket, "error", content)
-
-
-def _validate_ws_origin(websocket: WebSocket) -> None:
-    """Reject cross-origin (CSWSH) WebSocket handshakes — Origin check ONLY.
-
-    WebSockets are exempt from the browser same-origin/CORS policy, so a malicious
-    page could otherwise open this socket using the victim's ambient cookies. When
-    an ``Origin`` header is present (browser client) it MUST be on the CORS
-    allowlist; non-browser clients omit ``Origin``. Authentication is decided
-    separately by :func:`_authenticate_ws_admin` (bearer header, cookie/session, or
-    the internal-service key), so this function no longer imposes an
-    Authorization-header precondition that locked out cookie/internal-key callers
-    (#11016). Fail-closed: a disallowed or unresolvable Origin raises.
-    """
-    origin = websocket.headers.get("origin", "")
-    if not origin:
-        return  # non-browser client (no Origin) — not subject to CSWSH
-    try:
-        from config.manager import get_config_manager  # noqa: PLC0415
-
-        allowed = set(get_config_manager().get_cors_origins() or [])
-    except Exception:  # config unavailable → fail closed, allow nothing cross-origin
-        allowed = set()
-    if origin not in allowed:
-        raise PermissionError(f"Origin not allowed for workspace shell: {origin}")
 
 
 def _authenticate_ws_admin(websocket: WebSocket) -> bool:

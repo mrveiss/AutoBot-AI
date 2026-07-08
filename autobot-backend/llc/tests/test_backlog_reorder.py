@@ -255,18 +255,29 @@ class TestBacklogReorderRoute:
             patcher.stop()
 
     def test_unauthenticated_returns_error(self):
-        """No auth overrides installed → the real dependency rejects the request."""
+        """No authenticated user → the real ``get_current_user`` dependency rejects.
+
+        Omitting the auth dependency override is not enough on its own: the test
+        conftest stubs ``auth_middleware.get_auth_middleware`` as a MagicMock whose
+        ``get_user_from_request()`` returns a truthy mock, so the real
+        ``get_current_user`` would always see a "user" and never reject. Force the
+        (stubbed) middleware to yield no user so the route's real auth-rejection
+        path (``if not user_data: raise HTTPException``) actually runs. (#11142)
+        """
+        from unittest.mock import patch  # noqa: PLC0415
+
         client, patcher = self._client(install_auth=False)
         try:
-            company_id = str(uuid.uuid4())
-            ids = [str(uuid.uuid4())]
-            resp = client.post(
-                f"/companies/{company_id}/backlog/reorder",
-                json={"work_item_ids": ids},
-            )
-            # Any 4xx is acceptable — the dependency may raise 400/401/403/422
-            # depending on how the test client handles missing Authorization headers.
-            assert resp.status_code >= 400
+            with patch("api.user_management.dependencies.get_auth_middleware") as mock_gam:
+                mock_gam.return_value.get_user_from_request.return_value = None
+                company_id = str(uuid.uuid4())
+                ids = [str(uuid.uuid4())]
+                resp = client.post(
+                    f"/companies/{company_id}/backlog/reorder",
+                    json={"work_item_ids": ids},
+                )
+                # Real get_current_user raises 401 when the middleware yields no user.
+                assert resp.status_code >= 400
         finally:
             patcher.stop()
 

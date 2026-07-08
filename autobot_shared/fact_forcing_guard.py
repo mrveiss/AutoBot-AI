@@ -19,6 +19,9 @@ Lives in ``autobot_shared`` (not ``agent_loop``) so BOTH the agent loop
 
 import os
 
+from autobot_shared.env_utils import env_flag
+from autobot_shared.tool_args import path_from_tool_args
+
 # Tools that count as investigating a path.
 INVESTIGATION_TOOLS: frozenset[str] = frozenset(
     {
@@ -48,18 +51,6 @@ EDIT_TOOLS: frozenset[str] = frozenset(
     }
 )
 
-PATH_KEYS: tuple[str, ...] = ("file_path", "path", "directory", "target_file")
-
-
-def _path_from_args(args: dict) -> str | None:
-    if not isinstance(args, dict):
-        return None
-    for key in PATH_KEYS:
-        value = args.get(key)
-        if value:
-            return str(value)
-    return None
-
 
 def _norm(path: str) -> str:
     # realpath (not normpath) so a file read by relative path and edited by
@@ -75,7 +66,7 @@ def record_investigation(tool_name: str, args: dict, investigated: set[str]) -> 
     """Record *args*' path in *investigated* if *tool_name* is an investigation tool."""
     if str(tool_name).lower() not in INVESTIGATION_TOOLS:
         return
-    path = _path_from_args(args)
+    path = path_from_tool_args(args)
     if path:
         investigated.add(_norm(path))
 
@@ -93,7 +84,7 @@ def uninvestigated_edit_path(
     """
     if str(tool_name).lower() not in EDIT_TOOLS:
         return None
-    path = _path_from_args(args)
+    path = path_from_tool_args(args)
     if not path:
         return None
     if _norm(path) in investigated:
@@ -128,4 +119,4 @@ def first_uninvestigated_edit(
 
 def fact_forcing_env_enabled() -> bool:
     """True when ``AUTOBOT_FACT_FORCING`` enables the gate."""
-    return os.environ.get("AUTOBOT_FACT_FORCING", "").strip().lower() in {"1", "true", "yes", "on"}
+    return env_flag("AUTOBOT_FACT_FORCING")

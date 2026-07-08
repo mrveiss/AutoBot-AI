@@ -36,6 +36,7 @@ GH#11148) are controlled separately by design.
 
 import os
 
+from autobot_shared.env_utils import truthy
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -64,7 +65,7 @@ GUARD_PROFILES: dict[str, dict[str, object]] = {
 
 
 def _as_bool(raw: str) -> bool:
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
+    return truthy(raw)
 
 
 # env var -> (config field, parser)

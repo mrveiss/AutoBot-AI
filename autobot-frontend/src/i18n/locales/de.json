@@ -8483,7 +8483,26 @@
     "velocityAria": "Velocity für {name}",
     "target": "Ziel {date}",
     "backlogLink": "Backlog",
-    "timelineLink": "Zeitachse"
+    "timelineLink": "Zeitachse",
+    "repo": {
+      "linkedLabel": "Repository",
+      "clonePath": "Arbeitsbereich-Pfad",
+      "status": "Status",
+      "attachBtn": "Repo anhängen",
+      "attachTitle": "GitHub-Repository anhängen",
+      "repoLabel": "owner/repo",
+      "repoPlaceholder": "z. B. acme-org/backend",
+      "credentialLabel": "Anmeldedaten-ID",
+      "credentialPlaceholder": "Gespeicherte Anmeldedaten-ID",
+      "submitBtn": "Anhängen",
+      "syncBtn": "Synchronisieren",
+      "detachBtn": "Trennen",
+      "attachError": "Repository konnte nicht angehängt werden.",
+      "detachError": "Repository konnte nicht getrennt werden.",
+      "syncError": "Synchronisierung konnte nicht ausgelöst werden.",
+      "syncSuccess": "Synchronisierung gestartet.",
+      "copyClonePath": "Arbeitsbereich-Pfad kopieren"
+    }
   },
   "admin": {
     "systemHealth": {

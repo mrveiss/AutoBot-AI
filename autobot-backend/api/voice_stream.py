@@ -35,6 +35,7 @@ from collections import deque
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from api.ws_security import enforce_ws_origin
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -421,6 +422,8 @@ async def _cleanup_ws_tasks(
 )
 async def voice_stream_ws(websocket: WebSocket) -> None:
     """Full-duplex voice conversation WebSocket (#1031, #1319)."""
+    if not await enforce_ws_origin(websocket):
+        return
     await websocket.accept()
     logger.info("Voice stream WebSocket connected")
 

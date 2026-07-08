@@ -8483,7 +8483,26 @@
     "velocityAria": "Vélocité pour {name}",
     "target": "Cible {date}",
     "backlogLink": "Backlog",
-    "timelineLink": "Chronologie"
+    "timelineLink": "Chronologie",
+    "repo": {
+      "linkedLabel": "Dépôt",
+      "clonePath": "Chemin de l'espace de travail",
+      "status": "Statut",
+      "attachBtn": "Attacher le dépôt",
+      "attachTitle": "Attacher un dépôt GitHub",
+      "repoLabel": "owner/repo",
+      "repoPlaceholder": "ex. acme-org/backend",
+      "credentialLabel": "ID d'identifiant",
+      "credentialPlaceholder": "ID d'identifiant enregistré",
+      "submitBtn": "Attacher",
+      "syncBtn": "Synchroniser",
+      "detachBtn": "Détacher",
+      "attachError": "Échec de l'attachement du dépôt.",
+      "detachError": "Échec du détachement du dépôt.",
+      "syncError": "Échec du déclenchement de la synchronisation.",
+      "syncSuccess": "Synchronisation démarrée.",
+      "copyClonePath": "Copier le chemin de l'espace de travail"
+    }
   },
   "admin": {
     "systemHealth": {

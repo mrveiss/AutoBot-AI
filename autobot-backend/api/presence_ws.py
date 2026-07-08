@@ -11,6 +11,7 @@ Issue #3282: collaborative multi-user support — shared sessions and workspaces
 
 from fastapi import APIRouter, Query, WebSocket
 
+from api.ws_security import enforce_ws_origin
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from websocket.presence import presence_websocket_handler
@@ -43,5 +44,7 @@ async def session_presence(
         user_id: Caller's user ID (passed as query param until WS auth middleware
                  is extended to cover WebSocket handshakes for this path)
     """
+    if not await enforce_ws_origin(websocket):
+        return
     logger.info("Presence WS connect: user=%s session=%s", user_id, session_id)
     await presence_websocket_handler(websocket, session_id, user_id)

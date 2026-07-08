@@ -41,6 +41,24 @@
     group: "{{ service_group }}"
     mode: '0644'
 
+# Enforce the advertised retention — without this the backup_*.txt files
+# under backups/redis accumulate forever (#11133; mirrors #11112 node-data prune).
+- name: Find Redis backups older than retention
+  ansible.builtin.find:
+    paths: "{{ project_root }}/backups/redis"
+    patterns: "backup_*.txt"
+    age: "{{ redis_backup_retention_days }}d"
+    age_stamp: mtime
+  register: expired_redis_backups
+
+- name: Remove expired Redis backups
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ expired_redis_backups.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+
 - name: Display backup status
   debug:
     msg: "Redis backup completed: {{ ansible_facts['date_time'].iso8601 }}"

@@ -8483,7 +8483,26 @@
     "velocityAria": "Velocidad de {name}",
     "target": "Objetivo {date}",
     "backlogLink": "Backlog",
-    "timelineLink": "Cronograma"
+    "timelineLink": "Cronograma",
+    "repo": {
+      "linkedLabel": "Repositorio",
+      "clonePath": "Ruta del espacio de trabajo",
+      "status": "Estado",
+      "attachBtn": "Adjuntar repo",
+      "attachTitle": "Adjuntar repositorio de GitHub",
+      "repoLabel": "owner/repo",
+      "repoPlaceholder": "p. ej. acme-org/backend",
+      "credentialLabel": "ID de credencial",
+      "credentialPlaceholder": "ID de credencial almacenada",
+      "submitBtn": "Adjuntar",
+      "syncBtn": "Sincronizar",
+      "detachBtn": "Desvincular",
+      "attachError": "No se pudo adjuntar el repositorio.",
+      "detachError": "No se pudo desvincular el repositorio.",
+      "syncError": "No se pudo iniciar la sincronización.",
+      "syncSuccess": "Sincronización iniciada.",
+      "copyClonePath": "Copiar ruta del espacio de trabajo"
+    }
   },
   "admin": {
     "systemHealth": {

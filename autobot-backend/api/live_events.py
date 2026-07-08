@@ -26,6 +26,7 @@ import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from api.ws_security import enforce_ws_origin
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from events.bus import get_event_bus
@@ -116,6 +117,8 @@ async def _keepalive_loop(ws: WebSocket, stop_event: asyncio.Event) -> None:
 )
 async def live_events_endpoint(websocket: WebSocket):
     """WebSocket endpoint for scoped real-time event streaming (#1408)."""
+    if not await enforce_ws_origin(websocket):
+        return
     # #9963: use the canonical WS auth (JWT), same as /api/ws — the local
     # raw-JWT check was too strict and rejected valid deployments.
     from auth_middleware import authenticate_websocket
