@@ -2856,6 +2856,12 @@ before summarizing.
         if language:
             session.metadata["language"] = language
 
+        # #11261: stash caller identity so the prompt-build path can scope
+        # trajectory retrieval to this user/tenant (strict isolation, #11089).
+        if context:
+            session.metadata["user_id"] = context.get("user_id") or ""
+            session.metadata["tenant_id"] = context.get("tenant_id") or context.get("org_id") or ""
+
         # Issue MVA-1992: Determine if query qualifies for lightweight mode.
         # Trivial tier (GH#9050, score < trivial_threshold) is the primary
         # signal; simple tier (score < complexity_threshold) is used as a
@@ -3002,8 +3008,9 @@ before summarizing.
         # Replaces the direct verbatim-store asyncio.create_task from #5070 with
         # a Celery-backed stop hook so writes are durable and off the hot path.
         user_id = context.get("user_id") if context else None
+        tenant_id = (context.get("tenant_id") or context.get("org_id")) if context else None
         turn = len([m for m in workflow_messages if m.type == "response"])
-        asyncio.create_task(self._fire_stop_hook(session_id, message, combined_response, user_id, turn))
+        asyncio.create_task(self._fire_stop_hook(session_id, message, combined_response, user_id, turn, tenant_id))
 
     async def _fire_stop_hook(
         self,
@@ -3012,11 +3019,13 @@ before summarizing.
         assistant_response: str,
         user_id: str | None,
         turn_number: int,
+        tenant_id: str | None = None,
     ) -> None:
         """Invoke stop hook to enqueue memory tasks after turn completion.
 
         Issue #5073: Delegates to chat_workflow.stop_hook.on_turn_complete
         which enqueues write_verbatim + extract_facts Celery tasks.
+        #11261: also passes tenant_id so trajectory capture stays scoped.
         Called via asyncio.create_task — never blocks the response stream.
         """
         from chat_workflow.stop_hook import on_turn_complete
@@ -3027,6 +3036,7 @@ before summarizing.
             assistant_response=assistant_response,
             user_id=user_id,
             turn_number=turn_number,
+            tenant_id=tenant_id,
         )
 
     async def _fire_pre_compact_hook(
