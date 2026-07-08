@@ -49,7 +49,7 @@ describe('FindingsPolicySettings', () => {
 
   it('falls back to POST when PUT returns 404', async () => {
     let callCount = 0
-    global.fetch = vi.fn(async (url, opts) => {
+    global.fetch = vi.fn(async (_url, opts) => {
       callCount++
       if (opts?.method === 'PUT') {
         return { ok: false, status: 404, json: async () => ({}) } as Response
