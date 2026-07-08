@@ -183,7 +183,10 @@
           </div>
           <ul v-else-if="proposals[p.id]" class="findings-list">
             <li v-for="prop in proposals[p.id]" :key="prop.id" class="finding-row">
-              <span class="finding-severity">{{ prop.severity }}</span>
+              <span class="finding-severity" :title="t('llcBrowser.findings.severity')">{{ prop.severity }}</span>
+              <span v-if="prop.verdict_is_real" class="finding-verdict">
+                {{ t('llcBrowser.findings.verdictReal') }}
+              </span>
               <span class="finding-location">{{ prop.file_path }}:{{ prop.line_number }}</span>
               <span class="finding-desc">{{ prop.description }}</span>
               <span v-if="prop.verdict_rationale" class="finding-rationale">
