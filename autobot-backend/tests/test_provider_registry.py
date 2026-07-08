@@ -41,8 +41,9 @@ class MockProvider(BaseProvider):
         self.chat_completion_called = False
         self.stream_completion_called = False
 
-    async def chat_completion(self, request: LLMRequest) -> LLMResponse:
-        """Mock chat completion."""
+    async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
+        """Mock chat completion — implements the abstract hook so the base
+        rate-limiter/backoff wrapper (chat_completion) drives it (#11249)."""
         self.chat_completion_called = True
         self._total_requests += 1
         return LLMResponse(
@@ -575,6 +576,46 @@ class TestEdgeCases:
         # Should gracefully fall back to available providers
         selected = await registry.get_provider_for_request(conversation_id="conv-id", request=request)
         assert selected is provider
+
+
+# ============================================================================
+# #11249 — providers must implement _chat_completion_impl (not override the
+# concrete chat_completion wrapper), else the class stays abstract and silently
+# fails to register (TypeError: Can't instantiate abstract class).
+# ============================================================================
+
+
+class TestProviderConcreteness:
+    """Regression: every BaseProvider subclass must be instantiable.
+
+    Verified by source inspection (AST) rather than import, because several
+    providers carry optional SDK deps that are not installed in every test
+    environment — but the regression we guard (overriding the concrete
+    ``chat_completion`` wrapper instead of implementing the abstract
+    ``_chat_completion_impl``) is fully visible in the source.
+    """
+
+    @pytest.mark.parametrize(
+        "filename",
+        ["ollama_provider.py", "custom_openai.py", "groq.py", "huggingface.py", "vllm_base.py"],
+    )
+    def test_provider_implements_impl_not_override(self, filename):
+        import ast
+        from pathlib import Path
+
+        source = (Path(__file__).resolve().parents[1] / "llm_shared" / "providers" / filename).read_text(
+            encoding="utf-8"
+        )
+        methods = {n.name for n in ast.walk(ast.parse(source)) if isinstance(n, ast.AsyncFunctionDef)}
+        assert "_chat_completion_impl" in methods, f"{filename}: must implement _chat_completion_impl (#11249)"
+        assert "chat_completion" not in methods, (
+            f"{filename}: must not override the concrete chat_completion wrapper — "
+            f"that leaves the class abstract and it fails to register (#11249)"
+        )
+
+    def test_mock_provider_is_concrete(self):
+        # MockProvider is imported at module top, so the runtime check is reliable here.
+        assert not set(getattr(MockProvider, "__abstractmethods__", frozenset()))
 
 
 if __name__ == "__main__":
