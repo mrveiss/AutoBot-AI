@@ -29,7 +29,6 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import services.llm_service as _llm_service_mod
-
 from autobot_shared.ssot_config import config as _cfg
 from llm_shared.types import LLMType
 
