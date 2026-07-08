@@ -8463,7 +8463,14 @@
       "loadError": "Failed to load projects.",
       "create": "New Project",
       "createTitle": "Create Project",
-      "createError": "Failed to create project."
+      "createError": "Failed to create project.",
+      "archive": "آرکائیو",
+      "restore": "بحال",
+      "delete": "حذف",
+      "confirmDelete": "اس آرکائیو شدہ پروجیکٹ اور اس کے اسپرنٹس کو حذف کریں؟ یہ واپس نہیں ہو سکتا۔",
+      "archiveError": "پروجیکٹ آرکائیو کرنے میں ناکامی۔",
+      "restoreError": "پروجیکٹ بحال کرنے میں ناکامی۔",
+      "deleteError": "پروجیکٹ حذف کرنے میں ناکامی۔"
     },
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."
@@ -8502,6 +8509,12 @@
       "syncError": "Failed to trigger sync.",
       "syncSuccess": "Sync started.",
       "copyClonePath": "Copy workspace path"
+    },
+    "lifecycle": {
+      "active": "فعال",
+      "archived": "آرکائیو شدہ",
+      "pending_disposal": "حذف کا انتظار",
+      "disposed": "حذف شدہ"
     }
   },
   "admin": {

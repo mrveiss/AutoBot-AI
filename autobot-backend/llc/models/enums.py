@@ -125,6 +125,7 @@ class ApprovalType(str, Enum):
     STRATEGY = "strategy"
     BUDGET_OVERRIDE = "budget_override"
     SPRINT_CLOSE = "sprint_close"
+    PROJECT_DISPOSAL = "project_disposal"
 
 
 class ApprovalStatus(str, Enum):

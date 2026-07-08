@@ -17,6 +17,45 @@ from .source_storage import save_source
 logger = get_logger(__name__)
 
 
+async def delete_source_and_cleanup(source_id: str, source: CodeSource | None = None) -> bool:
+    """Delete a CodeSource: its clone dir (only under CODE_SOURCES_BASE), its
+    ChromaDB documents, and its Redis record. Idempotent; returns Redis-delete result.
+
+    Callers that already loaded the record (e.g. the DELETE handler's 404 check) may
+    pass ``source`` to avoid a redundant Redis read."""
+    import shutil  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    from .source_paths import CODE_SOURCES_BASE  # noqa: PLC0415
+    from .source_storage import delete_source, get_source  # noqa: PLC0415
+
+    if source is None:
+        source = await get_source(source_id)
+    if source is None:
+        return False
+    if source.clone_path and Path(source.clone_path).exists():
+        clone = Path(source.clone_path).resolve()
+        if clone.is_relative_to(CODE_SOURCES_BASE):
+            shutil.rmtree(source.clone_path, ignore_errors=True)
+    await _purge_source_index(source_id)
+    ok = await delete_source(source_id)
+    logger.info("Deleted code source %s (clone+index+record)", source_id)
+    return ok
+
+
+async def _purge_source_index(source_id: str) -> None:
+    """Best-effort ChromaDB document removal for a source; never raises."""
+    try:
+        from .chromadb_storage import _delete_source_documents  # noqa: PLC0415
+        from .storage import get_code_collection_async  # noqa: PLC0415
+
+        collection = await get_code_collection_async()
+        if collection is not None:
+            await _delete_source_documents(collection, task_id="dispose", source_id=source_id)
+    except Exception as exc:  # noqa: BLE001 — index cleanup is best-effort
+        logger.warning("ChromaDB purge for source %s failed: %s", source_id, exc)
+
+
 async def create_github_source(
     *,
     name: str,

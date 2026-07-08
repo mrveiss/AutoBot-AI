@@ -8463,7 +8463,14 @@
       "loadError": "Neizdevās ielādēt projektus.",
       "create": "Jauns projekts",
       "createTitle": "Izveidot projektu",
-      "createError": "Neizdevās izveidot projektu."
+      "createError": "Neizdevās izveidot projektu.",
+      "archive": "Arhivēt",
+      "restore": "Atjaunot",
+      "delete": "Dzēst",
+      "confirmDelete": "Dzēst šo arhivēto projektu un tā sprintus? Šo darbību nevar atcelt.",
+      "archiveError": "Neizdevās arhivēt projektu.",
+      "restoreError": "Neizdevās atjaunot projektu.",
+      "deleteError": "Neizdevās dzēst projektu."
     },
     "approvals": {
       "decideError": "Neizdevās saglabāt jūsu lēmumu. Lūdzu, mēģiniet vēlreiz."
@@ -8502,6 +8509,12 @@
       "syncError": "Failed to trigger sync.",
       "syncSuccess": "Sync started.",
       "copyClonePath": "Copy workspace path"
+    },
+    "lifecycle": {
+      "active": "Aktīvs",
+      "archived": "Arhivēts",
+      "pending_disposal": "Gaida dzēšanu",
+      "disposed": "Dzēsts"
     }
   },
   "admin": {

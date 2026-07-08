@@ -8463,7 +8463,14 @@
       "loadError": "Failed to load projects.",
       "create": "New Project",
       "createTitle": "Create Project",
-      "createError": "Failed to create project."
+      "createError": "Failed to create project.",
+      "archive": "بایگانی",
+      "restore": "بازیابی",
+      "delete": "حذف",
+      "confirmDelete": "این پروژه بایگانی‌شده و اسپرینت‌های آن حذف شوند؟ این عمل قابل بازگشت نیست.",
+      "archiveError": "بایگانی پروژه ناموفق بود.",
+      "restoreError": "بازیابی پروژه ناموفق بود.",
+      "deleteError": "حذف پروژه ناموفق بود."
     },
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."
@@ -8502,6 +8509,12 @@
       "syncError": "Failed to trigger sync.",
       "syncSuccess": "Sync started.",
       "copyClonePath": "Copy workspace path"
+    },
+    "lifecycle": {
+      "active": "فعال",
+      "archived": "بایگانی‌شده",
+      "pending_disposal": "در انتظار حذف",
+      "disposed": "حذف‌شده"
     }
   },
   "admin": {

@@ -12,6 +12,8 @@
     "preview": "vite preview",
     "lint": "eslint . --fix",
     "type-check": "vue-tsc --noEmit -p tsconfig.json",
+    "test": "vitest",
+    "test:unit": "vitest run",
     "storybook": "VITE_API_URL=/slm storybook dev -p 6007",
     "build-storybook": "VITE_API_URL=/slm storybook build"
   },
@@ -28,6 +30,9 @@
     "vue-router": "^5.1.0"
   },
   "devDependencies": {
+    "@vue/test-utils": "^2.4.11",
+    "jsdom": "^26.1.0",
+    "vitest": "^4.1.5",
     "@storybook/addon-docs": "^10.4.6",
     "@storybook/vue3": "^10.4.6",
     "@storybook/vue3-vite": "^10.4.6",

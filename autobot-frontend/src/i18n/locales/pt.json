@@ -8463,7 +8463,14 @@
       "loadError": "Falha ao carregar os projetos.",
       "create": "Novo projeto",
       "createTitle": "Criar projeto",
-      "createError": "Falha ao criar o projeto."
+      "createError": "Falha ao criar o projeto.",
+      "archive": "Arquivar",
+      "restore": "Restaurar",
+      "delete": "Excluir",
+      "confirmDelete": "Excluir este projeto arquivado e seus sprints? Esta ação não pode ser desfeita.",
+      "archiveError": "Falha ao arquivar o projeto.",
+      "restoreError": "Falha ao restaurar o projeto.",
+      "deleteError": "Falha ao excluir o projeto."
     },
     "approvals": {
       "decideError": "Falha ao registrar sua decisão. Tente novamente."
@@ -8502,6 +8509,12 @@
       "syncError": "Falha ao acionar a sincronização.",
       "syncSuccess": "Sincronização iniciada.",
       "copyClonePath": "Copiar caminho do espaço de trabalho"
+    },
+    "lifecycle": {
+      "active": "Ativo",
+      "archived": "Arquivado",
+      "pending_disposal": "Exclusão pendente",
+      "disposed": "Excluído"
     }
   },
   "admin": {

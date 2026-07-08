@@ -8463,7 +8463,14 @@
       "loadError": "Projekte konnten nicht geladen werden.",
       "create": "Neues Projekt",
       "createTitle": "Projekt erstellen",
-      "createError": "Projekt konnte nicht erstellt werden."
+      "createError": "Projekt konnte nicht erstellt werden.",
+      "archive": "Archivieren",
+      "restore": "Wiederherstellen",
+      "delete": "Löschen",
+      "confirmDelete": "Dieses archivierte Projekt und seine Sprints löschen? Dies kann nicht rückgängig gemacht werden.",
+      "archiveError": "Projekt konnte nicht archiviert werden.",
+      "restoreError": "Projekt konnte nicht wiederhergestellt werden.",
+      "deleteError": "Projekt konnte nicht gelöscht werden."
     },
     "approvals": {
       "decideError": "Ihre Entscheidung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut."
@@ -8502,6 +8509,12 @@
       "syncError": "Synchronisierung konnte nicht ausgelöst werden.",
       "syncSuccess": "Synchronisierung gestartet.",
       "copyClonePath": "Arbeitsbereich-Pfad kopieren"
+    },
+    "lifecycle": {
+      "active": "Aktiv",
+      "archived": "Archiviert",
+      "pending_disposal": "Ausstehende Löschung",
+      "disposed": "Gelöscht"
     }
   },
   "admin": {

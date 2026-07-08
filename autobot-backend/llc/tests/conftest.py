@@ -69,9 +69,15 @@ def _make_services_stub() -> types.ModuleType:
     llm_mod.__package__ = "services"
     llm_mod.get_llm_service = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
 
+    slm_mod = types.ModuleType("services.slm_client")
+    slm_mod.__package__ = "services"
+    slm_mod.get_slm_client = MagicMock(return_value=None)  # type: ignore[attr-defined]
+
     services_mod.llm_service = llm_mod  # type: ignore[attr-defined]
+    services_mod.slm_client = slm_mod  # type: ignore[attr-defined]
     sys.modules["services"] = services_mod
     sys.modules["services.llm_service"] = llm_mod
+    sys.modules["services.slm_client"] = slm_mod
     return services_mod
 
 
@@ -134,6 +140,14 @@ def _shield_codebase_analytics_package() -> None:
     pkg.__path__ = [str(_pkg_dir)]  # type: ignore[attr-defined]
     pkg.__package__ = "api.codebase_analytics"
     sys.modules["api.codebase_analytics"] = pkg
+    # Expose as an attribute on the parent ``api`` package so that
+    # ``mock.patch("api.codebase_analytics.<submodule>.<attr>")`` — whose dotted
+    # lookup runs ``getattr(api, "codebase_analytics")`` — resolves to this shield
+    # (#11129 P2). Without it, patching a lazily-imported analytics helper raises
+    # ``AttributeError: module 'api' has no attribute 'codebase_analytics'``.
+    import importlib  # noqa: PLC0415
+
+    importlib.import_module("api").codebase_analytics = pkg  # type: ignore[attr-defined]
 
 
 _shield_codebase_analytics_package()
@@ -233,6 +247,11 @@ def _make_mock_project(company_id: uuid.UUID, code_source_id: str | None = None)
     proj.open_work_item_count = 0
     proj.created_at = datetime.now(timezone.utc)
     proj.updated_at = datetime.now(timezone.utc)
+    # Pin lifecycle fields (#11129 P2) so model_validate doesn't auto-vivify Mocks.
+    proj.lifecycle_state = "active"
+    proj.archived_at = None
+    proj.disposal_scheduled_at = None
+    proj.disposal_approval_id = None
     return proj
 
 

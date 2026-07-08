@@ -8463,7 +8463,14 @@
       "loadError": "No se pudieron cargar los proyectos.",
       "create": "Nuevo proyecto",
       "createTitle": "Crear proyecto",
-      "createError": "No se pudo crear el proyecto."
+      "createError": "No se pudo crear el proyecto.",
+      "archive": "Archivar",
+      "restore": "Restaurar",
+      "delete": "Eliminar",
+      "confirmDelete": "¿Eliminar este proyecto archivado y sus sprints? Esta acción no se puede deshacer.",
+      "archiveError": "Error al archivar el proyecto.",
+      "restoreError": "Error al restaurar el proyecto.",
+      "deleteError": "Error al eliminar el proyecto."
     },
     "approvals": {
       "decideError": "No se pudo registrar tu decisión. Inténtalo de nuevo."
@@ -8502,6 +8509,12 @@
       "syncError": "No se pudo iniciar la sincronización.",
       "syncSuccess": "Sincronización iniciada.",
       "copyClonePath": "Copiar ruta del espacio de trabajo"
+    },
+    "lifecycle": {
+      "active": "Activo",
+      "archived": "Archivado",
+      "pending_disposal": "Eliminación pendiente",
+      "disposed": "Eliminado"
     }
   },
   "admin": {

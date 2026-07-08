@@ -94,6 +94,15 @@ def _make_project(company_id: str, program_id: Optional[uuid.UUID] = None) -> Ma
     m.auto_rollover = None
     m.created_at = None
     m.updated_at = None
+    # Pin repo-link and lifecycle fields (#11129 / #11129 P2) — prevent MagicMock auto-vivify.
+    m.code_source_id = None
+    m.code_source = None
+    m.open_work_item_count = 0
+    m.active_sprint_name = None
+    m.lifecycle_state = "active"
+    m.archived_at = None
+    m.disposal_scheduled_at = None
+    m.disposal_approval_id = None
     return m
 
 
@@ -229,6 +238,20 @@ def _make_app(
             obj.velocity_actual = 0
         if not getattr(obj, "pending_close_approval_id", None):
             obj.pending_close_approval_id = None
+        # Lifecycle fields (#11129 P2) — pin so ProjectResponse.model_validate doesn't choke.
+        if not getattr(obj, "lifecycle_state", None):
+            obj.lifecycle_state = "active"
+        if not hasattr(obj, "archived_at") or callable(getattr(obj, "archived_at", None)):
+            obj.archived_at = None
+        if not hasattr(obj, "disposal_scheduled_at") or callable(getattr(obj, "disposal_scheduled_at", None)):
+            obj.disposal_scheduled_at = None
+        if not hasattr(obj, "disposal_approval_id") or callable(getattr(obj, "disposal_approval_id", None)):
+            obj.disposal_approval_id = None
+        # Repo-link fields (#11129) — prevent auto-vivification.
+        if not hasattr(obj, "code_source_id") or callable(getattr(obj, "code_source_id", None)):
+            obj.code_source_id = None
+        if not hasattr(obj, "code_source") or callable(getattr(obj, "code_source", None)):
+            obj.code_source = None
 
     mock_session.refresh = _fake_refresh
 

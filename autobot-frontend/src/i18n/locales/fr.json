@@ -8463,7 +8463,14 @@
       "loadError": "Échec du chargement des projets.",
       "create": "Nouveau projet",
       "createTitle": "Créer un projet",
-      "createError": "Échec de la création du projet."
+      "createError": "Échec de la création du projet.",
+      "archive": "Archiver",
+      "restore": "Restaurer",
+      "delete": "Supprimer",
+      "confirmDelete": "Supprimer ce projet archivé et ses sprints ? Cette action est irréversible.",
+      "archiveError": "Échec de l'archivage du projet.",
+      "restoreError": "Échec de la restauration du projet.",
+      "deleteError": "Échec de la suppression du projet."
     },
     "approvals": {
       "decideError": "Échec de l'enregistrement de votre décision. Veuillez réessayer."
@@ -8502,6 +8509,12 @@
       "syncError": "Échec du déclenchement de la synchronisation.",
       "syncSuccess": "Synchronisation démarrée.",
       "copyClonePath": "Copier le chemin de l'espace de travail"
+    },
+    "lifecycle": {
+      "active": "Actif",
+      "archived": "Archivé",
+      "pending_disposal": "Suppression en attente",
+      "disposed": "Supprimé"
     }
   },
   "admin": {

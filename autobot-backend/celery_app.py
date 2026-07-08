@@ -204,6 +204,11 @@ celery_app.conf.beat_schedule = {
         "task": "llc.scheduler.sprint_autoclose.run_daily_check",
         "schedule": crontab(hour=0, minute=5),
     },
+    # #11129 P2: dispose pending_disposal projects whose retention has elapsed
+    "llc-project-disposal-sweep": {
+        "task": "llc.scheduler.project_disposal_sweep.run_disposal_sweep",
+        "schedule": crontab(hour=1, minute=0),
+    },
     # GH#7356: background audit daemon — testgaps, dead-code, claims
     # Beat pidfile must NOT reside on tmpfs (/run/autobot/ is wiped on reboot).
     "audit-testgaps-6h": {
@@ -271,6 +276,7 @@ celery_app.conf.beat_schedule = {
     },
 }
 
+import llc.scheduler.project_disposal_sweep  # noqa: F401
 import tasks.audit_log_retention  # noqa: F401
 
 # GH#8995: import retention tasks so Celery registers them at worker startup

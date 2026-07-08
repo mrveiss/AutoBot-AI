@@ -8463,7 +8463,14 @@
       "loadError": "Failed to load projects.",
       "create": "New Project",
       "createTitle": "Create Project",
-      "createError": "Failed to create project."
+      "createError": "Failed to create project.",
+      "archive": "أرشفة",
+      "restore": "استعادة",
+      "delete": "حذف",
+      "confirmDelete": "حذف هذا المشروع المؤرشف وسباقاته؟ لا يمكن التراجع عن هذا.",
+      "archiveError": "فشل أرشفة المشروع.",
+      "restoreError": "فشل استعادة المشروع.",
+      "deleteError": "فشل حذف المشروع."
     },
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."
@@ -8502,6 +8509,12 @@
       "syncError": "Failed to trigger sync.",
       "syncSuccess": "Sync started.",
       "copyClonePath": "Copy workspace path"
+    },
+    "lifecycle": {
+      "active": "نشط",
+      "archived": "مؤرشف",
+      "pending_disposal": "في انتظار الحذف",
+      "disposed": "محذوف"
     }
   },
   "admin": {

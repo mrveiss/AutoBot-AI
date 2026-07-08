@@ -8463,7 +8463,14 @@
       "loadError": "Nie udało się załadować projektów.",
       "create": "Nowy projekt",
       "createTitle": "Utwórz projekt",
-      "createError": "Nie udało się utworzyć projektu."
+      "createError": "Nie udało się utworzyć projektu.",
+      "archive": "Archiwizuj",
+      "restore": "Przywróć",
+      "delete": "Usuń",
+      "confirmDelete": "Usunąć ten zarchiwizowany projekt i jego sprinty? Tej operacji nie można cofnąć.",
+      "archiveError": "Nie udało się zarchiwizować projektu.",
+      "restoreError": "Nie udało się przywrócić projektu.",
+      "deleteError": "Nie udało się usunąć projektu."
     },
     "approvals": {
       "decideError": "Nie udało się zapisać Twojej decyzji. Spróbuj ponownie."
@@ -8502,6 +8509,12 @@
       "syncError": "Failed to trigger sync.",
       "syncSuccess": "Sync started.",
       "copyClonePath": "Copy workspace path"
+    },
+    "lifecycle": {
+      "active": "Aktywny",
+      "archived": "Zarchiwizowany",
+      "pending_disposal": "Oczekuje na usunięcie",
+      "disposed": "Usunięty"
     }
   },
   "admin": {
