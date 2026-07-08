@@ -229,13 +229,38 @@
           v-model="attachForm.repo"
           :label="t('llcBrowser.repo.repoLabel')"
           :placeholder="t('llcBrowser.repo.repoPlaceholder')"
+          :helper-text="t('llcBrowser.repo.repoHelp')"
+          :error="repoFieldError"
           required
         />
         <BaseInput
-          v-model="attachForm.credential_id"
-          :label="t('llcBrowser.repo.credentialLabel')"
-          :placeholder="t('llcBrowser.repo.credentialPlaceholder')"
+          v-model="attachForm.branch"
+          :label="t('llcBrowser.repo.branchLabel')"
+          :placeholder="t('llcBrowser.repo.branchPlaceholder')"
         />
+        <div class="create-field">
+          <label class="create-label" for="attach-credential">
+            {{ t('llcBrowser.repo.credentialLabel') }}
+          </label>
+          <select
+            id="attach-credential"
+            v-model="attachForm.credential_id"
+            class="create-select"
+          >
+            <option value="">{{ t('llcBrowser.repo.credentialNone') }}</option>
+            <option
+              v-for="cred in credentialOptions"
+              :key="cred.id"
+              :value="cred.id"
+            >
+              {{ cred.label }}
+            </option>
+          </select>
+          <p class="create-help">{{ t('llcBrowser.repo.credentialHelp') }}</p>
+          <p v-if="credentialsError" class="create-help create-help-error">
+            {{ t('llcBrowser.repo.credentialLoadError') }}
+          </p>
+        </div>
       </div>
       <template #actions>
         <BaseButton variant="secondary" :disabled="attaching" @click="showAttach = false">
@@ -268,6 +293,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseInput from '@/components/base/BaseInput.vue'
 import { BaseModal } from '@autobot/ui'
 import ErrorBanner from '@/components/base/ErrorBanner.vue'
+import { secretsApiClient } from '@/utils/SecretsApiClient'
 
 // GH#11129: linked code-source summary on a project.
 interface CodeSourceSummary {
@@ -331,13 +357,29 @@ const createError = ref('')
 const form = ref({ name: '', description: '' })
 
 // GH#11129: repo attach/detach/sync state
+// Backend requires the repo in `owner/repo` form (AttachRepoRequest pattern);
+// we normalize pasted GitHub URLs to that shape before POSTing (#11129 repo-link bug 1).
+const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/
 const showAttach = ref(false)
 const attachTargetId = ref<string | null>(null)
 const attaching = ref(false)
 const attachError = ref('')
-const attachForm = ref({ repo: '', credential_id: '' })
+// branch defaults to "main" so users can pick a branch (#11129 repo-link bug 2).
+const attachForm = ref({ repo: '', credential_id: '', branch: 'main' })
 const detachingRepo = ref<string | null>(null)
 const syncingRepo = ref<string | null>(null)
+
+// GH#11129 repo-link bug 3: credential picker sourced from the existing secrets store.
+interface CredentialOption { id: string; label: string }
+const credentialOptions = ref<CredentialOption[]>([])
+const credentialsError = ref(false)
+
+// Inline client-side validation for the repo field (#11129 repo-link bug 1).
+const repoFieldError = computed(() => {
+  const raw = attachForm.value.repo.trim()
+  if (!raw) return ''
+  return REPO_PATTERN.test(normalizeRepo(raw)) ? '' : t('llcBrowser.repo.repoInvalid')
+})
 // per-project error messages (keyed by project id)
 const repoError = ref<Record<string, string>>({})
 
@@ -435,16 +477,53 @@ async function createProject(): Promise<void> {
 
 // GH#11129: repo linkage actions -------------------------------------------
 
+// Reduce free-text repo input (URL / SSH / trailing .git) to the `owner/repo`
+// form the backend expects (#11129 repo-link bug 1).
+function normalizeRepo(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^https?:\/\/github\.com\//i, '')
+    .replace(/^git@github\.com:/i, '')
+    .replace(/\.git$/i, '')
+    .replace(/\/+$/, '')
+    .trim()
+}
+
+// GH#11129 repo-link bug 3: load selectable credentials from the secrets store.
+// Failures are non-fatal — the field is optional (public repos need none).
+async function loadCredentials(): Promise<void> {
+  credentialsError.value = false
+  try {
+    const res = (await secretsApiClient.getSecrets({})) as { secrets?: CredentialOption[] }
+    const list = (res.secrets ?? []) as Array<{ id: string; name?: string; type?: string }>
+    credentialOptions.value = list.map(sec => ({
+      id: sec.id,
+      label: sec.type ? `${sec.name ?? sec.id} (${sec.type})` : (sec.name ?? sec.id),
+    }))
+  } catch (err) {
+    logger.error('Failed to load credentials', err)
+    credentialsError.value = true
+    credentialOptions.value = []
+  }
+}
+
 function openAttach(projectId: string): void {
   attachTargetId.value = projectId
-  attachForm.value = { repo: '', credential_id: '' }
+  attachForm.value = { repo: '', credential_id: '', branch: 'main' }
   attachError.value = ''
   showAttach.value = true
+  void loadCredentials()
 }
 
 async function submitAttach(): Promise<void> {
-  const repo = attachForm.value.repo.trim()
+  const repo = normalizeRepo(attachForm.value.repo)
   if (!repo || !attachTargetId.value) return
+  // Client-side guard so a bad paste never silently 422s (#11129 repo-link bug 1).
+  if (!REPO_PATTERN.test(repo)) {
+    attachError.value = t('llcBrowser.repo.repoInvalid')
+    return
+  }
+  const branch = attachForm.value.branch.trim() || 'main'
   attaching.value = true
   attachError.value = ''
   try {
@@ -452,15 +531,22 @@ async function submitAttach(): Promise<void> {
       `/api/llc/projects/${attachTargetId.value}/repo`,
       {
         repo,
+        branch,
         credential_id: attachForm.value.credential_id.trim() || null,
       },
     )
     const idx = projects.value.findIndex(p => p.id === attachTargetId.value)
+    // Reload so the persisted code_source is reflected in the list (#11129 repo-link bug 1).
     if (idx !== -1) projects.value[idx] = updated
+    else await loadProjects()
     showAttach.value = false
   } catch (err) {
+    // Surface the backend 422/error text instead of silently closing (#11129 repo-link bug 1).
     logger.error('Failed to attach repo', err)
-    attachError.value = t('llcBrowser.repo.attachError')
+    const detail = err instanceof Error ? err.message : ''
+    attachError.value = detail
+      ? t('llcBrowser.repo.attachErrorDetail', { detail })
+      : t('llcBrowser.repo.attachError')
   } finally {
     attaching.value = false
   }
@@ -721,6 +807,27 @@ onMounted(loadProjects)
   color: var(--text-primary);
   font-size: 0.875rem;
   resize: vertical;
+}
+
+/* GH#11129 repo-link bug 3: credential picker + help text */
+.create-select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
+.create-help {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin: 0.25rem 0 0;
+}
+
+.create-help-error {
+  color: var(--color-error, #dc2626);
 }
 
 /* GH#11129: repo linkage styles */
