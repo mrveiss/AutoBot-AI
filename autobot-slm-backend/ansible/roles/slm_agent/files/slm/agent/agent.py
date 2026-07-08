@@ -236,10 +236,12 @@ class SLMAgent:
         """
         Build list of listening ports for heartbeat payload.
 
-        Returns a list of dictionaries with port, process, and pid info.
-        Issue #620.
+        Returns a list of dictionaries with port, process, pid, and bind address.
+        Issue #620; ``address`` added for the security-posture audit (GH#11224).
         """
-        return [{"port": p.port, "process": p.process, "pid": p.pid} for p in get_listening_ports()]
+        return [
+            {"port": p.port, "process": p.process, "pid": p.pid, "address": p.address} for p in get_listening_ports()
+        ]
 
     def _build_heartbeat_payload(self, health: dict, os_info: str, code_version: str | None) -> dict:
         """
