@@ -738,6 +738,14 @@ _COMPONENT_FRONTEND_DIRS: Dict[str, str] = {
     "autobot-slm-frontend": "/opt/autobot/autobot-slm-frontend",
 }
 
+# npm build script per frontend component. The SLM frontend is co-located under
+# /slm and MUST bake VITE_API_URL=/slm (via `build:slm`), or its API calls hit
+# the root user backend instead of /slm/api — breaking login and every action
+# (#11310). vite.config.ts hard-errors on a co-located build without it.
+_COMPONENT_BUILD_SCRIPT: Dict[str, str] = {
+    "autobot-slm-frontend": "build:slm",
+}
+
 # Maps component name → systemd service names to restart after sync.
 _COMPONENT_SERVICES: Dict[str, List[str]] = {
     "autobot-backend": ["autobot-backend"],
@@ -904,10 +912,11 @@ async def _build_npm_frontend_for_component(component: str, steps: List[str]) ->
             steps.append(f"npm ci: failed (rc={proc.returncode}): {out[:150]}")
             return
 
+        build_script = _COMPONENT_BUILD_SCRIPT.get(component, "build")
         proc = await asyncio.create_subprocess_exec(
             "npm",
             "run",
-            "build",
+            build_script,
             "--prefix",
             frontend_dir,
             stdout=asyncio.subprocess.PIPE,
@@ -915,7 +924,7 @@ async def _build_npm_frontend_for_component(component: str, steps: List[str]) ->
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
         if proc.returncode == 0:
-            logger.info("drift resolve: npm build succeeded for %s", component)
+            logger.info("drift resolve: npm build (%s) succeeded for %s", build_script, component)
             steps.append("npm build: succeeded")
         else:
             out = stdout.decode(errors="replace")[:300] if stdout else ""
