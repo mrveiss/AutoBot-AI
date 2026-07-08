@@ -16,6 +16,7 @@ Real LLM service call (services/llm_service.py:179):
 FAIL CLOSED: any failure → Verdict(is_real=False, confidence=0.0, rationale="unverifiable: <reason>")
 """
 
+import itertools
 import json
 import logging
 from dataclasses import dataclass
@@ -48,8 +49,11 @@ def _read_code_window(clone_path: str, file_path: str, line_number: int | None) 
     if not file_path or line_number is None:
         return ""
     full = Path(clone_path) / file_path
+    # Bounded read (only up to the window's last line) + errors="replace" so a
+    # huge/minified or non-UTF-8 file degrades to verify-by-context, never crashes.
     try:
-        lines = full.read_text(encoding="utf-8").splitlines()
+        with full.open(encoding="utf-8", errors="replace") as fh:
+            lines = [ln.rstrip("\n") for ln in itertools.islice(fh, line_number + _WINDOW_LINES)]
     except OSError:
         return ""
     lo = max(0, line_number - 1 - _WINDOW_LINES)
@@ -77,13 +81,21 @@ def _build_prompt(finding: dict, code_window: str) -> str:
 
 
 def _parse_verdict(text: str) -> Verdict:
-    """Parse a strict-JSON verdict string into a Verdict; raise on any issue."""
+    """Parse a strict-JSON verdict string into a Verdict; raise on any issue.
+
+    ``is_real`` MUST be a JSON boolean — a truthy string like "false" is rejected
+    (``bool("false")`` is True), so nothing is queued as real unless the engine
+    explicitly said so. Out-of-range confidence is also rejected. Any raise is
+    caught upstream and turned into a fail-closed verdict.
+    """
     data = json.loads(text)
-    return Verdict(
-        is_real=bool(data["is_real"]),
-        confidence=float(data["confidence"]),
-        rationale=str(data["rationale"]),
-    )
+    raw = data["is_real"]
+    if not isinstance(raw, bool):
+        raise ValueError(f"is_real must be a JSON boolean, got {type(raw).__name__!r}")
+    confidence = float(data["confidence"])
+    if not 0.0 <= confidence <= 1.0:
+        raise ValueError(f"confidence {confidence!r} out of [0, 1]")
+    return Verdict(is_real=raw, confidence=confidence, rationale=str(data["rationale"]))
 
 
 async def verify_finding(finding: dict, clone_path: str) -> Verdict:

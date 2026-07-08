@@ -113,7 +113,28 @@ async def test_verify_finding_non_json_fails_closed(clone_dir: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_verify_finding_missing_file_fails_closed(tmp_path: Path) -> None:
+async def test_verify_finding_string_false_fails_closed(clone_dir: Path) -> None:
+    """is_real as the JSON string "false" must NOT coerce to True (bool('false') is True)."""
+    bad = json.dumps({"is_real": "false", "confidence": 0.9, "rationale": "ok"})
+    svc = _mock_service(chat_return=_make_response(bad))
+    with patch("llc.services.findings_verify.get_llm_service", return_value=svc):
+        verdict = await verify_finding(_FINDING, str(clone_dir))
+    assert verdict.is_real is False
+    assert verdict.confidence == 0.0
+
+
+@pytest.mark.asyncio
+async def test_verify_finding_out_of_range_confidence_fails_closed(clone_dir: Path) -> None:
+    """A verdict with confidence outside [0,1] is rejected → fail-closed."""
+    bad = json.dumps({"is_real": True, "confidence": 1.5, "rationale": "ok"})
+    svc = _mock_service(chat_return=_make_response(bad))
+    with patch("llc.services.findings_verify.get_llm_service", return_value=svc):
+        verdict = await verify_finding(_FINDING, str(clone_dir))
+    assert verdict.is_real is False
+
+
+@pytest.mark.asyncio
+async def test_verify_finding_missing_file_does_not_raise(tmp_path: Path) -> None:
     """Finding pointing at a nonexistent file → still returns a Verdict, never raises."""
     svc = _mock_service(chat_return=_make_response(_GOOD_VERDICT_JSON))
     finding_no_file = dict(_FINDING, file_path="does/not/exist.py")
