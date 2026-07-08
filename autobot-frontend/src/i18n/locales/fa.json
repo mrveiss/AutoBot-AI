@@ -8515,6 +8515,18 @@
       "archived": "بایگانی‌شده",
       "pending_disposal": "در انتظار حذف",
       "disposed": "حذف‌شده"
+    },
+    "findings": {
+      "scan": "جستجوی یافته‌ها",
+      "scanning": "در حال اسکن…",
+      "empty": "هیچ یافته معلقی وجود ندارد.",
+      "promote": "ارتقا",
+      "dismiss": "رد کردن",
+      "dismissReason": "دلیل رد کردن",
+      "verdictReal": "حکم: واقعی",
+      "verdictRationale": "استدلال",
+      "disabled": "جستجوی یافته‌ها غیرفعال است.",
+      "severity": "شدت"
     }
   },
   "admin": {

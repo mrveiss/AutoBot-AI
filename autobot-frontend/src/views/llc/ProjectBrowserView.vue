@@ -164,6 +164,51 @@
           />
         </div>
 
+        <!-- GH#11271: findings proposal queue -->
+        <div v-if="p.code_source_id" class="card-findings">
+          <div class="findings-header">
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :loading="scanningProject === p.id"
+              :disabled="scanningProject === p.id"
+              @click="scanFindings(p)"
+            >
+              {{ scanningProject === p.id ? t('llcBrowser.findings.scanning') : t('llcBrowser.findings.scan') }}
+            </BaseButton>
+          </div>
+          <ErrorBanner v-if="findingsError[p.id]" :message="findingsError[p.id]" class="browser-error" />
+          <div v-if="proposals[p.id] && proposals[p.id].length === 0" class="findings-empty">
+            {{ t('llcBrowser.findings.empty') }}
+          </div>
+          <ul v-else-if="proposals[p.id]" class="findings-list">
+            <li v-for="prop in proposals[p.id]" :key="prop.id" class="finding-row">
+              <span class="finding-severity">{{ prop.severity }}</span>
+              <span class="finding-location">{{ prop.file_path }}:{{ prop.line_number }}</span>
+              <span class="finding-desc">{{ prop.description }}</span>
+              <span v-if="prop.verdict_rationale" class="finding-rationale">
+                {{ prop.verdict_rationale }}
+              </span>
+              <div class="finding-actions">
+                <BaseButton
+                  variant="secondary"
+                  size="sm"
+                  @click="promoteProposal(p, prop)"
+                >
+                  {{ t('llcBrowser.findings.promote') }}
+                </BaseButton>
+                <BaseButton
+                  variant="secondary"
+                  size="sm"
+                  @click="dismissProposal(p, prop)"
+                >
+                  {{ t('llcBrowser.findings.dismiss') }}
+                </BaseButton>
+              </div>
+            </li>
+          </ul>
+        </div>
+
         <div class="card-actions">
           <RouterLink class="action-link" :to="`/llc/companies/${companyId}/backlog`">
             {{ t('llcBrowser.backlogLink') }}
@@ -269,6 +314,24 @@ import BaseInput from '@/components/base/BaseInput.vue'
 import { BaseModal } from '@autobot/ui'
 import ErrorBanner from '@/components/base/ErrorBanner.vue'
 
+// GH#11271: finding proposal returned from the API.
+interface FindingProposal {
+  id: string
+  project_id: string
+  finding_type: string
+  severity: string
+  file_path: string
+  line_number: number | null
+  description: string
+  suggestion: string | null
+  verdict_is_real: boolean
+  verdict_confidence: number | null
+  verdict_rationale: string | null
+  status: string
+  work_item_id: string | null
+  dismiss_reason: string | null
+}
+
 // GH#11129: linked code-source summary on a project.
 interface CodeSourceSummary {
   id: string
@@ -348,6 +411,11 @@ const deletingProject = ref<string | null>(null)
 // per-project lifecycle error messages (keyed by project id)
 const lifecycleError = ref<Record<string, string>>({})
 
+// GH#11271: findings proposal queue state (keyed by project id)
+const proposals = ref<Record<string, FindingProposal[]>>({})
+const scanningProject = ref<string | null>(null)
+const findingsError = ref<Record<string, string>>({})
+
 function velocityFor(projectId: string): number[] {
   return velocities.value[projectId] ?? []
 }
@@ -376,6 +444,7 @@ async function loadProjects(): Promise<void> {
       `/api/llc/programs/${programId.value}/projects`,
     )
     void loadVelocities()
+    void loadAllProposals()
   } catch (err) {
     logger.error('Failed to load projects', err)
     loadError.value = true
@@ -383,6 +452,14 @@ async function loadProjects(): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+async function loadAllProposals(): Promise<void> {
+  await Promise.all(
+    projects.value
+      .filter(p => p.code_source_id)
+      .map(p => loadProposals(p.id)),
+  )
 }
 
 // Fetch each project's velocity history in parallel (reuses the #9861 endpoint).
@@ -542,6 +619,56 @@ async function deleteProject(project: ProjectResponse): Promise<void> {
     lifecycleError.value = { ...lifecycleError.value, [project.id]: t('llcBrowser.projects.deleteError') }
   } finally {
     deletingProject.value = null
+  }
+}
+
+// GH#11271: findings proposal queue actions ---------------------------------
+
+async function loadProposals(projectId: string): Promise<void> {
+  try {
+    const list = await api.get<FindingProposal[]>(
+      `/api/llc/projects/${projectId}/findings/proposals?status=pending`,
+    )
+    proposals.value = { ...proposals.value, [projectId]: list }
+  } catch (err) {
+    logger.error('Failed to load proposals', err)
+    proposals.value = { ...proposals.value, [projectId]: [] }
+  }
+}
+
+async function scanFindings(project: ProjectResponse): Promise<void> {
+  scanningProject.value = project.id
+  findingsError.value = { ...findingsError.value, [project.id]: '' }
+  try {
+    await api.post(`/api/llc/projects/${project.id}/findings/scan`)
+    await loadProposals(project.id)
+  } catch (err) {
+    logger.error('Failed to scan findings', err)
+    findingsError.value = { ...findingsError.value, [project.id]: t('llcBrowser.findings.disabled') }
+  } finally {
+    scanningProject.value = null
+  }
+}
+
+async function promoteProposal(project: ProjectResponse, proposal: FindingProposal): Promise<void> {
+  try {
+    await api.post(`/api/llc/findings/proposals/${proposal.id}/promote`)
+    await loadProposals(project.id)
+  } catch (err) {
+    logger.error('Failed to promote proposal', err)
+    findingsError.value = { ...findingsError.value, [project.id]: t('llcBrowser.findings.disabled') }
+  }
+}
+
+async function dismissProposal(project: ProjectResponse, proposal: FindingProposal): Promise<void> {
+  const reason = window.prompt(t('llcBrowser.findings.dismissReason'))
+  if (reason === null) return
+  try {
+    await api.post(`/api/llc/findings/proposals/${proposal.id}/dismiss`, { reason })
+    await loadProposals(project.id)
+  } catch (err) {
+    logger.error('Failed to dismiss proposal', err)
+    findingsError.value = { ...findingsError.value, [project.id]: t('llcBrowser.findings.disabled') }
   }
 }
 

@@ -8515,6 +8515,18 @@
       "archived": "Archivado",
       "pending_disposal": "Eliminación pendiente",
       "disposed": "Eliminado"
+    },
+    "findings": {
+      "scan": "Buscar hallazgos",
+      "scanning": "Escaneando…",
+      "empty": "No hay hallazgos pendientes.",
+      "promote": "Promover",
+      "dismiss": "Descartar",
+      "dismissReason": "Motivo del descarte",
+      "verdictReal": "Veredicto: real",
+      "verdictRationale": "Justificación",
+      "disabled": "La búsqueda de hallazgos está deshabilitada.",
+      "severity": "Severidad"
     }
   },
   "admin": {

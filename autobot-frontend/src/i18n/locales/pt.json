@@ -8515,6 +8515,18 @@
       "archived": "Arquivado",
       "pending_disposal": "Exclusão pendente",
       "disposed": "Excluído"
+    },
+    "findings": {
+      "scan": "Verificar resultados",
+      "scanning": "Verificando…",
+      "empty": "Nenhum resultado pendente.",
+      "promote": "Promover",
+      "dismiss": "Descartar",
+      "dismissReason": "Motivo do descarte",
+      "verdictReal": "Veredicto: real",
+      "verdictRationale": "Justificativa",
+      "disabled": "A verificação de resultados está desativada.",
+      "severity": "Severidade"
     }
   },
   "admin": {
