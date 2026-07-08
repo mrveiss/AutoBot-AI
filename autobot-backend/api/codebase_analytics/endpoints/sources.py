@@ -32,7 +32,7 @@ from ..source_models import (
     SourceSyncResponse,
 )
 from ..source_paths import CODE_SOURCES_BASE, make_clone_path
-from ..source_storage import delete_source, get_source, list_sources, save_source
+from ..source_storage import get_source, list_sources, save_source
 
 logger = get_logger(__name__)
 
@@ -335,17 +335,13 @@ async def update_code_source(source_id: str, request: CodeSourceUpdateRequest):
     error_code_prefix="CODEBASE",
 )
 async def delete_code_source(source_id: str):
-    """Delete a code source and remove its clone directory if present."""
+    """Delete a code source and remove its clone directory + index if present."""
+    from ..source_service import delete_source_and_cleanup  # noqa: PLC0415
+
     source = await get_source(source_id)
     if source is None:
         raise HTTPException(status_code=404, detail=f"Source {source_id} not found")
-    if source.clone_path and Path(source.clone_path).exists():
-        # Only remove clone directories we created (under CODE_SOURCES_BASE)
-        clone = Path(source.clone_path).resolve()
-        if clone.is_relative_to(CODE_SOURCES_BASE):
-            shutil.rmtree(source.clone_path, ignore_errors=True)
-    ok = await delete_source(source_id)
-    logger.info("Deleted code source %s", source_id)
+    ok = await delete_source_and_cleanup(source_id)
     return JSONResponse({"success": ok, "source_id": source_id})
 
 
