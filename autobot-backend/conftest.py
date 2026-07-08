@@ -335,7 +335,28 @@ if "llm_shared" not in sys.modules:
     # strategy classes without hitting the llm_shared MagicMock stub.
     _load_real_mod("llm_shared.provider_auth", _llm_root / "provider_auth.py")
     # #10551: base_provider — load real so BaseProvider tests can instantiate it.
+    # #10917: base_provider's real load (added in #10551) silently failed because
+    # the llm_shared stub has an empty __path__, so its relative imports
+    # (`from .cross_worker_rate_limiter`, `.observability`, `.rate_limit_backoff`)
+    # couldn't resolve on disk. Pre-load those transitive light deps in dependency
+    # order — all bare-env-importable (observability guards its langfuse/langsmith
+    # SDK imports inside methods and does not import otel_observer at top level) —
+    # so base_provider (and then provider_registry) load real.
+    _load_real_mod("llm_shared.cross_worker_rate_limiter", _llm_root / "cross_worker_rate_limiter.py")
+    _load_real_mod("llm_shared.observability", _llm_root / "observability" / "__init__.py")
+    _load_real_mod("llm_shared.rate_limit_backoff", _llm_root / "rate_limit_backoff.py")
     _load_real_mod("llm_shared.base_provider", _llm_root / "base_provider.py")
+    _load_real_mod("llm_shared.model_param_registry", _llm_root / "model_param_registry.py")
+    _load_real_mod("llm_shared.provider_registry", _llm_root / "provider_registry.py")
+    # Re-export the real classes onto the top-level stub so
+    # `from llm_shared import ProviderRegistry, BaseProvider` resolves to the real
+    # ones for tests that exercise them (tests/test_provider_registry.py, #10917).
+    _pr_mod = sys.modules.get("llm_shared.provider_registry")
+    if _pr_mod is not None and hasattr(_pr_mod, "ProviderRegistry"):
+        _llm_stub.ProviderRegistry = _pr_mod.ProviderRegistry  # type: ignore[attr-defined]
+    _bp_mod = sys.modules.get("llm_shared.base_provider")
+    if _bp_mod is not None and hasattr(_bp_mod, "BaseProvider"):
+        _llm_stub.BaseProvider = _bp_mod.BaseProvider  # type: ignore[attr-defined]
 
     # Stub llm_shared.optimization.model_inspector so complexity_router.py can
     # load without the full optimization stack (inspect_model is only called in
