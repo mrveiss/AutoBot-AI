@@ -91,6 +91,10 @@ class PortInfo(BaseModel):
     port: int
     process: str | None = None
     pid: int | None = None
+    # GH#11224: bind interface, consumed by the security-posture audit. Without
+    # this field Pydantic's extra="ignore" strips it at heartbeat ingest, so the
+    # audit would never see a bind address. None for pre-GH#11224 agents.
+    address: str | None = None
 
 
 class RoleReportItem(BaseModel):
