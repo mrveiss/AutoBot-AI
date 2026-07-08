@@ -242,7 +242,7 @@ class TestDistinctProvider:
         mock_registry.get_provider = _get_prov
 
         with (
-            patch("agent_loop.pre_action_verifier.get_provider_registry", return_value=mock_registry),
+            patch("llm_shared.provider_registry.get_provider_registry", return_value=mock_registry),
             patch("agent_loop.pre_action_verifier.VERIFIER_ENABLED", True),
         ):
             from agent_loop.pre_action_verifier import _select_verifier_provider
@@ -264,7 +264,7 @@ class TestDistinctProvider:
 
         mock_registry.get_provider = _get_prov
 
-        with patch("agent_loop.pre_action_verifier.get_provider_registry", return_value=mock_registry):
+        with patch("llm_shared.provider_registry.get_provider_registry", return_value=mock_registry):
             from agent_loop.pre_action_verifier import _select_verifier_provider
 
             chosen = await _select_verifier_provider(actor_provider="ollama")
