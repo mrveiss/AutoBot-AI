@@ -59,7 +59,7 @@ class TestExport:
             patch.object(api_mod, "_get_detector", return_value=detector),
         ):
             result = await api_mod.export_agent_knowledge(
-                agent_id="research_agent", task_type=None, min_confidence=0.8, _user=None
+                agent_id="research_agent", task_type=None, min_confidence=0.8, current_user={"org_id": "org1"}
             )
         assert result.learned_strategy is not None
         assert result.learned_strategy.best_approach == "read first"
@@ -78,7 +78,7 @@ class TestExport:
             patch.object(api_mod, "_get_detector", return_value=detector),
         ):
             result = await api_mod.export_agent_knowledge(
-                agent_id="research_agent", task_type=None, min_confidence=0.8, _user=None
+                agent_id="research_agent", task_type=None, min_confidence=0.8, current_user={"org_id": "org1"}
             )
         assert result.learned_strategy is None
         assert result.high_confidence_failure_patterns == []
@@ -89,8 +89,9 @@ class TestImportSanitization:
     async def test_import_sanitizes_untrusted_template(self) -> None:
         captured: dict = {}
 
-        async def _capture(strategy: LearnedStrategy) -> None:
+        async def _capture(strategy: LearnedStrategy, tenant_id: str = "") -> None:
             captured["strategy"] = strategy
+            captured["tenant_id"] = tenant_id
 
         learner = MagicMock()
         learner.save_strategy = AsyncMock(side_effect=_capture)
@@ -103,7 +104,12 @@ class TestImportSanitization:
             confidence=0.7,
         )
         with patch.object(api_mod, "_get_learner", return_value=learner):
-            resp = await api_mod.import_agent_knowledge(agent_id="research_agent", payload=payload, _admin=True)
+            resp = await api_mod.import_agent_knowledge(
+                agent_id="research_agent", payload=payload, _admin=True, current_user={"org_id": "org1"}
+            )
+
+        # GH#11071: import is scoped to the caller's tenant
+        assert captured["tenant_id"] == "org1"
 
         saved = captured["strategy"]
         # Marker delimiters stripped; newlines collapsed → cannot escape the frame.
@@ -123,7 +129,7 @@ class TestSaveStrategy:
         learner = TaskPatternLearner()
         fake_redis = AsyncMock()
         with patch.object(learner, "_get_redis", AsyncMock(return_value=fake_redis)):
-            await learner.save_strategy(_strategy(task_type="Research Agent"))
+            await learner.save_strategy(_strategy(task_type="Research Agent"), tenant_id="org1")
         assert fake_redis.set.await_count == 1
         key = fake_redis.set.await_args.args[0]
-        assert key == "task:patterns:research_agent"
+        assert key == "task:patterns:org1:research_agent"
