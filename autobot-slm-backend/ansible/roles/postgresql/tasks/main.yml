@@ -23,3 +23,9 @@
   tags:
     - postgresql
     - databases
+- name: Include scheduled backup tasks
+  ansible.builtin.include_tasks: backup.yml
+  when: postgresql_backup_enabled | bool
+  tags:
+    - postgresql
+    - backup

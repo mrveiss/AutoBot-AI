@@ -89,6 +89,9 @@
       when: item != inventory_hostname
       register: network_tests
       changed_when: false
+      # OPTIONAL: cross-host reachability. On a single-box/partial inventory a
+      # peer VM may legitimately be absent/unreachable — this must not gate the
+      # deploy. Result is surfaced in the debug summary below.
       failed_when: false
       tags: [network]
 
@@ -103,6 +106,8 @@
       command: nslookup google.com
       register: dns_test
       changed_when: false
+      # OPTIONAL: outbound internet resolution is informational and unrelated to
+      # in-cluster service health (air-gapped boxes have none). Surfaced below.
       failed_when: false
       tags: [network]
 
@@ -119,6 +124,11 @@
       systemd:
         name: nginx
       register: nginx_status
+      # GATE: an inactive/failed unit is an unhealthy deploy — fail loud.
+      failed_when: >-
+        nginx_status is defined and nginx_status.status is defined
+        and nginx_status.status.ActiveState is defined
+        and nginx_status.status.ActiveState != 'active'
       when: is_frontend | bool
       tags: [frontend, services]
 
@@ -154,6 +164,11 @@
       systemd:
         name: autobot-backend
       register: backend_service_status
+      # GATE: an inactive/failed unit is an unhealthy deploy — fail loud.
+      failed_when: >-
+        backend_service_status is defined and backend_service_status.status is defined
+        and backend_service_status.status.ActiveState is defined
+        and backend_service_status.status.ActiveState != 'active'
       when: is_backend | bool
       tags: [backend, services]
 
@@ -192,6 +207,11 @@
       systemd:
         name: redis-stack-server
       register: redis_service_status
+      # GATE: an inactive/failed unit is an unhealthy deploy — fail loud.
+      failed_when: >-
+        redis_service_status is defined and redis_service_status.status is defined
+        and redis_service_status.status.ActiveState is defined
+        and redis_service_status.status.ActiveState != 'active'
       when: is_database | bool
       tags: [database, services]
 
@@ -232,6 +252,9 @@
         method: GET
         timeout: 10
       register: redisinsight_test
+      # OPTIONAL: RedisInsight is a developer GUI, not a data-plane service.
+      # Its absence must not gate the deploy; Redis health is gated by the
+      # redis-stack-server unit + PING checks above.
       failed_when: false
       when: is_database | bool
       tags: [database, services]
@@ -244,6 +267,11 @@
       systemd:
         name: autobot-ai-stack
       register: ai_stack_service_status
+      # GATE: an inactive/failed unit is an unhealthy deploy — fail loud.
+      failed_when: >-
+        ai_stack_service_status is defined and ai_stack_service_status.status is defined
+        and ai_stack_service_status.status.ActiveState is defined
+        and ai_stack_service_status.status.ActiveState != 'active'
       when: is_ai_stack | bool
       tags: [ai_stack, services]
 
@@ -261,6 +289,11 @@
       systemd:
         name: autobot-chromadb
       register: chromadb_service_status
+      # GATE: an inactive/failed unit is an unhealthy deploy — fail loud.
+      failed_when: >-
+        chromadb_service_status is defined and chromadb_service_status.status is defined
+        and chromadb_service_status.status.ActiveState is defined
+        and chromadb_service_status.status.ActiveState != 'active'
       when: is_ai_stack | bool
       tags: [ai_stack, services, chromadb]
 
@@ -296,6 +329,11 @@
       systemd:
         name: autobot-npu-worker
       register: npu_worker_service_status
+      # GATE: an inactive/failed unit is an unhealthy deploy — fail loud.
+      failed_when: >-
+        npu_worker_service_status is defined and npu_worker_service_status.status is defined
+        and npu_worker_service_status.status.ActiveState is defined
+        and npu_worker_service_status.status.ActiveState != 'active'
       when: is_npu | bool
       tags: [npu, services]
 
@@ -356,6 +394,11 @@
       systemd:
         name: autobot-slm-backend
       register: slm_service_status
+      # GATE: an inactive/failed unit is an unhealthy deploy — fail loud.
+      failed_when: >-
+        slm_service_status is defined and slm_service_status.status is defined
+        and slm_service_status.status.ActiveState is defined
+        and slm_service_status.status.ActiveState != 'active'
       when: is_slm | bool
       tags: [slm, services]
 
@@ -364,8 +407,8 @@
         url: "http://127.0.0.1:8000/api/health"
         method: GET
         timeout: 15
+        status_code: 200  # GATE: any non-200 (or unreachable) fails the play
       register: slm_health_test
-      failed_when: false
       when: is_slm | bool
       tags: [slm, services]
 
@@ -373,6 +416,11 @@
       systemd:
         name: nginx
       register: slm_nginx_status
+      # GATE: an inactive/failed unit is an unhealthy deploy — fail loud.
+      failed_when: >-
+        slm_nginx_status is defined and slm_nginx_status.status is defined
+        and slm_nginx_status.status.ActiveState is defined
+        and slm_nginx_status.status.ActiveState != 'active'
       when: is_slm | bool
       tags: [slm, services]
 
@@ -384,6 +432,11 @@
       systemd:
         name: autobot-vnc-server
       register: vnc_service_status
+      # GATE: an inactive/failed unit is an unhealthy deploy — fail loud.
+      failed_when: >-
+        vnc_service_status is defined and vnc_service_status.status is defined
+        and vnc_service_status.status.ActiveState is defined
+        and vnc_service_status.status.ActiveState != 'active'
       when: is_browser | bool
       tags: [browser, services]
 
@@ -391,6 +444,11 @@
       systemd:
         name: autobot-playwright
       register: playwright_service_status
+      # GATE: an inactive/failed unit is an unhealthy deploy — fail loud.
+      failed_when: >-
+        playwright_service_status is defined and playwright_service_status.status is defined
+        and playwright_service_status.status.ActiveState is defined
+        and playwright_service_status.status.ActiveState != 'active'
       when: is_browser | bool
       tags: [browser, services]
 
@@ -460,6 +518,8 @@
       shell: journalctl --since "1 hour ago" --priority=err --no-pager --lines=10
       register: system_errors
       changed_when: false
+      # OPTIONAL: log scan is diagnostic (non-zero exit == "no matching lines"),
+      # not a service-up check. Surfaced in the summary below.
       failed_when: false
       tags: [logs]
 
@@ -473,6 +533,7 @@
       shell: journalctl -u autobot-* --since "1 hour ago" --no-pager --lines=5
       register: autobot_logs
       changed_when: false
+      # OPTIONAL: diagnostic log tail, not a service-up check.
       failed_when: false
       tags: [logs]
 
@@ -504,6 +565,48 @@
           - "Services: {{ vm_health_summary.services_status }}"
       tags: always
 
+    # ==========================================
+    # REQUIRED-SERVICE GATE (fail the deploy on any unhealthy required service)
+    # ==========================================
+    #
+    # The per-task `failed_when`/`status_code` checks above already abort the
+    # play the moment a required service is down. This block is a belt-and-braces
+    # final assertion so a green health-check run PROVABLY means every required
+    # service on this host reported healthy — a broken deploy can no longer be
+    # reported as success (#11382). Each check is guarded `is defined and not
+    # skipped` so it only asserts on services that actually apply to this host.
+    - name: "GATE | Assert all required services on this host are healthy"
+      ansible.builtin.assert:
+        that:
+          # systemd units must be active
+          - "nginx_status is not defined or nginx_status is skipped or nginx_status.status.ActiveState == 'active'"
+          - "backend_service_status is not defined or backend_service_status is skipped or backend_service_status.status.ActiveState == 'active'"
+          - "redis_service_status is not defined or redis_service_status is skipped or redis_service_status.status.ActiveState == 'active'"
+          - "ai_stack_service_status is not defined or ai_stack_service_status is skipped or ai_stack_service_status.status.ActiveState == 'active'"
+          - "chromadb_service_status is not defined or chromadb_service_status is skipped or chromadb_service_status.status.ActiveState == 'active'"
+          - "npu_worker_service_status is not defined or npu_worker_service_status is skipped or npu_worker_service_status.status.ActiveState == 'active'"
+          - "slm_service_status is not defined or slm_service_status is skipped or slm_service_status.status.ActiveState == 'active'"
+          - "slm_nginx_status is not defined or slm_nginx_status is skipped or slm_nginx_status.status.ActiveState == 'active'"
+          - "vnc_service_status is not defined or vnc_service_status is skipped or vnc_service_status.status.ActiveState == 'active'"
+          - "playwright_service_status is not defined or playwright_service_status is skipped or playwright_service_status.status.ActiveState == 'active'"
+          # HTTP health endpoints must have returned 200
+          - "frontend_http_test is not defined or frontend_http_test is skipped or frontend_http_test.status == 200"
+          - "backend_health_test is not defined or backend_health_test is skipped or backend_health_test.status == 200"
+          - "backend_status_test is not defined or backend_status_test is skipped or backend_status_test.status == 200"
+          - "ai_stack_health_test is not defined or ai_stack_health_test is skipped or ai_stack_health_test.status == 200"
+          - "chromadb_health_test is not defined or chromadb_health_test is skipped or chromadb_health_test.status == 200"
+          - "npu_worker_health_test is not defined or npu_worker_health_test is skipped or npu_worker_health_test.status == 200"
+          - "slm_health_test is not defined or slm_health_test is skipped or slm_health_test.status == 200"
+          - "playwright_health_test is not defined or playwright_health_test is skipped or playwright_health_test.status == 200"
+          # Redis must answer PING
+          - "redis_ping_test is not defined or redis_ping_test is skipped or 'PONG' in (redis_ping_test.stdout | default(''))"
+        fail_msg: >-
+          UNHEALTHY DEPLOY on {{ inventory_hostname }} ({{ group_names | join(', ') }}):
+          one or more required services are down or returned a non-healthy status.
+          Inspect the task output above and `journalctl -u autobot-*` on this host.
+        success_msg: "All required services on {{ inventory_hostname }} are healthy."
+      tags: [always, gate]
+
 # ==========================================
 # INTEGRATION TESTS
 # ==========================================
@@ -528,6 +631,10 @@
         method: GET
         timeout: 15
       register: frontend_backend_test
+      # Non-fatal here so every integration probe runs and is reported
+      # together; the aggregate GATE assertion in the final-report play
+      # fails the run if any probe that actually targeted a present host
+      # did not return 200 (#11382).
       failed_when: false
       when: _frontend_host | length > 0
       tags: [integration]
@@ -539,6 +646,10 @@
         timeout: 15
         validate_certs: false
       register: backend_database_test
+      # Non-fatal here so every integration probe runs and is reported
+      # together; the aggregate GATE assertion in the final-report play
+      # fails the run if any probe that actually targeted a present host
+      # did not return 200 (#11382).
       failed_when: false
       when: _backend_host | length > 0
       tags: [integration]
@@ -550,6 +661,10 @@
         timeout: 30
         validate_certs: false
       register: backend_ai_test
+      # Non-fatal here so every integration probe runs and is reported
+      # together; the aggregate GATE assertion in the final-report play
+      # fails the run if any probe that actually targeted a present host
+      # did not return 200 (#11382).
       failed_when: false
       when: _backend_host | length > 0
       tags: [integration]
@@ -560,6 +675,10 @@
         method: GET
         timeout: 15
       register: npu_connectivity_test
+      # Non-fatal here so every integration probe runs and is reported
+      # together; the aggregate GATE assertion in the final-report play
+      # fails the run if any probe that actually targeted a present host
+      # did not return 200 (#11382).
       failed_when: false
       when: _npu_host | length > 0
       tags: [integration]
@@ -601,6 +720,28 @@
           ai_vm: "{{ hostvars[_ai_host[0]]['vm_health_summary'] | default({'services_status': 'Unknown'}) if _ai_host | length > 0 else {'services_status': 'No host'} }}"
           npu_vm: "{{ hostvars[_npu_host[0]]['vm_health_summary'] | default({'services_status': 'Unknown'}) if _npu_host | length > 0 else {'services_status': 'No host'} }}"
           browser_vm: "{{ hostvars[_browser_host[0]]['vm_health_summary'] | default({'services_status': 'Unknown'}) if _browser_host | length > 0 else {'services_status': 'No host'} }}"
+
+    # ==========================================
+    # INTEGRATION GATE (fail the deploy on any broken cross-service path)
+    # ==========================================
+    # The integration probes are non-fatal individually so they all run; this
+    # assertion aggregates them and fails the run if any probe that ACTUALLY
+    # targeted a present host did not return 200. A probe that was skipped
+    # (group absent on this inventory) has no `.status` and is not asserted —
+    # single-box/partial deploys are not penalised for missing peers (#11382).
+    - name: "GATE | Assert cross-service integration paths are healthy"
+      ansible.builtin.assert:
+        that:
+          - "hostvars['localhost']['frontend_backend_test'] is not defined or hostvars['localhost']['frontend_backend_test'] is skipped or hostvars['localhost']['frontend_backend_test'].status | default(0) == 200"
+          - "hostvars['localhost']['backend_database_test'] is not defined or hostvars['localhost']['backend_database_test'] is skipped or hostvars['localhost']['backend_database_test'].status | default(0) == 200"
+          - "hostvars['localhost']['backend_ai_test'] is not defined or hostvars['localhost']['backend_ai_test'] is skipped or hostvars['localhost']['backend_ai_test'].status | default(0) == 200"
+          - "hostvars['localhost']['npu_connectivity_test'] is not defined or hostvars['localhost']['npu_connectivity_test'] is skipped or hostvars['localhost']['npu_connectivity_test'].status | default(0) == 200"
+        fail_msg: >-
+          UNHEALTHY DEPLOY: one or more cross-service integration paths failed
+          (frontend->backend, backend->database, backend->AI, or NPU worker).
+          See the "Integration Test Results" output above.
+        success_msg: "All targeted cross-service integration paths returned 200."
+      tags: [always, gate, integration]
 
     - name: Generate final health report
       debug:

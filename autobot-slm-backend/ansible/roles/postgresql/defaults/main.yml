@@ -79,3 +79,24 @@ autobot_group: "autobot"
 # Health check (retry-based polling instead of fixed timeout)
 postgresql_health_check_retries: 60  # Max attempts (60 × 5s = 300s)
 postgresql_health_check_delay: 5     # Seconds between retries
+
+# ==========================================
+# Scheduled backups (systemd timer + pg_dumpall) — #11383
+# ==========================================
+# Master switch. Set false to skip backup provisioning entirely (idempotent).
+postgresql_backup_enabled: true
+
+# Destination for compressed cluster dumps. Owned by the AutoBot service user.
+postgresql_backup_dir: "/var/backups/autobot/postgresql"
+
+# systemd OnCalendar schedule (see `man systemd.time`). Default: daily 02:30.
+postgresql_backup_on_calendar: "*-*-* 02:30:00"
+
+# Spread load / avoid thundering-herd when many nodes share a schedule.
+postgresql_backup_randomized_delay_sec: 900
+
+# Keep dumps for this many days; older *.sql.gz files are pruned each run.
+postgresql_backup_retention_days: 14
+
+# Filename prefix for each dump (timestamp is appended).
+postgresql_backup_prefix: "postgresql-all"

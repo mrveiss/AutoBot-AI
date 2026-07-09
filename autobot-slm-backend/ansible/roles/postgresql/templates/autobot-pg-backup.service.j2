@@ -1,0 +1,18 @@
+# AutoBot PostgreSQL Scheduled Backup - Ansible Managed (#11383)
+# Oneshot cluster dump; triggered by autobot-pg-backup.timer.
+# Check status: systemctl status autobot-pg-backup.service
+[Unit]
+Description=AutoBot PostgreSQL cluster backup (pg_dumpall)
+After=postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=oneshot
+# Runs as root so `su - postgres` needs no password (matches pre-migration dump).
+User=root
+Group=root
+ExecStart=/usr/local/bin/autobot-pg-backup.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-pg-backup
+TimeoutStartSec=1800
