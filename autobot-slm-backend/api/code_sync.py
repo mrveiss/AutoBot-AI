@@ -29,6 +29,7 @@ from typing_extensions import Annotated
 
 from config import settings
 from models.database import CodeSource, CodeStatus
+from models.database import ComponentSyncJob as ComponentSyncJobModel
 from models.database import FleetSyncJob as FleetSyncJobModel
 from models.database import FleetSyncNodeState as FleetSyncNodeStateModel
 from models.database import Node, NodeRole, Setting, UpdateSchedule
@@ -37,6 +38,8 @@ from models.schemas import (
     CodeSyncStatusResponse,
     CodeVersionNotification,
     CodeVersionNotificationResponse,
+    ComponentSyncJobStatus,
+    DriftResolveJobResponse,
     DriftResolveRequest,
     DriftResolveResponse,
     FileDriftReport,
@@ -138,6 +141,163 @@ async def reconcile_stale_fleet_sync_jobs() -> int:
             await db.commit()
 
     return count
+
+
+async def reconcile_stale_component_sync_jobs() -> int:
+    """Mark stale 'running' component sync jobs as failed on startup (#11303).
+
+    Called during SLM backend lifespan init.  Any job left in 'running' status
+    from a prior process crash (including a self-restart triggered by the job
+    itself) is marked 'failed' with an explanatory message.
+
+    Returns:
+        Number of stale jobs reconciled.
+    """
+    from services.database import db_service
+
+    async with db_service.session() as db:
+        result = await db.execute(
+            select(ComponentSyncJobModel).where(ComponentSyncJobModel.status == "running")
+        )
+        stale_jobs = result.scalars().all()
+        count = len(stale_jobs)
+
+        for job in stale_jobs:
+            job.status = "failed"
+            job.completed_at = datetime.now(timezone.utc)
+            job.message = "reconciled: server restarted while job was running"
+            logger.warning(
+                "Reconciled stale component sync job %s "
+                "(was 'running', marked 'failed')",
+                job.job_id,
+            )
+
+        if count:
+            await db.commit()
+
+    return count
+
+
+async def _run_component_resolve_job(job_id: str, component: str) -> None:
+    """Background executor for an async component drift/resolve job (#11303).
+
+    Runs rsync + post-sync steps (pip/build/alembic) then commits the job row
+    to DB BEFORE triggering the service restart.  This guarantees the status is
+    durable even if the restart kills this process (the autobot-slm-backend
+    self-resolve case).
+    """
+    from services.database import db_service
+
+    try:
+        try:
+            source_dir = get_default_source_dir(component)
+        except ValueError as exc:
+            async with db_service.session() as db:
+                result = await db.execute(
+                    select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id)
+                )
+                job_row = result.scalar_one_or_none()
+                if job_row:
+                    job_row.status = "failed"
+                    job_row.success = False
+                    job_row.message = f"Failed to determine source path: {exc}"
+                    job_row.completed_at = datetime.now(timezone.utc)
+                    await db.commit()
+            logger.error("component resolve job %s: source path error: %s", job_id, exc)
+            return
+
+        deployed_dir = get_default_deployed_dir(component)
+        source_root = str(Path(source_dir).parent)
+
+        excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
+        excludes = excludes_map.get(
+            component,
+            ["__pycache__", "*.pyc", ".git", "node_modules", "dist", "venv", "*.log"],
+        )
+
+        logger.info(
+            "component resolve job %s: rsync source=%s/%s deployed=%s",
+            job_id,
+            source_root,
+            component,
+            deployed_dir,
+        )
+
+        ok, msg = await _rsync_component_local(source_root, component, excludes)
+
+        if not ok:
+            async with db_service.session() as db:
+                result = await db.execute(
+                    select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id)
+                )
+                job_row = result.scalar_one_or_none()
+                if job_row:
+                    job_row.status = "failed"
+                    job_row.success = False
+                    job_row.message = msg or "rsync failed"
+                    job_row.completed_at = datetime.now(timezone.utc)
+                    await db.commit()
+            logger.error("component resolve job %s: rsync failed: %s", job_id, msg)
+            return
+
+        deps_changed, post_steps, pip_ok = await _run_post_sync_steps(
+            component, source_dir, deployed_dir, restart=False
+        )
+
+        # Commit the job row BEFORE the restart — the whole point of this async
+        # path.  If the restart kills this process the row is already durable.
+        async with db_service.session() as db:
+            result = await db.execute(
+                select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id)
+            )
+            job_row = result.scalar_one_or_none()
+            if job_row:
+                job_row.status = "completed" if pip_ok else "failed"
+                job_row.success = pip_ok
+                job_row.deps_changed = deps_changed
+                job_row.post_steps = "\n".join(post_steps)
+                if pip_ok:
+                    job_row.message = f"Resynced {component} from code_source"
+                else:
+                    job_row.message = "pip install failed — see post_steps"
+                job_row.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+
+        if not pip_ok:
+            logger.error("component resolve job %s: pip install failed", job_id)
+            return
+
+        logger.info(
+            "component resolve job %s: completed; triggering deferred restart for %s",
+            job_id,
+            component,
+        )
+        # Deferred restart — may kill this process for autobot-slm-backend; that
+        # is fine because the job row is already committed above.
+        steps2: List[str] = []
+        await _restart_component_services(component, steps2)
+
+    except Exception as exc:
+        logger.error("component resolve job %s: unexpected error: %s", job_id, exc, exc_info=True)
+        try:
+            from services.database import db_service as _db_svc
+
+            async with _db_svc.session() as db:
+                result = await db.execute(
+                    select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id)
+                )
+                job_row = result.scalar_one_or_none()
+                if job_row:
+                    job_row.status = "failed"
+                    job_row.message = str(exc)
+                    job_row.completed_at = datetime.now(timezone.utc)
+                    await db.commit()
+        except Exception as inner:
+            logger.error(
+                "component resolve job %s: failed to persist error state: %s", job_id, inner
+            )
+    finally:
+        _running_tasks.pop(job_id, None)
 
 
 async def _persist_fleet_sync_job(
@@ -519,6 +679,84 @@ async def resolve_drift(
         deployed_dir=deployed_dir,
         deps_changed=deps_changed,
         post_steps=post_steps,
+    )
+
+
+@router.post("/drift/resolve-async", response_model=DriftResolveJobResponse, status_code=202)
+async def resolve_drift_async(
+    request: DriftResolveRequest,
+    _: Annotated[dict, Depends(get_current_user)],
+) -> DriftResolveJobResponse:
+    """
+    Kick off an async per-component drift/resolve job (#11303).
+
+    Identical validation to POST /drift/resolve but returns immediately with a
+    job_id.  The rsync + post-sync steps (pip/build/alembic) run in the
+    background.  Job status is persisted to DB so it survives the SLM backend
+    restarting itself when autobot-slm-backend is the resolved component.
+
+    Poll GET /drift/resolve/status/{job_id} to track progress.
+    """
+    if request.component not in ALLOWED_COMPONENTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid component '{request.component}'. Must be one of: {sorted(ALLOWED_COMPONENTS)}",
+        )
+
+    from services.database import db_service
+
+    job_id = uuid.uuid4().hex
+
+    async with db_service.session() as db:
+        db.add(
+            ComponentSyncJobModel(
+                job_id=job_id,
+                component=request.component,
+                status="running",
+            )
+        )
+        await db.commit()
+
+    task = asyncio.create_task(_run_component_resolve_job(job_id, request.component))
+    _running_tasks[job_id] = task
+
+    logger.info(
+        "drift resolve-async: spawned job %s for component %s",
+        job_id,
+        request.component,
+    )
+    return DriftResolveJobResponse(job_id=job_id, component=request.component, status="running")
+
+
+@router.get("/drift/resolve/status/{job_id}", response_model=ComponentSyncJobStatus)
+async def get_component_resolve_status(
+    job_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> ComponentSyncJobStatus:
+    """
+    Return the status of an async component drift/resolve job (#11303).
+
+    Raises 404 if job_id is unknown.
+    """
+    result = await db.execute(
+        select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id)
+    )
+    row = result.scalar_one_or_none()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"No component sync job found for id '{job_id}'")
+
+    return ComponentSyncJobStatus(
+        job_id=row.job_id,
+        component=row.component,
+        status=row.status,
+        success=row.success,
+        deps_changed=bool(row.deps_changed),
+        message=row.message,
+        post_steps=row.post_steps.split("\n") if row.post_steps else [],
+        created_at=row.created_at,
+        completed_at=row.completed_at,
     )
 
 
@@ -1385,6 +1623,7 @@ async def _run_post_sync_steps(
     component: str,
     source_dir: str,
     deployed_dir: str,
+    restart: bool = True,
 ) -> Tuple[bool, List[str], bool]:
     """Run dep-install / rebuild / restart after a per-component rsync (#9982).
 
@@ -1392,6 +1631,11 @@ async def _run_post_sync_steps(
     pip_ok is False when pip or npm exits non-zero so resolve_drift can surface
     the failure via success=False rather than silently returning success=True
     (#11322, #11351).
+
+    restart=False defers the final service restart so the async job path (#11303)
+    can commit the job row to DB before restarting (surviving a self-restart of
+    autobot-slm-backend).  All other steps still run; restart=True (default) keeps
+    the existing synchronous behaviour for all current callers.
 
     Component routing:
       - Python backend (autobot-backend, autobot-slm-backend):
@@ -1430,19 +1674,28 @@ async def _run_post_sync_steps(
         # Restore symlink BEFORE restart so the process imports the correct shared
         # code the moment it starts (#10912).
         await _ensure_autobot_shared_symlink(component, steps)
-        await _restart_component_services(component, steps)
+        if restart:
+            await _restart_component_services(component, steps)
+        else:
+            steps.append("post-sync: restart deferred")
     elif component in _COMPONENT_FRONTEND_DIRS:
         npm_ok = await _build_npm_frontend_for_component(component, steps)
         if not npm_ok:
             pip_ok = False
-        await _restart_component_services(component, steps)
+        if restart:
+            await _restart_component_services(component, steps)
+        else:
+            steps.append("post-sync: restart deferred")
     elif component in _COMPONENT_SERVICES:
         # Library component (autobot_shared): no build step, but every service
         # that imports it must restart so the new shared code is loaded (#10248).
         # Restore both backends' symlinks first so services start cleanly (#10912).
         for backend in sorted(_BACKEND_COMPONENTS):
             await _ensure_autobot_shared_symlink(backend, steps)
-        await _restart_component_services(component, steps)
+        if restart:
+            await _restart_component_services(component, steps)
+        else:
+            steps.append("post-sync: restart deferred")
     else:
         steps.append(f"post-sync: no service or build step for {component}")
 
