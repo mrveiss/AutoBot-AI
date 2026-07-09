@@ -162,10 +162,10 @@ const router = createRouter({
           meta: { title: 'General Settings', parent: 'settings' }
         },
         {
-          // Issue #4705: Wire InfrastructureSettings view into settings router
+          // Issue #11368: infrastructure settings consolidated into the canonical
+          // /roles view; redirect preserves old bookmarks.
           path: 'infrastructure',
-          name: 'settings-infrastructure',
-          component: () => import('@/views/settings/InfrastructureSettings.vue'),
+          redirect: '/roles',
           meta: { title: 'Infrastructure', parent: 'settings' }
         },
         {

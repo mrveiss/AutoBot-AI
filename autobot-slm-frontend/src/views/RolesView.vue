@@ -99,6 +99,15 @@ const formData = ref<RoleFormData>({
 // Computed
 const formTitle = computed(() => editingRole.value ? `Edit Role: ${editingRole.value}` : 'Create Role')
 const filteredRoles = computed(() => roles.value)
+const nodeStatusSummary = computed(() => {
+  const list = nodes.value
+  return {
+    total: list.length,
+    online: list.filter(n => n.status === 'online' || n.status === 'healthy').length,
+    offline: list.filter(n => n.status === 'offline' || n.status === 'error' || n.status === 'unhealthy').length,
+    pending: list.filter(n => n.status === 'pending' || n.status === 'enrolling').length,
+  }
+})
 const healthClass = computed(() => {
   if (!fleetHealth.value) return 'bg-gray-100 text-gray-600'
   return {
@@ -276,6 +285,7 @@ async function executeMigrate(): Promise<void> {
 onMounted(() => {
   fetchRoles()
   fetchFleetHealth()
+  fetchNodes()
 })
 </script>
 
@@ -308,6 +318,26 @@ onMounted(() => {
     <div v-if="fleetHealth && fleetHealth.health !== 'healthy'" class="mb-4 p-3 rounded-lg border text-sm"
       :class="fleetHealth.health === 'critical' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'">
       {{ fleetHealth.detail }}
+    </div>
+
+    <!-- Node Status Summary -->
+    <div class="grid grid-cols-4 gap-4 mb-6">
+      <div class="bg-white rounded-lg border border-gray-200 p-4">
+        <p class="text-sm text-gray-500">{{ $t('rolesView.totalNodes') }}</p>
+        <p class="text-3xl font-bold text-gray-900">{{ nodeStatusSummary.total }}</p>
+      </div>
+      <div class="bg-white rounded-lg border border-green-200 p-4">
+        <p class="text-sm text-green-600">{{ $t('rolesView.online') }}</p>
+        <p class="text-3xl font-bold text-green-700">{{ nodeStatusSummary.online }}</p>
+      </div>
+      <div class="bg-white rounded-lg border border-red-200 p-4">
+        <p class="text-sm text-red-600">{{ $t('rolesView.offline') }}</p>
+        <p class="text-3xl font-bold text-red-700">{{ nodeStatusSummary.offline }}</p>
+      </div>
+      <div class="bg-white rounded-lg border border-yellow-200 p-4">
+        <p class="text-sm text-yellow-600">{{ $t('rolesView.pending') }}</p>
+        <p class="text-3xl font-bold text-yellow-700">{{ nodeStatusSummary.pending }}</p>
+      </div>
     </div>
 
     <!-- Alerts -->

@@ -11,7 +11,7 @@
  * 2. Fleet Operations (from OrchestrationView)
  * 3. Roles & Deployment (from RolesView)
  * 4. Migration & Advanced (from OrchestrationView)
- * 5. Infrastructure Overview (from InfrastructureSettings)
+ * 5. Infrastructure Overview (fleet status + service summary)
  */
 
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
