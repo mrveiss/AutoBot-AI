@@ -23,6 +23,7 @@ from memory.trajectory_store import (
     TrajectoryStore,
     _hash_start_state,
     get_trajectory_store,
+    outcome_from_reward,
     reward_from_execution,
 )
 
@@ -108,6 +109,38 @@ def test_reward_from_execution_failure_partial():
 
 def test_reward_from_execution_failure():
     assert reward_from_execution({"success": False}) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Tests: outcome_from_reward (#11280 — canonical reward→outcome thresholds)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "reward,expected",
+    [
+        (1.0, "success"),
+        (0.7, "success"),  # boundary: >= 0.7 is success
+        (0.69, "partial"),
+        (0.5, "partial"),
+        (0.4, "partial"),  # boundary: >= 0.4 is partial
+        (0.39, "failure"),
+        (0.0, "failure"),
+    ],
+)
+def test_outcome_from_reward_thresholds(reward, expected):
+    assert outcome_from_reward(reward) == expected
+
+
+def test_outcome_from_reward_matches_reward_from_execution_chain():
+    # The values reward_from_execution can emit map to the intended outcomes.
+    assert outcome_from_reward(reward_from_execution({"success": True})) == "success"  # 1.0
+    assert outcome_from_reward(reward_from_execution({"success": True, "retry_count": 1})) == "success"  # 0.8
+    assert (
+        outcome_from_reward(reward_from_execution({"success": False, "criteria_evaluation": {"overall": "partial"}}))
+        == "partial"
+    )  # 0.5
+    assert outcome_from_reward(reward_from_execution({"success": False})) == "failure"  # 0.0
 
 
 # ---------------------------------------------------------------------------
