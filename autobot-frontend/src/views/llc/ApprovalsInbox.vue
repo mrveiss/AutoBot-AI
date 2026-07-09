@@ -143,6 +143,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { formatDateTime } from '@/utils/formatHelpers'
 import { useUserStore } from '@/stores/useUserStore'
 import { useI18n } from 'vue-i18n'
 import { useNotificationBus } from '@/composables/useNotificationBus'
@@ -216,8 +217,7 @@ function formatType(val: string) {
 }
 
 function formatDate(iso: string | null) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString()
+  return formatDateTime(iso) || '—'
 }
 
 function formatJson(payload: Record<string, unknown>) {

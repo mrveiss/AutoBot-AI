@@ -35,6 +35,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { formatDate as fmtDate } from '@/utils/formatHelpers'
 
 interface BoardSummary {
   id: string
@@ -57,9 +58,7 @@ const boards = ref<BoardSummary[]>([])
 const loading = ref(false)
 
 function formatDate(value: string): string {
-  const ms = Date.parse(value)
-  if (Number.isNaN(ms)) return '—'
-  return new Date(ms).toLocaleDateString()
+  return fmtDate(value) || '—'
 }
 
 async function loadBoards(): Promise<void> {

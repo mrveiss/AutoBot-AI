@@ -333,6 +333,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { formatDate as fmtDate } from '@/utils/formatHelpers'
 import { useClipboard } from '@/composables/useClipboard'
 import Icon from '@/components/ui/Icon.vue'
 import LlcBreadcrumb, { type BreadcrumbItem } from '@/components/llc/LlcBreadcrumb.vue'
@@ -475,10 +476,7 @@ const breadcrumb = computed<BreadcrumbItem[]>(() => [
 ])
 
 function formatDate(value: string | null): string {
-  if (!value) return '—'
-  const ms = Date.parse(value)
-  if (Number.isNaN(ms)) return '—'
-  return new Date(ms).toLocaleDateString()
+  return fmtDate(value) || '—'
 }
 
 async function loadProjects(): Promise<void> {

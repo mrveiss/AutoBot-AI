@@ -157,6 +157,7 @@ import { useApiClient } from '@/plugins/api'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { formatDateTime, formatDuration as fmtDuration } from '@/utils/formatHelpers'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{ companyId?: string }>()
@@ -226,24 +227,15 @@ const downloadingFixture = ref<Set<string>>(new Set())
 const heartbeatAgents = computed(() => agents.value.filter(a => a.heartbeat_enabled))
 
 function formatDate(iso?: string) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString()
+  return formatDateTime(iso) || '—'
 }
 
 function formatDuration(startedAt?: string) {
-  if (!startedAt) return '—'
-  const ms = Date.now() - new Date(startedAt).getTime()
-  if (ms < 0) return '—'
-  const s = Math.floor(ms / 1000)
-  if (s < 60) return `${s}s`
-  return `${Math.floor(s / 60)}m ${s % 60}s`
+  return startedAt ? fmtDuration(startedAt, null) : '—'
 }
 
 function computeDuration(start: string, end: string) {
-  const ms = new Date(end).getTime() - new Date(start).getTime()
-  const s = Math.floor(ms / 1000)
-  if (s < 60) return `${s}s`
-  return `${Math.floor(s / 60)}m ${s % 60}s`
+  return fmtDuration(start, end)
 }
 
 function formatJson(data?: Record<string, unknown>) {
