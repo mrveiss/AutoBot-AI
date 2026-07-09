@@ -50,6 +50,7 @@ const links = computed<SidebarLink[]>(() => {
     { labelKey: 'nav.llcApprovals', to: { path: `/llc/companies/${id}/approvals` } },
     { labelKey: 'nav.llcCosts', to: { path: `/llc/companies/${id}/costs` } },
     { labelKey: 'nav.llcHeartbeat', to: { path: `/llc/companies/${id}/heartbeat` } },
+    { labelKey: 'nav.llcRoutines', to: { path: `/llc/companies/${id}/routines` } },
     { labelKey: 'nav.llcCeoChat', to: { path: `/llc/companies/${id}/ceo-chat` } },
   ]
 })

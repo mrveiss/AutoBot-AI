@@ -1186,6 +1186,7 @@ export const routes: RouteRecordRaw[] = [
       { path: 'approvals', name: 'llc-approvals', component: () => import('@/views/llc/ApprovalsInbox.vue'), props: true, meta: { title: 'Approvals Inbox', requiresAuth: true } },
       { path: 'costs', name: 'llc-costs', component: () => import('@/views/llc/CostDashboard.vue'), props: true, meta: { title: 'Cost Dashboard', requiresAuth: true } },
       { path: 'heartbeat', name: 'llc-heartbeat', component: () => import('@/views/llc/HeartbeatMonitor.vue'), props: true, meta: { title: 'Heartbeat Monitor', requiresAuth: true } },
+      { path: 'routines', name: 'llc-routines', component: () => import('@/views/llc/RoutinesView.vue'), props: true, meta: { title: 'Routines', requiresAuth: true } },
       { path: 'ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true } },
       { path: 'members', name: 'llc-members', component: () => import('@/views/llc/MembersView.vue'), props: true, meta: { title: 'Members', requiresAuth: true } },
       // GH#10750 (B3): in-layout variants of the formerly top-level dashboard/
