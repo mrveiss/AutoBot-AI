@@ -3,17 +3,18 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 #
-# Shared dependency role: Python 3.14 (deadsnakes PPA)
-# Installs Python 3.14 interpreter and venv support.
+# Shared dependency role: install a deadsnakes Python interpreter.
+# Version is parameterized via python_interpreter_version (default 3.14;
+# NPU overrides to 3.11). Installs the interpreter and venv support.
 # Venv creation and pip installs stay in service roles.
 ---
 
-- name: "python314 | Check if Python 3.14 is available"
+- name: "python314 | Check if Python {{ python_interpreter_version }} is available"
   ansible.builtin.command:
-    cmd: python3.14 --version
-  register: _py312_check
+    cmd: "{{ python_interpreter_binary }} --version"
+  register: _py_check
   changed_when: false
-  # (#2872) Intentional: python3.14 may not be installed yet;
+  # (#2872) Intentional: the interpreter may not be installed yet;
   # rc != 0 triggers the deadsnakes PPA installation below.
   failed_when: false
   tags: ['deps', 'python314']
@@ -23,7 +24,7 @@
     name: software-properties-common
     state: present
   become: true
-  when: _py312_check.rc != 0
+  when: _py_check.rc != 0
   tags: ['deps', 'python314']
 
 # #7218: idempotent repo-add — preserve device-shipped PPA if present
@@ -33,14 +34,14 @@
     apt_repo_match: "deadsnakes/ppa"
     apt_repo_spec: "ppa:deadsnakes/ppa"
     apt_repo_filename: "deadsnakes"
-    apt_repo_label: "deadsnakes (Python 3.14)"
-  when: _py312_check.rc != 0
+    apt_repo_label: "deadsnakes (Python {{ python_interpreter_version }})"
+  when: _py_check.rc != 0
   tags: ['deps', 'python314']
 
 # #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
-# Only fires when Python 3.14 is missing, but when it does it must tolerate
+# Only fires when the interpreter is missing, but when it does it must tolerate
 # flaky PPAs (the deadsnakes PPA was just added; if it's unreachable, the
-# next deploy retry will still need to install Python 3.14).
+# next deploy retry will still need to install the interpreter).
 - name: "python314 | Refresh apt cache (best-effort, bounded; #6719)"
   ansible.builtin.command:
     cmd: >-
@@ -50,19 +51,21 @@
   become: true
   changed_when: false
   failed_when: false
-  when: _py312_check.rc != 0
+  when: _py_check.rc != 0
   tags: ['deps', 'python314']
 
-- name: "python314 | Install Python 3.14"
+- name: "python314 | Install Python {{ python_interpreter_version }}"
   ansible.builtin.apt:
     name: "{{ python314_packages }}"
     state: present
   become: true
-  when: _py312_check.rc != 0
+  when: _py_check.rc != 0
   tags: ['deps', 'python314']
 
-- name: "python314 | Verify Python 3.14 is available"
+# Fail-loud: a broken PPA must fail the deploy here, not silently leave the
+# wrong interpreter for the venv step to trip over. No failed_when: false.
+- name: "python314 | Verify Python {{ python_interpreter_version }} is available"
   ansible.builtin.command:
-    cmd: python3.14 --version
+    cmd: "{{ python_interpreter_binary }} --version"
   changed_when: false
   tags: ['deps', 'python314']

@@ -1,7 +1,17 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 ---
+# Target interpreter version installed from the deadsnakes PPA.
+# Defaults to 3.14 (the fleet standard for backends). Callers that need a
+# different interpreter (e.g. the NPU worker needs 3.11 for OpenVINO) override
+# python_interpreter_version; the package list and the interpreter binary name
+# are derived from it so the SAME role installs any deadsnakes-supported
+# version without duplicated apt logic (#11374).
+python_interpreter_version: "3.14"
+
+# Derived — do not set directly; override python_interpreter_version instead.
+python_interpreter_binary: "python{{ python_interpreter_version }}"
 python314_packages:
-  - python3.14
-  - python3.14-venv
-  - python3.14-dev
+  - "python{{ python_interpreter_version }}"
+  - "python{{ python_interpreter_version }}-venv"
+  - "python{{ python_interpreter_version }}-dev"
