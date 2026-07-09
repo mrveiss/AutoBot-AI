@@ -7707,6 +7707,7 @@
     "llcHeartbeat": "Heartbeat",
     "llcRoutines": "Routines",
     "llcCeoChat": "CEO Chat",
+    "llcActivity": "Activity",
     "llcSelectCompany": "Switch Company",
     "llcSelectCompanyPrompt": "Select a company to open its dashboard, backlog, and tools.",
     "llcNoCompanies": "No companies yet.",
@@ -8346,6 +8347,29 @@
       "saveFailed": "Failed to save secret.",
       "confirmRevoke": "Revoke secret “{name}”? Active runs referencing it will be cancelled on next resolution.",
       "revokeFailed": "Failed to revoke secret."
+    },
+    "activity": {
+      "title": "Activity",
+      "refresh": "Refresh",
+      "refreshing": "Refreshing...",
+      "autoRefresh": "Auto-refresh (15s)",
+      "loading": "Loading activity...",
+      "loadFailed": "Failed to load activity.",
+      "empty": "No activity recorded yet.",
+      "filterActor": "Actor",
+      "actorAll": "All actors",
+      "actorAgent": "Agent",
+      "actorUser": "User",
+      "actorSystem": "System",
+      "filterEntity": "Entity type",
+      "filterEntityPlaceholder": "e.g. work_item, sprint",
+      "filterAction": "Action",
+      "filterActionPlaceholder": "e.g. created, transitioned",
+      "applyFilters": "Apply",
+      "clearFilters": "Clear",
+      "pageInfo": "Page {page} · {total} events",
+      "prev": "Previous",
+      "next": "Next"
     }
   },
   "code": {
