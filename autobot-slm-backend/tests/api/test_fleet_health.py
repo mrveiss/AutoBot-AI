@@ -37,8 +37,9 @@ def _make_role(name: str, required: bool) -> types.SimpleNamespace:
 def _load_helpers_from_roles():
     """Load _classify_fleet_health and _get_active_role_names from api/roles.py."""
     import importlib.util
-    import pydantic
     from pathlib import Path
+
+    import pydantic
 
     roles_py = Path(__file__).parent.parent.parent / "api" / "roles.py"
 

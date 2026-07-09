@@ -81,9 +81,9 @@ from services.compose_fleet import (
     seed_compose_nodes,
     start_compose_heartbeat,
 )
-from services.node_seeder import sync_slm_node_roles
 from services.database import db_service
 from services.git_tracker import start_version_checker
+from services.node_seeder import sync_slm_node_roles
 from services.reconciler import reconciler_service
 from services.schedule_executor import start_schedule_executor, stop_schedule_executor
 from services.security_posture_auditor import (
