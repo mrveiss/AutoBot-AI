@@ -7749,6 +7749,7 @@
     "llcPortfolios": "Portfolios",
     "llcTimeline": "Timeline",
     "llcApprovals": "Approvals",
+    "llcApprovalsPending": "{count} pending approvals",
     "llcCosts": "Costs & Budget",
     "llcHeartbeat": "Heartbeat",
     "llcRoutines": "Routines",

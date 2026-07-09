@@ -13,20 +13,59 @@
   Sprint & Kanban boards need a :boardId and are reached via the Backlog.
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useLlcCompanyStore } from '@/stores/useLlcCompanyStore'
+import { useApiClient } from '@/plugins/api'
+import { useLiveEvents } from '@/composables/useLiveEvents'
+import { createLogger } from '@/utils/debugUtils'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const companyStore = useLlcCompanyStore()
+const api = useApiClient()
+const live = useLiveEvents()
+const logger = createLogger('LlcSidebar')
 
 const companyId = computed(() => {
   const raw = route.params.companyId
   return (Array.isArray(raw) ? raw[0] : raw) ?? companyStore.selectedCompanyId
 })
+
+// FR-GOV-03: pending board-approval count badge on the Approvals link.
+const pendingApprovals = ref(0)
+
+async function fetchPendingCount(): Promise<void> {
+  const id = companyId.value
+  if (!id) return
+  try {
+    // GET /api/llc/approvals returns the pending list for a company.
+    const list = await api.get<unknown[]>(`/api/llc/approvals?company_id=${id}`)
+    pendingApprovals.value = Array.isArray(list) ? list.length : 0
+  } catch (err) {
+    logger.error('Failed to load pending approval count', err)
+  }
+}
+
+// Track + rebind the live subscription across company switches: the sidebar
+// stays mounted (#10750 B3) and companyId is a computed, so re-subscribe on
+// change (immediate covers mount). useLiveEvents also auto-cleans on unmount.
+let unsubApprovals: (() => void) | null = null
+watch(
+  companyId,
+  (id) => {
+    void fetchPendingCount()
+    if (unsubApprovals) unsubApprovals()
+    unsubApprovals = id
+      ? live.subscribe(`company:${id}`, (ev) => {
+          if (String(ev.event_type).includes('approval')) void fetchPendingCount()
+        })
+      : null
+  },
+  { immediate: true },
+)
 
 interface SidebarLink {
   labelKey: string
@@ -117,7 +156,14 @@ async function onCompanyChange(event: Event): Promise<void> {
         :class="{ active: isActive(link) }"
         :aria-current="isActive(link) ? 'page' : undefined"
       >
-        {{ t(link.labelKey) }}
+        <span class="llc-nav-label">{{ t(link.labelKey) }}</span>
+        <span
+          v-if="link.labelKey === 'nav.llcApprovals' && pendingApprovals > 0"
+          class="llc-nav-badge"
+          :aria-label="t('nav.llcApprovalsPending', { count: pendingApprovals })"
+        >
+          {{ pendingApprovals }}
+        </span>
       </RouterLink>
     </nav>
   </aside>
@@ -180,13 +226,29 @@ async function onCompanyChange(event: Event): Promise<void> {
 }
 
 .llc-nav-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   padding: 0.4375rem 0.625rem;
   font-size: 0.875rem;
   border-radius: var(--radius-md, 8px);
   border-left: 2px solid transparent;
   color: var(--text-secondary, #4b5563);
   text-decoration: none;
+}
+
+.llc-nav-badge {
+  flex: none;
+  min-width: 1.25rem;
+  padding: 0 0.375rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  text-align: center;
+  border-radius: 999px;
+  background: var(--color-accent, #c4651a);
+  color: #fff;
 }
 
 .llc-nav-item:hover {
