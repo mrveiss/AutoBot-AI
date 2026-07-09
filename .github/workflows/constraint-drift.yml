@@ -20,6 +20,7 @@ on:
       - '**/requirements*.txt'
       - 'constraints/shared.txt'
       - 'scripts/check_constraint_drift.py'
+      - 'scripts/check_websockets_cap.py'
       - '.github/workflows/constraint-drift.yml'
   push:
     branches: [Dev_new_gui]
@@ -27,6 +28,7 @@ on:
       - '**/requirements*.txt'
       - 'constraints/shared.txt'
       - 'scripts/check_constraint_drift.py'
+      - 'scripts/check_websockets_cap.py'
 
 permissions:
   contents: read
@@ -41,5 +43,14 @@ jobs:
         with:
           python-version: '3.14'
 
+      - name: Install guard dependencies
+        run: python3 -m pip install --quiet packaging
+
       - name: Check single-source constraint compliance
         run: python3 scripts/check_constraint_drift.py
+
+      # #11030: fail fast with a clear message if autobot-backend's websockets pin
+      # is bumped past the langgraph-sdk <16 cap (the opaque ResolutionImpossible
+      # that dependabot #10997 caused). Auto-relaxes if langgraph is dropped.
+      - name: Check websockets <16 cap (langgraph-sdk)
+        run: python3 scripts/check_websockets_cap.py
