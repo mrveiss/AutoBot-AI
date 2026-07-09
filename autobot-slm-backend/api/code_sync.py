@@ -985,6 +985,13 @@ _COMPONENT_PYTHON_TARGET: Dict[str, str] = {
 # ansible/playbooks/configure-python-provision-permissions.yml.
 _ANSIBLE_DIR: Path = Path(DEFAULT_REPO_PATH) / "autobot-slm-backend" / "ansible"
 _PROVISION_PYTHON_PLAYBOOK: Path = _ANSIBLE_DIR / "playbooks" / "provision-local-python.yml"
+# #11403: ansible resolves roles via roles_path in ansible.cfg, which it only reads
+# from its cwd (or via ANSIBLE_CONFIG). Run from an arbitrary cwd, roles_path
+# defaults to playbooks/roles/ and the python314 role (at ansible/roles/) is not
+# found → play fails. We pass cwd=_ANSIBLE_DIR — it survives sudo's env_reset,
+# whereas changing the command args would break the exact-match NOPASSWD sudoers
+# rule. ANSIBLE_CONFIG is also set as a fallback (honored only if sudoers keeps it).
+_ANSIBLE_CONFIG: Path = _ANSIBLE_DIR / "ansible.cfg"
 
 # Deployed path for the top-level constraints/ dir (#11322).
 # `autobot-backend/requirements.txt` uses `-c ../constraints/shared.txt` so the
@@ -1135,6 +1142,8 @@ async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
+            cwd=str(_ANSIBLE_DIR),
+            env={**os.environ, "ANSIBLE_CONFIG": str(_ANSIBLE_CONFIG)},
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=600.0)
         out = stdout.decode(errors="replace") if stdout else ""
