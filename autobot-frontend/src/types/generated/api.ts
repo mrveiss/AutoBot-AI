@@ -50213,11 +50213,13 @@ export interface paths {
         };
         /**
          * List Agents
-         * @description List LLC agents for the org with their latest heartbeat summary (GH#8549).
+         * @description List LLC agents for the org with their latest heartbeat summary (GH#8549, #11366).
          *
-         *     Returns one row per distinct agent_id that has at least one heartbeat run
-         *     scoped to the caller's org.  Heartbeat-enabled status and last-run data are
-         *     derived from LLCHeartbeatRun rows.
+         *     Returns the full company roster from the org chart (``AgentOrgNode``) — every
+         *     agent, not just those with heartbeat history — each with its human-readable
+         *     name and its latest heartbeat run (LEFT JOIN) for status.  This lets assignee
+         *     pickers (Routines, Heartbeat monitor) list freshly-provisioned agents and show
+         *     names instead of opaque ids.
          */
         get: operations["list_agents_api_llc_agents_get"];
         put?: never;
