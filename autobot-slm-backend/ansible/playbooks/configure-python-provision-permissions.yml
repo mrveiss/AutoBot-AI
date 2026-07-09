@@ -1,0 +1,93 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+---
+# Python Provision Permissions Playbook (#11343)
+# Grants the autobot service user a narrowly-scoped NOPASSWD sudoers entry so
+# the SLM code-sync update path can install the target Python interpreter
+# (python3.14 for backends, python3.11 for NPU) when it is missing, by running
+# ONLY the provision-local-python.yml playbook via ansible-playbook.
+#
+# Mirrors configure-redis-service-management.yml: validated with visudo,
+# written 0440 root:root, applied once during provisioning.
+#
+# The grant is scoped to the exact ansible-playbook invocation that the
+# backend issues (services/api/code_sync.py::_ensure_target_python_installed).
+# The role itself performs the apt/add-apt-repository work under root — running
+# the whole ansible-playbook as root keeps the sudoers surface to ONE command
+# instead of a blanket apt/add-apt-repository grant.
+
+- name: "Configure Python Provision Permissions"
+  hosts: slm_server
+  become: true
+  gather_facts: true
+
+  vars:
+    sudoers_file: "/etc/sudoers.d/autobot-python-provision"
+    autobot_user: "autobot"
+    # Absolute paths the backend passes to sudo ansible-playbook. Sudoers
+    # matches the command literally, so these MUST equal the argv the backend
+    # builds in _ensure_target_python_installed.
+    ansible_playbook_bin: "/usr/bin/ansible-playbook"
+    provision_playbook: "/opt/autobot/code_source/autobot-slm-backend/ansible/playbooks/provision-local-python.yml"
+    provision_inventory: "/opt/autobot/code_source/autobot-slm-backend/ansible/inventory.yml"
+
+  pre_tasks:
+    - name: Display configuration information
+      ansible.builtin.debug:
+        msg:
+          - "Configuring Python Provision Permissions"
+          - "Host: {{ inventory_hostname }}"
+          - "User: {{ autobot_user }}"
+          - "Sudoers file: {{ sudoers_file }}"
+          - "Playbook: {{ provision_playbook }}"
+
+  tasks:
+    - name: Verify autobot user exists
+      ansible.builtin.command: id {{ autobot_user }}
+      register: user_check
+      failed_when: user_check.rc != 0
+      changed_when: false
+
+    - name: Create Python provision sudoers configuration
+      ansible.builtin.copy:
+        content: |
+          # AutoBot Python Provision (#11343)
+          # Allows the autobot user to install the target Python interpreter via
+          # the provision-local-python.yml playbook without a password. Scoped to
+          # the EXACT ansible-playbook invocation the SLM backend issues.
+          # Created by: Ansible playbook configure-python-provision-permissions.yml
+          # Date: {{ ansible_facts['date_time'].iso8601 }}
+
+          {{ autobot_user }} ALL=(root) NOPASSWD: {{ ansible_playbook_bin }} {{ provision_playbook }} --tags python314 --limit localhost -i {{ provision_inventory }} --connection local
+        dest: "{{ sudoers_file }}.tmp"
+        owner: root
+        group: root
+        mode: '0440'
+
+    - name: Validate sudoers file syntax
+      ansible.builtin.command: visudo -cf {{ sudoers_file }}.tmp
+      register: visudo_check
+      changed_when: false
+
+    - name: Move validated sudoers file to final location
+      ansible.builtin.command: mv {{ sudoers_file }}.tmp {{ sudoers_file }}
+      when: visudo_check.rc == 0
+      changed_when: true
+
+    - name: Ensure sudoers file has correct permissions
+      ansible.builtin.file:
+        path: "{{ sudoers_file }}"
+        owner: root
+        group: root
+        mode: '0440'
+        state: file
+
+  post_tasks:
+    - name: Display configuration summary
+      ansible.builtin.debug:
+        msg:
+          - "Python Provision Permissions Configuration Complete"
+          - "Sudoers file: {{ sudoers_file }}"
+          - "User: {{ autobot_user }}"
+          - "The autobot user can now run the interpreter provisioning playbook:"
+          - "  sudo {{ ansible_playbook_bin }} {{ provision_playbook }} --tags python314 --limit localhost -i {{ provision_inventory }} --connection local"

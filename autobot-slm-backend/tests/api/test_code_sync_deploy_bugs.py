@@ -75,6 +75,7 @@ from api.code_sync import (  # noqa: E402
     _REPO_ROOT_REQUIREMENT_FILES,
     _deploy_constraints_dir,
     _deploy_repo_root_requirements,
+    _ensure_target_python_installed,
     _ensure_venv_python,
     _install_pip_deps_for_component,
     _run_post_sync_steps,
@@ -513,3 +514,118 @@ def test_run_post_sync_steps_calls_deploy_repo_root_requirements() -> None:
         _run(_run_post_sync_steps("autobot-backend", "/src/autobot-backend", "/opt/autobot/autobot-backend"))
 
     assert called, "_deploy_repo_root_requirements must be called for pip backend components"
+
+
+# ---------------------------------------------------------------------------
+# #11343 — _ensure_target_python_installed: provision interpreter when missing
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_target_python_skips_when_present() -> None:
+    """When shutil.which finds the target, no ansible playbook is invoked."""
+    steps: list[str] = []
+    with (
+        patch("shutil.which", return_value="/usr/bin/python3.14"),
+        patch("api.code_sync._run_python_provision_playbook", AsyncMock()) as run_pb,
+    ):
+        _run(_ensure_target_python_installed("autobot-backend", steps))
+    run_pb.assert_not_called()
+    assert any("already present" in s for s in steps)
+
+
+def test_ensure_target_python_invokes_ansible_when_missing() -> None:
+    """When the target is absent, the python314 provisioning playbook is run."""
+    steps: list[str] = []
+    with (
+        patch("shutil.which", return_value=None),
+        patch("api.code_sync._PROVISION_PYTHON_PLAYBOOK") as pb,
+        patch("api.code_sync._run_python_provision_playbook", AsyncMock(return_value=True)) as run_pb,
+    ):
+        pb.exists.return_value = True
+        _run(_ensure_target_python_installed("autobot-backend", steps))
+    run_pb.assert_awaited_once()
+
+
+def test_ensure_target_python_skipped_for_unknown_component() -> None:
+    """Non-Python components have no target and are a no-op."""
+    steps: list[str] = []
+    with patch("api.code_sync._run_python_provision_playbook", AsyncMock()) as run_pb:
+        _run(_ensure_target_python_installed("autobot-frontend", steps))
+    run_pb.assert_not_called()
+    assert steps == []
+
+
+def test_ensure_target_python_uses_arg_list_and_target_from_map(tmp_path) -> None:
+    """The ansible invocation is an arg-list (no shell) using the mapped target."""
+    steps: list[str] = []
+    captured: list = []
+
+    async def _fake_exec(*cmd, **kw):
+        captured.extend(cmd)
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"ok", b""))
+        return proc
+
+    playbook = tmp_path / "provision-local-python.yml"
+    playbook.write_text("---\n", encoding="utf-8")
+    inventory = tmp_path / "inventory.yml"
+    inventory.write_text("all:\n", encoding="utf-8")
+
+    # shutil.which: None first (trigger provision), path after install re-check.
+    with (
+        patch("shutil.which", side_effect=[None, "/usr/bin/python3.14"]),
+        patch("api.code_sync._PROVISION_PYTHON_PLAYBOOK", playbook),
+        patch("api.code_sync._PROVISION_PYTHON_INVENTORY", inventory),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+    ):
+        _run(_ensure_target_python_installed("autobot-backend", steps))
+
+    assert captured[0] == "sudo"
+    assert captured[1] == "ansible-playbook"
+    assert "--tags" in captured and "python314" in captured
+    assert "--connection" in captured and "local" in captured
+    assert str(playbook) in captured
+    assert any("now on PATH" in s for s in steps)
+
+
+def test_ensure_target_python_does_not_recreate_venv_on_provision_failure() -> None:
+    """On ansible failure the venv is NOT removed/recreated (preserves #11323 guard)."""
+    steps: list[str] = []
+    with (
+        patch("shutil.which", return_value=None),
+        patch("api.code_sync._PROVISION_PYTHON_PLAYBOOK") as pb,
+        patch("api.code_sync._run_python_provision_playbook", AsyncMock(return_value=False)),
+        patch("api.code_sync._recreate_venv", AsyncMock()) as recreate,
+        patch("shutil.rmtree") as rmtree,
+    ):
+        pb.exists.return_value = True
+        _run(_ensure_target_python_installed("autobot-backend", steps))
+    recreate.assert_not_called()
+    rmtree.assert_not_called()
+
+
+def test_run_post_sync_steps_provisions_python_before_venv() -> None:
+    """_ensure_target_python_installed runs BEFORE _ensure_venv_python."""
+    order: list[str] = []
+
+    async def _provision(component, steps):
+        order.append("provision")
+
+    async def _venv(component, steps):
+        order.append("venv")
+
+    with (
+        patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
+        patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
+        patch("api.code_sync._ensure_target_python_installed", side_effect=_provision),
+        patch("api.code_sync._ensure_venv_python", side_effect=_venv),
+        patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=True)),
+        patch("api.code_sync._run_alembic_migrations", AsyncMock()),
+        patch("api.code_sync._ensure_autobot_shared_symlink", AsyncMock()),
+        patch("api.code_sync._restart_component_services", AsyncMock()),
+    ):
+        _run(_run_post_sync_steps("autobot-backend", "/src/autobot-backend", "/opt/autobot/autobot-backend"))
+
+    assert order == ["provision", "venv"], f"expected provision before venv, got {order}"
