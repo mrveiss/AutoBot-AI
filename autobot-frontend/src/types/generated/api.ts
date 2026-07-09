@@ -2823,7 +2823,7 @@ export interface paths {
          * Update Telemetry Settings
          * @description Update telemetry settings (Issue #9035).
          *
-         *     Allows users to opt in/out of telemetry collection. When telemetry
+         *     Allows admins to opt in/out of telemetry collection. When telemetry
          *     is disabled, the AnalyticsMiddleware and VoiceRealtimeTelemetry
          *     services skip data collection.
          *
@@ -2838,6 +2838,32 @@ export interface paths {
          *         Updated telemetry settings
          */
         post: operations["update_telemetry_settings_api_settings_telemetry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/telemetry/prompt-shown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Telemetry Prompt
+         * @description Mark the first-run telemetry prompt as shown (Issue #11344).
+         *
+         *     Records a UI-dismissal state only — it never changes the enable/disable
+         *     flags — so it is available to any authenticated user (not just admins).
+         *     This lets non-admins dismiss the consent modal without a 403, which
+         *     previously caused it to re-appear on every refresh. Toggling telemetry
+         *     itself still requires the admin-gated POST /telemetry endpoint.
+         */
+        post: operations["dismiss_telemetry_prompt_api_settings_telemetry_prompt_shown_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -104397,6 +104423,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_telemetry_prompt_api_settings_telemetry_prompt_shown_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelemetrySettingsResponse"];
                 };
             };
         };
