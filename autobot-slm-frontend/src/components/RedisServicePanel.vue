@@ -15,8 +15,11 @@
 
 import { ref, onMounted, onUnmounted } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
+import i18n from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { createLogger } from '@/utils/debugUtils'
+
+const t = i18n.global.t.bind(i18n.global)
 
 const logger = createLogger('RedisServicePanel')
 const authStore = useAuthStore()
@@ -95,7 +98,9 @@ function statusTextClass(status: string | undefined): string {
 
 async function fetchStatus(): Promise<void> {
   try {
-    const response = await fetch(`${getBackendUrl()}/api/redis-service/status`)
+    const response = await fetch(`${getBackendUrl()}/api/redis-service/status`, {
+      headers: authHeaders(),
+    })
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
     }
@@ -103,7 +108,7 @@ async function fetchStatus(): Promise<void> {
     errorMessage.value = null
   } catch (err) {
     logger.error('Failed to fetch Redis status:', err)
-    errorMessage.value = 'Failed to fetch Redis service status'
+    errorMessage.value = t('redisServicePanel.fetchStatusFailed')
   } finally {
     isLoading.value = false
   }
@@ -125,13 +130,13 @@ async function performAction(action: 'start' | 'stop' | 'restart'): Promise<void
       const body = await response.json().catch(() => ({}))
       throw new Error(body.detail ?? `HTTP ${response.status}`)
     }
-    successMessage.value = `Redis service ${action} succeeded`
+    successMessage.value = t('redisServicePanel.actionSucceeded', { action })
     // Refresh status after action
     await fetchStatus()
     setTimeout(() => { successMessage.value = null }, 4000)
   } catch (err) {
     logger.error(`Failed to ${action} Redis service:`, err)
-    errorMessage.value = err instanceof Error ? err.message : `Failed to ${action} Redis service`
+    errorMessage.value = err instanceof Error ? err.message : t('redisServicePanel.actionFailed', { action })
   } finally {
     isActionInProgress.value = false
     currentAction.value = null

@@ -916,9 +916,12 @@
     "sLOCompliance": "SLO Compliance:"
   },
   "redisServicePanel": {
+    "actionFailed": "Failed to {action} Redis service",
+    "actionSucceeded": "Redis service {action} succeeded",
     "cancel": "Cancel",
     "checking": "Checking…",
     "clients": "Clients",
+    "fetchStatusFailed": "Failed to fetch Redis service status",
     "inMemoryDataStore": "In-memory data store",
     "memoryUsed": "Memory Used",
     "peakMemory": "Peak Memory",
