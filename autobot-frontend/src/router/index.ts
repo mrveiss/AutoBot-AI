@@ -1188,6 +1188,7 @@ export const routes: RouteRecordRaw[] = [
       { path: 'heartbeat', name: 'llc-heartbeat', component: () => import('@/views/llc/HeartbeatMonitor.vue'), props: true, meta: { title: 'Heartbeat Monitor', requiresAuth: true } },
       { path: 'routines', name: 'llc-routines', component: () => import('@/views/llc/RoutinesView.vue'), props: true, meta: { title: 'Routines', requiresAuth: true } },
       { path: 'ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true } },
+      { path: 'activity', name: 'llc-activity', component: () => import('@/views/llc/ActivityFeedView.vue'), props: true, meta: { title: 'Activity', requiresAuth: true } },
       { path: 'members', name: 'llc-members', component: () => import('@/views/llc/MembersView.vue'), props: true, meta: { title: 'Members', requiresAuth: true } },
       { path: 'portability', name: 'llc-company-portability', component: () => import('@/views/llc/CompanyPortabilityView.vue'), props: true, meta: { title: 'Portability', requiresAuth: true } },
       { path: 'secrets', name: 'llc-company-secrets', component: () => import('@/views/llc/SecretsView.vue'), props: true, meta: { title: 'Secrets', requiresAuth: true } },
