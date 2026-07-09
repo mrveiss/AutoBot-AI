@@ -51,7 +51,9 @@ jobs:
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install -r requirements-ci.txt --prefer-binary || true
+          # #11062: drop `|| true` so a genuine install crash surfaces (red step);
+          # the step's continue-on-error keeps the eval non-blocking regardless.
+          python -m pip install -r requirements-ci.txt --prefer-binary
           python -m pip install pytest pytest-asyncio --prefer-binary
 
       - name: Run harness unit tests
@@ -65,8 +67,10 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/autobot-backend
         run: |
+          # #11062: keep pipefail but drop `|| true` so a harness crash surfaces
+          # as a red step; continue-on-error on the step keeps it non-blocking.
           set -o pipefail
-          python -m eval.run --json trajectory-eval-report.json | tee trajectory-eval-report.md || true
+          python -m eval.run --json trajectory-eval-report.json | tee trajectory-eval-report.md
 
       - name: Upload eval report
         if: always()
