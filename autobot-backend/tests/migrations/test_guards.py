@@ -11,6 +11,9 @@ Postgres-only (``CREATE TYPE``) and are exercised by the fresh-database
 schema verification instead (see PR evidence and the #10002 migration gate).
 """
 
+import ast
+from pathlib import Path
+
 import pytest
 
 # Real alembic required: the backend conftest stubs alembic with a MagicMock
@@ -78,3 +81,51 @@ class TestPgEnum:
         # create_type=False is the entire point: op.create_table must not
         # emit CREATE TYPE for a column that references this type (#9759).
         assert pg_enum("boardtype", "kanban", "sprint").create_type is False
+
+
+# ---------------------------------------------------------------------------
+# #11346 — migration lint: no generic sa.Enum() (enforce pg_enum)
+# ---------------------------------------------------------------------------
+
+_MIGRATIONS_VERSIONS = Path(__file__).resolve().parents[2] / "migrations" / "versions"
+
+
+def _generic_enum_call_lines(path: Path) -> list[int]:
+    """Line numbers of generic ``sa.Enum(...)`` / ``sqlalchemy.Enum(...)`` calls.
+
+    AST-based so comments/docstrings mentioning ``sa.Enum(`` (the guard files
+    explain *why* they avoid it) don't false-positive.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    hits: list[int] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "Enum"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id in ("sa", "sqlalchemy")
+        ):
+            hits.append(node.lineno)
+    return hits
+
+
+def test_migrations_use_pg_enum_not_generic_sa_enum() -> None:
+    """Alembic migrations must build Postgres enums via ``migrations.guards.pg_enum``,
+    never generic ``sa.Enum()`` (#11337/#11338/#11346).
+
+    ``sa.Enum(..., create_type=False)`` is **silently ignored** by SQLAlchemy 2.0
+    (only ``postgresql.ENUM`` honours ``create_type``), so ``op.create_table``
+    re-emits ``CREATE TYPE`` for the column → ``DuplicateObjectError`` when the type
+    already exists (partially-applied DB). ``pg_enum()`` returns a ``postgresql.ENUM``
+    that ``op.create_table`` never auto-creates; pair it with ``ensure_pg_enum``.
+    """
+    assert _MIGRATIONS_VERSIONS.is_dir(), f"migrations/versions not found at {_MIGRATIONS_VERSIONS}"
+    violations: list[str] = []
+    for f in sorted(_MIGRATIONS_VERSIONS.glob("*.py")):
+        violations += [f"{f.name}:{line}" for line in _generic_enum_call_lines(f)]
+    assert not violations, (
+        "Migrations must use migrations.guards.pg_enum(), not generic sa.Enum() — "
+        "create_type=False is ignored on the generic Enum, causing duplicate CREATE TYPE. "
+        f"Offending call sites: {violations}"
+    )
