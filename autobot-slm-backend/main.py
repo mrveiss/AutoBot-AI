@@ -81,6 +81,7 @@ from services.compose_fleet import (
     seed_compose_nodes,
     start_compose_heartbeat,
 )
+from services.node_seeder import sync_slm_node_roles
 from services.database import db_service
 from services.git_tracker import start_version_checker
 from services.reconciler import reconciler_service
@@ -373,6 +374,7 @@ async def _ensure_local_node() -> None:
             # running (older rows predate this).
             if list(existing.detected_roles or []) != _SLM_ROLES:
                 existing.detected_roles = _SLM_ROLES
+            await sync_slm_node_roles(session, _SLM_NODE_ID, list(existing.roles or []), _SLM_ROLES)
             await session.commit()
             return
 
