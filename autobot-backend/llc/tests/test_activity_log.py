@@ -280,9 +280,12 @@ class TestRecordUnit:
             occurred_at=datetime.now(tz=timezone.utc),
         )
         mock_pub = AsyncMock()
-        with patch("live_event_manager.publish_live_event", mock_pub), patch(
-            "llc.services.activity_log.get_async_redis_client",
-            AsyncMock(return_value=AsyncMock(publish=AsyncMock())),
+        with (
+            patch("live_event_manager.publish_live_event", mock_pub),
+            patch(
+                "llc.services.activity_log.get_async_redis_client",
+                AsyncMock(return_value=AsyncMock(publish=AsyncMock())),
+            ),
         ):
             await svc._publish(company_id, entry)
 
