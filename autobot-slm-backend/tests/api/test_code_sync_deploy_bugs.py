@@ -574,14 +574,11 @@ def test_ensure_target_python_uses_arg_list_and_target_from_map(tmp_path) -> Non
 
     playbook = tmp_path / "provision-local-python.yml"
     playbook.write_text("---\n", encoding="utf-8")
-    inventory = tmp_path / "inventory.yml"
-    inventory.write_text("all:\n", encoding="utf-8")
 
     # shutil.which: None first (trigger provision), path after install re-check.
     with (
         patch("shutil.which", side_effect=[None, "/usr/bin/python3.14"]),
         patch("api.code_sync._PROVISION_PYTHON_PLAYBOOK", playbook),
-        patch("api.code_sync._PROVISION_PYTHON_INVENTORY", inventory),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
     ):
         _run(_ensure_target_python_installed("autobot-backend", steps))
@@ -591,6 +588,10 @@ def test_ensure_target_python_uses_arg_list_and_target_from_map(tmp_path) -> Non
     assert "--tags" in captured and "python314" in captured
     assert "--connection" in captured and "local" in captured
     assert str(playbook) in captured
+    # #11352: inline localhost inventory, NOT "--limit localhost" against the
+    # fleet inventory (which targeted no hosts).
+    assert "-i" in captured and "localhost," in captured
+    assert "--limit" not in captured
     assert any("now on PATH" in s for s in steps)
 
 
