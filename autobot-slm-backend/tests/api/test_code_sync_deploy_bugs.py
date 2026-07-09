@@ -1444,3 +1444,45 @@ def test_run_post_sync_steps_rolls_back_on_unhealthy(tmp_path) -> None:
 
     assert not pip_ok
     assert rolled_back, "rollback must be triggered when health poll fails after restart"
+
+
+# ---------------------------------------------------------------------------
+# #11403 — python provision runs with ansible.cfg discoverable (cwd + ANSIBLE_CONFIG)
+# ---------------------------------------------------------------------------
+
+
+def test_provision_playbook_runs_from_ansible_dir_with_config() -> None:
+    """#11403: ansible-playbook must run with the ansible dir as cwd (survives
+    sudo env_reset) and ANSIBLE_CONFIG set, so roles_path resolves the python314
+    role instead of defaulting to playbooks/roles/ (role-not-found)."""
+    from api.code_sync import (
+        _ANSIBLE_CONFIG,
+        _ANSIBLE_DIR,
+        _PROVISION_PYTHON_PLAYBOOK,
+        _run_python_provision_playbook,
+    )
+
+    captured: dict = {}
+
+    async def _fake_exec(*cmd, **kw):
+        captured["cmd"] = cmd
+        captured["kw"] = kw
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"PLAY RECAP ok=11 changed=1 failed=0", b""))
+        return proc
+
+    steps: list = []
+    with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
+        ok = _run(_run_python_provision_playbook("python3.14", steps))
+
+    assert ok is True
+    kw = captured["kw"]
+    # cwd is the load-bearing fix (sudo preserves cwd; command args can't change)
+    assert kw.get("cwd") == str(_ANSIBLE_DIR)
+    env = kw.get("env") or {}
+    assert env.get("ANSIBLE_CONFIG") == str(_ANSIBLE_CONFIG)
+    # env must be merged from os.environ, else sudo/ansible-playbook aren't on PATH
+    assert "PATH" in env
+    # command args unchanged — must still match the exact NOPASSWD sudoers grant
+    assert captured["cmd"][:3] == ("sudo", "ansible-playbook", str(_PROVISION_PYTHON_PLAYBOOK))
