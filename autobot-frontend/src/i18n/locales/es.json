@@ -8109,7 +8109,9 @@
       "sprintId": "ID de sprint",
       "sprintIdPlaceholder": "UUID de sprint",
       "assigning": "Asignando...",
-      "assign": "Asignar"
+      "assign": "Asignar",
+      "createError": "Couldn't create the work item. Please try again.",
+      "createErrorDetail": "Couldn't create the work item: {detail}"
     },
     "workItem": {
       "priority": "Prioridad",

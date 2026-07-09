@@ -8109,7 +8109,9 @@
       "sprintId": "ID du sprint",
       "sprintIdPlaceholder": "UUID du sprint",
       "assigning": "Affectation...",
-      "assign": "Affecter"
+      "assign": "Affecter",
+      "createError": "Couldn't create the work item. Please try again.",
+      "createErrorDetail": "Couldn't create the work item: {detail}"
     },
     "workItem": {
       "priority": "Priorité",

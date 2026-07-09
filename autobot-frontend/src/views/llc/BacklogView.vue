@@ -177,6 +177,8 @@
           </div>
         </div>
 
+        <p v-if="createError" class="create-error" role="alert">{{ createError }}</p>
+
         <div class="modal-actions">
           <button class="btn-secondary" @click="showCreateForm = false">{{ t('common.cancel') }}</button>
           <button class="btn-primary" :disabled="!newItem.title || isCreating" @click="createItem">
@@ -260,6 +262,7 @@ const filters = ref({ type: '', status: '', priority: '', search: '' })
 
 const showCreateForm = ref(false)
 const isCreating = ref(false)
+const createError = ref('')
 const newItem = ref({ title: '', type: 'pbi', priority: 'medium', story_points: null as number | null, description: '' })
 const isSuggestingAC = ref(false)
 const suggestedACs = ref<{ text: string; selected: boolean }[]>([])
@@ -373,6 +376,7 @@ async function suggestAC() {
 async function createItem() {
   if (!newItem.value.title) return
   isCreating.value = true
+  createError.value = ''
   try {
     const ac = suggestedACs.value.filter(a => a.selected).map(a => a.text)
     const created = await api.post<WorkItem>(`/api/llc/work-items`, {
@@ -385,7 +389,12 @@ async function createItem() {
     newItem.value = { title: '', type: 'pbi', priority: 'medium', story_points: null, description: '' }
     suggestedACs.value = []
   } catch (err) {
+    // Surface the backend reason instead of a silent console-only log (#11411).
     logger.error('Create work item failed', err)
+    const detail = err instanceof Error ? err.message : ''
+    createError.value = detail
+      ? t('llc.backlog.createErrorDetail', { detail })
+      : t('llc.backlog.createError')
   } finally {
     isCreating.value = false
   }
@@ -688,6 +697,12 @@ onMounted(fetchBacklog)
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.create-error {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--color-danger, #b91c1c);
 }
 
 .btn-primary {
