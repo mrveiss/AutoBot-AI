@@ -10,6 +10,7 @@ Provides endpoints for code version tracking and sync operations.
 
 import asyncio
 import functools
+import hashlib
 import logging
 import os
 import uuid
@@ -781,6 +782,17 @@ _COMPONENT_FRONTEND_DIRS: Dict[str, str] = {
     "autobot-slm-frontend": "/opt/autobot/autobot-slm-frontend",
 }
 
+# Timeout (seconds) for `npm ci` (dependency install).  Windows-generated
+# package-lock.json on WSL can be slow; 300 s default matches pip (#11351).
+_NPM_INSTALL_TIMEOUT: float = float(os.environ.get("AUTOBOT_NPM_INSTALL_TIMEOUT", "300"))
+
+# Timeout (seconds) for `npm run <build>` (vite build step) (#11351).
+_NPM_BUILD_TIMEOUT: float = float(os.environ.get("AUTOBOT_NPM_BUILD_TIMEOUT", "300"))
+
+# Marker file stored inside node_modules after a successful npm ci.  Holds the
+# sha256 hex-digest of the package-lock.json that was installed (#11351).
+_NPM_LOCK_HASH_MARKER: str = ".autobot-lock-hash"
+
 # npm build script per frontend component. The SLM frontend is co-located under
 # /slm and MUST bake VITE_API_URL=/slm (via `build:slm`), or its API calls hit
 # the root user backend instead of /slm/api — breaking login and every action
@@ -1164,15 +1176,43 @@ async def _run_alembic_migrations(component: str, deployed_dir: str, steps: List
         steps.append(f"alembic: upgrade error: {exc}")
 
 
-async def _build_npm_frontend_for_component(component: str, steps: List[str]) -> None:
-    """Run npm ci + npm run build for a frontend component (#9982).
+def _lockfile_hash(frontend_dir: str) -> Optional[str]:
+    """Return the sha256 hex-digest of <frontend_dir>/package-lock.json, or None if absent."""
+    lock_path = Path(frontend_dir) / "package-lock.json"
+    if not lock_path.exists():
+        return None
+    return hashlib.sha256(lock_path.read_bytes()).hexdigest()
 
-    Appends human-readable step notes to *steps*.
+
+def _lockfile_unchanged(frontend_dir: str) -> bool:
+    """Return True when node_modules exists and its lock-hash marker matches the current lockfile.
+
+    False means a fresh ``npm ci`` is needed (node_modules missing, marker absent,
+    or package-lock.json changed since the last successful install).
     """
-    frontend_dir = _COMPONENT_FRONTEND_DIRS.get(component)
-    if frontend_dir is None:
-        return
-    steps.append(f"npm: building {frontend_dir}")
+    node_modules = Path(frontend_dir) / "node_modules"
+    if not node_modules.is_dir():
+        return False
+    marker = node_modules / _NPM_LOCK_HASH_MARKER
+    if not marker.exists():
+        return False
+    stored = marker.read_text(encoding="utf-8").strip()
+    current = _lockfile_hash(frontend_dir)
+    return current is not None and stored == current
+
+
+async def _npm_install_if_needed(frontend_dir: str, component: str, steps: List[str]) -> bool:
+    """Run ``npm ci --prefix <frontend_dir>`` only when the lockfile changed or node_modules is missing.
+
+    Writes a sha256 marker to node_modules/.autobot-lock-hash after success so
+    subsequent runs with an unchanged lockfile skip the install entirely (#11351).
+    Returns True on success (or skip), False on failure.
+    """
+    if _lockfile_unchanged(frontend_dir):
+        steps.append("npm ci: skipped (node_modules up-to-date)")
+        logger.info("drift resolve: npm ci skipped for %s — lockfile unchanged", component)
+        return True
+    steps.append(f"npm ci: installing deps in {frontend_dir}")
     try:
         proc = await asyncio.create_subprocess_exec(
             "npm",
@@ -1182,14 +1222,45 @@ async def _build_npm_frontend_for_component(component: str, steps: List[str]) ->
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=_NPM_INSTALL_TIMEOUT)
         if proc.returncode != 0:
             out = stdout.decode(errors="replace")[:300] if stdout else ""
             logger.warning("drift resolve: npm ci failed (%d) for %s: %s", proc.returncode, component, out)
             steps.append(f"npm ci: failed (rc={proc.returncode}): {out[:150]}")
-            return
+            return False
+    except asyncio.TimeoutError:
+        logger.error("drift resolve: npm ci timed out for %s (%.0fs)", component, _NPM_INSTALL_TIMEOUT)
+        steps.append(f"npm ci: timed out after {_NPM_INSTALL_TIMEOUT:.0f}s")
+        return False
+    except Exception as exc:
+        logger.warning("drift resolve: npm ci error for %s: %s", component, exc)
+        steps.append(f"npm ci: error: {exc}")
+        return False
+    # Persist the lockfile hash so the next run can skip reinstall.
+    current_hash = _lockfile_hash(frontend_dir)
+    if current_hash:
+        marker = Path(frontend_dir) / "node_modules" / _NPM_LOCK_HASH_MARKER
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(current_hash, encoding="utf-8")
+    steps.append("npm ci: succeeded")
+    return True
 
-        build_script = _COMPONENT_BUILD_SCRIPT.get(component, "build")
+
+async def _build_npm_frontend_for_component(component: str, steps: List[str]) -> bool:
+    """Install deps (if needed) then run the npm build script for a frontend component (#9982, #11351).
+
+    Returns True when the build succeeds, False on any failure.
+    Appends human-readable step notes to *steps*.
+    """
+    frontend_dir = _COMPONENT_FRONTEND_DIRS.get(component)
+    if frontend_dir is None:
+        return True
+    steps.append(f"npm: building {frontend_dir}")
+    install_ok = await _npm_install_if_needed(frontend_dir, component, steps)
+    if not install_ok:
+        return False
+    build_script = _COMPONENT_BUILD_SCRIPT.get(component, "build")
+    try:
         proc = await asyncio.create_subprocess_exec(
             "npm",
             "run",
@@ -1199,20 +1270,23 @@ async def _build_npm_frontend_for_component(component: str, steps: List[str]) ->
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=_NPM_BUILD_TIMEOUT)
         if proc.returncode == 0:
             logger.info("drift resolve: npm build (%s) succeeded for %s", build_script, component)
             steps.append("npm build: succeeded")
-        else:
-            out = stdout.decode(errors="replace")[:300] if stdout else ""
-            logger.warning("drift resolve: npm build failed (%d) for %s: %s", proc.returncode, component, out)
-            steps.append(f"npm build: failed (rc={proc.returncode}): {out[:150]}")
+            return True
+        out = stdout.decode(errors="replace")[:300] if stdout else ""
+        logger.warning("drift resolve: npm build failed (%d) for %s: %s", proc.returncode, component, out)
+        steps.append(f"npm build: failed (rc={proc.returncode}): {out[:150]}")
+        return False
     except asyncio.TimeoutError:
-        logger.error("drift resolve: npm build timed out for %s", component)
-        steps.append("npm build: timed out after 300s")
+        logger.error("drift resolve: npm build timed out for %s (%.0fs)", component, _NPM_BUILD_TIMEOUT)
+        steps.append(f"npm build: timed out after {_NPM_BUILD_TIMEOUT:.0f}s")
+        return False
     except Exception as exc:
         logger.warning("drift resolve: npm build error for %s: %s", component, exc)
         steps.append(f"npm build: error: {exc}")
+        return False
 
 
 async def _restart_component_services(component: str, steps: List[str]) -> None:
@@ -1315,14 +1389,15 @@ async def _run_post_sync_steps(
     """Run dep-install / rebuild / restart after a per-component rsync (#9982).
 
     Returns (deps_changed, steps_log, pip_ok).
-    pip_ok is False when pip exits non-zero so resolve_drift can surface the
-    failure via success=False rather than silently returning success=True (#11322).
+    pip_ok is False when pip or npm exits non-zero so resolve_drift can surface
+    the failure via success=False rather than silently returning success=True
+    (#11322, #11351).
 
     Component routing:
       - Python backend (autobot-backend, autobot-slm-backend):
           constraints deploy (#11322) + venv version check (#11323) +
           pip install + symlink restore (#10912) + alembic + restart
-      - Frontend (autobot-frontend, autobot-slm-frontend): npm ci + build + nginx reload
+      - Frontend (autobot-frontend, autobot-slm-frontend): npm ci (conditional) + build + nginx reload
       - autobot_shared: restore BOTH backends' symlinks (#10912) + restart dependents
     """
     steps: List[str] = []
@@ -1357,7 +1432,9 @@ async def _run_post_sync_steps(
         await _ensure_autobot_shared_symlink(component, steps)
         await _restart_component_services(component, steps)
     elif component in _COMPONENT_FRONTEND_DIRS:
-        await _build_npm_frontend_for_component(component, steps)
+        npm_ok = await _build_npm_frontend_for_component(component, steps)
+        if not npm_ok:
+            pip_ok = False
         await _restart_component_services(component, steps)
     elif component in _COMPONENT_SERVICES:
         # Library component (autobot_shared): no build step, but every service

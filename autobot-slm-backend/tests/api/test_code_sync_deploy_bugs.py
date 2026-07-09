@@ -72,12 +72,17 @@ import asyncio  # noqa: E402
 from api.code_sync import (  # noqa: E402
     _COMPONENT_PYTHON_TARGET,
     _CONSTRAINTS_SOURCE_SUBDIR,
+    _NPM_LOCK_HASH_MARKER,
     _REPO_ROOT_REQUIREMENT_FILES,
+    _build_npm_frontend_for_component,
     _deploy_constraints_dir,
     _deploy_repo_root_requirements,
     _ensure_target_python_installed,
     _ensure_venv_python,
     _install_pip_deps_for_component,
+    _lockfile_hash,
+    _lockfile_unchanged,
+    _npm_install_if_needed,
     _run_post_sync_steps,
 )
 
@@ -629,3 +634,281 @@ def test_run_post_sync_steps_provisions_python_before_venv() -> None:
         _run(_run_post_sync_steps("autobot-backend", "/src/autobot-backend", "/opt/autobot/autobot-backend"))
 
     assert order == ["provision", "venv"], f"expected provision before venv, got {order}"
+
+
+# ---------------------------------------------------------------------------
+# #11351 — conditional npm ci: lockfile-hash skip logic
+# ---------------------------------------------------------------------------
+
+
+def test_lockfile_hash_returns_none_when_missing(tmp_path) -> None:
+    """_lockfile_hash returns None when package-lock.json is absent."""
+    assert _lockfile_hash(str(tmp_path)) is None
+
+
+def test_lockfile_hash_returns_hex_digest(tmp_path) -> None:
+    """_lockfile_hash returns a 64-char hex string for an existing lockfile."""
+    (tmp_path / "package-lock.json").write_bytes(b'{"lockfileVersion":3}')
+    result = _lockfile_hash(str(tmp_path))
+    assert result is not None
+    assert len(result) == 64
+    assert all(c in "0123456789abcdef" for c in result)
+
+
+def test_lockfile_unchanged_false_when_node_modules_missing(tmp_path) -> None:
+    """Returns False when node_modules directory does not exist."""
+    (tmp_path / "package-lock.json").write_bytes(b"{}")
+    assert _lockfile_unchanged(str(tmp_path)) is False
+
+
+def test_lockfile_unchanged_false_when_marker_absent(tmp_path) -> None:
+    """Returns False when node_modules exists but the hash marker file is missing."""
+    (tmp_path / "package-lock.json").write_bytes(b"{}")
+    (tmp_path / "node_modules").mkdir()
+    assert _lockfile_unchanged(str(tmp_path)) is False
+
+
+def test_lockfile_unchanged_false_when_hash_differs(tmp_path) -> None:
+    """Returns False when the stored hash doesn't match the current lockfile."""
+    lock = tmp_path / "package-lock.json"
+    lock.write_bytes(b'{"lockfileVersion":3}')
+    nm = tmp_path / "node_modules"
+    nm.mkdir()
+    (nm / _NPM_LOCK_HASH_MARKER).write_text("deadbeef" * 8, encoding="utf-8")
+    assert _lockfile_unchanged(str(tmp_path)) is False
+
+
+def test_lockfile_unchanged_true_when_hash_matches(tmp_path) -> None:
+    """Returns True when node_modules exists and the stored hash matches the lockfile."""
+    import hashlib
+
+    content = b'{"lockfileVersion":3}'
+    lock = tmp_path / "package-lock.json"
+    lock.write_bytes(content)
+    nm = tmp_path / "node_modules"
+    nm.mkdir()
+    (nm / _NPM_LOCK_HASH_MARKER).write_text(hashlib.sha256(content).hexdigest(), encoding="utf-8")
+    assert _lockfile_unchanged(str(tmp_path)) is True
+
+
+# ---------------------------------------------------------------------------
+# #11351 — _npm_install_if_needed: skip, run, failure
+# ---------------------------------------------------------------------------
+
+
+def test_npm_install_skipped_when_lockfile_unchanged(tmp_path) -> None:
+    """npm ci is NOT invoked when _lockfile_unchanged returns True."""
+    import hashlib
+
+    content = b'{"lockfileVersion":3}'
+    (tmp_path / "package-lock.json").write_bytes(content)
+    nm = tmp_path / "node_modules"
+    nm.mkdir()
+    (nm / _NPM_LOCK_HASH_MARKER).write_text(hashlib.sha256(content).hexdigest(), encoding="utf-8")
+
+    steps: list[str] = []
+    executed: list[str] = []
+
+    async def _fake_exec(*cmd, **kw):
+        executed.extend(cmd)
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
+        result = _run(_npm_install_if_needed(str(tmp_path), "autobot-slm-frontend", steps))
+
+    assert result is True
+    assert not executed, "npm ci must not run when lockfile is unchanged"
+    assert any("skipped" in s for s in steps)
+
+
+def test_npm_install_runs_when_node_modules_missing(tmp_path) -> None:
+    """npm ci IS invoked when node_modules doesn't exist."""
+    (tmp_path / "package-lock.json").write_bytes(b'{"lockfileVersion":3}')
+    # node_modules intentionally absent
+
+    steps: list[str] = []
+    executed: list[str] = []
+
+    async def _fake_exec(*cmd, **kw):
+        executed.extend(cmd)
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
+        result = _run(_npm_install_if_needed(str(tmp_path), "autobot-slm-frontend", steps))
+
+    assert result is True
+    assert "npm" in executed and "ci" in executed
+    assert any("succeeded" in s for s in steps)
+
+
+def test_npm_install_runs_when_lockfile_changed(tmp_path) -> None:
+    """npm ci IS invoked when the stored hash doesn't match the current lockfile."""
+    (tmp_path / "package-lock.json").write_bytes(b'{"lockfileVersion":3,"new-dep":true}')
+    nm = tmp_path / "node_modules"
+    nm.mkdir()
+    (nm / _NPM_LOCK_HASH_MARKER).write_text("stale_hash" * 6, encoding="utf-8")
+
+    steps: list[str] = []
+    executed: list[str] = []
+
+    async def _fake_exec(*cmd, **kw):
+        executed.extend(cmd)
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
+        result = _run(_npm_install_if_needed(str(tmp_path), "autobot-slm-frontend", steps))
+
+    assert result is True
+    assert "npm" in executed and "ci" in executed
+
+
+def test_npm_install_writes_marker_on_success(tmp_path) -> None:
+    """After a successful npm ci the hash marker is written to node_modules/."""
+    import hashlib
+
+    content = b'{"lockfileVersion":3}'
+    (tmp_path / "package-lock.json").write_bytes(content)
+    # node_modules absent — will be created by the real npm, but we just need
+    # the marker write to happen; fake the dir creation here.
+    nm = tmp_path / "node_modules"
+    nm.mkdir()
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
+        _run(_npm_install_if_needed(str(tmp_path), "autobot-slm-frontend", []))
+
+    marker = nm / _NPM_LOCK_HASH_MARKER
+    assert marker.exists()
+    assert marker.read_text(encoding="utf-8") == hashlib.sha256(content).hexdigest()
+
+
+def test_npm_install_returns_false_on_nonzero_rc(tmp_path) -> None:
+    """_npm_install_if_needed returns False when npm ci exits non-zero."""
+    (tmp_path / "package-lock.json").write_bytes(b"{}")
+
+    steps: list[str] = []
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.returncode = 1
+        proc.communicate = AsyncMock(return_value=(b"ERESOLVE", b""))
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
+        result = _run(_npm_install_if_needed(str(tmp_path), "autobot-slm-frontend", steps))
+
+    assert result is False
+    assert any("failed" in s for s in steps)
+
+
+# ---------------------------------------------------------------------------
+# #11351 — _build_npm_frontend_for_component: skip install → build still runs
+# ---------------------------------------------------------------------------
+
+
+def test_build_skips_install_and_runs_build(tmp_path) -> None:
+    """When lockfile is unchanged, npm ci is skipped but npm run build still runs."""
+    import hashlib
+
+    content = b'{"lockfileVersion":3}'
+    (tmp_path / "package-lock.json").write_bytes(content)
+    nm = tmp_path / "node_modules"
+    nm.mkdir()
+    (nm / _NPM_LOCK_HASH_MARKER).write_text(hashlib.sha256(content).hexdigest(), encoding="utf-8")
+
+    steps: list[str] = []
+    build_called: list[bool] = []
+
+    async def _fake_exec(*cmd, **kw):
+        if "run" in cmd:
+            build_called.append(True)
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    with (
+        patch("api.code_sync._COMPONENT_FRONTEND_DIRS", {"autobot-slm-frontend": str(tmp_path)}),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+    ):
+        result = _run(_build_npm_frontend_for_component("autobot-slm-frontend", steps))
+
+    assert result is True
+    assert build_called, "npm run build must still execute even when npm ci is skipped"
+    assert any("skipped" in s for s in steps)
+    assert any("succeeded" in s for s in steps)
+
+
+def test_build_returns_false_on_npm_ci_failure(tmp_path) -> None:
+    """When npm ci fails, the build is aborted and False is returned."""
+    (tmp_path / "package-lock.json").write_bytes(b"{}")
+
+    steps: list[str] = []
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.returncode = 1
+        proc.communicate = AsyncMock(return_value=(b"err", b""))
+        return proc
+
+    with (
+        patch("api.code_sync._COMPONENT_FRONTEND_DIRS", {"autobot-slm-frontend": str(tmp_path)}),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+    ):
+        result = _run(_build_npm_frontend_for_component("autobot-slm-frontend", steps))
+
+    assert result is False
+    assert any("failed" in s for s in steps)
+
+
+# ---------------------------------------------------------------------------
+# #11351 — _run_post_sync_steps surfaces npm build failure via pip_ok=False
+# ---------------------------------------------------------------------------
+
+
+def test_run_post_sync_steps_pip_ok_false_on_npm_failure() -> None:
+    """When npm build returns False, _run_post_sync_steps returns pip_ok=False."""
+    with (
+        patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        patch("api.code_sync._build_npm_frontend_for_component", AsyncMock(return_value=False)),
+        patch("api.code_sync._restart_component_services", AsyncMock()),
+    ):
+        _, _, pip_ok = _run(
+            _run_post_sync_steps(
+                "autobot-slm-frontend",
+                "/src/autobot-slm-frontend",
+                "/opt/autobot/autobot-slm-frontend",
+            )
+        )
+    assert pip_ok is False
+
+
+def test_run_post_sync_steps_pip_ok_true_on_npm_success() -> None:
+    """When npm build returns True, _run_post_sync_steps returns pip_ok=True."""
+    with (
+        patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        patch("api.code_sync._build_npm_frontend_for_component", AsyncMock(return_value=True)),
+        patch("api.code_sync._restart_component_services", AsyncMock()),
+    ):
+        _, _, pip_ok = _run(
+            _run_post_sync_steps(
+                "autobot-slm-frontend",
+                "/src/autobot-slm-frontend",
+                "/opt/autobot/autobot-slm-frontend",
+            )
+        )
+    assert pip_ok is True
