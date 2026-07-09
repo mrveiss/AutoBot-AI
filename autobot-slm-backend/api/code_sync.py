@@ -1707,28 +1707,30 @@ async def _restart_component_services(component: str, steps: List[str]) -> None:
 # =============================================================================
 
 
-def _snapshot_component(component: str) -> Optional[str]:
+async def _snapshot_component(component: str) -> Optional[str]:
     """Capture the HEAD commit of the deployed component dir (#11377).
 
-    The deployed dir is a git checkout (or sourced from one); `git -C <dir>
-    rev-parse HEAD` is the most reliable way to read the current tip without
-    parsing rsync output. Returns the commit SHA string on success, None when
-    the dir is not a git repo or git is unavailable.
+    Uses asyncio.create_subprocess_exec (non-blocking, bandit-safe) to run
+    `git -C <deployed_dir> rev-parse HEAD`.  Returns the commit SHA on success,
+    None when the dir is not a git repo or git is unavailable.
     """
-    import subprocess
-
     deployed_dir = get_default_deployed_dir(component)
     try:
-        result = subprocess.run(  # noqa: S603
-            ["git", "-C", deployed_dir, "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            timeout=10,
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            deployed_dir,
+            "rev-parse",
+            "HEAD",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
         )
-        if result.returncode == 0:
-            sha = result.stdout.strip()
-            logger.info("snapshot: %s HEAD=%s", component, sha[:12])
-            return sha
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10.0)
+        if proc.returncode == 0:
+            sha = (stdout.decode(errors="replace") if stdout else "").strip()
+            if sha:
+                logger.info("snapshot: %s HEAD=%s", component, sha[:12])
+                return sha
     except Exception as exc:
         logger.debug("snapshot: git rev-parse failed for %s: %s", component, exc)
     return None
@@ -1930,7 +1932,7 @@ async def _run_post_sync_steps(
     deps_changed = await _compute_deps_changed(component)
 
     # #11377: snapshot the deployed dir BEFORE any mutation for rollback.
-    snapshot = _snapshot_component(component)
+    snapshot = await _snapshot_component(component)
     # Track the last pg_dump path for rollback failure messages (#11376+#11377).
     last_dump_path: Optional[str] = None
 

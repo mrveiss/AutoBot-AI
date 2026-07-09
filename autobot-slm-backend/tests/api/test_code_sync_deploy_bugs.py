@@ -1161,7 +1161,7 @@ def test_pg_dump_abort_propagates_to_post_sync() -> None:
     """_run_post_sync_steps returns pip_ok=False when pg_dump fails (#11376)."""
     with (
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
-        patch("api.code_sync._snapshot_component", return_value=None),
+        patch("api.code_sync._snapshot_component", AsyncMock(return_value=None)),
         patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
         patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
         patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
@@ -1249,18 +1249,36 @@ def test_pg_dump_uses_arg_list_subprocess(tmp_path) -> None:
 
 
 def test_snapshot_component_returns_none_when_not_git(tmp_path) -> None:
-    """Returns None gracefully when the deployed dir is not a git repo."""
-    with patch("api.code_sync.get_default_deployed_dir", return_value=str(tmp_path)):
-        result = _snapshot_component("autobot-backend")
+    """Returns None gracefully when git rev-parse fails (not a git repo)."""
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.returncode = 128
+        proc.communicate = AsyncMock(return_value=(b"not a git repository", b""))
+        return proc
+
+    with (
+        patch("api.code_sync.get_default_deployed_dir", return_value=str(tmp_path)),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+    ):
+        result = _run(_snapshot_component("autobot-backend"))
     assert result is None
 
 
 def test_snapshot_component_returns_sha(tmp_path) -> None:
     """Returns the SHA string when git rev-parse succeeds."""
-    with patch("api.code_sync.get_default_deployed_dir", return_value=str(tmp_path)):
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="abc123def456\n")
-            result = _snapshot_component("autobot-backend")
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"abc123def456\n", b""))
+        return proc
+
+    with (
+        patch("api.code_sync.get_default_deployed_dir", return_value=str(tmp_path)),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+    ):
+        result = _run(_snapshot_component("autobot-backend"))
     assert result == "abc123def456"
 
 
@@ -1308,7 +1326,7 @@ def test_run_post_sync_steps_rolls_back_on_pip_failure() -> None:
 
     with (
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
-        patch("api.code_sync._snapshot_component", return_value="aabbcc"),
+        patch("api.code_sync._snapshot_component", AsyncMock(return_value="aabbcc")),
         patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
         patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
         patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
@@ -1408,7 +1426,7 @@ def test_run_post_sync_steps_rolls_back_on_unhealthy(tmp_path) -> None:
 
     with (
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
-        patch("api.code_sync._snapshot_component", return_value="aabbcc"),
+        patch("api.code_sync._snapshot_component", AsyncMock(return_value="aabbcc")),
         patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
         patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
         patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
