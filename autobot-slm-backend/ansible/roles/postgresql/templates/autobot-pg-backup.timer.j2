@@ -1,0 +1,12 @@
+# AutoBot PostgreSQL Scheduled Backup Timer - Ansible Managed (#11383)
+# View schedule: systemctl list-timers autobot-pg-backup*
+[Unit]
+Description=AutoBot PostgreSQL backup timer ({{ postgresql_backup_on_calendar }})
+
+[Timer]
+OnCalendar={{ postgresql_backup_on_calendar }}
+RandomizedDelaySec={{ postgresql_backup_randomized_delay_sec }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
