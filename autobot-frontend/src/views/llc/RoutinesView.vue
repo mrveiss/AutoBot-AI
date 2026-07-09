@@ -69,7 +69,7 @@
                 {{ routine.status === 'active' ? $t('llc.routines.pause') : $t('llc.routines.resume') }}
               </button>
               <button class="btn-sm btn-danger" :disabled="mutating.has(routine.id)" @click="removeRoutine(routine)">
-                {{ $t('llc.routines.delete') }}
+                {{ $t('llc.routines.archive') }}
               </button>
             </td>
           </tr>
@@ -129,7 +129,7 @@
 
     <!-- Run history drawer -->
     <div v-if="selectedRoutine" class="drawer-overlay" @click.self="selectedRoutine = null">
-      <div class="history-drawer">
+      <div class="history-drawer" role="dialog" aria-modal="true">
         <div class="drawer-header">
           <h3>{{ $t('llc.routines.runHistoryTitle', { name: selectedRoutine.name }) }}</h3>
           <button class="btn-close" :aria-label="$t('common.close')" @click="selectedRoutine = null">✕</button>
@@ -138,7 +138,7 @@
         <div v-else-if="runHistory.length === 0" class="state-msg">{{ $t('llc.routines.noRuns') }}</div>
         <div v-else class="run-list">
           <div v-for="run in runHistory" :key="run.id" class="run-item">
-            <span class="status-badge" :class="`status-run-${run.status}`">{{ run.status }}</span>
+            <span class="status-badge" :class="`status-run-${run.status}`">{{ runStatusLabel(run.status) }}</span>
             <span class="run-date">{{ formatDate(run.started_at ?? run.created_at) }}</span>
             <span v-if="run.finished_at" class="run-duration">
               {{ computeDuration(run.started_at, run.finished_at) }}
@@ -235,6 +235,14 @@ function producesLabel(produces: Routine['produces']) {
   return produces === 'new_work_item'
     ? t('llc.routines.producesNewWorkItem')
     : t('llc.routines.producesUpdatesRecurring')
+}
+
+// Backend run statuses: queued | running | succeeded | failed | completed
+// (llc/scheduler/routine_scheduler.py). Fall back to the raw value for any
+// status not yet mapped rather than showing an empty label.
+const RUN_STATUS_KEYS = ['queued', 'running', 'succeeded', 'failed', 'completed']
+function runStatusLabel(status: string) {
+  return RUN_STATUS_KEYS.includes(status) ? t(`llc.routines.runStatus_${status}`) : status
 }
 
 async function loadRoutines() {
@@ -360,7 +368,7 @@ async function toggleStatus(routine: Routine) {
 }
 
 async function removeRoutine(routine: Routine) {
-  if (!window.confirm(t('llc.routines.confirmDelete', { name: routine.name }))) return
+  if (!window.confirm(t('llc.routines.confirmArchive', { name: routine.name }))) return
   const next = new Set(mutating.value)
   next.add(routine.id)
   mutating.value = next
@@ -665,15 +673,24 @@ onMounted(() => {
   font-size: 0.75rem;
 }
 
-.status-run-success,
+.status-run-succeeded,
 .status-run-completed {
   background: var(--color-success-subtle, #dcfce7);
   color: var(--color-success-text, #15803d);
 }
 
-.status-run-failed,
-.status-run-error {
+.status-run-failed {
   background: var(--color-danger-subtle, #fee2e2);
   color: var(--color-danger, #b91c1c);
+}
+
+.status-run-running {
+  background: var(--color-info-subtle, #dbeafe);
+  color: var(--color-info-text, #1d4ed8);
+}
+
+.status-run-queued {
+  background: var(--bg-muted, #f3f4f6);
+  color: var(--text-secondary, #4b5563);
 }
 </style>

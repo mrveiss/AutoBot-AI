@@ -8280,7 +8280,6 @@
       "edit": "Edit",
       "pause": "Pause",
       "resume": "Resume",
-      "delete": "Delete",
       "status_active": "Active",
       "status_paused": "Paused",
       "status_archived": "Archived",
@@ -8305,7 +8304,13 @@
       "loadingRuns": "Loading runs...",
       "noRuns": "No runs yet.",
       "producedWorkItem": "created work item",
-      "confirmDelete": "Delete routine \"{name}\"? This cannot be undone."
+      "archive": "Archive",
+      "confirmArchive": "Archive routine \"{name}\"? It will stop running future jobs.",
+      "runStatus_queued": "Queued",
+      "runStatus_running": "Running",
+      "runStatus_succeeded": "Succeeded",
+      "runStatus_failed": "Failed",
+      "runStatus_completed": "Completed"
     }
   },
   "code": {
