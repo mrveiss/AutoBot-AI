@@ -21,9 +21,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from api.redis_service import _map_active_state, router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+from api.redis_service import _map_active_state, router
 
 # ---------------------------------------------------------------------------
 # App fixture
