@@ -71,11 +71,11 @@ import asyncio  # noqa: E402
 
 from api.code_sync import (  # noqa: E402
     _COMPONENT_PYTHON_TARGET,
-    _ensure_target_python_installed,
     _CONSTRAINTS_SOURCE_SUBDIR,
     _REPO_ROOT_REQUIREMENT_FILES,
     _deploy_constraints_dir,
     _deploy_repo_root_requirements,
+    _ensure_target_python_installed,
     _ensure_venv_python,
     _install_pip_deps_for_component,
     _run_post_sync_steps,
