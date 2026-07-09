@@ -110,6 +110,7 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { formatDateTime } from '@/utils/formatHelpers'
 import { useUserStore } from '@/stores/useUserStore'
+import type { components } from '@/types/generated/api'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{ companyId?: string }>()
@@ -119,13 +120,8 @@ const api = useApiClient()
 const userStore = useUserStore()
 const { t } = useI18n()
 
-interface SecretSummary {
-  name: string
-  version: number
-  created_by_agent_id: string
-  created_at: string
-  revoked_at?: string | null
-}
+// #11367: derive from the generated OpenAPI schema.
+type SecretSummary = components['schemas']['SecretSummary']
 
 const secrets = ref<SecretSummary[]>([])
 const isLoading = ref(false)
