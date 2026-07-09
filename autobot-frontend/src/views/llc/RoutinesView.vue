@@ -50,7 +50,7 @@
             <td>
               <span class="status-badge" :class="`status-${routine.status}`">{{ statusLabel(routine.status) }}</span>
             </td>
-            <td class="routine-fired">{{ formatDate(routine.last_fired_at) }}</td>
+            <td class="routine-fired">{{ displayDate(routine.last_fired_at) }}</td>
             <td class="routine-actions" @click.stop>
               <button
                 class="btn-sm"
@@ -139,9 +139,9 @@
         <div v-else class="run-list">
           <div v-for="run in runHistory" :key="run.id" class="run-item">
             <span class="status-badge" :class="`status-run-${run.status}`">{{ runStatusLabel(run.status) }}</span>
-            <span class="run-date">{{ formatDate(run.started_at ?? run.created_at) }}</span>
+            <span class="run-date">{{ displayDate(run.started_at ?? run.created_at) }}</span>
             <span v-if="run.finished_at" class="run-duration">
-              {{ computeDuration(run.started_at, run.finished_at) }}
+              {{ formatDuration(run.started_at, run.finished_at) }}
             </span>
             <span v-if="run.work_item_id" class="run-wi">{{ $t('llc.routines.producedWorkItem') }}</span>
           </div>
@@ -155,6 +155,7 @@
 import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { formatDateTime, formatDuration } from '@/utils/formatHelpers'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{ companyId?: string }>()
@@ -215,16 +216,10 @@ const form = ref({
   workItemTitle: '',
 })
 
-function formatDate(iso?: string | null) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString()
-}
-
-function computeDuration(start?: string | null, end?: string | null) {
-  if (!start || !end) return ''
-  const s = Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 1000)
-  if (s < 60) return `${s}s`
-  return `${Math.floor(s / 60)}m ${s % 60}s`
+// Reuse the shared formatters (utils/formatHelpers.ts) rather than re-rolling
+// them; this thin wrapper only supplies the em-dash empty-state placeholder.
+function displayDate(iso?: string | null) {
+  return formatDateTime(iso) || '—'
 }
 
 function statusLabel(status: Routine['status']) {
