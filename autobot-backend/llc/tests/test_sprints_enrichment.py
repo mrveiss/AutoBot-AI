@@ -158,6 +158,31 @@ def test_list_programs_attaches_project_count():
     assert resp.json()[0]["project_count"] == 7
 
 
+def test_list_company_projects_hydrates_code_source(monkeypatch):
+    """#11406: a linked repo must survive a plain project-list refetch — the
+    list path must hydrate `code_source`, not just the attach / with-repos paths."""
+    import llc.api.sprints as sprints_mod  # noqa: PLC0415
+
+    org = str(uuid.uuid4())
+    pr = _project(org)
+    pr.code_source_id = "src-1"
+
+    async def _fake_summary(code_source_id):
+        if not code_source_id:
+            return None
+        return sprints_mod.CodeSourceSummary(
+            id=code_source_id, repo="owner/repo", branch="main", clone_path="/tmp/x", status="ready"
+        )
+
+    monkeypatch.setattr(sprints_mod, "_project_source_summary", _fake_summary)
+    client = _client(org, [pr], [(pr.id, 0)], [])  # no open items, no active sprint
+    resp = client.get(f"/companies/{org}/projects")
+    assert resp.status_code == 200
+    body = resp.json()[0]
+    assert body["code_source"] is not None, "code_source must be hydrated on the list path (#11406)"
+    assert body["code_source"]["repo"] == "owner/repo"
+
+
 def test_list_company_projects_attaches_open_count_and_active_sprint():
     org = str(uuid.uuid4())
     pr1, pr2 = _project(org), _project(org)
