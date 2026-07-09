@@ -7,6 +7,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
+from migrations.guards import drop_pg_enum, ensure_pg_enum, pg_enum
+
 # Merge migration: unifies the two dangling heads left by Phase 1 (#11129) —
 # 20260707_066 (project_code_source) and 20260701_066 (requires_approval_before)
 # both descended from 20260630_065, creating "Multiple head revisions". See #11253.
@@ -17,14 +19,14 @@ down_revision: Union[str, Sequence[str], None] = ("20260707_066", "20260701_066"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_LIFECYCLE = sa.Enum(
-    "active", "archived", "pending_disposal", "disposed", name="projectlifecyclestate", create_type=False
-)
+# postgresql.ENUM with create_type=False — generic sa.Enum(create_type=False)
+# silently ignores the flag (#11337).  Harmless here (op.add_column never
+# auto-emits CREATE TYPE) but kept canonical for consistency.
+_LIFECYCLE = pg_enum("projectlifecyclestate", "active", "archived", "pending_disposal", "disposed")
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
-    _LIFECYCLE.create(bind, checkfirst=True)
+    ensure_pg_enum(_LIFECYCLE)
     op.add_column(
         "llc_projects",
         sa.Column(
@@ -52,5 +54,5 @@ def downgrade() -> None:
     op.drop_column("llc_projects", "disposal_scheduled_at")
     op.drop_column("llc_projects", "archived_at")
     op.drop_column("llc_projects", "lifecycle_state")
-    _LIFECYCLE.drop(op.get_bind(), checkfirst=True)
+    drop_pg_enum(_LIFECYCLE)
     # Note: Postgres cannot drop an enum value; 'project_disposal' remains on approvaltype (harmless).
