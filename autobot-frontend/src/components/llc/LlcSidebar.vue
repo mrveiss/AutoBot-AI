@@ -13,7 +13,7 @@
   Sprint & Kanban boards need a :boardId and are reached via the Backlog.
 -->
 <script setup lang="ts">
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useLlcCompanyStore } from '@/stores/useLlcCompanyStore'
@@ -49,15 +49,23 @@ async function fetchPendingCount(): Promise<void> {
   }
 }
 
-onMounted(() => {
-  void fetchPendingCount()
-  // Live refresh when an approval is created/resolved (auto-unsubscribes on unmount).
-  live.subscribe(`company:${companyId.value}`, (ev) => {
-    if (String(ev.event_type).includes('approval')) void fetchPendingCount()
-  })
-})
-
-watch(companyId, () => void fetchPendingCount())
+// Track + rebind the live subscription across company switches: the sidebar
+// stays mounted (#10750 B3) and companyId is a computed, so re-subscribe on
+// change (immediate covers mount). useLiveEvents also auto-cleans on unmount.
+let unsubApprovals: (() => void) | null = null
+watch(
+  companyId,
+  (id) => {
+    void fetchPendingCount()
+    if (unsubApprovals) unsubApprovals()
+    unsubApprovals = id
+      ? live.subscribe(`company:${id}`, (ev) => {
+          if (String(ev.event_type).includes('approval')) void fetchPendingCount()
+        })
+      : null
+  },
+  { immediate: true },
+)
 
 interface SidebarLink {
   labelKey: string
