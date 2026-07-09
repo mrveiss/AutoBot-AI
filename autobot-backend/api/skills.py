@@ -124,11 +124,17 @@ async def probe_skills(
     try:
         registry = get_skill_registry()
         skill_count = len(registry.list_skills()) if registry else 0
+        # #11141: surface cross-source name conflicts so operators can see when a
+        # source shadowed another (resolution is deterministic, not order-based).
+        conflicts = registry.get_conflicts() if registry else []
+        detail = f"{skill_count} skills loaded"
+        if conflicts:
+            detail += f"; {len(conflicts)} cross-source name conflict(s)"
         return ComponentHealth(
             name="skills",
             status="ok" if skill_count > 0 else "degraded",
-            detail=f"{skill_count} skills loaded",
-            data={"skill_count": skill_count},
+            detail=detail,
+            data={"skill_count": skill_count, "conflict_count": len(conflicts), "conflicts": conflicts},
         )
     except Exception as exc:
         return ComponentHealth(
