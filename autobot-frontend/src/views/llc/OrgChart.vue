@@ -23,6 +23,7 @@ const error = ref<string | null>(null)
 const selectedNode = ref<OrgNode | null>(null)
 const drawerOpen = ref(false)
 const showHire = ref(false) // GH#10219
+const terminating = ref(false) // in-flight guard — terminate is irreversible
 
 async function fetchTree() {
   isLoading.value = true
@@ -60,6 +61,22 @@ async function toggleAgentPause(node: OrgNode) {
     if (selectedNode.value?.id === node.id) selectedNode.value = { ...node }
   } catch (err: unknown) {
     logger.error('Toggle pause failed', err)
+  }
+}
+
+async function terminateAgent(node: OrgNode) {
+  if (!companyId.value || terminating.value) return
+  if (!window.confirm(t('llc.orgChart.confirmTerminate', { name: node.name }))) return
+  terminating.value = true
+  try {
+    // Permanent stop — canonical /controls/agents/{id}/terminate endpoint.
+    await api.post(`/api/llc/companies/${companyId.value}/controls/agents/${node.id}/terminate`, {})
+    await fetchTree() // reload from source of truth (backend sets status=terminated)
+    closeDrawer()
+  } catch (err: unknown) {
+    logger.error('Terminate agent failed', err)
+  } finally {
+    terminating.value = false
   }
 }
 
@@ -175,7 +192,7 @@ onMounted(fetchTree)
             </div>
           </dl>
         </div>
-        <div class="px-5 py-4 border-t border-autobot-border">
+        <div v-if="selectedNode.status !== 'terminated'" class="px-5 py-4 border-t border-autobot-border space-y-2">
           <button
             class="w-full py-2 rounded-lg text-sm font-medium transition-colors"
             :class="selectedNode.status === 'paused'
@@ -185,6 +202,16 @@ onMounted(fetchTree)
           >
             {{ selectedNode.status === 'paused' ? t('llc.orgChart.resumeAgent') : t('llc.orgChart.pauseAgent') }}
           </button>
+          <button
+            class="w-full py-2 rounded-lg text-sm font-medium transition-colors bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+            :disabled="terminating"
+            @click="terminateAgent(selectedNode)"
+          >
+            {{ t('llc.orgChart.terminateAgent') }}
+          </button>
+        </div>
+        <div v-else class="px-5 py-4 border-t border-autobot-border text-sm text-autobot-text-muted">
+          {{ t('llc.orgChart.terminatedNote') }}
         </div>
       </div>
     </transition>

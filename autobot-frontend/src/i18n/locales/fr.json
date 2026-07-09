@@ -8160,7 +8160,10 @@
       "budget": "Budget",
       "assignedItems": "Éléments assignés",
       "resumeAgent": "Reprendre l'agent",
-      "pauseAgent": "Suspendre l'agent"
+      "pauseAgent": "Suspendre l'agent",
+      "terminateAgent": "Terminate Agent",
+      "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
+      "terminatedNote": "This agent has been terminated."
     },
     "goals": {
       "title": "Arbre des objectifs",
