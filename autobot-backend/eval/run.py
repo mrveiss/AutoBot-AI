@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 from pathlib import Path
 
 from autobot_shared.async_compat import run_or_schedule
@@ -68,13 +69,31 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _resolve_output_path(json_path: str) -> Path | None:
+    """Resolve ``--json`` within the allowed output dir, refusing escapes (#11062).
+
+    An operator-supplied path could otherwise write outside the working tree
+    (``--json /etc/x`` or ``../../x``). Allowed root is ``EVAL_OUTPUT_DIR`` or the
+    current working directory. Returns the resolved path, or None if it escapes.
+    """
+    allowed = Path(os.environ.get("EVAL_OUTPUT_DIR", str(Path.cwd()))).resolve()
+    resolved = Path(json_path).resolve()
+    if resolved != allowed and allowed not in resolved.parents:
+        logger.error("Refusing to write JSON report outside %s: %s (#11062)", allowed, resolved)
+        return None
+    return resolved
+
+
 def _emit(report: RegressionReport, json_path: str) -> None:
     """Print the markdown report and optionally write JSON."""
     logger.info("%s", report.render_markdown())
     if json_path:
-        with open(json_path, "w", encoding="utf-8") as handle:
+        resolved = _resolve_output_path(json_path)
+        if resolved is None:
+            return
+        with open(resolved, "w", encoding="utf-8") as handle:
             json.dump(report.to_dict(), handle, indent=2)
-        logger.info("Wrote JSON report to %s", json_path)
+        logger.info("Wrote JSON report to %s", resolved)
 
 
 def main() -> int:

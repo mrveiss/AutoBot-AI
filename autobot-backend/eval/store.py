@@ -22,11 +22,17 @@ in as a golden with only these three keys added — no new format invented.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+
+# #11062: bound the golden loader so a runaway fixture dir cannot OOM/hang the
+# harness. Env-tunable; defaults are generous vs the current ~75 goldens.
+_MAX_GOLDEN_COUNT = int(os.environ.get("EVAL_MAX_GOLDEN_COUNT", "1000"))
+_MAX_GOLDEN_FILE_BYTES = int(os.environ.get("EVAL_MAX_GOLDEN_FILE_BYTES", str(1_000_000)))
 
 logger = get_logger(__name__)
 
@@ -85,6 +91,13 @@ def load_golden_set(directory: Path | None = None) -> List[GoldenTrajectory]:
     root = directory or GOLDEN_DIR
     goldens: List[GoldenTrajectory] = []
     for path in sorted(root.glob("*.json")):
+        if len(goldens) >= _MAX_GOLDEN_COUNT:
+            logger.warning("Golden cap %d reached; ignoring remaining files in %s (#11062)", _MAX_GOLDEN_COUNT, root)
+            break
+        size = path.stat().st_size
+        if size > _MAX_GOLDEN_FILE_BYTES:
+            logger.warning("Skipping oversized golden %s (%d > %d bytes) (#11062)", path, size, _MAX_GOLDEN_FILE_BYTES)
+            continue
         with open(path, encoding="utf-8") as handle:
             data = json.load(handle)
         goldens.append(GoldenTrajectory.from_fixture(data))

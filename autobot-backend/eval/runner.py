@@ -22,6 +22,8 @@ replay, a subprocess transcript, or a mock in tests).
 
 from __future__ import annotations
 
+import asyncio
+import os
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, List
 
@@ -29,6 +31,9 @@ from autobot_shared.logging_manager import get_logger
 from eval.report import RegressionReport, TrajectoryOutcome
 from eval.store import GoldenTrajectory
 from rlm.evaluator import ResponseQualityEvaluator
+
+# #11062: a hung/slow candidate must not stall the whole regression run.
+_REPLAY_TIMEOUT_S = float(os.environ.get("EVAL_REPLAY_TIMEOUT_S", "120"))
 
 logger = get_logger(__name__)
 
@@ -88,7 +93,23 @@ class TrajectoryReplayer:
         """Replay every golden against *candidate* and build the report."""
         outcomes: List[TrajectoryOutcome] = []
         for golden in goldens:
-            outcome = await self.replay_one(golden, candidate)
+            try:
+                outcome = await asyncio.wait_for(self.replay_one(golden, candidate), timeout=_REPLAY_TIMEOUT_S)
+            except asyncio.TimeoutError:
+                logger.error(
+                    "replay of %s timed out after %.0fs — recording as failure (#11062)",
+                    golden.trajectory_id,
+                    _REPLAY_TIMEOUT_S,
+                )
+                outcome = TrajectoryOutcome(
+                    trajectory_id=golden.trajectory_id,
+                    task_class=golden.task_class,
+                    baseline_score=golden.baseline_score,
+                    candidate_score=0.0,
+                    tools_ok=False,
+                    status_ok=False,
+                    detail=f"replay timed out after {_REPLAY_TIMEOUT_S:.0f}s",
+                )
             logger.info(
                 "replayed %s [%s] verdict=%s baseline=%.2f candidate=%.2f",
                 outcome.trajectory_id,

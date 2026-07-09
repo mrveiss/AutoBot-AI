@@ -21,6 +21,17 @@ from typing import Any, Dict, List
 DEFAULT_SCORE_EPSILON = 0.05
 
 
+def _md_escape(value: Any) -> str:
+    """Neutralize untrusted fields before interpolating into the markdown report (#11062).
+
+    trajectory_id / task_class / detail originate from golden fixtures + candidate
+    output, so a crafted value could inject backticks, table pipes, or newlines
+    into the CI artifact. Collapse newlines and escape markdown-significant chars.
+    """
+    text = " ".join(str(value).split())
+    return text.replace("\\", "\\\\").replace("`", "\\`").replace("|", "\\|")
+
+
 @dataclass
 class TrajectoryOutcome:
     """Result of replaying one golden trajectory against the candidate."""
@@ -134,13 +145,13 @@ class RegressionReport:
         lines.append("| Task class | Regressions | Improvements | Unchanged |")
         lines.append("| --- | --- | --- | --- |")
         for name, d in sorted(self.per_class().items()):
-            lines.append(f"| {name} | {d.regressions} | {d.improvements} | {d.unchanged} |")
+            lines.append(f"| {_md_escape(name)} | {d.regressions} | {d.improvements} | {d.unchanged} |")
         lines.append("")
         for outcome in self.outcomes:
             verdict = outcome.classify(self.epsilon).upper()
             lines.append(
-                f"- [{verdict}] `{outcome.trajectory_id}` ({outcome.task_class}) "
+                f"- [{verdict}] `{_md_escape(outcome.trajectory_id)}` ({_md_escape(outcome.task_class)}) "
                 f"baseline={outcome.baseline_score:.2f} candidate={outcome.candidate_score:.2f}"
-                + (f" — {outcome.detail}" if outcome.detail else "")
+                + (f" — {_md_escape(outcome.detail)}" if outcome.detail else "")
             )
         return "\n".join(lines)
