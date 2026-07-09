@@ -29314,8 +29314,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify migration preserves LLM judges integration for workflow evaluation"""
         from api import workflow_automation
 
-        # Verify judges availability flag exists
-        self.assertTrue(hasattr(workflow_automation, "JUDGES_AVAILABLE"))
+        # Issue #10880: JUDGES_AVAILABLE was removed; judge availability now
+        # lives in services.workflow_automation.step_evaluator via a try/except
+        # import inside WorkflowStepEvaluator._initialize_judges. Verify the
+        # shim still exposes the manager and the availability mechanism moved
+        # to the step evaluator.
+        from services.workflow_automation.step_evaluator import WorkflowStepEvaluator
+
+        self.assertTrue(hasattr(WorkflowStepEvaluator, "_initialize_judges"))
 
         # Verify WorkflowAutomationManager class exists
         self.assertTrue(hasattr(workflow_automation, "WorkflowAutomationManager"))
