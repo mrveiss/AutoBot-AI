@@ -8159,7 +8159,10 @@
       "budget": "Budget",
       "assignedItems": "Zugewiesene Elemente",
       "resumeAgent": "Agent fortsetzen",
-      "pauseAgent": "Agent pausieren"
+      "pauseAgent": "Agent pausieren",
+      "terminateAgent": "Terminate Agent",
+      "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
+      "terminatedNote": "This agent has been terminated."
     },
     "goals": {
       "title": "Zielbaum",

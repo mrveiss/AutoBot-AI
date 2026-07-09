@@ -13,8 +13,10 @@
  * the unions below are the single source of truth for the frontend.
  */
 
-/** Display status for an LLC agent (org-chart node / dashboard agent grid). */
-export type AgentDisplayStatus = 'active' | 'idle' | 'error' | 'paused'
+/** Display status for an LLC agent (org-chart node / dashboard agent grid).
+ * 'terminated' is a permanent stop set by the controls terminate endpoint
+ * (backend agent_org_nodes.status). */
+export type AgentDisplayStatus = 'active' | 'idle' | 'error' | 'paused' | 'terminated'
 
 /** Display status for a heartbeat-run row. */
 export type RunDisplayStatus = 'running' | 'done' | 'failed'
@@ -28,6 +30,7 @@ export function agentStatusColor(status: string): string {
   if (status === 'active') return 'bg-green-500'
   if (status === 'idle') return 'bg-yellow-400'
   if (status === 'error') return 'bg-red-500'
+  if (status === 'terminated') return 'bg-gray-600'
   return 'bg-gray-400'
 }
 

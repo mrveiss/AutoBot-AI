@@ -63,6 +63,19 @@ async function toggleAgentPause(node: OrgNode) {
   }
 }
 
+async function terminateAgent(node: OrgNode) {
+  if (!companyId.value) return
+  if (!window.confirm(t('llc.orgChart.confirmTerminate', { name: node.name }))) return
+  try {
+    // Permanent stop — canonical /controls/agents/{id}/terminate endpoint.
+    await api.post(`/api/llc/companies/${companyId.value}/controls/agents/${node.id}/terminate`, {})
+    await fetchTree() // reload from source of truth (backend sets status=terminated)
+    closeDrawer()
+  } catch (err: unknown) {
+    logger.error('Terminate agent failed', err)
+  }
+}
+
 function openDrawer(node: OrgNode) {
   selectedNode.value = node
   drawerOpen.value = true
@@ -175,7 +188,7 @@ onMounted(fetchTree)
             </div>
           </dl>
         </div>
-        <div class="px-5 py-4 border-t border-autobot-border">
+        <div v-if="selectedNode.status !== 'terminated'" class="px-5 py-4 border-t border-autobot-border space-y-2">
           <button
             class="w-full py-2 rounded-lg text-sm font-medium transition-colors"
             :class="selectedNode.status === 'paused'
@@ -185,6 +198,15 @@ onMounted(fetchTree)
           >
             {{ selectedNode.status === 'paused' ? t('llc.orgChart.resumeAgent') : t('llc.orgChart.pauseAgent') }}
           </button>
+          <button
+            class="w-full py-2 rounded-lg text-sm font-medium transition-colors bg-red-600 text-white hover:bg-red-700"
+            @click="terminateAgent(selectedNode)"
+          >
+            {{ t('llc.orgChart.terminateAgent') }}
+          </button>
+        </div>
+        <div v-else class="px-5 py-4 border-t border-autobot-border text-sm text-autobot-text-muted">
+          {{ t('llc.orgChart.terminatedNote') }}
         </div>
       </div>
     </transition>
