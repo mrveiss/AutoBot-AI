@@ -41,6 +41,8 @@ if "models" not in sys.modules or isinstance(sys.modules.get("models"), MagicMoc
         "CodeSyncRefreshResponse",
         "CodeVersionNotification",
         "CodeVersionNotificationResponse",
+        "ComponentSyncJobStatus",
+        "DriftResolveJobResponse",
         "DriftResolveRequest",
         "DriftResolveResponse",
         "FileDriftReport",

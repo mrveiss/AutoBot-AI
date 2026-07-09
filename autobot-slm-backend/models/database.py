@@ -409,6 +409,27 @@ class FleetSyncNodeState(Base):
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
 
+class ComponentSyncJob(Base):
+    """Async per-component drift/resolve job (#11303).
+
+    DB-backed so status survives the SLM backend restarting itself when the
+    resolved component is autobot-slm-backend (same rationale as #1707).
+    """
+
+    __tablename__ = "component_sync_jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_id = Column(String(64), unique=True, nullable=False, index=True)
+    component = Column(String(64), nullable=False)
+    status = Column(String(20), default="pending")  # pending|running|completed|failed
+    success = Column(Boolean, nullable=True)
+    deps_changed = Column(Boolean, default=False)
+    message = Column(Text, nullable=True)
+    post_steps = Column(Text, nullable=True)  # newline-joined step log
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+
 class Service(Base):
     """Service tracking for systemd services on nodes."""
 

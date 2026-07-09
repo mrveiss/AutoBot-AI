@@ -66,6 +66,9 @@ MIGRATIONS = [
     # Issue #10764: rename the integer-PK SLM node audit table off 'audit_logs'
     # so the UUID/org-aware user_management model is the sole owner of that name.
     "rename_audit_logs_to_slm_node_audit_logs",
+    # Issue #11303: per-component async drift/resolve job tracking table so job
+    # status survives the SLM backend restarting itself during a self-resolve.
+    "add_component_sync_jobs_table",
 ]
 
 

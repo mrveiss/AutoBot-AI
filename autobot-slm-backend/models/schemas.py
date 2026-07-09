@@ -1631,6 +1631,28 @@ class DriftResolveResponse(BaseModel):
     post_steps: List[str] = []
 
 
+class DriftResolveJobResponse(BaseModel):
+    """Accepted async component-resolve job (#11303)."""
+
+    job_id: str
+    component: str
+    status: str
+
+
+class ComponentSyncJobStatus(BaseModel):
+    """Status of an async component-resolve job (#11303)."""
+
+    job_id: str
+    component: str
+    status: str
+    success: bool | None = None
+    deps_changed: bool = False
+    message: str | None = None
+    post_steps: List[str] = []
+    created_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
 class PendingNodeResponse(BaseModel):
     """Node that needs code update."""
 

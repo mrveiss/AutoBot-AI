@@ -252,6 +252,16 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed to reconcile stale fleet sync jobs")
 
+    # Reconcile stale component sync jobs from prior crash (#11303)
+    try:
+        from api.code_sync import reconcile_stale_component_sync_jobs
+
+        reconciled_comp = await reconcile_stale_component_sync_jobs()
+        if reconciled_comp:
+            logger.warning("Reconciled %d stale component sync job(s)", reconciled_comp)
+    except Exception:
+        logger.exception("Failed to reconcile stale component sync jobs")
+
     # Resume any update-all fleet stage interrupted by SLM self-update restart (#9971)
     try:
         from api.code_sync import resume_update_all_orchestration
