@@ -290,19 +290,27 @@ def _enrich(model_cls, orm_obj, **extra):
 
 
 async def _enrich_projects(session: AsyncSession, projects: List[LLCProject]) -> List[ProjectResponse]:
-    """Attach open-work-item counts + the active sprint name to project cards."""
+    """Attach open-work-item counts, the active sprint name, and the linked
+    code-source summary to project cards.
+
+    #11406: code_source must be hydrated here (not only on attach / with-repos)
+    so a linked repo survives a plain project-list refetch — otherwise the card
+    reverts to the empty state on refresh.
+    """
     pids = [p.id for p in projects]
     open_counts = await _open_work_item_counts(session, pids)
     active = await _active_sprint_names(session, pids)
-    return [
-        _enrich(
+    enriched: List[ProjectResponse] = []
+    for p in projects:
+        resp = _enrich(
             ProjectResponse,
             p,
             open_work_item_count=open_counts.get(p.id, 0),
             active_sprint_name=active.get(p.id),
         )
-        for p in projects
-    ]
+        resp.code_source = await _project_source_summary(p.code_source_id)
+        enriched.append(resp)
+    return enriched
 
 
 async def _project_source_summary(code_source_id: Optional[str]) -> Optional[CodeSourceSummary]:
