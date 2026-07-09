@@ -126,18 +126,22 @@ const activityFeed = ref<ActivityEvent[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 
-// Live activity via the canonical /ws/live event bus (channel company:{id}).
-// Backend publishes activity-log rows through LiveEventManager
-// (llc/services/activity_log.py). Map the row payload to the display shape.
-function pushActivity(p: Record<string, unknown>) {
-  const event: ActivityEvent = {
+// Map an activity-log row (llc/services/activity_log.py — actor_*/entity_*/action/
+// occurred_at) to the ActivityEvent display shape. Used by both the initial fetch
+// and the live /ws/live stream so neither renders blank fields (#11395).
+function mapActivityRow(p: Record<string, unknown>): ActivityEvent {
+  return {
     id: String(p.id ?? ''),
     type: String(p.action ?? p.type ?? ''),
     summary: String(p.summary ?? `${p.action ?? ''} ${p.entity_type ?? ''}`.trim()),
     agent_name: (p.actor_agent_id ?? p.actor_user_id ?? null) as string | null,
     timestamp: String(p.occurred_at ?? p.timestamp ?? ''),
   }
-  activityFeed.value = [event, ...activityFeed.value].slice(0, 50)
+}
+
+// Live activity via the canonical /ws/live event bus (channel company:{id}).
+function pushActivity(p: Record<string, unknown>) {
+  activityFeed.value = [mapActivityRow(p), ...activityFeed.value].slice(0, 50)
 }
 
 const budgetPercent = (b: BudgetInfo) =>
@@ -166,13 +170,15 @@ async function fetchDashboardData() {
       api.get<PendingApproval[]>(`/api/llc/approvals?company_id=${cid}`),
       api.get<RawBudgetRow[]>(`/api/llc/budget?company_id=${cid}`),
       api.get<RawRunRow[]>('/api/llc/heartbeat-runs?limit=20'),
-      api.get<{ items: ActivityEvent[] }>(`/api/llc/companies/${cid}/activity?page_size=50`),
+      api.get<{ items: Array<Record<string, unknown>> }>(`/api/llc/companies/${cid}/activity?page_size=50`),
     ])
     agents.value = (agentsResp ?? []).map(mapAgent)
     pendingApprovals.value = approvalsResp ?? []
     budgets.value = (budgetsResp ?? []).map(mapBudget)
     heartbeatRuns.value = (runsResp ?? []).map(mapRun)
-    activityFeed.value = activityResp?.items ?? []
+    // Backend returns ActivityLogEntry rows, not the display shape — map them
+    // through the same mapper as live events so fields aren't blank (#11395).
+    activityFeed.value = (activityResp?.items ?? []).map(mapActivityRow).slice(0, 50)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     logger.error('Failed to fetch dashboard data:', msg)
