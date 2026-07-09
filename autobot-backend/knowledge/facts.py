@@ -16,8 +16,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List
 
-from llama_index.core import Document
-
 from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
@@ -604,6 +602,8 @@ class FactsMixin:
         if write_buffer is not None:
             await write_buffer.write(fact_id, embedding, content, sanitized_metadata)
         else:
+            from llama_index.core import Document
+
             doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
             doc.embedding = embedding
             await asyncio.to_thread(self.vector_store.add, [doc])
@@ -873,6 +873,8 @@ class FactsMixin:
         if write_buffer is not None:
             await write_buffer.write(fact_id, embedding, content, sanitized_metadata)
         else:
+            from llama_index.core import Document
+
             doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
             doc.embedding = embedding
             await asyncio.to_thread(self.vector_store.add, [doc])
