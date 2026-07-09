@@ -29,7 +29,6 @@
     # builds in _ensure_target_python_installed.
     ansible_playbook_bin: "/usr/bin/ansible-playbook"
     provision_playbook: "/opt/autobot/code_source/autobot-slm-backend/ansible/playbooks/provision-local-python.yml"
-    provision_inventory: "/opt/autobot/code_source/autobot-slm-backend/ansible/inventory.yml"
 
   pre_tasks:
     - name: Display configuration information
@@ -58,7 +57,7 @@
           # Created by: Ansible playbook configure-python-provision-permissions.yml
           # Date: {{ ansible_facts['date_time'].iso8601 }}
 
-          {{ autobot_user }} ALL=(root) NOPASSWD: {{ ansible_playbook_bin }} {{ provision_playbook }} --tags python314 --limit localhost -i {{ provision_inventory }} --connection local
+          {{ autobot_user }} ALL=(root) NOPASSWD: {{ ansible_playbook_bin }} {{ provision_playbook }} --tags python314 -i localhost, --connection local
         dest: "{{ sudoers_file }}.tmp"
         owner: root
         group: root
@@ -90,4 +89,4 @@
           - "Sudoers file: {{ sudoers_file }}"
           - "User: {{ autobot_user }}"
           - "The autobot user can now run the interpreter provisioning playbook:"
-          - "  sudo {{ ansible_playbook_bin }} {{ provision_playbook }} --tags python314 --limit localhost -i {{ provision_inventory }} --connection local"
+          - "  sudo {{ ansible_playbook_bin }} {{ provision_playbook }} --tags python314 -i localhost, --connection local"

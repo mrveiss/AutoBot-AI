@@ -760,7 +760,6 @@ _COMPONENT_PYTHON_TARGET: Dict[str, str] = {
 # ansible/playbooks/configure-python-provision-permissions.yml.
 _ANSIBLE_DIR: Path = Path(DEFAULT_REPO_PATH) / "autobot-slm-backend" / "ansible"
 _PROVISION_PYTHON_PLAYBOOK: Path = _ANSIBLE_DIR / "playbooks" / "provision-local-python.yml"
-_PROVISION_PYTHON_INVENTORY: Path = _ANSIBLE_DIR / "inventory.yml"
 
 # Deployed path for the top-level constraints/ dir (#11322).
 # `autobot-backend/requirements.txt` uses `-c ../constraints/shared.txt` so the
@@ -899,9 +898,12 @@ async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
     configure-python-provision-permissions.yml. Returns True on rc==0.
     """
     # ARG LIST only — never a shell string. Matches the NOPASSWD sudoers grant.
+    # Use an inline localhost inventory ("localhost,") rather than the fleet
+    # inventory + "--limit localhost": the fleet inventory has no localhost host,
+    # so "--limit localhost" left ansible with no hosts to target (#11352). The
+    # playbook is `hosts: localhost` / `connection: local`.
     cmd = ["sudo", "ansible-playbook", str(_PROVISION_PYTHON_PLAYBOOK)]
-    cmd += ["--tags", "python314", "--limit", "localhost"]
-    cmd += ["-i", str(_PROVISION_PYTHON_INVENTORY), "--connection", "local"]
+    cmd += ["--tags", "python314", "-i", "localhost,", "--connection", "local"]
     steps.append(f"python-provision: installing {target} via {_PROVISION_PYTHON_PLAYBOOK.name}")
     try:
         proc = await asyncio.create_subprocess_exec(
