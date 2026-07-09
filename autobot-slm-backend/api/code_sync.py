@@ -10,6 +10,7 @@ Provides endpoints for code version tracking and sync operations.
 
 import asyncio
 import functools
+import getpass
 import hashlib
 import logging
 import os
@@ -1248,6 +1249,41 @@ async def _npm_install_if_needed(frontend_dir: str, component: str, steps: List[
     return True
 
 
+async def _ensure_dist_writable(frontend_dir: str, steps: List[str]) -> None:
+    """Chown dist/ to the running service user so vite's emptyOutDir can rimraf it (#11364).
+
+    Root-owned files (from a prior Ansible build) cause EACCES; chown normalises
+    ownership without destroying the live bundle.  Service user = getpass.getuser()
+    (never hardcoded). Failure is non-fatal — step recorded, build still attempted.
+    """
+    dist_dir = Path(frontend_dir) / "dist"
+    if not dist_dir.exists():
+        steps.append("dist: no dist/ directory — ownership check skipped")
+        return
+    service_user = getpass.getuser()
+    owner_spec = f"{service_user}:{service_user}"
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "sudo",
+            "chown",
+            "-R",
+            owner_spec,
+            str(dist_dir),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        _, _ = await asyncio.wait_for(proc.communicate(), timeout=30.0)
+        if proc.returncode == 0:
+            logger.info("dist: chown -R %s %s ok", owner_spec, dist_dir)
+            steps.append("dist: normalized ownership")
+        else:
+            logger.warning("dist: chown -R %s %s rc=%d", owner_spec, dist_dir, proc.returncode)
+            steps.append(f"dist: chown failed (rc={proc.returncode}) — attempting build anyway")
+    except Exception as exc:
+        logger.warning("dist: chown error for %s: %s", dist_dir, exc)
+        steps.append(f"dist: chown error: {exc} — attempting build anyway")
+
+
 async def _build_npm_frontend_for_component(component: str, steps: List[str]) -> bool:
     """Install deps (if needed) then run the npm build script for a frontend component (#9982, #11351).
 
@@ -1258,6 +1294,7 @@ async def _build_npm_frontend_for_component(component: str, steps: List[str]) ->
     if frontend_dir is None:
         return True
     steps.append(f"npm: building {frontend_dir}")
+    await _ensure_dist_writable(frontend_dir, steps)
     install_ok = await _npm_install_if_needed(frontend_dir, component, steps)
     if not install_ok:
         return False

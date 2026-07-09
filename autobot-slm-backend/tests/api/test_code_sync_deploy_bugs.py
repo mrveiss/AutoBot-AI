@@ -77,6 +77,7 @@ from api.code_sync import (  # noqa: E402
     _build_npm_frontend_for_component,
     _deploy_constraints_dir,
     _deploy_repo_root_requirements,
+    _ensure_dist_writable,
     _ensure_target_python_installed,
     _ensure_venv_python,
     _install_pip_deps_for_component,
@@ -913,3 +914,139 @@ def test_run_post_sync_steps_pip_ok_true_on_npm_success() -> None:
             )
         )
     assert pip_ok is True
+
+
+# ---------------------------------------------------------------------------
+# #11364 — _ensure_dist_writable: chown before npm build
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_dist_writable_skipped_when_dist_absent(tmp_path) -> None:
+    """No chown is run when dist/ does not exist."""
+    steps: list[str] = []
+    executed: list = []
+
+    async def _fake_exec(*cmd, **kw):
+        executed.extend(cmd)
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
+        _run(_ensure_dist_writable(str(tmp_path), steps))
+
+    assert not executed, "sudo chown must not run when dist/ is absent"
+    assert any("skipped" in s for s in steps)
+
+
+def test_ensure_dist_writable_chowns_when_dist_exists(tmp_path) -> None:
+    """sudo chown -R <user>:<user> dist/ is invoked when dist/ exists."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.js").write_bytes(b"")
+
+    steps: list[str] = []
+    captured: list = []
+
+    async def _fake_exec(*cmd, **kw):
+        captured.extend(cmd)
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    with (
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        patch("getpass.getuser", return_value="autobot"),
+    ):
+        _run(_ensure_dist_writable(str(tmp_path), steps))
+
+    assert captured[:3] == ["sudo", "chown", "-R"], f"unexpected cmd prefix: {captured[:3]}"
+    assert "autobot:autobot" in captured
+    assert str(dist) in captured
+    assert any("normalized ownership" in s for s in steps)
+
+
+def test_ensure_dist_writable_uses_getpass_not_hardcoded(tmp_path) -> None:
+    """Service user comes from getpass.getuser(), not a hardcoded string."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+
+    steps: list[str] = []
+    captured: list = []
+
+    async def _fake_exec(*cmd, **kw):
+        captured.extend(cmd)
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    with (
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        patch("getpass.getuser", return_value="customsvcuser"),
+    ):
+        _run(_ensure_dist_writable(str(tmp_path), steps))
+
+    owner_arg = next((a for a in captured if "customsvcuser" in a), None)
+    assert owner_arg == "customsvcuser:customsvcuser", f"expected owner arg, got captured={captured}"
+
+
+def test_ensure_dist_writable_non_fatal_on_chown_failure(tmp_path) -> None:
+    """A non-zero chown rc appends a failure step but does NOT raise."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+
+    steps: list[str] = []
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.returncode = 1
+        proc.communicate = AsyncMock(return_value=(b"permission denied", b""))
+        return proc
+
+    with (
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        patch("getpass.getuser", return_value="autobot"),
+    ):
+        _run(_ensure_dist_writable(str(tmp_path), steps))  # must not raise
+
+    assert any("attempting build anyway" in s for s in steps)
+
+
+def test_build_npm_calls_ensure_dist_writable_before_install(tmp_path) -> None:
+    """_ensure_dist_writable is called before _npm_install_if_needed in the build path."""
+    import hashlib
+
+    content = b'{"lockfileVersion":3}'
+    (tmp_path / "package-lock.json").write_bytes(content)
+    nm = tmp_path / "node_modules"
+    nm.mkdir()
+    (nm / _NPM_LOCK_HASH_MARKER).write_text(hashlib.sha256(content).hexdigest(), encoding="utf-8")
+
+    order: list[str] = []
+
+    async def _fake_writable(fd, steps):
+        order.append("ensure_dist_writable")
+
+    async def _fake_install(fd, comp, steps):
+        order.append("npm_install")
+        return True
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    with (
+        patch("api.code_sync._COMPONENT_FRONTEND_DIRS", {"autobot-slm-frontend": str(tmp_path)}),
+        patch("api.code_sync._ensure_dist_writable", side_effect=_fake_writable),
+        patch("api.code_sync._npm_install_if_needed", side_effect=_fake_install),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+    ):
+        result = _run(_build_npm_frontend_for_component("autobot-slm-frontend", []))
+
+    assert result is True
+    assert order[0] == "ensure_dist_writable", f"expected ensure_dist_writable first, got {order}"
