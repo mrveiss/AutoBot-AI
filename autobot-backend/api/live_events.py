@@ -55,6 +55,40 @@ async def _send_error(ws: WebSocket, message: str) -> None:
         pass
 
 
+async def _authorize_llc_channel(channel: str, user_payload: dict) -> bool:
+    """Authorize subscription to tenant-scoped LLC channels (``company:``/``board:``).
+
+    These channels carry per-company data (activity audit rows, board moves), so a
+    client may only subscribe to a company it belongs to. Admins bypass. Fails
+    closed on any error (#11386 security review).
+    """
+    if "admin" in user_payload.get("roles", []):
+        return True
+    user_id = str(user_payload.get("user_id") or user_payload.get("username") or "")
+    if not user_id:
+        return False
+    prefix, _, ident = channel.partition(":")
+    if not ident:
+        return False
+    try:
+        from llc.services.membership_service import MembershipService
+        from user_management.database import get_async_session_factory
+
+        async with get_async_session_factory()() as session:
+            company_id = ident
+            if prefix == "board":
+                from llc.services.board import BoardService
+
+                board = await BoardService().get_board(session, ident)
+                if board is None:
+                    return False
+                company_id = str(board.company_id)
+            return await MembershipService().is_member(session, company_id, user_id)
+    except Exception:
+        logger.exception("LLC channel authorization failed for %s", channel)
+        return False
+
+
 async def _handle_subscribe(ws: WebSocket, channel: str, user_payload: dict | None) -> None:
     """Process a subscribe action from the client."""
     if user_payload and channel.startswith("agent:"):
@@ -63,6 +97,11 @@ async def _handle_subscribe(ws: WebSocket, channel: str, user_payload: dict | No
         username = user_payload.get("username", "")
         is_admin = "admin" in user_payload.get("roles", [])
         if not is_admin and claimed_id not in (user_id, username):
+            await _send_error(ws, f"Not authorized to subscribe to {channel}")
+            return
+    elif user_payload and (channel.startswith("company:") or channel.startswith("board:")):
+        # Tenant-scoped LLC channels: enforce company membership (#11386).
+        if not await _authorize_llc_channel(channel, user_payload):
             await _send_error(ws, f"Not authorized to subscribe to {channel}")
             return
     ok = await get_event_bus().subscribe_ws(ws, channel)

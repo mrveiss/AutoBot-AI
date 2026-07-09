@@ -269,6 +269,16 @@ class LLCActivityLogService:
             "action": entry.action,
             "occurred_at": entry.occurred_at.isoformat(),
         }
+        # In-process fan-out to /ws/live subscribers on the valid channel
+        # company:{id} (the raw-Redis channel below is not bridged into
+        # LiveEventManager, so the CompanyDashboard feed needs this).
+        try:
+            from live_event_manager import publish_live_event
+
+            await publish_live_event(f"company:{company_id}", "llc:activity_created", payload)
+        except Exception:
+            logger.exception("Failed to publish activity live event for company %s", company_id)
+
         try:
             redis = await get_async_redis_client()
             if redis is None:
