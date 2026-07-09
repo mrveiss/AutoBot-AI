@@ -18,7 +18,7 @@ import asyncio
 import sys
 import types
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # ---------------------------------------------------------------------------
 # Dev-host stub: provide minimal real Pydantic models for models.schemas so
@@ -279,21 +279,22 @@ def test_run_component_resolve_job_happy_path() -> None:
     ):
         # Also patch the local import inside _run_component_resolve_job
         with patch.dict("sys.modules", {"services.database": MagicMock(db_service=db_mock)}):
-            import importlib
+            pass
+
             import api.code_sync as _cs_mod
 
-            original_import = __builtins__.__import__ if hasattr(__builtins__, "__import__") else None
+            __builtins__.__import__ if hasattr(__builtins__, "__import__") else None
 
             # Directly patch the module-level reference that the function imports
-            old_db_service = getattr(_cs_mod, "db_service", None)
+            getattr(_cs_mod, "db_service", None)
             _run(_run_component_resolve_job("abc123", "autobot-slm-backend"))
 
     # Commit must happen BEFORE restart
     assert "committed" in restart_order, "DB was never committed"
     assert "restarted" in restart_order, "restart was never called"
-    assert restart_order.index("committed") < restart_order.index("restarted"), (
-        f"DB commit must precede restart; order was {restart_order}"
-    )
+    assert restart_order.index("committed") < restart_order.index(
+        "restarted"
+    ), f"DB commit must precede restart; order was {restart_order}"
     assert row.status == "completed"
     assert row.success is True
 

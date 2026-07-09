@@ -156,9 +156,7 @@ async def reconcile_stale_component_sync_jobs() -> int:
     from services.database import db_service
 
     async with db_service.session() as db:
-        result = await db.execute(
-            select(ComponentSyncJobModel).where(ComponentSyncJobModel.status == "running")
-        )
+        result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.status == "running"))
         stale_jobs = result.scalars().all()
         count = len(stale_jobs)
 
@@ -167,8 +165,7 @@ async def reconcile_stale_component_sync_jobs() -> int:
             job.completed_at = datetime.now(timezone.utc)
             job.message = "reconciled: server restarted while job was running"
             logger.warning(
-                "Reconciled stale component sync job %s "
-                "(was 'running', marked 'failed')",
+                "Reconciled stale component sync job %s " "(was 'running', marked 'failed')",
                 job.job_id,
             )
 
@@ -193,9 +190,7 @@ async def _run_component_resolve_job(job_id: str, component: str) -> None:
             source_dir = get_default_source_dir(component)
         except ValueError as exc:
             async with db_service.session() as db:
-                result = await db.execute(
-                    select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id)
-                )
+                result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
                 job_row = result.scalar_one_or_none()
                 if job_row:
                     job_row.status = "failed"
@@ -227,9 +222,7 @@ async def _run_component_resolve_job(job_id: str, component: str) -> None:
 
         if not ok:
             async with db_service.session() as db:
-                result = await db.execute(
-                    select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id)
-                )
+                result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
                 job_row = result.scalar_one_or_none()
                 if job_row:
                     job_row.status = "failed"
@@ -247,9 +240,7 @@ async def _run_component_resolve_job(job_id: str, component: str) -> None:
         # Commit the job row BEFORE the restart — the whole point of this async
         # path.  If the restart kills this process the row is already durable.
         async with db_service.session() as db:
-            result = await db.execute(
-                select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id)
-            )
+            result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
             job_row = result.scalar_one_or_none()
             if job_row:
                 job_row.status = "completed" if pip_ok else "failed"
@@ -283,9 +274,7 @@ async def _run_component_resolve_job(job_id: str, component: str) -> None:
             from services.database import db_service as _db_svc
 
             async with _db_svc.session() as db:
-                result = await db.execute(
-                    select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id)
-                )
+                result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
                 job_row = result.scalar_one_or_none()
                 if job_row:
                     job_row.status = "failed"
@@ -293,9 +282,7 @@ async def _run_component_resolve_job(job_id: str, component: str) -> None:
                     job_row.completed_at = datetime.now(timezone.utc)
                     await db.commit()
         except Exception as inner:
-            logger.error(
-                "component resolve job %s: failed to persist error state: %s", job_id, inner
-            )
+            logger.error("component resolve job %s: failed to persist error state: %s", job_id, inner)
     finally:
         _running_tasks.pop(job_id, None)
 
@@ -739,9 +726,7 @@ async def get_component_resolve_status(
 
     Raises 404 if job_id is unknown.
     """
-    result = await db.execute(
-        select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id)
-    )
+    result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
     row = result.scalar_one_or_none()
 
     if row is None:

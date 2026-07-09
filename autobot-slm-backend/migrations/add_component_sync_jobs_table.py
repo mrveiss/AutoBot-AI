@@ -41,10 +41,7 @@ def _create_component_sync_jobs(cursor) -> None:
             completed_at TIMESTAMPTZ
         )
     """)
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_component_sync_jobs_job_id "
-        "ON component_sync_jobs (job_id)"
-    )
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_component_sync_jobs_job_id " "ON component_sync_jobs (job_id)")
     logger.info("Created component_sync_jobs table")
 
 
