@@ -1,0 +1,40 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# Provision the target Python interpreter on the LOCAL host (#11343).
+#
+# The SLM code-sync update path calls this when the target interpreter
+# (python3.14 for backends, python3.11 for NPU) is missing on the box it
+# runs on. Applying roles/python314 to localhost installs the deadsnakes
+# interpreter so the subsequent venv recreation + pip install succeed.
+#
+# The python314 role is idempotent: it first runs `python3.14 --version`
+# and does nothing when the interpreter is already present. This playbook
+# is intentionally scoped to localhost with connection: local so it can be
+# driven from the SLM backend without SSH.
+#
+# Usage (run from autobot-slm-backend/ansible):
+#   ansible-playbook playbooks/provision-local-python.yml \
+#     --tags python314 --limit localhost -i inventory.yml --connection local
+#
+# Privilege: the role's apt tasks use become: true. The autobot service
+# user is granted a narrowly-scoped NOPASSWD sudoers entry for exactly this
+# invocation by playbooks/configure-python-provision-permissions.yml, which
+# must be applied once during provisioning.
+---
+
+- name: "Provision local Python interpreter (#11343)"
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: "Install target Python interpreter via python314 role"
+      ansible.builtin.include_role:
+        name: python314
+        apply:
+          tags: ['deps', 'python314']
+      tags: ['deps', 'python314']

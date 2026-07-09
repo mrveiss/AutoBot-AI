@@ -752,6 +752,15 @@ _COMPONENT_PYTHON_TARGET: Dict[str, str] = {
     "autobot-npu-worker": "python3.11",
 }
 
+# Ansible assets that provision the target interpreter on THIS host (#11343).
+# Derived from the code_source layout (DEFAULT_REPO_PATH) so a non-standard
+# SLM_REPO_PATH works without editing these — never hardcode /opt/autobot here.
+# These paths MUST match the sudoers grant created by
+# ansible/playbooks/configure-python-provision-permissions.yml.
+_ANSIBLE_DIR: Path = Path(DEFAULT_REPO_PATH) / "autobot-slm-backend" / "ansible"
+_PROVISION_PYTHON_PLAYBOOK: Path = _ANSIBLE_DIR / "playbooks" / "provision-local-python.yml"
+_PROVISION_PYTHON_INVENTORY: Path = _ANSIBLE_DIR / "inventory.yml"
+
 # Deployed path for the top-level constraints/ dir (#11322).
 # `autobot-backend/requirements.txt` uses `-c ../constraints/shared.txt` so the
 # relative path resolves to /opt/autobot/constraints/ at runtime.  Code-sync
@@ -868,6 +877,72 @@ async def _deploy_repo_root_requirements(source_root: str, steps: List[str]) -> 
                 steps.append(f"root-reqs: cp {filename} failed (rc={proc.returncode})")
         except Exception as exc:
             steps.append(f"root-reqs: {filename} deploy error: {exc}")
+
+
+async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
+    """Run the python314 role on localhost to install *target* (#11343).
+
+    Invokes ansible-playbook via an ARG LIST (never a shell string) under sudo.
+    The command matches the NOPASSWD sudoers grant from
+    configure-python-provision-permissions.yml. Returns True on rc==0.
+    """
+    # ARG LIST only — never a shell string. Matches the NOPASSWD sudoers grant.
+    cmd = ["sudo", "ansible-playbook", str(_PROVISION_PYTHON_PLAYBOOK)]
+    cmd += ["--tags", "python314", "--limit", "localhost"]
+    cmd += ["-i", str(_PROVISION_PYTHON_INVENTORY), "--connection", "local"]
+    steps.append(f"python-provision: installing {target} via {_PROVISION_PYTHON_PLAYBOOK.name}")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=600.0)
+        out = stdout.decode(errors="replace") if stdout else ""
+        if proc.returncode == 0:
+            logger.info("drift resolve: provisioned interpreter %s", target)
+            steps.append(f"python-provision: {target} install ok")
+            return True
+        logger.error("drift resolve: interpreter provision failed (%d): %s", proc.returncode, out[-400:])
+        steps.append(f"python-provision: FAILED (rc={proc.returncode}): {out[-200:]}")
+        return False
+    except asyncio.TimeoutError:
+        logger.error("drift resolve: interpreter provision timed out for %s", target)
+        steps.append("python-provision: timed out after 600s")
+        return False
+    except Exception as exc:
+        logger.error("drift resolve: interpreter provision error for %s: %s", target, exc)
+        steps.append(f"python-provision: error: {exc}")
+        return False
+
+
+async def _ensure_target_python_installed(component: str, steps: List[str]) -> None:
+    """Install the target interpreter when missing, BEFORE venv recreation (#11343).
+
+    Runs the Ansible python314 role (deadsnakes) scoped to localhost when the
+    interpreter mapped in _COMPONENT_PYTHON_TARGET is absent from PATH. Preserves
+    the #11323 safety guard: on provision failure it appends a clear step and
+    RETURNS without touching the venv, so a running service is never bricked.
+    The target is looked up from the trusted map — never a user-derived name.
+    """
+    import shutil
+
+    target = _COMPONENT_PYTHON_TARGET.get(component)
+    if target is None:
+        return
+    if shutil.which(target):
+        steps.append(f"python-provision: {target} already present — skipped")
+        return
+    if not _PROVISION_PYTHON_PLAYBOOK.exists():
+        steps.append(f"python-provision: playbook {_PROVISION_PYTHON_PLAYBOOK} not found — skipped")
+        return
+    ok = await _run_python_provision_playbook(target, steps)
+    if not ok:
+        return
+    if shutil.which(target):
+        steps.append(f"python-provision: {target} now on PATH")
+    else:
+        steps.append(f"python-provision: {target} STILL not on PATH after install")
 
 
 async def _ensure_venv_python(component: str, steps: List[str]) -> None:
@@ -1265,6 +1340,10 @@ async def _run_post_sync_steps(
         await _deploy_constraints_dir(source_root, steps)
         # Deploy repo-root files so `-r ../requirements.txt` resolves (#11336).
         await _deploy_repo_root_requirements(source_root, steps)
+        # Install the target interpreter if it is missing, BEFORE the venv
+        # check — otherwise _ensure_venv_python must skip recreation and the
+        # box stays stuck on the wrong Python (#11343).
+        await _ensure_target_python_installed(component, steps)
         # Recreate venv if its Python version doesn't match the target (#11323).
         await _ensure_venv_python(component, steps)
         pip_ok = await _install_pip_deps_for_component(component, steps)

@@ -49,6 +49,7 @@ from api import (
     npu_router,
     orchestration_router,
     rdp_router,
+    redis_service_router,
     scim_router,
     secrets_router,
     security_router,
@@ -643,6 +644,8 @@ app.include_router(api_keys_router, prefix="/api", dependencies=_SM)
 app.include_router(setup_wizard_router, prefix="/api", dependencies=_SM)
 # LLM Configuration (Issue #2371)
 app.include_router(llm_config_router, prefix="/api", dependencies=_SM)
+# Redis service lifecycle control (Issue #11340)
+app.include_router(redis_service_router, prefix="/api", dependencies=_SM)
 
 
 @app.get("/")
