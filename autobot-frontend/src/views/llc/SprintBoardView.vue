@@ -118,6 +118,7 @@ import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
 import WorkItemDetail from './WorkItemDetail.vue'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 import { useLiveEvents } from '@/composables/useLiveEvents'
+import { formatDate as fmtDate } from '@/utils/formatHelpers'
 
 const logger = createLogger('SprintBoardView')
 const api = useApiClient()
@@ -181,7 +182,7 @@ function initials(name: string) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return fmtDate(iso, { month: 'short', day: 'numeric' })
 }
 
 function openDetail(item: WorkItem) {

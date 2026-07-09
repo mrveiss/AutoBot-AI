@@ -147,6 +147,7 @@ import { formatDateTime } from '@/utils/formatHelpers'
 import { useUserStore } from '@/stores/useUserStore'
 import { useI18n } from 'vue-i18n'
 import { useNotificationBus } from '@/composables/useNotificationBus'
+import type { components } from '@/types/generated/api'
 
 const logger = createLogger('ApprovalsInbox')
 const api = useApiClient()
@@ -163,18 +164,8 @@ const APPROVAL_TYPES = [
   'data_access', 'policy_change', 'contract_sign', 'hiring',
 ]
 
-interface Approval {
-  id: string
-  company_id: string
-  type: string
-  status: string
-  requested_by_agent_id: string
-  payload: Record<string, unknown>
-  decided_by_agent_id: string | null
-  decided_at: string | null
-  created_at: string
-  updated_at: string
-}
+// #11367: derive from the generated OpenAPI schema.
+type Approval = components['schemas']['ApprovalResponse']
 
 const approvals = ref<Approval[]>([])
 const isLoading = ref(false)

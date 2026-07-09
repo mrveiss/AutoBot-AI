@@ -96,6 +96,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { formatDateTime, formatTimeAgo } from '@/utils/formatHelpers'
+import type { components } from '@/types/generated/api'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{ companyId?: string }>()
@@ -108,24 +109,10 @@ const { t } = useI18n()
 const POLL_INTERVAL_MS = 15000
 const PAGE_SIZE = 50
 
-interface ActivityEntry {
-  id: string
-  actor_type: 'agent' | 'user' | 'system'
-  actor_agent_id?: string | null
-  actor_user_id?: string | null
-  entity_type: string
-  entity_id: string
-  action: string
-  occurred_at: string
-}
-
-interface ActivityResponse {
-  items: ActivityEntry[]
-  page: number
-  page_size: number
-  total: number
-  has_next: boolean
-}
+// #11367: derive from the generated OpenAPI schema so backend field changes
+// surface as type errors instead of silently drifting.
+type ActivityEntry = components['schemas']['ActivityLogEntry']
+type ActivityResponse = components['schemas']['ActivityLogResponse']
 
 const entries = ref<ActivityEntry[]>([])
 const page = ref(1)
