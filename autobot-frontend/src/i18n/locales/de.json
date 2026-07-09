@@ -5731,6 +5731,10 @@
       "actions": "Aktionen",
       "noDataAvailable": "Keine Daten verfügbar",
       "selectRow": "Zeile {row} auswählen"
+    },
+    "panel": {
+      "collapse": "Bereich einklappen",
+      "expand": "Bereich ausklappen"
     }
   },
   "views": {

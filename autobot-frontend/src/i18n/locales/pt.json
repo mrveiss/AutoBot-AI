@@ -5731,6 +5731,10 @@
       "actions": "Ações",
       "noDataAvailable": "Sem dados disponíveis",
       "selectRow": "Selecionar linha {row}"
+    },
+    "panel": {
+      "collapse": "Recolher painel",
+      "expand": "Expandir painel"
     }
   },
   "views": {

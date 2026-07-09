@@ -5731,6 +5731,10 @@
       "actions": "Darbības",
       "noDataAvailable": "Nav pieejamu datu",
       "selectRow": "Atlasīt rindu {row}"
+    },
+    "panel": {
+      "collapse": "Sakļaut paneli",
+      "expand": "Izvērst paneli"
     }
   },
   "views": {
