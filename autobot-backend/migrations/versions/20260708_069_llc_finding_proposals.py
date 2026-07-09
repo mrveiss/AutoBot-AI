@@ -13,7 +13,7 @@ down_revision: Union[str, Sequence[str], None] = "20260708_068"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_FINDING_STATUS = sa.Enum("pending", "promoted", "dismissed", name="findingproposalstatus")
+_FINDING_STATUS = sa.Enum("pending", "promoted", "dismissed", name="findingproposalstatus", create_type=False)
 
 
 def upgrade() -> None:

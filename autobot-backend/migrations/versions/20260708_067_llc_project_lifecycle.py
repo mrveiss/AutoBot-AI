@@ -17,7 +17,9 @@ down_revision: Union[str, Sequence[str], None] = ("20260707_066", "20260701_066"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_LIFECYCLE = sa.Enum("active", "archived", "pending_disposal", "disposed", name="projectlifecyclestate")
+_LIFECYCLE = sa.Enum(
+    "active", "archived", "pending_disposal", "disposed", name="projectlifecyclestate", create_type=False
+)
 
 
 def upgrade() -> None:
