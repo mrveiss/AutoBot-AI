@@ -23,6 +23,7 @@ const error = ref<string | null>(null)
 const selectedNode = ref<OrgNode | null>(null)
 const drawerOpen = ref(false)
 const showHire = ref(false) // GH#10219
+const terminating = ref(false) // in-flight guard — terminate is irreversible
 
 async function fetchTree() {
   isLoading.value = true
@@ -64,8 +65,9 @@ async function toggleAgentPause(node: OrgNode) {
 }
 
 async function terminateAgent(node: OrgNode) {
-  if (!companyId.value) return
+  if (!companyId.value || terminating.value) return
   if (!window.confirm(t('llc.orgChart.confirmTerminate', { name: node.name }))) return
+  terminating.value = true
   try {
     // Permanent stop — canonical /controls/agents/{id}/terminate endpoint.
     await api.post(`/api/llc/companies/${companyId.value}/controls/agents/${node.id}/terminate`, {})
@@ -73,6 +75,8 @@ async function terminateAgent(node: OrgNode) {
     closeDrawer()
   } catch (err: unknown) {
     logger.error('Terminate agent failed', err)
+  } finally {
+    terminating.value = false
   }
 }
 
@@ -199,7 +203,8 @@ onMounted(fetchTree)
             {{ selectedNode.status === 'paused' ? t('llc.orgChart.resumeAgent') : t('llc.orgChart.pauseAgent') }}
           </button>
           <button
-            class="w-full py-2 rounded-lg text-sm font-medium transition-colors bg-red-600 text-white hover:bg-red-700"
+            class="w-full py-2 rounded-lg text-sm font-medium transition-colors bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+            :disabled="terminating"
             @click="terminateAgent(selectedNode)"
           >
             {{ t('llc.orgChart.terminateAgent') }}
