@@ -5731,6 +5731,10 @@
       "actions": "Actions",
       "noDataAvailable": "Aucune donnée disponible",
       "selectRow": "Sélectionner la ligne {row}"
+    },
+    "panel": {
+      "collapse": "Réduire le panneau",
+      "expand": "Développer le panneau"
     }
   },
   "views": {
