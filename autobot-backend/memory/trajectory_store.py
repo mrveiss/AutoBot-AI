@@ -64,6 +64,12 @@ _COLLECTION_NAME = "trajectories"
 _DEFAULT_TOP_K = 5
 _MIN_REWARD_DEFAULT = 0.7
 
+# #11280: canonical reward→outcome thresholds. success at/above _OUTCOME_SUCCESS_MIN,
+# partial at/above _OUTCOME_PARTIAL_MIN, failure below. Env-tunable; these are the
+# single source for outcome_from_reward() so callers stop re-deriving inline.
+_OUTCOME_SUCCESS_MIN = env_float("AUTOBOT_TRAJECTORY_OUTCOME_SUCCESS_MIN", default=_MIN_REWARD_DEFAULT)
+_OUTCOME_PARTIAL_MIN = env_float("AUTOBOT_TRAJECTORY_OUTCOME_PARTIAL_MIN", default=0.4)
+
 # #11263: consolidation defaults. Duplicate near-identical tasks hurt retrieval
 # precision, and stale low-reward failures are noise. Both thresholds are env-tunable.
 _CONSOLIDATE_MIN_REWARD_FLOOR = env_float("AUTOBOT_TRAJECTORY_PRUNE_REWARD_FLOOR", default=0.4)
@@ -187,6 +193,20 @@ def reward_from_execution(result: Dict[str, Any]) -> float:
     if isinstance(criteria, dict) and criteria.get("overall") == "partial":
         return 0.5
     return 0.0
+
+
+def outcome_from_reward(reward: float) -> Literal["success", "partial", "failure"]:
+    """Map a normalised reward in [0.0, 1.0] to a trajectory outcome (#11280).
+
+    Canonical thresholding so reward-based capture paths (e.g. chat) stop
+    re-deriving it inline: ``success`` at/above ``_OUTCOME_SUCCESS_MIN`` (0.7),
+    ``partial`` at/above ``_OUTCOME_PARTIAL_MIN`` (0.4), otherwise ``failure``.
+    """
+    if reward >= _OUTCOME_SUCCESS_MIN:
+        return "success"
+    if reward >= _OUTCOME_PARTIAL_MIN:
+        return "partial"
+    return "failure"
 
 
 def _parse_ts(raw: str) -> Optional[datetime]:

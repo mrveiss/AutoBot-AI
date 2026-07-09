@@ -154,7 +154,7 @@ async def capture_chat_trajectory(
     try:
         async with _get_capture_semaphore():
             from judges.task_outcome_judge import TaskOutcomeJudge
-            from memory.trajectory_store import get_trajectory_store
+            from memory.trajectory_store import get_trajectory_store, outcome_from_reward
 
             judgment = await TaskOutcomeJudge().evaluate_task_outcome(
                 task_type=_CHAT_TASK_TYPE,
@@ -165,7 +165,8 @@ async def capture_chat_trajectory(
             )
             # overall_score is already normalised to [0.0, 1.0].
             reward = max(0.0, min(1.0, float(getattr(judgment, "overall_score", 0.0))))
-            outcome = "success" if reward >= _MIN_REWARD else ("partial" if reward >= 0.4 else "failure")
+            # #11280: canonical thresholding lives in trajectory_store.outcome_from_reward.
+            outcome = outcome_from_reward(reward)
 
             store = await get_trajectory_store()
             await store.capture(
