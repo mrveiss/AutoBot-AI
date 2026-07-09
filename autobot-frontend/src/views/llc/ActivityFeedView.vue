@@ -70,7 +70,7 @@
         <span class="actor-badge" :class="`actor-${entry.actor_type}`">{{ actorLabel(entry.actor_type) }}</span>
         <div class="event-body">
           <span class="event-action">{{ entry.action }}</span>
-          <span class="event-entity">{{ entry.entity_type }}<span class="event-entity-id">#{{ shortId(entry.entity_id) }}</span></span>
+          <span class="event-entity">{{ entry.entity_type }}<span class="event-entity-id" :title="entry.entity_id">#{{ shortId(entry.entity_id) }}</span></span>
           <span v-if="actorName(entry)" class="event-actor-name">· {{ actorName(entry) }}</span>
         </div>
         <time class="event-time" :title="formatDateTime(entry.occurred_at)">{{ formatTimeAgo(entry.occurred_at) }}</time>
