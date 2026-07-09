@@ -65,9 +65,11 @@ async def test_board_resolves_company_then_checks_membership() -> None:
     board = MagicMock(company_id="c-owner")
     board_svc = MagicMock()
     board_svc.get_board = AsyncMock(return_value=board)
-    with _patch_session(), patch(
-        "llc.services.membership_service.MembershipService", MagicMock(return_value=membership)
-    ), patch("llc.services.board.BoardService", MagicMock(return_value=board_svc)):
+    with (
+        _patch_session(),
+        patch("llc.services.membership_service.MembershipService", MagicMock(return_value=membership)),
+        patch("llc.services.board.BoardService", MagicMock(return_value=board_svc)),
+    ):
         assert await _authorize_llc_channel("board:b1", {"user_id": "u1", "roles": []}) is True
     board_svc.get_board.assert_awaited_once()
     # membership checked against the board's owning company, not the board id
@@ -84,7 +86,5 @@ async def test_board_not_found_denied() -> None:
 
 @pytest.mark.asyncio
 async def test_fails_closed_on_error() -> None:
-    with patch(
-        "user_management.database.get_async_session_factory", MagicMock(side_effect=RuntimeError("db down"))
-    ):
+    with patch("user_management.database.get_async_session_factory", MagicMock(side_effect=RuntimeError("db down"))):
         assert await _authorize_llc_channel("company:c1", {"user_id": "u1", "roles": []}) is False
