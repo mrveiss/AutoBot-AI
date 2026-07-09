@@ -8,17 +8,21 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
+from migrations.guards import drop_pg_enum, ensure_pg_enum, pg_enum
+
 revision: str = "20260708_069"
 down_revision: Union[str, Sequence[str], None] = "20260708_068"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_FINDING_STATUS = sa.Enum("pending", "promoted", "dismissed", name="findingproposalstatus", create_type=False)
+# postgresql.ENUM with create_type=False — generic sa.Enum(create_type=False)
+# silently ignores the flag, so op.create_table re-emits CREATE TYPE after the
+# explicit .create() and trips DuplicateObjectError (#11337).
+_FINDING_STATUS = pg_enum("findingproposalstatus", "pending", "promoted", "dismissed")
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
-    _FINDING_STATUS.create(bind, checkfirst=True)
+    ensure_pg_enum(_FINDING_STATUS)
     op.create_table(
         "llc_finding_proposals",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
@@ -56,5 +60,5 @@ def downgrade() -> None:
     op.drop_index("ix_llc_finding_proposals_project_id", table_name="llc_finding_proposals")
     op.drop_index("ix_llc_finding_proposals_company_id", table_name="llc_finding_proposals")
     op.drop_table("llc_finding_proposals")
-    _FINDING_STATUS.drop(op.get_bind(), checkfirst=True)
+    drop_pg_enum(_FINDING_STATUS)
     # Note: Postgres cannot drop an enum value; 'finding_promotion' remains on approvaltype (harmless).
