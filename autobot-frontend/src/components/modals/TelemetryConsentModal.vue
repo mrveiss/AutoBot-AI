@@ -131,21 +131,31 @@ async function updateConsent(enabled: boolean) {
   isProcessing.value = true
 
   try {
+    // Persist the enable/disable choice (admin-gated). Non-admins will get a
+    // 403 here — that is expected and handled below by the prompt-shown call.
     await api.post('/api/settings/telemetry', {
       enabled,
       anonymous_usage_stats: enabled,
       first_run_prompt_shown: true,
     })
-
-    localStorage.setItem(CONSENT_STORAGE_KEY, 'true')
-    isVisible.value = false
-
     logger.debug(`Telemetry consent: ${enabled ? 'accepted' : 'declined'}`)
   } catch (error) {
     logger.error('Failed to save telemetry consent', error)
-    // Close the modal even on error to avoid blocking the user
-    isVisible.value = false
   } finally {
+    // Record the dismissal for ANY authenticated user (#11344). This is a
+    // non-admin endpoint, so it persists server-side even when the admin POST
+    // above 403s. Best-effort: a failure here still falls through to the
+    // localStorage flag so the modal never re-nags on this browser.
+    try {
+      await api.post('/api/settings/telemetry/prompt-shown', {})
+    } catch (error) {
+      logger.error('Failed to persist telemetry prompt dismissal', error)
+    }
+
+    // Always mark shown locally and close, regardless of POST success/failure,
+    // so the consent modal never re-appears on refresh (#11344).
+    localStorage.setItem(CONSENT_STORAGE_KEY, 'true')
+    isVisible.value = false
     isProcessing.value = false
   }
 }
