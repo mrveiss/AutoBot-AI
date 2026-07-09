@@ -1345,7 +1345,12 @@ _DB_BACKUP_KEEP: int = int(os.environ.get("AUTOBOT_DB_BACKUP_KEEP", "5"))
 
 # --- #11378: post-restart health polling ---------------------------------------
 # Total seconds to wait for a component to become healthy after restart.
-_HEALTH_POLL_TIMEOUT: float = float(os.environ.get("AUTOBOT_HEALTH_POLL_TIMEOUT", "60"))
+# Default 180s (#11413): a freshly-recreated py3.14 venv cold-starts slowly —
+# first-run bytecode compilation of the whole dependency tree can take >60s, so a
+# 60s window falsely reported a healthy service as unhealthy and tripped the
+# #11377 rollback. Env-overridable via AUTOBOT_HEALTH_POLL_TIMEOUT.
+_DEFAULT_HEALTH_POLL_TIMEOUT_S = "180"
+_HEALTH_POLL_TIMEOUT: float = float(os.environ.get("AUTOBOT_HEALTH_POLL_TIMEOUT", _DEFAULT_HEALTH_POLL_TIMEOUT_S))
 # Per-attempt connect timeout (seconds) when probing the health endpoint.
 _HEALTH_POLL_CONNECT_TIMEOUT: float = 3.0
 # Per-component health URLs (localhost only — never egress).
