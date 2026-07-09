@@ -110,17 +110,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
 import WorkItemDetail from './WorkItemDetail.vue'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
+import { useLiveEvents } from '@/composables/useLiveEvents'
 
 const logger = createLogger('SprintBoardView')
 const api = useApiClient()
 const route = useRoute()
+const live = useLiveEvents()
 const { sprintStatusLabel } = useWorkItemLabels()
 
 const companyId = computed(() => route.params.companyId as string)
@@ -160,7 +162,6 @@ const burndown = ref<BurndownPoint[]>([])
 const isLoading = ref(false)
 const detailItem = ref<WorkItem | null>(null)
 const draggedItem = ref<WorkItem | null>(null)
-let ws: WebSocket | null = null
 
 const burndownPoints = computed(() => {
   if (!burndown.value.length) return ''
@@ -213,26 +214,16 @@ async function onDrop(colId: string) {
   }
 }
 
-function connectWS() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  const host = location.hostname
-  const port = import.meta.env.VITE_BACKEND_PORT ?? '8001'
-  ws = new WebSocket(`${proto}://${host}:${port}/ws/llc/board/${boardId.value}`)
-
-  ws.onmessage = (evt) => {
-    try {
-      const msg = JSON.parse(evt.data)
-      if (msg.type === 'card_moved') {
-        const item = items.value.find(i => i.id === msg.work_item_id)
-        if (item) item.column_id = msg.column_id
-      }
-    } catch {
-      // ignore malformed frames
-    }
-  }
-
-  ws.onerror = () => logger.error('Board WS error')
-  ws.onclose = () => logger.info('Board WS closed')
+// Live board updates via the canonical /ws/live event bus (channel board:{id}).
+// Backend publishes board moves through LiveEventManager (llc/services/board.py).
+function subscribeBoard() {
+  live.subscribe(`board:${boardId.value}`, (ev) => {
+    const wid = ev.payload?.work_item_id as string | undefined
+    const col = ev.payload?.column_id as string | undefined
+    if (!wid || !col) return
+    const item = items.value.find(i => i.id === wid)
+    if (item) item.column_id = col
+  })
 }
 
 async function fetchBoard() {
@@ -255,12 +246,9 @@ async function fetchBoard() {
 
 onMounted(async () => {
   await fetchBoard()
-  connectWS()
+  subscribeBoard()
 })
-
-onUnmounted(() => {
-  ws?.close()
-})
+// useLiveEvents auto-unsubscribes on unmount — no manual teardown needed.
 </script>
 
 <style scoped>

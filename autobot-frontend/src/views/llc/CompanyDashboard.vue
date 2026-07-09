@@ -3,10 +3,9 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
-import { useWebSocket } from '@/composables/useWebSocket'
-import { getBackendUrl } from '@/config/ssot-config'
+import { useLiveEvents } from '@/composables/useLiveEvents'
 import { createLogger } from '@/utils/debugUtils'
 import { useRouter } from 'vue-router'
 import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
@@ -20,6 +19,7 @@ import type { AgentDisplayStatus, RunDisplayStatus } from '@/composables/llc/llc
 const logger = createLogger('CompanyDashboard')
 const api = useApiClient()
 const router = useRouter()
+const live = useLiveEvents()
 const { resolveCompanyId } = useLlcCompanyContext()
 
 // Resolved at mount: the top-level /llc/dashboard nav entry carries no
@@ -126,22 +126,18 @@ const activityFeed = ref<ActivityEvent[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 
-const wsUrl = computed(
-  () => `${getBackendUrl().replace(/^http/, 'ws')}/api/llc/ws/activity/${companyId.value}`
-)
-
-const { lastMessage, connect, disconnect } = useWebSocket(wsUrl, {
-  autoConnect: false,
-  autoReconnect: true,
-})
-
-function handleWsMessage(raw: string) {
-  try {
-    const event = JSON.parse(raw) as ActivityEvent
-    activityFeed.value = [event, ...activityFeed.value].slice(0, 50)
-  } catch (err) {
-    logger.warn('WS parse error', err)
+// Live activity via the canonical /ws/live event bus (channel company:{id}).
+// Backend publishes activity-log rows through LiveEventManager
+// (llc/services/activity_log.py). Map the row payload to the display shape.
+function pushActivity(p: Record<string, unknown>) {
+  const event: ActivityEvent = {
+    id: String(p.id ?? ''),
+    type: String(p.action ?? p.type ?? ''),
+    summary: String(p.summary ?? `${p.action ?? ''} ${p.entity_type ?? ''}`.trim()),
+    agent_name: (p.actor_agent_id ?? p.actor_user_id ?? null) as string | null,
+    timestamp: String(p.occurred_at ?? p.timestamp ?? ''),
   }
+  activityFeed.value = [event, ...activityFeed.value].slice(0, 50)
 }
 
 const budgetPercent = (b: BudgetInfo) =>
@@ -214,15 +210,10 @@ onMounted(async () => {
   await resolveCompanyId().then((id) => { companyId.value = id })
   if (!companyId.value) return
   await fetchDashboardData()
-  connect()
-})
-
-onUnmounted(() => {
-  disconnect()
-})
-
-watch(lastMessage, (msg) => {
-  if (msg) handleWsMessage(msg as string)
+  // useLiveEvents auto-unsubscribes on unmount.
+  live.subscribe(`company:${companyId.value}`, (ev) => {
+    if (ev.event_type === 'llc:activity_created') pushActivity(ev.payload)
+  })
 })
 </script>
 

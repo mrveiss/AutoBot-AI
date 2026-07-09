@@ -320,21 +320,29 @@ class BoardService(LLCServiceBase):
         Never raises — publishing failures are logged but must not break
         the calling move_item operation.
         """
+        data = {
+            "event_type": event_type,
+            "board_id": board_id,
+            "work_item_id": work_item_id,
+            "column_id": column_id,
+            "new_status": new_status,
+            "actor_id": actor_id,
+        }
+        # In-process fan-out to /ws/live subscribers (channel board:{id}) — the
+        # LiveEventManager is what the WebSocket endpoint serves. Kept alongside
+        # the raw-Redis publish below so cross-process consumers still receive it.
+        try:
+            from live_event_manager import publish_live_event
+
+            await publish_live_event(f"board:{board_id}", event_type, data)
+        except Exception:
+            logger.exception("Failed to publish board:%s live event", board_id)
+
         redis = await get_async_redis_client()
         if redis is None:
             logger.warning("Redis unavailable — skipping llc:board:%s publish", board_id)
             return
         try:
-            payload = json.dumps(
-                {
-                    "event_type": event_type,
-                    "board_id": board_id,
-                    "work_item_id": work_item_id,
-                    "column_id": column_id,
-                    "new_status": new_status,
-                    "actor_id": actor_id,
-                }
-            )
-            await redis.publish(f"llc:board:{board_id}", payload)
+            await redis.publish(f"llc:board:{board_id}", json.dumps(data))
         except Exception:
             logger.exception("Failed to publish llc:board:%s event", board_id)
