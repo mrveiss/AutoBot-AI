@@ -8343,7 +8343,8 @@
       "saving": "Saving...",
       "save": "Save",
       "saveFailed": "Failed to save secret.",
-      "confirmRevoke": "Revoke secret “{name}”? Active runs referencing it will be cancelled on next resolution."
+      "confirmRevoke": "Revoke secret “{name}”? Active runs referencing it will be cancelled on next resolution.",
+      "revokeFailed": "Failed to revoke secret."
     }
   },
   "code": {
