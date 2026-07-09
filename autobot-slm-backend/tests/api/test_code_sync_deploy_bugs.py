@@ -1352,6 +1352,16 @@ def test_health_poll_timeout_constant_positive() -> None:
     assert _HEALTH_POLL_TIMEOUT > 0
 
 
+def test_health_poll_default_allows_py314_cold_start() -> None:
+    """#11413: the default health-poll window must be >=180s so a freshly-recreated
+    py3.14 venv (slow first-run bytecode compilation, >60s) isn't falsely declared
+    unhealthy → false rollback. Asserts the env-independent default, not the
+    possibly-overridden runtime value."""
+    from api.code_sync import _DEFAULT_HEALTH_POLL_TIMEOUT_S
+
+    assert float(_DEFAULT_HEALTH_POLL_TIMEOUT_S) >= 180
+
+
 def test_wait_component_healthy_returns_true_on_healthy_response() -> None:
     """Returns True when the health endpoint responds 2xx (#11378)."""
     steps: list[str] = []
