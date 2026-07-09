@@ -67,6 +67,42 @@
     deployment_phase: "base-system"
     phase_description: "Ubuntu base system, security, users, networking"
 
+# -------------------------------------------------------------------
+# Phase 1.5: Language runtimes (#11374)
+# Install the target Python interpreter on every group whose service roles
+# build a venv, BEFORE those roles run. python3.14 for backend + AI/ML;
+# python3.11 (OpenVINO) for NPU. The python314 role is idempotent (skips when
+# the interpreter is present) and fail-loud (verifies after install), so a
+# broken deadsnakes PPA fails the deploy here instead of leaving the wrong
+# interpreter for the venv step to trip over. Ordered AFTER deploy-base (needs
+# apt/user) and BEFORE deploy-backend.
+# -------------------------------------------------------------------
+- name: "Phase 1.5: Language runtimes (Python interpreters)"
+  hosts: backend:aiml
+  become: true
+  gather_facts: true
+  vars:
+    deployment_phase: "language-runtimes"
+    phase_description: "Install python3.14 interpreter before venv creation"
+  roles:
+    - role: python314
+      vars:
+        python_interpreter_version: "3.14"
+      tags: ['deps', 'python314', 'runtimes']
+
+- name: "Phase 1.5: Language runtimes (NPU python3.11)"
+  hosts: npu
+  become: true
+  gather_facts: true
+  vars:
+    deployment_phase: "language-runtimes-npu"
+    phase_description: "Install python3.11 (OpenVINO) interpreter before venv creation"
+  roles:
+    - role: python314
+      vars:
+        python_interpreter_version: "3.11"
+      tags: ['deps', 'python314', 'runtimes']
+
 # Phase 2: Database Infrastructure
 - name: "Phase 2: Database Infrastructure"
   import_playbook: deploy-database.yml
@@ -84,12 +120,39 @@
     deployment_phase: "service-auth"
     phase_description: "Generate and deploy service-to-service auth keys"
 
+# -------------------------------------------------------------------
+# Phase 2.6: Service-management sudoers bootstraps (#11374)
+# Bake the previously-manual-only sudoers grants into the canonical install so
+# there is zero manual step / misconfig risk. Both are idempotent and
+# visudo-validated. Runs after base (autobot user exists) + after the interpreter
+# is present, and BEFORE backend (which relies on these grants at runtime):
+#   - python-provision: lets the SLM code-sync path (re)install the interpreter
+#     via provision-local-python.yml without a password (targets slm_server).
+#   - redis-service: lets the autobot user manage redis-stack-server (database).
+# -------------------------------------------------------------------
+- name: "Phase 2.6: Python provision sudoers"
+  import_playbook: configure-python-provision-permissions.yml
+  vars:
+    deployment_phase: "python-provision-sudoers"
+    phase_description: "NOPASSWD grant for interpreter provisioning"
+
+- name: "Phase 2.6: Redis service-management sudoers"
+  import_playbook: configure-redis-service-management.yml
+  vars:
+    deployment_phase: "redis-service-sudoers"
+    phase_description: "NOPASSWD grant for redis-stack-server control"
+
 # Phase 3: Backend Services
 - name: "Phase 3: Backend Services"
-  import_playbook: deploy-backend.yml
+  hosts: backend
+  become: true
+  gather_facts: true
   vars:
     deployment_phase: "backend"
     phase_description: "FastAPI, Python services, log aggregation"
+  roles:
+    - role: backend_services
+      tags: ['backend']
 
 # Phase 4: AI/ML Services
 - name: "Phase 4: AI/ML Infrastructure"
@@ -100,17 +163,27 @@
 
 # Phase 5: Frontend Services
 - name: "Phase 5: Frontend Infrastructure"
-  import_playbook: deploy-frontend.yml
+  hosts: frontend
+  become: true
+  gather_facts: true
   vars:
     deployment_phase: "frontend"
     phase_description: "Vue.js frontend, nginx, DNS cache"
+  roles:
+    - role: frontend
+      tags: ['frontend']
 
 # Phase 6: Browser Automation
 - name: "Phase 6: Browser Automation"
-  import_playbook: deploy-browser.yml
+  hosts: browser
+  become: true
+  gather_facts: true
   vars:
     deployment_phase: "browser"
     phase_description: "Playwright, VNC server, desktop environment"
+  roles:
+    - role: browser
+      tags: ['browser']
 
 # Phase 7: Data Migration
 - name: "Phase 7: Data Migration"
