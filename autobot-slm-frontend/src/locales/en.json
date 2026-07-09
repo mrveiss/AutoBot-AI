@@ -1023,6 +1023,9 @@
     "name": "Name *",
     "name1": "Name",
     "noRolesDefinedClick": "No roles defined. Click \"Create Role\" to add one.",
+    "offline": "Offline",
+    "online": "Online",
+    "pending": "Pending",
     "playbook": "Playbook:",
     "playbookOutput": "Playbook Output:",
     "postSyncCommand": "Post-sync Command",
@@ -1038,7 +1041,8 @@
     "target": "Target",
     "targetNode": "Target Node *",
     "targetPath": "Target Path *",
-    "times": "&times;"
+    "times": "&times;",
+    "totalNodes": "Total Nodes"
   },
   "sSOCallbackView": {
     "completingSSOLogin": "Completing SSO login..."
@@ -1492,22 +1496,6 @@
       "setupWizard": "Setup Wizard",
       "systemName": "System Name",
       "useDarkThemeFor": "Use dark theme for the interface"
-    },
-    "infrastructureSettings": {
-      "addRemoveAndConfigure": "Add, remove, and configure infrastructure nodes",
-      "configurationSource": "Configuration Source",
-      "configuredInfrastructureEndpointsFrom": "Configured infrastructure endpoints from SSOT configuration",
-      "forDetailedNodeManagement": ".\n              For detailed node management including enrollment, updates, and certificate management, use the",
-      "manageNodes": "Manage Nodes",
-      "nodeManagement": "Node Management",
-      "nodesSettings": "Nodes settings",
-      "offline": "Offline",
-      "online": "Online",
-      "pending": "Pending",
-      "serviceEndpoints": "Service Endpoints",
-      "srcConfigSsotConfig": "src/config/ssot-config.ts",
-      "theseEndpointsAreConfigured": "These endpoints are configured in",
-      "totalNodes": "Total Nodes"
     },
     "monitoringSettings": {
       "10Seconds": "10 seconds",
