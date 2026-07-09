@@ -14,6 +14,7 @@ import importlib.util
 import os
 import pkgutil
 import threading
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Set, Type
 
 import yaml
@@ -25,6 +26,38 @@ from skills.base_skill import BaseSkill, DeclarativeSkill, SkillHealth, SkillMan
 from skills.dependency_resolver import check_missing_dependencies, resolve_dependencies
 
 logger = get_logger(__name__)
+
+# #11141: skills arrive from independent sources (builtin modules, SKILL.md
+# declaratives, the community hub, external git/http imports, sync backends).
+# On a name collision we must resolve DETERMINISTICALLY by source trust — never
+# by discovery order — so a SANDBOXED external import can never silently mask a
+# trusted builtin (nor vice-versa). Higher number = higher trust = wins.
+_SOURCE_PRIORITY: Dict[str, int] = {
+    "builtin": 100,
+    "custom": 50,
+    "hub": 30,
+    "external": 20,
+    "mcp": 20,
+    "sync": 20,
+}
+_DEFAULT_SOURCE_PRIORITY = 10
+
+
+def _source_priority(source: str) -> int:
+    """Trust rank for a skill source; unknown sources rank below all known ones."""
+    return _SOURCE_PRIORITY.get(source, _DEFAULT_SOURCE_PRIORITY)
+
+
+@dataclass
+class SkillConflict:
+    """A recorded cross-source skill name collision (#11141)."""
+
+    name: str
+    incumbent_source: str
+    incumbent_version: str
+    incoming_source: str
+    incoming_version: str
+    resolution: str  # "kept_incumbent" | "replaced_with_incoming"
 
 
 class SkillRegistry:
@@ -38,23 +71,78 @@ class SkillRegistry:
         self._skill_classes: Dict[str, Type[BaseSkill]] = {}
         self._lock = threading.Lock()
         self._routing_index: SkillRoutingIndex | None = None
+        # #11141: source of each registered skill + recorded cross-source conflicts.
+        self._sources: Dict[str, str] = {}
+        self._conflicts: List[SkillConflict] = []
 
-    def register(self, skill_class: Type[BaseSkill]) -> None:
+    def _resolve_name_conflict(self, name: str, incoming_source: str, incoming_version: str) -> bool:
+        """Record a name collision and decide the winner by source trust (#11141).
+
+        MUST be called while holding ``self._lock``. Returns True when the
+        incoming skill should REPLACE the incumbent (strictly higher-trust
+        source), False when the incumbent is kept. Either way the conflict is
+        recorded (visible via :meth:`get_conflicts`) instead of being silently
+        dropped. Ties keep the incumbent — a same-trust source never displaces
+        an already-registered skill.
+        """
+        incumbent_source = self._sources.get(name, "builtin")
+        try:
+            incumbent_version = self._skills[name].get_manifest().version
+        except Exception:
+            incumbent_version = "unknown"
+        # A same-source, same-version re-registration is an idempotent reload,
+        # not a cross-source conflict — keep the incumbent without recording.
+        if incoming_source == incumbent_source and incoming_version == incumbent_version:
+            return False
+        incoming_wins = _source_priority(incoming_source) > _source_priority(incumbent_source)
+        resolution = "replaced_with_incoming" if incoming_wins else "kept_incumbent"
+        self._conflicts.append(
+            SkillConflict(
+                name=name,
+                incumbent_source=incumbent_source,
+                incumbent_version=incumbent_version,
+                incoming_source=incoming_source,
+                incoming_version=incoming_version,
+                resolution=resolution,
+            )
+        )
+        logger.warning(
+            "Skill name conflict on '%s': incumbent %s v%s (%s) vs incoming %s v%s (%s) -> %s",
+            name,
+            incumbent_source,
+            incumbent_version,
+            incumbent_source,
+            incoming_source,
+            incoming_version,
+            incoming_source,
+            resolution,
+        )
+        return incoming_wins
+
+    def get_conflicts(self) -> List[Dict[str, Any]]:
+        """Structured cross-source skill name conflicts recorded so far (#11141)."""
+        with self._lock:
+            return [asdict(c) for c in self._conflicts]
+
+    def register(self, skill_class: Type[BaseSkill], source: str = "builtin") -> None:
         """Register a skill class and create its instance.
 
         Args:
             skill_class: A class extending BaseSkill.
+            source: Origin of the skill (``builtin``/``custom``/``hub``/``external``/
+                ``mcp``/``sync``). On a name collision the higher-trust source wins
+                deterministically and the conflict is recorded (#11141).
         """
         manifest = skill_class.get_manifest()
         name = manifest.name
         with self._lock:
-            if name in self._skills:
-                logger.warning("Skill '%s' already registered, skipping", name)
+            if name in self._skills and not self._resolve_name_conflict(name, source, manifest.version):
                 return
             instance = skill_class()
             self._skills[name] = instance
             self._skill_classes[name] = skill_class
-            logger.info("Registered skill: %s v%s", name, manifest.version)
+            self._sources[name] = source
+            logger.info("Registered skill: %s v%s (source=%s)", name, manifest.version, source)
         # #7431 ADR-006: publish skill_promoted so blocked plans waiting on
         # a matching capability can be re-routed and resumed via the
         # BlockedPlanResumer subscriber. Fire-and-forget; never raises if
@@ -62,19 +150,25 @@ class SkillRegistry:
         self._publish_skill_promoted(name, manifest.tools)
         self._rebuild_routing_index()
 
-    def register_declarative(self, manifest: "SkillManifest") -> bool:
+    def register_declarative(self, manifest: "SkillManifest", source: str = "builtin") -> bool:
         """Register a SKILL.md-style manifest as a DeclarativeSkill.
 
-        Returns True if newly registered, False if a skill of that name exists.
-        Used by builtin Pass-2 discovery and by boot-time custom-skill reload.
+        Returns True if newly registered or if it replaced a lower-trust
+        incumbent, False if an equal/higher-trust skill of that name was kept.
+        On a name collision the winner is chosen by source trust and the
+        conflict is recorded (#11141). Used by builtin Pass-2 discovery and by
+        boot-time custom/hub-skill reload.
         """
         with self._lock:
-            if manifest.name in self._skills:
+            if manifest.name in self._skills and not self._resolve_name_conflict(
+                manifest.name, source, manifest.version
+            ):
                 return False
             self._skills[manifest.name] = DeclarativeSkill(manifest)
+            self._sources[manifest.name] = source
         self._rebuild_routing_index()
         self._publish_skill_promoted(manifest.name, manifest.tools)
-        logger.info("Registered declarative skill: %s v%s", manifest.name, manifest.version)
+        logger.info("Registered declarative skill: %s v%s (source=%s)", manifest.name, manifest.version, source)
         return True
 
     def _rebuild_routing_index(self) -> None:

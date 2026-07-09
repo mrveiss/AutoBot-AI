@@ -75,7 +75,7 @@ class SkillManager:
                 description=f"Hub skill {rec.name}",
                 category="hub",
             )
-            if self._registry.register_declarative(manifest):
+            if self._registry.register_declarative(manifest, source="hub"):
                 registered += 1
         if registered:
             logger.info("Re-registered %d custom/hub skill(s) at boot", registered)
