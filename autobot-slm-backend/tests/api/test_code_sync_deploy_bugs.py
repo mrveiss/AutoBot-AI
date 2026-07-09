@@ -20,7 +20,9 @@
 
 from __future__ import annotations
 
+import os
 import sys
+import time
 import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -74,6 +76,9 @@ import asyncio  # noqa: E402
 from api.code_sync import (  # noqa: E402
     _COMPONENT_PYTHON_TARGET,
     _CONSTRAINTS_SOURCE_SUBDIR,
+    _DB_BACKUP_DIR,
+    _DB_BACKUP_KEEP,
+    _HEALTH_POLL_TIMEOUT,
     _NPM_LOCK_HASH_MARKER,
     _REPO_ROOT_REQUIREMENT_FILES,
     _build_npm_frontend_for_component,
@@ -86,7 +91,13 @@ from api.code_sync import (  # noqa: E402
     _lockfile_hash,
     _lockfile_unchanged,
     _npm_install_if_needed,
+    _pg_dump_before_migration,
+    _prune_old_backups,
+    _rollback_component,
+    _run_alembic_migrations,
     _run_post_sync_steps,
+    _snapshot_component,
+    _wait_component_healthy,
 )
 
 
@@ -1052,3 +1063,366 @@ def test_build_npm_calls_ensure_dist_writable_before_install(tmp_path) -> None:
 
     assert result is True
     assert order[0] == "ensure_dist_writable", f"expected ensure_dist_writable first, got {order}"
+
+
+# ---------------------------------------------------------------------------
+# #11376 — pg_dump before migrations
+# ---------------------------------------------------------------------------
+
+
+def test_pg_dump_constants_defined() -> None:
+    """Module constants for backup dir and keep count must exist."""
+    assert _DB_BACKUP_DIR  # non-empty string
+    assert _DB_BACKUP_KEEP >= 1
+
+
+def test_pg_dump_invoked_before_alembic(tmp_path) -> None:
+    """_pg_dump_before_migration must be called before alembic upgrade (#11376)."""
+    call_order: list[str] = []
+
+    async def _fake_dump(component, deployed_dir, steps):
+        call_order.append("dump")
+        steps.append("pg_dump: backup ok → /tmp/test.dump")
+        return "/tmp/test.dump"
+
+    async def _fake_exec(*cmd, **kw):
+        call_order.append("alembic")
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    deployed = tmp_path / "autobot-backend"
+    deployed.mkdir()
+    (deployed / ".env").write_text("DATABASE_URL=postgresql://u:p@localhost/db\n", encoding="utf-8")
+    alembic_ini = deployed / "migrations" / "alembic.ini"
+    alembic_ini.parent.mkdir(parents=True)
+    alembic_ini.write_text("[alembic]\n", encoding="utf-8")
+    # Create a fake alembic binary so the path-existence check passes
+    alembic_bin = deployed / "venv" / "bin" / "alembic"
+    alembic_bin.parent.mkdir(parents=True)
+    alembic_bin.write_text("#!/bin/sh\n", encoding="utf-8")
+    alembic_bin.chmod(0o755)
+
+    with (
+        patch(
+            "api.code_sync._COMPONENT_MIGRATION_CONFIG",
+            {"autobot-backend": "migrations/alembic.ini"},
+        ),
+        patch("api.code_sync._COMPONENT_PIP_PATHS", {"autobot-backend": ("req.txt", str(deployed / "venv/bin/pip"))}),
+        patch("api.code_sync._pg_dump_before_migration", side_effect=_fake_dump),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+    ):
+        _run(_run_alembic_migrations("autobot-backend", str(deployed), []))
+
+    assert call_order[0] == "dump", f"pg_dump must run before alembic; got order={call_order}"
+    assert "alembic" in call_order
+
+
+def test_alembic_aborted_when_dump_fails(tmp_path) -> None:
+    """Migration must not run if pg_dump returns None (#11376)."""
+    executed: list[str] = []
+
+    async def _fake_dump(component, deployed_dir, steps):
+        steps.append("pg_dump: FAILED (rc=1): some error")
+        return None
+
+    async def _fake_exec(*cmd, **kw):
+        executed.extend(cmd)
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    deployed = tmp_path / "autobot-backend"
+    deployed.mkdir()
+    (deployed / "migrations").mkdir()
+    (deployed / "migrations" / "alembic.ini").write_text("[alembic]\n", encoding="utf-8")
+
+    with (
+        patch(
+            "api.code_sync._COMPONENT_MIGRATION_CONFIG",
+            {"autobot-backend": "migrations/alembic.ini"},
+        ),
+        patch("api.code_sync._COMPONENT_PIP_PATHS", {"autobot-backend": ("req.txt", str(deployed / "venv/bin/pip"))}),
+        patch("pathlib.Path.exists", return_value=True),
+        patch("api.code_sync._pg_dump_before_migration", side_effect=_fake_dump),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+    ):
+        steps: list[str] = []
+        result = _run(_run_alembic_migrations("autobot-backend", str(deployed), steps))
+
+    assert result is False
+    assert not executed, "alembic must NOT execute when pg_dump fails"
+    assert any("ABORTED" in s for s in steps)
+
+
+def test_pg_dump_abort_propagates_to_post_sync() -> None:
+    """_run_post_sync_steps returns pip_ok=False when pg_dump fails (#11376)."""
+    with (
+        patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        patch("api.code_sync._snapshot_component", return_value=None),
+        patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
+        patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
+        patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
+        patch("api.code_sync._ensure_venv_python", AsyncMock()),
+        patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=True)),
+        patch("api.code_sync._run_alembic_migrations", AsyncMock(return_value=False)),
+        patch("api.code_sync._rollback_component", AsyncMock()),
+        patch("api.code_sync._ensure_autobot_shared_symlink", AsyncMock()),
+        patch("api.code_sync._restart_component_services", AsyncMock()),
+    ):
+        _, _, pip_ok = _run(
+            _run_post_sync_steps("autobot-backend", "/src/autobot-backend", "/opt/autobot/autobot-backend")
+        )
+    assert pip_ok is False
+
+
+def test_prune_old_backups_removes_oldest(tmp_path) -> None:
+    """_prune_old_backups keeps only max_keep newest dumps (#11376)."""
+    for i in range(4):
+        p = tmp_path / f"autobot-backend_{i:04d}.dump"
+        p.write_bytes(b"x")
+        # stagger mtime so glob sort is deterministic
+        os.utime(str(p), (time.time() + i, time.time() + i))
+
+    _prune_old_backups(tmp_path, "autobot-backend", max_keep=2)
+
+    remaining = sorted(tmp_path.glob("autobot-backend_*.dump"))
+    assert len(remaining) == 2
+    # Newest two should survive
+    assert remaining[0].name == "autobot-backend_0002.dump"
+    assert remaining[1].name == "autobot-backend_0003.dump"
+
+
+def test_pg_dump_skips_when_no_database_url(tmp_path) -> None:
+    """_pg_dump_before_migration returns None when DATABASE_URL is absent."""
+    (tmp_path / ".env").write_text("FOO=bar\n", encoding="utf-8")
+    steps: list[str] = []
+
+    with patch.dict("os.environ", {}, clear=False):
+        # Remove DATABASE_URL if present in env
+        env_backup = os.environ.pop("DATABASE_URL", None)
+        try:
+            result = _run(_pg_dump_before_migration("autobot-backend", str(tmp_path), steps))
+        finally:
+            if env_backup is not None:
+                os.environ["DATABASE_URL"] = env_backup
+
+    assert result is None
+    assert any("DATABASE_URL" in s for s in steps)
+
+
+def test_pg_dump_uses_arg_list_subprocess(tmp_path) -> None:
+    """pg_dump invocation must use an arg list, never a shell string (#11376)."""
+    (tmp_path / ".env").write_text("DATABASE_URL=postgresql://user:pw@localhost:5432/mydb\n", encoding="utf-8")
+    captured: list = []
+
+    async def _fake_exec(*cmd, env=None, **kw):
+        captured.extend(cmd)
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    steps: list[str] = []
+
+    with (
+        patch("api.code_sync._DB_BACKUP_DIR", str(backup_dir)),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+    ):
+        _run(_pg_dump_before_migration("autobot-backend", str(tmp_path), steps))
+
+    assert captured[0] == "pg_dump", f"first arg must be 'pg_dump', got {captured[0]}"
+    assert "--format=custom" in captured
+    assert "-h" in captured and "localhost" in captured
+    assert "-U" in captured and "user" in captured
+    # Each argument must be a plain string, not a shell-interpolated blob
+    assert all(isinstance(a, str) for a in captured)
+
+
+# ---------------------------------------------------------------------------
+# #11377 — snapshot + rollback on post-sync failure
+# ---------------------------------------------------------------------------
+
+
+def test_snapshot_component_returns_none_when_not_git(tmp_path) -> None:
+    """Returns None gracefully when the deployed dir is not a git repo."""
+    with patch("api.code_sync.get_default_deployed_dir", return_value=str(tmp_path)):
+        result = _snapshot_component("autobot-backend")
+    assert result is None
+
+
+def test_snapshot_component_returns_sha(tmp_path) -> None:
+    """Returns the SHA string when git rev-parse succeeds."""
+    with patch("api.code_sync.get_default_deployed_dir", return_value=str(tmp_path)):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="abc123def456\n")
+            result = _snapshot_component("autobot-backend")
+    assert result == "abc123def456"
+
+
+def test_rollback_component_calls_git_reset_and_restart(tmp_path) -> None:
+    """_rollback_component runs git reset --hard and restarts services (#11377)."""
+    restarted: list[bool] = []
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"HEAD is now at abc123", b""))
+        return proc
+
+    async def _fake_restart(component, steps):
+        restarted.append(True)
+
+    with (
+        patch("api.code_sync.get_default_deployed_dir", return_value=str(tmp_path)),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        patch("api.code_sync._restart_component_services", side_effect=_fake_restart),
+    ):
+        steps: list[str] = []
+        _run(_rollback_component("autobot-backend", "abc123def456", steps, "/tmp/dump.dump"))
+
+    assert restarted, "services must be restarted after rollback"
+    assert any("reverted" in s for s in steps)
+    assert any("/tmp/dump.dump" in s for s in steps), "dump path must appear in steps"
+
+
+def test_rollback_noop_when_no_snapshot() -> None:
+    """_rollback_component is a no-op (warning) when snapshot is None (#11377)."""
+    steps: list[str] = []
+    with patch("api.code_sync._restart_component_services", AsyncMock()) as restart:
+        _run(_rollback_component("autobot-backend", None, steps))
+    restart.assert_not_called()
+    assert any("no snapshot" in s for s in steps)
+
+
+def test_run_post_sync_steps_rolls_back_on_pip_failure() -> None:
+    """When pip fails, rollback is triggered (#11377)."""
+    rolled_back: list[bool] = []
+
+    async def _fake_rollback(component, snapshot, steps, dump_path=None):
+        rolled_back.append(True)
+
+    with (
+        patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        patch("api.code_sync._snapshot_component", return_value="aabbcc"),
+        patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
+        patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
+        patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
+        patch("api.code_sync._ensure_venv_python", AsyncMock()),
+        patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=False)),
+        patch("api.code_sync._rollback_component", side_effect=_fake_rollback),
+    ):
+        _, _, pip_ok = _run(
+            _run_post_sync_steps("autobot-backend", "/src/autobot-backend", "/opt/autobot/autobot-backend")
+        )
+
+    assert not pip_ok
+    assert rolled_back, "rollback must be triggered on pip failure"
+
+
+# ---------------------------------------------------------------------------
+# #11378 — health polling after restart
+# ---------------------------------------------------------------------------
+
+
+def test_health_poll_timeout_constant_positive() -> None:
+    """_HEALTH_POLL_TIMEOUT must be a positive number."""
+    assert _HEALTH_POLL_TIMEOUT > 0
+
+
+def test_wait_component_healthy_returns_true_on_healthy_response() -> None:
+    """Returns True when the health endpoint responds 2xx (#11378)."""
+    steps: list[str] = []
+
+    class _FakeResp:
+        status_code = 200
+
+    class _FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            pass
+
+        async def get(self, url):
+            return _FakeResp()
+
+    with (
+        patch("api.code_sync._COMPONENT_HEALTH_URLS", {"autobot-backend": "http://127.0.0.1:8001/api/health"}),
+        patch("api.code_sync._HEALTH_POLL_TIMEOUT", 5.0),
+        patch("httpx.AsyncClient", return_value=_FakeClient()),
+    ):
+        result = _run(_wait_component_healthy("autobot-backend", steps))
+
+    assert result is True
+    assert any("healthy" in s for s in steps)
+
+
+def test_wait_component_healthy_returns_false_on_timeout() -> None:
+    """Returns False when the component stays unhealthy for the full timeout (#11378)."""
+    steps: list[str] = []
+
+    class _FailClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            pass
+
+        async def get(self, url):
+            raise ConnectionRefusedError("refused")
+
+    with (
+        patch("api.code_sync._COMPONENT_HEALTH_URLS", {"autobot-backend": "http://127.0.0.1:8001/api/health"}),
+        patch("api.code_sync._HEALTH_POLL_TIMEOUT", 0.1),
+        patch("api.code_sync._HEALTH_POLL_CONNECT_TIMEOUT", 0.05),
+        patch("asyncio.sleep", AsyncMock()),
+        patch("httpx.AsyncClient", return_value=_FailClient()),
+    ):
+        result = _run(_wait_component_healthy("autobot-backend", steps))
+
+    assert result is False
+    assert any("NOT healthy" in s for s in steps)
+
+
+def test_wait_component_healthy_skips_when_no_url() -> None:
+    """Components with no health URL are considered healthy immediately (#11378)."""
+    steps: list[str] = []
+    with patch("api.code_sync._COMPONENT_HEALTH_URLS", {}):
+        result = _run(_wait_component_healthy("autobot-slm-backend", steps))
+
+    assert result is True
+    assert any("skipped" in s for s in steps)
+
+
+def test_run_post_sync_steps_rolls_back_on_unhealthy(tmp_path) -> None:
+    """When health poll fails after restart, rollback is triggered (#11378)."""
+    rolled_back: list[bool] = []
+
+    async def _fake_rollback(component, snapshot, steps, dump_path=None):
+        rolled_back.append(True)
+
+    with (
+        patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        patch("api.code_sync._snapshot_component", return_value="aabbcc"),
+        patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
+        patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
+        patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
+        patch("api.code_sync._ensure_venv_python", AsyncMock()),
+        patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=True)),
+        patch("api.code_sync._run_alembic_migrations", AsyncMock(return_value=True)),
+        patch("api.code_sync._ensure_autobot_shared_symlink", AsyncMock()),
+        patch("api.code_sync._restart_component_services", AsyncMock()),
+        patch("api.code_sync._wait_component_healthy", AsyncMock(return_value=False)),
+        patch("api.code_sync._rollback_component", side_effect=_fake_rollback),
+    ):
+        _, _, pip_ok = _run(
+            _run_post_sync_steps("autobot-backend", "/src/autobot-backend", "/opt/autobot/autobot-backend")
+        )
+
+    assert not pip_ok
+    assert rolled_back, "rollback must be triggered when health poll fails after restart"

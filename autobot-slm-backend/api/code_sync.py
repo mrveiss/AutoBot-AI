@@ -14,6 +14,7 @@ import getpass
 import hashlib
 import logging
 import os
+import shutil
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -1163,7 +1164,6 @@ async def _ensure_target_python_installed(component: str, steps: List[str]) -> N
     RETURNS without touching the venv, so a running service is never bricked.
     The target is looked up from the trusted map — never a user-derived name.
     """
-    import shutil
 
     target = _COMPONENT_PYTHON_TARGET.get(component)
     if target is None:
@@ -1195,7 +1195,6 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> None:
     recorded — the service stays running; operators must provision the interpreter
     first (Ansible python314 role). (#11327 review)
     """
-    import shutil
 
     target = _COMPONENT_PYTHON_TARGET.get(component)
     paths = _COMPONENT_PIP_PATHS.get(component)
@@ -1329,6 +1328,25 @@ _COMPONENT_MIGRATION_CONFIG: Dict[str, str] = {
     "autobot-backend": "migrations/alembic.ini",
 }
 
+# --- #11376: pg_dump before migrations -----------------------------------------
+# Directory where pg_dump backups are stored; override with AUTOBOT_DB_BACKUP_DIR.
+_DB_BACKUP_DIR: str = os.environ.get("AUTOBOT_DB_BACKUP_DIR", "/opt/autobot/db-backups")
+# Maximum number of backups to retain per component; older ones are pruned.
+_DB_BACKUP_KEEP: int = int(os.environ.get("AUTOBOT_DB_BACKUP_KEEP", "5"))
+
+# --- #11378: post-restart health polling ---------------------------------------
+# Total seconds to wait for a component to become healthy after restart.
+_HEALTH_POLL_TIMEOUT: float = float(os.environ.get("AUTOBOT_HEALTH_POLL_TIMEOUT", "60"))
+# Per-attempt connect timeout (seconds) when probing the health endpoint.
+_HEALTH_POLL_CONNECT_TIMEOUT: float = 3.0
+# Per-component health URLs (localhost only — never egress).
+_COMPONENT_HEALTH_URLS: Dict[str, str] = {
+    "autobot-backend": "http://127.0.0.1:8001/api/health",
+    "autobot-slm-backend": "http://127.0.0.1:8000/slm/api/code-sync/status",
+    "autobot-frontend": "http://127.0.0.1/",
+    "autobot-slm-frontend": "http://127.0.0.1/slm/",
+}
+
 
 def _load_env_file(env_path: Path) -> Dict[str, str]:
     """Parse a deployed KEY=VALUE .env into a dict (for subprocess env)."""
@@ -1344,23 +1362,121 @@ def _load_env_file(env_path: Path) -> Dict[str, str]:
     return env
 
 
-async def _run_alembic_migrations(component: str, deployed_dir: str, steps: List[str]) -> None:
+def _prune_old_backups(backup_dir: Path, component: str, max_keep: int) -> None:
+    """Delete oldest pg_dump files for *component* beyond *max_keep* (#11376)."""
+    prefix = f"{component}_"
+    dumps = sorted(backup_dir.glob(f"{prefix}*.dump"), key=lambda p: p.stat().st_mtime)
+    for old in dumps[:-max_keep] if max_keep > 0 else dumps:
+        try:
+            old.unlink()
+            logger.info("pg_dump prune: removed %s", old)
+        except OSError as exc:
+            logger.warning("pg_dump prune: failed to remove %s: %s", old, exc)
+
+
+async def _pg_dump_before_migration(component: str, deployed_dir: str, steps: List[str]) -> Optional[str]:
+    """Take a pg_dump of the component DB before running migrations (#11376).
+
+    Resolves DATABASE_URL from the component's deployed .env (same source used
+    by _run_alembic_migrations).  Writes a timestamped .dump file under
+    _DB_BACKUP_DIR and prunes old backups beyond _DB_BACKUP_KEEP.
+
+    Returns the backup path string on success, None on failure.
+    Appends step notes and logs errors; caller must ABORT migration on None.
+    """
+    env_vars = _load_env_file(Path(deployed_dir) / ".env")
+    db_url = env_vars.get("DATABASE_URL") or os.environ.get("DATABASE_URL", "")
+    if not db_url:
+        steps.append("pg_dump: DATABASE_URL not found — cannot back up")
+        return None
+
+    try:
+        parsed = urlparse(db_url)
+    except Exception as exc:
+        steps.append(f"pg_dump: failed to parse DATABASE_URL: {exc}")
+        return None
+
+    backup_dir = Path(_DB_BACKUP_DIR)
+    try:
+        backup_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        steps.append(f"pg_dump: cannot create backup dir {backup_dir}: {exc}")
+        return None
+
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    dump_path = backup_dir / f"{component}_{ts}.dump"
+
+    cmd = ["pg_dump", "--format=custom", f"--file={dump_path}"]
+    if parsed.hostname:
+        cmd += ["-h", parsed.hostname]
+    if parsed.port:
+        cmd += ["-p", str(parsed.port)]
+    if parsed.username:
+        cmd += ["-U", parsed.username]
+    db_name = (parsed.path or "").lstrip("/") or parsed.username or ""
+    if db_name:
+        cmd.append(db_name)
+
+    env = dict(os.environ)
+    if parsed.password:
+        env["PGPASSWORD"] = parsed.password
+    env.update(env_vars)
+
+    steps.append(f"pg_dump: backing up {component} DB to {dump_path}")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            env=env,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+        out = stdout.decode(errors="replace") if stdout else ""
+        if proc.returncode != 0:
+            logger.error("pg_dump FAILED (rc=%d) for %s: %s", proc.returncode, component, out[-400:])
+            steps.append(f"pg_dump: FAILED (rc={proc.returncode}): {out[-200:]}")
+            if dump_path.exists():
+                dump_path.unlink(missing_ok=True)
+            return None
+        logger.info("pg_dump: backup ok for %s at %s", component, dump_path)
+        steps.append(f"pg_dump: backup ok → {dump_path}")
+        _prune_old_backups(backup_dir, component, _DB_BACKUP_KEEP)
+        return str(dump_path)
+    except asyncio.TimeoutError:
+        logger.error("pg_dump: timed out for %s", component)
+        steps.append("pg_dump: timed out after 300s")
+        return None
+    except Exception as exc:
+        logger.error("pg_dump: error for %s: %s", component, exc)
+        steps.append(f"pg_dump: error: {exc}")
+        return None
+
+
+async def _run_alembic_migrations(component: str, deployed_dir: str, steps: List[str]) -> bool:
     """Apply Alembic migrations (`upgrade heads`) so the schema matches synced code (#11255).
 
-    Runs BEFORE the service restart. Non-fatal to the sync, but surfaces failures
-    loudly in the step log + backend logs so schema drift can't hide (code-sync
-    previously skipped this entirely → Company OS 500'd on unapplied columns).
+    Now takes a pg_dump BEFORE running migrations (#11376).  If the dump fails
+    the migration is ABORTED and False is returned — never migrate without a
+    backup.  Returns True on successful migration, False on dump or migrate failure.
     """
     cfg_rel = _COMPONENT_MIGRATION_CONFIG.get(component)
     paths = _COMPONENT_PIP_PATHS.get(component)
     if cfg_rel is None or paths is None:
-        return
+        return True
     _, pip_bin = paths
     alembic_bin = str(Path(pip_bin).with_name("alembic"))
     cfg_path = str(Path(deployed_dir) / cfg_rel)
     if not Path(alembic_bin).exists() or not Path(cfg_path).exists():
         steps.append(f"alembic: binary or config missing for {component} — skipped")
-        return
+        return True
+
+    # #11376: take a pg_dump BEFORE mutating the schema.
+    # Abort if the dump fails — never migrate without a restorable backup.
+    dump_path = await _pg_dump_before_migration(component, deployed_dir, steps)
+    if dump_path is None:
+        steps.append("alembic: ABORTED — pg_dump failed; schema not migrated")
+        logger.error("drift resolve: alembic aborted for %s — pg_dump failed", component)
+        return False
 
     # alembic env.py resolves DATABASE_URL from the environment; load the
     # component's deployed .env so migrations hit the right database.
@@ -1386,20 +1502,23 @@ async def _run_alembic_migrations(component: str, deployed_dir: str, steps: List
         if proc.returncode == 0:
             logger.info("drift resolve: alembic upgrade ok for %s", component)
             steps.append("alembic: upgrade succeeded")
-        else:
-            logger.error(
-                "drift resolve: alembic upgrade FAILED (%d) for %s: %s",
-                proc.returncode,
-                component,
-                out[-400:],
-            )
-            steps.append(f"alembic: upgrade FAILED (rc={proc.returncode}): {out[-200:]}")
+            return True
+        logger.error(
+            "drift resolve: alembic upgrade FAILED (%d) for %s: %s",
+            proc.returncode,
+            component,
+            out[-400:],
+        )
+        steps.append(f"alembic: upgrade FAILED (rc={proc.returncode}): {out[-200:]}" f" — DB backup at {dump_path}")
+        return False
     except asyncio.TimeoutError:
         logger.error("drift resolve: alembic upgrade timed out for %s", component)
-        steps.append("alembic: upgrade timed out after 300s")
+        steps.append(f"alembic: upgrade timed out after 300s — DB backup at {dump_path}")
+        return False
     except Exception as exc:
         logger.error("drift resolve: alembic upgrade error for %s: %s", component, exc)
-        steps.append(f"alembic: upgrade error: {exc}")
+        steps.append(f"alembic: upgrade error: {exc} — DB backup at {dump_path}")
+        return False
 
 
 def _lockfile_hash(frontend_dir: str) -> Optional[str]:
@@ -1583,6 +1702,134 @@ async def _restart_component_services(component: str, steps: List[str]) -> None:
             steps.append(f"restart {service}: error: {exc}")
 
 
+# =============================================================================
+# #11377 — Component snapshot / rollback helpers
+# =============================================================================
+
+
+def _snapshot_component(component: str) -> Optional[str]:
+    """Capture the HEAD commit of the deployed component dir (#11377).
+
+    The deployed dir is a git checkout (or sourced from one); `git -C <dir>
+    rev-parse HEAD` is the most reliable way to read the current tip without
+    parsing rsync output. Returns the commit SHA string on success, None when
+    the dir is not a git repo or git is unavailable.
+    """
+    import subprocess
+
+    deployed_dir = get_default_deployed_dir(component)
+    try:
+        result = subprocess.run(  # noqa: S603
+            ["git", "-C", deployed_dir, "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            sha = result.stdout.strip()
+            logger.info("snapshot: %s HEAD=%s", component, sha[:12])
+            return sha
+    except Exception as exc:
+        logger.debug("snapshot: git rev-parse failed for %s: %s", component, exc)
+    return None
+
+
+async def _rollback_component(
+    component: str,
+    snapshot: Optional[str],
+    steps: List[str],
+    dump_path: Optional[str] = None,
+) -> None:
+    """Revert *component* to *snapshot* commit after a failed post-sync step (#11377).
+
+    Runs `git -C <deployed_dir> reset --hard <snapshot>` in a subprocess.
+    Restarts the component services so the reverted code goes live.
+    Does NOT restore the DB automatically — operators use the pg_dump at
+    *dump_path*.  The dump path is surfaced in the step log for reference.
+
+    No-op (logs warning) when *snapshot* is None — means we had no baseline.
+    """
+    if snapshot is None:
+        steps.append("rollback: no snapshot available — manual recovery required")
+        logger.warning("rollback: no snapshot for %s — cannot auto-revert", component)
+        return
+
+    deployed_dir = get_default_deployed_dir(component)
+    steps.append(f"rollback: reverting {component} to {snapshot[:12]}")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            deployed_dir,
+            "reset",
+            "--hard",
+            snapshot,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+        out = stdout.decode(errors="replace") if stdout else ""
+        if proc.returncode == 0:
+            steps.append(f"rollback: reverted to {snapshot[:12]}")
+            logger.info("rollback: %s reverted to %s", component, snapshot[:12])
+        else:
+            steps.append(f"rollback: git reset failed (rc={proc.returncode}): {out[:200]}")
+            logger.error("rollback: git reset failed for %s: %s", component, out[-300:])
+            return
+    except Exception as exc:
+        steps.append(f"rollback: git reset error: {exc}")
+        logger.error("rollback: git reset error for %s: %s", component, exc)
+        return
+
+    await _restart_component_services(component, steps)
+    if dump_path:
+        steps.append(f"rollback: DB backup available at {dump_path} for manual restore")
+
+
+# =============================================================================
+# #11378 — Post-restart health polling helper
+# =============================================================================
+
+
+async def _wait_component_healthy(component: str, steps: List[str]) -> bool:
+    """Poll the component health URL until healthy or timeout (#11378).
+
+    Uses _COMPONENT_HEALTH_URLS and _HEALTH_POLL_TIMEOUT (env-configurable).
+    Returns True when the endpoint responds 2xx within the timeout window.
+    Returns False and appends a step note when the timeout expires unhealthy.
+    Components with no health URL are considered healthy immediately.
+    """
+    try:
+        import httpx
+    except ImportError:
+        steps.append("health: httpx not available — skipping health check")
+        return True
+
+    url = _COMPONENT_HEALTH_URLS.get(component)
+    if url is None:
+        steps.append(f"health: no health URL configured for {component} — skipped")
+        return True
+
+    deadline = asyncio.get_event_loop().time() + _HEALTH_POLL_TIMEOUT
+    attempt = 0
+    while asyncio.get_event_loop().time() < deadline:
+        attempt += 1
+        try:
+            async with httpx.AsyncClient(timeout=_HEALTH_POLL_CONNECT_TIMEOUT) as client:
+                resp = await client.get(url)
+            if resp.status_code < 400:
+                steps.append(f"health: {component} healthy (HTTP {resp.status_code}) after {attempt} attempt(s)")
+                logger.info("health: %s healthy at %s (attempt %d)", component, url, attempt)
+                return True
+        except Exception:
+            pass
+        await asyncio.sleep(2.0)
+
+    steps.append(f"health: {component} NOT healthy after {_HEALTH_POLL_TIMEOUT:.0f}s" f" — check {url}")
+    logger.error("health: %s unhealthy after %.0fs polling %s", component, _HEALTH_POLL_TIMEOUT, url)
+    return False
+
+
 # Python backend components that embed an autobot_shared symlink (#10912).
 _BACKEND_COMPONENTS = frozenset(_COMPONENT_PIP_PATHS.keys())
 
@@ -1656,6 +1903,11 @@ async def _run_post_sync_steps(
     the failure via success=False rather than silently returning success=True
     (#11322, #11351).
 
+    #11377: Captures a git snapshot BEFORE any mutation so that on failure the
+    deployed dir can be reverted.  Rollback is triggered when pip/alembic/build
+    fails or when the post-restart health poll (#11378) reports unhealthy.
+    The DB is NOT rolled back automatically — operators use the pg_dump (#11376).
+
     restart=False defers the final service restart so the async job path (#11303)
     can commit the job row to DB before restarting (surviving a self-restart of
     autobot-slm-backend).  All other steps still run; restart=True (default) keeps
@@ -1664,8 +1916,8 @@ async def _run_post_sync_steps(
     Component routing:
       - Python backend (autobot-backend, autobot-slm-backend):
           constraints deploy (#11322) + venv version check (#11323) +
-          pip install + symlink restore (#10912) + alembic + restart
-      - Frontend (autobot-frontend, autobot-slm-frontend): npm ci (conditional) + build + nginx reload
+          pip install + symlink restore (#10912) + alembic + restart + health
+      - Frontend (autobot-frontend, autobot-slm-frontend): npm ci (conditional) + build + nginx reload + health
       - autobot_shared: restore BOTH backends' symlinks (#10912) + restart dependents
     """
     steps: List[str] = []
@@ -1677,37 +1929,52 @@ async def _run_post_sync_steps(
     # For the response we report whether deps files existed and were touched.
     deps_changed = await _compute_deps_changed(component)
 
+    # #11377: snapshot the deployed dir BEFORE any mutation for rollback.
+    snapshot = _snapshot_component(component)
+    # Track the last pg_dump path for rollback failure messages (#11376+#11377).
+    last_dump_path: Optional[str] = None
+
     if component in _COMPONENT_PIP_PATHS:
-        # Deploy constraints dir so `-c ../constraints/shared.txt` resolves (#11322).
         source_root = str(Path(source_dir).parent)
         await _deploy_constraints_dir(source_root, steps)
-        # Deploy repo-root files so `-r ../requirements.txt` resolves (#11336).
         await _deploy_repo_root_requirements(source_root, steps)
-        # Install the target interpreter if it is missing, BEFORE the venv
-        # check — otherwise _ensure_venv_python must skip recreation and the
-        # box stays stuck on the wrong Python (#11343).
         await _ensure_target_python_installed(component, steps)
-        # Recreate venv if its Python version doesn't match the target (#11323).
         await _ensure_venv_python(component, steps)
         pip_ok = await _install_pip_deps_for_component(component, steps)
-        # Apply DB migrations BEFORE restart so the app starts against the
-        # correct schema. Code-sync previously skipped Alembic, so a merge that
-        # added columns 500'd (e.g. Company OS) until migrations were run by
-        # hand — the update procedure must include them (#11255).
-        await _run_alembic_migrations(component, deployed_dir, steps)
-        # Restore symlink BEFORE restart so the process imports the correct shared
-        # code the moment it starts (#10912).
+        if not pip_ok:
+            await _rollback_component(component, snapshot, steps, last_dump_path)
+            return deps_changed, steps, False
+        alembic_ok = await _run_alembic_migrations(component, deployed_dir, steps)
+        # Extract the dump path recorded during _run_alembic_migrations for rollback msg.
+        last_dump_path = next(
+            (s.split("→")[-1].strip() for s in steps if "pg_dump: backup ok" in s),
+            None,
+        )
+        if not alembic_ok:
+            await _rollback_component(component, snapshot, steps, last_dump_path)
+            return deps_changed, steps, False
         await _ensure_autobot_shared_symlink(component, steps)
         if restart:
             await _restart_component_services(component, steps)
+            healthy = await _wait_component_healthy(component, steps)
+            if not healthy:
+                await _rollback_component(component, snapshot, steps, last_dump_path)
+                steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
+                pip_ok = False
         else:
             steps.append("post-sync: restart deferred")
     elif component in _COMPONENT_FRONTEND_DIRS:
         npm_ok = await _build_npm_frontend_for_component(component, steps)
         if not npm_ok:
+            await _rollback_component(component, snapshot, steps, None)
             pip_ok = False
-        if restart:
+        elif restart:
             await _restart_component_services(component, steps)
+            healthy = await _wait_component_healthy(component, steps)
+            if not healthy:
+                await _rollback_component(component, snapshot, steps, None)
+                steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
+                pip_ok = False
         else:
             steps.append("post-sync: restart deferred")
     elif component in _COMPONENT_SERVICES:
