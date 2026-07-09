@@ -118,6 +118,7 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { formatDate as fmtDate, formatTime as fmtTime } from '@/utils/formatHelpers'
 import { useI18n } from 'vue-i18n'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { BaseModal } from '@autobot/ui'
@@ -165,11 +166,11 @@ const creatingThread = ref(false)
 const messagesArea = ref<HTMLElement | null>(null)
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString()
+  return fmtDate(iso)
 }
 
 function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return fmtTime(iso)
 }
 
 async function scrollToBottom() {
