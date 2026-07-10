@@ -104,6 +104,7 @@ class ModelFallbackCoordinator:
                     current_model=current_model,
                     attempt_count=attempt + 1,
                     chain_tried=chain_tried,
+                    degraded_skipped=request.metadata.get("degraded_skipped"),
                 )
                 if fallback_used:
                     logger.info(
@@ -169,6 +170,7 @@ class ModelFallbackCoordinator:
             attempt_count=len(chain_tried),
             chain_tried=chain_tried,
             exhausted=True,
+            degraded_skipped=request.metadata.get("degraded_skipped"),
         )
         return last_error_response
 
