@@ -446,8 +446,13 @@ def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
 
 # Issue #650: Pre-compiled regex for tool call parsing (performance optimization)
 # Handles both uppercase and lowercase TOOL_CALL tags with nested JSON in params
+# #11545: the closing `>` is optional — some chat models emit `</TOOL_CALL`
+# (newline/prose after) without it, which previously left the whole tool call
+# unparsed (raw tag leaked to the user, tool never executed). `\b` guards
+# against matching `</tool_callable…`. The opening tag's `>` (after params) is
+# still required.
 _TOOL_CALL_PATTERN = re.compile(
-    r'<tool_call\s+name="([^"]+)"\s+params=(["\'])(.+?)\2>([^<]*)</tool_call>',
+    r'<tool_call\s+name="([^"]+)"\s+params=(["\'])(.+?)\2>([^<]*)</tool_call\b\s*>?',
     re.IGNORECASE | re.DOTALL,
 )
 
