@@ -384,12 +384,31 @@ class TaskWorkspaceManager:
 
     def _start_container_sync(self, task_id: str, volume_name: str, image: str) -> str:
         """Start the workspace container applying full sandbox security constraints."""
+        name = f"{_CONTAINER_PREFIX}{task_id}"
+        # GH#11059: the container name is deterministic, so a stale container from a
+        # crashed/partially-cleaned prior run — or a restore racing an incomplete
+        # force-stop — makes ``run(name=…)`` fail with 409 Conflict. Reap any
+        # pre-existing container with this name first (idempotent). Lookups are
+        # always by container id, never name, so this reconcile is safe.
+        self._reap_container_by_name(name)
         container = self._docker.containers.run(
             image=image,
-            name=f"{_CONTAINER_PREFIX}{task_id}",
+            name=name,
             **_apply_sandbox_security(task_id, volume_name),
         )
         return container.id
+
+    def _reap_container_by_name(self, name: str) -> None:
+        """Force-remove a pre-existing container with *name*, if any (GH#11059)."""
+        try:
+            existing = self._docker.containers.get(name)
+        except NotFound:
+            return
+        try:
+            existing.remove(force=True)
+            logger.warning("workspace: reaped stale container name=%s before recreate (GH#11059)", name)
+        except (NotFound, APIError):
+            pass
 
     def _exec_sync(self, container_id: str, cmd: list[str]) -> dict[str, Any]:
         try:

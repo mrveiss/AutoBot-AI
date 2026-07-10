@@ -605,25 +605,38 @@ class LLMHandlerMixin:
         """
         return get_language_instruction(language_code)
 
-    def _get_system_prompt(self, language=None) -> str:
+    def _get_system_prompt(self, language=None, company_id=None) -> str:
         """Get system prompt with optional personality preamble.
 
         Issue #964: Personality preamble prepended when a profile is active.
         Issue #1325: Appends language instruction when non-English.
+        #11501 T2: appends board/company tool teaching when *company_id* is set
+        (the CEO-chat path), so those tools are advertised only there.
         """
         preamble = self._get_personality_preamble()
         resolved_lang = self._resolve_language(language)
         lang_instruction = self._get_language_instruction(resolved_lang)
+        llc_tools = self._get_llc_tool_prompt() if company_id else ""
         try:
             prompt = get_prompt("chat.system_prompt_simple")
             logger.debug("[ChatWorkflowManager] Loaded simplified system prompt")
-            return preamble + prompt + lang_instruction
+            return preamble + prompt + llc_tools + lang_instruction
         except Exception as e:
             logger.error("Failed to load system prompt from file: %s", e)
-            return preamble + """You are AutoBot. Execute commands using:
+            return preamble + llc_tools + """You are AutoBot. Execute commands using:
 <TOOL_CALL name="execute_command" params='{"command":"cmd"}'>desc</TOOL_CALL>
 
 NEVER teach commands - ALWAYS execute them.""" + lang_instruction
+
+    @staticmethod
+    def _get_llc_tool_prompt() -> str:
+        """Board/company tool teaching for the CEO-chat path (#11501 T2)."""
+        try:
+            from llc.agent_tools import LLC_TOOL_PROMPT
+
+            return LLC_TOOL_PROMPT
+        except Exception:  # noqa: BLE001 — LLC optional; never break general chat
+            return ""
 
     def _build_conversation_context(self, session: WorkflowSession) -> str:
         """Build conversation context from recent history.
@@ -756,7 +769,10 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             {"message": message, "use_knowledge": use_knowledge, "language": language},
         )
 
-        system_prompt = self._get_system_prompt(language=language)
+        system_prompt = self._get_system_prompt(
+            language=language,
+            company_id=(session.metadata.get("company_id") if session and session.metadata else None),
+        )
         # Issue #5066: Tiered L0-L3 context wake-up (A/B against legacy path).
         # When TIERED_CONTEXT_ENABLED=true the TieredContextBuilder owns all
         # context prepending (L0 identity + L1 essential story + L2/L3 on-demand).

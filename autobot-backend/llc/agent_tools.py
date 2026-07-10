@@ -95,6 +95,32 @@ class LLCToolError(RuntimeError):
     """Raised when an LLC tool cannot be dispatched (bad context/args)."""
 
 
+# --- System-prompt teaching for the chat agent (#11501 T2) ------------------
+# The chat agent learns tools from the system prompt (<TOOL_CALL> syntax), not
+# function-calling schemas. This snippet is appended to the system prompt only
+# for the CEO-chat path (context carries company_id), so board tools are never
+# advertised in general chat.
+LLC_TOOL_PROMPT = """
+## Board / Company operations
+
+You are the company's board interface. When the message calls for it, act on it
+by emitting ONE of these tool calls (same <TOOL_CALL> syntax as other tools) —
+do NOT ask for clarification if the intent is clear. Example params shown; keep
+titles/summaries concise:
+
+- create_task — params: {"title":"...","priority":"high|medium|low","description":"..."}
+- update_goal — params: {"goal_id":"<uuid-from-context>","status":"...","title":"..."}
+- request_approval — params: {"gate_type":"strategy","summary":"..."}
+- record_decision — params: {"decision":"...","rationale":"..."}
+
+For example:
+<TOOL_CALL name="create_task" params='{"title":"Write the Q3 report"}'>Create task</TOOL_CALL>
+
+After the tool result, use the `respond` tool to confirm what you did in one
+sentence. Only ask the user to clarify if the request is genuinely ambiguous.
+"""
+
+
 def _session_factory():
     """Return the shared async_sessionmaker (lazily, to avoid import cycles)."""
     from user_management.database import get_async_session_factory

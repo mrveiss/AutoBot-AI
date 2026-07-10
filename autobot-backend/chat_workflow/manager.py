@@ -60,8 +60,10 @@ _TOOL_CALL_OPEN_RE = re.compile(r"<TOOL_\s+CALL")
 _TOOL_CALL_CLOSE_RE = re.compile(r"</TOOL_\s+CALL>")
 
 # Issue #727: Pattern to detect completed tool call tags (for hallucination prevention)
-# Matches </tool_call>, </TOOL_CALL>, and </TOOL_ CALL> (underscore variant) with optional whitespace
-_TOOL_CALL_COMPLETE_RE = re.compile(r"</\s*tool_?\s*call\s*>", re.IGNORECASE)
+# Matches </tool_call>, </TOOL_CALL>, and </TOOL_ CALL> (underscore variant).
+# #11545: the trailing `>` is optional — some models omit it (`</TOOL_CALL` +
+# newline); `\b` keeps `</tool_callable` from matching.
+_TOOL_CALL_COMPLETE_RE = re.compile(r"</\s*tool_?\s*call\b\s*>?", re.IGNORECASE)
 
 # Issue #716: Patterns for internal prompts that should not be shown to users
 # These are continuation instructions that LLM sometimes echoes back
@@ -2861,6 +2863,9 @@ before summarizing.
         if context:
             session.metadata["user_id"] = context.get("user_id") or ""
             session.metadata["tenant_id"] = context.get("tenant_id") or context.get("org_id") or ""
+            # #11501 T2: CEO-chat path carries company_id — used to append the
+            # board-tool teaching to the system prompt for this turn only.
+            session.metadata["company_id"] = context.get("company_id") or ""
 
         # Issue MVA-1992: Determine if query qualifies for lightweight mode.
         # Trivial tier (GH#9050, score < trivial_threshold) is the primary

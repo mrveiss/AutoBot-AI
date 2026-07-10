@@ -65,7 +65,7 @@ jobs:
         python -m pip install -r requirements-ci.txt --prefer-binary
 
         echo "Installing testing dependencies..."
-        python -m pip install pytest pytest-asyncio pytest-cov pytest-xdist==3.8.0 flake8 black isort mypy bandit
+        python -m pip install pytest pytest-asyncio pytest-cov pytest-xdist==3.8.0 fakeredis flake8 black isort mypy bandit
 
     - name: Create necessary directories and config files
       run: |

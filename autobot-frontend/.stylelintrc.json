@@ -1,0 +1,16 @@
+{
+  "overrides": [
+    {
+      "files": ["**/*.vue"],
+      "customSyntax": "postcss-html"
+    }
+  ],
+  "rules": {
+    "color-no-hex": [
+      true,
+      {
+        "message": "Hardcoded hex color — use a design token, e.g. var(--color-…) (tokenisation umbrella #11515). A var(--token, #fallback) fallback is still flagged here; migrate the raw value first."
+      }
+    ]
+  }
+}

@@ -293,6 +293,31 @@ async def test_create_is_idempotent(manager, mock_redis, mock_docker):
     mock_docker.containers.run.assert_not_called()
 
 
+def test_start_reaps_stale_container_before_recreate(manager, mock_docker):
+    """GH#11059: a leftover container with the deterministic name is force-removed
+    before recreate, so run() cannot hit a 409 name conflict."""
+    stale = MagicMock()
+    stale.remove = MagicMock()
+    mock_docker.containers.get.return_value = stale
+
+    cid = manager._start_container_sync("task-collide", "vol-collide", "alpine:3.18")
+
+    mock_docker.containers.get.assert_called_once_with("autobot-workspace-task-collide")
+    stale.remove.assert_called_once_with(force=True)
+    mock_docker.containers.run.assert_called_once()
+    assert cid == "abc123def456"
+
+
+def test_start_no_stale_container_skips_reap(manager, mock_docker):
+    """GH#11059: no pre-existing container → nothing to reap; run() still proceeds."""
+    mock_docker.containers.get.side_effect = dtw.NotFound("no such container")
+
+    cid = manager._start_container_sync("task-fresh", "vol-fresh", "alpine:3.18")
+
+    mock_docker.containers.run.assert_called_once()
+    assert cid == "abc123def456"
+
+
 # ---------------------------------------------------------------------------
 # TaskWorkspaceManager.exec_command
 # ---------------------------------------------------------------------------
