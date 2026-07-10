@@ -110,6 +110,7 @@
 
     <!-- Issue Key Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showIssueModal"
       :title="t('llmKeys.issueKey')"
       size="md"
@@ -154,6 +155,7 @@
 
     <!-- Revoke Confirmation Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :model-value="!!revokeKeyId"
       :title="t('llmKeys.revokeConfirm.title')"
       size="sm"

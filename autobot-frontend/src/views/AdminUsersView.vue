@@ -149,6 +149,7 @@
 
     <!-- Create User Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showCreateModal"
       title="Add User"
       size="sm"
@@ -185,6 +186,7 @@
 
     <!-- Assign Voice Bundle Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :model-value="!!bundleTarget"
       title="Assign Voice Bundle"
       size="sm"
@@ -221,6 +223,7 @@
 
     <!-- Delete Confirm Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :model-value="!!deleteTarget"
       title="Delete User"
       size="sm"
@@ -243,6 +246,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import Icon from '@/components/ui/Icon.vue'
 import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import {
   useAdminVoiceBundle,
   VOICE_BUNDLE_NAMES,
@@ -250,6 +254,7 @@ import {
 } from '@/composables/useVoiceBundle'
 import type { VoiceBundleName } from '@/composables/useVoiceBundle'
 
+const { t } = useI18n()
 const logger = createLogger('AdminUsersView')
 
 interface UserRecord {

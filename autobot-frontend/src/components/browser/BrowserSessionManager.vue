@@ -186,6 +186,7 @@
 
     <!-- Create Session Modal -->
     <BaseModal
+      :close-label="$t('ui.modal.closeDialog')"
       v-model="showCreateModal"
       :title="$t('browser.sessionManager.createBrowserSession')"
       size="sm"

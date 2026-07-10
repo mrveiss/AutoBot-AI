@@ -1,5 +1,6 @@
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :model-value="show"
     :title="$t('knowledge.vectorization.progressTitle')"
     size="md"
@@ -129,6 +130,8 @@ import { computed } from 'vue'
 import VectorizationStatusBadge from './VectorizationStatusBadge.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 interface DocumentState {
   documentId: string

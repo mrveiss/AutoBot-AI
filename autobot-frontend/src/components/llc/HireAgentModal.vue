@@ -7,6 +7,7 @@
 -->
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :model-value="true"
     title="Hire Agent"
     size="sm"
@@ -58,7 +59,9 @@ import { ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import AdapterTypeSelect from './AdapterTypeSelect.vue'
+const { t } = useI18n()
 
 const props = defineProps<{ companyId: string }>()
 const emit = defineEmits<{ close: []; hired: [] }>()

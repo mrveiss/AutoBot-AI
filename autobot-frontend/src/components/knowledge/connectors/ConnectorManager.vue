@@ -265,6 +265,7 @@ onMounted(() => {
 
     <!-- History Modal — Issue #8149: replaced with ConnectorHistoryPanel -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showHistoryModal"
       :title="t('knowledge.connectors.syncHistoryTitle', { name: historyConnectorName })"
       size="md"

@@ -309,6 +309,7 @@
 
     <!-- Patterns Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :model-value="showPatterns"
       :title="$t('analytics.performanceAnalysis.performancePatterns')"
       size="md"

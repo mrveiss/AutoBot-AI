@@ -197,6 +197,7 @@
 
     <!-- Intent Detail Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :model-value="!!selectedIntent"
       :title="selectedIntent?.intent_name ?? ''"
       size="sm"
@@ -260,11 +261,13 @@
  */
 import Icon from '@/components/ui/Icon.vue'
 import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import { ref, onMounted, computed } from 'vue'
 import {
   useConversationFlowData,
   type IntentPattern,
 } from '@/composables/analytics/useConversationFlowData'
+const { t } = useI18n()
 
 // State
 const timeRange = ref(24)

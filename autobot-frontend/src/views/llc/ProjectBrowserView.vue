@@ -225,6 +225,7 @@
 
     <!-- Create project modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showCreate"
       :title="t('llcBrowser.projects.createTitle')"
       size="sm"
@@ -267,6 +268,7 @@
 
     <!-- GH#11129: Attach repo modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showAttach"
       :title="t('llcBrowser.repo.attachTitle')"
       size="sm"

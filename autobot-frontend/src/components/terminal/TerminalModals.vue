@@ -2,6 +2,7 @@
   <div>
     <!-- Connection Lost Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :modelValue="showReconnectModal"
       @update:modelValue="val => !val && $emit('hide-reconnect-modal')"
       :title="$t('terminal.modals.connectionLost')"
@@ -42,6 +43,7 @@
 
     <!-- Command Confirmation Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :modelValue="showCommandConfirmation"
       @update:modelValue="val => !val && cancelCommand()"
       :title="$t('terminal.modals.destructiveCommand')"
@@ -108,6 +110,7 @@
 
     <!-- Emergency Kill Confirmation Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :modelValue="showKillConfirmation"
       @update:modelValue="val => !val && cancelKill()"
       :title="$t('terminal.modals.emergencyKillTitle')"
@@ -158,6 +161,7 @@
 
     <!-- Legacy Manual Step Confirmation Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :modelValue="showLegacyModal"
       @update:modelValue="val => !val && handleTakeManualControl()"
       :title="$t('terminal.modals.workflowTitle')"
@@ -238,9 +242,11 @@
 import { ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('TerminalModals')
-import { BaseModal } from '@autobot/ui'
+const { t } = useI18n()
 
 interface ProcessInfo {
   pid: number

@@ -5,6 +5,7 @@
 
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :model-value="show"
     :title="$t('analytics.findings.fileScan.title')"
     size="sm"

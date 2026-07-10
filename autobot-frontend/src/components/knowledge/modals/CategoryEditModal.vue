@@ -258,6 +258,7 @@ function selectIcon(icon: string): void {
 
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     v-model="isOpen"
     :title="t('knowledge.modals.categoryEdit.editTitle', { name: categoryTitle })"
     size="md"

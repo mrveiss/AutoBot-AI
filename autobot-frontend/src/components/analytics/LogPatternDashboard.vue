@@ -172,6 +172,7 @@
 
     <!-- Pattern Details Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :model-value="!!selectedPattern"
       :title="selectedPattern ? $t('analytics.logPatterns.patternDetails', { id: selectedPattern.pattern_id }) : ''"
       size="md"

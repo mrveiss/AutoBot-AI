@@ -5555,7 +5555,7 @@
       "dismissAlert": "Dismiss alert"
     },
     "modal": {
-      "closeDialog": "Close dialog"
+      "closeDialog": "Fechar caixa de diálogo"
     },
     "commandPermission": {
       "title": "Command Permission Required",

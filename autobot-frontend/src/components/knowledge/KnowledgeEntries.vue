@@ -290,6 +290,7 @@
 
     <!-- View/Edit Dialog -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showDialog"
       :title="dialogMode === 'view' ? $t('knowledge.entries.viewEntry') : $t('knowledge.entries.editEntry')"
       size="lg"

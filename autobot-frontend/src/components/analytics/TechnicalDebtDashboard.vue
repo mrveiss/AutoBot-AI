@@ -374,6 +374,7 @@
 
     <!-- Item Details Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :model-value="!!selectedItem"
       :title="$t('analytics.technicalDebt.debtItemDetails')"
       size="sm"
@@ -434,6 +435,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils';
 import { getCssVar } from '@/composables/useCssVars'
 import {
@@ -443,6 +445,7 @@ import {
   type TrendPoint,
   type DebtSummary,
 } from '@/composables/analytics/useTechnicalDebtData'
+const { t } = useI18n()
 
 // Create scoped logger for TechnicalDebtDashboard
 const logger = createLogger('TechnicalDebtDashboard');

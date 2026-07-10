@@ -4819,7 +4819,7 @@
       "notifications": "Notifications"
     },
     "modal": {
-      "closeDialog": "Close dialog"
+      "closeDialog": "סגירת תיבת הדו-שיח"
     },
     "progressBar": {
       "timeRemaining": "{time} remaining"

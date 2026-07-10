@@ -577,6 +577,7 @@ function closeModal() {
 
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :model-value="modelValue"
     :title="modalTitle"
     size="md"

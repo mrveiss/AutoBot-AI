@@ -230,6 +230,7 @@ watch(() => props.modelValue, (newValue) => {
 
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     v-model="isOpen"
     :title="modalTitle"
     size="md"

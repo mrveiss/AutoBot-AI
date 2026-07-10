@@ -8,6 +8,7 @@
 -->
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :model-value="true"
     :title="modalTitle"
     size="sm"

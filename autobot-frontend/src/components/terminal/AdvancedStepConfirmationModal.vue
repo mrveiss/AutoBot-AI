@@ -181,6 +181,7 @@ function resetEdit(): void {
 
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     v-model="isOpen"
     :title="t('terminal.window.workflowStepConfirmation')"
     size="md"

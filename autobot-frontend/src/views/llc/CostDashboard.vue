@@ -76,6 +76,7 @@
 
     <!-- Budget settings modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :model-value="settingsModal.visible"
       :title="$t('llc.cost.settingsTitle')"
       size="sm"

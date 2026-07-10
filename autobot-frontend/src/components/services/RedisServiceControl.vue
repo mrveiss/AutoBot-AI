@@ -189,6 +189,7 @@
 
     <!-- Confirmation Dialog -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showConfirmDialog"
       :title="confirmDialog.title"
       size="md"

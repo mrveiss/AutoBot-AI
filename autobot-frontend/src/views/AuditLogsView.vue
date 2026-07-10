@@ -139,6 +139,7 @@
 
       <!-- Cleanup Modal -->
       <BaseModal
+        :close-label="t('ui.modal.closeDialog')"
         v-model="showCleanupModal"
         :title="$t('views.auditLogs.cleanupTitle')"
         size="sm"

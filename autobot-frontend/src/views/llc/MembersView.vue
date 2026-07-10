@@ -75,6 +75,7 @@
 
     <!-- Add member modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showAddModal"
       :title="t('llcMembers.addModalTitle')"
       size="md"

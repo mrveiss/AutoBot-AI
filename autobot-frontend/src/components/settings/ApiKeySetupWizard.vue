@@ -1,5 +1,6 @@
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :modelValue="modelValue"
     @update:modelValue="$emit('update:modelValue', $event)"
     :title="t('settings.apiKeys.wizardTitle')"
