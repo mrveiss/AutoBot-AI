@@ -468,7 +468,7 @@ async def test_load_plugin_returns_none_when_required_env_missing(monkeypatch, c
         ]
     )
 
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
 
     with caplog.at_level("ERROR"):
         result = await loader.load_plugin(manifest)
@@ -497,7 +497,7 @@ async def test_load_plugin_succeeds_with_optional_env_missing(monkeypatch, caplo
         ],
     )
 
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
 
     with caplog.at_level("INFO"):
         plugin = await loader.load_plugin(manifest)
@@ -526,7 +526,7 @@ async def test_load_plugin_succeeds_when_all_required_env_set(monkeypatch) -> No
         ],
     )
 
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
 
     plugin = await loader.load_plugin(manifest)
     assert plugin is not None
@@ -566,7 +566,7 @@ async def test_get_env_status_returns_correct_shape(monkeypatch) -> None:
             },
         ],
     )
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
     await loader.load_plugin(manifest)
 
     status = loader.get_env_status("status-shape-plugin")
@@ -619,7 +619,7 @@ async def test_get_env_status_never_returns_value(monkeypatch) -> None:
             }
         ],
     )
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
     await loader.load_plugin(manifest)
 
     status = loader.get_env_status("leak-check-plugin")
@@ -692,7 +692,7 @@ async def test_load_plugin_validates_hook_names(monkeypatch) -> None:
     PluginRegistry().clear()
     loader = PluginLoader([])
     manifest = _make_manifest(name="hook-warn-plugin", hooks=["totally_invalid_hook"])
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -710,7 +710,7 @@ async def test_load_plugin_no_warning_for_known_hooks(monkeypatch) -> None:
     PluginRegistry().clear()
     loader = PluginLoader([])
     manifest = _make_manifest(name="hook-ok-plugin", hooks=[Hook.ON_STARTUP.value])
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -743,7 +743,7 @@ async def test_load_plugin_raises_plugin_load_error_when_required_env_missing(mo
         name="ple-test-plugin",
         required_env=[{"name": "TEST_PLE_VAR", "description": "x", "required": True}],
     )
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
 
     # Bypass the outer try/except to observe the raw exception
     with pytest.raises(PluginLoadError, match="TEST_PLE_VAR"):
@@ -767,7 +767,7 @@ async def test_load_plugin_returns_none_and_logs_when_required_env_missing(monke
         name="ple-bc-plugin",
         required_env=[{"name": "TEST_REQ_LOAD_FAIL_V2", "description": "x", "required": True}],
     )
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
 
     with caplog.at_level("ERROR"):
         result = await loader.load_plugin(manifest)
