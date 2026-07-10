@@ -122,9 +122,20 @@
         label: "{{ item.name }}"
       changed_when: true
 
+    # AI Stack lives under a different path shape (nested docker dir), so it
+    # keeps its own archive task (ported from the retired top-level playbook,
+    # #11424 — the aiml deploy must not be lost in the canonical consolidation).
+    - name: "[PRE-FLIGHT] Create AI Stack archive"
+      shell: >-
+        git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} archive {{ deploy_ref }}
+        -- autobot-infrastructure/shared/docker/ai-stack/
+        | gzip > {{ deploy_tmp }}/ai-stack.tar.gz
+      changed_when: true
+      tags: [always, ai-stack, aiml]
+
     - name: "[PRE-FLIGHT] Archives ready"
       debug:
-        msg: "7 deploy archives created from {{ deploy_ref }} ({{ deploy_info.stdout }})"
+        msg: "8 deploy archives created from {{ deploy_ref }} ({{ deploy_info.stdout }})"
 
     # --- Dependency change detection (#1603) ---
     - name: "[PRE-FLIGHT] Get previous commit (before pull)"
@@ -898,6 +909,41 @@
       when: >-
         'browser' in group_names
       tags: [browser, browser-worker, restart]
+
+    # ----- AI Stack (LangChain/LlamaIndex agent router + ChromaDB) -----
+    # Ported from the retired top-level update-all-nodes.yml (#11424) so the
+    # aiml node keeps receiving code updates through the canonical entrypoint.
+    - name: "[PLAY 2] AI Stack | Deploy ai_api_server and requirements"
+      unarchive:
+        src: "{{ deploy_tmp }}/ai-stack.tar.gz"
+        dest: /opt/autobot/autobot-ai-stack/
+        extra_opts: ['--strip-components=4']
+        owner: autobot
+        group: autobot
+      become: true
+      when: >-
+        'aiml' in group_names
+      tags: [ai-stack, aiml]
+
+    - name: "[PLAY 2] AI Stack | Restart autobot-ai-stack service"
+      systemd:
+        name: autobot-ai-stack
+        state: restarted
+      become: true
+      when: >-
+        'aiml' in group_names
+      failed_when: false
+      tags: [ai-stack, aiml, restart]
+
+    - name: "[PLAY 2] AI Stack | Restart autobot-chromadb service"
+      systemd:
+        name: autobot-chromadb
+        state: restarted
+      become: true
+      when: >-
+        'aiml' in group_names
+      failed_when: false
+      tags: [ai-stack, aiml, chromadb, restart]
 
     # ----- Shared (non-backend nodes) -----
     - name: "[PLAY 2] Shared | Deploy autobot_shared"

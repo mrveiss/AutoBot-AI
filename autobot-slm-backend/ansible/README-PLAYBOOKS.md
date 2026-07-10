@@ -40,9 +40,11 @@ ansible-playbook update-all-nodes.yml --tags backend
 
 | Playbook | Purpose | Scope | Time |
 |----------|---------|-------|------|
-| `update-all-nodes.yml` | Code sync + **DB migrations** + restart (all nodes) | Fleet | ~2 min |
+| `update-all-nodes.yml` | Code sync + **DB migrations** + restart (all nodes) | Fleet | ~3–10 min¹ |
 | `update-all-nodes.yml --tags backend` | Backend code only | Single service | ~30s |
 | `provision-fleet-roles.yml` | Full re-provision | Fleet | ~45 min |
+
+¹ Includes the pre-restart migration sequence (pg_dump backup → baseline → `alembic upgrade head`); longer when migrations or dependency changes apply.
 
 ---
 
