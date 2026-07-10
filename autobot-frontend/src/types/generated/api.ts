@@ -29760,6 +29760,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llm-auth/oauth/initiate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Oauth Initiate
+         * @description Begin a provider auth-code + PKCE flow; return the authorize URL + state.
+         *
+         *     The server mints the PKCE verifier/challenge and an unguessable ``state``,
+         *     stashes them in Redis (short TTL, keyed to the initiating admin), and returns
+         *     the provider authorize URL. The client never supplies the verifier — the
+         *     callback takes it from the stored state (#11297). Requires admin: the stored
+         *     credential is system-wide.
+         */
+        post: operations["oauth_initiate_api_llm_auth_oauth_initiate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llm-auth/oauth/callback": {
         parameters: {
             query?: never;
@@ -29773,9 +29799,11 @@ export interface paths {
          * Oauth Callback
          * @description Exchange an OAuth authorization code for tokens and persist to vault.
          *
-         *     The frontend redirects to this endpoint after the user completes the
-         *     provider sign-in page.  The backend performs the PKCE code exchange and
-         *     stores the resulting token pair in the system vault.
+         *     Authorized by a server-minted, **single-use** ``state`` (from /oauth/initiate):
+         *     the state is atomically consumed (GETDEL), must belong to the current admin,
+         *     and supplies the verifier / token_url / client_id — none of which the client
+         *     provides. This closes the CSRF / code-injection hole where a lured admin could
+         *     bind an attacker's account as the shared system credential (#11297).
          *
          *     Requires admin — stored credential is system-wide (shared by all users).
          */
@@ -82783,22 +82811,52 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** OAuthInitiateRequest */
-        OAuthInitiateRequest: {
-            /** Provider Name */
-            provider_name: string;
-            /** Token Url */
-            token_url: string;
-            /** Client Id */
-            client_id: string;
-            /** Client Secret */
-            client_secret: string;
+        /**
+         * OAuthAuthorizeResponse
+         * @description Return of /oauth/initiate — the provider URL to redirect to + the CSRF state.
+         */
+        OAuthAuthorizeResponse: {
+            /** Authorize Url */
+            authorize_url: string;
+            /** State */
+            state: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OAuthCallbackRequest
+         * @description Body for POST /oauth/callback — bound to a server-minted, single-use state.
+         *
+         *     The verifier / token_url / client_id are taken from the stored state, never
+         *     from the client, so a lured admin cannot inject an attacker's credentials.
+         */
+        OAuthCallbackRequest: {
+            /** State */
+            state: string;
             /** Code */
             code: string;
             /** Redirect Uri */
             redirect_uri: string;
-            /** Code Verifier */
-            code_verifier: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OAuthInitiateRequest
+         * @description Body for POST /oauth/initiate — starts a server-driven PKCE auth-code flow.
+         */
+        OAuthInitiateRequest: {
+            /** Provider Name */
+            provider_name: string;
+            /** Authorize Url */
+            authorize_url: string;
+            /** Token Url */
+            token_url: string;
+            /** Client Id */
+            client_id: string;
+            /** Redirect Uri */
+            redirect_uri: string;
+            /** Scopes */
+            scopes?: string[] | null;
         } & {
             [key: string]: unknown;
         };
@@ -139020,7 +139078,7 @@ export interface operations {
             };
         };
     };
-    oauth_callback_api_llm_auth_oauth_callback_post: {
+    oauth_initiate_api_llm_auth_oauth_initiate_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -139030,6 +139088,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["OAuthInitiateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthAuthorizeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_callback_api_llm_auth_oauth_callback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthCallbackRequest"];
             };
         };
         responses: {
