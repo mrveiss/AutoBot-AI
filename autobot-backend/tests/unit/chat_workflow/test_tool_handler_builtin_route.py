@@ -69,9 +69,7 @@ async def _dispatch(mixin: ToolHandlerMixin, tool_call: dict, execution_results:
 
 def test_uniform_set_is_union_of_builtin_families() -> None:
     """Membership SSOT: browser + web research + web_search + execute_command."""
-    assert _UNIFORM_BUILTIN_TOOLS == (
-        BROWSER_TOOL_NAMES | WEB_RESEARCH_TOOL_NAMES | {"web_search", "execute_command"}
-    )
+    assert _UNIFORM_BUILTIN_TOOLS == (BROWSER_TOOL_NAMES | WEB_RESEARCH_TOOL_NAMES | {"web_search", "execute_command"})
     # respond/delegate are non-uniform (special return shapes) and must stay out.
     assert "respond" not in _UNIFORM_BUILTIN_TOOLS
     assert "delegate" not in _UNIFORM_BUILTIN_TOOLS
@@ -102,7 +100,7 @@ def test_route_table_covers_every_member(tool_name: str, handler_attr: str) -> N
     )
 
     assert generator is not None
-    (label, _args), = calls  # handler factory invoked exactly once
+    ((label, _args),) = calls  # handler factory invoked exactly once
     assert label == handler_attr
 
 
@@ -144,7 +142,7 @@ async def test_browser_tool_routes_to_browser_handler() -> None:
     messages = await _dispatch(mixin, {"name": "click", "params": {"selector": "#go"}}, [])
 
     assert messages == ["browser-msg"]
-    (label, args), = calls
+    ((label, args),) = calls
     assert label == "browser"
     assert args[0]["name"] == "click"  # tool_call first
     assert args[2] == "sess-1"  # session_id third — parity with old branch
@@ -158,7 +156,7 @@ async def test_web_search_routes_to_web_search_handler() -> None:
     messages = await _dispatch(mixin, {"name": "web_search", "params": {"query": "hello"}}, [])
 
     assert messages == ["web_search-msg"]
-    (label, args), = calls
+    ((label, args),) = calls
     assert args[0]["params"]["query"] == "hello"
     assert args[2] == "sess-1"
 
@@ -171,7 +169,7 @@ async def test_web_research_handler_receives_tool_name_first() -> None:
     messages = await _dispatch(mixin, {"name": "scrape_url", "params": {"url": "https://example.com"}}, [])
 
     assert messages == ["research-msg"]
-    (label, args), = calls
+    ((label, args),) = calls
     assert args[0] == "scrape_url"  # tool_name first — parity with old branch
     assert args[3] == "sess-1"
 
@@ -193,7 +191,7 @@ async def test_execute_command_routes_with_full_arg_set() -> None:
     ]
 
     assert messages == ["exec-msg"]
-    (label, args), = calls
+    ((label, args),) = calls
     assert args[1] == "sess-1"
     assert args[2] == "term-1"
     assert args[3] == "http://127.0.0.1:11434"
@@ -226,5 +224,5 @@ async def test_unknown_tool_falls_through_to_mcp() -> None:
     messages = await _dispatch(mixin, {"name": "totally_unknown_tool", "params": {}}, [])
 
     assert messages == ["mcp-msg"]
-    (label, args), = calls
+    ((label, args),) = calls
     assert args[0] == "totally_unknown_tool"

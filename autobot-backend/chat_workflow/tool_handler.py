@@ -408,9 +408,7 @@ BROWSER_TOOL_NAMES: frozenset[str] = frozenset(
 )
 
 # Issue #7509: web research tools — direct internal dispatch via web_fetch.
-WEB_RESEARCH_TOOL_NAMES: frozenset[str] = frozenset(
-    {"scrape_url", "crawl_site", "map_site", "extract_structured_data"}
-)
+WEB_RESEARCH_TOOL_NAMES: frozenset[str] = frozenset({"scrape_url", "crawl_site", "map_site", "extract_structured_data"})
 
 # GH#11489: builtin tools sharing the uniform dispatch gate (invalid-call
 # counter reset → Issue #4529 schema validation → handler). ``_builtin_route``
