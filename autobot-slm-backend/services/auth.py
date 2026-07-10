@@ -27,6 +27,7 @@ rejected before PyJWT is invoked.
 """
 
 import logging
+import os
 import secrets
 from datetime import timedelta
 from typing import Callable
@@ -220,23 +221,79 @@ def require_permission(permission: Permission) -> Callable:
     """
 
     async def _check(current_user: dict = Depends(get_current_user)) -> dict:
-        role_str = current_user.get("role")
-        if role_str:
-            try:
-                role = Role(role_str)
-            except ValueError:
-                role = Role.USER
-        else:
-            role = Role.ADMIN if current_user.get("admin", False) else Role.USER
-
-        if permission not in ROLE_PERMISSIONS.get(role, []):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied: {permission.value} required",
-            )
-        return current_user
+        return _require_permission_or_403(current_user, permission)
 
     return _check
+
+
+def _resolve_role(current_user: dict) -> Role:
+    """Derive the caller's Role from the JWT 'role' field or legacy admin flag."""
+    role_str = current_user.get("role")
+    if role_str:
+        try:
+            return Role(role_str)
+        except ValueError:
+            return Role.USER
+    return Role.ADMIN if current_user.get("admin", False) else Role.USER
+
+
+def _require_permission_or_403(current_user: dict, permission: Permission) -> dict:
+    """Raise 403 unless *current_user*'s role grants *permission*; else return it."""
+    if permission not in ROLE_PERMISSIONS.get(_resolve_role(current_user), []):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permission denied: {permission.value} required",
+        )
+    return current_user
+
+
+# Optional bearer: unlike ``security`` (auto_error=True), this returns None
+# instead of 401 when no Authorization header is present, so a machine caller
+# authenticating via the internal API key is not rejected first (#11450).
+_optional_security = HTTPBearer(auto_error=False)
+
+
+def verify_internal_api_key(provided: str | None) -> bool:
+    """Constant-time check of the trusted internal-service API key (#11450).
+
+    Mirrors autobot-backend ``auth_middleware.verify_internal_api_key`` (#1145):
+    the slm-agent and sibling services authenticate machine-to-machine with the
+    shared ``AUTOBOT_INTERNAL_API_KEY`` (#10263/#10492), never a user JWT.
+    Returns True only when the key is configured AND *provided* matches exactly;
+    ``secrets.compare_digest`` prevents timing inference and a None can't match.
+    """
+    expected = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
+    if not expected or not provided:
+        return False
+    return secrets.compare_digest(provided, expected)
+
+
+async def require_service_management_or_internal(
+    x_internal_api_key: str | None = Header(None, alias="X-Internal-API-Key"),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_optional_security),
+) -> dict:
+    """Router gate for endpoints reachable by BOTH humans and the node agent.
+
+    #10198 gated the whole nodes/events/code-sync/roles routers behind the
+    *human* service.management permission, which also 401'd the machine-to-
+    machine agent-ingest endpoints (heartbeat/enroll/roles-definitions/code-sync
+    -notify/events-sync) — the agent carries no user JWT, so heartbeats were
+    rejected and the fleet Service table never populated (#11450).
+
+    Machine callers presenting a valid ``AUTOBOT_INTERNAL_API_KEY`` bypass the
+    user check; every other caller must be an authenticated user holding
+    service.management — preserving #10198's human-surface gate exactly.
+    """
+    if verify_internal_api_key(x_internal_api_key):
+        return {"internal_service": True, "role": "service"}
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    current_user = await get_current_user(credentials)
+    return _require_permission_or_403(current_user, Permission.SERVICE_MANAGEMENT)
 
 
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
