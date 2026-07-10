@@ -17,7 +17,11 @@ assert their branch behaviour; keep them in lock-step with the source.
 
 from __future__ import annotations
 
+import importlib
+import os
 import secrets
+
+import pytest
 
 
 # --- verbatim mirror of services.auth.verify_internal_api_key -------------
@@ -94,3 +98,41 @@ def test_gate_wrong_key_falls_through_to_user_permission():
         raise AssertionError("expected 403")
     except _Denied as e:
         assert e.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Drift guard: exercise the REAL services.auth.verify_internal_api_key when the
+# import chain is loadable (CI). Skips where the config chain can't load (this
+# sandbox reads /etc/autobot and conftest MagicMock-stubs `services`), so the
+# replicated tests above always run and this adds real-code coverage in CI.
+# ---------------------------------------------------------------------------
+
+
+def _load_real_auth():
+    import sys
+    import types
+
+    if "multipart" in sys.modules and not hasattr(sys.modules["multipart"], "multipart"):
+        sys.modules.pop("multipart", None)
+    _mp = types.ModuleType("multipart")
+    _mp.multipart = types.ModuleType("multipart.multipart")  # type: ignore[attr-defined]
+    sys.modules.setdefault("multipart", _mp)
+    sys.modules.setdefault("multipart.multipart", _mp.multipart)  # type: ignore[attr-defined]
+    mod = importlib.import_module("services.auth")
+    fn = getattr(mod, "verify_internal_api_key", None)
+    if not callable(fn) or type(fn).__name__ == "MagicMock":
+        raise RuntimeError("services.auth not real-loadable in this env")
+    return fn
+
+
+def test_real_verify_internal_api_key_matches_replica(monkeypatch):
+    try:
+        real = _load_real_auth()
+    except Exception as exc:  # noqa: BLE001 — env-dependent import chain
+        pytest.skip(f"services.auth not importable here: {exc}")
+    monkeypatch.setenv("AUTOBOT_INTERNAL_API_KEY", _KEY)
+    assert real(_KEY) is True
+    assert real("b" * 64) is False
+    assert real(None) is False
+    monkeypatch.delenv("AUTOBOT_INTERNAL_API_KEY", raising=False)
+    assert real(_KEY) is False

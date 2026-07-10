@@ -331,6 +331,17 @@ class SLMAgent:
                         new_backoff,
                     )
                     return False
+                if response.status == 401:
+                    # #11450: 401 means our X-Internal-API-Key is missing or
+                    # doesn't match the server's AUTOBOT_INTERNAL_API_KEY (e.g.
+                    # a partial re-provision). Point at the fix explicitly —
+                    # a bare "rejected 401" cost real diagnosis time.
+                    logger.warning(
+                        "Heartbeat 401: X-Internal-API-Key %s the server's — "
+                        "re-run deploy-slm-agent.yml to refresh agent-secrets.env (#11450)",
+                        "missing" if not self._internal_api_key else "does not match",
+                    )
+                    return False
                 logger.warning(
                     "Heartbeat rejected: %s %s",
                     response.status,
