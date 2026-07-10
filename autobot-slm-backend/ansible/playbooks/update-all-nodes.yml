@@ -894,9 +894,12 @@
       failed_when: false
       tags: [browser, browser-worker, deps]
 
+    # The browser worker ships no package-lock.json (git archive of a dir with
+    # only package.json), so `npm ci` (lockfile-required) is wrong here — use
+    # `npm install`, matching the provisioning role's `npm:` module.
     - name: "[PLAY 2] Browser | Install npm dependencies"
       command:
-        cmd: npm ci --omit=dev
+        cmd: npm install --omit=dev
         chdir: /opt/autobot/autobot-browser-worker
       become: true
       become_user: autobot
@@ -910,8 +913,9 @@
 
     # #11442: a playwright version bump changes the required browser revision;
     # without re-running install the worker bricks on the next /navigate
-    # ("Executable doesn't exist at .../chromium-<rev>"). Idempotent — a no-op
-    # when the revision is already present — so it runs on every update.
+    # ("Executable doesn't exist at .../chromium-<rev>"). Gated on node_deps_
+    # changed (npm install above ran first, so node_modules/.bin/playwright
+    # exists) — playwright skips the download when the revision is present.
     - name: "[PLAY 2] Browser | Ensure Playwright browsers match the installed package (#11442)"
       command:
         cmd: node_modules/.bin/playwright install chromium
@@ -920,10 +924,46 @@
         PLAYWRIGHT_BROWSERS_PATH: /var/lib/autobot/playwright-browsers
       become: true
       timeout: 900
-      changed_when: false
-      when: >-
-        'browser' in group_names
+      register: browser_playwright_install
+      changed_when: "'downloaded' in (browser_playwright_install.stdout | default('') | lower)"
       failed_when: false
+      when:
+        - >-
+          'browser' in group_names
+        - hostvars['localhost']['node_deps_changed'] | bool
+      tags: [browser, browser-worker, deps]
+
+    # #5085: a root-run install produces browser files the `autobot` service
+    # user cannot traverse/read. Symbolic a+rX adds read to all, plus traverse
+    # to dirs and execute only to already-executable files — preserving the
+    # chrome binary's +x (a recursive 0644 would strip it and re-brick launch).
+    - name: "[PLAY 2] Browser | Make Playwright browsers accessible to the service user (#5085)"
+      ansible.builtin.file:
+        path: /var/lib/autobot/playwright-browsers
+        mode: "a+rX"
+        recurse: true
+      become: true
+      when:
+        - >-
+          'browser' in group_names
+        - hostvars['localhost']['node_deps_changed'] | bool
+      failed_when: false
+      tags: [browser, browser-worker, deps]
+
+    # #11442: surface a bricked install instead of silently restarting onto a
+    # broken worker (pattern from "NPU | Warn if service not active").
+    - name: "[PLAY 2] Browser | Warn if Playwright install failed"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: Playwright browser install returned
+          rc={{ browser_playwright_install.rc | default('n/a') }} on
+          {{ inventory_hostname }} — /navigate may fail.
+          stderr: {{ browser_playwright_install.stderr | default('') | truncate(300) }}
+      when:
+        - >-
+          'browser' in group_names
+        - hostvars['localhost']['node_deps_changed'] | bool
+        - browser_playwright_install.rc | default(0) != 0
       tags: [browser, browser-worker, deps]
 
     - name: "[PLAY 2] Browser | Restart service"
