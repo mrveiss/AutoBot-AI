@@ -8,6 +8,12 @@ Agent Loop Module
 Implements the Manus-inspired 6-step agent loop pattern for structured
 task execution with event stream integration.
 
+NOT WIRED IN PRODUCTION (#11221): ``AgentLoop`` is never instantiated by any
+production caller — the live tool seam is ``chat_workflow._dispatch_tool_call``.
+Submodules here (belief_state, extractors, guards) ARE reused by other
+subsystems, but the loop orchestrator itself is dormant, so anything wired only
+into it is inert. See ``AgentLoop``'s docstring for details.
+
 The Agent Loop:
     1. ANALYZE EVENTS    → Understand state from event stream
     2. SELECT TOOLS      → Choose based on plan + knowledge
