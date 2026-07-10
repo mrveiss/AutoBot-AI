@@ -4,22 +4,22 @@
     <div class="search-mode-toggle">
       <div class="toggle-container">
         <button
-          :class="['mode-button', { active: !search.useRagSearch.value }]"
-          @click="search.useRagSearch.value = false"
+          :class="['mode-button', { active: !useRagSearch }]"
+          @click="useRagSearch = false"
         >
           <Icon name="search" />
           {{ $t('knowledge.search.traditionalSearch') }}
         </button>
         <button
-          :class="['mode-button', 'rag-button', { active: search.useRagSearch.value }]"
-          @click="search.useRagSearch.value = true"
+          :class="['mode-button', 'rag-button', { active: useRagSearch }]"
+          @click="useRagSearch = true"
         >
           <Icon name="brain" />
           {{ $t('knowledge.search.ragEnhanced') }}
         </button>
       </div>
       <div class="mode-description">
-        <p v-if="!search.useRagSearch.value" class="traditional-desc">
+        <p v-if="!useRagSearch" class="traditional-desc">
           {{ $t('knowledge.search.traditionalDesc') }}
         </p>
         <p v-else class="rag-desc">
@@ -32,14 +32,14 @@
     <div class="search-input-container">
       <div class="search-input-wrapper">
         <input
-          v-model="search.searchQuery.value"
+          v-model="searchQuery"
           type="text"
-          :placeholder="search.useRagSearch.value ? $t('knowledge.search.ragPlaceholder') : $t('knowledge.search.searchPlaceholder')"
+          :placeholder="useRagSearch ? $t('knowledge.search.ragPlaceholder') : $t('knowledge.search.searchPlaceholder')"
           @keyup.enter="onSearch"
           class="search-input"
         >
         <button
-          v-if="search.searchPerformed.value"
+          v-if="searchPerformed"
           @click="onClear"
           class="clear-button"
           :title="$t('knowledge.search.clear')"
@@ -48,12 +48,12 @@
         </button>
         <button
           @click="onSearch"
-          :disabled="search.isSearching.value || !search.searchQuery.value.trim()"
+          :disabled="isSearching || !searchQuery.trim()"
           class="search-button"
         >
-          <i v-if="search.isSearching.value" class="fas fa-spinner fa-spin"></i>
+          <i v-if="isSearching" class="fas fa-spinner fa-spin"></i>
           <i v-else class="fas fa-search"></i>
-          {{ search.isSearching.value ? $t('knowledge.search.searching') : $t('knowledge.search.searchBtn') }}
+          {{ isSearching ? $t('knowledge.search.searching') : $t('knowledge.search.searchBtn') }}
         </button>
       </div>
     </div>
@@ -72,15 +72,15 @@
           <button
             v-for="level in accessLevels"
             :key="level.value"
-            :class="['filter-chip', { active: search.selectedAccessLevel.value === level.value }]"
-            @click="search.toggleAccessLevel(level.value)"
+            :class="['filter-chip', { active: selectedAccessLevel === level.value }]"
+            @click="toggleAccessLevel(level.value)"
           >
             <i :class="level.icon"></i>
             {{ level.label }}
           </button>
           <button
-            v-if="search.selectedAccessLevel.value"
-            @click="search.clearAccessLevelFilter()"
+            v-if="selectedAccessLevel"
+            @click="clearAccessLevelFilter()"
             class="clear-chip"
             :title="$t('knowledge.search.clearAccessLevelFilter')"
           >
@@ -91,11 +91,11 @@
       </div>
 
       <!-- RAG Options -->
-      <div v-if="search.useRagSearch.value" class="rag-options">
+      <div v-if="useRagSearch" class="rag-options">
         <div class="option-group">
           <label>
             <input
-              v-model="search.ragOptions.value.reformulateQuery"
+              v-model="ragOptions.reformulateQuery"
               type="checkbox"
             >
             {{ $t('knowledge.search.autoEnhanceQuery') }}
@@ -104,7 +104,7 @@
         <div class="option-group">
           <label>
             <input
-              v-model="search.ragOptions.value.enableReranking"
+              v-model="ragOptions.enableReranking"
               type="checkbox"
             >
             <span class="reranking-label">
@@ -116,7 +116,7 @@
         <div class="option-group">
           <label>
             {{ $t('knowledge.search.resultsLimit') }}
-            <select v-model.number="search.ragOptions.value.limit" class="limit-select">
+            <select v-model.number="ragOptions.limit" class="limit-select">
               <option value="5">5</option>
               <option value="10">10</option>
               <option value="15">15</option>
@@ -139,6 +139,21 @@ const props = defineProps<{ search: ReturnType<typeof useKnowledgeSearch> }>()
 const emit = defineEmits<{ (e: 'search'): void; (e: 'clear'): void }>()
 const { t } = useI18n()
 
+// Destructure stable refs from the composable so the template binds to local
+// aliases rather than mutating a prop object directly (vue/no-mutating-props).
+// These are the same ref objects — writes propagate back to the composable.
+const {
+  searchQuery,
+  useRagSearch,
+  ragOptions,
+  selectedAccessLevel,
+  searchPerformed,
+  isSearching,
+  toggleAccessLevel,
+  clearAccessLevelFilter,
+  clearResults,
+} = props.search
+
 const accessLevels = computed(() => [
   { value: 'autobot', label: t('knowledge.search.accessPlatform'), icon: 'fas fa-robot' },
   { value: 'general', label: t('knowledge.search.accessPublic'), icon: 'fas fa-globe' },
@@ -152,8 +167,8 @@ async function onSearch() {
 }
 
 function onClear() {
-  props.search.searchQuery.value = ''
-  props.search.clearResults()
+  searchQuery.value = ''
+  clearResults()
   emit('clear')
 }
 </script>

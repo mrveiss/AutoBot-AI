@@ -785,8 +785,8 @@ export const routes: RouteRecordRaw[] = [
     redirect: '/analytics/codebase'
   },
   // Issue #902: Dev Tools moved into /analytics/dev-tools tab
-  // TASK 1a: AI Documents moved under /knowledge/documents. Keep legacy paths
-  // as redirects so existing bookmarks and deep links keep working.
+  // AI Documents now live in the unified /knowledge/browser (#11526). Keep legacy
+  // /documents paths as redirects so existing bookmarks and deep links keep working.
   {
     path: '/documents',
     redirect: '/knowledge/browser',

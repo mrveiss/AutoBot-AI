@@ -4,7 +4,7 @@
     <div v-if="docBranchError" class="error-toast" role="alert">{{ docBranchError }}</div>
 
     <!-- Search bar (Issue #11526: unified search) -->
-    <KnowledgeSearchBar :search="search" />
+    <KnowledgeSearchBar :search="search" @search="selectedDocId = null" />
 
     <!-- Main Categories -->
     <KnowledgeMainCategories
@@ -194,6 +194,7 @@
         :doc-id="selectedDocId!"
         class="content-pane"
         @error="docBranchError = $event"
+        @load-error="(msg: string) => { docBranchError = msg; selectedDocId = null }"
       />
       <KnowledgeSearchResults
         v-else-if="rightPane === 'results'"

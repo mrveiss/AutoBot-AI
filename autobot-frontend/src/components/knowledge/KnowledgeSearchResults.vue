@@ -79,7 +79,7 @@ import KBSearchResultPanel from './KBSearchResultPanel.vue'
 import Icon from '@/components/ui/Icon.vue'
 import type { useKnowledgeSearch } from '@/composables/knowledge/useKnowledgeSearch'
 
-const props = defineProps<{ search: ReturnType<typeof useKnowledgeSearch> }>()
+defineProps<{ search: ReturnType<typeof useKnowledgeSearch> }>()
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'select', result: SearchResult): void

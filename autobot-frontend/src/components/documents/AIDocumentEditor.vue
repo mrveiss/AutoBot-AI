@@ -125,6 +125,7 @@ const emit = defineEmits<{
   (e: 'saved', doc: AIDocument): void
   (e: 'refined', doc: AIDocument): void
   (e: 'error', message: string): void
+  (e: 'load-error', message: string): void
 }>()
 
 // ---------------------------------------------------------------------------
@@ -162,7 +163,9 @@ watch(
       isDirty.value = false
     } catch (err) {
       logger.error('Failed to load document', err)
-      emit('error', composable.error.value ?? 'Failed to load document')
+      const msg = composable.error.value ?? 'Failed to load document'
+      emit('error', msg)
+      emit('load-error', msg)
     }
   },
   { immediate: true }
