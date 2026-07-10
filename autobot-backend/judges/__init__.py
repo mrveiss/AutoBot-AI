@@ -16,34 +16,16 @@ Key Principles:
 - Feedback loops for continuous improvement
 """
 
-import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from llm_shared.json_utils import extract_json_object as _extract_json_object  # Issue #11520
 from llm_shared.types import LLMType
 
 logger = get_logger(__name__)
-
-
-def _extract_json_object(raw_text: str) -> Dict[str, Any]:
-    """Parse a JSON object from an LLM response, tolerating markdown code fences (#10672).
-
-    structured_output=True makes supporting providers emit valid JSON; providers
-    that ignore it may still wrap the object in a ```json fence, so strip that
-    before parsing. Raises json.JSONDecodeError on genuinely unparseable text.
-    """
-    try:
-        return json.loads(raw_text)
-    except json.JSONDecodeError:
-        if "```" in raw_text:
-            block = raw_text.split("```", 2)[1]
-            if block.lstrip().lower().startswith("json"):
-                block = block.lstrip()[4:]
-            return json.loads(block.strip())
-        raise
 
 
 class JudgmentConfidence(Enum):

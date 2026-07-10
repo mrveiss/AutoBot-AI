@@ -14,7 +14,6 @@ guards or Jina logic — those live in media/link/pipeline.py.
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any, Dict, Tuple
 
@@ -149,56 +148,20 @@ def _strip_script_blocks(markdown: str) -> str:
     return _SCRIPT_BLOCK_RE.sub("", markdown).strip()
 
 
-def _build_extraction_prompt(markdown: str, schema: Dict[str, Any]) -> str:
-    """Build the LLM prompt for schema-driven extraction.
-
-    The schema dict is JSON-serialised — never interpolated as raw string —
-    to prevent schema-injection attacks.
-    """
-    schema_json = json.dumps(schema, ensure_ascii=False)
-    return (
-        "Extract structured data from the following web page content.\n"
-        "Return ONLY a valid JSON object that conforms to this JSON Schema:\n\n"
-        f"```json\n{schema_json}\n```\n\n"
-        "Page content:\n\n"
-        f"{markdown}\n\n"
-        "Respond with only the JSON object, no explanation or markdown fences."
-    )
-
-
-async def _call_llm_for_extraction(prompt: str) -> str:
-    """Call the LLM gateway with structured-output mode and return raw content."""
-    from llm_shared.types import LLMType
-    from services.llm_service import get_llm_service
-
-    svc = get_llm_service()
-    response = await svc.chat(
-        messages=[{"role": "user", "content": prompt}],
-        llm_type=LLMType.EXTRACTION,
-        structured_output=True,
-    )
-    if response.error:
-        raise RuntimeError(f"LLM extraction failed: {response.error}")
-    return response.content
-
-
-def _validate_against_schema(data: Dict[str, Any], schema: Dict[str, Any]) -> None:
-    """Validate *data* against *schema* using Draft202012Validator.
-
-    Raises jsonschema.ValidationError on failure.
-    """
-    import jsonschema
-
-    validator = jsonschema.Draft202012Validator(schema)
-    validator.validate(data)
-
-
 async def extract_url(
     url: str,
     schema: Dict[str, Any],
     render: str = "auto",
 ) -> Dict[str, Any]:
     """Fetch *url*, strip script blocks, call LLM to extract structured data.
+
+    Delegates the LLM call, JSON parsing, retry logic, and schema validation to
+    ``llm_shared.structured_ops.extract`` (Issue #11520).
+
+    Deliberate behavior change vs the pre-#11520 implementation: LLM output
+    wrapped in markdown code fences is now tolerated (previously a hard parse
+    failure), and invalid JSON triggers up to ``EXTRACT_MAX_RETRIES`` retries
+    with the error fed back to the model.
 
     Args:
         url:    Absolute URL to fetch.
@@ -212,6 +175,7 @@ async def extract_url(
         RuntimeError:  Fetch failed (caller maps to 502).
         ValueError:    LLM returned invalid JSON or data fails schema (caller maps to 422).
     """
+    from llm_shared.structured_ops import ExtractionError, extract
     from web_fetch import FetchResult, RenderMode, WebFetcher
 
     render_mode = RenderMode(render)
@@ -229,17 +193,9 @@ async def extract_url(
         raise RuntimeError(f"web_content_blocked_by_firewall: risk={fw_verdict.risk.value}")
     safe_markdown = fw_verdict.content
 
-    prompt = _build_extraction_prompt(safe_markdown, schema)
-    raw = await _call_llm_for_extraction(prompt)
-
     try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"LLM returned non-JSON output: {exc}") from exc
-
-    try:
-        _validate_against_schema(data, schema)
-    except Exception as exc:
+        data = await extract(safe_markdown, schema)
+    except ExtractionError as exc:
         raise ValueError(str(exc)) from exc
 
     return {"url": result.url, "data": data, "schema_valid": True}

@@ -3,14 +3,22 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """Tests for web_fetch.extractors — HTML-to-Markdown, SPA detection, title extraction,
-and schema-driven structured data extraction (Issue #7405)."""
+and schema-driven structured data extraction (Issue #7405).
 
+Issue #11520: _build_extraction_prompt and _call_llm_for_extraction were
+consolidated into llm_shared.structured_ops.extract; extract_url now delegates
+there.  Tests for those internal helpers were moved/updated accordingly:
+  - _build_extraction_prompt → covered by structured_ops_test.py
+  - _call_llm_for_extraction → absorbed into structured_ops._extract_single
+  - extract_url tests now patch llm_shared.structured_ops.extract directly.
+"""
+
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from web_fetch.extractors import (
-    _build_extraction_prompt,
     _extract_title,
     _html_to_markdown_via_markdownify,
     _html_to_plain_text_via_bs4,
@@ -227,41 +235,17 @@ class TestStripScriptBlocks:
         assert "b()" not in result
         assert "text" in result
 
-    def test_script_injection_page_does_not_bleed_into_prompt(self) -> None:
-        """Fixture: <script>alert(1)</script> in page must not reach LLM prompt."""
+    def test_script_injection_stripped_before_extraction(self) -> None:
+        """_strip_script_blocks removes script content; safe to pass to LLM."""
         malicious_md = "<html><body><script>alert(1)</script><p>Real content</p></body></html>"
         safe = _strip_script_blocks(malicious_md)
-        prompt = _build_extraction_prompt(safe, {"type": "object"})
-        assert "alert(1)" not in prompt
-
-
-# ---------------------------------------------------------------------------
-# Issue #7405 — _build_extraction_prompt
-# ---------------------------------------------------------------------------
-
-
-class TestBuildExtractionPrompt:
-    def test_schema_is_json_serialised(self) -> None:
-        schema = {"type": "object", "properties": {"name": {"type": "string"}}}
-        prompt = _build_extraction_prompt("page content", schema)
-        import json
-
-        assert json.dumps(schema, ensure_ascii=False) in prompt
-
-    def test_markdown_content_included(self) -> None:
-        prompt = _build_extraction_prompt("My page text", {"type": "object"})
-        assert "My page text" in prompt
-
-    def test_raw_schema_string_not_interpolated(self) -> None:
-        # Schema dict with special chars — must be serialised, not raw
-        schema = {"type": "object", "description": 'say "hello"'}
-        prompt = _build_extraction_prompt("content", schema)
-        # The escaped JSON form should be in the prompt, not the raw Python repr
-        assert '"say \\"hello\\""' in prompt or 'say "hello"' in prompt
+        assert "alert(1)" not in safe
+        assert "Real content" in safe
 
 
 # ---------------------------------------------------------------------------
 # Issue #7405 — extract_url (integration-level unit tests with mocks)
+# Issue #11520 — now delegates to llm_shared.structured_ops.extract
 # ---------------------------------------------------------------------------
 
 
@@ -278,6 +262,16 @@ def _make_fetch_result(
     return r
 
 
+def _make_firewall_verdict(blocked: bool = False, content: str = "# Hello") -> MagicMock:
+    """Return a mock firewall verdict that passes through by default."""
+    v = MagicMock()
+    v.blocked = blocked
+    v.content = content
+    v.risk = MagicMock()
+    v.risk.value = "none"
+    return v
+
+
 @pytest.mark.asyncio
 async def test_extract_url_success() -> None:
     """extract_url returns {url, data, schema_valid:True} on happy path."""
@@ -285,11 +279,18 @@ async def test_extract_url_success() -> None:
 
     mock_result = _make_fetch_result(markdown="Product: Widget, Price: 9.99")
     schema = {"type": "object", "properties": {"product": {"type": "string"}, "price": {"type": "number"}}}
-    llm_json = '{"product": "Widget", "price": 9.99}'
+    extracted_data = {"product": "Widget", "price": 9.99}
+    ops_mod = sys.modules["llm_shared.structured_ops"]
 
     with (
         patch("web_fetch.WebFetcher.fetch", new_callable=AsyncMock, return_value=mock_result),
-        patch("web_fetch.extractors._call_llm_for_extraction", new_callable=AsyncMock, return_value=llm_json),
+        patch(
+            "security.content_firewall.get_content_firewall",
+            return_value=MagicMock(
+                inspect=AsyncMock(return_value=_make_firewall_verdict(content=mock_result.markdown))
+            ),
+        ),
+        patch.object(ops_mod, "extract", new_callable=AsyncMock, return_value=extracted_data),
     ):
         result = await extract_url("https://ex.com", schema)
 
@@ -312,32 +313,55 @@ async def test_extract_url_fetch_failure_raises_runtime_error() -> None:
 
 @pytest.mark.asyncio
 async def test_extract_url_schema_validation_failure_raises_value_error() -> None:
-    """extract_url raises ValueError when LLM output fails JSON Schema validation."""
+    """extract_url raises ValueError when extraction fails (ExtractionError → ValueError)."""
+    from llm_shared.structured_ops import ExtractionError
     from web_fetch.extractors import extract_url
 
     mock_result = _make_fetch_result()
-    schema = {"type": "object", "properties": {"count": {"type": "integer"}}, "required": ["count"]}
-    # LLM returns wrong type for 'count'
-    llm_json = '{"count": "not-an-integer"}'
+    ops_mod = sys.modules["llm_shared.structured_ops"]
 
     with (
         patch("web_fetch.WebFetcher.fetch", new_callable=AsyncMock, return_value=mock_result),
-        patch("web_fetch.extractors._call_llm_for_extraction", new_callable=AsyncMock, return_value=llm_json),
+        patch(
+            "security.content_firewall.get_content_firewall",
+            return_value=MagicMock(
+                inspect=AsyncMock(return_value=_make_firewall_verdict(content=mock_result.markdown))
+            ),
+        ),
+        patch.object(
+            ops_mod,
+            "extract",
+            new_callable=AsyncMock,
+            side_effect=ExtractionError("schema validation failed after 3 attempts"),
+        ),
     ):
         with pytest.raises(ValueError):
-            await extract_url("https://ex.com", schema)
+            await extract_url("https://ex.com", {"type": "object", "properties": {"count": {"type": "integer"}}})
 
 
 @pytest.mark.asyncio
 async def test_extract_url_non_json_llm_output_raises_value_error() -> None:
-    """extract_url raises ValueError when LLM returns non-JSON."""
+    """extract_url raises ValueError when extraction fails (e.g. non-JSON after retries)."""
+    from llm_shared.structured_ops import ExtractionError
     from web_fetch.extractors import extract_url
 
     mock_result = _make_fetch_result()
+    ops_mod = sys.modules["llm_shared.structured_ops"]
 
     with (
         patch("web_fetch.WebFetcher.fetch", new_callable=AsyncMock, return_value=mock_result),
-        patch("web_fetch.extractors._call_llm_for_extraction", new_callable=AsyncMock, return_value="not json at all"),
+        patch(
+            "security.content_firewall.get_content_firewall",
+            return_value=MagicMock(
+                inspect=AsyncMock(return_value=_make_firewall_verdict(content=mock_result.markdown))
+            ),
+        ),
+        patch.object(
+            ops_mod,
+            "extract",
+            new_callable=AsyncMock,
+            side_effect=ExtractionError("LLM returned non-JSON output after 3 attempts"),
+        ),
     ):
         with pytest.raises(ValueError, match="non-JSON"):
             await extract_url("https://ex.com", {"type": "object"})
@@ -350,19 +374,25 @@ async def test_extract_url_strips_scripts_before_llm() -> None:
 
     script_page = "<script>steal_cookies()</script>\n# Product: Widget"
     mock_result = _make_fetch_result(markdown=script_page)
-    captured_prompt: list = []
+    captured_text: list = []
 
-    async def capture_llm(prompt: str) -> str:
-        captured_prompt.append(prompt)
-        return '{"product": "Widget"}'
+    async def capture_extract(text: str, schema, **kwargs) -> dict:
+        captured_text.append(text)
+        return {"product": "Widget"}
 
     schema = {"type": "object", "properties": {"product": {"type": "string"}}}
+    safe_page = "# Product: Widget"
+    ops_mod = sys.modules["llm_shared.structured_ops"]
 
     with (
         patch("web_fetch.WebFetcher.fetch", new_callable=AsyncMock, return_value=mock_result),
-        patch("web_fetch.extractors._call_llm_for_extraction", side_effect=capture_llm),
+        patch(
+            "security.content_firewall.get_content_firewall",
+            return_value=MagicMock(inspect=AsyncMock(return_value=_make_firewall_verdict(content=safe_page))),
+        ),
+        patch.object(ops_mod, "extract", side_effect=capture_extract),
     ):
         await extract_url("https://ex.com", schema)
 
-    assert captured_prompt, "LLM was never called"
-    assert "steal_cookies" not in captured_prompt[0]
+    assert captured_text, "extract() was never called"
+    assert "steal_cookies" not in captured_text[0]
