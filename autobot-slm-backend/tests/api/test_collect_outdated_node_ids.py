@@ -36,31 +36,28 @@ sys.modules.setdefault("multipart", _mp_stub)
 sys.modules.setdefault("multipart.multipart", _mp_stub.multipart)  # type: ignore[attr-defined]
 
 # When conftest.py stubs `models.schemas` as a MagicMock, FastAPI cannot build
-# response models from MagicMock schema types at router-decoration time
+# request/response fields from MagicMock schema types at router-decoration time
 # (`Invalid args for response field`) and api.code_sync fails to import. Swap a
-# benign `dict` in for every schema name api/code_sync.py references as a
-# response_model, before importing it. No-op when models.schemas is the real
+# benign `dict` in for every schema name api/code_sync.py imports from
+# models.schemas, before importing it. No-op when models.schemas is the real
 # module (#10023).
-_SCHEMA_NAMES = (
-    "CodeSyncRefreshResponse",
-    "CodeSyncStatusResponse",
-    "CodeVersionNotification",
-    "CodeVersionNotificationResponse",
-    "DriftResolveRequest",
-    "DriftResolveResponse",
-    "FileDriftReport",
-    "FleetSyncJobStatus",
-    "FleetSyncNodeStatus",
-    "FleetSyncRequest",
-    "FleetSyncResponse",
-    "NodeSyncRequest",
-    "NodeSyncResponse",
-    "PendingNodeResponse",
-    "PendingNodesResponse",
-    "ScheduleCreate",
-    "ScheduleResponse",
-    "ScheduleRunResponse",
-    "ScheduleUpdate",
+#
+# The names are read straight from api/code_sync.py's `from models.schemas import
+# (...)` block rather than hand-listed: a static list silently rots when a new
+# schema lands (this is exactly how #11461 broke — the async drift job's
+# DriftResolveJobResponse / ComponentSyncJobStatus were added without updating
+# the list, so collection aborted). Deriving from the import block covers every
+# schema code_sync annotates — request bodies AND response models — automatically.
+import ast  # noqa: E402
+
+_code_sync_src = (_BACKEND_ROOT / "api" / "code_sync.py").read_text(encoding="utf-8")
+_SCHEMA_NAMES = tuple(
+    sorted(
+        alias.name
+        for node in ast.walk(ast.parse(_code_sync_src))
+        if isinstance(node, ast.ImportFrom) and node.module == "models.schemas"
+        for alias in node.names
+    )
 )
 _schemas_stub = sys.modules.get("models.schemas")
 if isinstance(_schemas_stub, MagicMock):
