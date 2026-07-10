@@ -104778,6 +104778,8 @@ export interface operations {
             query?: {
                 /** @description Permanently delete user */
                 hard_delete?: boolean;
+                /** @description Reassign the deleted user's memory records to this user */
+                reassign_to?: string | null;
             };
             header?: never;
             path: {
