@@ -286,8 +286,33 @@ const { categoryFactCounts, refreshCategoryFacts } = useKnowledgeStats()
 
 // State
 const recentActivities = ref<Activity[]>([])
-const vectorStats = ref<VectorStats | null>(null)
 const errorMessage = ref<string>('')
+
+// Vector stats for the category-distribution chart — computed over store.stats
+// so it stays in sync no matter which caller (shell loadVectorHealth or local
+// refreshStats) lands last (#11558)
+const vectorStats = computed<VectorStats | null>(() => {
+  const storeStats = store.stats
+  if (!storeStats || !storeStats.total_facts) return null
+  return {
+    total_facts: storeStats.total_facts || 0,
+    total_documents: storeStats.total_documents || 0,
+    total_vectors: storeStats.total_vectors || 0,
+    indexed_documents: storeStats.total_documents || 0,
+    db_size: storeStats.db_size || 0,
+    status: (storeStats.status as 'online' | 'offline' | 'unknown') || 'offline',
+    rag_available: storeStats.rag_available || false,
+    initialized: storeStats.initialized || false,
+    llama_index_configured: storeStats.initialized || false,
+    index_available: storeStats.initialized || false,
+    redis_db: storeStats.redis_db ? parseInt(storeStats.redis_db) : 0,
+    index_name: storeStats.index_name || 'unknown',
+    last_updated: storeStats.last_updated || undefined,
+    categories: Array.isArray(storeStats.categories)
+      ? (storeStats.categories as unknown as { name?: string }[]).map((c) => c.name || c) as string[]
+      : []
+  }
+})
 
 // Feed filter: 'all' | 'created' | 'updated'
 type FeedFilter = 'all' | 'created' | 'updated'
@@ -409,29 +434,6 @@ const refreshStats = async () => {
     }
 
     generateRecentActivities()
-
-    // Populate vectorStats from the store for the category distribution chart
-    const storeStats = store.stats
-    if (storeStats) {
-      vectorStats.value = {
-        total_facts: storeStats.total_facts || 0,
-        total_documents: storeStats.total_documents || 0,
-        total_vectors: storeStats.total_vectors || 0,
-        indexed_documents: storeStats.total_documents || 0,
-        db_size: storeStats.db_size || 0,
-        status: (storeStats.status as 'online' | 'offline' | 'unknown') || 'offline',
-        rag_available: storeStats.rag_available || false,
-        initialized: storeStats.initialized || false,
-        llama_index_configured: storeStats.initialized || false,
-        index_available: storeStats.initialized || false,
-        redis_db: storeStats.redis_db ? parseInt(storeStats.redis_db) : 0,
-        index_name: storeStats.index_name || 'unknown',
-        last_updated: storeStats.last_updated || undefined,
-        categories: Array.isArray(storeStats.categories)
-          ? (storeStats.categories as unknown as { name?: string }[]).map((c) => c.name || c) as string[]
-          : []
-      }
-    }
   } catch (error) {
     logger.error('Failed to refresh stats:', error)
     const errorMsg = error instanceof Error ? error.message : String(error)

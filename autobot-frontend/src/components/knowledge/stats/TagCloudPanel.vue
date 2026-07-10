@@ -28,7 +28,8 @@
  * Tag Cloud Panel Component
  *
  * Displays a cloud of popular tags with varying sizes.
- * Extracted from KnowledgeHealth.vue for better maintainability.
+ * Extracted from the former KnowledgeStats.vue (#184); currently unmounted —
+ * see orphaned-subpanels discovery issue.
  *
  * Issue #184: Split oversized Vue components
  */

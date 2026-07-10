@@ -12,7 +12,7 @@
 
     <!-- Cleanup Statistics -->
     <div class="tools-section">
-      <CleanupStatistics />
+      <CleanupStatistics @cleanup-complete="emit('refresh-strip')" />
     </div>
 
     <!-- Backup Manager -->
@@ -65,6 +65,12 @@ import ManPageManager from '@/components/manpage/ManPageManager.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('KnowledgeHealthTools')
+
+// Re-emit CleanupStatistics' cleanup-complete so the shell can refresh the
+// health dashboard strip (restores the old KnowledgeMaintenance seam, #11558)
+const emit = defineEmits<{
+  (e: 'refresh-strip'): void
+}>()
 
 const { t } = useI18n()
 const { confirm } = useConfirmDialog()

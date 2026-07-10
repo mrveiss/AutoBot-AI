@@ -204,9 +204,11 @@
     <div ref="tablistRef" class="health-tabs" role="tablist" :aria-label="$t('knowledge.views.healthAriaLabel')">
       <button
         v-for="tab in tabs"
+        :id="`tab-${tab.id}`"
         :key="tab.id"
         role="tab"
         :aria-selected="activeTab === tab.id"
+        :aria-controls="`tabpanel-${tab.id}`"
         :tabindex="activeTab === tab.id ? 0 : -1"
         :class="['health-tab-btn', { active: activeTab === tab.id }]"
         @click="activeTab = tab.id"
@@ -224,9 +226,30 @@
 
     <!-- Tab Bodies (v-if for lazy mount — each tab's onMounted fires on first open) -->
     <div class="health-tab-content">
-      <KnowledgeHealthAnalytics v-if="activeTab === 'analytics'" />
-      <KnowledgeVerificationQueue v-if="activeTab === 'verification'" />
-      <KnowledgeHealthTools v-if="activeTab === 'tools'" />
+      <div
+        v-if="activeTab === 'analytics'"
+        id="tabpanel-analytics"
+        role="tabpanel"
+        aria-labelledby="tab-analytics"
+      >
+        <KnowledgeHealthAnalytics />
+      </div>
+      <div
+        v-if="activeTab === 'verification'"
+        id="tabpanel-verification"
+        role="tabpanel"
+        aria-labelledby="tab-verification"
+      >
+        <KnowledgeVerificationQueue />
+      </div>
+      <div
+        v-if="activeTab === 'tools'"
+        id="tabpanel-tools"
+        role="tabpanel"
+        aria-labelledby="tab-tools"
+      >
+        <KnowledgeHealthTools @refresh-strip="loadHealthDashboard" />
+      </div>
     </div>
   </div>
 </template>
@@ -279,11 +302,17 @@ const pendingVerificationsTotal = computed(() => store.pendingVerificationsTotal
 // State
 const isRefreshing = ref(false)
 const vectorStats = ref<VectorStats | null>(null)
-const isLoadingVectorStats = ref(false)
 
-// Tab state
+// Tab state — initialized from the route at setup time so deep links
+// (?tab=verification|tools) mount the right tab on first render (#11558)
 type TabId = 'analytics' | 'verification' | 'tools'
-const activeTab = ref<TabId>('analytics')
+const VALID_TAB_IDS: TabId[] = ['analytics', 'verification', 'tools']
+const routeTab = route.query.tab
+const initialTab: TabId =
+  typeof routeTab === 'string' && (VALID_TAB_IDS as string[]).includes(routeTab)
+    ? (routeTab as TabId)
+    : 'analytics'
+const activeTab = ref<TabId>(initialTab)
 
 const tabs: Array<{ id: TabId; labelKey: string; icon: IconName }> = [
   { id: 'analytics', labelKey: 'knowledge.health.tabAnalytics', icon: 'chart-bar' },
@@ -301,8 +330,6 @@ const needsVectorization = computed(() => {
 
 // Methods
 const loadVectorHealth = async () => {
-  isLoadingVectorStats.value = true
-
   try {
     await store.refreshStats()
 
@@ -346,8 +373,6 @@ const loadVectorHealth = async () => {
         index_name: 'unknown'
       }
     }
-  } finally {
-    isLoadingVectorStats.value = false
   }
 }
 
@@ -392,7 +417,7 @@ const getEmbeddingModelDisplay = (): string => {
 }
 
 const handleTabKeydown = async (event: KeyboardEvent, currentId: TabId) => {
-  const tabIds: TabId[] = ['analytics', 'verification', 'tools']
+  const tabIds = VALID_TAB_IDS
   const currentIndex = tabIds.indexOf(currentId)
   let newIndex: number | null = null
 
@@ -402,6 +427,12 @@ const handleTabKeydown = async (event: KeyboardEvent, currentId: TabId) => {
   } else if (event.key === 'ArrowRight') {
     event.preventDefault()
     newIndex = (currentIndex + 1) % tabIds.length
+  } else if (event.key === 'Home') {
+    event.preventDefault()
+    newIndex = 0
+  } else if (event.key === 'End') {
+    event.preventDefault()
+    newIndex = tabIds.length - 1
   }
 
   if (newIndex !== null) {
@@ -414,19 +445,15 @@ const handleTabKeydown = async (event: KeyboardEvent, currentId: TabId) => {
 
 // Lifecycle
 onMounted(async () => {
-  const t = route.query.tab
-  if (typeof t === 'string' && (['analytics', 'verification', 'tools'] as string[]).includes(t)) {
-    activeTab.value = t as TabId
-  }
-
   loadHealthDashboard()
   loadVectorHealth()
 
-  // Prefetch pending-verification total so the badge is populated on page load
-  // (KnowledgeVerificationQueue overwrites this with full data when its tab opens)
+  // Prefetch pending-verification total so the badge is populated on page load.
+  // Total-only setter: must not clobber the list when a ?tab=verification deep
+  // link mounted KnowledgeVerificationQueue first and it already loaded page 1.
   try {
     const data = await knowledgeRepository.getPendingVerifications(1, 1)
-    store.setPendingVerifications(data.sources || [], data.total || 0)
+    store.setPendingVerificationsTotal(data.total || 0)
   } catch (error) {
     logger.error('Failed to prefetch pending verification count: %s', error)
   }
