@@ -28,8 +28,8 @@ from autobot_shared.plugin_sdk import (
     PluginRegistry,
     TrustTier,
 )
-from autobot_shared.plugin_sdk.loader import validate_plugin_config
 from autobot_shared.plugin_sdk.base import PluginLoadError
+from autobot_shared.plugin_sdk.loader import validate_plugin_config
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from plugin_install import install_from_git, install_from_zip
