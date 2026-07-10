@@ -63,6 +63,7 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
+from services.deploy_artifacts import rsync_artifact_excludes
 from services.drift_checker import (
     ALLOWED_COMPONENTS,
     build_drift_report,
@@ -233,7 +234,7 @@ async def _run_component_resolve_job(job_id: str, component: str) -> None:
         excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
         excludes = excludes_map.get(
             component,
-            ["__pycache__", "*.pyc", ".git", "node_modules", "dist", "venv", "*.log"],
+            [],  # artifacts excluded universally at the rsync chokepoint (#11459)
         )
 
         logger.info(
@@ -669,7 +670,7 @@ async def resolve_drift(
     excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
     excludes = excludes_map.get(
         request.component,
-        ["__pycache__", "*.pyc", ".git", "node_modules", "dist", "venv", "*.log"],
+        [],  # artifacts excluded universally at the rsync chokepoint (#11459)
     )
 
     logger.info(
@@ -907,19 +908,16 @@ async def get_pending_nodes(
     )
 
 
-_SLM_COMPONENTS = [
-    (
-        "autobot-slm-backend",
-        ["venv", "__pycache__", "*.pyc", ".git", "*.log"],
-    ),
-    (
-        "autobot-slm-frontend",
-        ["node_modules", "dist", ".git"],
-    ),
-    (
-        "autobot_shared",
-        ["__pycache__", "*.pyc", ".git"],
-    ),
+# Components synced by the SLM code-sync flow. Per-component exclude lists are
+# empty: every build/deploy artifact (__pycache__, *.pyc, .git, node_modules,
+# dist, build, venv/.venv, *.egg-info, *.log, …) is now excluded universally at
+# the rsync chokepoint from the canonical vocabulary (#11459,
+# services/deploy_artifacts.py). A component only needs an entry here if it must
+# exclude something that is NOT a standard artifact.
+_SLM_COMPONENTS: List[Tuple[str, List[str]]] = [
+    ("autobot-slm-backend", []),
+    ("autobot-slm-frontend", []),
+    ("autobot_shared", []),
 ]
 
 
@@ -933,8 +931,17 @@ _PROTECTED_EXCLUDES: List[str] = [".env", "data"]
 
 
 def _rsync_exclude_args(excludes: List[str]) -> List[str]:
-    """Build --exclude args from caller excludes plus protected paths (#9970)."""
-    merged = list(dict.fromkeys([*excludes, *_PROTECTED_EXCLUDES]))
+    """Build --exclude args from caller excludes, canonical build/deploy
+    artifacts, and protected runtime paths.
+
+    Canonical artifact excludes (#11459) are injected here — the single rsync
+    chokepoint — so every sync ignores exactly what the drift checker skips
+    (shared source: services/deploy_artifacts.py). This keeps rsync and drift in
+    lockstep: previously ``*.egg-info`` etc. were drift-skipped (#11440) but
+    still deleted-and-resynced, churning the deployed tree. Protected paths
+    (#9970) must survive every delete-style sync.
+    """
+    merged = list(dict.fromkeys([*excludes, *rsync_artifact_excludes(), *_PROTECTED_EXCLUDES]))
     return [f"--exclude={exc}" for exc in merged]
 
 
