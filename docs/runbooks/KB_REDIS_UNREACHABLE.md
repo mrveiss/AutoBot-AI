@@ -20,7 +20,7 @@ frontend shows an error banner.
 
 | Signal | Details |
 |--------|---------|
-| Frontend error banner | `/knowledge/categories` shows "Knowledge base is unreachable" |
+| Frontend error banner | `/knowledge/browser` shows "Knowledge base is unreachable" |
 | Empty knowledge search | RAG queries return zero results; category counts show 0 |
 | Prometheus counter | `autobot_kb_degradation_total{reason="redis_down"}` rate > 0 |
 | Backend log line | `KB categories returning kb_connected=false - Redis unreachable` at WARNING level |

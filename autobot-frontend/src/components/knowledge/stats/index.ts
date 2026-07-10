@@ -5,8 +5,9 @@
 /**
  * Knowledge Stats Sub-Components
  *
- * Barrel exports for KnowledgeStats sub-components.
- * Extracted from KnowledgeStats.vue for better maintainability.
+ * Barrel exports for knowledge stats sub-components (stats panels).
+ * Extracted from the former KnowledgeStats.vue (#184); currently unmounted —
+ * see orphaned-subpanels discovery issue.
  *
  * Issue #184: Split oversized Vue components
  */

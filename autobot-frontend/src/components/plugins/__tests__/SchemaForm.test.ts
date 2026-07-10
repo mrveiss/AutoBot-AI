@@ -6,8 +6,8 @@
  * SchemaForm component tests
  * Issue #11522 - schema-driven config form
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, fireEvent, screen } from '@testing-library/vue'
+import { describe, it, expect, vi } from 'vitest'
+import { render, fireEvent } from '@testing-library/vue'
 import { createI18n } from 'vue-i18n'
 import SchemaForm from '../SchemaForm.vue'
 
@@ -45,7 +45,6 @@ vi.mock('@/utils/debugUtils', () => ({
 }))
 
 function mountSchemaForm(schema: object, modelValue: Record<string, unknown> = {}) {
-  const modelRef = { value: modelValue }
   const result = render(SchemaForm, {
     props: {
       schema,
@@ -88,7 +87,6 @@ describe('SchemaForm', () => {
     })
 
     it('emits update:modelValue on text input change', async () => {
-      const handlers: Array<Record<string, unknown>> = []
       const { getByRole, emitted } = render(SchemaForm, {
         props: {
           schema: {

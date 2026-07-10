@@ -2926,7 +2926,17 @@
       "watchFolders": "Watch Folders",
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "براؤزر",
-      "browserAriaLabel": "علمی دستاویزات کو دیکھیں، تلاش کیجیں اور ترمیم کیجیں"
+      "browserAriaLabel": "علمی دستاویزات کو دیکھیں، تلاش کیجیں اور ترمیم کیجیں",
+      "health": "صحت",
+      "healthAriaLabel": "علمی صحت، تجزیات، تصدیق اور اوزار"
+    },
+    "health": {
+      "tabAnalytics": "تجزیات",
+      "tabVerification": "تصدیق",
+      "tabTools": "اوزار",
+      "feedAll": "سب",
+      "feedCreated": "تخلیق شدہ",
+      "feedUpdated": "تازہ کاری شدہ"
     },
     "upload": {
       "selectCategory": "Select category...",

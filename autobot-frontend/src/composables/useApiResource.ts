@@ -13,16 +13,16 @@
  *
  * Typical use with the typed ApiClient:
  *
- *   const stats = useApiResource<KnowledgeStats>(() =>
- *     apiClient.get<KnowledgeStats>(`${getApiBase()}/knowledge_base/stats`)
+ *   const stats = useApiResource<KnowledgeStatsBasic>(() =>
+ *     apiClient.get<KnowledgeStatsBasic>(`${getApiBase()}/knowledge_base/stats/basic`)
  *   )
  *   onMounted(stats.refresh)
  *   // stats.data.value, stats.error.value, stats.isLoading.value are reactive
  *
  * Fetchers that want abort support accept an AbortSignal:
  *
- *   const stats = useApiResource<KnowledgeStats>((signal) =>
- *     apiClient.get<KnowledgeStats>(`${getApiBase()}/knowledge_base/stats`, { signal })
+ *   const stats = useApiResource<KnowledgeStatsBasic>((signal) =>
+ *     apiClient.get<KnowledgeStatsBasic>(`${getApiBase()}/knowledge_base/stats/basic`, { signal })
  *   )
  *
  * Prior art in this repo: `composables/analytics/useAnalyticsEndpoint.ts`

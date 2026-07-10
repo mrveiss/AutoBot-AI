@@ -71,7 +71,7 @@ a few seconds for small files and up to a minute for larger ones.
 
 - **Tags and categories** make it easier to find documents later. Take a
   moment to add them when uploading.
-- **Verification queue** (`/knowledge/verification`) lets you review and
+- **Verification queue** (`/knowledge/health?tab=verification`) lets you review and
   confirm the accuracy of imported content before it is used in answers.
 - **Connectors** (`/knowledge/connectors`) allow you to import data from
   external sources automatically.

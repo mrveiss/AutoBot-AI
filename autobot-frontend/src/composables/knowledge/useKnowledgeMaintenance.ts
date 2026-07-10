@@ -6,7 +6,7 @@
 /**
  * useKnowledgeMaintenance Composable
  *
- * Extracts inline fetching from KnowledgeMaintenance.vue (#6053).
+ * Extracts inline fetching from KnowledgeHealth.vue (#6053).
  * GET /knowledge-maintenance/health/dashboard → useFetchEndpoint (Pattern A).
  */
 
