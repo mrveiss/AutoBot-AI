@@ -157,8 +157,6 @@ class TestNoMethodLevelBreaker:
         providers_dir = Path(__file__).parent / "providers"
         pattern = re.compile(r"@circuit_breaker_async[\s\S]{0,300}?async def _chat_completion_impl")
         offenders = [
-            path.name
-            for path in sorted(providers_dir.glob("*.py"))
-            if pattern.search(path.read_text(encoding="utf-8"))
+            path.name for path in sorted(providers_dir.glob("*.py")) if pattern.search(path.read_text(encoding="utf-8"))
         ]
         assert not offenders, f"method-level breaker on _chat_completion_impl in: {offenders}"
