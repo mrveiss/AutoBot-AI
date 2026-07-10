@@ -1091,6 +1091,9 @@
     # Note: a co-located SLM manager is in both slm_server (Play 1) and
     # infrastructure (Play 2, #11436), so it runs this idempotent role twice
     # per update (harmless — converges to the same state, one extra restart).
+    # No flush_handlers here (unlike Play 1): Play 2 reaches its play end so
+    # handlers flush normally; Play 1 needs the early flush because the backend
+    # self-restart kills the run before play end (#11492).
     - name: "[PLAY 2] SLM Agent | Redeploy agent (code + secrets + restart) (#11480)"
       when: slm_node_id is defined
       tags: [slm-agent]
