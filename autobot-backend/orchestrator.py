@@ -47,10 +47,10 @@ from memory import LongTermMemoryManager
 from orchestration import (
     FALLBACK_TIERS,
     AgentCapability,
+    AgentCapabilityRegistry,
     AgentInteraction,
     AgentPerformance,
     AgentProfile,
-    AgentCapabilityRegistry,
     AgentRouter,
     AgentTask,
     CausalErrorRecovery,
