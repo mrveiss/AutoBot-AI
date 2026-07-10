@@ -135,8 +135,6 @@ class TestFallbackAgentsFromRegistry:
 # registry contract inline to stay isolated from the import chain.
 # ---------------------------------------------------------------------------
 
-import pytest  # noqa: E402
-
 
 class TestAdapterRegistryContract:
     """Verify the AdapterRegistry contract that _init_llm_adapters relies on (#10526).
