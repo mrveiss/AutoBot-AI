@@ -67,6 +67,9 @@ class LLCWorkItem(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     acceptance_criteria: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    # GH#10852: per-criterion completion, booleans parallel-indexed to
+    # acceptance_criteria. NULL means no completion has been tracked yet.
+    acceptance_criteria_done: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
     labels: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=sa.text("'[]'::jsonb"))
 
     # GitHub PR linking (GH#9625)
