@@ -10,14 +10,37 @@ ansible/inventory/localhost.yml, and autobot_shared/* files) are excluded from
 the drift report even when their checksums differ between source and deployed.
 """
 
+import importlib.util
+import sys
 import tempfile
+import types
 from pathlib import Path
 
+_services_dir = Path(__file__).parent.parent.parent / "services"
+
+
+def _load_service_module(name: str, filename: str):
+    """Load a services/*.py module standalone, bypassing services/__init__.py."""
+    spec = importlib.util.spec_from_file_location(name, _services_dir / filename)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# drift_checker imports ``services.deploy_artifacts`` (canonical artifact
+# vocabulary, #11459) and ``services.git_tracker`` at module scope. Register a
+# minimal ``services`` package whose __path__ is the real directory so those
+# submodule imports resolve from disk WITHOUT executing the heavy
+# services/__init__.py chain (fastapi/redis/etc.).
+if "services" not in sys.modules:
+    _services_pkg = types.ModuleType("services")
+    _services_pkg.__path__ = [str(_services_dir)]  # type: ignore[attr-defined]
+    sys.modules["services"] = _services_pkg
+if "services.deploy_artifacts" not in sys.modules:
+    sys.modules["services.deploy_artifacts"] = _load_service_module("services.deploy_artifacts", "deploy_artifacts.py")
+
 # Load drift_checker without triggering services/__init__.py import chain.
-_mod_path = Path(__file__).parent.parent.parent / "services" / "drift_checker.py"
-_spec = __import__("importlib.util").util.spec_from_file_location("drift_checker", _mod_path)
-drift_checker = __import__("importlib.util").util.module_from_spec(_spec)
-_spec.loader.exec_module(drift_checker)
+drift_checker = _load_service_module("drift_checker", "drift_checker.py")
 
 _is_expected_drift = drift_checker._is_expected_drift
 compute_drift = drift_checker.compute_drift

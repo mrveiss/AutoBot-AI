@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
 from services.git_tracker import DEFAULT_REPO_PATH
 
 logger = logging.getLogger(__name__)
@@ -76,26 +77,13 @@ ALLOWED_COMPONENTS = frozenset(
     }
 )
 
-# Directory names to skip entirely during traversal.
-_SKIP_DIRS = {
-    "__pycache__",
-    ".git",
-    "venv",
-    ".venv",
-    "node_modules",
-    ".mypy_cache",
-    ".ruff_cache",
-    "dist",
-    "build",
-}
-
-# Directory-name SUFFIXES to skip — variable-prefixed build artifacts (e.g.
-# ``<pkg>.egg-info`` created by ``pip install`` in the deployed dir) that the
-# exact-match ``_SKIP_DIRS`` can't catch. Their contents (SOURCES.txt,
-# requires.txt, top_level.txt, dependency_links.txt) are deployment-generated and
-# never present in the git source tree, so they were reported as permanent false
-# drift (#11440), training operators to ignore the drift signal.
-_SKIP_DIR_SUFFIXES: tuple[str, ...] = (".egg-info",)
+# Directory names / suffixes to skip entirely during traversal. Sourced from the
+# canonical deploy-artifact vocabulary (#11459) so the drift walk and the
+# code_sync rsync excludes never disagree about what is an artifact — the
+# divergence that let ``*.egg-info`` be drift-skipped (#11440) yet still
+# rsync-churned. See services/deploy_artifacts.py for the shared definitions.
+_SKIP_DIRS = set(ARTIFACT_DIRS)
+_SKIP_DIR_SUFFIXES: tuple[str, ...] = ARTIFACT_DIR_SUFFIXES
 
 # Paths that are deployment-generated and never present in the git source tree.
 # Exact-match paths and prefix patterns are checked against the POSIX relative
