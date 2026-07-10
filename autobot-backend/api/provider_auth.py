@@ -12,7 +12,8 @@ vault (``services.envelope_secrets_service``).
 
 Routes
 ------
-POST /api/llm-auth/oauth/callback          — exchange authorization code + persist tokens
+POST /api/llm-auth/oauth/initiate          — mint PKCE+state, return provider authorize URL
+POST /api/llm-auth/oauth/callback          — state-bound single-use code exchange + persist tokens
 POST /api/llm-auth/device/initiate         — begin device-code flow
 POST /api/llm-auth/device/poll             — poll for device-code approval + persist
 GET  /api/llm-auth/status/{provider_name}  — check whether a provider has a stored token
@@ -21,16 +22,20 @@ DELETE /api/llm-auth/{provider_name}       — revoke / delete stored tokens
 
 from __future__ import annotations
 
+import json
+import os
 import time
-from typing import Any
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.knowledge_connector_oauth import _redis_getdel, _redis_setex
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_client import get_redis_client
 from autobot_shared.url_safety import get_oauth_allowed_hosts, require_allowlisted_https
 from llm_shared.provider_auth import (
     _vault_read,
@@ -72,6 +77,15 @@ router = APIRouter(prefix="/llm-auth", tags=["llm-auth"])
 # all authenticated users can use the shared provider connection.
 _SYSTEM_VAULT = "system"
 
+# OAuth authorize state is single-use and short-lived — a security window, not a
+# cache (#11297). Overridable via env; keyed to the initiating admin in Redis.
+_OAUTH_STATE_TTL_SECONDS = int(os.getenv("AUTOBOT_PROVIDER_OAUTH_STATE_TTL_SECONDS", "600"))
+_OAUTH_STATE_PREFIX = "llm-auth:oauth:state:"
+
+
+def _state_key(state: str) -> str:
+    return "%s%s" % (_OAUTH_STATE_PREFIX, state)
+
 
 # ---------------------------------------------------------------------------
 # Schemas
@@ -79,13 +93,33 @@ _SYSTEM_VAULT = "system"
 
 
 class OAuthInitiateRequest(BaseModel):
+    """Body for POST /oauth/initiate — starts a server-driven PKCE auth-code flow."""
+
     provider_name: str
+    authorize_url: str
     token_url: str
     client_id: str
-    client_secret: str
+    redirect_uri: str
+    scopes: Optional[List[str]] = None
+
+
+class OAuthAuthorizeResponse(BaseModel):
+    """Return of /oauth/initiate — the provider URL to redirect to + the CSRF state."""
+
+    authorize_url: str
+    state: str
+
+
+class OAuthCallbackRequest(BaseModel):
+    """Body for POST /oauth/callback — bound to a server-minted, single-use state.
+
+    The verifier / token_url / client_id are taken from the stored state, never
+    from the client, so a lured admin cannot inject an attacker's credentials.
+    """
+
+    state: str
     code: str
     redirect_uri: str
-    code_verifier: str
 
 
 class OAuthInitiateResponse(BaseModel):
@@ -140,62 +174,135 @@ def _current_user_id(user: Any) -> str:
 # ---------------------------------------------------------------------------
 
 
+@router.post("/oauth/initiate", response_model=OAuthAuthorizeResponse)
+async def oauth_initiate(
+    req: OAuthInitiateRequest,
+    user: Any = Depends(get_current_user),
+    _admin: bool = Depends(check_admin_permission),
+) -> OAuthAuthorizeResponse:
+    """Begin a provider auth-code + PKCE flow; return the authorize URL + state.
+
+    The server mints the PKCE verifier/challenge and an unguessable ``state``,
+    stashes them in Redis (short TTL, keyed to the initiating admin), and returns
+    the provider authorize URL. The client never supplies the verifier — the
+    callback takes it from the stored state (#11297). Requires admin: the stored
+    credential is system-wide.
+    """
+    from knowledge.connectors.oauth_flow import (  # noqa: PLC0415
+        OAuthProvider,
+        build_authorize_url,
+        generate_pkce,
+        generate_state,
+    )
+
+    # SSRF-validate BOTH outbound URLs before we store or return them.
+    _validate_outbound_url(req.authorize_url)
+    _validate_outbound_url(req.token_url)
+
+    redis = get_redis_client(database="main")
+    if redis is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OAuth state store unavailable")
+
+    verifier, challenge = generate_pkce()
+    state = generate_state()
+    scopes = tuple(req.scopes) if req.scopes else None
+    provider_cfg = OAuthProvider(
+        name=req.provider_name,
+        authorize_url=req.authorize_url,
+        token_url=req.token_url,
+        client_id_setting="",
+        client_secret_setting="",  # nosec B106 - setting NAME (empty), not a secret value
+        default_scopes=scopes or (),
+    )
+
+    payload = {
+        "verifier": verifier,
+        "admin_id": _current_user_id(user),
+        "provider_name": req.provider_name,
+        "token_url": req.token_url,
+        "client_id": req.client_id,
+    }
+    await _redis_setex(redis, _state_key(state), _OAUTH_STATE_TTL_SECONDS, json.dumps(payload, ensure_ascii=False))
+
+    authorize_url = build_authorize_url(provider_cfg, req.client_id, req.redirect_uri, state, challenge, scopes)
+    logger.info("OAuth authorize initiated for provider %s", req.provider_name)
+    return OAuthAuthorizeResponse(authorize_url=authorize_url, state=state)
+
+
 @router.post("/oauth/callback", response_model=OAuthInitiateResponse)
 async def oauth_callback(
-    req: OAuthInitiateRequest,
+    req: OAuthCallbackRequest,
     session: AsyncSession = Depends(get_db_session),
     user: Any = Depends(get_current_user),
     _admin: bool = Depends(check_admin_permission),
 ) -> OAuthInitiateResponse:
     """Exchange an OAuth authorization code for tokens and persist to vault.
 
-    The frontend redirects to this endpoint after the user completes the
-    provider sign-in page.  The backend performs the PKCE code exchange and
-    stores the resulting token pair in the system vault.
+    Authorized by a server-minted, **single-use** ``state`` (from /oauth/initiate):
+    the state is atomically consumed (GETDEL), must belong to the current admin,
+    and supplies the verifier / token_url / client_id — none of which the client
+    provides. This closes the CSRF / code-injection hole where a lured admin could
+    bind an attacker's account as the shared system credential (#11297).
 
     Requires admin — stored credential is system-wide (shared by all users).
     """
     from knowledge.connectors.oauth_flow import OAuthProvider, exchange_code  # noqa: PLC0415
 
-    # Validate outbound URL before any HTTP call — prevents SSRF via token_url.
-    _validate_outbound_url(req.token_url)
+    redis = get_redis_client(database="main")
+    if redis is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OAuth state store unavailable")
 
-    # Build a minimal OAuthProvider for the exchange helper.
+    # Single-use: atomically fetch-and-delete. Missing/expired/replayed → 400.
+    raw = await _redis_getdel(redis, _state_key(req.state))
+    if raw is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid or expired OAuth state")
+    stored = json.loads(raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else raw)
+
+    # Bind the completing admin to the initiating admin (defends against a lured admin).
+    if stored.get("admin_id") != _current_user_id(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="OAuth state does not belong to the current admin"
+        )
+
+    token_url = stored["token_url"]
+    _validate_outbound_url(token_url)  # defensive re-check before the outbound call
+
     provider_cfg = OAuthProvider(
-        name=req.provider_name,
+        name=stored["provider_name"],
         authorize_url="",
-        token_url=req.token_url,
+        token_url=token_url,
         client_id_setting="",
         client_secret_setting="",  # nosec B106 - setting NAME (empty), not a secret value
     )
 
     try:
+        # Public-client PKCE: the verifier (server-stored) replaces a client secret.
         resp = await exchange_code(
             provider_cfg,
-            req.client_id,
-            req.client_secret,
+            stored["client_id"],
+            "",  # nosec B106 - PKCE public client: no client_secret
             req.code,
             req.redirect_uri,
-            req.code_verifier,
+            stored["verifier"],
         )
     except RuntimeError as exc:
-        # Log provider name only — never log code, client_secret, or token values.
-        logger.warning("OAuth code exchange failed for provider %s", req.provider_name)
+        # Log provider name only — never log code or token values.
+        logger.warning("OAuth code exchange failed for provider %s", stored.get("provider_name"))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     token_data = build_token_data(resp, created_by=_current_user_id(user))
     await _vault_write(
         session,
-        provider_name=req.provider_name,
+        provider_name=stored["provider_name"],
         subject="global",
         owner_vault_str=_SYSTEM_VAULT,
         token_data=token_data,
         created_by_id=_current_user_id(user),
     )
     await session.commit()
-    logger.info("OAuth token stored for provider %s", req.provider_name)
+    logger.info("OAuth token stored for provider %s", stored.get("provider_name"))
     return OAuthInitiateResponse(
-        provider_name=req.provider_name,
+        provider_name=stored["provider_name"],
         stored=True,
         expires_at=token_data.get("expires_at"),
     )
