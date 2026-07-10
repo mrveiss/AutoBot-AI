@@ -11,9 +11,12 @@ the four hand-written branches the table replaced (browser #1368, web_search
 #2306, web research #7509, execute_command).
 """
 
+from types import SimpleNamespace
+
 import pytest
 
 from chat_workflow.tool_handler import (
+    _BUILTIN_TOOL_SCHEMAS,
     _UNIFORM_BUILTIN_TOOLS,
     BROWSER_TOOL_NAMES,
     WEB_RESEARCH_TOOL_NAMES,
@@ -40,11 +43,16 @@ def _mixin() -> ToolHandlerMixin:
 
 
 def _recording_handler(calls: list, label: str):
-    async def handler(*args, **kwargs):
+    def factory(*args, **kwargs):
+        # Record at call time (async-generator bodies only run when drained).
         calls.append((label, args))
-        yield f"{label}-msg"
 
-    return handler
+        async def gen():
+            yield f"{label}-msg"
+
+        return gen()
+
+    return factory
 
 
 async def _dispatch(mixin: ToolHandlerMixin, tool_call: dict, execution_results: list) -> list:
@@ -67,6 +75,65 @@ def test_uniform_set_is_union_of_builtin_families() -> None:
     # respond/delegate are non-uniform (special return shapes) and must stay out.
     assert "respond" not in _UNIFORM_BUILTIN_TOOLS
     assert "delegate" not in _UNIFORM_BUILTIN_TOOLS
+
+
+def test_every_uniform_tool_has_a_schema() -> None:
+    """A schema-less member would silently skip Issue #4529 validation."""
+    missing = _UNIFORM_BUILTIN_TOOLS - set(_BUILTIN_TOOL_SCHEMAS)
+    assert not missing, f"uniform builtins without schemas: {sorted(missing)}"
+
+
+_ROUTE_EXPECTATIONS = [
+    *[(name, "_handle_browser_tool") for name in sorted(BROWSER_TOOL_NAMES)],
+    *[(name, "_handle_web_research_tool") for name in sorted(WEB_RESEARCH_TOOL_NAMES)],
+    ("web_search", "_handle_web_search_tool"),
+    ("execute_command", "_dispatch_execute_command"),
+]
+
+
+@pytest.mark.parametrize("tool_name,handler_attr", _ROUTE_EXPECTATIONS)
+def test_route_table_covers_every_member(tool_name: str, handler_attr: str) -> None:
+    """Every union member maps to its family handler — no silent fallback."""
+    mixin, calls = _mixin(), []
+    setattr(mixin, handler_attr, _recording_handler(calls, handler_attr))
+
+    generator = mixin._builtin_route(
+        tool_name, {"name": tool_name, "params": {}}, "sess-1", "term-1", "ep", "model", [], []
+    )
+
+    assert generator is not None
+    (label, _args), = calls  # handler factory invoked exactly once
+    assert label == handler_attr
+
+
+def test_builtin_route_raises_on_unrouted_member() -> None:
+    """Defensive tail: an unrouted name fails loudly, never execute_command."""
+    mixin = _mixin()
+    with pytest.raises(ValueError, match="no route for 'not_a_builtin'"):
+        mixin._builtin_route("not_a_builtin", {"name": "not_a_builtin"}, "s", "t", "e", "m", [], [])
+
+
+@pytest.mark.asyncio
+async def test_uniform_gate_resets_invalid_call_counter() -> None:
+    """The shared gate resets ctx.consecutive_invalid_tool_calls — parity with
+    the four replaced branches."""
+    mixin, calls = _mixin(), []
+    mixin._handle_web_search_tool = _recording_handler(calls, "web_search")
+    ctx = SimpleNamespace(consecutive_invalid_tool_calls=2)
+
+    messages = [
+        msg
+        async for msg in mixin._dispatch_tool_call(
+            {"name": "web_search", "params": {"query": "q"}},
+            execution_results=[],
+            additional_response_parts=[],
+            ctx=ctx,
+            **_DISPATCH_ARGS,
+        )
+    ]
+
+    assert messages == ["web_search-msg"]
+    assert ctx.consecutive_invalid_tool_calls == 0
 
 
 @pytest.mark.asyncio

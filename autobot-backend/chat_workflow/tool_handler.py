@@ -16,7 +16,7 @@ import asyncio
 import html
 import json
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.logging_manager import get_logger
@@ -2423,20 +2423,8 @@ class ToolHandlerMixin:
         execution_results: list[dict[str, Any]],
     ) -> WorkflowMessage:
         """Build error message for an unknown tool call (#2305, #2310)."""
-        # Issue #7509: Added web research tools to known_tools hint.
-        known_tools = sorted(
-            {
-                "respond",
-                "delegate",
-                "execute_command",
-                "web_search",
-                "scrape_url",
-                "crawl_site",
-                "map_site",
-                "extract_structured_data",
-            }
-            | BROWSER_TOOL_NAMES
-        )
+        # GH#11489: derive from the routing SSOT so the hint never drifts.
+        known_tools = sorted({"respond", "delegate"} | _UNIFORM_BUILTIN_TOOLS)
         if ctx is not None:
             ctx.consecutive_invalid_tool_calls += 1
         consecutive = ctx.consecutive_invalid_tool_calls if ctx is not None else 0
@@ -2628,7 +2616,9 @@ class ToolHandlerMixin:
         """Route a tool call to the appropriate handler. Issue #620/#2310/#2629.
 
         Yields WorkflowMessage for execution stages, or (break_loop, respond_content) tuple
-        for the respond tool. Helpers handle MCP, browser, web_search, and execute_command.
+        for the respond tool. Uniform builtins (GH#11489: browser, web_search, web
+        research, execute_command) share one gate and route via ``_builtin_route``;
+        everything else falls through to MCP/unknown handling.
         """
         tool_name = tool_call["name"]
 
@@ -2722,7 +2712,7 @@ class ToolHandlerMixin:
         selected_model: str,
         execution_results: list[dict[str, Any]],
         additional_response_parts: list[str],
-    ):
+    ) -> AsyncIterator[Any]:
         """Return the handler async-generator for a uniform builtin tool (GH#11489).
 
         Membership SSOT is ``_UNIFORM_BUILTIN_TOOLS``; the caller has already run
@@ -2735,16 +2725,19 @@ class ToolHandlerMixin:
             return self._handle_web_search_tool(tool_call, execution_results, session_id)
         if tool_name in WEB_RESEARCH_TOOL_NAMES:  # Issue #7509
             return self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id)
-        # execute_command — the only remaining member of _UNIFORM_BUILTIN_TOOLS.
-        return self._dispatch_execute_command(
-            tool_call,
-            session_id,
-            terminal_session_id,
-            ollama_endpoint,
-            selected_model,
-            execution_results,
-            additional_response_parts,
-        )
+        if tool_name == "execute_command":
+            return self._dispatch_execute_command(
+                tool_call,
+                session_id,
+                terminal_session_id,
+                ollama_endpoint,
+                selected_model,
+                execution_results,
+                additional_response_parts,
+            )
+        # A member of _UNIFORM_BUILTIN_TOOLS without a route row is a wiring bug —
+        # fail loudly rather than falling through to a high-blast-radius handler.
+        raise ValueError(f"_builtin_route: no route for {tool_name!r}; add a row alongside _UNIFORM_BUILTIN_TOOLS")
 
     async def _dispatch_mcp_or_unknown(
         self,
