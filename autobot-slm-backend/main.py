@@ -261,9 +261,14 @@ async def lifespan(app: FastAPI):
         reconciled_comp, requeued_jobs = await reconcile_stale_component_sync_jobs()
         if reconciled_comp:
             logger.warning("Reconciled %d stale component sync job(s)", reconciled_comp)
+        import api.code_sync as _code_sync_mod
+
         for _job_id, _component in requeued_jobs:
             logger.warning("Re-running interrupted component sync job %s (%s)", _job_id, _component)
-            asyncio.create_task(_run_component_resolve_job(_job_id, _component))
+            _task = asyncio.create_task(_run_component_resolve_job(_job_id, _component))
+            # #11460 review: keep a strong reference (GC) + same #1928 task
+            # tracking the endpoint path uses; the runner's finally pops it.
+            _code_sync_mod._running_tasks[_job_id] = _task
     except Exception:
         logger.exception("Failed to reconcile stale component sync jobs")
 

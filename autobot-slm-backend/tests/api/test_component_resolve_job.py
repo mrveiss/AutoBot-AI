@@ -391,16 +391,49 @@ def test_reconcile_fails_second_interruption() -> None:
 
 def test_restart_pending_arms_only_for_self_killing_components() -> None:
     """_restart_component_services arms the 409 guard only when the chain can
-    kill the SLM itself (#11437)."""
+    kill the SLM itself (#11437); observable DURING the chain (it disarms on
+    surviving completion, #11460)."""
+    import api.code_sync as code_sync_mod
+
+    seen: dict = {}
+
+    async def _fake_exec(*args, **kwargs):
+        # record the guard state at restart time (mid-chain)
+        seen[args[-1]] = code_sync_mod._restart_is_pending()
+        proc = MagicMock()
+
+        async def _communicate():
+            return (b"", b"")
+
+        proc.communicate = _communicate
+        proc.returncode = 0
+        return proc
+
+    code_sync_mod._restart_pending = False
+    try:
+        with patch.dict(
+            code_sync_mod._COMPONENT_SERVICES,
+            {"autobot-backend": ["autobot-backend"], "autobot_shared": ["autobot-celery"]},
+        ), patch.object(code_sync_mod.asyncio, "create_subprocess_exec", _fake_exec):
+            _run(code_sync_mod._restart_component_services("autobot-backend", []))
+            _run(code_sync_mod._restart_component_services("autobot_shared", []))
+    finally:
+        code_sync_mod._restart_pending = False
+
+    assert seen["autobot-backend"] is False, "non-self-killing chain must not arm"
+    assert seen["autobot-celery"] is True, "self-killing chain must arm mid-chain"
+
+
+def test_restart_pending_disarms_when_process_survives() -> None:
+    """#11460 review: a failed self-restart chain must not leave the 409 guard
+    armed forever — reaching the end of the chain alive disarms it."""
     import api.code_sync as code_sync_mod
 
     code_sync_mod._restart_pending = False
     try:
-        with patch.dict(code_sync_mod._COMPONENT_SERVICES, {"autobot-backend": [], "autobot_shared": []}):
-            _run(code_sync_mod._restart_component_services("autobot-backend", []))
-            assert code_sync_mod._restart_is_pending() is False
-
+        with patch.dict(code_sync_mod._COMPONENT_SERVICES, {"autobot_shared": []}):
             _run(code_sync_mod._restart_component_services("autobot_shared", []))
-            assert code_sync_mod._restart_is_pending() is True
+        # chain completed without killing us -> guard released
+        assert code_sync_mod._restart_is_pending() is False
     finally:
         code_sync_mod._restart_pending = False

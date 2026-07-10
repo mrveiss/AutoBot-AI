@@ -145,24 +145,25 @@ async def reconcile_stale_fleet_sync_jobs() -> int:
     return count
 
 
-async def reconcile_stale_component_sync_jobs() -> int:
-    """Mark stale 'running' component sync jobs as failed on startup (#11303).
+async def reconcile_stale_component_sync_jobs() -> Tuple[int, List[Tuple[str, str]]]:
+    """Reconcile stale component sync jobs on startup (#11303, #11437).
 
-    Called during SLM backend lifespan init.  Any job left in 'running' status
-    from a prior process crash (including a self-restart triggered by the job
-    itself) is marked 'failed' with an explanatory message.
+    Jobs left 'running' (or 'queued' — a requeue whose re-run never started)
+    by a prior process death are re-queued ONCE so their post-steps (incl. DB
+    migrations) are not silently skipped; a job interrupted twice is failed
+    permanently with success=False.
 
     Returns:
-        Number of stale jobs reconciled.
+        (number of stale jobs reconciled, list of (job_id, component) requeued).
     """
     from services.database import db_service
 
     async with db_service.session() as db:
-        result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.status == "running"))
+        result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.status.in_(["running", "queued"])))
         stale_jobs = result.scalars().all()
         count = len(stale_jobs)
 
-        requeued: List[tuple] = []
+        requeued: List[Tuple[str, str]] = []
         for job in stale_jobs:
             if job.message and job.message.startswith("requeued"):
                 # Second interruption — do not loop forever (#11437).
@@ -1819,6 +1820,12 @@ async def _restart_component_services(component: str, steps: List[str]) -> None:
             logger.warning("drift resolve: restart %s error: %s", service, exc)
             steps.append(f"restart {service}: error: {exc}")
 
+    # #11460 review: reaching this line means the self-restart did NOT land
+    # (systemctl restart of our own unit blocks until this process dies, so a
+    # successful self-restart never returns here). Disarm the guard, or every
+    # future resolve would 409 forever after a failed restart chain.
+    _restart_pending = False
+
 
 # =============================================================================
 # #11377 — Component snapshot / rollback helpers
@@ -1842,7 +1849,6 @@ def _prune_old_snapshots(snap_base: Path, component: str, max_keep: int) -> None
             logger.info("snapshot prune: removed %s", old)
         except OSError as exc:
             logger.warning("snapshot prune: failed to remove %s: %s", old, exc)
-
 
 async def _snapshot_component(component: str) -> Optional[str]:
     """Rsync the deployed dir to a timestamped backup before mutation (#11404).
