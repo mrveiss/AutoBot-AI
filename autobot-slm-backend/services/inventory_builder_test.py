@@ -434,3 +434,28 @@ def test_required_groups_covers_known_playbook_references():
     }
     missing = known - REQUIRED_GROUPS
     assert not missing, f"REQUIRED_GROUPS is missing known group refs: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# #11436: co-located SLM nodes must join infrastructure
+# ---------------------------------------------------------------------------
+
+
+class TestColocatedSlmInfrastructure:
+    def test_pure_slm_node_stays_out_of_infrastructure(self):
+        """Pure SLM servers keep pre-#11436 behavior: update Play 2 skips them."""
+        inv = _build([_Node(node_id="00-SLM-Manager", ip_address="127.0.0.1", roles=["slm-manager"])])
+        assert "00-SLM-Manager" not in inv["all"]["children"]["infrastructure"]["hosts"]
+
+    def test_colocated_slm_node_joins_infrastructure_and_app_groups(self):
+        """#11436: an SLM node also carrying app roles (single-node install)
+        joins infrastructure so update Play 2 deploys the co-located components."""
+        inv = _build(
+            [_Node(node_id="00-SLM-Manager", ip_address="127.0.0.1", roles=["slm-manager", "backend", "frontend"])]
+        )
+        children = inv["all"]["children"]
+        assert "00-SLM-Manager" in children["infrastructure"]["hosts"]
+        assert "00-SLM-Manager" in children["backend"]["hosts"]
+        assert "00-SLM-Manager" in children["frontend"]["hosts"]
+        # still recognized as the SLM server for update Play 1
+        assert "00-SLM-Manager" in children["slm_server"]["hosts"]

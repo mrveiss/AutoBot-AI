@@ -280,9 +280,14 @@ def build_registry_inventory(nodes: list[Any], local_ip_check: Any) -> dict:
         # Every node joins autobot + autobot_cluster (centralized logging, etc.)
         node_groups |= _UNIVERSAL_ALL
 
-        # Non-SLM nodes also join infrastructure + production_vms
+        # Non-SLM nodes join infrastructure + production_vms. #11436: an SLM
+        # node that ALSO carries app roles (single-node installs co-locate
+        # backend/frontend/workers on the SLM box) must join them too —
+        # otherwise the update playbook's Play 2 never matches that host and
+        # the co-located components silently stop receiving updates.
         is_slm = bool(node_groups & {"slm", "slm_server", "slm_nodes"})
-        if not is_slm:
+        app_groups = node_groups - {"slm", "slm_server", "slm_nodes"} - _UNIVERSAL_ALL
+        if not is_slm or app_groups:
             node_groups |= _UNIVERSAL_NON_SLM
 
         for g in node_groups:

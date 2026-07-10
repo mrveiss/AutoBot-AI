@@ -438,7 +438,12 @@
 # PLAY 2: Update All Other Infrastructure Nodes
 # =============================================================================
 - name: "Play 2 - Update Other Infrastructure Nodes"
-  hosts: infrastructure:!slm_server
+# 11436: no longer excludes slm_server — a co-located SLM node (single-node
+# install) joins `infrastructure` via the registry inventory only when it also
+# carries app roles, so pure SLM servers still skip this play while co-located
+# backend/frontend/worker components finally receive updates. Ordering is
+# preserved: Play 1 updates the SLM components first.
+  hosts: infrastructure
   gather_facts: false
   serial: 3
   # A failed node update (most critically a failed backend database
