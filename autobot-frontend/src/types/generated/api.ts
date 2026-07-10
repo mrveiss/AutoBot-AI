@@ -28992,6 +28992,11 @@ export interface paths {
         /**
          * Send message to a channel
          * @description Send a message to the specified provider channel.
+         *
+         *     Slack and Discord are resolved through ``MessagingProtocol`` adapters
+         *     (#11524); Teams still uses its webhook-only execute_action path because
+         *     it targets a webhook URL rather than a channel_id and does not satisfy
+         *     the full MessagingProtocol contract.
          */
         post: operations["send_message_api_integrations_communication__provider__messages_post"];
         delete?: never;
