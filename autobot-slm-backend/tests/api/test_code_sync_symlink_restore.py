@@ -273,6 +273,10 @@ def test_pip_backend_emits_symlink_step(tmp_path) -> None:
             patch("api.code_sync._ensure_venv_python", AsyncMock()),
             patch("api.code_sync._run_alembic_migrations", AsyncMock()),
             patch("api.code_sync._restart_component_services", AsyncMock()),
+            # restart=True runs the post-restart health poll; without this mock it
+            # makes real httpx polls until the deadline — ~3 min of dead wait that
+            # reads as a hang (#11467, same class as #11462).
+            patch("api.code_sync._wait_component_healthy", AsyncMock(return_value=True)),
         ):
             _, steps, _ = _run(_run_post_sync_steps(component, f"/src/{component}", f"/opt/autobot/{component}"))
             steps_collected.extend(steps)

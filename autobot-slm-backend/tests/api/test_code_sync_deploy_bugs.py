@@ -1460,6 +1460,7 @@ def test_wait_component_healthy_returns_true_on_healthy_response() -> None:
     with (
         patch("api.code_sync._COMPONENT_HEALTH_URLS", {"autobot-backend": "http://127.0.0.1:8001/api/health"}),
         patch("api.code_sync._HEALTH_POLL_TIMEOUT", 5.0),
+        patch("api.code_sync._FAST_HEALTH_POLL_TIMEOUT", 5.0),  # #11458/#11467: default slow_start uses the fast window
         patch("httpx.AsyncClient", return_value=_FakeClient()),
     ):
         result = _run(_wait_component_healthy("autobot-backend", steps))
@@ -1490,6 +1491,10 @@ def test_wait_component_healthy_returns_true_on_timeout_no_failure() -> None:
     with (
         patch("api.code_sync._COMPONENT_HEALTH_URLS", {"autobot-backend": "http://127.0.0.1:8001/api/health"}),
         patch("api.code_sync._HEALTH_POLL_TIMEOUT", 0.1),
+        # #11458 split the window into slow (venv-recreated) and fast (warm) — a
+        # default-slow_start call now uses _FAST_HEALTH_POLL_TIMEOUT, so pin both
+        # or the poll busy-spins the unpatched 60s fast window (#11467).
+        patch("api.code_sync._FAST_HEALTH_POLL_TIMEOUT", 0.1),
         patch("api.code_sync._HEALTH_POLL_CONNECT_TIMEOUT", 0.05),
         patch("asyncio.sleep", AsyncMock()),
         patch("httpx.AsyncClient", return_value=_FailClient()),
@@ -1752,6 +1757,10 @@ def test_wait_component_healthy_returns_true_on_timeout_without_systemd_failure(
     with (
         patch("api.code_sync._COMPONENT_HEALTH_URLS", {"autobot-backend": "http://127.0.0.1:8001/api/health"}),
         patch("api.code_sync._HEALTH_POLL_TIMEOUT", 0.1),
+        # #11458 split the window into slow (venv-recreated) and fast (warm) — a
+        # default-slow_start call now uses _FAST_HEALTH_POLL_TIMEOUT, so pin both
+        # or the poll busy-spins the unpatched 60s fast window (#11467).
+        patch("api.code_sync._FAST_HEALTH_POLL_TIMEOUT", 0.1),
         patch("api.code_sync._HEALTH_POLL_CONNECT_TIMEOUT", 0.05),
         patch("asyncio.sleep", AsyncMock()),
         patch("httpx.AsyncClient", return_value=_FailClient()),
@@ -1781,6 +1790,7 @@ def test_wait_component_healthy_returns_false_when_unit_failed_during_poll() -> 
     with (
         patch("api.code_sync._COMPONENT_HEALTH_URLS", {"autobot-backend": "http://127.0.0.1:8001/api/health"}),
         patch("api.code_sync._HEALTH_POLL_TIMEOUT", 5.0),
+        patch("api.code_sync._FAST_HEALTH_POLL_TIMEOUT", 5.0),  # #11458/#11467: default slow_start uses the fast window
         patch("api.code_sync._HEALTH_POLL_CONNECT_TIMEOUT", 0.05),
         patch("asyncio.sleep", AsyncMock()),
         patch("httpx.AsyncClient", return_value=_FailClient()),
