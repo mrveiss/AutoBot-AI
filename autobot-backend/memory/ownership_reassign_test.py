@@ -3,7 +3,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Tests for memory ownership reassignment (Issue #11065).
+Tests for memory ownership reassignment (Issue #11065 / #11423).
 
 Coverage plan
 -------------
@@ -17,6 +17,12 @@ Coverage plan
 7. No-op when ids are blank or equal.
 8. ``delete_user(..., reassign_to=X)`` calls ``reassign_user_memory`` with correct args
    before deleting the DB row.
+9. KB facts ChromaDB collection — ``owner_id`` and ``user_id`` metadata reassigned;
+   non-matching untouched; other metadata preserved.
+10. KB facts Redis indexes — ``user:kb:facts:{old}`` and ``user:facts:{old}`` moved to
+    ``{new}``; old sets deleted; ids not lost.
+11. ``_reassign_kb_facts`` returns total count; store raising → ``reassign_user_memory``
+    still returns partial counts with ``kb_facts`` key present.
 """
 
 import json
@@ -373,6 +379,7 @@ class TestReassignUserMemoryFaultTolerance:
             patch("memory.ownership_reassign._reassign_trajectory", side_effect=_ok),
             patch("memory.ownership_reassign._reassign_working_memory", side_effect=_ok),
             patch("memory.ownership_reassign._reassign_graph_entities", side_effect=_ok),
+            patch("memory.ownership_reassign._reassign_kb_facts", side_effect=_ok),
         ):
             counts = await reassign_user_memory("user-A", "user-B")
 
@@ -381,6 +388,7 @@ class TestReassignUserMemoryFaultTolerance:
         assert counts["trajectory"] == 5
         assert counts["working_memory"] == 5
         assert counts["graph"] == 5
+        assert counts["kb_facts"] == 5
 
     @pytest.mark.asyncio
     async def test_all_stores_fail_returns_zeros(self):
@@ -394,10 +402,325 @@ class TestReassignUserMemoryFaultTolerance:
             patch("memory.ownership_reassign._reassign_trajectory", side_effect=_raise),
             patch("memory.ownership_reassign._reassign_working_memory", side_effect=_raise),
             patch("memory.ownership_reassign._reassign_graph_entities", side_effect=_raise),
+            patch("memory.ownership_reassign._reassign_kb_facts", side_effect=_raise),
         ):
             counts = await reassign_user_memory("user-A", "user-B")
 
-        assert counts == {"verbatim": 0, "trajectory": 0, "working_memory": 0, "graph": 0}
+        assert counts == {"verbatim": 0, "trajectory": 0, "working_memory": 0, "graph": 0, "kb_facts": 0}
+
+
+# ---------------------------------------------------------------------------
+# 9–11. KB facts store
+# ---------------------------------------------------------------------------
+
+
+def _make_kb_collection(owner_ids=None, user_ids=None):
+    """Build an AsyncMock ChromaDB collection for KB facts tests.
+
+    *owner_ids* and *user_ids* are lists of strings; the collection is
+    populated with one record per entry (using the same id prefix for
+    simplicity). Each call to ``col.get()`` returns the records whose
+    metadata matches the ``where`` filter passed to it.
+    """
+    # Build a flat list of (id, metadata) pairs combining both fields.
+    records = []
+    for i, oid in enumerate(owner_ids or []):
+        records.append((f"kb-oid-{i}", {"owner_id": oid, "extra": "keep-oid"}))
+    for i, uid in enumerate(user_ids or []):
+        records.append((f"kb-uid-{i}", {"user_id": uid, "extra": "keep-uid"}))
+
+    col = AsyncMock()
+
+    async def _get(where=None, include=None, **_kw):
+        field, value = next(iter(where.items())) if where else (None, None)
+        op_value = value.get("$eq") if isinstance(value, dict) else value
+        matched_ids = []
+        matched_metas = []
+        for rid, meta in records:
+            if field and meta.get(field) == op_value:
+                matched_ids.append(rid)
+                matched_metas.append(dict(meta))
+        return {"ids": matched_ids, "metadatas": matched_metas}
+
+    col.get = AsyncMock(side_effect=_get)
+    col.update = AsyncMock()
+    return col
+
+
+def _make_kb_redis(canonical_members=None, legacy_members=None):
+    """Build an async Redis mock for KB index tests.
+
+    *canonical_members*: members initially in ``user:kb:facts:{old_id}``.
+    *legacy_members*: members initially in ``user:facts:{old_id}``.
+    """
+    canonical_members = list(canonical_members or [])
+    legacy_members = list(legacy_members or [])
+
+    redis = AsyncMock()
+    redis.sunionstore = AsyncMock()
+    redis.delete = AsyncMock()
+    return redis
+
+
+class TestReassignKbFactsChroma:
+    """KB ChromaDB collection: owner_id and user_id reassignment."""
+
+    @pytest.mark.asyncio
+    async def test_owner_id_matching_records_reassigned(self):
+        """Records with owner_id == old_id are rewritten; other metadata preserved."""
+        import memory.ownership_reassign as mr
+
+        col = _make_kb_collection(owner_ids=["user-A", "user-A"], user_ids=[])
+        kb_mock = AsyncMock()
+        kb_mock._async_chroma_collection = col
+
+        orig = mr.get_knowledge_base_fn
+        mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
+        orig_redis = mr.get_redis_client
+        mr.get_redis_client = AsyncMock(return_value=_make_kb_redis())
+        try:
+            count = await mr._reassign_kb_facts("user-A", "user-B")
+        finally:
+            mr.get_knowledge_base_fn = orig
+            mr.get_redis_client = orig_redis
+
+        assert count == 2
+        # update must have been called for the owner_id pass
+        assert col.update.call_count >= 1
+        # All updated metadatas for the owner_id pass must have owner_id == new
+        for call in col.update.call_args_list:
+            _, kwargs = call
+            for meta in kwargs.get("metadatas", []):
+                if "owner_id" in meta:
+                    assert meta["owner_id"] == "user-B"
+                # extra field must be preserved
+                assert meta.get("extra") in ("keep-oid", "keep-uid", None)
+
+    @pytest.mark.asyncio
+    async def test_user_id_matching_records_reassigned(self):
+        """Records with user_id == old_id are rewritten; other metadata preserved."""
+        import memory.ownership_reassign as mr
+
+        col = _make_kb_collection(owner_ids=[], user_ids=["user-A"])
+        kb_mock = AsyncMock()
+        kb_mock._async_chroma_collection = col
+
+        orig = mr.get_knowledge_base_fn
+        mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
+        orig_redis = mr.get_redis_client
+        mr.get_redis_client = AsyncMock(return_value=_make_kb_redis())
+        try:
+            count = await mr._reassign_kb_facts("user-A", "user-B")
+        finally:
+            mr.get_knowledge_base_fn = orig
+            mr.get_redis_client = orig_redis
+
+        assert count == 1
+        # update called for user_id pass
+        assert col.update.call_count >= 1
+        _, kwargs = col.update.call_args_list[-1]
+        assert kwargs["metadatas"][0]["user_id"] == "user-B"
+        assert kwargs["metadatas"][0]["extra"] == "keep-uid"
+
+    @pytest.mark.asyncio
+    async def test_non_matching_records_untouched(self):
+        """Records owned by a different user are never updated."""
+        import memory.ownership_reassign as mr
+
+        col = _make_kb_collection(owner_ids=["user-C"], user_ids=["user-C"])
+        kb_mock = AsyncMock()
+        kb_mock._async_chroma_collection = col
+
+        orig = mr.get_knowledge_base_fn
+        mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
+        orig_redis = mr.get_redis_client
+        mr.get_redis_client = AsyncMock(return_value=_make_kb_redis())
+        try:
+            count = await mr._reassign_kb_facts("user-A", "user-B")
+        finally:
+            mr.get_knowledge_base_fn = orig
+            mr.get_redis_client = orig_redis
+
+        assert count == 0
+        col.update.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_both_owner_id_and_user_id_counted(self):
+        """Both passes contribute to the returned total."""
+        import memory.ownership_reassign as mr
+
+        col = _make_kb_collection(owner_ids=["user-A"], user_ids=["user-A"])
+        kb_mock = AsyncMock()
+        kb_mock._async_chroma_collection = col
+
+        orig = mr.get_knowledge_base_fn
+        mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
+        orig_redis = mr.get_redis_client
+        mr.get_redis_client = AsyncMock(return_value=_make_kb_redis())
+        try:
+            count = await mr._reassign_kb_facts("user-A", "user-B")
+        finally:
+            mr.get_knowledge_base_fn = orig
+            mr.get_redis_client = orig_redis
+
+        # 1 from owner_id pass + 1 from user_id pass
+        assert count == 2
+
+    @pytest.mark.asyncio
+    async def test_collection_none_returns_zero(self):
+        """If _async_chroma_collection is None the function returns 0 without raising."""
+        import memory.ownership_reassign as mr
+
+        kb_mock = AsyncMock()
+        kb_mock._async_chroma_collection = None
+
+        orig = mr.get_knowledge_base_fn
+        mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
+        orig_redis = mr.get_redis_client
+        mr.get_redis_client = AsyncMock(return_value=_make_kb_redis())
+        try:
+            count = await mr._reassign_kb_facts("user-A", "user-B")
+        finally:
+            mr.get_knowledge_base_fn = orig
+            mr.get_redis_client = orig_redis
+
+        assert count == 0
+
+
+class TestReassignKbFactsReduxIndex:
+    """KB Redis ownership index: fact ids move from old owner to new; old set deleted."""
+
+    @staticmethod
+    def _capture_redis():
+        """Return an async Redis mock that records sunionstore and delete calls."""
+        redis = AsyncMock()
+        redis.sunionstore = AsyncMock()
+        redis.delete = AsyncMock()
+        return redis
+
+    @pytest.mark.asyncio
+    async def test_canonical_index_moved(self):
+        """user:kb:facts:{old} is sunionstore'd into {new} then deleted."""
+        import memory.ownership_reassign as mr
+
+        redis = self._capture_redis()
+
+        col = _make_kb_collection()  # no chroma records
+        kb_mock = AsyncMock()
+        kb_mock._async_chroma_collection = col
+
+        orig = mr.get_knowledge_base_fn
+        mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
+        orig_redis = mr.get_redis_client
+        mr.get_redis_client = AsyncMock(return_value=redis)
+        try:
+            await mr._reassign_kb_facts("user-A", "user-B")
+        finally:
+            mr.get_knowledge_base_fn = orig
+            mr.get_redis_client = orig_redis
+
+        # SUNIONSTORE called with canonical new key, old key, new key (idempotent merge)
+        redis.sunionstore.assert_any_call("user:kb:facts:user-B", "user:kb:facts:user-A", "user:kb:facts:user-B")
+        # Old key deleted
+        redis.delete.assert_any_call("user:kb:facts:user-A")
+
+    @pytest.mark.asyncio
+    async def test_legacy_index_moved(self):
+        """user:facts:{old} is sunionstore'd into {new} then deleted."""
+        import memory.ownership_reassign as mr
+
+        redis = self._capture_redis()
+
+        col = _make_kb_collection()
+        kb_mock = AsyncMock()
+        kb_mock._async_chroma_collection = col
+
+        orig = mr.get_knowledge_base_fn
+        mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
+        orig_redis = mr.get_redis_client
+        mr.get_redis_client = AsyncMock(return_value=redis)
+        try:
+            await mr._reassign_kb_facts("user-A", "user-B")
+        finally:
+            mr.get_knowledge_base_fn = orig
+            mr.get_redis_client = orig_redis
+
+        # Legacy index sunionstore'd and old key deleted
+        redis.sunionstore.assert_any_call("user:facts:user-B", "user:facts:user-A", "user:facts:user-B")
+        redis.delete.assert_any_call("user:facts:user-A")
+
+    @pytest.mark.asyncio
+    async def test_redis_error_does_not_propagate(self):
+        """If Redis raises, _reassign_kb_facts still returns (doesn't re-raise)."""
+        import memory.ownership_reassign as mr
+
+        col = _make_kb_collection()
+        kb_mock = AsyncMock()
+        kb_mock._async_chroma_collection = col
+
+        redis = AsyncMock()
+        redis.sunionstore = AsyncMock(side_effect=ConnectionError("redis gone"))
+        redis.delete = AsyncMock()
+
+        orig = mr.get_knowledge_base_fn
+        mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
+        orig_redis = mr.get_redis_client
+        mr.get_redis_client = AsyncMock(return_value=redis)
+        try:
+            # Must not raise even when Redis is broken
+            result = await mr._reassign_kb_facts("user-A", "user-B")
+        finally:
+            mr.get_knowledge_base_fn = orig
+            mr.get_redis_client = orig_redis
+
+        assert isinstance(result, int)
+
+
+class TestReassignKbFactsInReassignUserMemory:
+    """kb_facts participates in reassign_user_memory fault-isolation."""
+
+    @pytest.mark.asyncio
+    async def test_kb_facts_raising_does_not_crash_reassign(self):
+        """A kb_facts error records 0 and other stores still run."""
+        from memory.ownership_reassign import reassign_user_memory
+
+        async def _raise(*_a, **_k):
+            raise RuntimeError("kb down")
+
+        async def _ok(*_a, **_k):
+            return 3
+
+        with (
+            patch("memory.ownership_reassign._reassign_verbatim", side_effect=_ok),
+            patch("memory.ownership_reassign._reassign_trajectory", side_effect=_ok),
+            patch("memory.ownership_reassign._reassign_working_memory", side_effect=_ok),
+            patch("memory.ownership_reassign._reassign_graph_entities", side_effect=_ok),
+            patch("memory.ownership_reassign._reassign_kb_facts", side_effect=_raise),
+        ):
+            counts = await reassign_user_memory("user-A", "user-B")
+
+        assert counts["kb_facts"] == 0
+        assert counts["verbatim"] == 3
+        assert counts["graph"] == 3
+
+    @pytest.mark.asyncio
+    async def test_kb_facts_key_present_in_return(self):
+        """kb_facts is always a key in the returned counts dict."""
+        from memory.ownership_reassign import reassign_user_memory
+
+        async def _ok(*_a, **_k):
+            return 0
+
+        with (
+            patch("memory.ownership_reassign._reassign_verbatim", side_effect=_ok),
+            patch("memory.ownership_reassign._reassign_trajectory", side_effect=_ok),
+            patch("memory.ownership_reassign._reassign_working_memory", side_effect=_ok),
+            patch("memory.ownership_reassign._reassign_graph_entities", side_effect=_ok),
+            patch("memory.ownership_reassign._reassign_kb_facts", side_effect=_ok),
+        ):
+            counts = await reassign_user_memory("user-A", "user-B")
+
+        assert "kb_facts" in counts
 
 
 # ---------------------------------------------------------------------------
