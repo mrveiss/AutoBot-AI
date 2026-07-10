@@ -361,6 +361,28 @@
       register: slm_build
       tags: [slm, slm-frontend]
 
+    # #11480/#11492: redeploy the slm-agent BEFORE the backend restart. The
+    # backend restart below kills this fire-and-forget playbook (KillMode=
+    # control-group, #11492), so anything after it never runs — the agent
+    # deploy must land here, and flush_handlers forces the role's restart
+    # handler to fire now (handlers otherwise run at play end, i.e. never).
+    # Idempotent role; block/rescue keeps a failure from aborting Play 1.
+    - name: "[PLAY 1] SLM Agent | Redeploy agent (code + secrets + restart) (#11480)"
+      tags: [slm, slm-agent]
+      block:
+        - name: "[PLAY 1] SLM Agent | Import slm_agent role"
+          ansible.builtin.import_role:
+            name: slm_agent
+        - name: "[PLAY 1] SLM Agent | Flush handlers so the agent restarts before the backend self-restart"
+          ansible.builtin.meta: flush_handlers
+      rescue:
+        - name: "[PLAY 1] SLM Agent | Warn on agent redeploy failure"
+          ansible.builtin.debug:
+            msg: >-
+              WARNING: slm_agent redeploy failed on {{ inventory_hostname }} —
+              agent may run stale code / miss agent-secrets.env (#11480).
+              Continuing to backend restart.
+
     - name: "[PLAY 1] SLM | Restart backend service"
       systemd:
         name: autobot-slm-backend
@@ -433,26 +455,6 @@
       ignore_errors: true
       when: slm_login_play1.status == 200
       tags: [always]
-
-    # #11480: redeploy the slm-agent (code + agent-secrets.env + restart) on
-    # every update. Previously the routine update path only copied autobot_shared
-    # into the agent dir, so agent-side fixes (e.g. #11450 heartbeat auth) never
-    # reached nodes through self-update — only the separate deploy-slm-agent.yml.
-    # Idempotent role; slm_server has no any_errors_fatal so a failure here fails
-    # only this host (the SLM manager), matching the rest of Play 1.
-    - name: "[PLAY 1] SLM Agent | Redeploy agent (code + secrets + restart) (#11480)"
-      tags: [slm, slm-agent]
-      block:
-        - name: "[PLAY 1] SLM Agent | Import slm_agent role"
-          ansible.builtin.import_role:
-            name: slm_agent
-      rescue:
-        - name: "[PLAY 1] SLM Agent | Warn on agent redeploy failure"
-          ansible.builtin.debug:
-            msg: >-
-              WARNING: slm_agent redeploy failed on {{ inventory_hostname }} —
-              agent may run stale code / miss agent-secrets.env (#11480). Backend
-              + frontend already deployed; continuing.
 
     - name: "[PLAY 1] SLM Update Complete"
       debug:
