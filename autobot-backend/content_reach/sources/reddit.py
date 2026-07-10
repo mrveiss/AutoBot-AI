@@ -109,7 +109,7 @@ class RedditJsonBackend(ContentBackend):
             backend_used=self.name,
             text="\n".join(text_lines),
             structured={"posts": posts},
-            reliability=SourceReliability.MEDIUM,
+            reliability=SourceReliability.COMMUNITY,  # #11079: crowd-sourced
         )
 
 
@@ -123,7 +123,7 @@ class HnAlgoliaBackend(ContentBackend):
     """
 
     name = "hn_algolia"
-    source_type = SourceType.REDDIT
+    source_type = SourceType.FORUM  # #11079: Hacker News is a forum, not Reddit
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self._client = client
@@ -171,11 +171,11 @@ class HnAlgoliaBackend(ContentBackend):
 
         return ContentResult(
             success=True,
-            source_type=SourceType.REDDIT,
+            source_type=SourceType.FORUM,  # #11079: HN is a forum, not Reddit
             backend_used=self.name,
             text="\n".join(text_lines),
             structured={"hits": hits},
-            reliability=SourceReliability.MEDIUM,
+            reliability=SourceReliability.COMMUNITY,  # #11079: crowd-sourced
         )
 
 
