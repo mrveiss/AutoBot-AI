@@ -8678,5 +8678,16 @@
       "refresh": "Refresh",
       "noSources": "No content sources configured"
     }
+  },
+  "components": {
+    "schemaForm": {
+      "requiredMark": "required",
+      "selectPlaceholder": "Select an option",
+      "removeTag": "Remove tag",
+      "addTagPlaceholder": "Press Enter to add",
+      "rawJsonFallback": "Schema contains nested objects. Edit as raw JSON:",
+      "rawJsonLabel": "Plugin configuration (JSON)",
+      "invalidJson": "Invalid JSON — please fix before saving."
+    }
   }
 }

@@ -397,7 +397,16 @@
             <div v-if="configLoading" class="config-loading">{{ $t('views.plugins.loadingConfig') }}</div>
 
             <div v-else-if="editingConfig">
+              <!-- Schema-driven form when manifest provides a config_schema (#11522) -->
+              <SchemaForm
+                v-if="selectedPlugin?.config_schema && hasSchemaProperties(selectedPlugin.config_schema)"
+                :schema="(selectedPlugin.config_schema as JsonSchema)"
+                :model-value="schemaFormValue"
+                @update:model-value="onSchemaFormUpdate"
+              />
+              <!-- Fallback: raw JSON textarea -->
               <textarea
+                v-else
                 v-model="configText"
                 class="config-editor"
                 rows="8"
@@ -444,6 +453,7 @@
 <script setup lang="ts">
 // Issue #929 - Plugin Manager UI
 // Issue #1359: i18n string extraction
+// Issue #11522: schema-driven config form
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -456,6 +466,7 @@ import PluginInstallModal from '@/components/plugins/PluginInstallModal.vue'
 import CapabilityApprovalDialog from '@/components/plugins/CapabilityApprovalDialog.vue'
 import CapabilityAuditLog from '@/components/plugins/CapabilityAuditLog.vue'
 import TrustTierBadge from '@/components/plugins/TrustTierBadge.vue'
+import SchemaForm, { type JsonSchema } from '@/components/plugins/SchemaForm.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -505,6 +516,19 @@ const configLoading = ref(false)
 const editingConfig = ref(false)
 const configText = ref('')
 const configError = ref('')
+// Issue #11522: schema form reactive value
+const schemaFormValue = ref<Record<string, unknown>>({})
+
+function hasSchemaProperties(schema: Record<string, unknown>): boolean {
+  const props = (schema as JsonSchema).properties
+  return typeof props === 'object' && props !== null && Object.keys(props).length > 0
+}
+
+function onSchemaFormUpdate(value: Record<string, unknown>) {
+  schemaFormValue.value = value
+  // Keep configText in sync so saveConfig works regardless of which branch is shown
+  configText.value = JSON.stringify(value, null, 2)
+}
 
 // Plugins that are in discover but not already in installed list
 const uninstalledPlugins = computed<PluginManifest[]>(() => {
@@ -621,7 +645,9 @@ function closeDetail() {
 }
 
 function startEditConfig() {
-  configText.value = JSON.stringify(pluginConfig.value ?? {}, null, 2)
+  const current = pluginConfig.value ?? {}
+  configText.value = JSON.stringify(current, null, 2)
+  schemaFormValue.value = { ...current }
   configError.value = ''
   editingConfig.value = true
 }
@@ -634,13 +660,21 @@ function cancelEditConfig() {
 async function saveConfig() {
   if (!selectedPlugin.value) return
   configError.value = ''
+
+  // Schema-form branch: schemaFormValue is already up-to-date via onSchemaFormUpdate
+  const schema = selectedPlugin.value.config_schema
   let parsed: Record<string, unknown>
-  try {
-    parsed = JSON.parse(configText.value)
-  } catch {
-    configError.value = t('views.plugins.invalidJson')
-    return
+  if (schema && hasSchemaProperties(schema)) {
+    parsed = schemaFormValue.value
+  } else {
+    try {
+      parsed = JSON.parse(configText.value)
+    } catch {
+      configError.value = t('views.plugins.invalidJson')
+      return
+    }
   }
+
   const ok = await updatePluginConfig(selectedPlugin.value.name, parsed)
   if (ok) {
     pluginConfig.value = parsed

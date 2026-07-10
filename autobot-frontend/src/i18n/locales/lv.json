@@ -8678,5 +8678,16 @@
       "refresh": "Atsvaidzināt",
       "noSources": "Nav konfigurētu satura avotu"
     }
+  },
+  "components": {
+    "schemaForm": {
+      "requiredMark": "obligāts",
+      "selectPlaceholder": "Izvēlieties opciju",
+      "removeTag": "Noņemt atzīmi",
+      "addTagPlaceholder": "Nospiediet Enter, lai pievienotu",
+      "rawJsonFallback": "Shēma satur ligzdotus objektus. Rediģēt kā neapstrādātu JSON:",
+      "rawJsonLabel": "Spraudņa konfigurācija (JSON)",
+      "invalidJson": "Nederīgs JSON — lūdzu labojiet pirms saglabāšanas."
+    }
   }
 }

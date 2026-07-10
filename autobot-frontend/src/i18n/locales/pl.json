@@ -8678,5 +8678,16 @@
       "refresh": "Odśwież",
       "noSources": "Brak skonfigurowanych źródeł treści"
     }
+  },
+  "components": {
+    "schemaForm": {
+      "requiredMark": "wymagane",
+      "selectPlaceholder": "Wybierz opcję",
+      "removeTag": "Usuń tag",
+      "addTagPlaceholder": "Naciśnij Enter aby dodać",
+      "rawJsonFallback": "Schemat zawiera zagnieżdżone obiekty. Edytuj jako surowy JSON:",
+      "rawJsonLabel": "Konfiguracja wtyczki (JSON)",
+      "invalidJson": "Nieprawidłowy JSON — popraw przed zapisaniem."
+    }
   }
 }

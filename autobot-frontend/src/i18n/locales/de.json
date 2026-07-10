@@ -8678,5 +8678,16 @@
       "refresh": "Aktualisieren",
       "noSources": "Keine Inhaltsquellen konfiguriert"
     }
+  },
+  "components": {
+    "schemaForm": {
+      "requiredMark": "erforderlich",
+      "selectPlaceholder": "Option wählen",
+      "removeTag": "Tag entfernen",
+      "addTagPlaceholder": "Enter drücken zum Hinzufügen",
+      "rawJsonFallback": "Schema enthält verschachtelte Objekte. Als JSON bearbeiten:",
+      "rawJsonLabel": "Plugin-Konfiguration (JSON)",
+      "invalidJson": "Ungültiges JSON — bitte vor dem Speichern korrigieren."
+    }
   }
 }
