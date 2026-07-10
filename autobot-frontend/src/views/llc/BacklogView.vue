@@ -18,7 +18,7 @@
         <button
           v-if="selectedIds.size > 0"
           class="btn-secondary"
-          @click="showBulkAssign = true"
+          @click="openBulkAssign"
         >
           {{ t('llc.backlog.assignSprint', { count: selectedIds.size }) }}
         </button>
@@ -194,8 +194,22 @@
         <h3>{{ t('llc.backlog.assignToSprint') }}</h3>
         <p>{{ t('llc.backlog.itemsSelected', { count: selectedIds.size }) }}</p>
         <div class="form-field">
-          <label>{{ t('llc.backlog.sprintId') }}</label>
-          <input v-model="bulkSprintId" type="text" class="form-input" :placeholder="t('llc.backlog.sprintIdPlaceholder')" />
+          <label>{{ t('llc.backlog.project') }}</label>
+          <select class="form-input" :value="selectedProjectId" :disabled="isLoadingProjects"
+                  @change="onProjectSelect(($event.target as HTMLSelectElement).value)">
+            <option value="">{{ isLoadingProjects ? t('llc.backlog.loadingProjects') : t('llc.backlog.selectProject') }}</option>
+            <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>{{ t('llc.backlog.sprint') }}</label>
+          <select v-model="bulkSprintId" class="form-input" :disabled="!selectedProjectId || isLoadingSprints">
+            <option value="">{{ isLoadingSprints ? t('llc.backlog.loadingSprints') : t('llc.backlog.selectSprint') }}</option>
+            <option v-for="s in sprints" :key="s.id" :value="s.id">{{ s.name }}</option>
+          </select>
+          <p v-if="selectedProjectId && !isLoadingSprints && sprints.length === 0" class="form-hint">
+            {{ t('llc.backlog.noSprints') }}
+          </p>
         </div>
         <div class="modal-actions">
           <button class="btn-secondary" @click="showBulkAssign = false">{{ t('common.cancel') }}</button>
@@ -270,6 +284,15 @@ const suggestedACs = ref<{ text: string; selected: boolean }[]>([])
 const showBulkAssign = ref(false)
 const isBulkAssigning = ref(false)
 const bulkSprintId = ref('')
+
+interface ProjectOpt { id: string; name: string; lifecycle_state: string }
+interface SprintOpt { id: string; name: string; status: string }
+
+const projects = ref<ProjectOpt[]>([])
+const sprints = ref<SprintOpt[]>([])
+const selectedProjectId = ref('')
+const isLoadingProjects = ref(false)
+const isLoadingSprints = ref(false)
 
 const filteredItems = computed(() => {
   return items.value.filter(item => {
@@ -398,6 +421,49 @@ async function createItem() {
   } finally {
     isCreating.value = false
   }
+}
+
+// Cascade picker for bulk sprint assignment: pick a Project, then a Sprint from
+// that project. Only assignable (non-archived) projects and (open) sprints are
+// offered so a user never needs to paste a raw Sprint UUID (#10853).
+async function loadProjects() {
+  isLoadingProjects.value = true
+  try {
+    const result = await api.get<ProjectOpt[]>(`/api/llc/companies/${companyId.value}/projects`)
+    projects.value = (result ?? []).filter(
+      p => p.lifecycle_state !== 'archived' && p.lifecycle_state !== 'disposed',
+    )
+  } catch (err) {
+    logger.error('Failed to load projects', err)
+  } finally {
+    isLoadingProjects.value = false
+  }
+}
+
+async function onProjectSelect(projectId: string) {
+  selectedProjectId.value = projectId
+  bulkSprintId.value = ''
+  sprints.value = []
+  if (!projectId) return
+  isLoadingSprints.value = true
+  try {
+    const result = await api.get<SprintOpt[]>(`/api/llc/projects/${projectId}/sprints`)
+    sprints.value = (result ?? []).filter(
+      sp => sp.status !== 'closed' && sp.status !== 'archived',
+    )
+  } catch (err) {
+    logger.error('Failed to load sprints', err)
+  } finally {
+    isLoadingSprints.value = false
+  }
+}
+
+function openBulkAssign() {
+  showBulkAssign.value = true
+  selectedProjectId.value = ''
+  sprints.value = []
+  bulkSprintId.value = ''
+  if (projects.value.length === 0) loadProjects()
 }
 
 async function bulkAssign() {
@@ -703,6 +769,12 @@ onMounted(fetchBacklog)
   margin: 0 0 0.5rem;
   font-size: 0.8125rem;
   color: var(--color-danger, #b91c1c);
+}
+
+.form-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #6b7280);
 }
 
 .btn-primary {
