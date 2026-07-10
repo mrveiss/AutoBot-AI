@@ -55,3 +55,21 @@ def test_complete_re_detects_missing_gt_and_wellformed_but_not_callable():
     assert complete.search("</TOOL_CALL>") is not None
     assert complete.search("</TOOL_CALL\n") is not None  # #11545
     assert complete.search("</tool_callable>") is None
+
+
+def test_two_back_to_back_calls_parse_separately_first_missing_gt():
+    """#11545: two calls (first missing '>') must parse as 2 separate matches,
+    not merge — the risk from making '>' optional."""
+    pat, _ = _load_patterns()
+    text = _OPEN.replace('create_task', 'a') + "</TOOL_CALL\n" + \
+        "<TOOL_CALL name=\"b\" params='{\"y\":2}'>second</TOOL_CALL>"
+    matches = list(pat.finditer(text))
+    assert [m.group(1) for m in matches] == ["a", "b"]
+    assert matches[1].group(3) == '{"y":2}'  # second call's params intact
+
+
+def test_trailing_prose_with_tool_call_mention_not_captured():
+    pat, _ = _load_patterns()
+    text = _OPEN + "</TOOL_CALL\n\nLater I referenced </tool_call in prose."
+    m = pat.search(text)
+    assert m and m.group(4).strip() == "Create task"  # desc not polluted by later mention
