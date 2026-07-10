@@ -1680,9 +1680,9 @@ watch(() => props.mode, () => {
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--color-error-bg, #3c1515);
-  color: var(--color-error, #f87171);
-  border: 1px solid var(--color-error, #f87171);
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  border: 1px solid var(--color-error);
   border-radius: var(--radius-md);
   padding: var(--spacing-2-5) var(--spacing-5);
   font-size: var(--text-sm);

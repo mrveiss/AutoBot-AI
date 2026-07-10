@@ -314,7 +314,7 @@ function formatDate(iso: string): string {
   gap: var(--spacing-2);
   padding: var(--spacing-6);
   text-align: center;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
   font-size: 0.9rem;
   flex: 1;
 }
@@ -322,16 +322,16 @@ function formatDate(iso: string): string {
 .empty-icon {
   font-size: 2rem;
   margin-bottom: var(--spacing-2);
-  color: var(--text-muted, #555);
+  color: var(--text-muted);
 }
 
 .empty-hint {
   font-size: 0.8rem;
-  color: var(--text-muted, #666);
+  color: var(--text-muted);
 }
 
 .chat-link {
-  color: var(--color-primary, #4caf50);
+  color: var(--color-primary);
   text-decoration: none;
 }
 
@@ -353,19 +353,19 @@ function formatDate(iso: string): string {
   flex-direction: column;
   padding: var(--spacing-2-5) var(--spacing-4);
   cursor: pointer;
-  border-bottom: 1px solid var(--border-default, #2a2a2a);
+  border-bottom: 1px solid var(--border-default);
   gap: var(--spacing-0-5);
   position: relative;
   transition: background 0.12s;
 }
 
 .document-item:hover {
-  background: var(--color-background-hover, #2a2a2a);
+  background: var(--bg-hover);
 }
 
 .document-item.active {
-  background: var(--color-primary-dim, #1e3a1e);
-  border-left: 3px solid var(--color-primary, #4caf50);
+  background: var(--color-primary-bg);
+  border-left: 3px solid var(--color-primary);
 }
 
 .doc-title {
@@ -379,7 +379,7 @@ function formatDate(iso: string): string {
 
 .doc-meta {
   font-size: 0.72rem;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
 }
 
 .delete-btn {
@@ -402,18 +402,18 @@ function formatDate(iso: string): string {
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-2) var(--spacing-3);
-  border-top: 1px solid var(--border-default, #333);
+  border-top: 1px solid var(--border-default);
   font-size: 0.8rem;
   flex-shrink: 0;
 }
 
 .page-info {
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
 }
 
 /* Transcriber nested branch */
 .transcriber-branch {
-  border-top: 1px solid var(--border-default, #333);
+  border-top: 1px solid var(--border-default);
   font-size: var(--text-sm);
 }
 
@@ -421,7 +421,7 @@ function formatDate(iso: string): string {
   padding: var(--spacing-2) var(--spacing-3);
   cursor: pointer;
   font-weight: 500;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
   list-style: none;
   user-select: none;
 }
@@ -448,12 +448,12 @@ function formatDate(iso: string): string {
 }
 
 .mini-card:hover {
-  background: var(--color-background-hover, #2a2a2a);
+  background: var(--bg-hover);
 }
 
 .btn-link {
   font-size: 0.75rem;
-  color: var(--color-primary, #4caf50);
+  color: var(--color-primary);
   text-decoration: none;
   padding: var(--spacing-1) var(--spacing-2);
 }
@@ -474,8 +474,8 @@ function formatDate(iso: string): string {
 }
 
 .modal-card {
-  background: var(--color-background-secondary, #252525);
-  border: 1px solid var(--border-default, #444);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   padding: var(--spacing-6);
   width: 360px;
@@ -491,7 +491,7 @@ function formatDate(iso: string): string {
 .modal-body {
   margin: var(--spacing-0) var(--spacing-0) var(--spacing-5);
   font-size: 0.9rem;
-  color: var(--text-muted, #bbb);
+  color: var(--text-muted);
   line-height: 1.5;
 }
 
