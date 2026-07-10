@@ -94,9 +94,7 @@ async def test_create_task_calls_work_item_service_with_authed_actor():
     svc = MagicMock()
     svc.create = AsyncMock(return_value=item)
     with p, patch("llc.services.work_item_service.WorkItemService", return_value=svc):
-        out = await dispatch_llc_tool(
-            "create_task", {"title": "Write Q3 report", "priority": "high"}, _COMPANY, _USER
-        )
+        out = await dispatch_llc_tool("create_task", {"title": "Write Q3 report", "priority": "high"}, _COMPANY, _USER)
     assert out["status"] == "success" and out["entity_type"] == "work_item"
     assert svc.create.await_args.kwargs["company_id"] == _COMPANY
     assert svc.create.await_args.kwargs["title"] == "Write Q3 report"
