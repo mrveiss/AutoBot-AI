@@ -22,6 +22,7 @@ DELETE /api/llm-auth/{provider_name}       — revoke / delete stored tokens
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -85,6 +86,29 @@ _OAUTH_STATE_PREFIX = "llm-auth:oauth:state:"
 
 def _state_key(state: str) -> str:
     return "%s%s" % (_OAUTH_STATE_PREFIX, state)
+
+
+# Device-code poll limiter (#11061): honor RFC-8628 server-side — reject polls
+# faster than the current interval, back off +5s on ``slow_down``, and cap total
+# attempts per device_code. All overridable via env.
+_DEVICE_POLL_MIN_INTERVAL = int(os.getenv("AUTOBOT_DEVICE_POLL_MIN_INTERVAL_SECONDS", "5"))
+_DEVICE_POLL_BACKOFF = int(os.getenv("AUTOBOT_DEVICE_POLL_BACKOFF_SECONDS", "5"))
+_DEVICE_POLL_MAX_ATTEMPTS = int(os.getenv("AUTOBOT_DEVICE_POLL_MAX_ATTEMPTS", "360"))
+_DEVICE_POLL_WINDOW = int(os.getenv("AUTOBOT_DEVICE_POLL_WINDOW_SECONDS", "1800"))
+_DEVICE_POLL_PREFIX = "llm-auth:device:poll:"
+
+
+def _device_poll_key(device_code: str) -> str:
+    # Hash the device_code so the raw grant secret never becomes a Redis key.
+    return "%s%s" % (_DEVICE_POLL_PREFIX, hashlib.sha256(device_code.encode("utf-8")).hexdigest())
+
+
+async def _redis_get(redis, key: str):
+    """Read a key without deleting it (sync- or async-client tolerant)."""
+    value = redis.get(key)
+    if hasattr(value, "__await__"):
+        value = await value
+    return value
 
 
 # ---------------------------------------------------------------------------
@@ -380,6 +404,27 @@ async def device_poll(
     # Validate outbound URL before any HTTP call — prevents SSRF via token_url.
     _validate_outbound_url(req.token_url)
 
+    # RFC-8628 server-side poll limiter (#11061): reject too-fast polls and cap
+    # total attempts BEFORE hitting the provider. Best-effort — skipped if Redis
+    # is unavailable so the flow still works in degraded mode.
+    redis = get_redis_client(database="main")
+    poll_key = _device_poll_key(req.device_code)
+    now = time.time()
+    poll_state = {"interval": _DEVICE_POLL_MIN_INTERVAL, "count": 0, "last_ts": 0.0}
+    if redis is not None:
+        raw = await _redis_get(redis, poll_key)
+        if raw:
+            poll_state = json.loads(raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else raw)
+        if poll_state["count"] >= _DEVICE_POLL_MAX_ATTEMPTS:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="device-code polling attempts exhausted"
+            )
+        if now - poll_state["last_ts"] < poll_state["interval"]:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="polling too fast; honor the device-code interval",
+            )
+
     payload = {
         "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
         "device_code": req.device_code,
@@ -399,6 +444,18 @@ async def device_poll(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
     error = data.get("error")
+    # Update the limiter: on slow_down, back off (+5s, RFC-8628); on a still-pending
+    # grant persist the new state; on a terminal outcome clear it.
+    if redis is not None:
+        if error == "slow_down":
+            poll_state["interval"] += _DEVICE_POLL_BACKOFF
+        poll_state["count"] += 1
+        poll_state["last_ts"] = now
+        if error in ("authorization_pending", "slow_down"):
+            await _redis_setex(redis, poll_key, _DEVICE_POLL_WINDOW, json.dumps(poll_state))
+        else:
+            await _redis_getdel(redis, poll_key)
+
     if error in ("authorization_pending", "slow_down"):
         return OAuthInitiateResponse(provider_name=req.provider_name, stored=False)
     if error:
