@@ -498,16 +498,20 @@ onUnmounted(() => {
   text-transform: capitalize;
 }
 
-.status-succeeded { color: #10b981; }
-.status-succeeded.status-dot { background: #10b981; }
-.status-running { color: #3b82f6; }
-.status-running.status-dot { background: #3b82f6; }
-.status-queued { color: #f59e0b; }
-.status-queued.status-dot { background: #f59e0b; }
-.status-failed { color: #ef4444; }
-.status-failed.status-dot { background: #ef4444; }
-.status-timed_out { color: #ef4444; }
-.status-timed_out.status-dot { background: #ef4444; }
+/* #11457: functional-status colors map to the semantic tokens so they adapt to
+   dark/ember instead of being hardcoded light hexes. The fallbacks equal the base
+   (light) token values, so light/dark render identically and ember picks up its
+   own palette (success/info are themed; error resolves via the ember alias). */
+.status-succeeded { color: var(--color-success, #10b981); }
+.status-succeeded.status-dot { background: var(--color-success, #10b981); }
+.status-running { color: var(--color-info, #3b82f6); }
+.status-running.status-dot { background: var(--color-info, #3b82f6); }
+.status-queued { color: var(--color-warning, #f59e0b); }
+.status-queued.status-dot { background: var(--color-warning, #f59e0b); }
+.status-failed { color: var(--color-error, #ef4444); }
+.status-failed.status-dot { background: var(--color-error, #ef4444); }
+.status-timed_out { color: var(--color-error, #ef4444); }
+.status-timed_out.status-dot { background: var(--color-error, #ef4444); }
 .status-unknown { color: var(--text-secondary, #9ca3af); }
 .status-unknown.status-dot { background: var(--border-default, #d1d5db); }
 

@@ -132,6 +132,13 @@
   --color-success-bg: var(--green-bg);
   --color-danger: var(--red-500);
   --color-danger-bg: var(--red-bg);
+  /* #11457: alias the functional error/warning tokens to ember's own palette so
+     they resolve to ember hues instead of the base #ef4444 / #f59e0b. Warning maps
+     to ember's gold (its --color-highlight / --badge-dot-medium signal) so all four
+     functional statuses are ember-native (no queued-vs-failed palette split). */
+  --color-error: var(--color-danger);
+  --color-error-bg: var(--color-danger-bg);
+  --color-warning: var(--gold-500);
   --color-info: var(--wine-500);
   --color-info-bg: #f3e2ea;
 
@@ -258,6 +265,11 @@
   --color-success-bg: var(--green-bg-dk);
   --color-danger: var(--red-300);
   --color-danger-bg: var(--red-bg-dk);
+  /* #11457: dark-ember functional error/warning alias ember's dark palette
+     (danger red + gold) so all four functional statuses are ember-native. */
+  --color-error: var(--color-danger);
+  --color-error-bg: var(--color-danger-bg);
+  --color-warning: var(--gold-400);
   --color-info: var(--wine-300);
   --color-info-bg: #2e1822;
 
