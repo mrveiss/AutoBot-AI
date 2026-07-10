@@ -2926,7 +2926,17 @@
       "watchFolders": "Watch Folders",
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "مرورگر",
-      "browserAriaLabel": "مرور، جستجو و ویرایش اسناد دانش"
+      "browserAriaLabel": "مرور، جستجو و ویرایش اسناد دانش",
+      "health": "سلامت",
+      "healthAriaLabel": "سلامت دانش، تحلیل‌ها، تأیید و ابزارها"
+    },
+    "health": {
+      "tabAnalytics": "تحلیل‌ها",
+      "tabVerification": "تأیید",
+      "tabTools": "ابزارها",
+      "feedAll": "همه",
+      "feedCreated": "ایجادشده",
+      "feedUpdated": "به‌روزشده"
     },
     "upload": {
       "selectCategory": "Select category...",

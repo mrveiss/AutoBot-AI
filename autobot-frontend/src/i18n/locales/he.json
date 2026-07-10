@@ -2926,7 +2926,17 @@
       "watchFolders": "Watch Folders",
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "דפדפן",
-      "browserAriaLabel": "עיון, חיפוש ועריכת מסמכי ידע"
+      "browserAriaLabel": "עיון, חיפוש ועריכת מסמכי ידע",
+      "health": "בריאות",
+      "healthAriaLabel": "בריאות הידע, ניתוחים, אימות וכלים"
+    },
+    "health": {
+      "tabAnalytics": "ניתוחים",
+      "tabVerification": "אימות",
+      "tabTools": "כלים",
+      "feedAll": "הכל",
+      "feedCreated": "נוצר",
+      "feedUpdated": "עודכן"
     },
     "upload": {
       "selectCategory": "Select category...",

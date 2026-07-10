@@ -2659,7 +2659,17 @@
       "watchFolders": "Watch Folders",
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "Browser",
-      "browserAriaLabel": "Browse, search and edit knowledge documents"
+      "browserAriaLabel": "Browse, search and edit knowledge documents",
+      "health": "Health",
+      "healthAriaLabel": "Knowledge health, analytics, verification and tools"
+    },
+    "health": {
+      "tabAnalytics": "Analytics",
+      "tabVerification": "Verification",
+      "tabTools": "Tools",
+      "feedAll": "All",
+      "feedCreated": "Created",
+      "feedUpdated": "Updated"
     },
     "backup": {
       "title": "Backup & Restore",
