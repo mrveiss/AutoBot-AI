@@ -367,7 +367,7 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'maintenance',
         name: 'knowledge-maintenance',
-        component: () => import('@/components/knowledge/KnowledgeMaintenance.vue'),
+        component: () => import('@/components/knowledge/KnowledgeHealth.vue'),
         meta: {
           title: 'Knowledge Maintenance',
           parent: 'knowledge'
