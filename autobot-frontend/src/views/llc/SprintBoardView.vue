@@ -298,10 +298,11 @@ onMounted(async () => {
   text-transform: capitalize;
 }
 
-.status-planning { background: #fef9c3; color: #713f12; }
-.status-active { background: #d1fae5; color: #065f46; }
-.status-review { background: #ddd6fe; color: #5b21b6; }
-.status-closed { background: #f3f4f6; color: #374151; }
+/* sprint status palette — theme-adaptive (GH#10868) */
+.status-planning { background: var(--badge-sprint-planning-bg); color: var(--badge-sprint-planning-fg); }
+.status-active { background: var(--badge-sprint-active-bg); color: var(--badge-sprint-active-fg); }
+.status-review { background: var(--badge-sprint-review-bg); color: var(--badge-sprint-review-fg); }
+.status-closed { background: var(--badge-sprint-closed-bg); color: var(--badge-sprint-closed-fg); }
 
 .sprint-stats {
   display: flex;
