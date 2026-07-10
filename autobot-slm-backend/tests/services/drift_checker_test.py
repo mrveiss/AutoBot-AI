@@ -101,6 +101,28 @@ class TestComputeDriftExclusions:
             drifted, _ = compute_drift(str(src), str(dep))
             assert any(d["path"] == "services/code_sync.py" for d in drifted)
 
+    def test_egg_info_dir_not_reported_as_drift(self):
+        """#11440: <pkg>.egg-info build-artifact dirs (deployed-only, pip-generated)
+        are pruned from the walk, not reported as permanent false drift. Their
+        contents are .txt (an included extension), so without the suffix-skip they
+        would surface as deployed-only drift forever."""
+        with tempfile.TemporaryDirectory() as src_root, tempfile.TemporaryDirectory() as dep_root:
+            src = Path(src_root)
+            dep = Path(dep_root)
+
+            self._write(src, "main.py", b"import os")
+            self._write(dep, "main.py", b"import os")
+
+            # pip-install artifacts present ONLY in the deployed dir.
+            self._write(dep, "autobot_shared.egg-info/SOURCES.txt", b"main.py\n")
+            self._write(dep, "autobot_shared.egg-info/requires.txt", b"redis\n")
+            self._write(dep, "autobot_shared.egg-info/top_level.txt", b"autobot_shared\n")
+            self._write(dep, "autobot_shared.egg-info/dependency_links.txt", b"\n")
+
+            drifted, _ = compute_drift(str(src), str(dep))
+            paths = [d["path"] for d in drifted]
+            assert paths == [], f"egg-info artifacts must not be reported as drift, got: {paths}"
+
     def test_total_compared_excludes_expected_drift_paths(self):
         """total_compared must count only non-excluded paths (Issue #4631)."""
         with tempfile.TemporaryDirectory() as src_root, tempfile.TemporaryDirectory() as dep_root:
