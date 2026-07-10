@@ -1,5 +1,11 @@
 <template>
   <div class="knowledge-file-browser">
+    <!-- Error toast for document branch / editor errors -->
+    <div v-if="docBranchError" class="error-toast" role="alert">{{ docBranchError }}</div>
+
+    <!-- Search bar (Issue #11526: unified search) -->
+    <KnowledgeSearchBar :search="search" />
+
     <!-- Main Categories -->
     <KnowledgeMainCategories
       :categories="mainCategories"
@@ -171,11 +177,32 @@
             <Icon name="spinner" class="animate-spin" />
             <span>{{ $t('knowledge.browser.loadingMoreEntries') }}</span>
           </div>
+
+          <!-- AI Documents branch (Issue #11526) -->
+          <KnowledgeDocumentsBranch
+            :selected-doc-id="selectedDocId"
+            @select="onDocSelect"
+            @deleted="onDocDeleted"
+            @error="docBranchError = $event"
+          />
         </div>
       </div>
 
-      <!-- Right: Content Viewer (70%) -->
+      <!-- Right pane: editor > results > content viewer -->
+      <AIDocumentEditor
+        v-if="rightPane === 'editor'"
+        :doc-id="selectedDocId!"
+        class="content-pane"
+        @error="docBranchError = $event"
+      />
+      <KnowledgeSearchResults
+        v-else-if="rightPane === 'results'"
+        :search="search"
+        class="content-pane"
+        @close="search.clearResults()"
+      />
       <KnowledgeContentViewer
+        v-else
         :selected-file="selectedFile"
         :content="fileContent"
         :is-loading="isLoadingContent"
@@ -191,7 +218,7 @@ import Icon from '@/components/ui/Icon.vue'
 import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { createLogger } from '@/utils/debugUtils'
 import {
   fetchMainCategories,
@@ -209,10 +236,15 @@ import { formatCategoryName } from '@/utils/formatHelpers'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
 import { useLoadingState } from '@/composables/useLoadingState'
 import { useDebounce } from '@/composables/useTimeout'
+import { useKnowledgeSearch } from '@/composables/knowledge/useKnowledgeSearch'
 import TreeNodeComponent, { type TreeNode } from './TreeNodeComponent.vue'
 import VectorizationProgressModal from './VectorizationProgressModal.vue'
 import KnowledgeBrowserHeader from './KnowledgeBrowserHeader.vue'
 import KnowledgeContentViewer from './KnowledgeContentViewer.vue'
+import KnowledgeSearchBar from './KnowledgeSearchBar.vue'
+import KnowledgeSearchResults from './KnowledgeSearchResults.vue'
+import KnowledgeDocumentsBranch from './KnowledgeDocumentsBranch.vue'
+import AIDocumentEditor from '@/components/documents/AIDocumentEditor.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import KnowledgeMainCategories from './KnowledgeMainCategories.vue'
@@ -242,8 +274,9 @@ const {
   cleanup: cleanupVectorization
 } = useKnowledgeVectorization()
 
-// Router for navigation
+// Router / route for navigation and deep-link handling
 const router = useRouter()
+const route = useRoute()
 
 // Props
 interface Props {
@@ -318,6 +351,35 @@ const populationStates = ref<Record<string, { isPopulating: boolean; progress: n
   'system-knowledge': { isPopulating: false, progress: 0 }
 })
 
+// Search, document editor and branch state (Issue #11526)
+const search = useKnowledgeSearch(selectedCategory)
+const selectedDocId = ref<string | null>(null)
+const docBranchError = ref<string | null>(null)
+
+// Auto-clear docBranchError after 5000ms (mirrors DocumentsView showError semantics)
+let _docBranchErrorTimer: ReturnType<typeof setTimeout> | null = null
+watch(docBranchError, (msg) => {
+  if (_docBranchErrorTimer) clearTimeout(_docBranchErrorTimer)
+  if (msg) {
+    _docBranchErrorTimer = setTimeout(() => { docBranchError.value = null }, 5000)
+  }
+})
+
+// Right-pane priority: document editor > search results > content viewer
+const rightPane = computed<'editor' | 'results' | 'viewer'>(() => {
+  if (selectedDocId.value) return 'editor'
+  if (search.searchPerformed.value) return 'results'
+  return 'viewer'
+})
+
+function onDocSelect(id: string) {
+  selectedDocId.value = id
+  clearSelection()
+}
+
+function onDocDeleted(id: string) {
+  if (selectedDocId.value === id) selectedDocId.value = null
+}
 
 // Use composables for async operations
 const { isLoading, wrap: loadKnowledgeTree } = useLoadingState()
@@ -785,6 +847,7 @@ const toggleNode = (nodeId: string) => {
 
 const selectNode = async (node: TreeNode) => {
   if (node.type === 'file') {
+    selectedDocId.value = null  // picking a fact leaves the AI document editor
     selectedFile.value = node
     await loadFileContent(node)
   } else {
@@ -1095,6 +1158,17 @@ onMounted(() => {
   // Set preselected category from props
   if (props.preselectedCategory) {
     selectedMainCategory.value = props.preselectedCategory
+  }
+
+  // Deep links: ?doc= opens the editor, ?q= runs a search, ?view=system
+  // pre-selects the system main category (fixes the previously inert
+  // query set by the legacy manpages/system-knowledge redirects).
+  if (typeof route.query.doc === 'string') selectedDocId.value = route.query.doc
+  if (typeof route.query.category === 'string') selectedCategory.value = route.query.category
+  if (route.query.view === 'system') selectedMainCategory.value = 'system-knowledge'
+  if (typeof route.query.q === 'string' && route.query.q.trim()) {
+    search.searchQuery.value = route.query.q
+    search.handleSearch()
   }
 })
 
@@ -1595,5 +1669,22 @@ watch(() => props.mode, () => {
 .tree-pane::-webkit-scrollbar-thumb:hover,
 .content-pane::-webkit-scrollbar-thumb:hover {
   background: var(--border-secondary);
+}
+
+/* Error toast — Issue #11526 (moved from DocumentsView) */
+.error-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-error-bg, #3c1515);
+  color: var(--color-error, #f87171);
+  border: 1px solid var(--color-error, #f87171);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-2-5) var(--spacing-5);
+  font-size: var(--text-sm);
+  z-index: var(--z-popover);
+  max-width: 90vw;
+  text-align: center;
 }
 </style>
