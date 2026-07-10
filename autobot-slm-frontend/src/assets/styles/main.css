@@ -117,6 +117,49 @@
   --a11y-sidebar-active: #0284c7;
 }
 
+/* ─── Semantic token aliases (#11515 Task 2.1) ────────────────────
+ * SLM components were written against user-frontend token names
+ * (--text-primary, --bg-secondary, --border-color, --color-primary, …)
+ * that were never defined here, so every `var(--text-primary, #fallback)`
+ * silently used its hardcoded fallback and ignored the theme. Map those
+ * names onto the real SLM tokens: the theme-adaptive --a11y-* set (redefined
+ * per :root / [data-theme='dark'] / [data-theme='high-contrast']) for
+ * surface/text/border, and the --color-*-500 scale for brand/status. var() is
+ * resolved at use-time, so these resolve to the ACTIVE theme's values. */
+:root {
+  /* Text */
+  --text-primary: var(--a11y-text);
+  --text-secondary: var(--a11y-text-muted);
+  --text-muted: var(--a11y-text-muted);
+  /* Surfaces */
+  --bg-primary: var(--a11y-bg);
+  --bg-secondary: var(--a11y-bg-surface);
+  --bg-tertiary: var(--a11y-bg-muted);
+  --bg-hover: var(--a11y-bg-muted);
+  /* Border */
+  --border-color: var(--a11y-border);
+  /* Brand / accent */
+  --color-primary: var(--color-primary-500);
+  --primary-color: var(--color-primary-500);
+  --primary: var(--color-primary-500);
+  --color-accent: var(--color-primary-500);
+  /* Status foregrounds */
+  --color-success: var(--color-success-500);
+  --success-color: var(--color-success-500);
+  --color-warning: var(--color-warning-500);
+  --warning-color: var(--color-warning-500);
+  --color-danger: var(--color-danger-500);
+  --danger-color: var(--color-danger-500);
+  --color-info: var(--color-primary-500);
+  --info-color: var(--color-primary-500);
+  /* Status backgrounds — tint the status hue over the active surface so they
+   * stay theme-aware (dark themes get a dark-tinted chip, not a light one). */
+  --success-bg: color-mix(in srgb, var(--color-success-500) 14%, var(--a11y-bg));
+  --warning-bg: color-mix(in srgb, var(--color-warning-500) 14%, var(--a11y-bg));
+  --danger-bg: color-mix(in srgb, var(--color-danger-500) 14%, var(--a11y-bg));
+  --info-bg: color-mix(in srgb, var(--color-primary-500) 14%, var(--a11y-bg));
+}
+
 /* ─── High Contrast Mode (Issue #754) ────────────────────────── */
 
 :root[data-theme='high-contrast'] {
