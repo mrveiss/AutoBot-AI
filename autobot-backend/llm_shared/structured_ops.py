@@ -165,10 +165,7 @@ async def _extract_single(
     prompt for attempt N+1.
     """
     schema_repr = _schema_to_repr(schema)
-    base_prompt = (
-        f"{_build_system_prompt(schema_repr)}\n\n"
-        f"Text to extract from:\n\n{text}"
-    )
+    base_prompt = f"{_build_system_prompt(schema_repr)}\n\n" f"Text to extract from:\n\n{text}"
     prompt = base_prompt
     last_error: str = ""
 
@@ -191,9 +188,7 @@ async def _extract_single(
             last_error = f"JSONDecodeError: {exc}"
             logger.warning("structured_ops: JSON parse failed (attempt %d): %s", attempt, exc)
             if attempt >= max_retries:
-                raise ExtractionError(
-                    f"LLM returned non-JSON output after {max_retries} attempts: {exc}"
-                ) from exc
+                raise ExtractionError(f"LLM returned non-JSON output after {max_retries} attempts: {exc}") from exc
             continue
 
         # --- Validate ---
@@ -205,13 +200,9 @@ async def _extract_single(
                 return _validate_pydantic(data, schema)
         except Exception as exc:
             last_error = str(exc)
-            logger.warning(
-                "structured_ops: validation failed (attempt %d): %s", attempt, exc
-            )
+            logger.warning("structured_ops: validation failed (attempt %d): %s", attempt, exc)
             if attempt >= max_retries:
-                raise ExtractionError(
-                    f"Schema validation failed after {max_retries} attempts: {exc}"
-                ) from exc
+                raise ExtractionError(f"Schema validation failed after {max_retries} attempts: {exc}") from exc
 
     # Should be unreachable — loop always returns or raises above.
     raise ExtractionError("extract: exhausted all attempts without result")  # pragma: no cover
@@ -296,10 +287,7 @@ async def extract(
         * Scalar/object fields: last non-null/non-empty chunk value wins.
         * List/array fields: concatenated; exact string duplicates removed.
     """
-    should_chunk = (
-        chunking == "auto"
-        and len(text) > EXTRACT_CHUNK_THRESHOLD_CHARS
-    )
+    should_chunk = chunking == "auto" and len(text) > EXTRACT_CHUNK_THRESHOLD_CHARS
 
     if not should_chunk:
         return await _extract_single(text, schema, llm_type, max_retries)
@@ -318,17 +306,13 @@ async def extract(
         chunk_texts = [c.content for c in chunks] if chunks else [text]
     except Exception as exc:
         # Graceful degradation: chunking unavailable, run on full text.
-        logger.warning(
-            "structured_ops.extract: chunking failed (%s) — using full text", exc
-        )
+        logger.warning("structured_ops.extract: chunking failed (%s) — using full text", exc)
         chunk_texts = [text]
 
     if len(chunk_texts) <= 1:
         return await _extract_single(text, schema, llm_type, max_retries)
 
-    logger.info(
-        "structured_ops.extract: processing %d chunks", len(chunk_texts)
-    )
+    logger.info("structured_ops.extract: processing %d chunks", len(chunk_texts))
     results: list[Any] = []
     for i, chunk_text in enumerate(chunk_texts, 1):
         logger.debug("structured_ops.extract: chunk %d/%d", i, len(chunk_texts))
