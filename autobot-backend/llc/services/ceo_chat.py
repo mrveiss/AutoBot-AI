@@ -4,19 +4,19 @@
 # Author: mrveiss
 """CEO Chat service — company-scoped chat resolving to work objects (GH#8233).
 
-CeoChatService.send() flow:
-  1. RAG-query ``company:{company_id}`` KB collection with message text (top 5).
-  2. Call LLM via ``llm_shared`` with board-interface system prompt.
-  3. Interpret structured JSON response → call appropriate LLC service.
-  4. Persist resolution in ``resolved_entity_type`` + ``resolved_entity_id``.
-  5. Return system reply message with link to the resolved entity.
+#11501 T2: CeoChatService.send() now delegates to the shared chat pipeline
+(chat_workflow) instead of a bespoke intent-classifier. The board LLM gets the
+same experience as /chat and creates work objects by calling the LLC tools
+(create_task / update_goal / request_approval / record_decision), which are
+taught in the system prompt only when the request context carries a company_id.
 
-Resolution intents:
-  create_task        → WorkItemService.create()
-  update_goal        → GoalService.update()
-  request_approval   → ApprovalService.create()
-  record_decision    → stored as thread annotation (resolved_entity_type="decision")
-  clarify            → no entity created; asks for more info
+Flow:
+  1. Persist the human message.
+  2. RAG-query the company + decisions KB for grounding (top 5 chunks).
+  3. Delegate to ChatWorkflowManager.process_message_stream with
+     {company_id, user_id} context; the LLC tools execute company-scoped.
+  4. Persist the streamed reply; set resolved_entity_type/id from the tool
+     result when the LLM created an entity.
 """
 
 import logging
@@ -105,15 +105,15 @@ class CeoChatService(LLCServiceBase):
         *,
         company_name: str = "the company",
     ) -> LLCCeoChatMessage:
-        """Process a human message and return the system reply.
+        """Process a human board message and return the system reply (#11501 T2).
 
         Steps:
           1. Persist the human message.
-          2. RAG-query the company KB for context.
-          3. Call LLM to resolve the intent.
-          4. Call the appropriate LLC service for non-clarify intents.
-          5. Update thread resolution fields.
-          6. Persist and return the system reply message.
+          2. RAG-query the company + decisions KB for grounding.
+          3-6. Delegate to the shared chat pipeline (_run_pipeline): the board
+             LLM answers and creates work objects via the LLC tools, then the
+             reply is persisted and the thread resolution updated if an entity
+             was created. company_name grounds the prompt.
         """
         # 1. Persist the incoming human message
         human_msg = LLCCeoChatMessage(
@@ -143,6 +143,7 @@ class CeoChatService(LLCServiceBase):
             company_id=company_id,
             user_id=user_id,
             kb_chunks=kb_chunks,
+            company_name=company_name,
         )
 
         if entity_type and entity_id:
@@ -170,21 +171,28 @@ class CeoChatService(LLCServiceBase):
         company_id: str,
         user_id: Optional[str],
         kb_chunks: List[str],
+        company_name: str = "the company",
     ) -> tuple[str, Optional[str], Optional[str]]:
         """Run the board message through the shared chat pipeline (#11501 T2).
 
         Returns (reply_text, entity_type, entity_id). company_id/user_id go in
         the context so the LLC tools (create_task/...) execute company-scoped;
-        the thread_id is the chat session_id. Company-KB chunks are prepended as
-        grounding. Reply is the last ``response`` message; the created entity (if
-        any) is read from the LLC tool-result metadata.
+        the thread_id is the chat session_id. Company name + KB chunks are
+        prepended as grounding. The created entity (if any) is read from the LLC
+        tool-result metadata.
+
+        Reply assembly (#11525 review): streaming ``response`` chunks are
+        cumulative snapshots keyed by message id, so we keep the latest content
+        per id and join distinct segments in order — robust whether the model
+        ends with a single ``respond`` message or interleaves prose + thoughts.
         """
-        grounded = message
+        grounded = f"[Company: {company_name}]\n"
         if kb_chunks:
-            grounded = "Company context:\n" + "\n".join(kb_chunks[:5]) + "\n\n---\n\n" + message
+            grounded += "Company context:\n" + "\n".join(kb_chunks[:5]) + "\n\n---\n\n"
+        grounded += message
         context = {"company_id": company_id, "user_id": user_id or ""}
 
-        reply_parts: List[str] = []
+        responses: "dict[str, str]" = {}  # message-id → latest full content, in order
         entity_type: Optional[str] = None
         entity_id: Optional[str] = None
         manager = _get_workflow_manager()
@@ -193,13 +201,14 @@ class CeoChatService(LLCServiceBase):
             content = getattr(msg, "content", "") or ""
             meta = getattr(msg, "metadata", None) or {}
             if mtype == "response" and content:
-                reply_parts.append(content)
+                mid = getattr(msg, "id", None) or f"_seg{len(responses)}"
+                responses[mid] = content  # snapshots replace; new segments append
             result = meta.get("result") if isinstance(meta, dict) else None
             if isinstance(result, dict) and result.get("entity_type") and result.get("entity_id"):
                 entity_type = result["entity_type"]
                 entity_id = result["entity_id"]
 
-        reply = reply_parts[-1] if reply_parts else "Done."
+        reply = "\n\n".join(v for v in responses.values() if v).strip() or "Done."
         return reply, entity_type, entity_id
 
     # --------------------------------------------------------------- Helpers

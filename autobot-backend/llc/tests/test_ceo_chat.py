@@ -224,3 +224,46 @@ async def test_rag_query_graceful_failure(svc: CeoChatService) -> None:
         else:
             sys.modules["utils.async_chromadb_client"] = orig
     assert result == []
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_joins_multi_segment_responses(svc: CeoChatService) -> None:
+    """#11525 review: prose answer interrupted by a thought yields two response
+    segments (distinct ids) — both must survive, not just the last."""
+
+    async def _stream(session_id, message, context):
+        a = _Msg("response", "Our runway is 14 months.", {})
+        a.id = "seg1"
+        b = _Msg("response", "We should raise in Q3.", {})
+        b.id = "seg2"
+        yield a
+        yield b
+
+    fake_mgr = MagicMock()
+    fake_mgr.process_message_stream = _stream
+    with patch("llc.services.ceo_chat._get_workflow_manager", return_value=fake_mgr):
+        reply, _, _ = await svc._run_pipeline(
+            thread_id="t1", message="runway?", company_id="co1", user_id="u1", kb_chunks=[]
+        )
+    assert "14 months" in reply and "raise in Q3" in reply  # both segments preserved
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_snapshots_same_id_take_latest(svc: CeoChatService) -> None:
+    """Cumulative streaming snapshots share an id — keep the latest (full) one."""
+
+    async def _stream(session_id, message, context):
+        a = _Msg("response", "Created", {})
+        a.id = "r1"
+        b = _Msg("response", "Created the Q3 task.", {})
+        b.id = "r1"
+        yield a
+        yield b
+
+    fake_mgr = MagicMock()
+    fake_mgr.process_message_stream = _stream
+    with patch("llc.services.ceo_chat._get_workflow_manager", return_value=fake_mgr):
+        reply, _, _ = await svc._run_pipeline(
+            thread_id="t1", message="task", company_id="co1", user_id="u1", kb_chunks=[]
+        )
+    assert reply == "Created the Q3 task."  # snapshot replaced, not duplicated
