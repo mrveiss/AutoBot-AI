@@ -172,6 +172,10 @@ def test_run_post_sync_steps_restart_true_calls_restart() -> None:
         patch("api.code_sync._run_alembic_migrations", AsyncMock()),
         patch("api.code_sync._ensure_autobot_shared_symlink", AsyncMock()),
         patch("api.code_sync._restart_component_services", restart_mock),
+        # #11462: restart=True runs the post-restart health poll (_wait_component_healthy),
+        # which otherwise makes real httpx polls until the _HEALTH_POLL_TIMEOUT deadline
+        # (180s since #11419) — ~3 min of dead wall time that reads as a hang. Mock it.
+        patch("api.code_sync._wait_component_healthy", AsyncMock(return_value=True)),
     ):
         _, steps, pip_ok = _run(
             _run_post_sync_steps(
