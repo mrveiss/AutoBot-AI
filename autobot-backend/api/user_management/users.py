@@ -295,11 +295,12 @@ async def update_user(
 async def delete_user(
     user_id: uuid.UUID,
     hard_delete: bool = Query(False, description="Permanently delete user"),
+    reassign_to: uuid.UUID | None = Query(None, description="Reassign the deleted user's memory records to this user"),
     user_service: UserService = Depends(get_user_service),
 ):
-    """Delete user account."""
+    """Delete user account, optionally reassigning memory ownership to *reassign_to*."""
     try:
-        await user_service.delete_user(user_id, hard_delete=hard_delete)
+        await user_service.delete_user(user_id, hard_delete=hard_delete, reassign_to=reassign_to)
         return UserDeletedResponse(
             message=f"User {user_id} deleted successfully",
         )
