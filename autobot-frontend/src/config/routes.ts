@@ -38,22 +38,15 @@ export const routeConfig: RouteConfig[] = [
   },
   {
     path: '/knowledge',
-    redirectTo: '/knowledge/search',
+    redirectTo: '/knowledge/browser',
     description: 'Knowledge base',
     icon: 'fas fa-brain',
     children: [
       {
-        path: '/knowledge/search',
-        name: 'knowledge-search',
-        component: 'KnowledgeSearch',
-        description: 'Knowledge search',
-        icon: 'fas fa-search'
-      },
-      {
-        path: '/knowledge/categories',
-        name: 'knowledge-categories',
-        component: 'KnowledgeCategories',
-        description: 'Categories management',
+        path: '/knowledge/browser',
+        name: 'knowledge-browser',
+        component: 'KnowledgeBrowser',
+        description: 'Unified knowledge browser',
         icon: 'fas fa-folder-tree'
       },
       {

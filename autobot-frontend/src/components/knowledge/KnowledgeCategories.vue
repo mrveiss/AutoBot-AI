@@ -263,9 +263,9 @@ const getKBStats = async () => {
 }
 
 const _browseCategory = async (category: string) => {
-  // Navigate to search with category filter
+  // Navigate to browser with category filter
   router.push({
-    path: '/knowledge/search',
+    path: '/knowledge/browser',
     query: { category }
   })
 }

@@ -150,39 +150,7 @@ export const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'knowledge-default',
-        redirect: '/knowledge/search'
-      },
-      {
-        path: 'search',
-        name: 'knowledge-search',
-        component: () => import('@/components/knowledge/KnowledgeSearch.vue'),
-        meta: {
-          title: 'Search Knowledge',
-          parent: 'knowledge'
-        }
-      },
-      {
-        // TASK 1a (#3245): AI Documents migrated under Knowledge sidebar.
-        // Legacy /documents + /documents/:docId redirect here (see below).
-        path: 'documents',
-        name: 'knowledge-documents',
-        component: () => import('@/views/DocumentsView.vue'),
-        meta: {
-          title: 'AI Documents',
-          parent: 'knowledge'
-        },
-        children: [
-          {
-            path: ':docId',
-            name: 'document-detail',
-            component: () => import('@/views/DocumentsView.vue'),
-            props: true,
-            meta: {
-              title: 'AI Document',
-              parent: 'knowledge'
-            }
-          }
-        ]
+        redirect: '/knowledge/browser'
       },
       {
         // TASK 1b (#9044): Transcriber migrated under Knowledge sidebar.
@@ -217,11 +185,11 @@ export const routes: RouteRecordRaw[] = [
         ]
       },
       {
-        path: 'categories',
-        name: 'knowledge-categories',
+        path: 'browser',
+        name: 'knowledge-browser',
         component: () => import('@/components/knowledge/KnowledgeBrowser.vue'),
         meta: {
-          title: 'Browse Knowledge',
+          title: 'Knowledge Browser',
           parent: 'knowledge'
         }
       },
@@ -319,24 +287,24 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'manpages',
         redirect: () => ({
-          path: '/knowledge/categories',
+          path: '/knowledge/browser',
           query: { view: 'system' }
         })
       },
       {
         path: 'system-knowledge',
         redirect: () => ({
-          path: '/knowledge/categories',
+          path: '/knowledge/browser',
           query: { view: 'system' }
         })
       },
       {
         path: 'browser/user',
-        redirect: '/knowledge/categories'
+        redirect: '/knowledge/browser'
       },
       {
         path: 'browser/autobot',
-        redirect: '/knowledge/categories'
+        redirect: '/knowledge/browser'
       },
       {
         path: 'graph',
@@ -821,11 +789,11 @@ export const routes: RouteRecordRaw[] = [
   // as redirects so existing bookmarks and deep links keep working.
   {
     path: '/documents',
-    redirect: '/knowledge/documents',
+    redirect: '/knowledge/browser',
   },
   {
     path: '/documents/:docId',
-    redirect: (to) => ({ path: `/knowledge/documents/${to.params.docId}` }),
+    redirect: (to) => ({ path: '/knowledge/browser', query: { doc: String(to.params.docId) } }),
   },
   // MVA-360: Live Canvas — route always registered (preserves bookmarks/direct nav);
   // nav item gated by VITE_FEATURE_CANVAS via navItems.ts (GH#8758)
