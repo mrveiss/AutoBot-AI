@@ -144,8 +144,8 @@
     <!-- Recent Activity with Filter Chips -->
     <BasePanel variant="bordered" size="md">
       <div class="activity-header">
-        <h4>{{ $t('knowledge.stats.recentActivity.title') }}</h4>
-        <div class="feed-filter-chips" role="group" :aria-label="$t('knowledge.stats.recentActivity.title')">
+        <h4>{{ $t('knowledge.stats.recentActivity') }}</h4>
+        <div class="feed-filter-chips" role="group" :aria-label="$t('knowledge.stats.recentActivity')">
           <button
             v-for="chip in feedChips"
             :key="chip.value"
@@ -170,7 +170,7 @@
         <EmptyState
           v-if="filteredActivities.length === 0"
           icon="clock"
-          :message="$t('knowledge.stats.recentActivity.noActivity')"
+          :message="$t('knowledge.stats.noRecentActivity')"
         />
       </div>
     </BasePanel>
