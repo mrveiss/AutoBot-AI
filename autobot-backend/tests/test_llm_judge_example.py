@@ -150,7 +150,6 @@ async def test_llm_judge_wrapper_raises_on_low_score() -> None:
 async def test_llm_judge_wrapper_includes_reasoning_in_error() -> None:
     """Failure message must include per-criterion reasoning for debuggability."""
     from judges import CriterionScore, JudgmentConfidence, JudgmentDimension
-
     from tests.helpers.llm_judge_fixture import _LLMJudgeWrapper
 
     criterion = CriterionScore(
