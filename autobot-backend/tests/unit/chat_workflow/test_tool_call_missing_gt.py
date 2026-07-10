@@ -61,8 +61,11 @@ def test_two_back_to_back_calls_parse_separately_first_missing_gt():
     """#11545: two calls (first missing '>') must parse as 2 separate matches,
     not merge — the risk from making '>' optional."""
     pat, _ = _load_patterns()
-    text = _OPEN.replace('create_task', 'a') + "</TOOL_CALL\n" + \
-        "<TOOL_CALL name=\"b\" params='{\"y\":2}'>second</TOOL_CALL>"
+    text = (
+        _OPEN.replace("create_task", "a")
+        + "</TOOL_CALL\n"
+        + '<TOOL_CALL name="b" params=\'{"y":2}\'>second</TOOL_CALL>'
+    )
     matches = list(pat.finditer(text))
     assert [m.group(1) for m in matches] == ["a", "b"]
     assert matches[1].group(3) == '{"y":2}'  # second call's params intact
