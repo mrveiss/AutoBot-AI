@@ -744,13 +744,18 @@
         # TLS on 443. There is NO 8443 listener (#957/#10378). Probe the direct
         # backend on the loopback — it does not depend on nginx (deployed after
         # this task) and needs no cert validation (#10650).
+        #
+        # #11455: run ON the backend node (no delegate_to) so 127.0.0.1 is the
+        # node's own loopback. 8001 is bound to localhost, so it is unreachable
+        # from the controller — delegating to localhost only worked for a
+        # co-located single-node backend and spun 42×10s against the wrong host
+        # for any remote backend, aborting the rollout via any_errors_fatal.
         url: "http://127.0.0.1:8001/api/health"
         status_code: 200
       register: backend_health_check
       until: backend_health_check.status == 200
       retries: 42
       delay: 10
-      delegate_to: localhost
       when: "'backend' in group_names"
       tags: [backend, restart]
 
