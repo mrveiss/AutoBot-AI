@@ -132,6 +132,10 @@
   --color-success-bg: var(--green-bg);
   --color-danger: var(--red-500);
   --color-danger-bg: var(--red-bg);
+  /* #11457: alias the functional error token to ember's danger red so
+     --color-error resolves to ember's palette instead of the base #ef4444. */
+  --color-error: var(--color-danger);
+  --color-error-bg: var(--color-danger-bg);
   --color-info: var(--wine-500);
   --color-info-bg: #f3e2ea;
 
@@ -258,6 +262,9 @@
   --color-success-bg: var(--green-bg-dk);
   --color-danger: var(--red-300);
   --color-danger-bg: var(--red-bg-dk);
+  /* #11457: dark-ember functional error aliases the dark danger red. */
+  --color-error: var(--color-danger);
+  --color-error-bg: var(--color-danger-bg);
   --color-info: var(--wine-300);
   --color-info-bg: #2e1822;
 
