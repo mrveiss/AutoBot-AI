@@ -103,6 +103,83 @@ def _create_coordination_agent() -> AgentProfile:
     )
 
 
+# #11251 Part 1: the orchestrator's capability-routing map keys on these ids.
+# Giving each a first-class AgentProfile lets orchestrator.agent_capabilities be a
+# pure projection of this registry (no parallel hardcoded capability dict). The
+# capabilities below MUST match the historical routing map exactly (no routing
+# regression); a test asserts the projection equals the previous literal.
+# Boundaries (decision: proper hardening): read/analysis/synthesis routing agents
+# forbid infra+shell; ``system_commands`` is the routing executor, allowed
+# infra/shell like ``system_agent``.
+_ROUTING_PROFILE_SPECS = [
+    (
+        "classification_agent",
+        "classifier",
+        {AgentCapability.ANALYSIS, AgentCapability.VALIDATION},
+        ["intent_classification", "input_validation"],
+    ),
+    (
+        "kb_librarian",
+        "librarian",
+        {AgentCapability.RESEARCH, AgentCapability.SYNTHESIS},
+        ["knowledge_retrieval", "context_synthesis"],
+    ),
+    (
+        "security_scanner",
+        "security",
+        {AgentCapability.SECURITY, AgentCapability.VALIDATION},
+        ["vulnerability_scan", "policy_validation"],
+    ),
+    (
+        "npu_code_search",
+        "search",
+        {AgentCapability.ANALYSIS, AgentCapability.OPTIMIZATION},
+        ["code_search", "npu_acceleration"],
+    ),
+    (
+        "development_speedup",
+        "optimizer",
+        {AgentCapability.ANALYSIS, AgentCapability.OPTIMIZATION},
+        ["dev_optimization"],
+    ),
+    (
+        "json_formatter",
+        "formatter",
+        {AgentCapability.VALIDATION, AgentCapability.SYNTHESIS},
+        ["json_formatting", "schema_validation"],
+    ),
+    ("llm_failsafe", "failsafe", {AgentCapability.SYNTHESIS}, ["fallback_synthesis"]),
+]
+
+# The full routing-agent id set (the 7 above + the executor + research_agent).
+ROUTING_AGENT_IDS = frozenset([spec[0] for spec in _ROUTING_PROFILE_SPECS] + ["system_commands", "research_agent"])
+
+
+def _create_routing_profiles() -> List[AgentProfile]:
+    """Build first-class profiles for the orchestrator routing ids (#11251 P1)."""
+    profiles = [
+        AgentProfile(
+            agent_id=agent_id,
+            agent_type=agent_type,
+            capabilities=set(caps),
+            specializations=list(specs),
+            forbidden_work=list(_INFRA_AND_SHELL_TOOLS),
+        )
+        for agent_id, agent_type, caps, specs in _ROUTING_PROFILE_SPECS
+    ]
+    # system_commands is the routing executor — allowed infra/shell (mirrors system_agent).
+    profiles.append(
+        AgentProfile(
+            agent_id="system_commands",
+            agent_type="executor",
+            capabilities={AgentCapability.EXECUTION, AgentCapability.MONITORING},
+            specializations=["command_execution", "system_monitoring"],
+            allowed_work=list(_INFRA_AND_SHELL_TOOLS),
+        )
+    )
+    return profiles
+
+
 def get_default_agents() -> List[AgentProfile]:
     """
     Get the list of default agent profiles.
@@ -110,8 +187,9 @@ def get_default_agents() -> List[AgentProfile]:
     Returns:
         List of pre-configured AgentProfile instances.
         Issue #620: Refactored to use helper functions for each agent.
+        #11251 P1: routing-map agents get first-class profiles too.
     """
-    return [
+    return _create_routing_profiles() + [
         _create_research_agent(),
         _create_documentation_agent(),
         _create_system_agent(),
