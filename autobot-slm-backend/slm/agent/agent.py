@@ -120,6 +120,16 @@ class SLMAgent:
         self.node_id = node_id or os.environ.get("SLM_NODE_ID")
         self.running = False
 
+        # #11450: machine-to-machine auth. The SLM control-plane routers
+        # (nodes/events/code-sync/roles) accept either a service.management
+        # user JWT (humans) or this shared internal key (the agent), sent on
+        # every request via the session default headers. Empty -> the server
+        # rejects our heartbeats 401 and the fleet Service table never
+        # populates, so warn loudly.
+        self._internal_api_key = os.environ.get("AUTOBOT_INTERNAL_API_KEY", "")
+        if not self._internal_api_key:
+            logger.warning("AUTOBOT_INTERNAL_API_KEY not set — heartbeats will be rejected 401 (#11450)")
+
         # Issue #741: Initialize version manager
         self.version_manager = get_agent_version()
         self._pending_update = False
@@ -321,6 +331,17 @@ class SLMAgent:
                         new_backoff,
                     )
                     return False
+                if response.status == 401:
+                    # #11450: 401 means our X-Internal-API-Key is missing or
+                    # doesn't match the server's AUTOBOT_INTERNAL_API_KEY (e.g.
+                    # a partial re-provision). Point at the fix explicitly —
+                    # a bare "rejected 401" cost real diagnosis time.
+                    logger.warning(
+                        "Heartbeat 401: X-Internal-API-Key %s the server's — "
+                        "re-run deploy-slm-agent.yml to refresh agent-secrets.env (#11450)",
+                        "missing" if not self._internal_api_key else "does not match",
+                    )
+                    return False
                 logger.warning(
                     "Heartbeat rejected: %s %s",
                     response.status,
@@ -433,8 +454,10 @@ class SLMAgent:
         # Notify systemd that we're ready
         sd_notify("READY=1")
 
-        # Single session for the lifetime of the agent (#9086)
-        async with aiohttp.ClientSession() as session:
+        # Single session for the lifetime of the agent (#9086). The internal
+        # API key rides as a default header on every request (#11450).
+        _default_headers = {"X-Internal-API-Key": self._internal_api_key} if self._internal_api_key else {}
+        async with aiohttp.ClientSession(headers=_default_headers) as session:
             self._session = session
 
             # Issue #741: Start notification server if enabled (code-source nodes)

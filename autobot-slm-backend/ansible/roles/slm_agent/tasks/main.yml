@@ -234,6 +234,24 @@
   become: true
   tags: ['slm_agent', 'deploy', 'role-meta']
 
+# #11450: the agent authenticates its heartbeat/events/code-sync/roles calls
+# with the shared AUTOBOT_INTERNAL_API_KEY. Write it to a 0600 EnvironmentFile
+# (loaded by the unit) rather than baking the secret into the world-readable
+# .service unit. Works on remote nodes too (they have no slm-secrets.env).
+- name: "SLM Agent | Deploy agent secrets EnvironmentFile (#11450)"
+  ansible.builtin.copy:
+    content: |
+      # Managed by Ansible - do not edit manually
+      AUTOBOT_INTERNAL_API_KEY={{ autobot_internal_api_key | default('') }}
+    dest: "{{ slm_agent_data_dir }}/agent-secrets.env"
+    owner: "{{ slm_agent_user }}"
+    group: "{{ slm_agent_group }}"
+    mode: '0600'
+  become: true
+  no_log: true
+  notify: Restart SLM agent
+  tags: ['slm_agent', 'systemd', 'secrets']
+
 - name: "SLM Agent | Deploy systemd service unit"
   template:
     src: slm-agent.service.j2

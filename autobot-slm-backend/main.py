@@ -74,7 +74,7 @@ from autobot_shared.integrity_manifest import verify_integrity_at_startup
 from config import settings
 from middleware import ApiRequestCounterMiddleware, SecurityHeadersMiddleware
 from services.a2a_card_fetcher import start_card_refresh_task
-from services.auth import require_service_management
+from services.auth import require_service_management, require_service_management_or_internal
 from services.compose_fleet import (
     _SLM_MGMT_IP,
     _compose_nodes_enabled,
@@ -607,6 +607,13 @@ app.add_middleware(ApiRequestCounterMiddleware)
 # do not have this permission and receive 403.  Admin and Operator do.
 _SM = [Depends(require_service_management)]
 
+# #11450: routers that ALSO carry machine-to-machine agent-ingest endpoints
+# (heartbeat/enroll, roles/definitions, code-sync/notify, events/sync). The
+# node agent presents AUTOBOT_INTERNAL_API_KEY (no user JWT), so these mount
+# with a gate that accepts the internal key OR a service.management user —
+# preserving #10198's human-surface gate while un-breaking the agent plane.
+_SM_OR_AGENT = [Depends(require_service_management_or_internal)]
+
 app.include_router(health_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
@@ -620,7 +627,7 @@ app.include_router(scim_router)
 # --- Service-management–gated routers ---
 app.include_router(browser_router, prefix="/api", dependencies=_SM)
 app.include_router(agents_router, prefix="/api", dependencies=_SM)
-app.include_router(nodes_router, prefix="/api", dependencies=_SM)
+app.include_router(nodes_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(nodes_execution_router, prefix="/api", dependencies=_SM)  # Issue #3406
 app.include_router(services_router, prefix="/api", dependencies=_SM)
 app.include_router(fleet_services_router, prefix="/api", dependencies=_SM)
@@ -633,7 +640,7 @@ app.include_router(maintenance_router, prefix="/api", dependencies=_SM)
 app.include_router(monitoring_router, prefix="/api", dependencies=_SM)
 app.include_router(performance_router, prefix="/api", dependencies=_SM)
 app.include_router(errors_router, prefix="/api", dependencies=_SM)
-app.include_router(events_router, prefix="/api", dependencies=_SM)
+app.include_router(events_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(external_agents_router, prefix="/api", dependencies=_SM)
 app.include_router(node_rdp_router, prefix="/api", dependencies=_SM)
 app.include_router(rdp_router, prefix="/api", dependencies=_SM)
@@ -643,8 +650,8 @@ app.include_router(node_tls_router, prefix="/api", dependencies=_SM)
 app.include_router(tls_router, prefix="/api", dependencies=_SM)
 app.include_router(secrets_router, prefix="/api", dependencies=_SM)
 app.include_router(security_router, prefix="/api", dependencies=_SM)
-app.include_router(code_sync_router, prefix="/api", dependencies=_SM)
-app.include_router(roles_router, prefix="/api", dependencies=_SM)
+app.include_router(code_sync_router, prefix="/api", dependencies=_SM_OR_AGENT)
+app.include_router(roles_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(code_source_router, prefix="/api", dependencies=_SM)
 app.include_router(personality_proxy_router, prefix="/api", dependencies=_SM)  # Issue #1145
 app.include_router(voice_proxy_router, prefix="/api", dependencies=_SM)  # Voice proxy for personality voice assignment
