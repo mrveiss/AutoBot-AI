@@ -144,8 +144,8 @@
     <!-- Recent Activity with Filter Chips -->
     <BasePanel variant="bordered" size="md">
       <div class="activity-header">
-        <h4>{{ $t('knowledge.stats.recentActivity') }}</h4>
-        <div class="feed-filter-chips" role="group" :aria-label="$t('knowledge.stats.recentActivity')">
+        <h4>{{ $t('knowledge.stats.recentActivity.title') }}</h4>
+        <div class="feed-filter-chips" role="group" :aria-label="$t('knowledge.stats.recentActivity.title')">
           <button
             v-for="chip in feedChips"
             :key="chip.value"
@@ -170,7 +170,7 @@
         <EmptyState
           v-if="filteredActivities.length === 0"
           icon="clock"
-          :message="$t('knowledge.stats.noRecentActivity')"
+          :message="$t('knowledge.stats.recentActivity.noActivity')"
         />
       </div>
     </BasePanel>
@@ -259,7 +259,7 @@ interface VectorStats {
 
 interface Activity {
   id: string | number
-  type: 'created' | 'updated' | 'deleted' | 'imported'
+  type: 'created' | 'updated'
   description: string
   timestamp: Date | string
 }
@@ -292,19 +292,15 @@ const recentActivities = ref<Activity[]>([])
 const vectorStats = ref<VectorStats | null>(null)
 const errorMessage = ref<string>('')
 
-// Feed filter: 'all' | 'documents' | 'maintenance'
-type FeedFilter = 'all' | 'documents' | 'maintenance'
+// Feed filter: 'all' | 'created' | 'updated'
+type FeedFilter = 'all' | 'created' | 'updated'
 const activeFeedFilter = ref<FeedFilter>('all')
 
 const feedChips: { value: FeedFilter; labelKey: string }[] = [
   { value: 'all', labelKey: 'knowledge.health.feedAll' },
-  { value: 'documents', labelKey: 'knowledge.health.feedDocuments' },
-  { value: 'maintenance', labelKey: 'knowledge.health.feedMaintenance' }
+  { value: 'created', labelKey: 'knowledge.health.feedCreated' },
+  { value: 'updated', labelKey: 'knowledge.health.feedUpdated' }
 ]
-
-// Activity types grouped by feed filter
-const DOCUMENT_TYPES: Activity['type'][] = ['created', 'updated']
-const MAINTENANCE_TYPES: Activity['type'][] = ['deleted', 'imported']
 
 // Computed statistics
 const avgDocsPerCategory = computed(() => {
@@ -382,10 +378,7 @@ const recentDocsCount = computed(() => {
 
 const filteredActivities = computed(() => {
   if (activeFeedFilter.value === 'all') return recentActivities.value
-  if (activeFeedFilter.value === 'documents') {
-    return recentActivities.value.filter(a => DOCUMENT_TYPES.includes(a.type))
-  }
-  return recentActivities.value.filter(a => MAINTENANCE_TYPES.includes(a.type))
+  return recentActivities.value.filter(a => a.type === activeFeedFilter.value)
 })
 
 // Methods
@@ -419,6 +412,29 @@ const refreshStats = async () => {
     }
 
     generateRecentActivities()
+
+    // Populate vectorStats from the store for the category distribution chart
+    const storeStats = store.stats
+    if (storeStats) {
+      vectorStats.value = {
+        total_facts: storeStats.total_facts || 0,
+        total_documents: storeStats.total_documents || 0,
+        total_vectors: storeStats.total_vectors || 0,
+        indexed_documents: storeStats.total_documents || 0,
+        db_size: storeStats.db_size || 0,
+        status: (storeStats.status as 'online' | 'offline' | 'unknown') || 'offline',
+        rag_available: storeStats.rag_available || false,
+        initialized: storeStats.initialized || false,
+        llama_index_configured: storeStats.initialized || false,
+        index_available: storeStats.initialized || false,
+        redis_db: storeStats.redis_db ? parseInt(storeStats.redis_db) : 0,
+        index_name: storeStats.index_name || 'unknown',
+        last_updated: storeStats.last_updated || undefined,
+        categories: Array.isArray(storeStats.categories)
+          ? (storeStats.categories as unknown as { name?: string }[]).map((c) => c.name || c) as string[]
+          : []
+      }
+    }
   } catch (error) {
     logger.error('Failed to refresh stats:', error)
   }
@@ -525,9 +541,7 @@ const getTypePercentage = (count: number): number => {
 const getActivityIcon = (type: string): IconName => {
   const icons: Record<string, IconName> = {
     created: 'plus-circle',
-    updated: 'edit',
-    deleted: 'trash',
-    imported: 'download'
+    updated: 'edit'
   }
   return icons[type] || 'circle'
 }
@@ -558,44 +572,15 @@ const getCategoryColor = (index: number): string => {
   return colors[index % colors.length]
 }
 
-// Load stats on mount: refreshStats (store-backed) + refreshCategoryFacts
+// Load stats on mount: unified refreshStats + refreshCategoryFacts
 onMounted(async () => {
-  // Fetch store-backed stats (charts, tags, activity)
+  // Fetch stats (controller + store) and populate recent activities
   await refreshStats()
 
   // Fetch category fact counts for the distribution chart
   const factsResult = await refreshCategoryFacts()
   if (factsResult === null) {
     logger.warn('Failed to fetch category facts, continuing with basic stats')
-  }
-
-  // Populate vectorStats from the store for the category distribution chart
-  try {
-    await store.refreshStats()
-    const storeStats = store.stats
-    if (storeStats) {
-      vectorStats.value = {
-        total_facts: storeStats.total_facts || 0,
-        total_documents: storeStats.total_documents || 0,
-        total_vectors: storeStats.total_vectors || 0,
-        indexed_documents: storeStats.total_documents || 0,
-        db_size: storeStats.db_size || 0,
-        status: (storeStats.status as 'online' | 'offline' | 'unknown') || 'offline',
-        rag_available: storeStats.rag_available || false,
-        initialized: storeStats.initialized || false,
-        llama_index_configured: storeStats.initialized || false,
-        index_available: storeStats.initialized || false,
-        redis_db: storeStats.redis_db ? parseInt(storeStats.redis_db) : 0,
-        index_name: storeStats.index_name || 'unknown',
-        last_updated: storeStats.last_updated || undefined,
-        categories: Array.isArray(storeStats.categories)
-          ? (storeStats.categories as unknown as { name?: string }[]).map((c) => c.name || c) as string[]
-          : []
-      }
-    }
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred'
-    showErrorNotification(`Failed to load statistics: ${errorMsg}`)
   }
 })
 </script>
@@ -946,14 +931,6 @@ onMounted(async () => {
 
 .activity-icon.updated {
   background: var(--color-info);
-}
-
-.activity-icon.deleted {
-  background: var(--color-error);
-}
-
-.activity-icon.imported {
-  background: var(--chart-purple);
 }
 
 .activity-content {

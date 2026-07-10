@@ -5422,8 +5422,13 @@
   "knowledge.stats.avgPerDoc": "{size} avg/doc",
   "knowledge.stats.docsByCategory": "Documents by Category",
   "knowledge.stats.docsByType": "Documents by Type",
-  "knowledge.stats.recentActivity": "Recent Activity",
-  "knowledge.stats.noRecentActivity": "No recent activity",
+  "knowledge.stats.recentActivity": {
+    "title": "Recent Activity",
+    "noActivity": "No recent activity"
+  },
+  "knowledge.health.feedAll": "All",
+  "knowledge.health.feedCreated": "Created",
+  "knowledge.health.feedUpdated": "Updated",
   "knowledge.stats.popularTags": "Popular Tags",
   "knowledge.stats.popularTagsAriaLabel": "Popular tags in knowledge base",
   "knowledge.stats.systemKnowledgeMgmt": "System Knowledge Management",
