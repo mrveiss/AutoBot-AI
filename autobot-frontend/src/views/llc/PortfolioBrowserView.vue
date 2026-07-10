@@ -57,6 +57,7 @@
     </div>
 
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showCreate"
       :title="t('llcBrowser.portfolios.createTitle')"
       size="sm"

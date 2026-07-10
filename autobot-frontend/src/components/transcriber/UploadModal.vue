@@ -6,6 +6,8 @@ import { useTranscriberApi } from '@/composables/transcriber/useTranscriberApi'
 import type { Recording } from '@/composables/transcriber/useTranscriberApi'
 import { createLogger } from '@/utils/debugUtils'
 import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const logger = createLogger('UploadModal')
 const props = defineProps<{ projectId: number; open: boolean }>()
@@ -41,6 +43,7 @@ async function upload() {
 
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :model-value="open"
     title="Upload Recording"
     size="sm"

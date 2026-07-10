@@ -304,6 +304,7 @@
 
     <!-- Patterns Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :model-value="showPatterns"
       :title="$t('analytics.codeReview.reviewPatterns')"
       size="md"

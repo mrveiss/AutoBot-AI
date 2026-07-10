@@ -366,6 +366,7 @@
 
   <!-- Edit Session Name Modal -->
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     v-model="showEditModal"
     :title="$t('chat.sidebar.editChatName')"
     size="md"

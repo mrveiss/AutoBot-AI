@@ -1,5 +1,6 @@
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :model-value="isOpen"
     :title="$t('knowledge.share.title', { name: factTitle })"
     size="md"

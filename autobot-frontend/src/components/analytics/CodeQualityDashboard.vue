@@ -394,6 +394,7 @@
 
     <!-- Drill-Down Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :model-value="!!drillDownCategory"
       :title="drillDownCategory ? `${formatCategoryName(drillDownCategory)} - ${$t('analytics.codeQuality.detailedView')}` : ''"
       size="md"

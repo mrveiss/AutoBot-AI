@@ -87,6 +87,7 @@
 
     <!-- System Category Documents Panel -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showCategoryDocuments"
       :title="`${formatCategoryName(selectedCategoryPath)} - Documents`"
       size="lg"
@@ -127,6 +128,7 @@
 
     <!-- Document Details Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showDocumentModal"
       :title="currentDocument?.title || currentDocument?.filename || $t('knowledge.categories.documentDetails')"
       size="lg"

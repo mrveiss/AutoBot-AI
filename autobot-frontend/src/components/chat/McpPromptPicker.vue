@@ -12,6 +12,7 @@
     </BaseButton>
 
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-if="showModal"
       :model-value="showModal"
       title="Prompt Templates"
@@ -149,8 +150,10 @@ import { ref, computed, watch } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
 import { createLogger } from '@/utils/debugUtils'
+const { t } = useI18n()
 
 const logger = createLogger('McpPromptPicker')
 const api = useApiClient()

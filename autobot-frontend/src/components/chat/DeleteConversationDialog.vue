@@ -1,5 +1,6 @@
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :model-value="visible"
     :title="$t('chat.deleteDialog.title')"
     size="md"

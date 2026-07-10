@@ -5555,7 +5555,7 @@
       "dismissAlert": "Dismiss alert"
     },
     "modal": {
-      "closeDialog": "Close dialog"
+      "closeDialog": "Aizvērt dialoglodziņu"
     },
     "commandPermission": {
       "title": "Command Permission Required",

@@ -71,6 +71,7 @@
 
     <!-- Add/Edit Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showAddModal"
       :title="editingEndpoint ? $t('featureFlags.enforcement.editOverride') : $t('featureFlags.enforcement.addEndpointOverride')"
       size="md"
@@ -127,6 +128,7 @@
 
     <!-- Remove Confirmation Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showRemoveModal"
       :title="$t('featureFlags.enforcement.removeOverride')"
       size="sm"

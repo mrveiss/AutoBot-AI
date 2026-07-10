@@ -5555,7 +5555,7 @@
       "dismissAlert": "Dismiss alert"
     },
     "modal": {
-      "closeDialog": "Close dialog"
+      "closeDialog": "Zamknij okno dialogowe"
     },
     "commandPermission": {
       "title": "Command Permission Required",

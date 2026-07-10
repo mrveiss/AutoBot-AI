@@ -414,6 +414,7 @@ onBeforeUnmount(() => {
 
     <!-- History Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showHistoryModal"
       :title="$t('knowledge.promptEditor.versionHistory')"
       size="lg"

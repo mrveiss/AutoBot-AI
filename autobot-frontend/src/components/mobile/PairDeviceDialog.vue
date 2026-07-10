@@ -5,9 +5,11 @@
 
 import { watch } from 'vue'
 import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
 import { usePairingQR } from '@/composables/usePairingQR'
 import { createLogger } from '@/utils/debugUtils'
+const { t } = useI18n()
 
 const logger = createLogger('PairDeviceDialog')
 
@@ -54,6 +56,7 @@ watch(isPaired, (paired) => {
 
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :model-value="modelValue"
     :title="$t('mobile.pairing.title')"
     size="md"

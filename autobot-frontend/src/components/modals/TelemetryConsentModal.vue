@@ -9,6 +9,7 @@ Issue #9035: Operator-controlled local usage metrics (never transmitted)
 
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     v-model="isVisible"
     title="Local Usage Metrics"
     size="sm"
@@ -75,6 +76,8 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import Icon from '@/components/ui/Icon.vue'
 import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const logger = createLogger('TelemetryConsentModal')
 const api = useApiClient()

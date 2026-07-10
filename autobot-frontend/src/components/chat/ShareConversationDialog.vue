@@ -1,5 +1,6 @@
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :model-value="visible"
     :title="$t('chat.share.title')"
     size="md"
@@ -221,12 +222,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'
 import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useBatchSelection } from '@/composables/useBatchSelection'
 import Icon from '@/components/ui/Icon.vue'
+const { t } = useI18n()
 
 const logger = createLogger('ShareConversationDialog')
 

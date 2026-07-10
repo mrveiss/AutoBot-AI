@@ -91,6 +91,7 @@
 
     <!-- New thread modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showNewThread"
       :title="$t('llc.ceoChat.newThreadTitle')"
       size="sm"

@@ -270,6 +270,7 @@
 
     <!-- Create/Edit Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :modelValue="showCreateModal || showEditModal"
       @update:modelValue="val => !val && closeModals()"
       :title="modalTitle"
@@ -650,6 +651,7 @@
 
     <!-- View Secret Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showViewModal"
       :title="viewingSecret?.name || $t('security.secretsManager.viewDetails')"
       size="md"
@@ -728,6 +730,7 @@
 
     <!-- Transfer Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showTransferModal"
       :title="$t('security.secretsManager.transferTitle')"
       size="sm"
@@ -755,6 +758,7 @@
 
     <!-- Delete Confirmation Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showDeleteModal"
       :title="$t('security.secretsManager.deleteConfirmTitle')"
       size="sm"

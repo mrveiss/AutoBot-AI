@@ -1,5 +1,6 @@
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :model-value="visible"
     :title="isEditMode ? $t('analytics.sources.editSource') : $t('analytics.sources.addCodeSource')"
     size="sm"
