@@ -89,6 +89,14 @@ _SKIP_DIRS = {
     "build",
 }
 
+# Directory-name SUFFIXES to skip — variable-prefixed build artifacts (e.g.
+# ``<pkg>.egg-info`` created by ``pip install`` in the deployed dir) that the
+# exact-match ``_SKIP_DIRS`` can't catch. Their contents (SOURCES.txt,
+# requires.txt, top_level.txt, dependency_links.txt) are deployment-generated and
+# never present in the git source tree, so they were reported as permanent false
+# drift (#11440), training operators to ignore the drift signal.
+_SKIP_DIR_SUFFIXES: tuple[str, ...] = (".egg-info",)
+
 # Paths that are deployment-generated and never present in the git source tree.
 # Exact-match paths and prefix patterns are checked against the POSIX relative
 # path of each file before it is added to the drift report (Issue #4610).
@@ -166,8 +174,9 @@ def _collect_checksums(
     active_extensions = extensions if extensions is not None else _INCLUDE_EXTENSIONS
     checksums: Dict[str, str] = {}
     for dirpath, dirnames, filenames in os.walk(root):
-        # Prune skip dirs in-place so os.walk does not descend into them.
-        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+        # Prune skip dirs in-place so os.walk does not descend into them. Also
+        # prune variable-named build-artifact dirs like ``<pkg>.egg-info`` (#11440).
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS and not d.endswith(_SKIP_DIR_SUFFIXES)]
 
         for filename in filenames:
             filepath = Path(dirpath) / filename
