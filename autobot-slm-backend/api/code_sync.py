@@ -1388,21 +1388,57 @@ def _prune_old_backups(backup_dir: Path, component: str, max_keep: int) -> None:
             logger.warning("pg_dump prune: failed to remove %s: %s", old, exc)
 
 
+def _resolve_pg_db_url(env_vars: Dict[str, str]) -> str:
+    """Resolve the Postgres connection URL from env vars (#11431).
+
+    Resolution order (mirrors migrations/db_url.py and alembic env.py):
+      1. AUTOBOT_DATABASE_URL  — explicit full URL (set by db-credentials.env.j2)
+      2. DATABASE_URL          — bare alias some deployments use
+      3. AUTOBOT_POSTGRES_*   — component vars from backend.env.j2
+      4. os.environ fallbacks — in case the process already has them
+
+    Returns an empty string when no DB config can be found at all, which the
+    caller treats as "proceed with warning" rather than "abort deploy".
+    """
+    # 1. Explicit full URL written by db-credentials.env.j2
+    url = env_vars.get("AUTOBOT_DATABASE_URL") or os.environ.get("AUTOBOT_DATABASE_URL", "")
+    if url:
+        return url
+    # 2. Bare DATABASE_URL alias
+    url = env_vars.get("DATABASE_URL") or os.environ.get("DATABASE_URL", "")
+    if url:
+        return url
+    # 3. Assemble from AUTOBOT_POSTGRES_* component vars (backend.env.j2 style)
+    host = env_vars.get("AUTOBOT_POSTGRES_HOST") or os.environ.get("AUTOBOT_POSTGRES_HOST", "")
+    if host:
+        port = env_vars.get("AUTOBOT_POSTGRES_PORT") or os.environ.get("AUTOBOT_POSTGRES_PORT", "5432")
+        user = env_vars.get("AUTOBOT_POSTGRES_USER") or os.environ.get("AUTOBOT_POSTGRES_USER", "autobot_app")
+        pw = env_vars.get("AUTOBOT_POSTGRES_PASSWORD") or os.environ.get("AUTOBOT_POSTGRES_PASSWORD", "")
+        db = env_vars.get("AUTOBOT_POSTGRES_DB") or os.environ.get("AUTOBOT_POSTGRES_DB", "autobot_users")
+        auth = f"{user}:{pw}@" if pw else f"{user}@"
+        return f"postgresql://{auth}{host}:{port}/{db}"
+    return ""
+
+
 async def _pg_dump_before_migration(component: str, deployed_dir: str, steps: List[str]) -> Optional[str]:
-    """Take a pg_dump of the component DB before running migrations (#11376).
+    """Take a pg_dump of the component DB before running migrations (#11376, #11431).
 
-    Resolves DATABASE_URL from the component's deployed .env (same source used
-    by _run_alembic_migrations).  Writes a timestamped .dump file under
-    _DB_BACKUP_DIR and prunes old backups beyond _DB_BACKUP_KEEP.
+    Resolves the DB URL via _resolve_pg_db_url() which mirrors alembic env.py /
+    migrations/db_url.py — checking AUTOBOT_DATABASE_URL, DATABASE_URL, and
+    AUTOBOT_POSTGRES_* component vars in order.
 
-    Returns the backup path string on success, None on failure.
-    Appends step notes and logs errors; caller must ABORT migration on None.
+    If no DB config is found at all, logs a warning and returns the sentinel
+    "NO_BACKUP" so the caller PROCEEDS with migration rather than aborting.
+    This keeps deploys working on boxes that have no DB configured for this
+    component. Returns None only on a genuine pg_dump execution failure.
     """
     env_vars = _load_env_file(Path(deployed_dir) / ".env")
-    db_url = env_vars.get("DATABASE_URL") or os.environ.get("DATABASE_URL", "")
+    db_url = _resolve_pg_db_url(env_vars)
     if not db_url:
-        steps.append("pg_dump: DATABASE_URL not found — cannot back up")
-        return None
+        msg = "pg_dump: no DB config found (AUTOBOT_DATABASE_URL/AUTOBOT_POSTGRES_*) — skipping backup, proceeding"
+        steps.append(msg)
+        logger.warning("pg_dump: %s: %s", component, msg)
+        return "NO_BACKUP"
 
     try:
         parsed = urlparse(db_url)
@@ -1469,9 +1505,11 @@ async def _pg_dump_before_migration(component: str, deployed_dir: str, steps: Li
 async def _run_alembic_migrations(component: str, deployed_dir: str, steps: List[str]) -> bool:
     """Apply Alembic migrations (`upgrade heads`) so the schema matches synced code (#11255).
 
-    Now takes a pg_dump BEFORE running migrations (#11376).  If the dump fails
-    the migration is ABORTED and False is returned — never migrate without a
-    backup.  Returns True on successful migration, False on dump or migrate failure.
+    Takes a pg_dump BEFORE running migrations (#11376, #11431).
+    pg_dump returns None on execution failure (connection refused etc.) → migration
+    ABORTED.  pg_dump returns "NO_BACKUP" when no DB config is found → migration
+    PROCEEDS with a logged warning so the deploy is never blocked by a missing URL.
+    Returns True on successful migration, False on abort or failure.
     """
     cfg_rel = _COMPONENT_MIGRATION_CONFIG.get(component)
     paths = _COMPONENT_PIP_PATHS.get(component)
@@ -1484,13 +1522,16 @@ async def _run_alembic_migrations(component: str, deployed_dir: str, steps: List
         steps.append(f"alembic: binary or config missing for {component} — skipped")
         return True
 
-    # #11376: take a pg_dump BEFORE mutating the schema.
-    # Abort if the dump fails — never migrate without a restorable backup.
+    # #11376/#11431: take a pg_dump BEFORE mutating the schema.
+    # None = genuine pg_dump failure (connection failed etc.) → abort.
+    # "NO_BACKUP" = no DB config found → proceed with warning (don't block deploy).
     dump_path = await _pg_dump_before_migration(component, deployed_dir, steps)
     if dump_path is None:
         steps.append("alembic: ABORTED — pg_dump failed; schema not migrated")
         logger.error("drift resolve: alembic aborted for %s — pg_dump failed", component)
         return False
+    # Normalise: treat NO_BACKUP as None for display only; migration still runs.
+    display_dump = dump_path if dump_path != "NO_BACKUP" else None
 
     # alembic env.py resolves DATABASE_URL from the environment; load the
     # component's deployed .env so migrations hit the right database.
@@ -1523,15 +1564,18 @@ async def _run_alembic_migrations(component: str, deployed_dir: str, steps: List
             component,
             out[-400:],
         )
-        steps.append(f"alembic: upgrade FAILED (rc={proc.returncode}): {out[-200:]}" f" — DB backup at {dump_path}")
+        _backup_ref = f" — DB backup at {display_dump}" if display_dump else ""
+        steps.append(f"alembic: upgrade FAILED (rc={proc.returncode}): {out[-200:]}{_backup_ref}")
         return False
     except asyncio.TimeoutError:
         logger.error("drift resolve: alembic upgrade timed out for %s", component)
-        steps.append(f"alembic: upgrade timed out after 300s — DB backup at {dump_path}")
+        _backup_ref = f" — DB backup at {display_dump}" if display_dump else ""
+        steps.append(f"alembic: upgrade timed out after 300s{_backup_ref}")
         return False
     except Exception as exc:
         logger.error("drift resolve: alembic upgrade error for %s: %s", component, exc)
-        steps.append(f"alembic: upgrade error: {exc} — DB backup at {dump_path}")
+        _backup_ref = f" — DB backup at {display_dump}" if display_dump else ""
+        steps.append(f"alembic: upgrade error: {exc}{_backup_ref}")
         return False
 
 
@@ -1721,33 +1765,69 @@ async def _restart_component_services(component: str, steps: List[str]) -> None:
 # =============================================================================
 
 
-async def _snapshot_component(component: str) -> Optional[str]:
-    """Capture the HEAD commit of the deployed component dir (#11377).
+_SNAPSHOT_BASE_DIR: str = os.environ.get("AUTOBOT_SNAPSHOT_DIR", "/opt/autobot/snapshots")
+_SNAPSHOT_KEEP: int = int(os.environ.get("AUTOBOT_SNAPSHOT_KEEP", "3"))
 
-    Uses asyncio.create_subprocess_exec (non-blocking, bandit-safe) to run
-    `git -C <deployed_dir> rev-parse HEAD`.  Returns the commit SHA on success,
-    None when the dir is not a git repo or git is unavailable.
+
+def _prune_old_snapshots(snap_base: Path, component: str, max_keep: int) -> None:
+    """Remove oldest snapshot dirs for *component* beyond *max_keep* (#11404)."""
+    prefix = f"{component}_"
+    dirs = sorted(
+        (d for d in snap_base.iterdir() if d.is_dir() and d.name.startswith(prefix)),
+        key=lambda d: d.stat().st_mtime,
+    )
+    for old in dirs[:-max_keep] if max_keep > 0 else dirs:
+        try:
+            shutil.rmtree(old, ignore_errors=True)
+            logger.info("snapshot prune: removed %s", old)
+        except OSError as exc:
+            logger.warning("snapshot prune: failed to remove %s: %s", old, exc)
+
+
+async def _snapshot_component(component: str) -> Optional[str]:
+    """Rsync the deployed dir to a timestamped backup before mutation (#11404).
+
+    Deployed dirs are rsync copies — not git repos — so `git rev-parse HEAD`
+    always fails, leaving snapshot=None and rollback printing "manual recovery".
+    Instead: rsync the deployed dir to a snapshot under _SNAPSHOT_BASE_DIR,
+    prune old snapshots, and return the backup path.
+
+    Returns the backup dir path string on success, None on failure.
     """
     deployed_dir = get_default_deployed_dir(component)
+    snap_base = Path(_SNAPSHOT_BASE_DIR)
+    try:
+        snap_base.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        logger.warning("snapshot: cannot create %s: %s", snap_base, exc)
+        return None
+
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    backup_dir = snap_base / f"{component}_{ts}"
     try:
         proc = await asyncio.create_subprocess_exec(
-            "git",
-            "-C",
-            deployed_dir,
-            "rev-parse",
-            "HEAD",
+            "rsync",
+            "-a",
+            "--delete",
+            f"{deployed_dir}/",
+            f"{backup_dir}/",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10.0)
-        if proc.returncode == 0:
-            sha = (stdout.decode(errors="replace") if stdout else "").strip()
-            if sha:
-                logger.info("snapshot: %s HEAD=%s", component, sha[:12])
-                return sha
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120.0)
+        if proc.returncode != 0:
+            out = stdout.decode(errors="replace") if stdout else ""
+            logger.warning("snapshot: rsync failed for %s (rc=%d): %s", component, proc.returncode, out[-200:])
+            return None
+        logger.info("snapshot: %s backed up to %s", component, backup_dir)
+        _prune_old_snapshots(snap_base, component, _SNAPSHOT_KEEP)
+        return str(backup_dir)
+    except asyncio.TimeoutError:
+        logger.warning("snapshot: rsync timed out for %s", component)
+        return None
     except Exception as exc:
-        logger.debug("snapshot: git rev-parse failed for %s: %s", component, exc)
-    return None
+        logger.warning("snapshot: error for %s: %s", component, exc)
+        return None
 
 
 async def _rollback_component(
@@ -1756,14 +1836,13 @@ async def _rollback_component(
     steps: List[str],
     dump_path: Optional[str] = None,
 ) -> None:
-    """Revert *component* to *snapshot* commit after a failed post-sync step (#11377).
+    """Restore *component* from the filesystem snapshot after a failed post-sync step (#11404).
 
-    Runs `git -C <deployed_dir> reset --hard <snapshot>` in a subprocess.
-    Restarts the component services so the reverted code goes live.
-    Does NOT restore the DB automatically — operators use the pg_dump at
-    *dump_path*.  The dump path is surfaced in the step log for reference.
+    Rsyncs from the backup dir created by _snapshot_component() back over the
+    deployed dir, then restarts services.  Does NOT restore the DB — operators
+    use the pg_dump at *dump_path*.
 
-    No-op (logs warning) when *snapshot* is None — means we had no baseline.
+    No-op (logs warning) when *snapshot* is None.
     """
     if snapshot is None:
         steps.append("rollback: no snapshot available — manual recovery required")
@@ -1771,34 +1850,37 @@ async def _rollback_component(
         return
 
     deployed_dir = get_default_deployed_dir(component)
-    steps.append(f"rollback: reverting {component} to {snapshot[:12]}")
+    steps.append(f"rollback: restoring {component} from {snapshot}")
     try:
         proc = await asyncio.create_subprocess_exec(
-            "git",
-            "-C",
-            deployed_dir,
-            "reset",
-            "--hard",
-            snapshot,
+            "rsync",
+            "-a",
+            "--delete",
+            f"{snapshot}/",
+            f"{deployed_dir}/",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120.0)
         out = stdout.decode(errors="replace") if stdout else ""
         if proc.returncode == 0:
-            steps.append(f"rollback: reverted to {snapshot[:12]}")
-            logger.info("rollback: %s reverted to %s", component, snapshot[:12])
+            steps.append(f"rollback: restored from {snapshot}")
+            logger.info("rollback: %s restored from %s", component, snapshot)
         else:
-            steps.append(f"rollback: git reset failed (rc={proc.returncode}): {out[:200]}")
-            logger.error("rollback: git reset failed for %s: %s", component, out[-300:])
+            steps.append(f"rollback: rsync restore failed (rc={proc.returncode}): {out[:200]}")
+            logger.error("rollback: rsync restore failed for %s: %s", component, out[-300:])
             return
+    except asyncio.TimeoutError:
+        steps.append("rollback: rsync restore timed out after 120s")
+        logger.error("rollback: rsync restore timed out for %s", component)
+        return
     except Exception as exc:
-        steps.append(f"rollback: git reset error: {exc}")
-        logger.error("rollback: git reset error for %s: %s", component, exc)
+        steps.append(f"rollback: rsync restore error: {exc}")
+        logger.error("rollback: rsync restore error for %s: %s", component, exc)
         return
 
     await _restart_component_services(component, steps)
-    if dump_path:
+    if dump_path and dump_path != "NO_BACKUP":
         steps.append(f"rollback: DB backup available at {dump_path} for manual restore")
 
 
@@ -1807,12 +1889,40 @@ async def _rollback_component(
 # =============================================================================
 
 
-async def _wait_component_healthy(component: str, steps: List[str]) -> bool:
-    """Poll the component health URL until healthy or timeout (#11378).
+async def _is_systemd_unit_failed(service: str) -> bool:
+    """Return True only when systemd reports the unit is definitively failed (#11413).
 
-    Uses _COMPONENT_HEALTH_URLS and _HEALTH_POLL_TIMEOUT (env-configurable).
-    Returns True when the endpoint responds 2xx within the timeout window.
-    Returns False and appends a step note when the timeout expires unhealthy.
+    A unit in 'activating' (still starting) or 'inactive' states is NOT failed.
+    Used to gate rollback: a slow cold-start must not be reverted.
+    """
+    services = _COMPONENT_SERVICES.get(service, [service])
+    primary = services[0] if services else service
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "systemctl",
+            "is-failed",
+            primary,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5.0)
+        state = (stdout.decode(errors="replace") if stdout else "").strip()
+        return state == "failed"
+    except Exception:
+        return False
+
+
+async def _wait_component_healthy(component: str, steps: List[str]) -> bool:
+    """Poll the component health URL until healthy or timeout (#11378, #11413).
+
+    Returns True when the endpoint responds 2xx within the timeout window, OR
+    when the timeout expires WITHOUT a confirmed systemd failure — a slow cold
+    start (py3.14 venv bytecode compilation can exceed 60s) must not trigger a
+    rollback of an otherwise-successful deploy.
+
+    Returns False ONLY when the systemd unit enters the 'failed' state during
+    the polling window (crashloop, activation error, etc.).
+
     Components with no health URL are considered healthy immediately.
     """
     try:
@@ -1830,6 +1940,11 @@ async def _wait_component_healthy(component: str, steps: List[str]) -> bool:
     attempt = 0
     while asyncio.get_event_loop().time() < deadline:
         attempt += 1
+        # Check for a definitive systemd failure FIRST — fail fast on crashloop.
+        if await _is_systemd_unit_failed(component):
+            steps.append(f"health: {component} unit entered 'failed' state — rolling back")
+            logger.error("health: %s systemd unit failed during startup poll", component)
+            return False
         try:
             async with httpx.AsyncClient(timeout=_HEALTH_POLL_CONNECT_TIMEOUT) as client:
                 resp = await client.get(url)
@@ -1841,9 +1956,18 @@ async def _wait_component_healthy(component: str, steps: List[str]) -> bool:
             pass
         await asyncio.sleep(2.0)
 
-    steps.append(f"health: {component} NOT healthy after {_HEALTH_POLL_TIMEOUT:.0f}s" f" — check {url}")
-    logger.error("health: %s unhealthy after %.0fs polling %s", component, _HEALTH_POLL_TIMEOUT, url)
-    return False
+    # Timeout reached but no systemd failure — the unit may still be starting
+    # (e.g. py3.14 venv cold-start). Warn but do NOT roll back (#11413).
+    if await _is_systemd_unit_failed(component):
+        steps.append(f"health: {component} unit failed after {_HEALTH_POLL_TIMEOUT:.0f}s — rolling back")
+        logger.error("health: %s systemd unit failed after polling", component)
+        return False
+    steps.append(
+        f"health: {component} did not respond within {_HEALTH_POLL_TIMEOUT:.0f}s"
+        " — unit not failed; deploy treated as successful (check {url} manually)"
+    )
+    logger.warning("health: %s timeout after %.0fs but unit not failed — proceeding", component, _HEALTH_POLL_TIMEOUT)
+    return True
 
 
 # Python backend components that embed an autobot_shared symlink (#10912).

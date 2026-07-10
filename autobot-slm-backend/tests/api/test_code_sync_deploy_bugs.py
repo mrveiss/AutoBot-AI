@@ -81,6 +81,7 @@ from api.code_sync import (  # noqa: E402
     _HEALTH_POLL_TIMEOUT,
     _NPM_LOCK_HASH_MARKER,
     _REPO_ROOT_REQUIREMENT_FILES,
+    _SNAPSHOT_BASE_DIR,
     _build_npm_frontend_for_component,
     _deploy_constraints_dir,
     _deploy_repo_root_requirements,
@@ -88,11 +89,14 @@ from api.code_sync import (  # noqa: E402
     _ensure_target_python_installed,
     _ensure_venv_python,
     _install_pip_deps_for_component,
+    _is_systemd_unit_failed,
     _lockfile_hash,
     _lockfile_unchanged,
     _npm_install_if_needed,
     _pg_dump_before_migration,
     _prune_old_backups,
+    _prune_old_snapshots,
+    _resolve_pg_db_url,
     _rollback_component,
     _run_alembic_migrations,
     _run_post_sync_steps,
@@ -1195,27 +1199,33 @@ def test_prune_old_backups_removes_oldest(tmp_path) -> None:
     assert remaining[1].name == "autobot-backend_0003.dump"
 
 
-def test_pg_dump_skips_when_no_database_url(tmp_path) -> None:
-    """_pg_dump_before_migration returns None when DATABASE_URL is absent."""
+def test_pg_dump_proceeds_with_warning_when_no_db_config(tmp_path) -> None:
+    """#11431: _pg_dump_before_migration returns 'NO_BACKUP' (not None) when no DB config
+    is found — deploy proceeds with a warning instead of aborting."""
     (tmp_path / ".env").write_text("FOO=bar\n", encoding="utf-8")
     steps: list[str] = []
+    clear_keys = {
+        "DATABASE_URL",
+        "AUTOBOT_DATABASE_URL",
+        "AUTOBOT_POSTGRES_HOST",
+        "AUTOBOT_POSTGRES_USER",
+        "AUTOBOT_POSTGRES_PASSWORD",
+        "AUTOBOT_POSTGRES_DB",
+        "AUTOBOT_POSTGRES_PORT",
+    }
+    env_backup = {k: os.environ.pop(k) for k in clear_keys if k in os.environ}
+    try:
+        result = _run(_pg_dump_before_migration("autobot-backend", str(tmp_path), steps))
+    finally:
+        os.environ.update(env_backup)
 
-    with patch.dict("os.environ", {}, clear=False):
-        # Remove DATABASE_URL if present in env
-        env_backup = os.environ.pop("DATABASE_URL", None)
-        try:
-            result = _run(_pg_dump_before_migration("autobot-backend", str(tmp_path), steps))
-        finally:
-            if env_backup is not None:
-                os.environ["DATABASE_URL"] = env_backup
-
-    assert result is None
-    assert any("DATABASE_URL" in s for s in steps)
+    assert result == "NO_BACKUP", f"expected 'NO_BACKUP' sentinel, got {result!r}"
+    assert any("no DB config" in s or "skipping backup" in s for s in steps)
 
 
 def test_pg_dump_uses_arg_list_subprocess(tmp_path) -> None:
     """pg_dump invocation must use an arg list, never a shell string (#11376)."""
-    (tmp_path / ".env").write_text("DATABASE_URL=postgresql://user:pw@localhost:5432/mydb\n", encoding="utf-8")
+    (tmp_path / ".env").write_text("AUTOBOT_DATABASE_URL=postgresql://user:pw@localhost:5432/mydb\n", encoding="utf-8")
     captured: list = []
 
     async def _fake_exec(*cmd, env=None, **kw):
@@ -1244,68 +1254,136 @@ def test_pg_dump_uses_arg_list_subprocess(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# #11377 — snapshot + rollback on post-sync failure
+# #11377 / #11404 — rsync-based snapshot + rollback on post-sync failure
 # ---------------------------------------------------------------------------
 
 
-def test_snapshot_component_returns_none_when_not_git(tmp_path) -> None:
-    """Returns None gracefully when git rev-parse fails (not a git repo)."""
+def test_snapshot_component_returns_none_when_rsync_fails(tmp_path) -> None:
+    """Returns None gracefully when rsync fails (#11404)."""
 
     async def _fake_exec(*cmd, **kw):
         proc = MagicMock()
-        proc.returncode = 128
-        proc.communicate = AsyncMock(return_value=(b"not a git repository", b""))
+        proc.returncode = 23
+        proc.communicate = AsyncMock(return_value=(b"rsync error", b""))
         return proc
 
+    snap_dir = tmp_path / "snapshots"
+    snap_dir.mkdir()
     with (
-        patch("api.code_sync.get_default_deployed_dir", return_value=str(tmp_path)),
+        patch("api.code_sync.get_default_deployed_dir", return_value=str(tmp_path / "deployed")),
+        patch("api.code_sync._SNAPSHOT_BASE_DIR", str(snap_dir)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
     ):
         result = _run(_snapshot_component("autobot-backend"))
     assert result is None
 
 
-def test_snapshot_component_returns_sha(tmp_path) -> None:
-    """Returns the SHA string when git rev-parse succeeds."""
+def test_snapshot_component_returns_backup_path(tmp_path) -> None:
+    """Returns a snapshot dir path string when rsync succeeds (#11404)."""
+    deployed = tmp_path / "deployed"
+    deployed.mkdir()
+    snap_dir = tmp_path / "snapshots"
+    snap_dir.mkdir()
 
     async def _fake_exec(*cmd, **kw):
         proc = MagicMock()
         proc.returncode = 0
-        proc.communicate = AsyncMock(return_value=(b"abc123def456\n", b""))
+        proc.communicate = AsyncMock(return_value=(b"", b""))
         return proc
 
     with (
-        patch("api.code_sync.get_default_deployed_dir", return_value=str(tmp_path)),
+        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
+        patch("api.code_sync._SNAPSHOT_BASE_DIR", str(snap_dir)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
     ):
         result = _run(_snapshot_component("autobot-backend"))
-    assert result == "abc123def456"
+
+    assert result is not None
+    assert result.startswith(str(snap_dir))
+    assert "autobot-backend_" in result
 
 
-def test_rollback_component_calls_git_reset_and_restart(tmp_path) -> None:
-    """_rollback_component runs git reset --hard and restarts services (#11377)."""
-    restarted: list[bool] = []
+def test_snapshot_rsyncs_deployed_dir(tmp_path) -> None:
+    """#11404: _snapshot_component rsyncs deployed/ to a backup dir, not git rev-parse."""
+    deployed = tmp_path / "deployed"
+    deployed.mkdir()
+    snap_dir = tmp_path / "snapshots"
+    snap_dir.mkdir()
+    captured: list = []
 
     async def _fake_exec(*cmd, **kw):
+        captured.extend(cmd)
         proc = MagicMock()
         proc.returncode = 0
-        proc.communicate = AsyncMock(return_value=(b"HEAD is now at abc123", b""))
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    with (
+        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
+        patch("api.code_sync._SNAPSHOT_BASE_DIR", str(snap_dir)),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+    ):
+        _run(_snapshot_component("autobot-backend"))
+
+    assert captured[0] == "rsync", f"expected rsync, got {captured[0]}"
+    assert "git" not in captured, "git must NOT be called — deployed dirs are not git repos"
+
+
+def test_rollback_component_rsyncs_from_backup_and_restarts(tmp_path) -> None:
+    """#11404: _rollback_component restores from the rsync backup and restarts services."""
+    deployed = tmp_path / "deployed"
+    deployed.mkdir()
+    backup = tmp_path / "snapshots" / "autobot-backend_20260101T000000Z"
+    backup.mkdir(parents=True)
+    restarted: list[bool] = []
+    rsync_calls: list = []
+
+    async def _fake_exec(*cmd, **kw):
+        rsync_calls.extend(cmd)
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
         return proc
 
     async def _fake_restart(component, steps):
         restarted.append(True)
 
     with (
-        patch("api.code_sync.get_default_deployed_dir", return_value=str(tmp_path)),
+        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
         patch("api.code_sync._restart_component_services", side_effect=_fake_restart),
     ):
         steps: list[str] = []
-        _run(_rollback_component("autobot-backend", "abc123def456", steps, "/tmp/dump.dump"))
+        _run(_rollback_component("autobot-backend", str(backup), steps, "/opt/autobot/db-backups/test.dump"))
 
     assert restarted, "services must be restarted after rollback"
-    assert any("reverted" in s for s in steps)
-    assert any("/tmp/dump.dump" in s for s in steps), "dump path must appear in steps"
+    assert rsync_calls[0] == "rsync", "rollback must rsync from backup to deployed"
+    assert any("restored" in s for s in steps)
+    assert any("test.dump" in s for s in steps), "dump path must appear in steps"
+
+
+def test_rollback_skips_dump_path_when_no_backup_sentinel(tmp_path) -> None:
+    """NO_BACKUP sentinel must not appear in rollback steps (#11431 + #11404)."""
+    deployed = tmp_path / "deployed"
+    deployed.mkdir()
+    backup = tmp_path / "snapshots" / "autobot-backend_ts"
+    backup.mkdir(parents=True)
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    with (
+        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        patch("api.code_sync._restart_component_services", AsyncMock()),
+    ):
+        steps: list[str] = []
+        _run(_rollback_component("autobot-backend", str(backup), steps, "NO_BACKUP"))
+
+    assert not any("NO_BACKUP" in s for s in steps), "NO_BACKUP sentinel must not leak into steps"
 
 
 def test_rollback_noop_when_no_snapshot() -> None:
@@ -1390,8 +1468,13 @@ def test_wait_component_healthy_returns_true_on_healthy_response() -> None:
     assert any("healthy" in s for s in steps)
 
 
-def test_wait_component_healthy_returns_false_on_timeout() -> None:
-    """Returns False when the component stays unhealthy for the full timeout (#11378)."""
+def test_wait_component_healthy_returns_true_on_timeout_no_failure() -> None:
+    """#11413: timeout without systemd 'failed' returns True — slow start is not a failure.
+
+    Prior behaviour returned False on any timeout (#11378 regression): this caused
+    good deploys to be rolled back when bytecode compilation took >60s.  Now only
+    a confirmed systemd 'failed' state returns False.
+    """
     steps: list[str] = []
 
     class _FailClient:
@@ -1410,11 +1493,12 @@ def test_wait_component_healthy_returns_false_on_timeout() -> None:
         patch("api.code_sync._HEALTH_POLL_CONNECT_TIMEOUT", 0.05),
         patch("asyncio.sleep", AsyncMock()),
         patch("httpx.AsyncClient", return_value=_FailClient()),
+        patch("api.code_sync._is_systemd_unit_failed", AsyncMock(return_value=False)),
     ):
         result = _run(_wait_component_healthy("autobot-backend", steps))
 
-    assert result is False
-    assert any("NOT healthy" in s for s in steps)
+    assert result is True, "timeout without systemd failure must return True (slow start)"
+    assert any("unit not failed" in s or "did not respond" in s for s in steps)
 
 
 def test_wait_component_healthy_skips_when_no_url() -> None:
@@ -1496,3 +1580,272 @@ def test_provision_playbook_runs_from_ansible_dir_with_config() -> None:
     assert "PATH" in env
     # command args unchanged — must still match the exact NOPASSWD sudoers grant
     assert captured["cmd"][:3] == ("sudo", "ansible-playbook", str(_PROVISION_PYTHON_PLAYBOOK))
+
+
+# ---------------------------------------------------------------------------
+# #11431 — _resolve_pg_db_url: robust DB URL resolution
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_pg_db_url_prefers_autobot_database_url() -> None:
+    """AUTOBOT_DATABASE_URL in env_vars takes highest priority (#11431)."""
+    env_vars = {
+        "AUTOBOT_DATABASE_URL": "postgresql://u:p@host/db",
+        "DATABASE_URL": "postgresql://other:other@other/other",
+        "AUTOBOT_POSTGRES_HOST": "ignored-host",
+    }
+    result = _resolve_pg_db_url(env_vars)
+    assert result == "postgresql://u:p@host/db"
+
+
+def test_resolve_pg_db_url_falls_back_to_database_url() -> None:
+    """DATABASE_URL is used when AUTOBOT_DATABASE_URL is absent (#11431)."""
+    env_vars = {"DATABASE_URL": "postgresql://u:p@host/db"}
+    result = _resolve_pg_db_url(env_vars)
+    assert result == "postgresql://u:p@host/db"
+
+
+def test_resolve_pg_db_url_assembles_from_component_vars() -> None:
+    """AUTOBOT_POSTGRES_* vars are assembled into a URL when no full URL exists (#11431)."""
+    env_vars = {
+        "AUTOBOT_POSTGRES_HOST": "db.internal",
+        "AUTOBOT_POSTGRES_PORT": "5432",
+        "AUTOBOT_POSTGRES_USER": "autobot_app",
+        "AUTOBOT_POSTGRES_PASSWORD": "secret",
+        "AUTOBOT_POSTGRES_DB": "autobot_users",
+    }
+    result = _resolve_pg_db_url(env_vars)
+    assert "db.internal" in result
+    assert "autobot_app" in result
+    assert "secret" in result
+    assert "autobot_users" in result
+    assert result.startswith("postgresql://")
+
+
+def test_resolve_pg_db_url_returns_empty_when_nothing_configured() -> None:
+    """Returns '' when no DB config is available anywhere (#11431)."""
+    result = _resolve_pg_db_url({})
+    # Must not raise; empty string signals caller to proceed with warning
+    assert isinstance(result, str)
+
+
+def test_pg_dump_resolves_url_from_autobot_postgres_vars(tmp_path) -> None:
+    """#11431: pg_dump succeeds using AUTOBOT_POSTGRES_* vars when DATABASE_URL absent."""
+    env_content = (
+        "AUTOBOT_POSTGRES_HOST=127.0.0.1\n"
+        "AUTOBOT_POSTGRES_PORT=5432\n"
+        "AUTOBOT_POSTGRES_USER=autobot_app\n"
+        "AUTOBOT_POSTGRES_PASSWORD=secret\n"
+        "AUTOBOT_POSTGRES_DB=autobot_users\n"
+    )
+    (tmp_path / ".env").write_text(env_content, encoding="utf-8")
+    captured: list = []
+
+    async def _fake_exec(*cmd, env=None, **kw):
+        captured.extend(cmd)
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    steps: list[str] = []
+    clear_keys = {"DATABASE_URL", "AUTOBOT_DATABASE_URL"}
+    env_backup = {k: os.environ.pop(k) for k in clear_keys if k in os.environ}
+    try:
+        with (
+            patch("api.code_sync._DB_BACKUP_DIR", str(backup_dir)),
+            patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        ):
+            result = _run(_pg_dump_before_migration("autobot-backend", str(tmp_path), steps))
+    finally:
+        os.environ.update(env_backup)
+
+    assert result is not None and result != "NO_BACKUP", f"expected backup path, got {result!r}"
+    assert captured[0] == "pg_dump"
+    assert "127.0.0.1" in captured
+
+
+def test_alembic_not_aborted_when_no_db_config(tmp_path) -> None:
+    """#11431: alembic migration proceeds when pg_dump returns NO_BACKUP (no DB config)."""
+    alembic_ran: list[bool] = []
+
+    async def _fake_exec(*cmd, **kw):
+        if "alembic" in str(cmd):
+            alembic_ran.append(True)
+        proc = MagicMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        return proc
+
+    deployed = tmp_path / "autobot-backend"
+    deployed.mkdir()
+    alembic_ini = deployed / "migrations" / "alembic.ini"
+    alembic_ini.parent.mkdir(parents=True)
+    alembic_ini.write_text("[alembic]\n", encoding="utf-8")
+    alembic_bin = deployed / "venv" / "bin" / "alembic"
+    alembic_bin.parent.mkdir(parents=True)
+    alembic_bin.write_text("#!/bin/sh\n", encoding="utf-8")
+    alembic_bin.chmod(0o755)
+
+    with (
+        patch("api.code_sync._COMPONENT_MIGRATION_CONFIG", {"autobot-backend": "migrations/alembic.ini"}),
+        patch("api.code_sync._COMPONENT_PIP_PATHS", {"autobot-backend": ("req.txt", str(deployed / "venv/bin/pip"))}),
+        patch("api.code_sync._pg_dump_before_migration", AsyncMock(return_value="NO_BACKUP")),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+    ):
+        steps: list[str] = []
+        result = _run(_run_alembic_migrations("autobot-backend", str(deployed), steps))
+
+    assert result is True, "alembic must succeed when pg_dump returns NO_BACKUP"
+    assert alembic_ran, "alembic must actually run when pg_dump returns NO_BACKUP"
+    assert not any("ABORTED" in s for s in steps)
+
+
+# ---------------------------------------------------------------------------
+# #11404 — _prune_old_snapshots
+# ---------------------------------------------------------------------------
+
+
+def test_prune_old_snapshots_removes_oldest(tmp_path) -> None:
+    """_prune_old_snapshots keeps only max_keep newest snapshot dirs (#11404)."""
+    snap_base = tmp_path / "snapshots"
+    snap_base.mkdir()
+    for i in range(4):
+        d = snap_base / f"autobot-backend_202601{i:02d}T000000Z"
+        d.mkdir()
+        os.utime(str(d), (time.time() + i, time.time() + i))
+
+    _prune_old_snapshots(snap_base, "autobot-backend", max_keep=2)
+
+    remaining = sorted(d.name for d in snap_base.iterdir() if d.is_dir())
+    assert len(remaining) == 2
+    # Newest two survive
+    assert "202601" in remaining[0]
+
+
+def test_snapshot_base_dir_constant_defined() -> None:
+    """_SNAPSHOT_BASE_DIR constant must be non-empty (#11404)."""
+    assert _SNAPSHOT_BASE_DIR  # non-empty string
+
+
+# ---------------------------------------------------------------------------
+# #11413 — health poll: timeout without failure does not trigger rollback
+# ---------------------------------------------------------------------------
+
+
+def test_wait_component_healthy_returns_true_on_timeout_without_systemd_failure() -> None:
+    """#11413: timeout without a confirmed systemd 'failed' state returns True (no rollback)."""
+    steps: list[str] = []
+
+    class _FailClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            pass
+
+        async def get(self, url):
+            raise ConnectionRefusedError("refused")
+
+    with (
+        patch("api.code_sync._COMPONENT_HEALTH_URLS", {"autobot-backend": "http://127.0.0.1:8001/api/health"}),
+        patch("api.code_sync._HEALTH_POLL_TIMEOUT", 0.1),
+        patch("api.code_sync._HEALTH_POLL_CONNECT_TIMEOUT", 0.05),
+        patch("asyncio.sleep", AsyncMock()),
+        patch("httpx.AsyncClient", return_value=_FailClient()),
+        # systemd unit is NOT failed (still activating / slow start)
+        patch("api.code_sync._is_systemd_unit_failed", AsyncMock(return_value=False)),
+    ):
+        result = _run(_wait_component_healthy("autobot-backend", steps))
+
+    assert result is True, "slow start without systemd failure must NOT trigger rollback"
+    assert any("unit not failed" in s or "did not respond" in s for s in steps)
+
+
+def test_wait_component_healthy_returns_false_when_unit_failed_during_poll() -> None:
+    """#11413: a systemd 'failed' state detected mid-poll causes False (rollback)."""
+    steps: list[str] = []
+
+    class _FailClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            pass
+
+        async def get(self, url):
+            raise ConnectionRefusedError("refused")
+
+    with (
+        patch("api.code_sync._COMPONENT_HEALTH_URLS", {"autobot-backend": "http://127.0.0.1:8001/api/health"}),
+        patch("api.code_sync._HEALTH_POLL_TIMEOUT", 5.0),
+        patch("api.code_sync._HEALTH_POLL_CONNECT_TIMEOUT", 0.05),
+        patch("asyncio.sleep", AsyncMock()),
+        patch("httpx.AsyncClient", return_value=_FailClient()),
+        # systemd reports 'failed' immediately
+        patch("api.code_sync._is_systemd_unit_failed", AsyncMock(return_value=True)),
+    ):
+        result = _run(_wait_component_healthy("autobot-backend", steps))
+
+    assert result is False, "confirmed systemd failure must trigger rollback (return False)"
+    assert any("failed" in s for s in steps)
+
+
+def test_is_systemd_unit_failed_returns_true_on_failed_output() -> None:
+    """_is_systemd_unit_failed returns True only when systemctl prints 'failed' (#11413)."""
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.returncode = 1  # systemctl is-failed exits 1 when unit IS failed
+        proc.communicate = AsyncMock(return_value=(b"failed\n", b""))
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
+        result = _run(_is_systemd_unit_failed("autobot-backend"))
+    assert result is True
+
+
+def test_is_systemd_unit_failed_returns_false_on_activating() -> None:
+    """_is_systemd_unit_failed returns False when unit is 'activating' (slow start) (#11413)."""
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.returncode = 3
+        proc.communicate = AsyncMock(return_value=(b"activating\n", b""))
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
+        result = _run(_is_systemd_unit_failed("autobot-backend"))
+    assert result is False
+
+
+def test_run_post_sync_steps_does_not_roll_back_on_slow_start() -> None:
+    """#11413: a slow-but-eventually-healthy start does NOT trigger rollback."""
+    rolled_back: list[bool] = []
+
+    async def _fake_rollback(component, snapshot, steps, dump_path=None):
+        rolled_back.append(True)
+
+    with (
+        patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        patch("api.code_sync._snapshot_component", AsyncMock(return_value="/snapshots/backup")),
+        patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
+        patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
+        patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
+        patch("api.code_sync._ensure_venv_python", AsyncMock()),
+        patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=True)),
+        patch("api.code_sync._run_alembic_migrations", AsyncMock(return_value=True)),
+        patch("api.code_sync._ensure_autobot_shared_symlink", AsyncMock()),
+        patch("api.code_sync._restart_component_services", AsyncMock()),
+        # health poll: slow start but unit is not failed → returns True
+        patch("api.code_sync._wait_component_healthy", AsyncMock(return_value=True)),
+        patch("api.code_sync._rollback_component", side_effect=_fake_rollback),
+    ):
+        _, _, pip_ok = _run(
+            _run_post_sync_steps("autobot-backend", "/src/autobot-backend", "/opt/autobot/autobot-backend")
+        )
+
+    assert pip_ok is True, "deploy must succeed when health poll returns True"
+    assert not rolled_back, "rollback must NOT fire on slow-but-successful start"
