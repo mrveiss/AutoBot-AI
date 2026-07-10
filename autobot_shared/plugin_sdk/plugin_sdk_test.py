@@ -774,3 +774,143 @@ async def test_load_plugin_returns_none_and_logs_when_required_env_missing(monke
 
     assert result is None
     assert "TEST_REQ_LOAD_FAIL_V2" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# GH#11522 — config_schema validation helpers
+# ---------------------------------------------------------------------------
+
+
+def test_validate_config_schema_accepts_valid_draft202012() -> None:
+    from plugin_sdk.loader import _validate_config_schema
+
+    _validate_config_schema("p", {"type": "object", "properties": {"host": {"type": "string"}}})
+
+
+def test_validate_config_schema_accepts_empty_schema() -> None:
+    from plugin_sdk.loader import _validate_config_schema
+
+    _validate_config_schema("p", {})
+
+
+def test_validate_config_schema_rejects_invalid_type() -> None:
+    from plugin_sdk.loader import _validate_config_schema
+
+    with pytest.raises(PluginLoadError, match="not valid JSON Schema"):
+        _validate_config_schema("p", {"type": "totally_invalid_type"})
+
+
+def test_validate_config_against_schema_accepts_conforming() -> None:
+    from plugin_sdk.loader import _validate_config_against_schema
+
+    schema = {
+        "type": "object",
+        "properties": {"host": {"type": "string"}, "port": {"type": "integer"}},
+        "required": ["host"],
+    }
+    _validate_config_against_schema("p", {"host": "localhost", "port": 8080}, schema)
+
+
+def test_validate_config_against_schema_rejects_wrong_type() -> None:
+    from plugin_sdk.loader import _validate_config_against_schema
+
+    schema = {"type": "object", "properties": {"port": {"type": "integer"}}}
+    with pytest.raises(PluginLoadError, match="does not conform to config_schema"):
+        _validate_config_against_schema("p", {"port": "not-an-int"}, schema)
+
+
+def test_validate_config_against_schema_field_level_detail() -> None:
+    """Error message must name the offending field."""
+    from plugin_sdk.loader import _validate_config_against_schema
+
+    schema = {
+        "type": "object",
+        "properties": {"timeout": {"type": "integer"}},
+        "required": ["timeout"],
+    }
+    with pytest.raises(PluginLoadError, match="timeout"):
+        _validate_config_against_schema("p", {}, schema)
+
+
+def test_validate_config_against_schema_missing_required() -> None:
+    from plugin_sdk.loader import _validate_config_against_schema
+
+    schema = {
+        "type": "object",
+        "properties": {"host": {"type": "string"}},
+        "required": ["host"],
+    }
+    with pytest.raises(PluginLoadError):
+        _validate_config_against_schema("p", {}, schema)
+
+
+# ---------------------------------------------------------------------------
+# GH#11522 — load_plugin enforces config_schema at load time
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_invalid_schema_returns_none_and_logs(monkeypatch, caplog) -> None:
+    """A manifest with an invalid config_schema returns None (outer handler swallows PluginLoadError)."""
+    from plugin_sdk.loader import PluginLoader
+
+    PluginRegistry().clear()
+    loader = PluginLoader([])
+    manifest = _make_manifest(
+        name="bad-schema-plugin",
+        config_schema={"type": "totally_invalid_type"},
+    )
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, d=None: _ConcretePlugin)
+
+    with caplog.at_level("ERROR"):
+        result = await loader.load_plugin(manifest)
+
+    assert result is None
+    assert "not valid JSON Schema" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_nonconforming_config_returns_none_and_logs(monkeypatch, caplog) -> None:
+    """A non-conforming config returns None and logs the field-level error."""
+    from plugin_sdk.loader import PluginLoader
+
+    PluginRegistry().clear()
+    loader = PluginLoader([])
+    schema = {"type": "object", "properties": {"host": {"type": "string"}}, "required": ["host"]}
+    manifest = _make_manifest(name="schema-plugin", config_schema=schema)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, d=None: _ConcretePlugin)
+
+    with caplog.at_level("ERROR"):
+        result = await loader.load_plugin(manifest, config={"host": 999})
+
+    assert result is None
+    assert "does not conform to config_schema" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_conforming_config_loads(monkeypatch) -> None:
+    """A valid schema + conforming config loads successfully."""
+    from plugin_sdk.loader import PluginLoader
+
+    PluginRegistry().clear()
+    schema = {"type": "object", "properties": {"host": {"type": "string"}}, "required": ["host"]}
+    loader = PluginLoader([])
+    manifest = _make_manifest(name="ok-schema-plugin", config_schema=schema)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, d=None: _ConcretePlugin)
+
+    plugin = await loader.load_plugin(manifest, config={"host": "localhost"})
+    assert plugin is not None
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_empty_schema_any_config_loads(monkeypatch) -> None:
+    """An absent config_schema keeps today's behaviour (no validation)."""
+    from plugin_sdk.loader import PluginLoader
+
+    PluginRegistry().clear()
+    loader = PluginLoader([])
+    manifest = _make_manifest(name="noschema-plugin")
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, d=None: _ConcretePlugin)
+
+    plugin = await loader.load_plugin(manifest, config={"anything": True})
+    assert plugin is not None
