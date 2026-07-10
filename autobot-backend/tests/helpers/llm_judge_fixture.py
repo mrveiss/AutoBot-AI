@@ -31,12 +31,9 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Union
+from typing import Union
 
 import pytest
-
-if TYPE_CHECKING:
-    from judges import JudgmentDimension  # typing-time only — not imported at load
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +42,15 @@ _JUDGE_TESTS_ENV = "AUTOBOT_LLM_JUDGE_TESTS"
 
 # Configurable minimum score for the default threshold (env constant pattern).
 _DEFAULT_MIN_SCORE = float(os.environ.get("AUTOBOT_LLM_JUDGE_MIN_SCORE", "0.7"))
+
+# Dimensions evaluated when callers pass plain-string criteria.  Names are
+# resolved against JudgmentDimension lazily (the enum must not be imported at
+# collection time).  Override per-call by passing an explicit dimension list.
+STRING_CRITERIA_DIMENSIONS: tuple[str, ...] = ("RELEVANCE", "ACCURACY", "QUALITY")
+
+# The bare Ollama default — its presence alone does NOT prove a provider is
+# configured (it is often baked into .env files with no server running).
+_DEFAULT_OLLAMA_ENDPOINT = "http://localhost:11434"
 
 
 def _is_judge_tests_enabled() -> bool:
@@ -68,6 +74,9 @@ def _provider_configured() -> bool:
     ollama_ep = os.environ.get("AUTOBOT_OLLAMA_ENDPOINT", "")
     openai_key = os.environ.get("AUTOBOT_OPENAI_API_KEY", "")
     anthropic_key = os.environ.get("AUTOBOT_ANTHROPIC_API_KEY", "")
+    # The bare default endpoint is not evidence of a reachable provider.
+    if ollama_ep.rstrip("/") == _DEFAULT_OLLAMA_ENDPOINT:
+        ollama_ep = ""
     # Any explicit configuration counts.
     return bool(provider or ollama_ep or openai_key or anthropic_key)
 
@@ -116,7 +125,9 @@ class _LLMJudgeWrapper:
         from judges import JudgmentDimension as _Dim
 
         if isinstance(criteria, str):
-            dimensions = [_Dim.RELEVANCE, _Dim.ACCURACY, _Dim.QUALITY]
+            # String criteria are evaluated on the fixed STRING_CRITERIA_DIMENSIONS
+            # set — the string steers the judge's reasoning, not the dimension list.
+            dimensions = [getattr(_Dim, name) for name in STRING_CRITERIA_DIMENSIONS]
             judge_context = {"criteria_description": criteria, "context": context}
         else:
             dimensions = criteria
@@ -135,14 +146,12 @@ class _LLMJudgeWrapper:
                 f"Reasoning: {result.reasoning}",
             ]
             for cs in result.criterion_scores:
-                lines.append(
-                    f"  [{cs.dimension.value}] score={cs.score:.3f} — {cs.reasoning}"
-                )
+                lines.append(f"  [{cs.dimension.value}] score={cs.score:.3f} — {cs.reasoning}")
             raise AssertionError("\n".join(lines))
 
 
 @pytest.fixture
-async def llm_judge(request):
+async def llm_judge():
     """pytest fixture: provides ``_LLMJudgeWrapper`` for LLM-quality assertions.
 
     Auto-skips when:
@@ -153,9 +162,7 @@ async def llm_judge(request):
     in async test functions directly.
     """
     if not _is_judge_tests_enabled():
-        pytest.skip(
-            f"LLM judge tests disabled — set {_JUDGE_TESTS_ENV}=1 to enable"
-        )
+        pytest.skip(f"LLM judge tests disabled — set {_JUDGE_TESTS_ENV}=1 to enable")
 
     if not _provider_configured():
         pytest.skip(
@@ -163,9 +170,11 @@ async def llm_judge(request):
             "(set AUTOBOT_OLLAMA_ENDPOINT, AUTOBOT_OPENAI_API_KEY, etc.)"
         )
 
-    # Late import — judges/__init__.py imports llm_shared and autobot_shared
-    # chains that must NOT run at collection time.
-    from judges import BaseLLMJudge
+    # Late import — judges imports llm_shared and autobot_shared chains that
+    # must NOT run at collection time.  AgentResponseJudge is used because
+    # BaseLLMJudge._prepare_judgment_prompt is abstract (raises
+    # NotImplementedError → every judgment would error-score 0.0).
+    from judges.agent_response_judge import AgentResponseJudge
 
-    judge = BaseLLMJudge(judge_type="pytest_quality_judge")
+    judge = AgentResponseJudge()
     yield _LLMJudgeWrapper(judge)

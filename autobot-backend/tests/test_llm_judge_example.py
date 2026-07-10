@@ -38,7 +38,8 @@ The unit tests in this file (``test_llm_judge_*_unit``) are NOT marked
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -105,7 +106,7 @@ def _make_judgment(overall_score: float, criterion_scores: list | None = None):
     return JudgmentResult(
         subject_id="test-subject",
         judge_type="pytest_quality_judge",
-        timestamp=MagicMock(),
+        timestamp=datetime.now(tz=timezone.utc),
         overall_score=overall_score,
         recommendation="APPROVE" if overall_score >= 0.7 else "REJECT",
         confidence=JudgmentConfidence.HIGH,
@@ -197,7 +198,12 @@ def test_provider_configured_no_env(monkeypatch) -> None:
     """Provider check returns False when no provider env vars are set."""
     from tests.helpers.llm_judge_fixture import _provider_configured
 
-    for key in ("AUTOBOT_LLM_PROVIDER", "AUTOBOT_OLLAMA_ENDPOINT", "AUTOBOT_OPENAI_API_KEY", "AUTOBOT_ANTHROPIC_API_KEY"):
+    for key in (
+        "AUTOBOT_LLM_PROVIDER",
+        "AUTOBOT_OLLAMA_ENDPOINT",
+        "AUTOBOT_OPENAI_API_KEY",
+        "AUTOBOT_ANTHROPIC_API_KEY",
+    ):
         monkeypatch.delenv(key, raising=False)
     assert not _provider_configured()
 
@@ -210,3 +216,33 @@ def test_provider_configured_with_openai_key(monkeypatch) -> None:
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("AUTOBOT_OPENAI_API_KEY", "sk-test")
     assert _provider_configured()
+
+
+def test_provider_configured_with_generic_provider(monkeypatch) -> None:
+    """Provider check returns True when AUTOBOT_LLM_PROVIDER is set."""
+    from tests.helpers.llm_judge_fixture import _provider_configured
+
+    for key in ("AUTOBOT_OLLAMA_ENDPOINT", "AUTOBOT_OPENAI_API_KEY", "AUTOBOT_ANTHROPIC_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("AUTOBOT_LLM_PROVIDER", "ollama")
+    assert _provider_configured()
+
+
+def test_provider_configured_with_custom_ollama_endpoint(monkeypatch) -> None:
+    """A non-default Ollama endpoint counts as configured."""
+    from tests.helpers.llm_judge_fixture import _provider_configured
+
+    for key in ("AUTOBOT_LLM_PROVIDER", "AUTOBOT_OPENAI_API_KEY", "AUTOBOT_ANTHROPIC_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("AUTOBOT_OLLAMA_ENDPOINT", "http://10.0.0.5:11434")
+    assert _provider_configured()
+
+
+def test_provider_configured_default_ollama_endpoint_excluded(monkeypatch) -> None:
+    """The bare default Ollama endpoint does NOT count as configured."""
+    from tests.helpers.llm_judge_fixture import _provider_configured
+
+    for key in ("AUTOBOT_LLM_PROVIDER", "AUTOBOT_OPENAI_API_KEY", "AUTOBOT_ANTHROPIC_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("AUTOBOT_OLLAMA_ENDPOINT", "http://localhost:11434")
+    assert not _provider_configured()
