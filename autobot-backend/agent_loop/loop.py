@@ -148,7 +148,7 @@ class AgentLoop:
             think_tool: Optional think tool for reasoning
             config: Loop configuration
             agent_id: Optional agent identity (GH#11145). When set, the agent's
-                ``forbidden_work`` manifest is resolved from ``AgentRegistry`` and
+                ``forbidden_work`` manifest is resolved from ``AgentCapabilityRegistry`` and
                 applied to ``config.forbidden_tools`` so ``_check_forbidden`` hard-
                 blocks out-of-manifest tools. When unset (the default), the loop
                 runs as no particular agent and the manifest is empty (no change).
@@ -1438,7 +1438,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
         """Populate ``config.forbidden_tools`` from the agent's manifest (GH#11145).
 
         Reads ``forbidden_work`` off the agent's ``AgentProfile`` via
-        ``AgentRegistry`` and returns a config with those tools hard-blocked. When
+        ``AgentCapabilityRegistry`` and returns a config with those tools hard-blocked. When
         no ``agent_id`` is given, or the config already carries an explicit
         ``forbidden_tools`` set, or the agent has no boundary, the config is
         returned unchanged. Registry resolution never raises into the loop — a

@@ -16452,7 +16452,7 @@ export interface paths {
          * @description Return all registered agents with runtime status (#10502, #10511).
          *
          *     Uses the Postgres-backed ``AgentOrgService`` when a session is available,
-         *     with a defensive fallback to the in-memory ``AgentRegistry`` populated from
+         *     with a defensive fallback to the in-memory ``AgentCapabilityRegistry`` populated from
          *     ``DEFAULT_AGENT_CONFIGS`` so the Home dashboard "Agent Activity Monitor"
          *     returns 200 instead of 503.
          */

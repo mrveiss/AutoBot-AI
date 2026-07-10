@@ -27,8 +27,8 @@ class AgentRegistryService:
     **persistence** registry — canonical source of truth for agent metadata at
     startup/shutdown.  Does not track live health or in-process profile state.
     See also:
-    - orchestration.agent_registry.AgentRegistry — static profile/capability registry
-    - agents.agent_client.AgentRegistry — health-tracking runtime registry
+    - orchestration.agent_registry.AgentCapabilityRegistry — static profile/capability registry
+    - agents.agent_client.AgentHealthRegistry — health-tracking runtime registry
     - agents.agent_orchestration.distributed_management.DistributedAgentManager — dynamic/distributed
     """
 

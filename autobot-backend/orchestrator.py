@@ -47,10 +47,10 @@ from memory import LongTermMemoryManager
 from orchestration import (
     FALLBACK_TIERS,
     AgentCapability,
+    AgentCapabilityRegistry,
     AgentInteraction,
     AgentPerformance,
     AgentProfile,
-    AgentRegistry,
     AgentRouter,
     AgentTask,
     CausalErrorRecovery,
@@ -107,7 +107,7 @@ except ImportError:
     KNOWLEDGE_BASE_AVAILABLE = False
     logger.warning("KnowledgeBase not available - auto-documentation features disabled")
 
-from agents.agent_client import AgentRegistry as _AgentClientRegistry
+from agents.agent_client import AgentHealthRegistry as _AgentClientRegistry
 from autobot_shared.status_enums import Priority as TaskPriority  # #7504 consolidation
 from autobot_shared.status_enums import WorkflowStatus  # #6973 consolidation
 from autobot_types import TaskComplexity
@@ -157,11 +157,11 @@ class Orchestrator(_DeprecatedRequestMixin):
 
     def _init_components(self) -> None:
         self.agent_registry: Dict[str, AgentProfile] = {}
-        # GH #6820: AgentRegistry — structured profile store with capability-based lookup.
+        # GH #6820: AgentCapabilityRegistry — structured profile store with capability-based lookup.
         # Runs alongside the plain-dict self.agent_registry for structured queries.
         # GH#11139: seeded by _initialize_default_agents() (called later in __init__)
         # via register(), so skip the built-in defaults to avoid double instantiation.
-        self._profile_registry = AgentRegistry(initialize_defaults=False)
+        self._profile_registry = AgentCapabilityRegistry(initialize_defaults=False)
         self.workflow_documentation: Dict[str, WorkflowDocumentation] = {}
         self.agent_interactions: List[AgentInteraction] = []
         self.knowledge_base = KnowledgeBase() if KNOWLEDGE_BASE_AVAILABLE else None
