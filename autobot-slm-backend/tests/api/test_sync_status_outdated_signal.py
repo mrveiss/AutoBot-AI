@@ -14,6 +14,7 @@ from pathlib import Path
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_BACKEND_ROOT))
 
+import ast  # noqa: E402
 import inspect  # noqa: E402
 import types  # noqa: E402
 from unittest.mock import MagicMock  # noqa: E402
@@ -28,32 +29,17 @@ _mp_stub.multipart = types.ModuleType("multipart.multipart")  # type: ignore[att
 sys.modules.setdefault("multipart", _mp_stub)
 sys.modules.setdefault("multipart.multipart", _mp_stub.multipart)  # type: ignore[attr-defined]
 
-_SCHEMA_NAMES = (
-    "CodeSyncRefreshResponse",
-    "CodeSyncStatusResponse",
-    "CodeVersionNotification",
-    "CodeVersionNotificationResponse",
-    "DriftResolveRequest",
-    "DriftResolveResponse",
-    "FileDriftReport",
-    "FleetSyncJobStatus",
-    "FleetSyncNodeStatus",
-    "FleetSyncRequest",
-    "FleetSyncResponse",
-    "NodeSyncRequest",
-    "NodeSyncResponse",
-    "PendingNodeResponse",
-    "PendingNodesResponse",
-    "ScheduleCreate",
-    "ScheduleResponse",
-    "ScheduleRunResponse",
-    "ScheduleUpdate",
-    # #11303/#11447 additions missing from the sibling's list
-    "DriftResolveJobResponse",
-    "ComponentSyncJobStatus",
-    "UpdateAllRequest",
-    "UpdateAllStatusResponse",
-    "MarkSyncedResponse",
+# Names read straight from api/code_sync.py's `from models.schemas import (...)`
+# block rather than hand-listed — a static list silently rots when a new schema
+# lands (that rot is #11461). Covers request bodies AND response models.
+_code_sync_src = (_BACKEND_ROOT / "api" / "code_sync.py").read_text(encoding="utf-8")
+_SCHEMA_NAMES = tuple(
+    sorted(
+        alias.name
+        for node in ast.walk(ast.parse(_code_sync_src))
+        if isinstance(node, ast.ImportFrom) and node.module == "models.schemas"
+        for alias in node.names
+    )
 )
 _schemas_stub = sys.modules.get("models.schemas")
 if isinstance(_schemas_stub, MagicMock):
