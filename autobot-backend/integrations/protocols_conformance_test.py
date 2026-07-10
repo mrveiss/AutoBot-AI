@@ -64,14 +64,10 @@ def adapter(request, slack_adapter, discord_adapter):
 
 class TestMessagingProtocolConformance:
     def test_slack_adapter_isinstance(self, slack_adapter):
-        assert isinstance(slack_adapter, MessagingProtocol), (
-            "SlackMessagingAdapter must satisfy MessagingProtocol"
-        )
+        assert isinstance(slack_adapter, MessagingProtocol), "SlackMessagingAdapter must satisfy MessagingProtocol"
 
     def test_discord_adapter_isinstance(self, discord_adapter):
-        assert isinstance(discord_adapter, MessagingProtocol), (
-            "DiscordMessagingAdapter must satisfy MessagingProtocol"
-        )
+        assert isinstance(discord_adapter, MessagingProtocol), "DiscordMessagingAdapter must satisfy MessagingProtocol"
 
     def test_plain_dict_is_not_messaging_protocol(self):
         assert not isinstance({}, MessagingProtocol)
@@ -108,16 +104,14 @@ class TestMessagingProtocolSignatures:
     @pytest.mark.parametrize("impl_name", ["slack", "discord"])
     def test_send_message_is_coroutine(self, impl_name, slack_adapter, discord_adapter):
         impl = slack_adapter if impl_name == "slack" else discord_adapter
-        assert inspect.iscoroutinefunction(impl.send_message), (
-            f"{impl_name}.send_message must be a coroutine function"
-        )
+        assert inspect.iscoroutinefunction(impl.send_message), f"{impl_name}.send_message must be a coroutine function"
 
     @pytest.mark.parametrize("impl_name", ["slack", "discord"])
     def test_fetch_messages_is_coroutine(self, impl_name, slack_adapter, discord_adapter):
         impl = slack_adapter if impl_name == "slack" else discord_adapter
-        assert inspect.iscoroutinefunction(impl.fetch_messages), (
-            f"{impl_name}.fetch_messages must be a coroutine function"
-        )
+        assert inspect.iscoroutinefunction(
+            impl.fetch_messages
+        ), f"{impl_name}.fetch_messages must be a coroutine function"
 
 
 # ---------------------------------------------------------------------------
