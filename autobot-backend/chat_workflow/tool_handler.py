@@ -407,6 +407,19 @@ BROWSER_TOOL_NAMES: frozenset[str] = frozenset(
     }
 )
 
+# Issue #7509: web research tools — direct internal dispatch via web_fetch.
+WEB_RESEARCH_TOOL_NAMES: frozenset[str] = frozenset(
+    {"scrape_url", "crawl_site", "map_site", "extract_structured_data"}
+)
+
+# GH#11489: builtin tools sharing the uniform dispatch gate (invalid-call
+# counter reset → Issue #4529 schema validation → handler). ``_builtin_route``
+# maps each name to its handler, so adding a tool here needs no new branch at
+# the ``_dispatch_tool_call`` seam.
+_UNIFORM_BUILTIN_TOOLS: frozenset[str] = (
+    BROWSER_TOOL_NAMES | WEB_RESEARCH_TOOL_NAMES | frozenset({"web_search", "execute_command"})
+)
+
 # GH#11160: maps a declared approval category (a work item's
 # ``requires_approval_before`` entry) to the tools that constitute that action. A
 # tool is approval-gated only when the work item declared its category; names
@@ -2665,50 +2678,10 @@ class ToolHandlerMixin:
                 yield msg
             return
 
-        # Issue #1368: Route browser tools to browser VM
-        if tool_name in BROWSER_TOOL_NAMES:
-            if ctx is not None:
-                ctx.consecutive_invalid_tool_calls = 0
-            # Issue #4529: Validate arguments against schema before dispatch.
-            validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
-            if validation_msg is not None:
-                execution_results.append(
-                    {
-                        "tool": tool_name,
-                        "status": "schema_error",
-                        "error": validation_msg.content,
-                        "schema_validation_failed": True,
-                    }
-                )
-                yield validation_msg
-                return
-            async for msg in self._handle_browser_tool(tool_call, execution_results, session_id):
-                yield msg
-            return
-
-        # Issue #2306: web_search convenience tool wraps browser multi-step flow
-        if tool_name == "web_search":
-            if ctx is not None:
-                ctx.consecutive_invalid_tool_calls = 0
-            # Issue #4529: Validate arguments against schema before dispatch.
-            validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
-            if validation_msg is not None:
-                execution_results.append(
-                    {
-                        "tool": tool_name,
-                        "status": "schema_error",
-                        "error": validation_msg.content,
-                        "schema_validation_failed": True,
-                    }
-                )
-                yield validation_msg
-                return
-            async for msg in self._handle_web_search_tool(tool_call, execution_results, session_id):
-                yield msg
-            return
-
-        # Issue #7509: Web research tools — direct internal dispatch.
-        if tool_name in ("scrape_url", "crawl_site", "map_site", "extract_structured_data"):
+        # GH#11489: every uniform builtin (browser #1368, web_search #2306, web
+        # research #7509, execute_command) passes one shared gate — invalid-call
+        # counter reset, then Issue #4529 schema validation — before its handler.
+        if tool_name in _UNIFORM_BUILTIN_TOOLS:
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
             validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
@@ -2723,33 +2696,47 @@ class ToolHandlerMixin:
                 )
                 yield validation_msg
                 return
-            async for msg in self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id):
-                yield msg
-            return
-
-        if tool_name != "execute_command":
-            async for msg in self._dispatch_mcp_or_unknown(
-                tool_name, tool_call, execution_results, ctx, role, session_id
+            async for msg in self._builtin_route(
+                tool_name,
+                tool_call,
+                session_id,
+                terminal_session_id,
+                ollama_endpoint,
+                selected_model,
+                execution_results,
+                additional_response_parts,
             ):
                 yield msg
             return
 
-        if ctx is not None:
-            ctx.consecutive_invalid_tool_calls = 0
-        # Issue #4529: Validate arguments against schema before dispatch.
-        validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
-        if validation_msg is not None:
-            execution_results.append(
-                {
-                    "tool": tool_name,
-                    "status": "schema_error",
-                    "error": validation_msg.content,
-                    "schema_validation_failed": True,
-                }
-            )
-            yield validation_msg
-            return
-        async for msg in self._dispatch_execute_command(
+        async for msg in self._dispatch_mcp_or_unknown(tool_name, tool_call, execution_results, ctx, role, session_id):
+            yield msg
+
+    def _builtin_route(
+        self,
+        tool_name: str,
+        tool_call: dict[str, Any],
+        session_id: str,
+        terminal_session_id: str,
+        ollama_endpoint: str,
+        selected_model: str,
+        execution_results: list[dict[str, Any]],
+        additional_response_parts: list[str],
+    ):
+        """Return the handler async-generator for a uniform builtin tool (GH#11489).
+
+        Membership SSOT is ``_UNIFORM_BUILTIN_TOOLS``; the caller has already run
+        the shared gate. Adding a builtin that follows the standard gate takes a
+        schema entry plus one row here — no new branch at the dispatch seam.
+        """
+        if tool_name in BROWSER_TOOL_NAMES:  # Issue #1368: route to browser VM
+            return self._handle_browser_tool(tool_call, execution_results, session_id)
+        if tool_name == "web_search":  # Issue #2306: multi-step browser flow
+            return self._handle_web_search_tool(tool_call, execution_results, session_id)
+        if tool_name in WEB_RESEARCH_TOOL_NAMES:  # Issue #7509
+            return self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id)
+        # execute_command — the only remaining member of _UNIFORM_BUILTIN_TOOLS.
+        return self._dispatch_execute_command(
             tool_call,
             session_id,
             terminal_session_id,
@@ -2757,8 +2744,7 @@ class ToolHandlerMixin:
             selected_model,
             execution_results,
             additional_response_parts,
-        ):
-            yield msg
+        )
 
     async def _dispatch_mcp_or_unknown(
         self,
