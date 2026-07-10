@@ -79,11 +79,11 @@ sys.path.insert(0, str(_BACKEND_ROOT))
 
 from api.code_sync import (  # noqa: E402
     UpdateAllJob,
-    _StageStatus,
     _extract_ansible_fatal,
     _is_node_operational,
     _make_stage,
     _run_fleet_stage,
+    _StageStatus,
     _sync_fleet_node,
 )
 
