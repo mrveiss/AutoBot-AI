@@ -31,6 +31,14 @@ can race with concurrent reads.  The rl store is omitted here; its records
 are scoped by key and become inaccessible once the user is gone — they will
 expire naturally (short-lived hash entries) and do not block anyone else's
 forget operations.
+
+NOT yet covered (documented follow-up, tracked on #11065): the main knowledge
+facts collection (``autobot_memory``, owned via ``owner_id`` + the
+``user:facts:{owner_id}`` Redis index + the OwnershipManager grant tables) is a
+separate ownership subsystem — reassigning it must update collection metadata
+AND rehouse the Redis facts index AND the grants, so it is a distinct follow-up
+rather than a bolt-on here. This module solves the #10989 un-forgettable
+working-memory/graph problem that #11065 names.
 """
 
 import json
