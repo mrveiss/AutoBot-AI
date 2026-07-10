@@ -24,7 +24,7 @@ def _load_patterns():
     return _TOOL_CALL_PATTERN, _TOOL_CALL_COMPLETE_RE
 
 
-_OPEN = "<TOOL_CALL name=\"create_task\" params='{\"title\":\"X\"}'>Create task"
+_OPEN = '<TOOL_CALL name="create_task" params=\'{"title":"X"}\'>Create task'
 _WELLFORMED = _OPEN + "</TOOL_CALL>"
 _MISSING_GT = _OPEN + "</TOOL_CALL\n\nHigh priority created"  # #11545: no closing '>'
 
