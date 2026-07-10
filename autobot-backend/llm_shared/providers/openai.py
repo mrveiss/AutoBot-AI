@@ -23,7 +23,6 @@ from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
-from circuit_breaker import circuit_breaker_async
 from constants.model_constants import OPENAI_O1_MINI  # used in _OPENAI_MODELS list
 from constants.model_constants import (
     OPENAI_GPT4,
@@ -103,12 +102,13 @@ class OpenAIProvider(BaseProvider):
         self._client = openai.AsyncOpenAI(**kwargs)
         return self._client
 
-    @circuit_breaker_async("openai_service")
     async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
         """Execute a non-streaming chat completion via OpenAI.
 
-        Protected by the openai_service circuit breaker.  Errors are returned
-        via ``LLMResponse.error`` so the registry can perform fallback.
+        Circuit-breaker protection lives in ``BaseProvider._guarded_completion``
+        (GH#11488) — the old per-method decorator never saw failures because
+        errors are returned via ``LLMResponse.error``, and its 30s default
+        timeout killed healthy long completions.
         """
         self._total_requests += 1
         start = time.time()
