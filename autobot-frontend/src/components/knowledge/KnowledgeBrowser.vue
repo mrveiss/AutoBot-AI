@@ -1165,7 +1165,7 @@ onMounted(() => {
   // query set by the legacy manpages/system-knowledge redirects).
   if (typeof route.query.doc === 'string') selectedDocId.value = route.query.doc
   if (typeof route.query.category === 'string') selectedCategory.value = route.query.category
-  if (route.query.view === 'system') selectedMainCategory.value = 'system-knowledge'
+  if (typeof route.query.view === 'string' && route.query.view === 'system') selectedMainCategory.value = 'system-knowledge'
   if (typeof route.query.q === 'string' && route.query.q.trim()) {
     search.searchQuery.value = route.query.q
     search.handleSearch()
@@ -1173,6 +1173,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (_docBranchErrorTimer) clearTimeout(_docBranchErrorTimer)
   cleanupVectorization()
 })
 
@@ -1185,6 +1186,7 @@ watch(() => props.mode, () => {
     error.value = err instanceof Error ? err : new Error(String(err))
   })
   clearSelection()
+  selectedDocId.value = null
   nodeExpansion.collapseAll()
 })
 </script>
