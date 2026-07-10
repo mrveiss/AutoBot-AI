@@ -175,8 +175,8 @@ async def test_reddit_empty_children_raises_backend_error():
 
 
 @pytest.mark.asyncio
-async def test_reddit_result_reliability_medium():
-    """RedditJsonBackend result has reliability MEDIUM."""
+async def test_reddit_result_reliability_community():
+    """RedditJsonBackend result is COMMUNITY reliability (#11079: crowd-sourced)."""
     from content_reach.sources.reddit import RedditJsonBackend
 
     mock_client, _ = _make_async_mock_client(200, _REDDIT_SEARCH_JSON)
@@ -184,7 +184,7 @@ async def test_reddit_result_reliability_medium():
     request = ContentRequest(query="python tips", limit=2)
     result = await backend.fetch(request)
 
-    assert result.reliability is SourceReliability.MEDIUM
+    assert result.reliability is SourceReliability.COMMUNITY
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +203,7 @@ async def test_hn_maps_hits():
     result = await backend.fetch(request)
 
     assert result.success is True
-    assert result.source_type is SourceType.REDDIT
+    assert result.source_type is SourceType.FORUM  # #11079: HN is a forum, not Reddit
     hits = result.structured["hits"]
     assert len(hits) == 2
     # First hit: has url field
@@ -230,8 +230,8 @@ async def test_hn_forwards_limit():
 
 
 @pytest.mark.asyncio
-async def test_hn_result_reliability_medium():
-    """HnAlgoliaBackend result has reliability MEDIUM."""
+async def test_hn_result_reliability_community():
+    """HnAlgoliaBackend result is COMMUNITY reliability (#11079: crowd-sourced)."""
     from content_reach.sources.reddit import HnAlgoliaBackend
 
     mock_client, _ = _make_async_mock_client(200, _HN_ALGOLIA_JSON)
@@ -239,7 +239,7 @@ async def test_hn_result_reliability_medium():
     request = ContentRequest(query="python asyncio")
     result = await backend.fetch(request)
 
-    assert result.reliability is SourceReliability.MEDIUM
+    assert result.reliability is SourceReliability.COMMUNITY
 
 
 # ---------------------------------------------------------------------------
