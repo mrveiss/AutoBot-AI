@@ -199,42 +199,18 @@
     - _chromium_binary.matched == 0
   tags: ['browser', 'packages']
 
-- name: "Browser | Find Playwright browser directories for permission fix (#5085)"
-  ansible.builtin.find:
-    paths: /var/lib/autobot/playwright-browsers
-    file_type: directory
-    recurse: true
-  register: _pb_dirs
-  become: true
-  when: _browser_worker_dir.stat.exists | default(false)
-  tags: ['browser', 'packages']
-
-- name: "Browser | Set Playwright browser directories world-executable (#5085)"
+# #5085: a root-run install produces browser files the `autobot` service user
+# cannot traverse/read. Symbolic a+rX adds read to all, plus traverse to dirs
+# and execute only to already-executable files — preserving the chrome binary's
+# +x. This single recurse=true task replaces the prior find+loop pair that set
+# directories 0755 then files 0644; the recursive 0644 stripped +x from the
+# chrome binary and its helpers, a latent brick (#11470). Matches the form the
+# update playbook adopted in #11468.
+- name: "Browser | Make Playwright browsers accessible to the service user (#5085)"
   ansible.builtin.file:
-    path: "{{ item.path }}"
-    state: directory
-    mode: "0755"
-  loop: "{{ _pb_dirs.files | default([]) }}"
-  become: true
-  when: _browser_worker_dir.stat.exists | default(false)
-  tags: ['browser', 'packages']
-
-- name: "Browser | Find Playwright browser data files for permission fix (#5085)"
-  ansible.builtin.find:
-    paths: /var/lib/autobot/playwright-browsers
-    file_type: file
+    path: /var/lib/autobot/playwright-browsers
+    mode: "a+rX"
     recurse: true
-  register: _pb_files
-  become: true
-  when: _browser_worker_dir.stat.exists | default(false)
-  tags: ['browser', 'packages']
-
-- name: "Browser | Set Playwright browser data files world-readable (#5085)"
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    state: file
-    mode: "0644"
-  loop: "{{ _pb_files.files | default([]) }}"
   become: true
   when: _browser_worker_dir.stat.exists | default(false)
   tags: ['browser', 'packages']
