@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
@@ -57,6 +58,12 @@ from services.docker_task_workspace import (
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/workspace", tags=["task-workspace"])
+
+# GH#11059: bound the total bytes streamed from a workspace shell exec to the
+# client. Without this, a runaway command (e.g. `cat /dev/urandom`, `yes`) streams
+# unbounded data through the WebSocket, exhausting backend memory/bandwidth. The
+# cap is generous for interactive use and env-overridable.
+_WS_OUTPUT_CAP_BYTES: int = int(os.environ.get("AUTOBOT_WORKSPACE_WS_OUTPUT_CAP_MB", "25")) * 1024 * 1024
 
 
 # ---------------------------------------------------------------------------
@@ -325,11 +332,26 @@ async def workspace_shell(
 
 
 async def _pump_container_to_ws(sock: Any, websocket: WebSocket) -> None:
-    """Read raw bytes from Docker exec socket and forward as 'output' messages."""
+    """Read raw bytes from the Docker exec socket and forward as 'output' messages.
+
+    Bounds the total forwarded output (GH#11059): a runaway command can otherwise
+    stream unbounded data through the WebSocket, exhausting backend memory/bandwidth.
+    On reaching the cap the client is told and the pump stops (the shell session is
+    torn down by the caller's ``finally``).
+    """
+    total = 0
     try:
         while True:
             chunk = await asyncio.to_thread(_socket_read, sock, 4096)
             if not chunk:
+                break
+            total += len(chunk)
+            if total > _WS_OUTPUT_CAP_BYTES:
+                await _ws_send(
+                    websocket,
+                    "output",
+                    "\r\n[output limit reached — shell session closed to protect the server]\r\n",
+                )
                 break
             text = chunk.decode("utf-8", errors="replace")
             await _ws_send(websocket, "output", text)
@@ -376,8 +398,6 @@ def _authenticate_ws_admin(websocket: WebSocket) -> bool:
     A WebSocket exposes the same ``headers``/``cookies`` interface as a Request,
     so the standard auth middleware resolves the caller. Any error → deny.
     """
-    import os  # noqa: PLC0415
-
     # Dev/test escape hatch: when WS auth is explicitly disabled, allow the
     # connection. Production defaults to "1", so full auth is required.
     if os.environ.get("AUTOBOT_REQUIRE_WS_AUTH", "1") != "1":
