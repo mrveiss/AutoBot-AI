@@ -2861,6 +2861,9 @@ before summarizing.
         if context:
             session.metadata["user_id"] = context.get("user_id") or ""
             session.metadata["tenant_id"] = context.get("tenant_id") or context.get("org_id") or ""
+            # #11501 T2: CEO-chat path carries company_id — used to append the
+            # board-tool teaching to the system prompt for this turn only.
+            session.metadata["company_id"] = context.get("company_id") or ""
 
         # Issue MVA-1992: Determine if query qualifies for lightweight mode.
         # Trivial tier (GH#9050, score < trivial_threshold) is the primary
