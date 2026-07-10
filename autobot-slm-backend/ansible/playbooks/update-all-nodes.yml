@@ -22,7 +22,14 @@
 #   npu, npu-worker      - NPU worker deploy + restart tasks
 #   browser, browser-worker - browser worker deploy + restart tasks
 #   slm, slm-backend, slm-frontend - SLM node deploy + build + restart tasks
+#   slm-agent            - slm_agent role redeploy (code + secrets + restart) (#11480)
 #   shared               - autobot_shared deploy tasks (all nodes)
+#
+# NOTE (#11480): the slm-agent redeploy imports the slm_agent role, whose restart
+# runs via a handler and whose pip install is tagged `packages` (not `deps`).
+# So `--skip-tags restart` / `--skip-tags deps` do NOT skip the agent restart or
+# its dep install — a code-only push still restarts the agent. Use
+# `--skip-tags slm-agent` to exclude agent redeploy entirely.
 
 # =============================================================================
 # PLAY 0: Pre-flight Git Safety Check & Create Deploy Archives
@@ -1079,6 +1086,9 @@
     # remote nodes too. block/rescue keeps a single node's agent failure from
     # aborting the whole fleet update (Play 2 has any_errors_fatal: true) —
     # consistent with the failed_when:false used by the other Play 2 tasks.
+    # Note: a co-located SLM manager is in both slm_server (Play 1) and
+    # infrastructure (Play 2, #11436), so it runs this idempotent role twice
+    # per update (harmless — converges to the same state, one extra restart).
     - name: "[PLAY 2] SLM Agent | Redeploy agent (code + secrets + restart) (#11480)"
       when: slm_node_id is defined
       tags: [slm-agent]
