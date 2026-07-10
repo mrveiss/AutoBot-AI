@@ -129,7 +129,10 @@ def test_default_slow_start_is_false() -> None:
         patch("api.code_sync.asyncio.get_event_loop", return_value=_immediate_deadline_loop()),
         patch("api.code_sync._is_systemd_unit_failed", AsyncMock(return_value=False)),
     ):
-        _run(_wait_component_healthy("autobot-backend", steps))
+        healthy = _run(_wait_component_healthy("autobot-backend", steps))
+    # The load-bearing safety contract: fast window + timeout + no systemd failure
+    # → proceed (True), never a rollback.
+    assert healthy is True
     assert any("within 60s" in s for s in steps), steps
 
 

@@ -2033,11 +2033,13 @@ async def _wait_component_healthy(component: str, steps: List[str], *, slow_star
     Returns False ONLY when the systemd unit enters the 'failed' state during
     the polling window (crashloop, activation error, etc.).
 
-    slow_start selects the adaptive timeout window (#11458): True when the venv
-    was just recreated (cold interpreter → full _HEALTH_POLL_TIMEOUT), False for a
-    warm restart (shorter _FAST_HEALTH_POLL_TIMEOUT). Either way rollback is gated
-    on a genuine systemd failure, not on the timeout, so the fast window only
-    trims dead wait — it never rolls back a slow-but-healthy deploy.
+    slow_start selects the adaptive timeout window (#11458): True when the restart
+    is expected to be slow — a just-recreated venv (cold py3.14 interpreter) or a
+    fresh frontend asset swap — using the full _HEALTH_POLL_TIMEOUT; False for a
+    warm pip-backend restart, using the shorter _FAST_HEALTH_POLL_TIMEOUT. Either
+    way rollback is gated on a genuine systemd failure, not on the timeout, so the
+    fast window only trims dead wait — it never rolls back a slow-but-healthy
+    deploy.
 
     Components with no health URL are considered healthy immediately.
     """
@@ -2229,7 +2231,11 @@ async def _run_post_sync_steps(
             pip_ok = False
         elif restart:
             await _restart_component_services(component, steps)
-            healthy = await _wait_component_healthy(component, steps)
+            # Frontend keeps the full health-poll window (#11458 review): the fast
+            # window is only for warm pip-backend restarts. A fresh nginx worker
+            # after a large asset swap can lag past 60s, and the generous window
+            # avoids logging an otherwise-healthy frontend as "check manually".
+            healthy = await _wait_component_healthy(component, steps, slow_start=True)
             if not healthy:
                 await _rollback_component(component, snapshot, steps, None)
                 steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
