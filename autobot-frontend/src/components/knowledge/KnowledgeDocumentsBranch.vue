@@ -250,12 +250,13 @@ function confirmDelete(id: string, title: string) {
 async function executeDelete() {
   if (!deleteTarget.value) return
   const { id } = deleteTarget.value
-  deleteTarget.value = null
   try {
     await composable.deleteDocument(id)
+    deleteTarget.value = null
     logger.info('Deleted document', id)
     emit('deleted', id)
   } catch {
+    deleteTarget.value = null
     emit('error', composable.error.value ?? 'Delete failed')
   }
 }
@@ -315,6 +316,7 @@ function formatDate(iso: string): string {
   text-align: center;
   color: var(--text-muted, #888);
   font-size: 0.9rem;
+  flex: 1;
 }
 
 .empty-icon {
@@ -343,6 +345,7 @@ function formatDate(iso: string): string {
   margin: var(--spacing-0);
   padding: var(--spacing-0);
   overflow-y: auto;
+  flex: 1;
 }
 
 .document-item {
