@@ -8681,5 +8681,16 @@
       "refresh": "רענן",
       "noSources": "לא הוגדרו מקורות תוכן"
     }
+  },
+  "components": {
+    "schemaForm": {
+      "requiredMark": "חובה",
+      "selectPlaceholder": "בחר אפשרות",
+      "removeTag": "הסר תגית",
+      "addTagPlaceholder": "לחץ Enter להוסיף",
+      "rawJsonFallback": "הסכמה מכילה אובייקטים מקוננים. ערוך כ-JSON גולמי:",
+      "rawJsonLabel": "תצורת תוסף (JSON)",
+      "invalidJson": "JSON לא תקין — נא לתקן לפני השמירה."
+    }
   }
 }

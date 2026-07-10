@@ -8681,5 +8681,16 @@
       "refresh": "Atualizar",
       "noSources": "Nenhuma fonte de conteúdo configurada"
     }
+  },
+  "components": {
+    "schemaForm": {
+      "requiredMark": "obrigatório",
+      "selectPlaceholder": "Selecionar uma opção",
+      "removeTag": "Remover etiqueta",
+      "addTagPlaceholder": "Pressione Enter para adicionar",
+      "rawJsonFallback": "O esquema contém objetos aninhados. Edite como JSON puro:",
+      "rawJsonLabel": "Configuração do plugin (JSON)",
+      "invalidJson": "JSON inválido — corrija antes de salvar."
+    }
   }
 }
