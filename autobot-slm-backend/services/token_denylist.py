@@ -34,7 +34,17 @@ import time
 
 from autobot_shared.redis_client import get_redis_client
 
+try:  # redis-py exceptions do NOT inherit builtin ConnectionError/OSError
+    from redis.exceptions import RedisError as _RedisError
+except ImportError:  # pragma: no cover - redis is a hard dep in deployments
+    _RedisError = ConnectionError  # type: ignore[assignment,misc]
+
 logger = logging.getLogger(__name__)
+
+# Failures that arm the fail-open window. asyncio.TimeoutError is not OSError
+# on py3.10, and redis.exceptions.ConnectionError is not builtin ConnectionError
+# — both must be listed explicitly (#11445 review).
+_REDIS_FAILURES = (asyncio.TimeoutError, ConnectionError, OSError, _RedisError)
 
 _DENYLIST_PREFIX = "slm:jwt:denylist:"
 
@@ -98,11 +108,13 @@ async def revoke_jti(jti: str, ttl_seconds: int) -> None:
 
     try:
         ok = await asyncio.wait_for(_do(), timeout=_REDIS_DEADLINE_SECONDS)
-    except (asyncio.TimeoutError, ConnectionError, OSError) as exc:
+    except _REDIS_FAILURES as exc:
         _mark_redis_unavailable("revoke_jti", jti, exc)
+        logger.warning("revoke_jti: jti=%r NOT revoked (Redis unavailable)", jti)
         return
     if not ok:
         _mark_redis_unavailable("revoke_jti", jti, None)
+        logger.warning("revoke_jti: jti=%r NOT revoked (Redis unavailable)", jti)
         return
     _mark_redis_available()
     logger.info("revoke_jti: jti=%r revoked with ttl=%d", jti, ttl)
@@ -126,7 +138,7 @@ async def is_jti_revoked(jti: str) -> bool:
 
     try:
         result = await asyncio.wait_for(_do(), timeout=_REDIS_DEADLINE_SECONDS)
-    except (asyncio.TimeoutError, ConnectionError, OSError) as exc:
+    except _REDIS_FAILURES as exc:
         _mark_redis_unavailable("is_jti_revoked", jti, exc)
         return False
     if result is None:
