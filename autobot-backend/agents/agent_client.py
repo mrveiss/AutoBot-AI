@@ -67,13 +67,13 @@ class AgentClientConfig:
         )
 
 
-class AgentRegistry:
+class AgentHealthRegistry:
     """Health-tracking registry for running BaseAgent instances.
 
     Scope (#6828): tracks which BaseAgent objects are reachable and alive,
     performing periodic health checks.  This is the **runtime-health** registry
     — it does not hold capability profiles or database state.  See also:
-    - orchestration.agent_registry.AgentRegistry — static profile/capability registry
+    - orchestration.agent_registry.AgentCapabilityRegistry — static profile/capability registry
     - services.agent_registry_service.AgentRegistryService — DB-backed CRUD
     - agents.agent_orchestration.distributed_management.DistributedAgentManager — dynamic/distributed
     """
@@ -209,7 +209,7 @@ class AgentClient:
     def __init__(self, config: AgentClientConfig | None = None):
         """Initialize unified agent client with registry and stats tracking."""
         self.config = config or AgentClientConfig()
-        self.registry = AgentRegistry()
+        self.registry = AgentHealthRegistry()
         self.container_agents: Dict[str, ContainerAgentProxy] = {}
 
         # Performance tracking

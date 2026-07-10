@@ -9,11 +9,11 @@ Acceptance criteria:
   - AgentProfile carries allowed_work / forbidden_work (default empty).
   - Default profiles declare a least-privilege forbidden_work boundary for
     non-executor agents; the system (executor) agent has none.
-  - AgentRegistry exposes the boundary via forbidden_tools() / work_boundary()
+  - AgentCapabilityRegistry exposes the boundary via forbidden_tools() / work_boundary()
     as the single query point — unknown agents degrade to empty (no boundary).
 """
 
-from orchestration.agent_registry import AgentRegistry, get_default_agents
+from orchestration.agent_registry import AgentCapabilityRegistry, get_default_agents
 from orchestration.types import AgentCapability, AgentProfile
 
 
@@ -54,19 +54,19 @@ class TestDefaultProfilesBoundary:
 
 class TestAgentRegistryAccessors:
     def test_forbidden_tools_reads_manifest(self) -> None:
-        reg = AgentRegistry(initialize_defaults=True)
+        reg = AgentCapabilityRegistry(initialize_defaults=True)
         forbidden = reg.forbidden_tools("research_agent")
         assert isinstance(forbidden, frozenset)
         assert "bash" in forbidden and "terraform" in forbidden
 
     def test_work_boundary_returns_allowed_and_forbidden(self) -> None:
-        reg = AgentRegistry(initialize_defaults=True)
+        reg = AgentCapabilityRegistry(initialize_defaults=True)
         allowed, forbidden = reg.work_boundary("documentation_agent")
         assert "write_file" in allowed
         assert "docker" in forbidden
 
     def test_unknown_agent_degrades_to_empty(self) -> None:
-        reg = AgentRegistry(initialize_defaults=True)
+        reg = AgentCapabilityRegistry(initialize_defaults=True)
         assert reg.forbidden_tools("does-not-exist") == frozenset()
         assert reg.work_boundary("does-not-exist") == ([], [])
 
@@ -85,7 +85,7 @@ class TestRoutingOverlayNonRegressive:
         before_keys = set(agent_capabilities)
         before_research = set(agent_capabilities["research_agent"])
 
-        reg = AgentRegistry(initialize_defaults=True)
+        reg = AgentCapabilityRegistry(initialize_defaults=True)
         for agent_id, profile in reg.get_all().items():
             if agent_id in agent_capabilities:
                 agent_capabilities[agent_id] = set(profile.capabilities)

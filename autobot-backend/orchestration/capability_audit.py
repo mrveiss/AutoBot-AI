@@ -20,7 +20,7 @@ from typing import List
 from autobot_shared.logging_manager import get_logger
 from orchestration.agent_registry import (
     _INFRA_AND_SHELL_TOOLS,
-    AgentRegistry,
+    AgentCapabilityRegistry,
     get_default_agents,
     match_forbidden_tool,
 )
@@ -113,7 +113,7 @@ def audit_agent_manifests(profiles: List[AgentProfile]) -> List[AuditFinding]:
     return findings
 
 
-def audit_registry(registry: AgentRegistry) -> List[AuditFinding]:
+def audit_registry(registry: AgentCapabilityRegistry) -> List[AuditFinding]:
     """Audit every profile in a live registry (incl. dynamically-registered agents)."""
     return audit_agent_manifests(list(registry.get_all().values()))
 

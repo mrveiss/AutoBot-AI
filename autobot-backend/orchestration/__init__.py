@@ -40,7 +40,7 @@ This package contains:
 
 from autobot_shared.workflow import ExecutionStrategy
 
-from .agent_registry import AgentRegistry, get_default_agents
+from .agent_registry import AgentCapabilityRegistry, get_default_agents
 from .agent_router import AgentRouter, TaskAgentScorer
 from .blocked_plan_resumer import BlockedPlanResumer
 from .causal_error_recovery import CausalErrorRecovery, RecoveryPlan, get_recovery_recommender
@@ -139,7 +139,7 @@ __all__ = [
     "AgentTask",
     "WorkflowDependencies",
     # Agent management
-    "AgentRegistry",
+    "AgentCapabilityRegistry",
     "get_default_agents",
     # Agent routing / scoring (#6819)
     "TaskAgentScorer",

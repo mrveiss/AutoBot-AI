@@ -7,7 +7,7 @@ End-to-end wiring: AgentProfile.forbidden_work -> AgentLoopConfig.forbidden_tool
 
 #11139 delivered the enforcement primitive (``_check_forbidden``); this proves the
 connective tissue: constructing ``AgentLoop`` with an ``agent_id`` resolves that
-agent's ``forbidden_work`` manifest from ``AgentRegistry`` and hard-blocks the
+agent's ``forbidden_work`` manifest from ``AgentCapabilityRegistry`` and hard-blocks the
 forbidden tools through a real dispatch path.
 
 Acceptance criteria:

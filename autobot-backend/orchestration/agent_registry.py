@@ -130,14 +130,14 @@ def match_forbidden_tool(tool_name: str, forbidden: "frozenset[str]") -> "str | 
     return match_tool_name(tool_name, forbidden)
 
 
-class AgentRegistry:
+class AgentCapabilityRegistry:
     """Static profile registry for orchestration agent capabilities.
 
     Scope (#6828): holds in-memory AgentProfile + AgentCapability catalogue
     populated at orchestrator startup from DEFAULT_AGENT_CONFIGS.  This is
     the **what-can-each-agent-do** registry — it does not track live health or
     database persistence.  See also:
-    - agents.agent_client.AgentRegistry — health-tracking runtime registry
+    - agents.agent_client.AgentHealthRegistry — health-tracking runtime registry
     - services.agent_registry_service.AgentRegistryService — DB-backed CRUD
     - agents.agent_orchestration.distributed_management.DistributedAgentManager — dynamic/distributed
     """
@@ -358,7 +358,7 @@ class AgentRegistry:
 # seeded once from get_default_agents() (the same SSOT the orchestrator uses, so
 # no drift). Lets the production tool-dispatch seam resolve an agent's boundary
 # cheaply without constructing an Orchestrator on every tool call.
-_default_registry: "AgentRegistry | None" = None
+_default_registry: "AgentCapabilityRegistry | None" = None
 
 
 def resolve_forbidden_tools(agent_id: "str | None") -> "frozenset[str]":
@@ -372,5 +372,5 @@ def resolve_forbidden_tools(agent_id: "str | None") -> "frozenset[str]":
         return frozenset()
     global _default_registry  # noqa: PLW0603
     if _default_registry is None:
-        _default_registry = AgentRegistry(initialize_defaults=True)
+        _default_registry = AgentCapabilityRegistry(initialize_defaults=True)
     return _default_registry.forbidden_tools(agent_id)

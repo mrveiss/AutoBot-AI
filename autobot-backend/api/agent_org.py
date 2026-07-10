@@ -48,15 +48,15 @@ _ORCH_TYPE_MAP: Dict[str, str] = {
 
 
 def _fallback_agents_from_registry() -> List[Dict[str, Any]]:
-    """Build agent list from the in-memory AgentRegistry when PG is unavailable (#10511).
+    """Build agent list from the in-memory AgentCapabilityRegistry when PG is unavailable (#10511).
 
     Returns the same shape as ``AgentOrgService.get_agent_statuses()`` so the
     caller can treat both sources uniformly.
     """
     try:
-        from orchestration.agent_registry import AgentRegistry
+        from orchestration.agent_registry import AgentCapabilityRegistry
 
-        registry = AgentRegistry(initialize_defaults=True)
+        registry = AgentCapabilityRegistry(initialize_defaults=True)
         agents = []
         for profile in registry.get_all().values():
             agents.append(
@@ -120,7 +120,7 @@ async def get_agents_status(
     """Return all registered agents with runtime status (#10502, #10511).
 
     Uses the Postgres-backed ``AgentOrgService`` when a session is available,
-    with a defensive fallback to the in-memory ``AgentRegistry`` populated from
+    with a defensive fallback to the in-memory ``AgentCapabilityRegistry`` populated from
     ``DEFAULT_AGENT_CONFIGS`` so the Home dashboard "Agent Activity Monitor"
     returns 200 instead of 503.
     """
