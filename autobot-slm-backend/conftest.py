@@ -109,6 +109,7 @@ for _m in [
     "services.database",
     "services.blue_green",
     "services.code_distributor",
+    "services.deploy_artifacts",
     "services.deployment",
     "services.drift_checker",
     "services.encryption",
