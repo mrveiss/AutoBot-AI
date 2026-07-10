@@ -17,6 +17,9 @@ on:
     paths:
       - "autobot-frontend/**/*.vue"
       - "autobot-frontend/**/*.css"
+      # Self-validate when the guard or its config changes.
+      - "autobot-frontend/.stylelintrc.json"
+      - ".github/workflows/stylelint-tokens.yml"
 
 permissions:
   contents: read
