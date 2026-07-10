@@ -28,7 +28,7 @@
  * Recent Activity Panel Component
  *
  * Displays a timeline of recent knowledge base activities.
- * Extracted from KnowledgeStats.vue for better maintainability.
+ * Extracted from KnowledgeHealth.vue for better maintainability.
  *
  * Issue #184: Split oversized Vue components
  */

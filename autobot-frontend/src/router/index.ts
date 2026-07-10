@@ -207,15 +207,6 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
-        path: 'verification',
-        name: 'knowledge-verification',
-        component: () => import('@/components/knowledge/KnowledgeVerificationQueue.vue'),
-        meta: {
-          title: 'Source Verification',
-          parent: 'knowledge'
-        }
-      },
-      {
         // Issue #1256: Observable Research Panel — live browser collaboration
         path: 'research',
         name: 'knowledge-research',
@@ -252,15 +243,6 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/components/knowledge/connectors/ConnectorManager.vue'),
         meta: {
           title: 'Source Connectors',
-          parent: 'knowledge'
-        }
-      },
-      {
-        path: 'stats',
-        name: 'knowledge-stats',
-        component: () => import('@/components/knowledge/KnowledgeStats.vue'),
-        meta: {
-          title: 'Statistics',
           parent: 'knowledge'
         }
       },
@@ -365,11 +347,11 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
-        path: 'maintenance',
-        name: 'knowledge-maintenance',
+        path: 'health',
+        name: 'knowledge-health',
         component: () => import('@/components/knowledge/KnowledgeHealth.vue'),
         meta: {
-          title: 'Knowledge Maintenance',
+          title: 'Knowledge Health',
           parent: 'knowledge'
         }
       },

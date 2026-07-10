@@ -5,8 +5,8 @@
 /**
  * Knowledge Stats Sub-Components
  *
- * Barrel exports for KnowledgeStats sub-components.
- * Extracted from KnowledgeStats.vue for better maintainability.
+ * Barrel exports for KnowledgeHealth sub-components (stats panels).
+ * Extracted from KnowledgeHealth.vue for better maintainability.
  *
  * Issue #184: Split oversized Vue components
  */

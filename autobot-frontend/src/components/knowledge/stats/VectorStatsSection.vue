@@ -172,7 +172,7 @@
  * Vector Stats Section Component
  *
  * Displays vector database statistics including facts, vectors, health indicators.
- * Extracted from KnowledgeStats.vue for better maintainability.
+ * Extracted from KnowledgeHealth.vue for better maintainability.
  *
  * Issue #184: Split oversized Vue components
  */

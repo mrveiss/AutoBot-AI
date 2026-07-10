@@ -36,7 +36,6 @@ export { default as KnowledgePersistenceDialog } from './KnowledgePersistenceDia
 export { default as KnowledgePromptEditor } from './KnowledgePromptEditor.vue'
 export { default as KnowledgeResearchPanel } from './KnowledgeResearchPanel.vue'
 export { default as KnowledgeScopeSelector } from './KnowledgeScopeSelector.vue'
-export { default as KnowledgeStats } from './KnowledgeStats.vue'
 export { default as KnowledgeSystemDocs } from './KnowledgeSystemDocs.vue'
 export { default as KnowledgeUpload } from './KnowledgeUpload.vue'
 export { default as KnowledgeVerificationQueue } from './KnowledgeVerificationQueue.vue'

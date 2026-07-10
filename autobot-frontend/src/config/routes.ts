@@ -64,11 +64,11 @@ export const routeConfig: RouteConfig[] = [
         icon: 'fas fa-file-alt'
       },
       {
-        path: '/knowledge/stats',
-        name: 'knowledge-stats',
-        component: 'KnowledgeStats',
-        description: 'Knowledge statistics',
-        icon: 'fas fa-chart-bar'
+        path: '/knowledge/health',
+        name: 'knowledge-health',
+        component: 'KnowledgeHealth',
+        description: 'Knowledge health, analytics and tools',
+        icon: 'fas fa-heartbeat'
       }
     ]
   },
