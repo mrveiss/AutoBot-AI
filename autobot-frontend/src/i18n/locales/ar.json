@@ -2594,7 +2594,9 @@
       "vectorStoreAriaLabel": "Browse the vector store",
       "automationGroup": "Automation",
       "watchFolders": "Watch Folders",
-      "watchFoldersAriaLabel": "Watch Folders"
+      "watchFoldersAriaLabel": "Watch Folders",
+      "browser": "متصفح",
+      "browserAriaLabel": "تصفح وبحث وتعديل مستندات المعرفة"
     },
     "backup": {
       "title": "Backup & Restore",
@@ -2906,7 +2908,8 @@
       "closeFileViewer": "Close file viewer",
       "facts": "facts",
       "documentsSelected": "{count} document(s) selected",
-      "backToRoot": "Back to root"
+      "backToRoot": "Back to root",
+      "filters": "عوامل التصفية"
     },
     "contentViewer": {
       "noFileSelected": "No file selected",
