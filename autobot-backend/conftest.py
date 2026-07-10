@@ -338,6 +338,10 @@ if "llm_shared" not in sys.modules:
 
     _load_real_mod("llm_shared.types", _llm_root / "types.py")
     _load_real_mod("llm_shared.models", _llm_root / "models.py")
+    # #11520: canonical JSON parser and schema-typed extraction helper — lightweight,
+    # no heavy deps; load real so tests importing them don't hit the stub.
+    _load_real_mod("llm_shared.json_utils", _llm_root / "json_utils.py")
+    _load_real_mod("llm_shared.structured_ops", _llm_root / "structured_ops.py")
     _load_real_mod("llm_shared.optimization.rate_limiter", _llm_root / "optimization" / "rate_limiter.py")
     _load_real_mod("llm_shared.fallback_chain", _llm_root / "fallback_chain.py")
     _load_real_mod("llm_shared.model_fallback_coordinator", _llm_root / "model_fallback_coordinator.py")
