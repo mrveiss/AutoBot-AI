@@ -43,6 +43,7 @@ from llm_shared.models import LLMRequest
 from prepared_facts import ProviderRuntimeFact
 
 from .base_provider import BaseProvider
+from .provider_degradation import get_degradation_store
 
 logger = get_logger(__name__)
 
@@ -434,11 +435,38 @@ class ProviderRegistry:
                 candidates.append(name)
 
         primary = candidates[0] if candidates else None
+        model_name: str | None = request.model_name if request else None
+        degradation = get_degradation_store()
+
+        # Determine which candidates are currently degraded (Issue #11519).
+        # All candidates are checked up-front so we can detect the all-degraded
+        # edge case and fall through rather than returning None.
+        degraded_set: set[str] = set()
         for name in candidates:
+            if await degradation.is_degraded(name, model_name):
+                degraded_set.add(name)
+        all_degraded = len(candidates) > 0 and degraded_set == set(candidates)
+        if all_degraded and degraded_set:
+            logger.warning(
+                "degradation: all %d candidates degraded — proceeding anyway",
+                len(candidates),
+            )
+
+        degraded_skipped: list[str] = []
+        for name in candidates:
+            if name in degraded_set and not all_degraded:
+                logger.debug("degradation: skipping degraded provider %s", name)
+                degraded_skipped.append(name)
+                continue
             provider = await self.get_provider(name)
             if provider is not None:
                 if request is not None:
                     self.enrich_request(request, name)
+                    # Attach observability field so callers know what was skipped.
+                    if degraded_skipped:
+                        if request.metadata is None:
+                            request.metadata = {}
+                        request.metadata["degraded_skipped"] = degraded_skipped
                 if name != primary:
                     logger.debug(
                         "Fallback chain selected non-primary provider: %s (preferred: %s)",
