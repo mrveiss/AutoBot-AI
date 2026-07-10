@@ -551,13 +551,23 @@ class UserService(BaseService):
         logger.info("Activated user: %s", user_id)
         return True
 
-    async def delete_user(self, user_id: uuid.UUID, hard_delete: bool = False) -> bool:
+    async def delete_user(
+        self,
+        user_id: uuid.UUID,
+        hard_delete: bool = False,
+        reassign_to: uuid.UUID | None = None,
+    ) -> bool:
         """
         Delete a user account.
 
         Args:
             user_id: User ID to delete
             hard_delete: If True, permanently delete; otherwise soft delete
+            reassign_to: When provided, ownership of the user's memory records
+                is transferred to this user BEFORE the row is deleted.  For a
+                hard delete this is fail-closed: if reassignment raises
+                unexpectedly the delete is aborted so data is never
+                hard-destroyed-then-orphaned.  Soft delete proceeds regardless.
 
         Returns:
             True if deleted
@@ -569,6 +579,21 @@ class UserService(BaseService):
         if not user:
             raise UserNotFoundError(f"User {user_id} not found")
 
+        reassign_counts: dict = {}
+        if reassign_to is not None:
+            # Lazy import avoids heavy circular deps at module load time.
+            from memory.ownership_reassign import reassign_user_memory  # noqa: PLC0415
+
+            if hard_delete:
+                # Fail-closed for hard delete: propagate any unexpected error so
+                # the caller knows the data was not destroyed.
+                reassign_counts = await reassign_user_memory(str(user_id), str(reassign_to))
+            else:
+                try:
+                    reassign_counts = await reassign_user_memory(str(user_id), str(reassign_to))
+                except Exception as exc:
+                    logger.warning("delete_user: memory reassign failed (soft delete continues): %s", exc)
+
         if hard_delete:
             await self.session.delete(user)
         else:
@@ -577,14 +602,19 @@ class UserService(BaseService):
 
         await self.session.flush()
 
+        audit_details: dict = {"hard_delete": hard_delete}
+        if reassign_to is not None:
+            audit_details["reassign_to"] = str(reassign_to)
+            audit_details["reassign_counts"] = reassign_counts
+
         await self._audit_log(
             action=AuditAction.USER_DELETED,
             resource_type=AuditResourceType.USER,
             resource_id=user_id,
-            details={"hard_delete": hard_delete},
+            details=audit_details,
         )
 
-        logger.info("Deleted user: %s (hard=%s)", user_id, hard_delete)
+        logger.info("Deleted user: %s (hard=%s, reassign_to=%s)", user_id, hard_delete, reassign_to)
         return True
 
     # -------------------------------------------------------------------------
