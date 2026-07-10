@@ -2579,6 +2579,7 @@
       "retryBtn": "Retry",
       "clearSelection": "Clear Selection",
       "backToRoot": "Back to root",
+      "filters": "فیلترها",
       "root": "Root",
       "clearSearch": "Clear search",
       "noItemsFound": "No items found",
@@ -2923,7 +2924,9 @@
       "vectorStoreAriaLabel": "Browse the vector store",
       "automationGroup": "Automation",
       "watchFolders": "Watch Folders",
-      "watchFoldersAriaLabel": "Watch Folders"
+      "watchFoldersAriaLabel": "Watch Folders",
+      "browser": "مرورگر",
+      "browserAriaLabel": "مرور، جستجو و ویرایش اسناد دانش"
     },
     "upload": {
       "selectCategory": "Select category...",

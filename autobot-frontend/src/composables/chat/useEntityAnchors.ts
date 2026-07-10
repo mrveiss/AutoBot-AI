@@ -71,7 +71,7 @@ export function resolveEntityRoute(anchor: ParsedEntityAnchor): RouteLocationRaw
     case 'session':
       return { name: 'chat-session', params: { sessionId: anchor.id } }
     case 'document':
-      return { name: 'document-detail', params: { docId: anchor.id } }
+      return { name: 'knowledge-browser', query: { doc: anchor.id } }
     case 'workflow':
       return { name: 'automation', query: { workflow: anchor.id } }
     case 'task':

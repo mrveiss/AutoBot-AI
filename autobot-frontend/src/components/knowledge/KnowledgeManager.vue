@@ -29,7 +29,7 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 
 // Import sub-components
-import KnowledgeSearch from './KnowledgeSearch.vue'
+import KnowledgeBrowser from './KnowledgeBrowser.vue'
 import KnowledgeCategories from './KnowledgeCategories.vue'
 
 // Lazy load heavier components using direct dynamic imports for Vue Router compatibility
@@ -59,7 +59,7 @@ const tabs = computed<{ id: TabId; label: string }[]>(() => [
 
 // Component mapping
 const componentMap = {
-  search: KnowledgeSearch,
+  search: KnowledgeBrowser,
   categories: KnowledgeCategories,
   upload: KnowledgeUpload,
   manage: KnowledgeEntries,
@@ -71,7 +71,7 @@ const componentMap = {
 
 // Active component based on tab
 const activeComponent = computed(() => {
-  return componentMap[store.activeTab as keyof typeof componentMap] || KnowledgeSearch
+  return componentMap[store.activeTab as keyof typeof componentMap] || KnowledgeBrowser
 })
 </script>
 

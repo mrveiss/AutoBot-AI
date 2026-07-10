@@ -2594,7 +2594,9 @@
       "vectorStoreAriaLabel": "Browse the vector store",
       "automationGroup": "Automation",
       "watchFolders": "Watch Folders",
-      "watchFoldersAriaLabel": "Watch Folders"
+      "watchFoldersAriaLabel": "Watch Folders",
+      "browser": "Pārlūks",
+      "browserAriaLabel": "Pārlūkot, meklēt un rediģēt zināšanu dokumentus"
     },
     "backup": {
       "title": "Dublēšana un atjaunošana",
@@ -2906,7 +2908,8 @@
       "closeFileViewer": "Aizvērt failu skatītāju",
       "facts": "fakti",
       "documentsSelected": "{count} dokuments(-i) atlasīts(-i)",
-      "backToRoot": "Atpakaļ uz sakni"
+      "backToRoot": "Atpakaļ uz sakni",
+      "filters": "Filtri"
     },
     "contentViewer": {
       "noFileSelected": "Nav atlasīts fails",
