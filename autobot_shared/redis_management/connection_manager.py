@@ -20,6 +20,7 @@ Moved from autobot-backend/utils/ to autobot_shared/ (Issue #2313).
 """
 
 import asyncio
+import functools
 import logging
 import socket
 import time
@@ -888,7 +889,11 @@ class RedisConnectionManager:
                 # Always retrieve the exception even if every waiter was
                 # cancelled — avoids "Task exception was never retrieved" and
                 # preserves the failure reason in the logs (#11451).
-                task.add_done_callback(lambda t, _db=database_name: self._log_pool_task_failure(_db, t))
+                # functools.partial (not a lambda): Black collapses a short lambda
+                # onto one line, and mypy then rejects the single-line lambda-with-
+                # default with "Cannot infer type of lambda" — the two tools cannot
+                # both be satisfied with a lambda here (#11472). partial types cleanly.
+                task.add_done_callback(functools.partial(self._log_pool_task_failure, database_name))
                 self._async_pool_tasks[database_name] = task
         try:
             pool = await asyncio.shield(task)
