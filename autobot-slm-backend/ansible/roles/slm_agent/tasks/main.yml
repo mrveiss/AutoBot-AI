@@ -264,11 +264,18 @@
   no_log: true
   tags: ['slm_agent', 'systemd', 'secrets']
 
-- name: "SLM Agent | Resolve effective internal API key (var wins, else node file) (#11480)"
+- name: "SLM Agent | Resolve effective internal API key (SLM slm-secrets.env wins) (#11450 #11507)"
   ansible.builtin.set_fact:
+    # The agent authenticates to the SLM backend, which loads slm-secrets.env —
+    # so the node file (read slm-secrets.env FIRST) is authoritative. The
+    # autobot_internal_api_key deploy var reflects the MANAGED backend's key,
+    # which has drifted from the SLM's on some installs (#11507) → using it gave
+    # the agent the wrong key and every heartbeat 401'd (#11450). Prefer the
+    # node file; fall back to the var only when no node secrets file exists
+    # (e.g. a remote agent-only node — tracked by the #11507 reconciliation).
     _agent_internal_api_key: >-
-      {{ autobot_internal_api_key | default('') | trim
-         or (_agent_key_from_node.stdout | default('') | trim) }}
+      {{ (_agent_key_from_node.stdout | default('') | trim)
+         or (autobot_internal_api_key | default('') | trim) }}
   no_log: true
   tags: ['slm_agent', 'systemd', 'secrets']
 
