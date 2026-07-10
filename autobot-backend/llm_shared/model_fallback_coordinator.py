@@ -33,6 +33,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from .fallback_chain import get_fallback_chain_manager
 from .models import LLMRequest, LLMResponse
 from .optimization.rate_limiter import RateLimitError
+from .provider_degradation import get_degradation_store
 
 if TYPE_CHECKING:
     from .provider_registry import ProviderRegistry
@@ -129,6 +130,12 @@ class ModelFallbackCoordinator:
                     )
                     break
 
+                # Mark the exhausted provider:model degraded so sibling workers
+                # skip it immediately (Issue #11519).
+                await get_degradation_store().mark_degraded(
+                    current_provider or "", current_model or None
+                )
+
                 fallback = get_fallback_chain_manager().get_next_fallback(current_model, current_provider)
                 if fallback is None:
                     logger.warning(
@@ -213,6 +220,7 @@ class ModelFallbackCoordinator:
         attempt_count: int,
         chain_tried: list[str],
         exhausted: bool = False,
+        degraded_skipped: list[str] | None = None,
     ) -> None:
         """Extend response.provider_metadata with fallback audit fields."""
         if response.provider_metadata is None:
@@ -227,6 +235,7 @@ class ModelFallbackCoordinator:
                 "attempt_count": attempt_count,
                 "fallback_chain_tried": chain_tried,
                 "fallback_exhausted": exhausted,
+                "degraded_skipped": degraded_skipped or [],
             }
         )
 
