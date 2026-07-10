@@ -49,8 +49,12 @@ class TestValidateConfigHost:
 
     def test_configuration_error_is_not_retryable_connection_error(self):
         """The retry mechanism keys on ConnectionError/TimeoutError — the
-        config error must not match, so it fails fast (#11449)."""
+        config error must match neither the builtin nor redis-py's
+        ConnectionError (which shadows the builtin in the module) (#11449)."""
+        from redis.exceptions import ConnectionError as _RedisCE
+
         assert not issubclass(RedisConfigurationError, ConnectionError)
+        assert not issubclass(RedisConfigurationError, _RedisCE)
         assert issubclass(RedisConfigurationError, ValueError)
 
 
@@ -126,3 +130,26 @@ class TestEnsureAsyncPoolLockScope:
         await m._ensure_async_pool_exists("main")  # retry succeeds
         assert m._async_pools["main"] is pool
         assert attempts["n"] == 2
+
+
+    @pytest.mark.asyncio
+    async def test_completed_task_is_harvested_not_respawned(self):
+        """A done-successful task whose waiter hasn't written the registry yet
+        must be harvested — not respawned as a duplicate pool (#11451)."""
+        m = _bare_manager()
+        pool = object()
+
+        async def _done_pool():
+            return pool
+
+        task = asyncio.ensure_future(_done_pool())
+        await task  # completed, but registry never written (waiter "not yet run")
+        m._async_pool_tasks["main"] = task
+
+        async def _must_not_run(name):  # pragma: no cover - failure path
+            raise AssertionError("duplicate creation spawned")
+
+        m._create_async_pool = _must_not_run
+        await m._ensure_async_pool_exists("main")
+        assert m._async_pools["main"] is pool
+        assert "main" not in m._async_pool_tasks

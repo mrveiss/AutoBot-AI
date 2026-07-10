@@ -848,6 +848,17 @@ class RedisConnectionManager:
             self._handle_sync_client_failure(database_name, e)
             return None
 
+    @staticmethod
+    def _log_pool_task_failure(database_name: str, task: "asyncio.Task") -> None:
+        """Done-callback: retrieve (and log) a failed pool-creation's exception
+        so asyncio never reports it as unretrieved, even when every waiter was
+        cancelled by its own deadline (#11451)."""
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.warning("Async pool creation for '%s' failed: %s", database_name, exc)
+
     async def _ensure_async_pool_exists(self, database_name: str) -> None:
         """
         Ensure async connection pool exists for database, creating if needed.
@@ -865,8 +876,21 @@ class RedisConnectionManager:
             if database_name in self._async_pools:
                 return
             task = self._async_pool_tasks.get(database_name)
+            if task is not None and task.done() and not task.cancelled() and task.exception() is None:
+                # A completed creation whose waiter hasn't written the registry
+                # yet — harvest its pool instead of spawning a duplicate that
+                # would lose the setdefault and leak its connection (#11451).
+                self._async_pools.setdefault(database_name, task.result())
+                self._async_pool_tasks.pop(database_name, None)
+                return
             if task is None or task.done():
                 task = asyncio.ensure_future(self._create_async_pool(database_name))
+                # Always retrieve the exception even if every waiter was
+                # cancelled — avoids "Task exception was never retrieved" and
+                # preserves the failure reason in the logs (#11451).
+                task.add_done_callback(
+                    lambda t, _db=database_name: self._log_pool_task_failure(_db, t)
+                )
                 self._async_pool_tasks[database_name] = task
         try:
             pool = await asyncio.shield(task)
