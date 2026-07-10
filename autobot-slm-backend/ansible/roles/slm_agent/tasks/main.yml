@@ -237,12 +237,46 @@
 # #11450: the agent authenticates its heartbeat/events/code-sync/roles calls
 # with the shared AUTOBOT_INTERNAL_API_KEY. Write it to a 0600 EnvironmentFile
 # (loaded by the unit) rather than baking the secret into the world-readable
-# .service unit. Works on remote nodes too (they have no slm-secrets.env).
+# .service unit.
+#
+# #11480 review: the `autobot_internal_api_key` var is NOT supplied on the
+# self-update / provision-fleet / deploy-slm-agent import paths, so relying on
+# it alone wrote the file EMPTY and the agent still 401'd. Resolve the key from,
+# in order: the ansible var (provision extra_var) → the node's own
+# slm-secrets.env → autobot-backend.env (both already carry the key, #10263/
+# #10492). Remote agent-only nodes without either file get an empty key and the
+# agent logs the #11450 401 hint until the key is provisioned.
+- name: "SLM Agent | Read AUTOBOT_INTERNAL_API_KEY from node secrets (fallback when var unset) (#11480)"
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    for f in /etc/autobot/slm-secrets.env /etc/autobot/autobot-backend.env; do
+      if [ -r "$f" ]; then
+        v=$(grep -m1 '^AUTOBOT_INTERNAL_API_KEY=' "$f" | cut -d= -f2-);
+        if [ -n "$v" ]; then printf '%s' "$v"; exit 0; fi;
+      fi;
+    done
+  args:
+    executable: /bin/bash
+  become: true
+  register: _agent_key_from_node
+  changed_when: false
+  failed_when: false
+  no_log: true
+  tags: ['slm_agent', 'systemd', 'secrets']
+
+- name: "SLM Agent | Resolve effective internal API key (var wins, else node file) (#11480)"
+  ansible.builtin.set_fact:
+    _agent_internal_api_key: >-
+      {{ autobot_internal_api_key | default('') | trim
+         or (_agent_key_from_node.stdout | default('') | trim) }}
+  no_log: true
+  tags: ['slm_agent', 'systemd', 'secrets']
+
 - name: "SLM Agent | Deploy agent secrets EnvironmentFile (#11450)"
   ansible.builtin.copy:
     content: |
       # Managed by Ansible - do not edit manually
-      AUTOBOT_INTERNAL_API_KEY={{ autobot_internal_api_key | default('') }}
+      AUTOBOT_INTERNAL_API_KEY={{ _agent_internal_api_key }}
     dest: "{{ slm_agent_data_dir }}/agent-secrets.env"
     owner: "{{ slm_agent_user }}"
     group: "{{ slm_agent_group }}"
@@ -250,6 +284,15 @@
   become: true
   no_log: true
   notify: Restart SLM agent
+  tags: ['slm_agent', 'systemd', 'secrets']
+
+- name: "SLM Agent | Warn when no internal API key could be resolved (#11480)"
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: no AUTOBOT_INTERNAL_API_KEY resolved for {{ inventory_hostname }}
+      (no var, no slm-secrets.env / autobot-backend.env) — agent heartbeats will
+      401 until the key is provisioned (#11450).
+  when: not (_agent_internal_api_key | trim)
   tags: ['slm_agent', 'systemd', 'secrets']
 
 - name: "SLM Agent | Deploy systemd service unit"

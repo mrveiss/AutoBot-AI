@@ -22,7 +22,14 @@
 #   npu, npu-worker      - NPU worker deploy + restart tasks
 #   browser, browser-worker - browser worker deploy + restart tasks
 #   slm, slm-backend, slm-frontend - SLM node deploy + build + restart tasks
+#   slm-agent            - slm_agent role redeploy (code + secrets + restart) (#11480)
 #   shared               - autobot_shared deploy tasks (all nodes)
+#
+# NOTE (#11480): the slm-agent redeploy imports the slm_agent role, whose restart
+# runs via a handler and whose pip install is tagged `packages` (not `deps`).
+# So `--skip-tags restart` / `--skip-tags deps` do NOT skip the agent restart or
+# its dep install — a code-only push still restarts the agent. Use
+# `--skip-tags slm-agent` to exclude agent redeploy entirely.
 
 # =============================================================================
 # PLAY 0: Pre-flight Git Safety Check & Create Deploy Archives
@@ -427,12 +434,33 @@
       when: slm_login_play1.status == 200
       tags: [always]
 
+    # #11480: redeploy the slm-agent (code + agent-secrets.env + restart) on
+    # every update. Previously the routine update path only copied autobot_shared
+    # into the agent dir, so agent-side fixes (e.g. #11450 heartbeat auth) never
+    # reached nodes through self-update — only the separate deploy-slm-agent.yml.
+    # Idempotent role; slm_server has no any_errors_fatal so a failure here fails
+    # only this host (the SLM manager), matching the rest of Play 1.
+    - name: "[PLAY 1] SLM Agent | Redeploy agent (code + secrets + restart) (#11480)"
+      tags: [slm, slm-agent]
+      block:
+        - name: "[PLAY 1] SLM Agent | Import slm_agent role"
+          ansible.builtin.import_role:
+            name: slm_agent
+      rescue:
+        - name: "[PLAY 1] SLM Agent | Warn on agent redeploy failure"
+          ansible.builtin.debug:
+            msg: >-
+              WARNING: slm_agent redeploy failed on {{ inventory_hostname }} —
+              agent may run stale code / miss agent-secrets.env (#11480). Backend
+              + frontend already deployed; continuing.
+
     - name: "[PLAY 1] SLM Update Complete"
       debug:
         msg:
           - "SLM Server updated"
           - "  Backend deployed + restarted"
           - "  Frontend built + nginx restarted"
+          - "  SLM agent redeployed (#11480)"
 
 # =============================================================================
 # PLAY 2: Update All Other Infrastructure Nodes
@@ -1053,6 +1081,28 @@
       become: true
       when: slm_node_id is defined
       tags: [slm-agent, shared]
+
+    # #11480: redeploy the slm-agent (code + agent-secrets.env + restart) on
+    # remote nodes too. block/rescue keeps a single node's agent failure from
+    # aborting the whole fleet update (Play 2 has any_errors_fatal: true) —
+    # consistent with the failed_when:false used by the other Play 2 tasks.
+    # Note: a co-located SLM manager is in both slm_server (Play 1) and
+    # infrastructure (Play 2, #11436), so it runs this idempotent role twice
+    # per update (harmless — converges to the same state, one extra restart).
+    - name: "[PLAY 2] SLM Agent | Redeploy agent (code + secrets + restart) (#11480)"
+      when: slm_node_id is defined
+      tags: [slm-agent]
+      block:
+        - name: "[PLAY 2] SLM Agent | Import slm_agent role"
+          ansible.builtin.import_role:
+            name: slm_agent
+      rescue:
+        - name: "[PLAY 2] SLM Agent | Warn on agent redeploy failure"
+          ansible.builtin.debug:
+            msg: >-
+              WARNING: slm_agent redeploy failed on {{ inventory_hostname }} —
+              agent may run stale code / miss agent-secrets.env (#11480).
+              Continuing fleet update.
 
     # Issue #9565: slm-backend needs autobot_shared in PYTHONPATH
     - name: "[PLAY 2] SLM Backend | Create autobot_shared symlink for backend imports"
