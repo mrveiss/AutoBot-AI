@@ -501,3 +501,32 @@ def test_authenticate_ws_admin_dev_bypass_when_disabled():
 
     with patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "0"}):
         assert mod._authenticate_ws_admin(SimpleNamespace(headers={})) is True
+
+
+@pytest.mark.asyncio
+async def test_pump_container_to_ws_caps_output():
+    """#11059: the shell-output pump stops after the byte cap, so a runaway command
+    (e.g. `cat /dev/urandom`) can't flood the backend / WebSocket with unbounded data."""
+    from unittest.mock import patch
+
+    import api.task_workspace_ws as mod
+
+    sent: list[str] = []
+
+    class _FakeWS:
+        async def send_text(self, s: str) -> None:
+            sent.append(s)
+
+    class _FakeSock:
+        # Never returns empty, so only the cap can terminate the pump.
+        def recv(self, n: int) -> bytes:
+            return b"x" * 64
+
+    with patch.object(mod, "_WS_OUTPUT_CAP_BYTES", 256):
+        await mod._pump_container_to_ws(_FakeSock(), _FakeWS())
+
+    assert sent, "pump should forward output then stop"
+    last = json.loads(sent[-1])
+    assert "output limit reached" in last["content"], "must notify the client on cap"
+    forwarded = sum(len(json.loads(s)["content"].encode("utf-8")) for s in sent[:-1])
+    assert forwarded <= 256 + 64, "forwarded bytes must stay within the cap (+ one chunk)"
