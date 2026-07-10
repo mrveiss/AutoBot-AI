@@ -38,6 +38,13 @@ if "services" not in sys.modules:
     sys.modules["services"] = _services_pkg
 if "services.deploy_artifacts" not in sys.modules:
     sys.modules["services.deploy_artifacts"] = _load_service_module("services.deploy_artifacts", "deploy_artifacts.py")
+if "services.git_tracker" not in sys.modules:
+    # git_tracker.py transitively imports models.database; drift_checker only
+    # needs its DEFAULT_REPO_PATH constant, so stub it to keep this load fully
+    # standalone (same template as test_deploy_artifacts_lockstep.py).
+    _git_tracker_stub = types.ModuleType("services.git_tracker")
+    _git_tracker_stub.DEFAULT_REPO_PATH = "/opt/autobot/code_source"  # type: ignore[attr-defined]
+    sys.modules["services.git_tracker"] = _git_tracker_stub
 
 # Load drift_checker without triggering services/__init__.py import chain.
 drift_checker = _load_service_module("drift_checker", "drift_checker.py")
