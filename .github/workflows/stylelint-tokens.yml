@@ -1,0 +1,56 @@
+name: Stylelint Token Guard
+
+# Tokenisation enforcement scaffold (#11515 Task 1). Reports hardcoded hex colors
+# in CHANGED frontend CSS/Vue files so new hardcoded values are visible in review.
+#
+# NON-BLOCKING for now (continue-on-error): the ~6k pre-existing violations mean a
+# hard gate would block every frontend PR until migration completes. This job
+# surfaces new offenders without failing the queue. Once the worst offenders are
+# migrated (#11515 Task 4) and the config is validated, flip continue-on-error off
+# and add this to branch protection (#11515 Task 1.3).
+#
+# stylelint is installed ad-hoc with --no-save so no package.json / package-lock
+# change is required (the repo lockfiles are not regenerable in the dev env).
+
+on:
+  pull_request:
+    paths:
+      - "autobot-frontend/**/*.vue"
+      - "autobot-frontend/**/*.css"
+
+permissions:
+  contents: read
+
+jobs:
+  stylelint-changed:
+    name: Stylelint (changed CSS/Vue)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Determine changed frontend CSS/Vue files
+        id: changed
+        env:
+          # Untrusted-ish inputs handled via env (never interpolated into the
+          # shell command directly) to avoid workflow command injection.
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch origin "$BASE_REF" --depth=1 || true
+          git diff --name-only "origin/${BASE_REF}...HEAD" -- \
+            'autobot-frontend/**/*.vue' 'autobot-frontend/**/*.css' > changed-css.txt || true
+          count=$(wc -l < changed-css.txt | tr -d ' ')
+          echo "count=${count:-0}" >> "$GITHUB_OUTPUT"
+          echo "Changed CSS/Vue files: ${count:-0}"
+          cat changed-css.txt || true
+      - name: Run stylelint on changed files (report-only)
+        if: steps.changed.outputs.count != '0'
+        run: |
+          npm install --no-save --no-package-lock stylelint@^16 postcss-html@^1.6 >/dev/null 2>&1
+          # Read the file list from disk (not interpolated) and pass via xargs so
+          # filenames can't inject shell. Config path is repo-relative and fixed.
+          xargs -a changed-css.txt npx stylelint --config autobot-frontend/.stylelintrc.json
