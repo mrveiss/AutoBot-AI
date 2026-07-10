@@ -18,14 +18,30 @@ from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from circuit_breaker import CircuitBreakerConfig, CircuitBreakerOpenError, get_circuit_breaker_manager
+from constants import CircuitBreakerDefaults
 
 from .cross_worker_rate_limiter import get_llm_rate_limiter
 from .models import LLMRequest, LLMResponse
 from .observability import registry as obs_registry
 from .provider_auth import ApiKeyAuth, ProviderAuthError, ProviderAuthStrategy
-from .rate_limit_backoff import get_backoff_handler, raise_if_rate_limited
+from .rate_limit_backoff import extract_rate_limit_info, get_backoff_handler, raise_if_rate_limited
 
 logger = get_logger(__name__)
+
+
+class _CompletionErrorSignal(Exception):
+    """Internal: carries an error LLMResponse through the circuit breaker.
+
+    ``_chat_completion_impl`` must not raise (errors travel via
+    ``LLMResponse.error``), so the breaker cannot observe failures directly.
+    Raising this inside the breaker-guarded call records the failure; the
+    caller unwraps and returns the original response (#11488).
+    """
+
+    def __init__(self, response: LLMResponse) -> None:
+        super().__init__(response.error or "provider completion failed")
+        self.response = response
 
 
 class BaseProvider(ABC):
@@ -83,6 +99,7 @@ class BaseProvider(ABC):
         Wraps ``_chat_completion_impl`` with:
         - Issue #8170: cross-worker Redis rate limiter (proactive token acquire)
         - GH#8502: exponential backoff + auto-resume on provider rate-limit / quota reset
+        - GH#11488: per-provider circuit breaker (fail fast while a provider is down)
         - Observer fan-out (GH#6593)
 
         Errors are returned via ``LLMResponse.error`` so the registry can
@@ -97,7 +114,7 @@ class BaseProvider(ABC):
             async with get_llm_rate_limiter().acquire(provider_key):
                 start = time.monotonic()
                 try:
-                    response = await self._chat_completion_impl(request)
+                    response = await self._guarded_completion(request)
                     latency_ms = (time.monotonic() - start) * 1000
                     try:
                         asyncio.get_running_loop().create_task(obs_registry.notify_response(response, latency_ms, 0.0))
@@ -119,6 +136,60 @@ class BaseProvider(ABC):
             # Backoff exhausted — return the last error response if we have one,
             # otherwise let the exception propagate to the registry for fallback.
             raise
+
+    def _completion_circuit_breaker(self):
+        """Return this provider's completion circuit breaker (GH#11488).
+
+        Name-keyed on ``{provider_name}_service`` so all instances of a
+        provider share one breaker. Config uses the SSOT LLM defaults.
+        """
+        breaker_config = CircuitBreakerConfig(
+            failure_threshold=CircuitBreakerDefaults.LLM_FAILURE_THRESHOLD,
+            recovery_timeout=CircuitBreakerDefaults.LLM_RECOVERY_TIMEOUT,
+            timeout=CircuitBreakerDefaults.LLM_TIMEOUT,
+        )
+        name = f"{self.provider_name or 'default'}_service"
+        return get_circuit_breaker_manager().get_circuit_breaker(name, breaker_config)
+
+    def _breaker_error_response(self, request: LLMRequest, error: str, start: float) -> LLMResponse:
+        """Build the error LLMResponse for breaker-open / breaker-timeout outcomes."""
+        self._total_errors += 1
+        return LLMResponse(
+            content="",
+            model=request.model_name or "",
+            provider=self.provider_name,
+            processing_time=time.monotonic() - start,
+            request_id=request.request_id,
+            error=error,
+        )
+
+    async def _guarded_completion(self, request: LLMRequest) -> LLMResponse:
+        """Run ``_chat_completion_impl`` through the provider circuit breaker (GH#11488).
+
+        Error responses count as breaker failures — except rate limits, which
+        the backoff handler owns (GH#8502) and which prove the provider is up.
+        An open breaker fails fast with an error response so the registry can
+        fall back without paying per-request timeout latency.
+        """
+        breaker = self._completion_circuit_breaker()
+        start = time.monotonic()
+
+        async def _run() -> LLMResponse:
+            response = await self._chat_completion_impl(request)
+            is_rate_limited, _ = extract_rate_limit_info(response)
+            if response.error and not is_rate_limited:
+                raise _CompletionErrorSignal(response)
+            return response
+
+        try:
+            return await breaker.call_async(_run)
+        except _CompletionErrorSignal as signal:
+            return signal.response
+        except CircuitBreakerOpenError as exc:
+            logger.warning("Provider %s circuit breaker open; failing fast", self.provider_name)
+            return self._breaker_error_response(request, f"circuit breaker open: {exc}", start)
+        except TimeoutError as exc:
+            return self._breaker_error_response(request, str(exc), start)
 
     @abstractmethod
     async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
