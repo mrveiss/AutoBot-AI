@@ -388,9 +388,7 @@ async def test_extract_url_strips_scripts_before_llm() -> None:
         patch("web_fetch.WebFetcher.fetch", new_callable=AsyncMock, return_value=mock_result),
         patch(
             "security.content_firewall.get_content_firewall",
-            return_value=MagicMock(
-                inspect=AsyncMock(return_value=_make_firewall_verdict(content=safe_page))
-            ),
+            return_value=MagicMock(inspect=AsyncMock(return_value=_make_firewall_verdict(content=safe_page))),
         ),
         patch.object(ops_mod, "extract", side_effect=capture_extract),
     ):
