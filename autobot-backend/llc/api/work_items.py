@@ -162,6 +162,9 @@ class WorkItemUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     acceptance_criteria: Optional[List[str]] = None
+    # GH#10852: per-criterion completion, booleans parallel-indexed to
+    # acceptance_criteria; persists the WorkItemDetail checkboxes.
+    acceptance_criteria_done: Optional[List[bool]] = None
     priority: Optional[WorkItemPriority] = None
     story_points: Optional[int] = None
     labels: Optional[List[str]] = None
@@ -330,6 +333,7 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
         "title": item.title,
         "description": item.description,
         "acceptance_criteria": item.acceptance_criteria,
+        "acceptance_criteria_done": item.acceptance_criteria_done or [],  # GH#10852
         "status": item.status,
         "priority": item.priority,
         "story_points": item.story_points,

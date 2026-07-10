@@ -419,7 +419,10 @@ async function saveDesc() {
 }
 
 async function saveAC() {
-  // no-op: checkboxes are local display state; AC completion tracked via transition
+  // GH#10852: persist per-criterion completion (parallel-indexed to
+  // acceptance_criteria) so checkbox state survives reload.
+  const done = (localItem.value.acceptance_criteria ?? []).map((_, i) => checkedAC.value[i] ?? false)
+  await patchItem({ acceptance_criteria_done: done })
 }
 
 async function patchItem(patch: Partial<WorkItem>) {
@@ -540,7 +543,9 @@ watch(activeTab, (tab) => {
 
 onMounted(() => {
   localItem.value = { ...props.item }
-  checkedAC.value = (props.item.acceptance_criteria ?? []).map(() => false)
+  // GH#10852: hydrate from persisted per-criterion completion (default false).
+  const done = props.item.acceptance_criteria_done ?? []
+  checkedAC.value = (props.item.acceptance_criteria ?? []).map((_, i) => done[i] ?? false)
 })
 </script>
 
