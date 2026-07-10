@@ -83,7 +83,10 @@ class TTSProtocol(Protocol):
 
 @runtime_checkable
 class STTProtocol(Protocol):
-    """Structural protocol for speech-to-text transcription.
+    """Speech-to-text capability contract.
+
+    Deliberately unwired scaffolding: implementation adapter tracked in #11559
+    (voice_processing.SpeechProvider needs an adapter layer). Structural protocol for speech-to-text transcription.
 
     Derived from ``voice_processing.providers.SpeechProvider``'s async surface.
     """

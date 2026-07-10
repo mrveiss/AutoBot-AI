@@ -177,8 +177,12 @@ async def send_message(
     provider_lower = provider.lower()
     config = _create_config(provider_lower, token)
 
+    # Built OUTSIDE the try so an unknown provider's HTTPException(400)
+    # reaches FastAPI directly instead of being re-wrapped as a 500
+    # (#11524 review blocker) — same pattern as _get_integration elsewhere.
+    adapter = _build_messaging_adapter(provider_lower, config)
+
     try:
-        adapter = _build_messaging_adapter(provider_lower, config)
         if isinstance(adapter, MessagingProtocol):
             channel_id, text = _extract_channel_and_text(provider_lower, message)
             return await adapter.send_message(channel_id, text)

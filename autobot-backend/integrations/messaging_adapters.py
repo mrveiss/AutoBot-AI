@@ -89,8 +89,7 @@ class DiscordMessagingAdapter:
         follow-up without changing this Protocol surface.
         """
         logger.debug(
-            "DiscordMessagingAdapter.fetch_messages: fetch not yet implemented "
-            "(channel_id=%s, limit=%d)",
+            "DiscordMessagingAdapter.fetch_messages: fetch not yet implemented " "(channel_id=%s, limit=%d)",
             channel_id,
             limit,
         )
@@ -100,9 +99,7 @@ class DiscordMessagingAdapter:
 # Static structural assertion — checked at import time, not at runtime:
 # ensures both adapter classes satisfy MessagingProtocol without needing
 # to subclass it.
-assert issubclass(SlackMessagingAdapter, MessagingProtocol), (
-    "SlackMessagingAdapter does not satisfy MessagingProtocol"
-)
-assert issubclass(DiscordMessagingAdapter, MessagingProtocol), (
-    "DiscordMessagingAdapter does not satisfy MessagingProtocol"
-)
+assert issubclass(SlackMessagingAdapter, MessagingProtocol), "SlackMessagingAdapter does not satisfy MessagingProtocol"
+assert issubclass(
+    DiscordMessagingAdapter, MessagingProtocol
+), "DiscordMessagingAdapter does not satisfy MessagingProtocol"

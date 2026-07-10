@@ -1650,6 +1650,7 @@ class MiscConfig(BaseSettings):
     shell: str = Field(default="", alias="SHELL")
     slack_approvals_channel: str = Field(default="", alias="SLACK_APPROVALS_CHANNEL")
     slack_bot_token: str = Field(default="", alias="SLACK_BOT_TOKEN")
+    discord_bot_token: str = Field(default="", alias="DISCORD_BOT_TOKEN")
     slack_notifications_channel: str = Field(default="", alias="SLACK_NOTIFICATIONS_CHANNEL")
     slm_auth_token: str = Field(default="", alias="SLM_AUTH_TOKEN")
     slm_url: str = Field(default="", alias="SLM_URL")
