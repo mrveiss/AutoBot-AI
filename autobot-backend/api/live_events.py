@@ -123,9 +123,10 @@ async def _authorize_resource_channel(channel: str, user_payload: dict) -> bool:
                 svc = WorkflowPermissionService(session)
                 return await svc.check_permission(user_id, ident, "view")
             if prefix == "heartbeat":
+                from sqlalchemy import select
+
                 from llc.models.heartbeat_run import LLCHeartbeatRun
                 from llc.services.membership_service import MembershipService
-                from sqlalchemy import select
 
                 run = (
                     await session.execute(select(LLCHeartbeatRun).where(LLCHeartbeatRun.id == ident))
