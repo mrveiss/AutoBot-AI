@@ -894,6 +894,38 @@
       failed_when: false
       tags: [browser, browser-worker, deps]
 
+    - name: "[PLAY 2] Browser | Install npm dependencies"
+      command:
+        cmd: npm ci --omit=dev
+        chdir: /opt/autobot/autobot-browser-worker
+      become: true
+      become_user: autobot
+      timeout: 600
+      when:
+        - >-
+          'browser' in group_names
+        - hostvars['localhost']['node_deps_changed'] | bool
+      failed_when: false
+      tags: [browser, browser-worker, deps]
+
+    # #11442: a playwright version bump changes the required browser revision;
+    # without re-running install the worker bricks on the next /navigate
+    # ("Executable doesn't exist at .../chromium-<rev>"). Idempotent — a no-op
+    # when the revision is already present — so it runs on every update.
+    - name: "[PLAY 2] Browser | Ensure Playwright browsers match the installed package (#11442)"
+      command:
+        cmd: node_modules/.bin/playwright install chromium
+        chdir: /opt/autobot/autobot-browser-worker
+      environment:
+        PLAYWRIGHT_BROWSERS_PATH: /var/lib/autobot/playwright-browsers
+      become: true
+      timeout: 900
+      changed_when: false
+      when: >-
+        'browser' in group_names
+      failed_when: false
+      tags: [browser, browser-worker, deps]
+
     - name: "[PLAY 2] Browser | Restart service"
       systemd:
         name: autobot-playwright
