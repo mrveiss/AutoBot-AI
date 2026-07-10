@@ -25,7 +25,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_ as sa_or
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
@@ -530,17 +530,32 @@ async def get_sync_status(
     total_result = await db.execute(select(func.count(Node.id)))
     total_nodes = total_result.scalar() or 0
 
-    # Issue #1605: count outdated + service-failed as needing attention
-    outdated_result = await db.execute(
-        select(func.count(Node.id)).where(
-            Node.code_status.in_(
-                [
-                    CodeStatus.OUTDATED.value,
-                    CodeStatus.CODE_CURRENT_SERVICE_FAILED.value,
-                ]
+    # Issue #1605: count outdated + service-failed as needing attention.
+    # #11439: currency uses the SAME live signal as has_update (#9996-B:
+    # code_version != latest), not the heartbeat-lagged code_status stamp —
+    # otherwise the endpoint could report has_update=true with
+    # outdated_nodes=0 (contradictory operator signal).
+    if latest_version:
+        outdated_result = await db.execute(
+            select(func.count(Node.id)).where(
+                sa_or(
+                    Node.code_version.is_(None),
+                    Node.code_version != latest_version,
+                    Node.code_status == CodeStatus.CODE_CURRENT_SERVICE_FAILED.value,
+                )
             )
         )
-    )
+    else:
+        outdated_result = await db.execute(
+            select(func.count(Node.id)).where(
+                Node.code_status.in_(
+                    [
+                        CodeStatus.OUTDATED.value,
+                        CodeStatus.CODE_CURRENT_SERVICE_FAILED.value,
+                    ]
+                )
+            )
+        )
     outdated_nodes = outdated_result.scalar() or 0
 
     # Check if local repo has updates
