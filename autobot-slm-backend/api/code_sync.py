@@ -1274,8 +1274,13 @@ async def _ensure_target_python_installed(component: str, steps: List[str]) -> N
         steps.append(f"python-provision: {target} STILL not on PATH after install")
 
 
-async def _ensure_venv_python(component: str, steps: List[str]) -> None:
+async def _ensure_venv_python(component: str, steps: List[str]) -> bool:
     """Recreate the venv if its Python version doesn't match the target (#11323).
+
+    Returns True when the venv was (re)created from scratch — a fresh interpreter
+    cold-starts slowly, so the caller extends the post-restart health-poll window
+    (#11458). Returns False when the venv was left intact (version ok, or skipped
+    because the target interpreter is absent).
 
     Mirrors the ensure_venv_version Ansible role: runs `<venv>/bin/python --version`,
     compares against _COMPONENT_PYTHON_TARGET, and if mismatched removes the venv
@@ -1290,7 +1295,7 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> None:
     target = _COMPONENT_PYTHON_TARGET.get(component)
     paths = _COMPONENT_PIP_PATHS.get(component)
     if target is None or paths is None:
-        return
+        return False
     _, pip_bin = paths
     venv_python = str(Path(pip_bin).parent / "python")
     if not Path(venv_python).exists():
@@ -1300,10 +1305,10 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> None:
                 f"venv: {venv_python} missing and {target} not installed"
                 " — skipping recreation; provision the interpreter first (Ansible python314 role)"
             )
-            return
+            return False
         steps.append(f"venv: {venv_python} missing — will create with {target}")
         await _recreate_venv(component, target, pip_bin, steps)
-        return
+        return True
     try:
         proc = await asyncio.create_subprocess_exec(
             venv_python,
@@ -1329,16 +1334,17 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> None:
                     f" but {target} not installed — skipping recreation;"
                     " provision the interpreter first (Ansible python314 role)"
                 )
-                return
+                return False
             steps.append(f"venv: mismatch (have '{version_out}', need {expected_fragment}) — recreating")
             venv_dir = str(Path(pip_bin).parents[1])
             shutil.rmtree(venv_dir, ignore_errors=True)
             await _recreate_venv(component, target, pip_bin, steps)
-        else:
-            steps.append(f"venv: python version ok ({version_out})")
+            return True
+        steps.append(f"venv: python version ok ({version_out})")
     except Exception as exc:
         logger.error("drift resolve: venv version check failed for %s: %s", component, exc)
         steps.append(f"venv: version check error: {exc}")
+    return False
 
 
 async def _recreate_venv(component: str, python_bin: str, pip_bin: str, steps: List[str]) -> None:
@@ -1426,13 +1432,24 @@ _DB_BACKUP_DIR: str = os.environ.get("AUTOBOT_DB_BACKUP_DIR", "/opt/autobot/db-b
 _DB_BACKUP_KEEP: int = int(os.environ.get("AUTOBOT_DB_BACKUP_KEEP", "5"))
 
 # --- #11378: post-restart health polling ---------------------------------------
-# Total seconds to wait for a component to become healthy after restart.
-# Default 180s (#11413): a freshly-recreated py3.14 venv cold-starts slowly —
-# first-run bytecode compilation of the whole dependency tree can take >60s, so a
-# 60s window falsely reported a healthy service as unhealthy and tripped the
-# #11377 rollback. Env-overridable via AUTOBOT_HEALTH_POLL_TIMEOUT.
+# Total seconds to wait for a component to become healthy after restart. The
+# window is adaptive (#11458): a freshly-recreated py3.14 venv cold-starts slowly
+# — first-run bytecode compilation of the whole dependency tree can take >60s, so
+# a short window falsely reported a healthy service as unhealthy and tripped the
+# #11377 rollback (default 180s, #11413). A resync that did NOT recreate the venv
+# restarts onto warm bytecode and is ready far sooner, so it uses the shorter FAST
+# window and no longer burns the full 180s of dead wait on a silent hang. Both are
+# env-overridable. Note: this only bounds how long we WAIT before proceeding on a
+# non-failed unit — rollback is gated on a genuine systemd 'failed' state, not on
+# the timeout (see _wait_component_healthy), so the shorter window cannot cause a
+# false rollback of a slow-but-healthy deploy.
 _DEFAULT_HEALTH_POLL_TIMEOUT_S = "180"
 _HEALTH_POLL_TIMEOUT: float = float(os.environ.get("AUTOBOT_HEALTH_POLL_TIMEOUT", _DEFAULT_HEALTH_POLL_TIMEOUT_S))
+# Fast window for restarts that did NOT recreate the venv (warm interpreter).
+_FAST_HEALTH_POLL_TIMEOUT_S = "60"
+_FAST_HEALTH_POLL_TIMEOUT: float = float(
+    os.environ.get("AUTOBOT_HEALTH_POLL_TIMEOUT_FAST", _FAST_HEALTH_POLL_TIMEOUT_S)
+)
 # Per-attempt connect timeout (seconds) when probing the health endpoint.
 _HEALTH_POLL_CONNECT_TIMEOUT: float = 3.0
 # Per-component health URLs (localhost only — never egress).
@@ -2005,7 +2022,7 @@ async def _is_systemd_unit_failed(service: str) -> bool:
         return False
 
 
-async def _wait_component_healthy(component: str, steps: List[str]) -> bool:
+async def _wait_component_healthy(component: str, steps: List[str], *, slow_start: bool = False) -> bool:
     """Poll the component health URL until healthy or timeout (#11378, #11413).
 
     Returns True when the endpoint responds 2xx within the timeout window, OR
@@ -2015,6 +2032,14 @@ async def _wait_component_healthy(component: str, steps: List[str]) -> bool:
 
     Returns False ONLY when the systemd unit enters the 'failed' state during
     the polling window (crashloop, activation error, etc.).
+
+    slow_start selects the adaptive timeout window (#11458): True when the restart
+    is expected to be slow — a just-recreated venv (cold py3.14 interpreter) or a
+    fresh frontend asset swap — using the full _HEALTH_POLL_TIMEOUT; False for a
+    warm pip-backend restart, using the shorter _FAST_HEALTH_POLL_TIMEOUT. Either
+    way rollback is gated on a genuine systemd failure, not on the timeout, so the
+    fast window only trims dead wait — it never rolls back a slow-but-healthy
+    deploy.
 
     Components with no health URL are considered healthy immediately.
     """
@@ -2029,7 +2054,8 @@ async def _wait_component_healthy(component: str, steps: List[str]) -> bool:
         steps.append(f"health: no health URL configured for {component} — skipped")
         return True
 
-    deadline = asyncio.get_event_loop().time() + _HEALTH_POLL_TIMEOUT
+    timeout = _HEALTH_POLL_TIMEOUT if slow_start else _FAST_HEALTH_POLL_TIMEOUT
+    deadline = asyncio.get_event_loop().time() + timeout
     attempt = 0
     while asyncio.get_event_loop().time() < deadline:
         attempt += 1
@@ -2052,14 +2078,14 @@ async def _wait_component_healthy(component: str, steps: List[str]) -> bool:
     # Timeout reached but no systemd failure — the unit may still be starting
     # (e.g. py3.14 venv cold-start). Warn but do NOT roll back (#11413).
     if await _is_systemd_unit_failed(component):
-        steps.append(f"health: {component} unit failed after {_HEALTH_POLL_TIMEOUT:.0f}s — rolling back")
+        steps.append(f"health: {component} unit failed after {timeout:.0f}s — rolling back")
         logger.error("health: %s systemd unit failed after polling", component)
         return False
     steps.append(
-        f"health: {component} did not respond within {_HEALTH_POLL_TIMEOUT:.0f}s"
+        f"health: {component} did not respond within {timeout:.0f}s"
         " — unit not failed; deploy treated as successful (check {url} manually)"
     )
-    logger.warning("health: %s timeout after %.0fs but unit not failed — proceeding", component, _HEALTH_POLL_TIMEOUT)
+    logger.warning("health: %s timeout after %.0fs but unit not failed — proceeding", component, timeout)
     return True
 
 
@@ -2172,7 +2198,7 @@ async def _run_post_sync_steps(
         await _deploy_constraints_dir(source_root, steps)
         await _deploy_repo_root_requirements(source_root, steps)
         await _ensure_target_python_installed(component, steps)
-        await _ensure_venv_python(component, steps)
+        venv_recreated = await _ensure_venv_python(component, steps)
         pip_ok = await _install_pip_deps_for_component(component, steps)
         if not pip_ok:
             await _rollback_component(component, snapshot, steps, last_dump_path)
@@ -2189,7 +2215,9 @@ async def _run_post_sync_steps(
         await _ensure_autobot_shared_symlink(component, steps)
         if restart:
             await _restart_component_services(component, steps)
-            healthy = await _wait_component_healthy(component, steps)
+            # #11458: a just-recreated venv cold-starts slowly → full health-poll
+            # window; a warm restart uses the shorter fast window.
+            healthy = await _wait_component_healthy(component, steps, slow_start=venv_recreated)
             if not healthy:
                 await _rollback_component(component, snapshot, steps, last_dump_path)
                 steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
@@ -2203,7 +2231,11 @@ async def _run_post_sync_steps(
             pip_ok = False
         elif restart:
             await _restart_component_services(component, steps)
-            healthy = await _wait_component_healthy(component, steps)
+            # Frontend keeps the full health-poll window (#11458 review): the fast
+            # window is only for warm pip-backend restarts. A fresh nginx worker
+            # after a large asset swap can lag past 60s, and the generous window
+            # avoids logging an otherwise-healthy frontend as "check manually".
+            healthy = await _wait_component_healthy(component, steps, slow_start=True)
             if not healthy:
                 await _rollback_component(component, snapshot, steps, None)
                 steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
