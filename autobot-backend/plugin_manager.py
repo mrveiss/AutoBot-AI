@@ -28,7 +28,7 @@ from autobot_shared.plugin_sdk import (
     PluginRegistry,
     TrustTier,
 )
-from autobot_shared.plugin_sdk.loader import _validate_config_against_schema, _validate_config_schema
+from autobot_shared.plugin_sdk.loader import validate_plugin_config
 from autobot_shared.plugin_sdk.base import PluginLoadError
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
@@ -494,8 +494,7 @@ async def update_plugin_config(
     schema = plugin.manifest.config_schema
     if schema:
         try:
-            _validate_config_schema(plugin_name, schema)
-            _validate_config_against_schema(plugin_name, config_update.config, schema)
+            validate_plugin_config(plugin_name, config_update.config, schema)
         except PluginLoadError as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

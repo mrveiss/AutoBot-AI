@@ -228,16 +228,79 @@ describe('SchemaForm', () => {
   })
 
   // ----------------------------------------------------------
+  describe('enum typed values (B-1)', () => {
+    it('emits the original numeric enum member, not its string form', async () => {
+      const { container, emitted } = mountSchemaForm(
+        {
+          type: 'object',
+          properties: { level: { type: 'integer', title: 'Level', enum: [1, 2, 3] } },
+        },
+        { level: 1 },
+      )
+      const select = container.querySelector('.field-select') as HTMLSelectElement
+      await fireEvent.update(select, '2')
+      const events = emitted()['update:modelValue']
+      expect(events?.at(-1)?.[0]).toEqual({ level: 2 })
+    })
+  })
+
+  // ----------------------------------------------------------
   describe('array (tag list) field', () => {
     it('renders tag list and add input for type=array', () => {
-      const { container } = mountSchemaForm({
-        type: 'object',
-        properties: {
-          tags: { type: 'array', title: 'Tags' },
+      const { container } = mountSchemaForm(
+        {
+          type: 'object',
+          properties: {
+            tags: { type: 'array', title: 'Tags' },
+          },
         },
-        modelValue: { tags: ['alpha', 'beta'] },
-      })
+        { tags: ['alpha', 'beta'] },
+      )
       expect(container.querySelector('.field-tags')).toBeTruthy()
+    })
+
+    it('emits update:modelValue with appended tag on enter', async () => {
+      const { container, emitted } = mountSchemaForm(
+        {
+          type: 'object',
+          properties: { tags: { type: 'array', title: 'Tags' } },
+        },
+        { tags: ['alpha'] },
+      )
+      const input = container.querySelector('.tags-input') as HTMLInputElement
+      input.value = 'beta'
+      await fireEvent.keyDown(input, { key: 'Enter' })
+      const events = emitted()['update:modelValue']
+      expect(events?.at(-1)?.[0]).toEqual({ tags: ['alpha', 'beta'] })
+    })
+
+    it('emits update:modelValue without the removed tag', async () => {
+      const { container, emitted } = mountSchemaForm(
+        {
+          type: 'object',
+          properties: { tags: { type: 'array', title: 'Tags' } },
+        },
+        { tags: ['alpha', 'beta'] },
+      )
+      const removeButtons = container.querySelectorAll('.tag-remove')
+      await fireEvent.click(removeButtons[0])
+      const events = emitted()['update:modelValue']
+      expect(events?.at(-1)?.[0]).toEqual({ tags: ['beta'] })
+    })
+
+    it('coerces added tags to numbers when items.type is integer (B-1)', async () => {
+      const { container, emitted } = mountSchemaForm(
+        {
+          type: 'object',
+          properties: { ports: { type: 'array', title: 'Ports', items: { type: 'integer' } } },
+        },
+        { ports: [8080] },
+      )
+      const input = container.querySelector('.tags-input') as HTMLInputElement
+      input.value = '9090'
+      await fireEvent.keyDown(input, { key: 'Enter' })
+      const events = emitted()['update:modelValue']
+      expect(events?.at(-1)?.[0]).toEqual({ ports: [8080, 9090] })
     })
 
     it('shows existing tags from modelValue', () => {

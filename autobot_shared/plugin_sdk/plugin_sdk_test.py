@@ -914,3 +914,28 @@ async def test_load_plugin_empty_schema_any_config_loads(monkeypatch) -> None:
 
     plugin = await loader.load_plugin(manifest, config={"anything": True})
     assert plugin is not None
+
+
+def test_validate_config_valid_schema_with_unrenderable_properties() -> None:
+    """A valid schema whose properties are nested objects (unrenderable by the
+    UI form) must still pass load-time validation — renderability is a
+    frontend concern, not a load gate (#11522 review m-6)."""
+    from plugin_sdk.loader import _validate_config_against_schema, _validate_config_schema
+
+    schema = {
+        "type": "object",
+        "properties": {"nested": {"type": "object", "properties": {"inner": {"type": "string"}}}},
+    }
+    _validate_config_schema("p", schema)  # must not raise
+    _validate_config_against_schema("p", {"nested": {"inner": "ok"}}, schema)  # must not raise
+
+
+def test_validate_plugin_config_public_wrapper() -> None:
+    """Public wrapper validates config and skips cleanly on empty schema."""
+    from plugin_sdk.loader import validate_plugin_config
+
+    validate_plugin_config("p", {"anything": 1}, {})  # empty schema → no-op
+    schema = {"type": "object", "properties": {"timeout": {"type": "integer"}}}
+    validate_plugin_config("p", {"timeout": 5}, schema)  # conforming → no raise
+    with pytest.raises(PluginLoadError, match="timeout"):
+        validate_plugin_config("p", {"timeout": "not-an-int"}, schema)

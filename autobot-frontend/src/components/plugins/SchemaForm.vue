@@ -45,7 +45,7 @@
           :id="`sf-${key}`"
           class="field-select"
           :value="String(localValue[key] ?? fieldSchema.default ?? '')"
-          @change="onSelect(key, ($event.target as HTMLSelectElement).value)"
+          @change="onSelect(key, fieldSchema, ($event.target as HTMLSelectElement).value)"
         >
           <option value="" disabled>{{ t('components.schemaForm.selectPlaceholder') }}</option>
           <option
@@ -85,7 +85,7 @@
             type="text"
             class="field-input tags-input"
             :placeholder="t('components.schemaForm.addTagPlaceholder')"
-            @keydown.enter.prevent="addTag(key, ($event.target as HTMLInputElement).value); ($event.target as HTMLInputElement).value = ''"
+            @keydown.enter.prevent="addTag(key, fieldSchema, ($event.target as HTMLInputElement).value); ($event.target as HTMLInputElement).value = ''"
           />
         </div>
 
@@ -222,21 +222,33 @@ function onCheckbox(key: string, checked: boolean) {
   emit_(key, checked)
 }
 
-function onSelect(key: string, value: string) {
-  emit_(key, value)
+function onSelect(key: string, s: JsonSchemaProperty, value: string) {
+  // Recover the original (possibly non-string) enum member: the DOM only
+  // gives us strings, but the schema may declare numeric/boolean enums.
+  const original = (s.enum ?? []).find((o) => String(o) === value)
+  emit_(key, original !== undefined ? original : value)
 }
 
-function arrayValue(key: string): string[] {
+function coerceScalar(v: string, type?: string): unknown {
+  if (type === 'number' || type === 'integer') {
+    const n = Number(v)
+    return Number.isNaN(n) ? v : n
+  }
+  if (type === 'boolean') return v === 'true'
+  return v
+}
+
+function arrayValue(key: string): unknown[] {
   const v = localValue.value[key]
-  if (Array.isArray(v)) return v as string[]
+  if (Array.isArray(v)) return v as unknown[]
   return []
 }
 
-function addTag(key: string, tag: string) {
+function addTag(key: string, s: JsonSchemaProperty, tag: string) {
   const trimmed = tag.trim()
   if (!trimmed) return
   const current = arrayValue(key)
-  emit_(key, [...current, trimmed])
+  emit_(key, [...current, coerceScalar(trimmed, s.items?.type)])
 }
 
 function removeTag(key: string, idx: number) {
