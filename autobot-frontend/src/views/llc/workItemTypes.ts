@@ -48,5 +48,7 @@ export interface WorkItem {
   status: WorkItemStatus
   labels: string[]
   acceptance_criteria: string[]
+  // GH#10852: per-criterion completion, parallel-indexed to acceptance_criteria.
+  acceptance_criteria_done?: boolean[]
   linked_pr_urls?: string[]
 }

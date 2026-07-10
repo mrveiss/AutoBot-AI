@@ -319,6 +319,7 @@ class WorkItemService(LLCServiceBase):
             "title",
             "description",
             "acceptance_criteria",
+            "acceptance_criteria_done",  # GH#10852
             "priority",
             "story_points",
             "labels",

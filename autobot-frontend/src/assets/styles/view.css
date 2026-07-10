@@ -157,9 +157,11 @@
 
 @media (max-width: 768px) {
   .view-container {
-    /* Adjust for mobile header height if different */
-    min-height: calc(100vh - 60px);
-    max-height: calc(100vh - 60px);
+    /* GH#10902: the header height is tokenized (--header-height, 56px) and does
+       not change on mobile — stay in sync via --view-min-height instead of a
+       hardcoded 60px that mis-sizes the view against its bounded content region. */
+    min-height: var(--view-min-height);
+    max-height: var(--view-min-height);
   }
 
   .view-content {

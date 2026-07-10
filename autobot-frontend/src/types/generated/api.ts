@@ -98996,6 +98996,8 @@ export interface components {
             description?: string | null;
             /** Acceptance Criteria */
             acceptance_criteria?: string[] | null;
+            /** Acceptance Criteria Done */
+            acceptance_criteria_done?: boolean[] | null;
             priority?: components["schemas"]["WorkItemPriority"] | null;
             /** Story Points */
             story_points?: number | null;
