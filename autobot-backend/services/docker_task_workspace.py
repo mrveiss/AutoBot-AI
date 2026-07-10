@@ -85,6 +85,14 @@ _BLOCKED_EXEC_COMMANDS: frozenset[str] = frozenset(
     }
 )
 
+# GH#11059: shell interpreters that run an inline command string bypass a
+# base-command-only denylist (e.g. `sh -c "sudo rm -rf /"`), so a wrapper
+# invocation with an inline-command flag is rejected outright.
+_SHELL_INTERPRETERS: frozenset[str] = frozenset(
+    {"sh", "bash", "dash", "zsh", "ash", "ksh", "csh", "tcsh", "fish", "busybox"}
+)
+_INLINE_CMD_FLAGS: frozenset[str] = frozenset({"-c", "-ic", "-lc", "-icl", "--command"})
+
 try:
     import docker
     from docker.errors import APIError, DockerException, NotFound
@@ -505,6 +513,18 @@ def validate_exec_command(cmd: list[str]) -> bool:
     if base in _BLOCKED_EXEC_COMMANDS:
         logger.warning("workspace: exec blocked base command=%s", base)
         return False
+    # GH#11059: a shell wrapper (`sh -c "sudo …"`) runs an inline command string
+    # that a first-token check never inspects — reject the wrapper itself.
+    if base in _SHELL_INTERPRETERS and any(a in _INLINE_CMD_FLAGS for a in cmd[1:]):
+        logger.warning("workspace: exec blocked shell wrapper base=%s", base)
+        return False
+    # GH#11059: scan EVERY token's basename, not just cmd[0], so prefix-runners
+    # (`env sudo …`, `timeout 5 sudo …`, `nice sudo …`) can't smuggle a blocked
+    # command past a first-token-only check.
+    for token in cmd:
+        if token.split("/")[-1] in _BLOCKED_EXEC_COMMANDS:
+            logger.warning("workspace: exec blocked command token=%s", token.split("/")[-1])
+            return False
     return True
 
 

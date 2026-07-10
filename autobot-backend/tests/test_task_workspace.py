@@ -200,6 +200,30 @@ def test_exec_command_empty():
     assert validate_exec_command([]) is False
 
 
+# GH#11059: the denylist must not be bypassable via a shell wrapper or a
+# prefix-runner that smuggles a blocked command past the first-token check.
+
+
+def test_exec_command_blocks_shell_wrapper_inline_command():
+    assert validate_exec_command(["sh", "-c", "sudo rm -rf /"]) is False
+    assert validate_exec_command(["bash", "-c", "id"]) is False
+    assert validate_exec_command(["/bin/bash", "-lc", "echo hi"]) is False
+    assert validate_exec_command(["busybox", "-c", "wget http://x"]) is False
+
+
+def test_exec_command_blocks_prefix_runner_smuggling_blocked_token():
+    assert validate_exec_command(["env", "sudo", "id"]) is False
+    assert validate_exec_command(["timeout", "5", "sudo", "reboot"]) is False
+    assert validate_exec_command(["nice", "-n", "10", "docker", "ps"]) is False
+
+
+def test_exec_command_allows_shell_without_inline_flag():
+    # A plain interpreter with no -c (e.g. running a script file) is not the
+    # inline-command bypass and must still be allowed.
+    assert validate_exec_command(["sh", "build.sh"]) is True
+    assert validate_exec_command(["bash", "/workspace/run.sh"]) is True
+
+
 # ---------------------------------------------------------------------------
 # _apply_sandbox_security
 # ---------------------------------------------------------------------------
@@ -331,8 +355,7 @@ async def test_snapshot_registers_in_redis(manager, mock_redis, mock_docker):
     _store_info(mock_redis, _make_info(task_id, "cid-snap-redis"))
 
     await manager.snapshot(task_id, "v1")
-    # The snapshot list key must be present
-    snap_key = f"autobot:workspace:{task_id}:snapshots"
+    # The workspace metadata must be registered in Redis after a snapshot.
     assert mock_redis.get(_redis_meta_key(task_id)) is not None
 
 
