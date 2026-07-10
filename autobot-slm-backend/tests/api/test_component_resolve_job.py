@@ -321,3 +321,86 @@ def test_run_component_resolve_job_rsync_failure() -> None:
     assert row.success is False
     assert "rsync boom" in (row.message or "")
     restart_mock.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# #11437: requeue-once reconcile + pending-restart guard
+# ---------------------------------------------------------------------------
+
+
+def _make_reconcile_db_mock(rows):
+    """db_service mock whose session().execute returns scalars().all() == rows."""
+    db_service_mock = MagicMock()
+
+    class _FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            pass
+
+        async def execute(self, _stmt):
+            result = MagicMock()
+            result.scalars.return_value.all.return_value = rows
+            return result
+
+        async def commit(self):
+            pass
+
+    db_service_mock.session.return_value = _FakeSession()
+    return db_service_mock
+
+
+def test_reconcile_requeues_first_interruption() -> None:
+    """A job interrupted by a racing restart is re-queued, not failed (#11437)."""
+    import api.code_sync as code_sync_mod
+
+    row = _FakeRow()
+    row.status = "running"
+    row.message = None
+    row.job_id = "job-1"
+    row.component = "autobot-backend"
+
+    with patch("services.database.db_service", _make_reconcile_db_mock([row])):
+        count, requeued = _run(code_sync_mod.reconcile_stale_component_sync_jobs())
+
+    assert count == 1
+    assert row.status == "queued"
+    assert row.message.startswith("requeued")
+    assert requeued == [("job-1", "autobot-backend")]
+
+
+def test_reconcile_fails_second_interruption() -> None:
+    """A job interrupted twice must not requeue forever (#11437)."""
+    import api.code_sync as code_sync_mod
+
+    row = _FakeRow()
+    row.status = "running"
+    row.message = "requeued after server restart"
+    row.job_id = "job-2"
+    row.component = "autobot-backend"
+
+    with patch("services.database.db_service", _make_reconcile_db_mock([row])):
+        count, requeued = _run(code_sync_mod.reconcile_stale_component_sync_jobs())
+
+    assert count == 1
+    assert row.status == "failed"
+    assert row.success is False
+    assert requeued == []
+
+
+def test_restart_pending_arms_only_for_self_killing_components() -> None:
+    """_restart_component_services arms the 409 guard only when the chain can
+    kill the SLM itself (#11437)."""
+    import api.code_sync as code_sync_mod
+
+    code_sync_mod._restart_pending = False
+    try:
+        with patch.dict(code_sync_mod._COMPONENT_SERVICES, {"autobot-backend": [], "autobot_shared": []}):
+            _run(code_sync_mod._restart_component_services("autobot-backend", []))
+            assert code_sync_mod._restart_is_pending() is False
+
+            _run(code_sync_mod._restart_component_services("autobot_shared", []))
+            assert code_sync_mod._restart_is_pending() is True
+    finally:
+        code_sync_mod._restart_pending = False

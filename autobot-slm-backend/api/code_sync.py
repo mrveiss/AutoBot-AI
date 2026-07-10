@@ -162,19 +162,31 @@ async def reconcile_stale_component_sync_jobs() -> int:
         stale_jobs = result.scalars().all()
         count = len(stale_jobs)
 
+        requeued: List[tuple] = []
         for job in stale_jobs:
-            job.status = "failed"
-            job.completed_at = datetime.now(timezone.utc)
-            job.message = "reconciled: server restarted while job was running"
-            logger.warning(
-                "Reconciled stale component sync job %s " "(was 'running', marked 'failed')",
-                job.job_id,
-            )
+            if job.message and job.message.startswith("requeued"):
+                # Second interruption — do not loop forever (#11437).
+                job.status = "failed"
+                job.success = False
+                job.completed_at = datetime.now(timezone.utc)
+                job.message = "failed: interrupted twice by server restarts"
+                logger.warning("Component sync job %s interrupted twice — marked failed", job.job_id)
+            else:
+                # #11437: the interruption was a restart racing the job, not a
+                # job failure — re-queue it so post-steps (incl. migrations)
+                # actually run instead of being silently skipped.
+                job.status = "queued"
+                job.message = "requeued after server restart"
+                requeued.append((job.job_id, job.component))
+                logger.warning(
+                    "Reconciled stale component sync job %s (was 'running', re-queued)",
+                    job.job_id,
+                )
 
         if count:
             await db.commit()
 
-    return count
+    return count, requeued
 
 
 async def _run_component_resolve_job(job_id: str, component: str) -> None:
@@ -188,6 +200,13 @@ async def _run_component_resolve_job(job_id: str, component: str) -> None:
     from services.database import db_service
 
     try:
+        # Requeued jobs arrive as 'queued' — mark running for status pollers (#11437).
+        async with db_service.session() as db:
+            result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
+            job_row = result.scalar_one_or_none()
+            if job_row and job_row.status != "running":
+                job_row.status = "running"
+                await db.commit()
         try:
             source_dir = get_default_source_dir(component)
         except ValueError as exc:
@@ -611,6 +630,11 @@ async def resolve_drift(
             status_code=400,
             detail=f"Invalid component '{request.component}'. Must be one of: {sorted(ALLOWED_COMPONENTS)}",
         )
+    if _restart_is_pending():
+        raise HTTPException(
+            status_code=409,
+            detail="A service restart from a previous resolve is in flight — retry in a few seconds (#11437)",
+        )
 
     try:
         source_dir = get_default_source_dir(request.component)
@@ -690,6 +714,11 @@ async def resolve_drift_async(
         raise HTTPException(
             status_code=400,
             detail=f"Invalid component '{request.component}'. Must be one of: {sorted(ALLOWED_COMPONENTS)}",
+        )
+    if _restart_is_pending():
+        raise HTTPException(
+            status_code=409,
+            detail="A service restart from a previous resolve is in flight — retry in a few seconds (#11437)",
         )
 
     from services.database import db_service
@@ -1046,6 +1075,19 @@ _COMPONENT_BUILD_SCRIPT: Dict[str, str] = {
 }
 
 # Maps component name → systemd service names to restart after sync.
+# #11437: components whose restart set includes autobot-slm-backend itself.
+# While such a restart chain is in flight this process is about to die; new
+# resolve jobs accepted in that window get killed mid-run and (pre-#11437)
+# were reconciled to failed with their migrations silently skipped.
+_SELF_KILLING_COMPONENTS = frozenset({"autobot-slm-backend", "autobot_shared"})
+_restart_pending: bool = False
+
+
+def _restart_is_pending() -> bool:
+    """True while a self-killing restart chain is in flight (#11437)."""
+    return _restart_pending
+
+
 _COMPONENT_SERVICES: Dict[str, List[str]] = {
     "autobot-backend": ["autobot-backend"],
     "autobot-slm-backend": ["autobot-slm-backend"],
@@ -1746,6 +1788,11 @@ async def _restart_component_services(component: str, steps: List[str]) -> None:
 
     Appends human-readable step notes to *steps*.
     """
+    global _restart_pending
+    if component in _SELF_KILLING_COMPONENTS:
+        # #11437: this chain will restart autobot-slm-backend itself — reject
+        # new resolve jobs until the process dies (flag resets on boot).
+        _restart_pending = True
     services = _COMPONENT_SERVICES.get(component, [])
     for service in services:
         steps.append(f"restart: {service}")

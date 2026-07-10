@@ -252,13 +252,18 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed to reconcile stale fleet sync jobs")
 
-    # Reconcile stale component sync jobs from prior crash (#11303)
+    # Reconcile stale component sync jobs from prior crash (#11303).
+    # #11437: jobs interrupted by a racing restart are re-queued (once) and
+    # re-run here so their post-steps (incl. DB migrations) are not skipped.
     try:
-        from api.code_sync import reconcile_stale_component_sync_jobs
+        from api.code_sync import _run_component_resolve_job, reconcile_stale_component_sync_jobs
 
-        reconciled_comp = await reconcile_stale_component_sync_jobs()
+        reconciled_comp, requeued_jobs = await reconcile_stale_component_sync_jobs()
         if reconciled_comp:
             logger.warning("Reconciled %d stale component sync job(s)", reconciled_comp)
+        for _job_id, _component in requeued_jobs:
+            logger.warning("Re-running interrupted component sync job %s (%s)", _job_id, _component)
+            asyncio.create_task(_run_component_resolve_job(_job_id, _component))
     except Exception:
         logger.exception("Failed to reconcile stale component sync jobs")
 
