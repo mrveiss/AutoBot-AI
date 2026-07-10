@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.singleton_factory import lazy_singleton
@@ -140,5 +140,4 @@ get_degradation_store = lazy_singleton(ProviderDegradationStore)
 __all__ = [
     "ProviderDegradationStore",
     "get_degradation_store",
-    "_DEGRADATION_TTL_SECONDS",
 ]

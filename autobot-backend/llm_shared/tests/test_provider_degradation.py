@@ -16,8 +16,8 @@ Coverage:
 from __future__ import annotations
 
 import time
-from typing import Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from contextlib import contextmanager
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -50,6 +50,25 @@ def _make_store_with_fake_server(server):
 
     store._get_redis = _fake_redis  # type: ignore[method-assign]
     return store
+
+
+@contextmanager
+def _inject_globals(func, **replacements):
+    """Swap names in *func*'s own module globals for the duration of the block.
+
+    ``unittest.mock.patch("llm_shared.X.name")`` resolves the target through
+    ``sys.modules``, which the conftest stub machinery can leave pointing at a
+    MagicMock module while the real class lives in a separately loaded module
+    object — silently patching the wrong namespace.  Injecting through
+    ``func.__globals__`` always hits the dict the executing code reads.
+    """
+    g = func.__globals__
+    saved = {k: g[k] for k in replacements}
+    g.update(replacements)
+    try:
+        yield
+    finally:
+        g.update(saved)
 
 
 # ---------------------------------------------------------------------------
@@ -248,8 +267,10 @@ async def test_coordinator_marks_degraded_on_rate_limit():
     )
     mgr._chains["claude-opus-4"] = chain
 
-    with patch("llm_shared.model_fallback_coordinator.get_fallback_chain_manager", return_value=mgr), patch(
-        "llm_shared.model_fallback_coordinator.get_degradation_store", return_value=store_instance
+    with _inject_globals(
+        ModelFallbackCoordinator.execute_with_fallback,
+        get_fallback_chain_manager=lambda: mgr,
+        get_degradation_store=lambda: store_instance,
     ):
         result = await coordinator.execute_with_fallback(req, registry)
 
@@ -291,7 +312,10 @@ async def test_registry_skips_degraded_provider():
     registry.set_fallback_chain(["openai", "anthropic"])
 
     store_b = _make_store_with_fake_server(server)
-    with patch("llm_shared.provider_registry.get_degradation_store", return_value=store_b):
+    with _inject_globals(
+        ProviderRegistry.get_provider_for_request,
+        get_degradation_store=lambda: store_b,
+    ):
         chosen = await registry.get_provider_for_request()
 
     # Should skip openai (degraded) and return anthropic.
@@ -320,8 +344,162 @@ async def test_registry_all_degraded_proceeds():
     registry.set_fallback_chain(["openai"])
 
     store_b = _make_store_with_fake_server(server)
-    with patch("llm_shared.provider_registry.get_degradation_store", return_value=store_b):
+    with _inject_globals(
+        ProviderRegistry.get_provider_for_request,
+        get_degradation_store=lambda: store_b,
+    ):
         chosen = await registry.get_provider_for_request()
 
     # All-degraded → proceed anyway; openai is still returned.
     assert chosen is openai_prov
+
+
+# ---------------------------------------------------------------------------
+# Review follow-ups (#11519): exhaustion marking, provider resolution,
+# coordinator→registry end-to-end key match.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_coordinator_marks_final_provider_on_exhaustion():
+    """The provider failing on the LAST attempt is marked too (mark before break)."""
+    _require_fakeredis()
+    server = fakeredis_async.FakeServer()
+    store_instance = _make_store_with_fake_server(server)
+
+    from llm_shared.fallback_chain import FallbackChain, FallbackChainManager
+    from llm_shared.model_fallback_coordinator import ModelFallbackCoordinator
+    from llm_shared.models import LLMRequest, ProviderType
+    from llm_shared.optimization.rate_limiter import RateLimitError
+
+    coordinator = ModelFallbackCoordinator()
+    req = LLMRequest(messages=[{"role": "user", "content": "hi"}])
+    req.model_name = "claude-opus-4"
+    req.provider = ProviderType("anthropic")
+
+    async def _always_rate_limited(r):
+        raise RateLimitError("quota")
+
+    provider = MagicMock()
+    provider.chat_completion = _always_rate_limited
+    registry = MagicMock()
+    registry.get_provider_for_request = AsyncMock(return_value=provider)
+
+    mgr = FallbackChainManager.__new__(FallbackChainManager)
+    mgr._chains = {}
+    mgr._chains["claude-opus-4"] = FallbackChain(
+        primary_model="claude-opus-4",
+        fallback_models=["claude-sonnet-4"],
+        primary_provider="anthropic",
+        fallback_providers=["anthropic"],
+    )
+    mgr._chains["claude-sonnet-4"] = FallbackChain(
+        primary_model="claude-sonnet-4",
+        fallback_models=["claude-haiku-4"],
+        primary_provider="anthropic",
+        fallback_providers=["anthropic"],
+    )
+
+    with _inject_globals(
+        ModelFallbackCoordinator.execute_with_fallback,
+        get_fallback_chain_manager=lambda: mgr,
+        get_degradation_store=lambda: store_instance,
+    ):
+        result = await coordinator.execute_with_fallback(req, registry, max_attempts=1)
+
+    assert result.error  # exhausted
+    # BOTH the primary and the final (exhausted) fallback model are marked.
+    assert await store_instance.is_degraded("anthropic", "claude-opus-4") is True
+    assert await store_instance.is_degraded("anthropic", "claude-sonnet-4") is True
+
+
+@pytest.mark.asyncio
+async def test_coordinator_marks_registry_resolved_provider_when_request_has_none():
+    """A request without a provider still produces a matchable mark via selected_provider."""
+    _require_fakeredis()
+    server = fakeredis_async.FakeServer()
+    store_instance = _make_store_with_fake_server(server)
+
+    from llm_shared.fallback_chain import FallbackChainManager
+    from llm_shared.model_fallback_coordinator import ModelFallbackCoordinator
+    from llm_shared.models import LLMRequest
+    from llm_shared.optimization.rate_limiter import RateLimitError
+
+    coordinator = ModelFallbackCoordinator()
+    req = LLMRequest(messages=[{"role": "user", "content": "hi"}])
+    req.model_name = "gpt-4o"
+    assert req.provider is None
+
+    async def _rate_limited(r):
+        raise RateLimitError("quota")
+
+    provider = MagicMock()
+    provider.chat_completion = _rate_limited
+
+    async def _resolve(provider_name=None, request=None):
+        # Emulate the real registry stamping the resolved provider (#11519).
+        if request is not None:
+            request.metadata["selected_provider"] = "openai"
+        return provider
+
+    registry = MagicMock()
+    registry.get_provider_for_request = AsyncMock(side_effect=_resolve)
+
+    mgr = FallbackChainManager.__new__(FallbackChainManager)
+    mgr._chains = {}  # no fallback registered → break after first failure
+
+    with _inject_globals(
+        ModelFallbackCoordinator.execute_with_fallback,
+        get_fallback_chain_manager=lambda: mgr,
+        get_degradation_store=lambda: store_instance,
+    ):
+        result = await coordinator.execute_with_fallback(req, registry)
+
+    assert result.error
+    # The mark uses the registry-resolved provider, so the registry's own
+    # is_degraded("openai", "gpt-4o") check matches the key.
+    assert await store_instance.is_degraded("openai", "gpt-4o") is True
+    # No junk empty-provider key was written.
+    entries = await store_instance.degraded_entries()
+    assert all(":deg::" not in e for e in entries)
+
+
+@pytest.mark.asyncio
+async def test_registry_stamps_selected_provider_and_skips_model_scoped_mark():
+    """End-to-end: a model-scoped coordinator mark is honored by registry selection."""
+    _require_fakeredis()
+    server = fakeredis_async.FakeServer()
+    store_a = _make_store_with_fake_server(server)
+
+    # Coordinator-style mark from another worker: provider:model scoped.
+    await store_a.mark_degraded("openai", "gpt-4o")
+
+    from llm_shared.models import LLMRequest
+    from llm_shared.provider_registry import ProviderRegistry
+
+    registry = ProviderRegistry()
+    openai_prov = MagicMock()
+    openai_prov.provider_name = "openai"
+    openai_prov.is_available = AsyncMock(return_value=True)
+    anthropic_prov = MagicMock()
+    anthropic_prov.provider_name = "anthropic"
+    anthropic_prov.is_available = AsyncMock(return_value=True)
+    registry.register(openai_prov)
+    registry.register(anthropic_prov)
+    registry.set_fallback_chain(["openai", "anthropic"])
+
+    req = LLMRequest(messages=[{"role": "user", "content": "hi"}])
+    req.model_name = "gpt-4o"
+
+    store_b = _make_store_with_fake_server(server)
+    with _inject_globals(
+        ProviderRegistry.get_provider_for_request,
+        get_degradation_store=lambda: store_b,
+    ):
+        chosen = await registry.get_provider_for_request(request=req)
+
+    # Model-scoped mark on openai:gpt-4o → anthropic chosen.
+    assert chosen is anthropic_prov
+    # Resolved provider stamped for the coordinator's mark path.
+    assert req.metadata["selected_provider"] == "anthropic"
+    assert req.metadata["degraded_skipped"] == ["openai"]

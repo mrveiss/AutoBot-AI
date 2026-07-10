@@ -446,7 +446,7 @@ class ProviderRegistry:
             if await degradation.is_degraded(name, model_name):
                 degraded_set.add(name)
         all_degraded = len(candidates) > 0 and degraded_set == set(candidates)
-        if all_degraded and degraded_set:
+        if all_degraded:
             logger.warning(
                 "degradation: all %d candidates degraded — proceeding anyway",
                 len(candidates),
@@ -462,10 +462,12 @@ class ProviderRegistry:
             if provider is not None:
                 if request is not None:
                     self.enrich_request(request, name)
+                    # Record the resolved provider so the fallback coordinator
+                    # marks the provider actually used, not the (possibly
+                    # absent) one on the request (#11519).
+                    request.metadata["selected_provider"] = name
                     # Attach observability field so callers know what was skipped.
                     if degraded_skipped:
-                        if request.metadata is None:
-                            request.metadata = {}
                         request.metadata["degraded_skipped"] = degraded_skipped
                 if name != primary:
                     logger.debug(

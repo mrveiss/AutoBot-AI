@@ -123,6 +123,20 @@ class ModelFallbackCoordinator:
                     provider=current_provider or "",
                     error=str(exc),
                 )
+                # Mark the exhausted provider:model degraded so sibling workers
+                # skip it immediately (Issue #11519).  Use the provider the
+                # registry actually resolved at dispatch time — the request may
+                # carry no provider at all.  Marking happens before the
+                # max-attempts break so the final provider is marked too.
+                failed_provider = request.metadata.get("selected_provider") or current_provider
+                if failed_provider:
+                    await get_degradation_store().mark_degraded(failed_provider, current_model or None)
+                else:
+                    logger.debug(
+                        "degradation: provider unresolved for model=%r — mark skipped",
+                        current_model,
+                    )
+
                 if attempt >= max_attempts:
                     logger.warning(
                         "quota-fallback: all %d fallback attempts exhausted for model=%r",
@@ -130,12 +144,6 @@ class ModelFallbackCoordinator:
                         primary_model,
                     )
                     break
-
-                # Mark the exhausted provider:model degraded so sibling workers
-                # skip it immediately (Issue #11519).
-                await get_degradation_store().mark_degraded(
-                    current_provider or "", current_model or None
-                )
 
                 fallback = get_fallback_chain_manager().get_next_fallback(current_model, current_provider)
                 if fallback is None:
