@@ -109,6 +109,15 @@ def _make_redis_mock(exists_return: int = 0) -> AsyncMock:
     return mock
 
 
+@pytest.fixture(autouse=True)
+def _reset_denylist_negative_cache():
+    """#11443: the module arms a negative-cache window after Redis failures;
+    reset it between tests so unavailable-path tests don't poison others."""
+    _dl_mod._unavailable_until = 0.0
+    yield
+    _dl_mod._unavailable_until = 0.0
+
+
 # ---------------------------------------------------------------------------
 # token_denylist: key format
 # ---------------------------------------------------------------------------
@@ -274,3 +283,51 @@ class TestDecodeTokenAsyncRevocation:
 
         assert result is not None
         assert result["sub"] == "eve"
+
+
+# ---------------------------------------------------------------------------
+# token_denylist: bounded Redis access + negative cache (#11443)
+# ---------------------------------------------------------------------------
+
+
+class TestBoundedRedisAccess:
+    @pytest.mark.asyncio
+    async def test_hanging_client_acquisition_is_cut_by_deadline(self):
+        """A hanging get_redis_client (retry-under-lock) must not hang auth:
+        the deadline cuts it and the check fails open (#11443)."""
+        import asyncio as _asyncio
+
+        async def _hang(*a, **kw):
+            await _asyncio.sleep(30)
+
+        with patch.object(_dl_mod, "_REDIS_DEADLINE_SECONDS", 0.05), patch.object(
+            _dl_mod, "get_redis_client", new=_hang
+        ):
+            loop = _asyncio.get_event_loop()
+            start = loop.time()
+            result = await is_jti_revoked("jti-hang")
+            elapsed = loop.time() - start
+
+        assert result is False
+        assert elapsed < 1.0, f"deadline did not bound the call ({elapsed:.2f}s)"
+
+    @pytest.mark.asyncio
+    async def test_failure_arms_negative_cache_skipping_redis(self):
+        """After a failure, subsequent checks skip Redis entirely for the
+        fail-open window instead of re-paying the deadline (#11443)."""
+        get_client = AsyncMock(return_value=None)
+        with patch.object(_dl_mod, "get_redis_client", get_client):
+            assert await is_jti_revoked("jti-a") is False  # arms the window
+            assert await is_jti_revoked("jti-b") is False  # short-circuits
+
+        get_client.assert_called_once()  # second call never touched Redis
+
+    @pytest.mark.asyncio
+    async def test_success_clears_negative_cache(self):
+        """A successful interaction clears the fail-open window."""
+        redis_mock = _make_redis_mock(exists_return=1)
+        get_client = AsyncMock(return_value=redis_mock)
+        _dl_mod._unavailable_until = 0.0
+        with patch.object(_dl_mod, "get_redis_client", get_client):
+            assert await is_jti_revoked("jti-ok") is True
+        assert _dl_mod._unavailable_until == 0.0
