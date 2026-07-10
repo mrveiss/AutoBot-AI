@@ -159,7 +159,9 @@ async def reconcile_stale_component_sync_jobs() -> Tuple[int, List[Tuple[str, st
     from services.database import db_service
 
     async with db_service.session() as db:
-        result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.status.in_(["running", "queued"])))
+        result = await db.execute(
+            select(ComponentSyncJobModel).where(ComponentSyncJobModel.status.in_(["running", "queued"]))
+        )
         stale_jobs = result.scalars().all()
         count = len(stale_jobs)
 
@@ -1849,6 +1851,7 @@ def _prune_old_snapshots(snap_base: Path, component: str, max_keep: int) -> None
             logger.info("snapshot prune: removed %s", old)
         except OSError as exc:
             logger.warning("snapshot prune: failed to remove %s: %s", old, exc)
+
 
 async def _snapshot_component(component: str) -> Optional[str]:
     """Rsync the deployed dir to a timestamped backup before mutation (#11404).

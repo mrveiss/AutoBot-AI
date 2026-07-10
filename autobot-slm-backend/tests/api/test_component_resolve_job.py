@@ -411,10 +411,13 @@ def test_restart_pending_arms_only_for_self_killing_components() -> None:
 
     code_sync_mod._restart_pending = False
     try:
-        with patch.dict(
-            code_sync_mod._COMPONENT_SERVICES,
-            {"autobot-backend": ["autobot-backend"], "autobot_shared": ["autobot-celery"]},
-        ), patch.object(code_sync_mod.asyncio, "create_subprocess_exec", _fake_exec):
+        with (
+            patch.dict(
+                code_sync_mod._COMPONENT_SERVICES,
+                {"autobot-backend": ["autobot-backend"], "autobot_shared": ["autobot-celery"]},
+            ),
+            patch.object(code_sync_mod.asyncio, "create_subprocess_exec", _fake_exec),
+        ):
             _run(code_sync_mod._restart_component_services("autobot-backend", []))
             _run(code_sync_mod._restart_component_services("autobot_shared", []))
     finally:
