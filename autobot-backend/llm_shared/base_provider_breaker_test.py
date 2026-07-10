@@ -16,10 +16,22 @@ import re
 from pathlib import Path
 from typing import AsyncIterator, List
 
+import pytest
+
+from circuit_breaker import get_circuit_breaker_manager
 from constants import CircuitBreakerDefaults
 
 from .base_provider import BaseProvider
 from .models import LLMRequest, LLMResponse
+
+
+@pytest.fixture(autouse=True)
+def _clean_test_breakers():
+    """Drop cbtest-* breakers from the process-wide manager after each test."""
+    yield
+    manager = get_circuit_breaker_manager()
+    for name in [n for n in manager.circuit_breakers if n.startswith("cbtest-")]:
+        del manager.circuit_breakers[name]
 
 
 def _request() -> LLMRequest:
@@ -108,6 +120,29 @@ class TestGuardedCompletion:
 
         # threshold-1 failures, a success, then one failure — breaker never opened.
         assert provider.impl_calls == len(script)
+
+
+class TestChatCompletionPipeline:
+    """The breaker-open error response survives the full chat_completion stack
+    (rate limiter → backoff handler → guarded completion) without being
+    retried or misread as a rate limit."""
+
+    async def test_open_breaker_fails_fast_through_chat_completion(self):
+        threshold = CircuitBreakerDefaults.LLM_FAILURE_THRESHOLD
+        provider = _ScriptedProvider(
+            "cbtest-pipeline",
+            [_err("cbtest-pipeline")] * threshold + [_ok("cbtest-pipeline")],
+        )
+
+        for _ in range(threshold):
+            response = await provider.chat_completion(_request())
+            assert response.error == "connection refused"
+
+        blocked = await provider.chat_completion(_request())
+        assert "circuit breaker open" in blocked.error
+        assert provider.impl_calls == threshold  # impl never reached while open
+        stats = provider.get_stats()
+        assert stats["error_rate"] <= 1.0
 
 
 class TestNoMethodLevelBreaker:

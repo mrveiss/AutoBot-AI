@@ -18,7 +18,12 @@ from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
-from circuit_breaker import CircuitBreakerConfig, CircuitBreakerOpenError, get_circuit_breaker_manager
+from circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitBreakerOpenError,
+    get_circuit_breaker_manager,
+)
 from constants import CircuitBreakerDefaults
 
 from .cross_worker_rate_limiter import get_llm_rate_limiter
@@ -28,6 +33,16 @@ from .provider_auth import ApiKeyAuth, ProviderAuthError, ProviderAuthStrategy
 from .rate_limit_backoff import extract_rate_limit_info, get_backoff_handler, raise_if_rate_limited
 
 logger = get_logger(__name__)
+
+# GH#11488: one breaker config for all provider completion breakers. ``timeout=None``
+# is deliberate — the breaker owns availability accounting only; latency budgets
+# belong to each provider/SDK (some use unbounded reads for long local generations,
+# and ``LLMRequest.timeout`` may legitimately exceed any fixed constant here).
+_LLM_BREAKER_CONFIG = CircuitBreakerConfig(
+    failure_threshold=CircuitBreakerDefaults.LLM_FAILURE_THRESHOLD,
+    recovery_timeout=CircuitBreakerDefaults.LLM_RECOVERY_TIMEOUT,
+    timeout=None,
+)
 
 
 class _CompletionErrorSignal(Exception):
@@ -137,22 +152,18 @@ class BaseProvider(ABC):
             # otherwise let the exception propagate to the registry for fallback.
             raise
 
-    def _completion_circuit_breaker(self):
+    def _completion_circuit_breaker(self) -> "CircuitBreaker":
         """Return this provider's completion circuit breaker (GH#11488).
 
         Name-keyed on ``{provider_name}_service`` so all instances of a
-        provider share one breaker. Config uses the SSOT LLM defaults.
+        provider share one breaker (config binds on first registration).
         """
-        breaker_config = CircuitBreakerConfig(
-            failure_threshold=CircuitBreakerDefaults.LLM_FAILURE_THRESHOLD,
-            recovery_timeout=CircuitBreakerDefaults.LLM_RECOVERY_TIMEOUT,
-            timeout=CircuitBreakerDefaults.LLM_TIMEOUT,
-        )
         name = f"{self.provider_name or 'default'}_service"
-        return get_circuit_breaker_manager().get_circuit_breaker(name, breaker_config)
+        return get_circuit_breaker_manager().get_circuit_breaker(name, _LLM_BREAKER_CONFIG)
 
     def _breaker_error_response(self, request: LLMRequest, error: str, start: float) -> LLMResponse:
         """Build the error LLMResponse for breaker-open / breaker-timeout outcomes."""
+        self._total_requests += 1  # blocked attempts still count as requests
         self._total_errors += 1
         return LLMResponse(
             content="",
@@ -168,8 +179,10 @@ class BaseProvider(ABC):
 
         Error responses count as breaker failures — except rate limits, which
         the backoff handler owns (GH#8502) and which prove the provider is up.
-        An open breaker fails fast with an error response so the registry can
-        fall back without paying per-request timeout latency.
+        An open breaker fails fast with an error response, sparing the caller
+        the provider's connect/latency cost while it is down. (The response
+        surfaces like any provider error; registry-level avoidance of
+        breaker-open providers is tracked separately.)
         """
         breaker = self._completion_circuit_breaker()
         start = time.monotonic()
