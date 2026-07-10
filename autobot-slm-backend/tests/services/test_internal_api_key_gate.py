@@ -18,7 +18,6 @@ assert their branch behaviour; keep them in lock-step with the source.
 from __future__ import annotations
 
 import importlib
-import os
 import secrets
 
 import pytest
