@@ -214,7 +214,6 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import { useKnowledgeStats } from '@/composables/knowledge/useKnowledgeStats'
@@ -234,8 +233,6 @@ import '@/styles/document-feed-wrapper.css'
 
 // Create scoped logger
 const logger = createLogger('KnowledgeHealthAnalytics')
-
-const { t } = useI18n()
 
 // TypeScript Interfaces
 interface VectorStats {
@@ -437,6 +434,8 @@ const refreshStats = async () => {
     }
   } catch (error) {
     logger.error('Failed to refresh stats:', error)
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    showErrorNotification(`Failed to load statistics: ${errorMsg}`)
   }
 }
 
