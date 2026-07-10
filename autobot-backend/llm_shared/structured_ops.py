@@ -137,12 +137,19 @@ def _schema_to_repr(schema: type[pydantic.BaseModel] | dict) -> str:
     return json.dumps(schema.model_json_schema(), ensure_ascii=False)
 
 
-async def _call_llm(prompt: str, llm_type: LLMType) -> str:
-    """Call the shared LLM service and return the raw content string."""
-    from services.llm_service import get_llm_service
+async def _call_llm(prompt: str, llm_type: LLMType, llm_service: Any = None) -> str:
+    """Call the LLM and return the raw content string.
 
-    svc = get_llm_service()
-    response = await svc.chat(
+    *llm_service* lets callers inject their own configured interface (any
+    object with the ``LLMService.chat`` signature) so per-agent SSOT
+    provider/endpoint/model routing is preserved; defaults to the shared
+    service singleton.
+    """
+    if llm_service is None:
+        from services.llm_service import get_llm_service
+
+        llm_service = get_llm_service()
+    response = await llm_service.chat(
         messages=[{"role": "user", "content": prompt}],
         llm_type=llm_type,
         structured_output=True,
@@ -157,6 +164,7 @@ async def _extract_single(
     schema: type[pydantic.BaseModel] | dict,
     llm_type: LLMType,
     max_retries: int,
+    llm_service: Any = None,
 ) -> pydantic.BaseModel | dict:
     """Run the extraction + validation loop for a single text block.
 
@@ -179,7 +187,7 @@ async def _extract_single(
                 last_error,
             )
 
-        raw = await _call_llm(prompt, llm_type)
+        raw = await _call_llm(prompt, llm_type, llm_service)
 
         # --- Parse ---
         try:
@@ -260,6 +268,7 @@ async def extract(
     llm_type: LLMType = LLMType.EXTRACTION,
     max_retries: int = EXTRACT_MAX_RETRIES,
     chunking: str = "auto",
+    llm_service: Any = None,
 ) -> Union[pydantic.BaseModel, dict]:
     """Extract structured data from *text* conforming to *schema*.
 
@@ -274,6 +283,9 @@ async def extract(
         chunking:    ``"auto"`` (default): chunk text when it exceeds
                      ``EXTRACT_CHUNK_THRESHOLD_CHARS`` chars.
                      ``"never"``: always treat the full text as one block.
+        llm_service: Optional pre-configured LLM interface (``LLMService.chat``
+                     signature).  Callers with per-agent SSOT routing must pass
+                     their own interface; defaults to the shared singleton.
 
     Returns:
         A ``pydantic.BaseModel`` instance when *schema* is a model class, or
@@ -290,7 +302,7 @@ async def extract(
     should_chunk = chunking == "auto" and len(text) > EXTRACT_CHUNK_THRESHOLD_CHARS
 
     if not should_chunk:
-        return await _extract_single(text, schema, llm_type, max_retries)
+        return await _extract_single(text, schema, llm_type, max_retries, llm_service)
 
     # --- Chunked path ---
     logger.info(
@@ -310,21 +322,25 @@ async def extract(
         chunk_texts = [text]
 
     if len(chunk_texts) <= 1:
-        return await _extract_single(text, schema, llm_type, max_retries)
+        return await _extract_single(text, schema, llm_type, max_retries, llm_service)
 
     logger.info("structured_ops.extract: processing %d chunks", len(chunk_texts))
     results: list[Any] = []
     for i, chunk_text in enumerate(chunk_texts, 1):
         logger.debug("structured_ops.extract: chunk %d/%d", i, len(chunk_texts))
-        chunk_result = await _extract_single(chunk_text, schema, llm_type, max_retries)
+        chunk_result = await _extract_single(chunk_text, schema, llm_type, max_retries, llm_service)
         results.append(chunk_result)
 
     # Merge all chunk results into a single output.
     merged = _merge_results(results)
 
     # If caller passed a Pydantic model, re-validate the merged dict.
-    if not isinstance(schema, dict):
-        return _validate_pydantic(merged, schema)
-
-    _validate_json_schema(merged, schema)
+    # Wrapped so the public ExtractionError-only contract holds even when the
+    # merged result fails validation (#11520 review B1).
+    try:
+        if not isinstance(schema, dict):
+            return _validate_pydantic(merged, schema)
+        _validate_json_schema(merged, schema)
+    except Exception as exc:
+        raise ExtractionError(f"Merged chunk result failed schema validation: {exc}") from exc
     return merged

@@ -158,6 +158,11 @@ async def extract_url(
     Delegates the LLM call, JSON parsing, retry logic, and schema validation to
     ``llm_shared.structured_ops.extract`` (Issue #11520).
 
+    Deliberate behavior change vs the pre-#11520 implementation: LLM output
+    wrapped in markdown code fences is now tolerated (previously a hard parse
+    failure), and invalid JSON triggers up to ``EXTRACT_MAX_RETRIES`` retries
+    with the error fed back to the model.
+
     Args:
         url:    Absolute URL to fetch.
         schema: JSON Schema (draft 2020-12) dict describing the desired output.

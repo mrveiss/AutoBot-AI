@@ -29,7 +29,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import BaseModel
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -86,14 +85,14 @@ def test_extract_json_plain() -> None:
 def test_extract_json_fence() -> None:
     from .json_utils import extract_json_object
 
-    raw = "```json\n{\"b\": 2}\n```"
+    raw = '```json\n{"b": 2}\n```'
     assert extract_json_object(raw) == {"b": 2}
 
 
 def test_extract_json_unnamed_fence() -> None:
     from .json_utils import extract_json_object
 
-    raw = "```\n{\"c\": 3}\n```"
+    raw = '```\n{"c": 3}\n```'
     assert extract_json_object(raw) == {"c": 3}
 
 
@@ -201,6 +200,10 @@ async def test_retry_on_bad_json_then_succeeds() -> None:
 
     assert result["k"] == "ok"  # type: ignore[index]
     assert svc.chat.call_count == 2
+    # The retry prompt must feed the parse error back to the model (M2).
+    second_prompt = svc.chat.call_args_list[1].kwargs["messages"][0]["content"]
+    assert "JSONDecodeError" in second_prompt
+    assert "previous response was invalid" in second_prompt
 
 
 @pytest.mark.asyncio
@@ -235,6 +238,10 @@ async def test_validation_error_triggers_retry() -> None:
 
     assert result["score"] == 0.9  # type: ignore[index]
     assert svc.chat.call_count == 2
+    # The retry prompt must feed the validation error back to the model (M2).
+    second_prompt = svc.chat.call_args_list[1].kwargs["messages"][0]["content"]
+    assert "not-a-number" in second_prompt
+    assert "previous response was invalid" in second_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -270,6 +277,7 @@ async def test_chunk_merge_combines_fields() -> None:
     # get_semantic_chunker is a local import inside extract(); ensure the stub
     # module exists in sys.modules then set the attribute before extract() runs.
     import types as _types
+
     if "utils" not in sys.modules:
         sys.modules["utils"] = _types.ModuleType("utils")
     if "utils.semantic_chunker" not in sys.modules:
@@ -282,6 +290,9 @@ async def test_chunk_merge_combines_fields() -> None:
             _patch_llm_service(svc),
             patch.object(ops_mod, "EXTRACT_CHUNK_THRESHOLD_CHARS", 5),
         ):
+            # The chunker is fully mocked, so the input content is irrelevant —
+            # only its length matters (> patched threshold of 5) to trigger the
+            # chunked code path.
             result = await extract("a" * 10, schema, chunking="auto")
     finally:
         if original_gsc is None:
@@ -341,3 +352,24 @@ def test_merge_dicts_list_concatenation_dedup() -> None:
     merged = _merge_dicts({"tags": ["a", "b"]}, {"tags": ["b", "c"]})
     assert set(merged["tags"]) == {"a", "b", "c"}
     assert merged["tags"].count("b") == 1
+
+
+@pytest.mark.asyncio
+async def test_injected_llm_service_is_used_not_singleton() -> None:
+    """extract(llm_service=...) must call the injected interface (#11520 M1).
+
+    Guards per-agent SSOT provider/endpoint/model routing: callers with their
+    own configured interface (e.g. KnowledgeExtractionAgent.llm_interface)
+    must not silently fall back to the global service singleton.
+    """
+    from .structured_ops import extract
+
+    schema = {"type": "object", "properties": {"k": {"type": "string"}}}
+    injected = _mock_llm_service(['{"k": "from-injected"}'])
+
+    # No _patch_llm_service here: if extract() ignored the injected service it
+    # would import the real singleton and fail loudly in the stub test env.
+    result = await extract("text", schema, llm_service=injected)
+
+    assert result["k"] == "from-injected"  # type: ignore[index]
+    assert injected.chat.call_count == 1

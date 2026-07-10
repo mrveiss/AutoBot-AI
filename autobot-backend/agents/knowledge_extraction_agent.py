@@ -486,7 +486,11 @@ Return the results as a JSON array of facts. Example format:
         prompt = self._build_extraction_prompt(content, context)
         try:
             result: Dict[str, Any] = await extract(  # type: ignore[assignment]
-                prompt, facts_envelope_schema, llm_type=LLMType.EXTRACTION, chunking="never"
+                prompt,
+                facts_envelope_schema,
+                llm_type=LLMType.EXTRACTION,
+                chunking="never",
+                llm_service=self.llm_interface,
             )
             return result.get("facts")
         except ExtractionError as exc:
