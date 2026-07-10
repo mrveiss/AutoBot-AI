@@ -21,6 +21,7 @@ from llc import agent_tools
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 
 _COMPANY = str(uuid.uuid4())
+_USER = str(uuid.uuid4())
 
 
 def _patch_session():
@@ -87,16 +88,20 @@ async def test_unknown_tool_raises():
 
 
 @pytest.mark.asyncio
-async def test_create_task_calls_work_item_service():
+async def test_create_task_calls_work_item_service_with_authed_actor():
     p, session = _patch_session()
     item = MagicMock(id=uuid.uuid4())
     svc = MagicMock()
     svc.create = AsyncMock(return_value=item)
     with p, patch("llc.services.work_item_service.WorkItemService", return_value=svc):
-        out = await dispatch_llc_tool("create_task", {"title": "Write Q3 report", "priority": "high"}, _COMPANY)
+        out = await dispatch_llc_tool(
+            "create_task", {"title": "Write Q3 report", "priority": "high"}, _COMPANY, _USER
+        )
     assert out["status"] == "success" and out["entity_type"] == "work_item"
     assert svc.create.await_args.kwargs["company_id"] == _COMPANY
     assert svc.create.await_args.kwargs["title"] == "Write Q3 report"
+    # #11501 review: audit actor = authenticated user, not LLM params.
+    assert svc.create.await_args.kwargs["created_by_user_id"] == _USER
 
 
 @pytest.mark.asyncio
@@ -104,25 +109,79 @@ async def test_create_task_blank_title_is_tool_error():
     p, _ = _patch_session()
     with p:
         with pytest.raises(LLCToolError):
-            await dispatch_llc_tool("create_task", {"title": "   "}, _COMPANY)
+            await dispatch_llc_tool("create_task", {"title": "   "}, _COMPANY, _USER)
 
 
 @pytest.mark.asyncio
-async def test_request_approval_calls_service():
+async def test_request_approval_uses_authed_user_not_params():
     p, _ = _patch_session()
     appr = MagicMock(id=uuid.uuid4())
     svc = MagicMock()
     svc.request_approval = AsyncMock(return_value=appr)
+    forged = str(uuid.uuid4())
     with p, patch("llc.services.approval.ApprovalService", return_value=svc):
-        out = await dispatch_llc_tool("request_approval", {"summary": "Approve the new hire"}, _COMPANY)
+        out = await dispatch_llc_tool(
+            # LLM tries to forge requested_by — must be IGNORED (#11501 review).
+            "request_approval",
+            {"summary": "Approve the new hire", "requested_by": forged},
+            _COMPANY,
+            _USER,
+        )
     assert out["status"] == "success" and out["entity_type"] == "approval"
     assert svc.request_approval.await_args.kwargs["company_id"] == uuid.UUID(_COMPANY)
+    assert svc.request_approval.await_args.kwargs["requested_by"] == uuid.UUID(_USER)
+
+
+@pytest.mark.asyncio
+async def test_request_approval_without_authed_user_is_error():
+    p, _ = _patch_session()
+    with p:
+        with pytest.raises(LLCToolError):
+            await dispatch_llc_tool("request_approval", {"summary": "x"}, _COMPANY, None)
+
+
+@pytest.mark.asyncio
+async def test_update_goal_rejects_cross_tenant():
+    """#11501 review (IDOR): a goal owned by another company must not be updated."""
+    p, _ = _patch_session()
+    other_company_goal = MagicMock(company_id=str(uuid.uuid4()))
+    svc = MagicMock()
+    svc.get = AsyncMock(return_value=other_company_goal)
+    svc.update = AsyncMock()
+    with p, patch("llc.services.goal.GoalService", return_value=svc):
+        with pytest.raises(LLCToolError):
+            await dispatch_llc_tool("update_goal", {"goal_id": str(uuid.uuid4()), "status": "done"}, _COMPANY, _USER)
+    svc.update.assert_not_awaited()  # never mutated the foreign goal
+
+
+@pytest.mark.asyncio
+async def test_update_goal_same_tenant_updates():
+    p, _ = _patch_session()
+    gid = uuid.uuid4()
+    goal = MagicMock(company_id=_COMPANY)
+    svc = MagicMock()
+    svc.get = AsyncMock(return_value=goal)
+    svc.update = AsyncMock(return_value=goal)
+    with p, patch("llc.services.goal.GoalService", return_value=svc):
+        out = await dispatch_llc_tool("update_goal", {"goal_id": str(gid), "status": "done"}, _COMPANY, _USER)
+    assert out["status"] == "success" and out["entity_type"] == "goal"
+    assert svc.update.await_args.kwargs["goal_id"] == gid
+
+
+@pytest.mark.asyncio
+async def test_update_goal_not_found_is_error():
+    p, _ = _patch_session()
+    svc = MagicMock()
+    svc.get = AsyncMock(return_value=None)
+    with p, patch("llc.services.goal.GoalService", return_value=svc):
+        with pytest.raises(LLCToolError):
+            await dispatch_llc_tool("update_goal", {"goal_id": str(uuid.uuid4())}, _COMPANY, _USER)
 
 
 @pytest.mark.asyncio
 async def test_record_decision_needs_no_service():
     p, _ = _patch_session()
     with p:
-        out = await dispatch_llc_tool("record_decision", {"decision": "Ship v2 on Friday"}, _COMPANY)
+        out = await dispatch_llc_tool("record_decision", {"decision": "Ship v2 on Friday"}, _COMPANY, _USER)
     assert out["status"] == "success" and out["entity_type"] == "decision"
     assert out["decision"] == "Ship v2 on Friday"

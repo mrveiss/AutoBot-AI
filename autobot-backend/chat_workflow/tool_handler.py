@@ -2227,13 +2227,17 @@ class ToolHandlerMixin:
         LLM can react to, rather than a crash.
         """
         params = tool_call.get("params", {}) or {}
-        company_id = (ctx.context.get("company_id") if ctx is not None and ctx.context else None)
+        _cctx = ctx.context if ctx is not None and ctx.context else {}
+        company_id = _cctx.get("company_id")
+        # #11501 review: actor for audit/authz comes from the authenticated chat
+        # context, never from LLM-supplied params.
+        user_id = _cctx.get("user_id")
         try:
-            result = await dispatch_llc_tool(tool_name, params, company_id)
+            result = await dispatch_llc_tool(tool_name, params, company_id, user_id)
             execution_results.append({"tool": tool_name, "status": "success", "output": result})
             entity = result.get("entity_type", "item")
             entity_id = result.get("entity_id")
-            summary = f"Created {entity}" + (f" [{entity_id}]" if entity_id else "")
+            summary = f"Done ({entity})" + (f" [{entity_id}]" if entity_id else "")
             yield WorkflowMessage(
                 type="command_output",
                 content=summary,
