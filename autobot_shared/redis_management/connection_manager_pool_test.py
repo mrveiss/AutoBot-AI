@@ -131,7 +131,6 @@ class TestEnsureAsyncPoolLockScope:
         assert m._async_pools["main"] is pool
         assert attempts["n"] == 2
 
-
     @pytest.mark.asyncio
     async def test_completed_task_is_harvested_not_respawned(self):
         """A done-successful task whose waiter hasn't written the registry yet
