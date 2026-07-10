@@ -111,6 +111,15 @@ def _get_metrics_manager():
 logger = logging.getLogger(__name__)
 
 
+class RedisConfigurationError(ValueError):
+    """Invalid Redis configuration (e.g. empty host).
+
+    Deliberately NOT a ConnectionError: the retry mechanism must treat it as
+    non-retryable so a misconfiguration fails fast instead of burning the full
+    exponential-backoff budget against a host that can never exist (#11449).
+    """
+
+
 class RedisConnectionManager:
     """
     Centralized Redis connection manager with circuit breaker and health monitoring.
@@ -189,6 +198,10 @@ class RedisConnectionManager:
         self._states: Dict[str, ConnectionState] = {}
         self._init_lock = Lock()
         self._async_lock = asyncio.Lock()
+        # #11449: in-flight async pool creations. The lock only guards these
+        # dicts; the (slow, retrying) creation itself runs OUTSIDE the lock so
+        # one bad database/config cannot serialize every other caller.
+        self._async_pool_tasks: Dict[str, "asyncio.Task[async_redis.ConnectionPool]"] = {}
 
     def _init_circuit_breaker_state(self) -> None:
         """
@@ -698,7 +711,24 @@ class RedisConnectionManager:
                 max_retries=self._pool_config.max_retries,
             )
 
+        self._validate_config_host(database_name, config)
         return self._create_sync_pool_with_keepalive(database_name, config)
+
+    @staticmethod
+    def _validate_config_host(database_name: str, config: "RedisConfig") -> None:
+        """Reject blank Redis hosts before any connect attempt (#11449).
+
+        An empty host (e.g. unresolvable ``vm.redis`` in a process that cannot
+        import the backend ConfigRegistry) is a configuration error, not a
+        transient outage — retrying it burned ~60 s of exponential backoff per
+        caller during the 2026-07-10 SLM auth incident.
+        """
+        host = (config.host or "").strip()
+        if not host:
+            raise RedisConfigurationError(
+                f"Redis host for database '{database_name}' is empty — configuration "
+                "error (set REDIS_HOST / vm.redis); refusing to retry"
+            )
 
     async def _create_async_pool(self, database_name: str) -> async_redis.ConnectionPool:
         """
@@ -732,6 +762,7 @@ class RedisConnectionManager:
                 health_check_interval=int(self._pool_config.health_check_interval),
             )
 
+        self._validate_config_host(database_name, config)
         return await self._create_async_pool_with_retry(database_name, config)
 
     def _check_sync_client_preconditions(self, database_name: str) -> bool | None:
@@ -817,17 +848,61 @@ class RedisConnectionManager:
             self._handle_sync_client_failure(database_name, e)
             return None
 
+    @staticmethod
+    def _log_pool_task_failure(database_name: str, task: "asyncio.Task") -> None:
+        """Done-callback: retrieve (and log) a failed pool-creation's exception
+        so asyncio never reports it as unretrieved, even when every waiter was
+        cancelled by its own deadline (#11451)."""
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.warning("Async pool creation for '%s' failed: %s", database_name, exc)
+
     async def _ensure_async_pool_exists(self, database_name: str) -> None:
         """
         Ensure async connection pool exists for database, creating if needed.
 
-        Uses double-checked locking pattern for thread safety.
-        Issue #620.
+        Issue #620 (double-checked locking) + #11449: the lock now guards only
+        the pool/task registries — the creation itself (which may retry with
+        exponential backoff for tens of seconds) runs OUTSIDE the lock as a
+        shared task. Concurrent callers await the same in-flight creation, and
+        a caller cancelled by its own deadline (``asyncio.wait_for``) does not
+        cancel the creation for everyone else (``asyncio.shield``).
         """
-        if database_name not in self._async_pools:
+        if database_name in self._async_pools:
+            return
+        async with self._async_lock:
+            if database_name in self._async_pools:
+                return
+            task = self._async_pool_tasks.get(database_name)
+            if task is not None and task.done() and not task.cancelled() and task.exception() is None:
+                # A completed creation whose waiter hasn't written the registry
+                # yet — harvest its pool instead of spawning a duplicate that
+                # would lose the setdefault and leak its connection (#11451).
+                self._async_pools.setdefault(database_name, task.result())
+                self._async_pool_tasks.pop(database_name, None)
+                return
+            if task is None or task.done():
+                task = asyncio.ensure_future(self._create_async_pool(database_name))
+                # Always retrieve the exception even if every waiter was
+                # cancelled — avoids "Task exception was never retrieved" and
+                # preserves the failure reason in the logs (#11451).
+                task.add_done_callback(
+                    lambda t, _db=database_name: self._log_pool_task_failure(_db, t)
+                )
+                self._async_pool_tasks[database_name] = task
+        try:
+            pool = await asyncio.shield(task)
+        except BaseException:
             async with self._async_lock:
-                if database_name not in self._async_pools:
-                    self._async_pools[database_name] = await self._create_async_pool(database_name)
+                if self._async_pool_tasks.get(database_name) is task and task.done():
+                    self._async_pool_tasks.pop(database_name, None)
+            raise
+        async with self._async_lock:
+            self._async_pools.setdefault(database_name, pool)
+            if self._async_pool_tasks.get(database_name) is task:
+                self._async_pool_tasks.pop(database_name, None)
 
     async def _create_and_verify_async_client(self, database_name: str) -> async_redis.Redis:
         """
