@@ -370,6 +370,14 @@
     - name: "[PLAY 1] SLM Agent | Redeploy agent (code + secrets + restart) (#11480)"
       tags: [slm, slm-agent]
       block:
+        # #11480: the slm_agent role's version.json/service/config templates use
+        # ansible_facts['date_time'], but this play runs gather_facts:false — so
+        # the role failed at "Deploy version.json" (AnsibleUndefinedVariable:
+        # date_time) and the agent never redeployed. Gather the minimal fact set
+        # (includes date_time) just before the import.
+        - name: "[PLAY 1] SLM Agent | Gather minimal facts for role templates (#11480)"
+          ansible.builtin.setup:
+            gather_subset: ["min"]
         - name: "[PLAY 1] SLM Agent | Import slm_agent role"
           ansible.builtin.import_role:
             name: slm_agent
@@ -1103,6 +1111,9 @@
       when: slm_node_id is defined
       tags: [slm-agent]
       block:
+        - name: "[PLAY 2] SLM Agent | Gather minimal facts for role templates (#11480)"
+          ansible.builtin.setup:
+            gather_subset: ["min"]
         - name: "[PLAY 2] SLM Agent | Import slm_agent role"
           ansible.builtin.import_role:
             name: slm_agent
