@@ -42,9 +42,45 @@ parameterization:
   placing fixtures in `conftest.py` unless they require non-trivial setup)
 - Production code disguised as a test utility (never)
 
+## LLM-judge quality assertions (#11521)
+
+`llm_judge_fixture.py` exposes the `llm_judge` pytest fixture, which wraps the
+existing `judges/` framework to let tests assert LLM output quality.
+
+### Quickstart
+
+```python
+@pytest.mark.llm_judge
+async def test_answer_quality(llm_judge) -> None:
+    await llm_judge.assert_llm(
+        output="Paris is the capital of France.",
+        criteria="The answer must be factually correct and relevant.",
+        min_score=0.8,
+        context="What is the capital of France?",
+    )
+```
+
+### Opt-in gate
+
+These tests **skip by default** and are never a CI dependency.  To run them
+locally against a configured Ollama or cloud provider:
+
+```bash
+AUTOBOT_LLM_JUDGE_TESTS=1 python -m pytest autobot-backend/tests/test_llm_judge_example.py -v
+```
+
+The fixture also skips when no provider environment variable is set
+(`AUTOBOT_OLLAMA_ENDPOINT`, `AUTOBOT_OPENAI_API_KEY`, etc.).
+
+### Minimum score threshold
+
+Override the default 0.7 threshold per call with `min_score=<float>`, or
+globally via the `AUTOBOT_LLM_JUDGE_MIN_SCORE` environment variable.
+
 ## See also
 
 - Root `autobot-backend/conftest.py` — shared pytest fixtures (auto-discoverable)
 - `docs/developer/PRIMITIVES.md` — repo-wide extraction rules
 - Issue #5437 — this directory's creation rationale
 - Issues #5431, #5432 — first consumers of this directory
+- Issue #11521 — llm_judge fixture origin
