@@ -3783,11 +3783,12 @@ class UpdateAllJob(BaseModel):
     """Full orchestration job state for update-all."""
 
     job_id: str
-    status: str = "pending"  # pending | running | completed | failed | already_current
+    status: str = "pending"  # pending | running | completed | failed | already_current | partial
     stages: List[UpdateAllStage] = []
     total_fleet_nodes: int = 0
     completed_fleet_nodes: int = 0
     failed_fleet_nodes: int = 0
+    skipped_fleet_nodes: int = 0  # non-operational nodes skipped (#11511)
     created_at: str = ""
     completed_at: Optional[str] = None
     failure_reason: Optional[str] = None
@@ -4118,6 +4119,41 @@ def _fail_fleet_stage(
     job.completed_at = _now_iso()
 
 
+_NON_OPERATIONAL_STATUSES = frozenset({"degraded", "offline", "error", "pending", "enrolling", "decommissioned"})
+
+
+def _is_node_operational(node: Node) -> bool:
+    """Return True only when a node is in a state where a deploy is safe (#11511).
+
+    Nodes that are degraded, have never sent a heartbeat, or whose status is
+    anything other than online/maintenance are not targeted — attempting an
+    Ansible deploy against them will always fail and should not affect the
+    overall job result.
+    """
+    if node.last_heartbeat is None:
+        return False
+    return node.status not in _NON_OPERATIONAL_STATUSES
+
+
+def _extract_ansible_fatal(output: str) -> str:
+    """Return the first meaningful ansible error line from playbook output (#11511).
+
+    Filters out [DEPRECATION WARNING] / [WARNING] noise so the reported
+    failure message reflects the real fatal: / FAILED! / msg: line rather
+    than an unrelated deprecation notice.  Falls back to the tail of the
+    output when no fatal line is found.
+    """
+    fatal_keywords = ("fatal:", "FAILED!", "msg:", "ERROR!")
+    skip_prefixes = ("[DEPRECATION WARNING]", "[WARNING]", "DEPRECATION WARNING")
+    for line in output.splitlines():
+        stripped = line.strip()
+        if any(stripped.startswith(pfx) for pfx in skip_prefixes):
+            continue
+        if any(kw in stripped for kw in fatal_keywords):
+            return stripped[:300]
+    return output.strip()[-300:] if output.strip() else "playbook failed (no output)"
+
+
 async def _sync_fleet_node(
     executor,
     node_id: str,
@@ -4128,6 +4164,8 @@ async def _sync_fleet_node(
     """Sync one fleet node. Returns True to continue loop, False to halt.
 
     M1: node-not-found halts (returns False, caller clears plan).
+    Non-operational nodes (degraded/no-heartbeat) are skipped without
+    failing the job (#11511).
     """
     from services.database import db_service
 
@@ -4147,6 +4185,15 @@ async def _sync_fleet_node(
         job.completed_fleet_nodes += 1
         return True
 
+    # Skip non-operational nodes rather than attempting a deploy that will fail (#11511).
+    if not _is_node_operational(node):
+        reason = (
+            f"status={node.status}, last_heartbeat={'none' if node.last_heartbeat is None else node.last_heartbeat}"
+        )
+        _stage_log(stage, f"Node {node_id} ({node.hostname}) skipped — not operational ({reason})")
+        job.skipped_fleet_nodes += 1
+        return True
+
     playbook_result = await executor.execute_playbook(
         playbook_name="update-all-nodes.yml",
         limit=["localhost", node_id],
@@ -4157,9 +4204,10 @@ async def _sync_fleet_node(
         _stage_log(stage, f"Node {node_id} updated successfully")
         return True
 
+    error_msg = _extract_ansible_fatal(playbook_result["output"])
     job.failed_fleet_nodes += 1
-    _stage_log(stage, f"Node {node_id} FAILED: {playbook_result['output'][:300]}")
-    _fail_fleet_stage(job, stage, f"Fleet node {node_id} playbook failed")
+    _stage_log(stage, f"Node {node_id} FAILED: {error_msg}")
+    _fail_fleet_stage(job, stage, f"Fleet node {node_id} playbook failed: {error_msg}")
     return False
 
 
@@ -4167,8 +4215,10 @@ async def _run_fleet_stage(job: UpdateAllJob, node_ids: List[str]) -> None:
     """Execute stage 4: sequential full update of each outdated fleet node.
 
     Runs nodes SEQUENTIALLY (playbook executor is a singleton resource).
-    Marks job completed/failed when done. Clears the resume plan.
+    Marks job completed/failed/partial when done. Clears the resume plan.
     M1: node-not-found is treated as stage failure (halts pipeline).
+    Non-operational nodes are skipped and counted in skipped_fleet_nodes
+    without failing the job (#11511).
     """
     stage = _get_stage(job, "fleet_nodes")
     stage.status = _StageStatus.RUNNING
@@ -4176,6 +4226,7 @@ async def _run_fleet_stage(job: UpdateAllJob, node_ids: List[str]) -> None:
     job.total_fleet_nodes = len(node_ids)
     job.completed_fleet_nodes = 0
     job.failed_fleet_nodes = 0
+    job.skipped_fleet_nodes = 0
 
     executor = get_playbook_executor()
     slm_own_ip = urlparse(settings.external_url).hostname or ""
@@ -4193,12 +4244,17 @@ async def _run_fleet_stage(job: UpdateAllJob, node_ids: List[str]) -> None:
             await _clear_resume_plan()
             return
 
+    skipped = job.skipped_fleet_nodes
+    summary = f"Updated {job.completed_fleet_nodes}/{job.total_fleet_nodes} nodes"
+    if skipped:
+        summary += f" ({skipped} skipped — not operational)"
+
     stage.status = _StageStatus.SUCCESS
-    stage.message = f"Updated {job.completed_fleet_nodes}/{job.total_fleet_nodes} nodes"
+    stage.message = summary
     stage.completed_at = _now_iso()
-    job.status = "completed"
+    job.status = "partial" if skipped else "completed"
     job.completed_at = _now_iso()
-    _stage_log(stage, f"Fleet stage complete: {job.completed_fleet_nodes}/{job.total_fleet_nodes}")
+    _stage_log(stage, f"Fleet stage complete: {summary}")
     await _clear_resume_plan()
 
 
