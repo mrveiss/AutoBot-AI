@@ -184,32 +184,19 @@ class Orchestrator(_DeprecatedRequestMixin):
 
     def _init_strategy_components(self) -> None:
         """Initialize multi-agent strategy components. Renamed from _init_multi_agent_state (#5058)."""
-        # Agent capabilities registry (task-routing layer distinct from agent_registry)
+        # #11251 Part 1: the routing capability map is now a PURE PROJECTION of the
+        # canonical AgentProfile registry (routing ids win) — no parallel hardcoded
+        # dict to drift against. Every routing id (ROUTING_AGENT_IDS) has a
+        # first-class profile in get_default_agents(); we project their capabilities
+        # and drop non-routing profiles. A test asserts this equals the previous
+        # literal so the routing candidate set is unchanged.
+        from orchestration.agent_registry import ROUTING_AGENT_IDS
+
         self.agent_capabilities: Dict[str, Set] = {
-            "research_agent": {AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
-            "classification_agent": {
-                AgentCapability.ANALYSIS,
-                AgentCapability.VALIDATION,
-            },
-            "kb_librarian": {AgentCapability.RESEARCH, AgentCapability.SYNTHESIS},
-            "system_commands": {AgentCapability.EXECUTION, AgentCapability.MONITORING},
-            "security_scanner": {AgentCapability.SECURITY, AgentCapability.VALIDATION},
-            "npu_code_search": {AgentCapability.ANALYSIS, AgentCapability.OPTIMIZATION},
-            "development_speedup": {
-                AgentCapability.ANALYSIS,
-                AgentCapability.OPTIMIZATION,
-            },
-            "json_formatter": {AgentCapability.VALIDATION, AgentCapability.SYNTHESIS},
-            "llm_failsafe": {AgentCapability.SYNTHESIS},
+            profile.agent_id: set(profile.capabilities)
+            for profile in get_default_agents()
+            if profile.agent_id in ROUTING_AGENT_IDS
         }
-        # GH#11139: the registered agent profiles are the capability manifest SSOT.
-        # Overlay their capabilities onto the routing map so any agent that also has
-        # a profile has ONE source of truth for its capabilities (no drift between
-        # this literal and the profile registry). Only overlays existing keys, so
-        # the routing candidate set is unchanged.
-        for agent_id, profile in self._profile_registry.get_all().items():
-            if agent_id in self.agent_capabilities:
-                self.agent_capabilities[agent_id] = set(profile.capabilities)
 
         # Workflow tracking
         self.active_workflows: Dict[str, WorkflowPlan] = {}
