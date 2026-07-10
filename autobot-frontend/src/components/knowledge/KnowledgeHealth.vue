@@ -201,12 +201,13 @@
     </div>
 
     <!-- Tab Bar -->
-    <div class="health-tabs" role="tablist" :aria-label="$t('knowledge.views.healthAriaLabel')">
+    <div ref="tablistRef" class="health-tabs" role="tablist" :aria-label="$t('knowledge.views.healthAriaLabel')">
       <button
         v-for="tab in tabs"
         :key="tab.id"
         role="tab"
         :aria-selected="activeTab === tab.id"
+        :tabindex="activeTab === tab.id ? 0 : -1"
         :class="['health-tab-btn', { active: activeTab === tab.id }]"
         @click="activeTab = tab.id"
         @keydown="handleTabKeydown($event, tab.id)"
@@ -233,13 +234,14 @@
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
 import type { IconName } from '@/components/ui/Icon.vue'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { formatFileSize, formatDateTime as formatDateTimeHelper } from '@/utils/formatHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useKnowledgeMaintenance } from '@/composables/knowledge/useKnowledgeMaintenance'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
+import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
 import KnowledgeHealthAnalytics from '@/components/knowledge/KnowledgeHealthAnalytics.vue'
 import KnowledgeVerificationQueue from '@/components/knowledge/KnowledgeVerificationQueue.vue'
 import KnowledgeHealthTools from '@/components/knowledge/KnowledgeHealthTools.vue'
@@ -288,6 +290,8 @@ const tabs: Array<{ id: TabId; labelKey: string; icon: IconName }> = [
   { id: 'verification', labelKey: 'knowledge.health.tabVerification', icon: 'check-double' },
   { id: 'tools', labelKey: 'knowledge.health.tabTools', icon: 'cog' },
 ]
+
+const tablistRef = ref<HTMLElement | null>(null)
 
 // Computed
 const needsVectorization = computed(() => {
@@ -387,23 +391,29 @@ const getEmbeddingModelDisplay = (): string => {
   }
 }
 
-const handleTabKeydown = (event: KeyboardEvent, currentId: TabId) => {
+const handleTabKeydown = async (event: KeyboardEvent, currentId: TabId) => {
   const tabIds: TabId[] = ['analytics', 'verification', 'tools']
   const currentIndex = tabIds.indexOf(currentId)
+  let newIndex: number | null = null
 
   if (event.key === 'ArrowLeft') {
     event.preventDefault()
-    const prevIndex = (currentIndex - 1 + tabIds.length) % tabIds.length
-    activeTab.value = tabIds[prevIndex]
+    newIndex = (currentIndex - 1 + tabIds.length) % tabIds.length
   } else if (event.key === 'ArrowRight') {
     event.preventDefault()
-    const nextIndex = (currentIndex + 1) % tabIds.length
-    activeTab.value = tabIds[nextIndex]
+    newIndex = (currentIndex + 1) % tabIds.length
+  }
+
+  if (newIndex !== null) {
+    activeTab.value = tabIds[newIndex]
+    await nextTick()
+    const tabBtns = tablistRef.value?.querySelectorAll<HTMLElement>('[role="tab"]')
+    tabBtns?.[newIndex]?.focus()
   }
 }
 
 // Lifecycle
-onMounted(() => {
+onMounted(async () => {
   const t = route.query.tab
   if (typeof t === 'string' && (['analytics', 'verification', 'tools'] as string[]).includes(t)) {
     activeTab.value = t as TabId
@@ -411,6 +421,15 @@ onMounted(() => {
 
   loadHealthDashboard()
   loadVectorHealth()
+
+  // Prefetch pending-verification total so the badge is populated on page load
+  // (KnowledgeVerificationQueue overwrites this with full data when its tab opens)
+  try {
+    const data = await knowledgeRepository.getPendingVerifications(1, 1)
+    store.setPendingVerifications(data.sources || [], data.total || 0)
+  } catch (error) {
+    logger.error('Failed to prefetch pending verification count: %s', error)
+  }
 })
 </script>
 
