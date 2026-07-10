@@ -89,7 +89,7 @@ class DiscordMessagingAdapter:
         follow-up without changing this Protocol surface.
         """
         logger.debug(
-            "DiscordMessagingAdapter.fetch_messages: fetch not yet implemented " "(channel_id=%s, limit=%d)",
+            "DiscordMessagingAdapter.fetch_messages: fetch not yet implemented — #11560 " "(channel_id=%s, limit=%d)",
             channel_id,
             limit,
         )
