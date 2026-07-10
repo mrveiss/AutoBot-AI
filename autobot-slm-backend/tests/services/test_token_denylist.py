@@ -300,8 +300,9 @@ class TestBoundedRedisAccess:
         async def _hang(*a, **kw):
             await _asyncio.sleep(30)
 
-        with patch.object(_dl_mod, "_REDIS_DEADLINE_SECONDS", 0.05), patch.object(
-            _dl_mod, "get_redis_client", new=_hang
+        with (
+            patch.object(_dl_mod, "_REDIS_DEADLINE_SECONDS", 0.05),
+            patch.object(_dl_mod, "get_redis_client", new=_hang),
         ):
             loop = _asyncio.get_event_loop()
             start = loop.time()
