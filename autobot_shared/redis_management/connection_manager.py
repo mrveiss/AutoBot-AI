@@ -888,9 +888,7 @@ class RedisConnectionManager:
                 # Always retrieve the exception even if every waiter was
                 # cancelled — avoids "Task exception was never retrieved" and
                 # preserves the failure reason in the logs (#11451).
-                task.add_done_callback(
-                    lambda t, _db=database_name: self._log_pool_task_failure(_db, t)
-                )
+                task.add_done_callback(lambda t, _db=database_name: self._log_pool_task_failure(_db, t))
                 self._async_pool_tasks[database_name] = task
         try:
             pool = await asyncio.shield(task)

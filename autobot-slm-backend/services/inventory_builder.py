@@ -291,8 +291,7 @@ def build_registry_inventory(nodes: list[Any], local_ip_check: Any) -> dict:
         # wrongly promote a pure SLM manager into infrastructure (#11453).
         is_slm = bool(node_groups & {"slm", "slm_server", "slm_nodes"})
         has_app_roles = any(
-            (t := tok.strip().lower()) and not t.startswith("slm-") and t != "slm_agent"
-            for tok in role_tokens
+            (t := tok.strip().lower()) and not t.startswith("slm-") and t != "slm_agent" for tok in role_tokens
         )
         if not is_slm or has_app_roles:
             node_groups |= _UNIVERSAL_NON_SLM
