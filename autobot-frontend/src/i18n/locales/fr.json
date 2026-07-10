@@ -8691,5 +8691,16 @@
       "refresh": "Actualiser",
       "noSources": "Aucune source de contenu configurée"
     }
+  },
+  "components": {
+    "schemaForm": {
+      "requiredMark": "requis",
+      "selectPlaceholder": "Sélectionner une option",
+      "removeTag": "Supprimer l'étiquette",
+      "addTagPlaceholder": "Appuyer sur Entrée pour ajouter",
+      "rawJsonFallback": "Le schéma contient des objets imbriqués. Modifier en JSON brut :",
+      "rawJsonLabel": "Configuration du plugin (JSON)",
+      "invalidJson": "JSON invalide — veuillez corriger avant d'enregistrer."
+    }
   }
 }

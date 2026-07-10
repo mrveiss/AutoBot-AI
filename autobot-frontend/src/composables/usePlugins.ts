@@ -29,6 +29,7 @@ export interface PluginInfo {
   status: 'unloaded' | 'loaded' | 'enabled' | 'disabled' | 'error'
   hooks: string[]
   trust_tier?: 'official' | 'verified' | 'community' | 'unverified'
+  config_schema?: Record<string, unknown>
 }
 
 export interface PluginManifest {

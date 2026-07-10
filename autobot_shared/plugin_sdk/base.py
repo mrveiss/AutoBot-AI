@@ -219,6 +219,7 @@ class BasePlugin(ABC):
             "author": self.manifest.author,
             "status": self.status.value,
             "hooks": self.manifest.hooks,
+            "config_schema": self.manifest.config_schema,
         }
 
 

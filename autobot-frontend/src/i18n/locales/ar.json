@@ -8691,5 +8691,16 @@
       "refresh": "تحديث",
       "noSources": "لا توجد مصادر محتوى مهيأة"
     }
+  },
+  "components": {
+    "schemaForm": {
+      "requiredMark": "مطلوب",
+      "selectPlaceholder": "اختر خياراً",
+      "removeTag": "إزالة العلامة",
+      "addTagPlaceholder": "اضغط Enter للإضافة",
+      "rawJsonFallback": "يحتوي المخطط على كائنات متداخلة. تحرير كـ JSON خام:",
+      "rawJsonLabel": "تكوين المكوّن الإضافي (JSON)",
+      "invalidJson": "JSON غير صالح — يُرجى التصحيح قبل الحفظ."
+    }
   }
 }

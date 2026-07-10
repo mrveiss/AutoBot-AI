@@ -11,6 +11,7 @@ Issue #730 - Plugin SDK for extensible tool architecture.
 Issue #6970 - Validate declared hooks against HOOK_REGISTRY on load.
 Issue #6971 - Raise PluginLoadError for missing required env vars.
 Issue #10294 - File-path fallback for hyphenated core-plugin directories.
+Issue #11522 - Validate config_schema (JSON Schema Draft 2020-12) and config at load.
 """
 
 import importlib
@@ -20,13 +21,74 @@ import logging
 import os
 from pathlib import Path
 from types import ModuleType
-from typing import Dict, List, Tuple, Type
+from typing import Any, Dict, List, Tuple, Type
+
+import jsonschema
 
 from .base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
 from .hooks import validate_hook_names
 from .registry import get_registry
 
 logger = logging.getLogger(__name__)
+
+_DRAFT_202012_VALIDATOR = jsonschema.Draft202012Validator
+
+
+def _validate_config_schema(plugin_name: str, config_schema: Dict[str, Any]) -> None:
+    """Raise PluginLoadError if config_schema is not a valid JSON Schema Draft 2020-12.
+
+    Issue #11522 — structural validation at load time.
+    """
+    try:
+        _DRAFT_202012_VALIDATOR.check_schema(config_schema)
+    except jsonschema.SchemaError as exc:
+        raise PluginLoadError(
+            f"Plugin '{plugin_name}': config_schema is not valid JSON Schema " f"(Draft 2020-12): {exc.message}"
+        ) from exc
+
+
+def _validate_config_against_schema(
+    plugin_name: str,
+    config: Dict[str, Any],
+    config_schema: Dict[str, Any],
+) -> None:
+    """Raise PluginLoadError if config does not conform to config_schema.
+
+    Issue #11522 — field-level error detail on non-conforming config.
+    """
+    validator = _DRAFT_202012_VALIDATOR(config_schema)
+    errors = list(validator.iter_errors(config))
+    if not errors:
+        return
+
+    # Value-free, field-level messages: name the field and the violated
+    # constraint but never echo the submitted value (#11522 review m-4) —
+    # these strings surface in HTTP 422 responses via validate_plugin_config.
+    def _fmt(err: jsonschema.ValidationError) -> str:
+        path = ".".join(str(p) for p in err.path) or "<root>"
+        if err.validator == "required":
+            # 'required' messages name schema-declared fields, never submitted
+            # values — keep them for actionable diagnostics.
+            return f"  - {path}: {err.message}"
+        return f"  - {path}: violates '{err.validator}' constraint"
+
+    field_messages = [_fmt(err) for err in errors]
+    raise PluginLoadError(
+        f"Plugin '{plugin_name}': config does not conform to config_schema:\n" + "\n".join(field_messages)
+    )
+
+
+def validate_plugin_config(plugin_name: str, config: Dict[str, Any], config_schema: Dict[str, Any]) -> None:
+    """Public seam: validate a plugin *config* against its *config_schema*.
+
+    For use outside the SDK (e.g. the plugin-manager API config-update path).
+    The schema itself is already structurally validated at plugin load time,
+    so only config conformance is checked here.  Raises PluginLoadError with
+    field-level, value-free messages.
+    """
+    if not config_schema:
+        return
+    _validate_config_against_schema(plugin_name, config, config_schema)
 
 
 class PluginLoader:
@@ -122,6 +184,12 @@ class PluginLoader:
                     manifest.name,
                     missing_optional,
                 )
+
+            # GH#11522: validate config_schema and supplied config at load time
+            if manifest.config_schema:
+                _validate_config_schema(manifest.name, manifest.config_schema)
+                if config:
+                    _validate_config_against_schema(manifest.name, config, manifest.config_schema)
 
             # Import plugin module — pass on-disk directory for file-path fallback (#10294)
             plugin_dir = self._manifest_dirs.get(manifest.name)

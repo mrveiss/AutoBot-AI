@@ -8691,5 +8691,16 @@
       "refresh": "تازہ کریں",
       "noSources": "کوئی مواد کا ذریعہ ترتیب نہیں دیا گیا"
     }
+  },
+  "components": {
+    "schemaForm": {
+      "requiredMark": "ضروری",
+      "selectPlaceholder": "ایک آپشن منتخب کریں",
+      "removeTag": "ٹیگ ہٹائیں",
+      "addTagPlaceholder": "شامل کرنے کے لیے Enter دبائیں",
+      "rawJsonFallback": "اسکیما میں نیسٹڈ اشیاء ہیں۔ خام JSON کے طور پر ترمیم کریں:",
+      "rawJsonLabel": "پلگ ان کنفیگریشن (JSON)",
+      "invalidJson": "JSON غلط ہے — براہ کرم محفوظ کرنے سے پہلے درست کریں۔"
+    }
   }
 }

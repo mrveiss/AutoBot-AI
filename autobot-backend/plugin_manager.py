@@ -28,6 +28,8 @@ from autobot_shared.plugin_sdk import (
     PluginRegistry,
     TrustTier,
 )
+from autobot_shared.plugin_sdk.base import PluginLoadError
+from autobot_shared.plugin_sdk.loader import validate_plugin_config
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from plugin_install import install_from_git, install_from_zip
@@ -487,6 +489,17 @@ async def update_plugin_config(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Plugin not found: {plugin_name}",
         )
+
+    # GH#11522: validate new config against the manifest's config_schema (if any)
+    schema = plugin.manifest.config_schema
+    if schema:
+        try:
+            validate_plugin_config(plugin_name, config_update.config, schema)
+        except PluginLoadError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
 
     # Update plugin config
     plugin.config = config_update.config

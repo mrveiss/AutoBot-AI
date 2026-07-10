@@ -8691,5 +8691,16 @@
       "refresh": "بازنشانی",
       "noSources": "هیچ منبع محتوایی پیکربندی نشده است"
     }
+  },
+  "components": {
+    "schemaForm": {
+      "requiredMark": "الزامی",
+      "selectPlaceholder": "یک گزینه انتخاب کنید",
+      "removeTag": "حذف برچسب",
+      "addTagPlaceholder": "Enter را برای افزودن فشار دهید",
+      "rawJsonFallback": "طرحواره حاوی اشیاء تودرتو است. به عنوان JSON خام ویرایش کنید:",
+      "rawJsonLabel": "پیکربندی افزونه (JSON)",
+      "invalidJson": "JSON نامعتبر است — لطفاً قبل از ذخیره اصلاح کنید."
+    }
   }
 }
