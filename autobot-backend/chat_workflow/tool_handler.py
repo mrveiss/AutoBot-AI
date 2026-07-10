@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
+from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
 
@@ -351,6 +352,10 @@ _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     "extract_structured_data": EXTRACT_STRUCTURED_DATA_SCHEMA,
     # #10932: Unified content_reach gateway (5 source chains).
     "content_reach": CONTENT_REACH_SCHEMA,
+    # #11501: LLC board/CEO-chat work-object tools (create_task, update_goal,
+    # request_approval, record_decision). Company-scoped; dispatched to the
+    # existing llc/services. Merged below so they validate like any built-in.
+    **LLC_TOOL_SCHEMAS,
 }
 
 
@@ -2214,6 +2219,46 @@ class ToolHandlerMixin:
                 metadata={"tool": tool_name, "error": True},
             )
 
+    async def _handle_llc_tool(self, tool_name, tool_call, execution_results, ctx):
+        """Dispatch an LLC work-object tool company-scoped (#11501).
+
+        company_id comes from the chat request context (set by the CEO-chat
+        endpoint, T2). A missing/invalid context surfaces as a tool error the
+        LLM can react to, rather than a crash.
+        """
+        params = tool_call.get("params", {}) or {}
+        _cctx = ctx.context if ctx is not None and ctx.context else {}
+        company_id = _cctx.get("company_id")
+        # #11501 review: actor for audit/authz comes from the authenticated chat
+        # context, never from LLM-supplied params.
+        user_id = _cctx.get("user_id")
+        try:
+            result = await dispatch_llc_tool(tool_name, params, company_id, user_id)
+            execution_results.append({"tool": tool_name, "status": "success", "output": result})
+            entity = result.get("entity_type", "item")
+            entity_id = result.get("entity_id")
+            summary = f"Done ({entity})" + (f" [{entity_id}]" if entity_id else "")
+            yield WorkflowMessage(
+                type="command_output",
+                content=summary,
+                metadata={"tool": tool_name, "status": "success", "result": result},
+            )
+        except LLCToolError as exc:
+            execution_results.append({"tool": tool_name, "status": "error", "error": str(exc)})
+            yield WorkflowMessage(
+                type="error",
+                content=f"{tool_name}: {exc}",
+                metadata={"tool": tool_name, "error": True},
+            )
+        except Exception as exc:  # noqa: BLE001 — surface any service error to the LLM, don't crash the turn
+            logger.error("[#11501] LLC tool %s failed: %s", tool_name, exc)
+            execution_results.append({"tool": tool_name, "status": "error", "error": str(exc)})
+            yield WorkflowMessage(
+                type="error",
+                content=f"{tool_name} failed: {exc}",
+                metadata={"tool": tool_name, "error": True},
+            )
+
     async def _exec_scrape_url(self, params: dict) -> str:
         """Fetch a URL and return markdown content. Issue #7509."""
         from web_fetch import RenderMode, WebFetcher
@@ -2663,6 +2708,29 @@ class ToolHandlerMixin:
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
             async for msg in self._handle_delegate_tool(tool_call, execution_results, ctx):
+                yield msg
+            return
+
+        # #11501: LLC board/CEO-chat work-object tools — company-scoped dispatch
+        # to the existing llc/services. Handled here (not via _builtin_route)
+        # because the handler needs ctx.context["company_id"], which the uniform
+        # route does not receive.
+        if tool_name in LLC_TOOL_NAMES:
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
+            validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
+            if validation_msg is not None:
+                execution_results.append(
+                    {
+                        "tool": tool_name,
+                        "status": "schema_error",
+                        "error": validation_msg.content,
+                        "schema_validation_failed": True,
+                    }
+                )
+                yield validation_msg
+                return
+            async for msg in self._handle_llc_tool(tool_name, tool_call, execution_results, ctx):
                 yield msg
             return
 
