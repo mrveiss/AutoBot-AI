@@ -117,144 +117,100 @@ async def test_list_threads(svc: CeoChatService) -> None:
     assert len(found) == 3
 
 
-# --------------------------------- send — RAG + LLM mocked
+# --------------------------------- send — delegates to the chat pipeline (#11501 T2)
+
+
+class _Msg:
+    """Minimal stand-in for a WorkflowMessage from the pipeline stream."""
+
+    def __init__(self, type="response", content="", metadata=None):
+        self.type = type
+        self.content = content
+        self.metadata = metadata or {}
 
 
 @pytest.mark.asyncio
-async def test_send_clarify_intent(svc: CeoChatService) -> None:
-    """send() with LLM returning 'clarify' stores no entity and returns system msg."""
+async def test_send_delegates_to_pipeline_and_persists(svc: CeoChatService) -> None:
+    """send() persists the human msg, delegates to _run_pipeline, and persists
+    the pipeline reply as the system message; updates thread on entity."""
     thread_id = str(uuid.uuid4())
-    session = AsyncMock()
-    session.flush = AsyncMock()
-    # get_thread call
     thread = _make_thread()
     thread.company_id = "co1"
-
+    session = AsyncMock()
+    session.flush = AsyncMock()
     with (
         patch.object(svc, "_rag_query", new=AsyncMock(return_value=[])),
-        patch.object(
-            svc,
-            "_resolve_via_llm",
-            new=AsyncMock(return_value={"intent": "clarify", "summary": "Need more info", "entity": {}}),
-        ),
+        patch.object(svc, "_query_decisions", new=AsyncMock(return_value=[])),
         patch.object(svc, "get_thread", new=AsyncMock(return_value=thread)),
+        patch.object(svc, "_run_pipeline", new=AsyncMock(return_value=("Created the task.", "work_item", "wi-1"))),
     ):
-        msg = await svc.send(session, thread_id=thread_id, message="hello", user_id=None)
-
+        msg = await svc.send(session, thread_id=thread_id, message="Create a Q3 task", user_id="u1")
     assert msg.author_type == "system"
-    assert "clarify" in msg.body.lower() or "could you" in msg.body.lower()
-    # Two flush calls: one for human_msg, one for system_msg
-    assert session.flush.await_count == 2
+    assert msg.body == "Created the task."
+    assert session.flush.await_count == 2  # human + system
+    session.execute.assert_awaited()  # thread resolution updated (entity present)
 
 
 @pytest.mark.asyncio
-async def test_send_create_task_intent(svc: CeoChatService) -> None:
-    """send() with 'create_task' intent delegates to WorkItemService."""
+async def test_send_no_entity_skips_thread_update(svc: CeoChatService) -> None:
     thread_id = str(uuid.uuid4())
     thread = _make_thread()
     thread.company_id = "co1"
-
-    fake_item = MagicMock()
-    fake_item.id = uuid.uuid4()
-
     session = AsyncMock()
     session.flush = AsyncMock()
-
-    with (
-        patch.object(svc, "_rag_query", new=AsyncMock(return_value=["some context"])),
-        patch.object(
-            svc,
-            "_resolve_via_llm",
-            new=AsyncMock(
-                return_value={
-                    "intent": "create_task",
-                    "summary": "Create Q3 roadmap task",
-                    "entity": {"title": "Q3 Roadmap"},
-                }
-            ),
-        ),
-        patch.object(svc, "get_thread", new=AsyncMock(return_value=thread)),
-        patch.object(svc, "_dispatch_intent", new=AsyncMock(return_value=("work_item", fake_item.id))),
-    ):
-        msg = await svc.send(session, thread_id=thread_id, message="Create a Q3 roadmap task", user_id=None)
-
-    assert msg.author_type == "system"
-    assert "work_item" in msg.body or "Resolved" in msg.body
-
-
-@pytest.mark.asyncio
-async def test_send_record_decision_intent(svc: CeoChatService) -> None:
-    """send() with 'record_decision' creates no external entity."""
-    thread_id = str(uuid.uuid4())
-    thread = _make_thread()
-    thread.company_id = "co1"
-
-    session = AsyncMock()
-    session.flush = AsyncMock()
-
     with (
         patch.object(svc, "_rag_query", new=AsyncMock(return_value=[])),
-        patch.object(
-            svc,
-            "_resolve_via_llm",
-            new=AsyncMock(return_value={"intent": "record_decision", "summary": "Approved budget", "entity": {}}),
-        ),
+        patch.object(svc, "_query_decisions", new=AsyncMock(return_value=[])),
         patch.object(svc, "get_thread", new=AsyncMock(return_value=thread)),
+        patch.object(svc, "_run_pipeline", new=AsyncMock(return_value=("Here's some info.", None, None))),
     ):
-        msg = await svc.send(session, thread_id=thread_id, message="We approved the budget", user_id=None)
-
-    assert msg.author_type == "system"
-    assert "decision" in msg.body.lower() or "Recorded" in msg.body
-
-
-# --------------------------------- build_reply
+        msg = await svc.send(session, thread_id=thread_id, message="what's our runway?", user_id="u1")
+    assert msg.body == "Here's some info."
+    session.execute.assert_not_awaited()  # no entity → no resolution update
 
 
-def test_build_reply_clarify() -> None:
-    body = CeoChatService._build_reply({"intent": "clarify", "summary": "Need more info", "entity": {}}, None, None)
-    assert "clarify" in body.lower() or "could you" in body.lower()
+@pytest.mark.asyncio
+async def test_run_pipeline_collects_reply_and_entity(svc: CeoChatService) -> None:
+    """_run_pipeline returns the last 'response' content + the LLC tool entity,
+    and passes company_id/user_id in the context."""
+
+    async def _fake_stream(session_id, message, context):
+        assert context["company_id"] == "co1" and context["user_id"] == "u1"
+        assert session_id == "t1"
+        yield _Msg("thought", "thinking...")
+        yield _Msg("command_output", "Done", {"result": {"entity_type": "work_item", "entity_id": "wi-9"}})
+        yield _Msg("response", "Created the Q3 task for you.")
+
+    fake_mgr = MagicMock()
+    fake_mgr.process_message_stream = _fake_stream
+    with patch("llc.services.ceo_chat._get_workflow_manager", return_value=fake_mgr):
+        reply, etype, eid = await svc._run_pipeline(
+            thread_id="t1", message="Create a Q3 task", company_id="co1", user_id="u1", kb_chunks=["ctx"]
+        )
+    assert reply == "Created the Q3 task for you."
+    assert etype == "work_item" and eid == "wi-9"
 
 
-def test_build_reply_create_task_with_entity() -> None:
-    eid = uuid.uuid4()
-    body = CeoChatService._build_reply(
-        {"intent": "create_task", "summary": "Created task", "entity": {}},
-        "work_item",
-        eid,
-    )
-    assert str(eid) in body
-    assert "work_item" in body
+@pytest.mark.asyncio
+async def test_run_pipeline_default_reply_when_no_response(svc: CeoChatService) -> None:
+    async def _fake_stream(session_id, message, context):
+        yield _Msg("thought", "hmm")
+
+    fake_mgr = MagicMock()
+    fake_mgr.process_message_stream = _fake_stream
+    with patch("llc.services.ceo_chat._get_workflow_manager", return_value=fake_mgr):
+        reply, etype, eid = await svc._run_pipeline(
+            thread_id="t1", message="hi", company_id="co1", user_id=None, kb_chunks=[]
+        )
+    assert reply == "Done." and etype is None and eid is None
 
 
-def test_build_reply_no_entity_created() -> None:
-    body = CeoChatService._build_reply(
-        {"intent": "create_task", "summary": "Failed to create task", "entity": {}},
-        None,
-        None,
-    )
-    assert "no entity" in body.lower()
-
-
-def test_build_reply_decision_no_entity_id() -> None:
-    body = CeoChatService._build_reply(
-        {"intent": "record_decision", "summary": "Approved budget", "entity": {}},
-        "decision",
-        None,
-    )
-    assert "decision" in body.lower()
-
-
-# --------------------------------- RAG helper
+# --------------------------------- _rag_query graceful failure (preserved)
 
 
 @pytest.mark.asyncio
 async def test_rag_query_graceful_failure(svc: CeoChatService) -> None:
-    """_rag_query returns [] when ChromaDB is unavailable.
-
-    The source does a local ``from utils.async_chromadb_client import ...``
-    inside the try block, so we simulate unavailability by temporarily removing
-    the module from sys.modules so the import raises ImportError.
-    """
+    """_rag_query returns [] when ChromaDB is unavailable."""
     import sys
 
     sentinel = object()
@@ -268,144 +224,3 @@ async def test_rag_query_graceful_failure(svc: CeoChatService) -> None:
         else:
             sys.modules["utils.async_chromadb_client"] = orig
     assert result == []
-
-
-# --------------------------------- LLM helper — malformed JSON
-
-
-@pytest.mark.asyncio
-async def test_resolve_via_llm_malformed_json(svc: CeoChatService) -> None:
-    """_resolve_via_llm falls back to 'clarify' on malformed LLM output (both attempts)."""
-    mock_response = MagicMock()
-    mock_response.content = "NOT JSON"
-    mock_response.error = None
-    mock_svc = MagicMock()
-    mock_svc.chat = AsyncMock(return_value=mock_response)
-
-    with patch("llc.services.ceo_chat._llm_service_mod.get_llm_service", return_value=mock_svc):
-        resolution = await svc._resolve_via_llm(
-            message="hello",
-            kb_chunks=[],
-            company_name="ACME",
-            conversation_id="t1",
-        )
-
-    assert resolution["intent"] == "clarify"
-    # Friendly message — not a raw exception string.
-    assert "exception" not in resolution["summary"].lower()
-    assert resolution["summary"]
-
-
-# --------------------------------- _extract_json parser
-
-
-def test_extract_json_clean() -> None:
-    raw = '{"intent":"create_task","summary":"ok","entity":{}}'
-    result = CeoChatService._extract_json(raw)
-    assert result["intent"] == "create_task"
-
-
-def test_extract_json_think_block_stripped() -> None:
-    raw = "<think>I should parse this carefully.</think>\n" '{"intent":"create_task","summary":"ok","entity":{}}'
-    result = CeoChatService._extract_json(raw)
-    assert result["intent"] == "create_task"
-
-
-def test_extract_json_prose_wrapper() -> None:
-    raw = (
-        'Here is my answer:\n```json\n{"intent":"update_goal","summary":"raise target","entity":{"goal_id":"g1"}}\n```'
-    )
-    result = CeoChatService._extract_json(raw)
-    assert result["intent"] == "update_goal"
-
-
-def test_extract_json_think_plus_prose() -> None:
-    """Models that emit <think> blocks AND wrap in prose are handled correctly."""
-    raw = (
-        "<think>Let me think step by step.</think>\n"
-        "Sure! Here is the JSON:\n"
-        '{"intent":"record_decision","summary":"approved","entity":{}}\n'
-        "That should be all."
-    )
-    result = CeoChatService._extract_json(raw)
-    assert result["intent"] == "record_decision"
-
-
-def test_extract_json_no_object_raises() -> None:
-    import pytest as _pytest
-
-    with _pytest.raises((ValueError, Exception)):
-        CeoChatService._extract_json("no json here at all")
-
-
-# --------------------------------- _resolve_via_llm retry path
-
-
-@pytest.mark.asyncio
-async def test_resolve_via_llm_recovers_on_retry(svc: CeoChatService) -> None:
-    """First response has think block + prose; second attempt returns clean JSON."""
-    first = MagicMock()
-    first.content = "<think>thinking…</think>\nHere you go: some prose before the JSON"
-    first.error = None
-
-    second = MagicMock()
-    second.content = '{"intent":"create_task","summary":"Write Q3 report","entity":{"title":"Q3 report"}}'
-    second.error = None
-
-    mock_svc = MagicMock()
-    mock_svc.chat = AsyncMock(side_effect=[first, second])
-
-    with patch("llc.services.ceo_chat._llm_service_mod.get_llm_service", return_value=mock_svc):
-        result = await svc._resolve_via_llm(
-            message="Create a task to write the Q3 report",
-            kb_chunks=[],
-            company_name="TestCo",
-            conversation_id="verify",
-        )
-
-    assert result["intent"] == "create_task"
-    assert mock_svc.chat.await_count == 2
-
-
-@pytest.mark.asyncio
-async def test_resolve_via_llm_think_block_recovered_first_pass(svc: CeoChatService) -> None:
-    """Think block on first response — parser should extract JSON without needing retry."""
-    resp = MagicMock()
-    resp.content = (
-        "<think>I should figure out the intent.</think>"
-        '{"intent":"create_task","summary":"Draft Q3 report","entity":{"title":"Q3 report"}}'
-    )
-    resp.error = None
-    mock_svc = MagicMock()
-    mock_svc.chat = AsyncMock(return_value=resp)
-
-    with patch("llc.services.ceo_chat._llm_service_mod.get_llm_service", return_value=mock_svc):
-        result = await svc._resolve_via_llm(
-            message="Create a task to write the Q3 report",
-            kb_chunks=[],
-            company_name="TestCo",
-            conversation_id="verify",
-        )
-
-    assert result["intent"] == "create_task"
-    # Only one LLM call needed — parser succeeded first pass.
-    assert mock_svc.chat.await_count == 1
-
-
-@pytest.mark.asyncio
-async def test_resolve_via_llm_unknown_intent_becomes_clarify(svc: CeoChatService) -> None:
-    resp = MagicMock()
-    resp.content = '{"intent":"do_something_weird","summary":"x","entity":{}}'
-    resp.error = None
-    mock_svc = MagicMock()
-    mock_svc.chat = AsyncMock(return_value=resp)
-
-    with patch("llc.services.ceo_chat._llm_service_mod.get_llm_service", return_value=mock_svc):
-        result = await svc._resolve_via_llm(
-            message="Do something weird",
-            kb_chunks=[],
-            company_name="Acme",
-            conversation_id="t",
-        )
-
-    assert result["intent"] == "clarify"
