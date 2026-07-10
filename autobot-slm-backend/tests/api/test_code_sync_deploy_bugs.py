@@ -1849,3 +1849,23 @@ def test_run_post_sync_steps_does_not_roll_back_on_slow_start() -> None:
 
     assert pip_ok is True, "deploy must succeed when health poll returns True"
     assert not rolled_back, "rollback must NOT fire on slow-but-successful start"
+
+
+# ---------------------------------------------------------------------------
+# #11439 — /refresh message must not imply a deploy happened
+# ---------------------------------------------------------------------------
+
+
+def test_refresh_message_does_not_imply_deploy() -> None:
+    """#11439: POST /refresh only re-fetches version metadata (git fetch) — it does
+    not deploy. The message must not read 'Version updated successfully' and must
+    surface whether an update is pending, so operators don't believe a fix is live."""
+    from api.code_sync import _refresh_message
+
+    up = _refresh_message(True)
+    current = _refresh_message(False)
+    assert "updated successfully" not in up.lower()
+    assert "updated successfully" not in current.lower()
+    assert "refreshed" in up.lower() and "refreshed" in current.lower()
+    assert "available" in up.lower()  # signals a pending, undeployed update
+    assert "up to date" in current.lower()

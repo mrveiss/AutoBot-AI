@@ -747,6 +747,19 @@ async def get_component_resolve_status(
     )
 
 
+def _refresh_message(has_update: bool) -> str:
+    """Message for POST /refresh (#11439).
+
+    ``/refresh`` only re-fetches version *metadata* (git fetch) — it does NOT deploy
+    code. The old "Version updated successfully" wording read as if a deploy had
+    happened, so operators could believe a pending fix was live when nothing had
+    been synced. Word it as a metadata refresh and surface whether an update awaits.
+    """
+    if has_update:
+        return "Version metadata refreshed — an update is available (run resolve/update to deploy it)"
+    return "Version metadata refreshed — already up to date"
+
+
 @router.post("/refresh", response_model=CodeSyncRefreshResponse)
 async def refresh_version(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -778,7 +791,7 @@ async def refresh_version(
 
             return CodeSyncRefreshResponse(
                 success=True,
-                message="Version updated successfully",
+                message=_refresh_message(result["has_update"]),
                 latest_version=result["remote_commit"],
                 has_update=result["has_update"],
             )
