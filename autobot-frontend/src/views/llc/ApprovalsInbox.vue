@@ -424,18 +424,19 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
-.type-budget_increase { background: #fef3c7; color: #92400e; }
-.type-agent_spawn { background: #ddd6fe; color: #5b21b6; }
-.type-external_api { background: #bfdbfe; color: #1d4ed8; }
-.type-code_deploy { background: #fee2e2; color: #991b1b; }
-.type-data_access { background: #d1fae5; color: #065f46; }
-.type-policy_change { background: #fce7f3; color: #9d174d; }
-.type-contract_sign { background: #ffedd5; color: #9a3412; }
-.type-hiring { background: #e0f2fe; color: #0369a1; }
+/* approval type + decision palette — theme-adaptive (GH#10868) */
+.type-budget_increase { background: var(--badge-approval-budget_increase-bg); color: var(--badge-approval-budget_increase-fg); }
+.type-agent_spawn { background: var(--badge-approval-agent_spawn-bg); color: var(--badge-approval-agent_spawn-fg); }
+.type-external_api { background: var(--badge-approval-external_api-bg); color: var(--badge-approval-external_api-fg); }
+.type-code_deploy { background: var(--badge-approval-code_deploy-bg); color: var(--badge-approval-code_deploy-fg); }
+.type-data_access { background: var(--badge-approval-data_access-bg); color: var(--badge-approval-data_access-fg); }
+.type-policy_change { background: var(--badge-approval-policy_change-bg); color: var(--badge-approval-policy_change-fg); }
+.type-contract_sign { background: var(--badge-approval-contract_sign-bg); color: var(--badge-approval-contract_sign-fg); }
+.type-hiring { background: var(--badge-approval-hiring-bg); color: var(--badge-approval-hiring-fg); }
 
-.status-approved { background: #d1fae5; color: #065f46; }
-.status-rejected { background: #fee2e2; color: #991b1b; }
-.status-changes_requested { background: #fef3c7; color: #92400e; }
+.status-approved { background: var(--badge-approval-approved-bg); color: var(--badge-approval-approved-fg); }
+.status-rejected { background: var(--badge-approval-rejected-bg); color: var(--badge-approval-rejected-fg); }
+.status-changes_requested { background: var(--badge-approval-changes_requested-bg); color: var(--badge-approval-changes_requested-fg); }
 
 .toggle-payload {
   font-size: 0.8rem;

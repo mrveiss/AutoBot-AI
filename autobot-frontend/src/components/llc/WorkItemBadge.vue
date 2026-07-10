@@ -65,34 +65,34 @@ const colorClass = computed(() =>
 .wib-dot--sm { width: 0.5rem; height: 0.5rem; }
 .wib-dot--xs { width: 0.45rem; height: 0.45rem; }
 
-/* type palette (identical across all LLC boards) */
-.type-epic { background: #ddd6fe; color: #5b21b6; }
-.type-feature { background: #bfdbfe; color: #1d4ed8; }
-.type-pbi { background: #d1fae5; color: #065f46; }
-.type-task { background: #e0f2fe; color: #0369a1; }
-.type-bug { background: #fee2e2; color: #991b1b; }
-.type-spike { background: #fef3c7; color: #92400e; }
-.type-subtask { background: #f3f4f6; color: #374151; }
-.type-risk { background: #fce7f3; color: #9d174d; }
+/* type palette — theme-adaptive categorical tokens (GH#10868) */
+.type-epic { background: var(--badge-type-epic-bg); color: var(--badge-type-epic-fg); }
+.type-feature { background: var(--badge-type-feature-bg); color: var(--badge-type-feature-fg); }
+.type-pbi { background: var(--badge-type-pbi-bg); color: var(--badge-type-pbi-fg); }
+.type-task { background: var(--badge-type-task-bg); color: var(--badge-type-task-fg); }
+.type-bug { background: var(--badge-type-bug-bg); color: var(--badge-type-bug-fg); }
+.type-spike { background: var(--badge-type-spike-bg); color: var(--badge-type-spike-fg); }
+.type-subtask { background: var(--badge-type-subtask-bg); color: var(--badge-type-subtask-fg); }
+.type-risk { background: var(--badge-type-risk-bg); color: var(--badge-type-risk-fg); }
 
-/* work-item status palette (from WorkItemDetail) */
-.status-backlog { background: #f3f4f6; color: #374151; }
-.status-ready { background: #e0f2fe; color: #0369a1; }
-.status-in_progress { background: #ddd6fe; color: #5b21b6; }
-.status-in_review { background: #fef9c3; color: #713f12; }
-.status-done { background: #d1fae5; color: #065f46; }
-.status-blocked { background: #fee2e2; color: #991b1b; }
-.status-cancelled { background: #f3f4f6; color: #9ca3af; }
+/* work-item status palette — theme-adaptive (GH#10868) */
+.status-backlog { background: var(--badge-status-backlog-bg); color: var(--badge-status-backlog-fg); }
+.status-ready { background: var(--badge-status-ready-bg); color: var(--badge-status-ready-fg); }
+.status-in_progress { background: var(--badge-status-in_progress-bg); color: var(--badge-status-in_progress-fg); }
+.status-in_review { background: var(--badge-status-in_review-bg); color: var(--badge-status-in_review-fg); }
+.status-done { background: var(--badge-status-done-bg); color: var(--badge-status-done-fg); }
+.status-blocked { background: var(--badge-status-blocked-bg); color: var(--badge-status-blocked-fg); }
+.status-cancelled { background: var(--badge-status-cancelled-bg); color: var(--badge-status-cancelled-fg); }
 
-/* priority pill palette (Backlog / WorkItemDetail) */
-.priority-critical { background: #fee2e2; color: #991b1b; }
-.priority-high { background: #ffedd5; color: #9a3412; }
-.priority-medium { background: #fef9c3; color: #713f12; }
-.priority-low { background: #f0fdf4; color: #14532d; }
+/* priority pill palette — theme-adaptive (GH#10868) */
+.priority-critical { background: var(--badge-priority-critical-bg); color: var(--badge-priority-critical-fg); }
+.priority-high { background: var(--badge-priority-high-bg); color: var(--badge-priority-high-fg); }
+.priority-medium { background: var(--badge-priority-medium-bg); color: var(--badge-priority-medium-fg); }
+.priority-low { background: var(--badge-priority-low-bg); color: var(--badge-priority-low-fg); }
 
-/* priority dot palette (SprintBoard / Kanban — solid fills) */
-.dot-critical { background: #ef4444; }
-.dot-high { background: #f97316; }
-.dot-medium { background: #eab308; }
-.dot-low { background: #22c55e; }
+/* priority dot palette — solid fills, theme-adaptive (GH#10868) */
+.dot-critical { background: var(--badge-dot-critical); }
+.dot-high { background: var(--badge-dot-high); }
+.dot-medium { background: var(--badge-dot-medium); }
+.dot-low { background: var(--badge-dot-low); }
 </style>
