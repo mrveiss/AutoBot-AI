@@ -617,13 +617,14 @@ class LLMHandlerMixin:
         resolved_lang = self._resolve_language(language)
         lang_instruction = self._get_language_instruction(resolved_lang)
         llc_tools = self._get_llc_tool_prompt() if company_id else ""
+        compose_teaching = self._get_compose_tool_prompt()
         try:
             prompt = get_prompt("chat.system_prompt_simple")
             logger.debug("[ChatWorkflowManager] Loaded simplified system prompt")
-            return preamble + prompt + llc_tools + lang_instruction
+            return preamble + prompt + llc_tools + compose_teaching + lang_instruction
         except Exception as e:
             logger.error("Failed to load system prompt from file: %s", e)
-            return preamble + llc_tools + """You are AutoBot. Execute commands using:
+            return preamble + llc_tools + compose_teaching + """You are AutoBot. Execute commands using:
 <TOOL_CALL name="execute_command" params='{"command":"cmd"}'>desc</TOOL_CALL>
 
 NEVER teach commands - ALWAYS execute them.""" + lang_instruction
@@ -637,6 +638,24 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             return LLC_TOOL_PROMPT
         except Exception:  # noqa: BLE001 — LLC optional; never break general chat
             return ""
+
+    @staticmethod
+    def _get_compose_tool_prompt() -> str:
+        """Compose tool teaching injected when CODEEXEC_ENABLED (GH#11568)."""
+        try:
+            from chat_workflow.tool_handler import CODEEXEC_ENABLED
+
+            if not CODEEXEC_ENABLED:
+                return ""
+        except Exception:  # noqa: BLE001
+            return ""
+        return (
+            "\n\n## compose tool\n"
+            "Use `compose` to run a sandboxed Python script that can call read-only AutoBot tools "
+            "via the `autobot_tools` module (e.g. `await autobot_tools.web_search(query=...)`). "
+            "Scripts must only import from the allowlist (autobot_tools, asyncio, json, re, math). "
+            "Do NOT use exec, eval, compile, or __import__.\n"
+        )
 
     def _build_conversation_context(self, session: WorkflowSession) -> str:
         """Build conversation context from recent history.

@@ -15,10 +15,13 @@ import ast
 import asyncio
 import html
 import json
+import os
 import re
+import uuid
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
@@ -40,6 +43,23 @@ from chat_workflow.session_handler import (
 )
 
 logger = get_logger(__name__)
+
+# GH#11568: compose tool feature flag and tuning constants.
+CODEEXEC_ENABLED: bool = env_flag("AUTOBOT_CODEEXEC_ENABLED", default=False)
+CODEEXEC_AUTOAPPROVE_READONLY: bool = env_flag("AUTOBOT_CODEEXEC_AUTOAPPROVE_READONLY", default=True)
+CODEEXEC_MAX_SCRIPT_RETRIES: int = env_int("AUTOBOT_CODEEXEC_MAX_SCRIPT_RETRIES", default=1)
+# GH#11568 BLOCKER-4: the read-only tool set eligible for auto-approval (design §3.1).
+# Auto-approve fires ONLY when every shimmed tool is in this set. Env-overridable so it
+# tracks the injectable default; sensitive tools are structurally excluded upstream.
+CODEEXEC_READONLY_TOOLS: frozenset[str] = frozenset(
+    os.environ.get(
+        "AUTOBOT_CODEEXEC_READONLY_TOOLS",
+        "web_search,scrape_url,map_site,extract_structured_data",
+    ).split(",")
+)
+# Approval-wait polling knobs (mirrors terminal-command approval loop).
+CODEEXEC_APPROVAL_WAIT_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_WAIT_SECONDS", default=1800)
+CODEEXEC_APPROVAL_POLL_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_POLL_SECONDS", default=2)
 
 # Issue #4482: Default retry count for schema self-correction loop.
 _DEFAULT_SCHEMA_RETRIES = 3
@@ -357,6 +377,27 @@ _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     # existing llc/services. Merged below so they validate like any built-in.
     **LLC_TOOL_SCHEMAS,
 }
+
+# GH#11568: compose tool — sandboxed Python script with injectable RPC shims.
+COMPOSE_TOOL_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "program": {
+            "type": "string",
+            "description": (
+                "Python program to execute. Import autobot_tools and call tool " "functions as async coroutines."
+            ),
+        },
+        "description": {
+            "type": "string",
+            "description": "Human-readable description of what this program does.",
+        },
+    },
+    "required": ["program"],
+}
+
+if CODEEXEC_ENABLED:
+    _BUILTIN_TOOL_SCHEMAS["compose"] = COMPOSE_TOOL_SCHEMA
 
 
 def _validate_builtin_tool_arguments(tool_name: str, tool_call: dict[str, Any]) -> WorkflowMessage | None:
@@ -2701,6 +2742,14 @@ class ToolHandlerMixin:
             yield approval_msg
             return
 
+        # GH#11568: sandboxed Python composition tool (main-chat only).
+        if tool_name == "compose" and CODEEXEC_ENABLED:
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
+            async for msg in self._handle_compose_tool(tool_call, session_id, execution_results, ctx):
+                yield msg
+            return
+
         if tool_name == "respond":
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
@@ -2858,6 +2907,221 @@ class ToolHandlerMixin:
             additional_response_parts,
         ):
             yield msg
+
+    # ------------------------------------------------------------------ #
+    # GH#11568: compose tool handlers                                     #
+    # ------------------------------------------------------------------ #
+
+    def _guard_compose(self, program: str, agent_id: "str | None") -> "WorkflowMessage | None":
+        """Run AST guard; return error WorkflowMessage on violation, else None."""
+        from chat_workflow.code_exec.ast_guard import check_script
+        from chat_workflow.code_exec.shim_codegen import injectable_tool_set
+        from orchestration.agent_registry import resolve_forbidden_tools
+
+        forbidden = resolve_forbidden_tools(agent_id)
+        injected = frozenset(injectable_tool_set([], forbidden))
+        verdict = check_script(program, frozenset(forbidden), injected_tools=injected)
+        if verdict.ok:
+            return None
+        lines = "; ".join(f"line {v['line']}: {v['message']}" for v in verdict.violations)
+        return WorkflowMessage(
+            type="tool_result",
+            content=f"compose script rejected by AST guard: {lines}",
+            metadata={"tool_name": "compose", "ast_violations": verdict.violations},
+        )
+
+    @staticmethod
+    def _compose_auto_approvable(shim_snapshot: list[str]) -> bool:
+        """Auto-approve only when the flag is on AND all shims are read-only (design §3.1)."""
+        return CODEEXEC_AUTOAPPROVE_READONLY and set(shim_snapshot) <= CODEEXEC_READONLY_TOOLS
+
+    async def _approve_compose(self, program: str, shim_snapshot: list[str], session_id: str) -> "str | None":
+        """Return an approval id requiring a gate, or ``None`` to auto-approve (GH#11568).
+
+        Auto-approval requires the flag AND a fully read-only shim set; any
+        non-read-only shim forces the WORKFLOW_GATE even with the flag on.
+        """
+        if self._compose_auto_approvable(shim_snapshot):
+            return None
+        return await self._persist_compose_approval(program, shim_snapshot, session_id)
+
+    async def _poll_compose_approval(self, approval_id: str) -> str:
+        """Poll the WORKFLOW_GATE until decided; return its terminal status (GH#11568 MINOR-2).
+
+        Mirrors the terminal-command approval loop: a bounded poll on the persisted
+        gate. Returns ``approved``/``rejected``/``revision_requested``, or
+        ``timeout`` when no decision lands within the wait budget.
+        """
+        import uuid as _uuid
+
+        from services.approval_gate_service import ApprovalGateService
+        from user_management.database import get_async_session_factory
+
+        elapsed = 0
+        session_factory = get_async_session_factory()
+        while elapsed < CODEEXEC_APPROVAL_WAIT_SECONDS:
+            async with session_factory() as db:
+                approval = await ApprovalGateService(db).get(_uuid.UUID(approval_id))
+            status = getattr(approval, "status", None)
+            if status and status != "pending":
+                return status
+            await asyncio.sleep(CODEEXEC_APPROVAL_POLL_SECONDS)
+            elapsed += CODEEXEC_APPROVAL_POLL_SECONDS
+        return "timeout"
+
+    async def _persist_compose_approval(self, program: str, shim_snapshot: list[str], session_id: str) -> "str | None":
+        """Persist a WORKFLOW_GATE Approval carrying program + shims + budgets (GH#11568)."""
+        from chat_workflow.code_exec.broker import CODEEXEC_MAX_TOOL_CALLS
+        from models.approval import ApprovalType
+        from secure_sandbox_executor import CODEEXEC_TIMEOUT_SECONDS
+        from services.approval_gate_service import ApprovalGateService
+        from user_management.database import get_async_session_factory
+
+        context = {
+            "program": program,
+            "shim_snapshot": shim_snapshot,
+            "budgets": {"max_tool_calls": CODEEXEC_MAX_TOOL_CALLS, "timeout_seconds": CODEEXEC_TIMEOUT_SECONDS},
+        }
+        session_factory = get_async_session_factory()
+        async with session_factory() as db:
+            approval = await ApprovalGateService(db).create_approval(
+                title="compose script execution",
+                approval_type=ApprovalType.WORKFLOW_GATE.value,
+                requested_by_agent="chat_agent",
+                description="Sandboxed Python compose script awaiting approval.",
+                workflow_id=session_id,
+                workflow_step="compose",
+                context=context,
+            )
+            return str(approval.id)
+
+    def _build_compose_dispatch(self, session_id: str, ctx: "LLMIterationContext | None"):
+        """Return an async dispatch callable routing shim calls through the seam (GH#11568)."""
+
+        async def _dispatch(tool: str, params: dict) -> Any:
+            sub_results: list[dict[str, Any]] = []
+            sub_call = {"name": tool, "params": params}
+            async for _ in self._dispatch_tool_call(sub_call, session_id, session_id, "", "", sub_results, [], ctx=ctx):
+                pass
+            last = sub_results[-1] if sub_results else {}
+            if last.get("status") == "error":
+                raise RepairableException(last.get("error", "tool dispatch failed"))
+            return last.get("output", last)
+
+        return _dispatch
+
+    async def _execute_compose(
+        self, program: str, agent_id: "str | None", run_id: str, session_id: str, ctx: "LLMIterationContext | None"
+    ) -> "WorkflowMessage":
+        """Run the script inside the sandbox via a live broker; return result msg."""
+        from chat_workflow.code_exec.broker import CodeExecBroker
+        from chat_workflow.code_exec.shim_codegen import generate_shim_module, injectable_tool_set
+        from orchestration.agent_registry import resolve_forbidden_tools
+        from secure_sandbox_executor import CODEEXEC_TIMEOUT_SECONDS, SecureSandboxExecutor  # lazy
+
+        forbidden = resolve_forbidden_tools(agent_id)
+        tools = injectable_tool_set([], forbidden)
+        shim_src = generate_shim_module(tools)
+        broker = CodeExecBroker(
+            self._build_compose_dispatch(session_id, ctx),
+            tools,
+            forbidden,
+            run_id,
+            f"autobot:codeexec:security:events:{run_id}",
+            progress_channel=f"workflow:{session_id}",
+        )
+        executor = SecureSandboxExecutor()
+        result = await executor.execute_with_stdio_broker(program, shim_src, broker, CODEEXEC_TIMEOUT_SECONDS, run_id)
+        return self._compose_result_message(result, run_id)
+
+    def _compose_result_message(self, result: Any, run_id: str) -> "WorkflowMessage":
+        """Build the tool_result WorkflowMessage from a SandboxResult (GH#11568)."""
+        if result.success:
+            return WorkflowMessage(
+                type="tool_result",
+                content=result.stdout or "(no output)",
+                metadata={"tool_name": "compose", "run_id": run_id},
+            )
+        content = f"compose execution failed (exit {result.exit_code}): {result.stderr or result.stdout}"
+        return WorkflowMessage(
+            type="tool_result",
+            content=content,
+            metadata={"tool_name": "compose", "run_id": run_id, "failed": True},
+        )
+
+    def _compose_shim_snapshot(self, agent_id: "str | None") -> list[str]:
+        """Injectable-tool snapshot for this agent (allowlist ∩ allowed − forbidden)."""
+        from chat_workflow.code_exec.shim_codegen import injectable_tool_set
+        from orchestration.agent_registry import resolve_forbidden_tools
+
+        return injectable_tool_set([], resolve_forbidden_tools(agent_id))
+
+    def _reject_delegated_compose(self, agent_id: "str | None") -> "WorkflowMessage | None":
+        """Main-chat-only: reject compose for any profile-bound (delegated) agent (GH#11568)."""
+        if agent_id is None:
+            return None
+        return WorkflowMessage(
+            type="tool_result",
+            content="compose is not available for delegated subagents",
+            metadata={"tool_name": "compose"},
+        )
+
+    def _compose_gate_request_msg(self, approval_id: str, shim_snapshot: list[str]) -> "WorkflowMessage":
+        """Build the WORKFLOW_GATE approval-required notification (GH#11568)."""
+        return WorkflowMessage(
+            type="approval_required",
+            content="compose script requires approval before execution",
+            metadata={
+                "tool": "compose",
+                "approval_required": True,
+                "approval_id": approval_id,
+                "shim_snapshot": shim_snapshot,
+            },
+        )
+
+    def _compose_gate_refusal_msg(self, status: str) -> "WorkflowMessage":
+        """Terminal refusal message for a non-approved gate (GH#11568)."""
+        return WorkflowMessage(
+            type="tool_result",
+            content=f"compose execution not approved (gate status: {status}).",
+            metadata={"tool_name": "compose", "approval_status": status, "denied": True},
+        )
+
+    async def _handle_compose_tool(
+        self,
+        tool_call: dict[str, Any],
+        session_id: str,
+        execution_results: list[dict[str, Any]],
+        ctx: "LLMIterationContext | None",
+    ):
+        """Handle the compose tool call — main chat agent only (GH#11568)."""
+        program: str = tool_call.get("params", {}).get("program", "")
+        agent_id: str | None = ctx.agent_context.agent_id if (ctx and ctx.agent_context) else None
+        subagent_msg = self._reject_delegated_compose(agent_id)
+        if subagent_msg is not None:
+            yield subagent_msg
+            return
+
+        guard_msg = self._guard_compose(program, agent_id)
+        if guard_msg is not None:
+            execution_results.append({"tool": "compose", "status": "ast_rejected"})
+            yield guard_msg
+            return
+
+        shim_snapshot = self._compose_shim_snapshot(agent_id)
+        approval_id = await self._approve_compose(program, shim_snapshot, session_id)
+        if approval_id is not None:
+            yield self._compose_gate_request_msg(approval_id, shim_snapshot)
+            status = await self._poll_compose_approval(approval_id)
+            if status != "approved":
+                execution_results.append({"tool": "compose", "status": "gated", "approval_status": status})
+                yield self._compose_gate_refusal_msg(status)
+                return
+
+        run_id = str(uuid.uuid4())
+        result_msg = await self._execute_compose(program, agent_id, run_id, session_id, ctx)
+        execution_results.append({"tool": "compose", "status": "executed", "run_id": run_id})
+        yield result_msg
 
     async def _process_tool_calls(
         self,
