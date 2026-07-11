@@ -104,6 +104,61 @@ def test_extract_json_raises_on_garbage() -> None:
 
 
 # ---------------------------------------------------------------------------
+# json_utils control-character sanitization tier (#11587)
+# ---------------------------------------------------------------------------
+
+
+def test_extract_json_raw_newline_in_value() -> None:
+    from .json_utils import extract_json_object
+
+    raw = '{"summary": "line one\nline two"}'
+    assert extract_json_object(raw) == {"summary": "line one\nline two"}
+
+
+def test_extract_json_control_char_in_key() -> None:
+    from .json_utils import extract_json_object
+
+    raw = '{"bad\tkey": 1, "esc\x01key": 2}'
+    assert extract_json_object(raw) == {"bad\tkey": 1, "esc\x01key": 2}
+
+
+def test_extract_json_fence_plus_control_chars() -> None:
+    from .json_utils import extract_json_object
+
+    raw = '```json\n{"a": "x\r\ny", "b": "tab\there"}\n```'
+    assert extract_json_object(raw) == {"a": "x\r\ny", "b": "tab\there"}
+
+
+def test_extract_json_pretty_printed_passthrough() -> None:
+    from .json_utils import _escape_controls_in_strings, extract_json_object
+
+    pretty = json.dumps({"a": 1, "b": {"c": [1, 2]}}, indent=2)
+    # Structural whitespace outside string literals must be untouched.
+    assert _escape_controls_in_strings(pretty) == pretty
+    assert extract_json_object(pretty) == json.loads(pretty)
+
+
+def test_extract_json_already_escaped_not_double_escaped() -> None:
+    from .json_utils import extract_json_object
+
+    # "\\n" is a literal backslash-n (already escaped); "\n" is a raw newline.
+    raw = '{"a": "x\\ny", "b": "p\nq"}'
+    result = extract_json_object(raw)
+    assert result["a"] == "x\ny"  # single newline — NOT double-escaped to "\\ny"
+    assert result["b"] == "p\nq"
+
+
+def test_extract_json_escaped_quote_inside_string() -> None:
+    from .json_utils import extract_json_object
+
+    # \" must not terminate the string literal in the state machine.
+    raw = '{"a": "he said \\"hi\\"\nok", "b": "back\\\\slash\tend"}'
+    result = extract_json_object(raw)
+    assert result["a"] == 'he said "hi"\nok'
+    assert result["b"] == "back\\slash\tend"
+
+
+# ---------------------------------------------------------------------------
 # structured_ops.extract — dict schema path
 # ---------------------------------------------------------------------------
 
@@ -373,3 +428,29 @@ async def test_injected_llm_service_is_used_not_singleton() -> None:
 
     assert result["k"] == "from-injected"  # type: ignore[index]
     assert injected.chat.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_extract_control_char_payload_parses_without_retry() -> None:
+    """A control-char payload parses on the first attempt — no LLM retry (#11587).
+
+    Before the sanitization tier, a raw newline inside a string value made
+    extract_json_object raise JSONDecodeError and burned a full LLM retry
+    round-trip. The single-response mock would raise StopAsyncIteration on a
+    second chat() call, so call_count == 1 proves no retry happened.
+    """
+    from .structured_ops import extract
+
+    schema = {
+        "type": "object",
+        "properties": {"summary": {"type": "string"}},
+        "required": ["summary"],
+    }
+    raw = '```json\n{"summary": "first line\nsecond line"}\n```'
+    svc = _mock_llm_service([raw])
+
+    with _patch_llm_service(svc):
+        result = await extract("some text", schema, max_retries=3)
+
+    assert result["summary"] == "first line\nsecond line"  # type: ignore[index]
+    assert svc.chat.call_count == 1
