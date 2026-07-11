@@ -90,6 +90,19 @@ async def _get_forwarder() -> LogForwarder:
         return _forwarder
 
 
+async def stop_forwarder_if_running() -> bool:
+    """Stop the forwarder threads WITHOUT constructing one if never created.
+
+    ``LogForwarder.stop()`` drains the queue synchronously (``Queue.join()``
+    with no timeout) — run it off the event loop so a slow destination cannot
+    stall shutdown. Returns True if a forwarder was stopped. Issue #11638.
+    """
+    if _forwarder is None:
+        return False
+    await asyncio.to_thread(_forwarder.stop)
+    return True
+
+
 # Pydantic models for API
 
 

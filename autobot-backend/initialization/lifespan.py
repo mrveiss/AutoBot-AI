@@ -2018,13 +2018,16 @@ async def cleanup_services(app: FastAPI):
             from api.analytics import analytics_controller
 
             await analytics_controller.metrics_collector.stop_collection()
+            logger.info("✅ Metrics collection stopped")
+        except Exception as _mc_err:
+            logger.warning("Metrics collection stop failed: %s", _mc_err)
+        try:
             metrics_task = getattr(app.state, "metrics_collection_task", None)
             if metrics_task is not None and not metrics_task.done():
                 metrics_task.cancel()
                 await asyncio.gather(metrics_task, return_exceptions=True)
-            logger.info("✅ Metrics collection stopped")
-        except Exception as _mc_err:
-            logger.warning("Metrics collection shutdown failed: %s", _mc_err)
+        except Exception as _mt_err:
+            logger.warning("Metrics task cancel failed: %s", _mt_err)
 
         # Issue #11638: Shutdown orchestrator singleton (agent pools, memory)
         try:
@@ -2044,7 +2047,8 @@ async def cleanup_services(app: FastAPI):
         except Exception as _wr_err:
             logger.warning("WebResearcher shutdown failed: %s", _wr_err)
 
-        # Issue #11638: Close AI Stack client session and retry loop
+        # Issue #11638: Cancel AI Stack client retry loop (its HTTP session
+        # is the shared HTTPClientManager and is intentionally not closed)
         try:
             from services.ai_stack_client import close_ai_stack_client
 
@@ -2063,14 +2067,26 @@ async def cleanup_services(app: FastAPI):
             logger.warning("Skills engine shutdown failed: %s", _sk_err)
 
         # Issue #11638: Stop log forwarder threads if one was created
+        # (off-loop: LogForwarder.stop() drains its queue synchronously)
         try:
-            import api.log_forwarding as _log_fwd
+            from api.log_forwarding import stop_forwarder_if_running
 
-            if _log_fwd._forwarder is not None:
-                _log_fwd._forwarder.stop()
+            if await stop_forwarder_if_running():
                 logger.info("✅ Log forwarder stopped")
         except Exception as _lf_err:
             logger.warning("Log forwarder shutdown failed: %s", _lf_err)
+
+        # Issue #11638: Stop NPU worker manager health/failover/pulse tasks
+        # (started by get_worker_manager() during _wire_npu_task_queue; these
+        # loops touch Redis, so stop them BEFORE closing Redis pools)
+        try:
+            import services.npu_worker_manager as _npu_wm
+
+            if _npu_wm._worker_manager is not None:
+                await _npu_wm._worker_manager.stop_health_monitoring()
+                logger.info("✅ NPU worker manager monitoring stopped")
+        except Exception as _npu_err:
+            logger.warning("NPU worker manager shutdown failed: %s", _npu_err)
 
         # Issue #1233: Shutdown dedicated I/O thread pools
         shutdown_io_executors()
@@ -2139,8 +2155,7 @@ async def cleanup_services(app: FastAPI):
         #   pools closed above and per-call file handles.
         # - GraphRAGService / EntityExtractor / mesh components hold in-memory
         #   model state only; reclaimed at process exit.
-        # - NPUWorkerManager WebSocket subscriptions close with the server's
-        #   WebSocket shutdown; DocIndexerService / OperationIntegrationManager /
+        # - DocIndexerService / OperationIntegrationManager /
         #   ContentReachRegistry own no background tasks requiring cancellation.
         logger.info("✅ Cleanup completed successfully")
     except Exception as e:
