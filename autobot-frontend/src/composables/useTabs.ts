@@ -86,7 +86,7 @@ export function useTabs<T extends string>(
   if (tabIds.length === 0) throw new Error('useTabs: tabIds must not be empty')
 
   const initial: T =
-    opts?.initial !== undefined && (tabIds as string[]).includes(opts.initial)
+    opts?.initial !== undefined && (tabIds as readonly string[]).includes(opts.initial)
       ? opts.initial
       : tabIds[0]
 
@@ -104,7 +104,7 @@ export function useTabs<T extends string>(
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return
     event.preventDefault()
 
-    const currentIndex = (tabIds as string[]).indexOf(activeTab.value)
+    const currentIndex = (tabIds as readonly string[]).indexOf(activeTab.value)
     let newIndex: number
 
     if (key === 'ArrowLeft') {
