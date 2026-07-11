@@ -31,6 +31,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.db_url import assemble_postgres_url
 from config import settings
 from models.database import CodeSource, CodeStatus
 from models.database import ComponentSyncJob as ComponentSyncJobModel
@@ -63,7 +64,6 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
-from autobot_shared.db_url import assemble_postgres_url
 from services.deploy_artifacts import rsync_artifact_excludes
 from services.drift_checker import (
     ALLOWED_COMPONENTS,

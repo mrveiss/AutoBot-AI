@@ -268,7 +268,7 @@ def tee_and_hint(raw: str, slug: str, exit_code: int, mode: str = "failures") ->
         tee_path = _TEE_DIR / filename
         tee_path.write_text(raw, encoding="utf-8")
         return f"[full output saved: {tee_path}]"
-    except Exception as exc:
+    except Exception:
         return None
 
 
