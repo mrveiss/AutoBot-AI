@@ -145,8 +145,8 @@ def _register_stt_if_available(registry: CapabilityRegistry) -> None:
     load time.  Skips silently when no provider is configured.
     """
     try:
-        from voice_processing.providers import get_speech_provider_registry
         from integrations.stt_adapter import SpeechProviderSTTAdapter
+        from voice_processing.providers import get_speech_provider_registry
     except Exception as exc:
         logger.debug("voice_processing unavailable — STT capability not registered: %s", exc)
         return
