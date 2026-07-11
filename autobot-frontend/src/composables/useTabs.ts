@@ -43,7 +43,7 @@ export interface UseTabsReturn<T extends string> {
    * Focus follows selection after nextTick by querying [role="tab"] elements
    * within `tablistRef`.
    */
-  handleKeydown: (event: KeyboardEvent) => void
+  handleKeydown: (event: KeyboardEvent) => Promise<void>
   /**
    * Attribute builder for a tab button.
    * Returns: id, role, aria-selected, aria-controls, tabindex.
