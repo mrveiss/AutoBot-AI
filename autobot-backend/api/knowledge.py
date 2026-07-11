@@ -107,6 +107,7 @@ from knowledge.schemas.stats import (
 # NOTE: Search models (SearchRequest) defined in schemas_knowledge.py (#10666 B1)
 from knowledge_factory import get_or_create_knowledge_base
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
+from services.knowledge.stats_service import fetch_kb_core_stats  # Issue #11554 canonical stats
 from utils.path_validation import contains_path_traversal
 
 # =============================================================================
@@ -288,12 +289,10 @@ async def get_knowledge_stats(
             },
         )
 
-    stats = await kb_to_use.get_stats()
+    # Issue #11554: fetch via canonical shared function so health/dashboard
+    # and this endpoint cannot independently diverge from kb.get_stats().
+    stats = await fetch_kb_core_stats(kb_to_use)
     stats["rag_available"] = RAG_AVAILABLE
-
-    # Vectorization stats removed - get_stats() already provides fact counts using async operations
-    # The previous implementation used synchronous redis_client.hgetall() which blocked the event
-    # loop
 
     return KnowledgeStatsResponse(**stats)
 

@@ -75,6 +75,7 @@ from services.knowledge.contradiction_detector import (
     load_report,
     store_report,
 )
+from services.knowledge.stats_service import fetch_kb_core_stats  # Issue #11554 canonical stats
 from services.knowledge.synthesis_provenance import SynthesisProvenanceLog
 
 # Set up logging
@@ -460,7 +461,12 @@ async def get_health_dashboard(
 
     logger.info("Health dashboard requested")
 
-    stats, quality = await asyncio.gather(kb.get_stats(), kb.get_data_quality_metrics())
+    # Issue #11554: fetch stats via canonical shared function to prevent drift
+    # with GET /api/knowledge_base/stats which uses the same source.
+    stats, quality = await asyncio.gather(
+        fetch_kb_core_stats(kb),
+        kb.get_data_quality_metrics(),
+    )
 
     return {
         "status": _determine_health_status(stats, quality),
