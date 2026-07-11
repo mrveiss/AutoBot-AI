@@ -11,6 +11,8 @@ per-call monotonic id so concurrent same-tool calls correlate their replies.
 
 import os
 
+from chat_workflow.code_exec.protocol import RPC_SENTINEL
+
 CODEEXEC_INJECTABLE_TOOLS: frozenset[str] = frozenset(
     os.environ.get(
         "AUTOBOT_CODEEXEC_INJECTABLE_TOOLS",
@@ -62,7 +64,11 @@ def _shim_for(tool: str) -> str:
 
 
 def _rpc_helper() -> str:
-    """Shared RPC helper: per-call monotonic id + reply correlation on that id."""
+    """Shared RPC helper: per-call monotonic id + reply correlation on that id.
+
+    RPC request lines are prefixed with ``RPC_SENTINEL`` so the executor pump can
+    tell them apart from the script's own stdout / final result (GH#11613).
+    """
     return (
         "_call_seq = 0\n"
         "_pending = {}\n\n"
@@ -73,7 +79,7 @@ def _rpc_helper() -> str:
         "async def _rpc_call(tool, params):\n"
         "    call_id = _next_id()\n"
         '    req = json.dumps({"id": call_id, "tool": tool, "params": params})\n'
-        '    sys.stdout.write(req + "\\n")\n'
+        '    sys.stdout.write(_RPC_SENTINEL + req + "\\n")\n'
         "    sys.stdout.flush()\n"
         "    while call_id not in _pending:\n"
         "        line = await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)\n"
@@ -88,5 +94,9 @@ def _rpc_helper() -> str:
 
 def generate_shim_module(tools: list[str]) -> str:
     """Return Python source for the ``autobot_tools`` shim module."""
-    header = '"""autobot_tools — generated RPC shims. Do not edit."""\n' "import asyncio, json, sys\n\n"
+    header = (
+        '"""autobot_tools — generated RPC shims. Do not edit."""\n'
+        "import asyncio, json, sys\n\n"
+        f"_RPC_SENTINEL = {RPC_SENTINEL!r}\n\n"
+    )
     return header + _rpc_helper() + "\n".join(_shim_for(t) for t in tools)

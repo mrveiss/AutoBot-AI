@@ -88,6 +88,14 @@ micro-calls is worse than what we have). Replacement controls:
 
 ## 4. Failure semantics
 
+- **Result channel (GH#11613):** the shim and the script share the sandbox's
+  single stdout, so RPC framing and the script's result must be separated or
+  the returned value is polluted by the tool-call transcript. RPC request lines
+  are prefixed with a control-char sentinel (`\x1e`, Record Separator — see
+  `code_exec/protocol.py`); the executor pump routes only sentinel lines to the
+  broker and captures every other stdout line as the script's result. The
+  script therefore returns its answer by printing to stdout normally (RPC is
+  transparent); `result.stdout` is that captured output, never `container.logs()`.
 - **Partial side effects:** v1 shims are read-only, so a mid-script abort
   loses only work, not consistency. This is the main reason v1 excludes
   mutating tools; compensation logic is deferred to v2 and must be designed

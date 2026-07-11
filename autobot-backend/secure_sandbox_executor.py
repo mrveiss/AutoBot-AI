@@ -458,12 +458,15 @@ class SecureSandboxExecutor:
             buf = buf[8 + size :]
         return out, buf
 
-    async def _pump_broker_io(self, container, broker: Any) -> None:
+    async def _pump_broker_io(self, container, broker: Any, script_out: "list[str]") -> None:
         """Drive the shim RPC loop: read stdout lines, reply on stdin (GH#11568).
 
         Reads Docker's multiplexed frames from the attach socket, demuxes stdout,
-        line-splits JSON-RPC requests, and writes the broker's reply to stdin.
-        Budget exhaustion aborts the container via teardown.
+        and line-splits it. Lines prefixed with ``RPC_SENTINEL`` are shim -> broker
+        JSON-RPC requests (reply written back to stdin); every other line is the
+        script's own output and is appended to *script_out* so the RPC framing
+        never pollutes the returned result (GH#11613). Budget exhaustion aborts
+        the container via teardown.
         """
         sock = container.attach_socket(params={"stdin": 1, "stdout": 1, "stream": 1})
         stream = getattr(sock, "_sock", sock)
@@ -476,16 +479,30 @@ class SecureSandboxExecutor:
             raw_buf += chunk
             decoded, raw_buf = self._demux_frames(raw_buf)
             line_buf += decoded
-            aborted = await self._drain_lines(stream, broker, line_buf, container)
-            line_buf = aborted[1]
-            if aborted[0]:
+            aborted, line_buf = await self._drain_lines(stream, broker, line_buf, container, script_out)
+            if aborted:
                 return
 
-    async def _drain_lines(self, stream, broker: Any, line_buf: bytes, container) -> "Tuple[bool, bytes]":
-        """Process complete JSON lines in *line_buf*; return (aborted, remaining)."""
+    async def _drain_lines(
+        self, stream, broker: Any, line_buf: bytes, container, script_out: "list[str]"
+    ) -> "Tuple[bool, bytes]":
+        """Route complete lines: sentinel -> broker RPC, others -> *script_out*.
+
+        The sentinel is a MUX separator, not an auth token: a script CAN forge a
+        sentinel-prefixed line, but ``broker.handle_line`` re-validates every call
+        against the injectable allowlist + forbidden_work + per-run budget, so a
+        forged call is exactly equivalent to calling the shim it already has —
+        it gains nothing (GH#11613 security review).
+        """
+        from chat_workflow.code_exec.protocol import RPC_SENTINEL_BYTES  # lazy
+
         while b"\n" in line_buf:
             raw, line_buf = line_buf.split(b"\n", 1)
-            reply = await broker.handle_line(raw.decode("utf-8", errors="replace"))
+            if not raw.startswith(RPC_SENTINEL_BYTES):
+                script_out.append(raw.decode("utf-8", errors="replace"))
+                continue
+            payload = raw[len(RPC_SENTINEL_BYTES) :].decode("utf-8", errors="replace")
+            reply = await broker.handle_line(payload)
             await asyncio.to_thread(stream.sendall, (reply + "\n").encode("utf-8"))
             if broker.budget_exhausted:
                 await asyncio.to_thread(container.kill)
@@ -534,8 +551,9 @@ class SecureSandboxExecutor:
             container = self.docker_client.containers.create(**cc)
             self.active_containers[container_id] = container.id
             container.start()
-            await self._pump_broker_io(container, broker)
-            return await self._collect_broker_results(container, container_id, cfg, start_time)
+            script_out: list[str] = []
+            await self._pump_broker_io(container, broker, script_out)
+            return await self._collect_broker_results(container, container_id, cfg, start_time, "\n".join(script_out))
         except Exception as e:  # noqa: BLE001
             self.logger.error("Broker script execution error: %s", e)
             return self._create_execution_error_result(e, start_time, container_id)
@@ -552,23 +570,28 @@ class SecureSandboxExecutor:
             pass
 
     async def _collect_broker_results(
-        self, container, container_id: str, cfg: "SandboxConfig", start_time: float
+        self, container, container_id: str, cfg: "SandboxConfig", start_time: float, script_stdout: str
     ) -> "SandboxResult":
         """Wait for an already-started broker container, then collect results (GH#11568 BLOCKER-2).
 
         Unlike ``_run_container_and_collect_results`` this never calls ``start()``
         again (the pump already started the container) — avoiding a 409 Conflict.
+        The result stdout is *script_stdout* — the non-RPC output the pump captured
+        live (GH#11613) — not ``container.logs()``, which interleaves the RPC frames.
         """
         try:
             exit_code = await asyncio.to_thread(lambda: container.wait(timeout=cfg.timeout)["StatusCode"])
         except Exception:  # noqa: BLE001
             await asyncio.to_thread(container.kill)
             exit_code = -9
-        logs = await asyncio.to_thread(lambda: container.logs(stdout=True, stderr=True, stream=False))
-        stdout_logs, stderr_logs = self._parse_logs(logs)
+        logs = await asyncio.to_thread(lambda: container.logs(stdout=False, stderr=True, stream=False))
+        # logs holds stderr only (stdout=False); _parse_logs lumps all text into
+        # its first element, so that IS the stderr here (result stdout comes from
+        # the pump-captured script_stdout, not logs).
+        stderr_logs, _ = self._parse_logs(logs)
         security_events = await self._collect_security_events(container_id)
         result = self._build_sandbox_result(
-            exit_code, stdout_logs, stderr_logs, time.time() - start_time, container_id, security_events, {}, cfg
+            exit_code, script_stdout, stderr_logs, time.time() - start_time, container_id, security_events, {}, cfg
         )
         await self._log_execution_metrics(container_id, result)
         return result
