@@ -13,6 +13,7 @@ import asyncio
 import hashlib
 import hmac
 import logging
+import threading
 import time
 from typing import Any, Dict
 
@@ -31,13 +32,16 @@ class HTTPClientManager:
     """
 
     _instance: "HTTPClientManager" | None = None
+    _instance_lock = threading.Lock()
     _session: ClientSession | None = None
     _lock = asyncio.Lock()
 
     def __new__(cls):
-        """Create or return singleton HTTPClientManager instance."""
+        """Create or return singleton HTTPClientManager instance (double-checked, #11637)."""
         if cls._instance is None:
-            cls._instance = super(HTTPClientManager, cls).__new__(cls)
+            with cls._instance_lock:
+                if cls._instance is None:
+                    cls._instance = super(HTTPClientManager, cls).__new__(cls)
         return cls._instance
 
     def __init__(self) -> None:
@@ -365,7 +369,6 @@ class HTTPClientManager:
 
 
 # Global singleton instance (thread-safe)
-import threading
 
 _http_client: HTTPClientManager | None = None
 _http_client_lock = threading.Lock()
@@ -393,6 +396,32 @@ async def close_http_client() -> None:
     if _http_client:
         await _http_client.close()
         _http_client = None
+
+
+def reset_http_client_for_new_loop() -> None:
+    """Discard the loop-bound session/manager so the next call recreates them.
+
+    Mirror of ``autobot_shared.redis_client.reset_async_redis_pools`` (#10936):
+    call from synchronous code immediately before entering a NEW event loop
+    (e.g. a Celery ``worker_process_init`` handler) so the aiohttp
+    ``ClientSession`` — which is bound to the loop that created it — is never
+    reused across loop boundaries. The old session is discarded, not closed;
+    its connections are reclaimed by GC exactly as discarded Redis pools are.
+
+    Limitation (same as ``reset_async_redis_pools``): objects that cached the
+    manager instance at construction keep the old, loop-bound one — the reset
+    only affects future ``get_http_client()`` / ``HTTPClientManager()`` calls.
+
+    Issue #11637.
+    """
+    global _http_client
+    with _http_client_lock:
+        _http_client = None
+        with HTTPClientManager._instance_lock:
+            HTTPClientManager._instance = None
+            # A contended asyncio.Lock binds permanently to the loop that
+            # contended it — rebind so the new loop gets a fresh lock.
+            HTTPClientManager._lock = asyncio.Lock()
 
 
 def sign_request(

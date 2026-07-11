@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Dict, List
@@ -231,12 +232,15 @@ class PluginRegistry:
     """
 
     _instance: "PluginRegistry" | None = None
+    _instance_lock = threading.Lock()
     _plugins: Dict[str, BasePlugin] = {}
 
     def __new__(cls):
-        """Singleton pattern."""
+        """Singleton pattern (double-checked locking, #11637)."""
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            with cls._instance_lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
         return cls._instance
 
     def register(self, plugin: BasePlugin) -> None:

@@ -38,8 +38,8 @@ def _mixin_instance():
 # tag omits the '>' (`</TOOL_CALL` + newline + more prose).
 _BOARD_OUTPUT = (
     "Creating the high priority task.\n\n"
-    "<TOOL_CALL name=\"create_task\" "
-    "params='{\"title\":\"Write the Q3 financial report\",\"priority\":\"high\"}'>"
+    '<TOOL_CALL name="create_task" '
+    'params=\'{"title":"Write the Q3 financial report","priority":"high"}\'>'
     "Create task</TOOL_CALL\n\nHigh priority task created."
 )
 

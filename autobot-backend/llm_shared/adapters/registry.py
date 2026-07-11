@@ -11,6 +11,7 @@ and runtime adapter switching per agent/task.
 
 from __future__ import annotations
 
+import threading
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -29,11 +30,17 @@ class AdapterRegistry:
     """
 
     _instance: "AdapterRegistry" | None = None
+    _instance_lock = threading.Lock()
 
     def __new__(cls) -> "AdapterRegistry":
+        # Issue #11637: double-checked locking — unlocked __new__ could
+        # construct two instances under concurrent first access.
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
+            with cls._instance_lock:
+                if cls._instance is None:
+                    instance = super().__new__(cls)
+                    instance._initialized = False
+                    cls._instance = instance
         return cls._instance
 
     def __init__(self) -> None:

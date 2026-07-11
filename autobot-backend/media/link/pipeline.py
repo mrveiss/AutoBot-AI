@@ -32,7 +32,6 @@ None of these helpers are removed; they are kept here to preserve all call
 sites intact (see issue #7401 caller audit).
 """
 
-import asyncio
 import ipaddress
 import re
 import time
@@ -82,11 +81,8 @@ _JINA_FAILURE_WINDOW_SECONDS = 60.0
 _jina_cooldown_until: float = 0.0
 _jina_failures_in_window: List[float] = []
 
-# Pooled aiohttp session for Jina Reader (reused across calls for connection
-# pooling). Lazy-created under _jina_session_lock to serialize the first-
-# creation race. Close via close_jina_session() during app shutdown.
-_jina_session: "aiohttp.ClientSession" | None = None
-_jina_session_lock: asyncio.Lock | None = None
+# Jina Reader requests go through the shared HTTPClientManager session
+# (#11641) — no private session fork; see _get_jina_session().
 
 
 class LinkPipeline(BasePipeline):
@@ -451,27 +447,17 @@ async def process_url(url: str, render: str = "auto", timeout: float = 30.0) -> 
 
 
 async def _get_jina_session() -> "aiohttp.ClientSession":
-    """Return the shared Jina Reader aiohttp.ClientSession, creating on first call.
+    """Return the shared pooled aiohttp session.
 
-    Lazy-created under an asyncio.Lock so concurrent first calls don't each
-    create their own session. Closed at app shutdown via close_jina_session().
+    Issue #11641: the private module-level Jina session forked the concept
+    owned by ``autobot_shared.http_client.HTTPClientManager``. Delegates to
+    the canonical singleton (lifecycle managed there); the Jina-specific
+    timeout stays per-request via ``_JINA_TIMEOUT``. Kept as an indirection
+    point — tests patch this seam.
     """
-    global _jina_session, _jina_session_lock
-    if _jina_session_lock is None:
-        _jina_session_lock = asyncio.Lock()
-    if _jina_session is None or _jina_session.closed:
-        async with _jina_session_lock:
-            if _jina_session is None or _jina_session.closed:
-                _jina_session = aiohttp.ClientSession()
-    return _jina_session
+    from autobot_shared.http_client import get_http_client
 
-
-async def close_jina_session() -> None:
-    """Close the pooled Jina Reader session. Call from app shutdown hook."""
-    global _jina_session
-    if _jina_session is not None and not _jina_session.closed:
-        await _jina_session.close()
-    _jina_session = None
+    return await get_http_client().get_session()
 
 
 def _record_jina_failure() -> None:

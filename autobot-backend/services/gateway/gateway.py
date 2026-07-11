@@ -13,6 +13,7 @@ and channel adapters.
 from __future__ import annotations
 
 import asyncio
+import threading
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
@@ -40,11 +41,14 @@ class Gateway:
 
     _instance: "Gateway" | None = None
     _lock = asyncio.Lock()
+    _instance_lock = threading.Lock()
 
     def __new__(cls, *args, **kwargs):
-        """Singleton pattern for Gateway instance."""
+        """Singleton pattern for Gateway instance (double-checked, #11637)."""
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            with cls._instance_lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(
