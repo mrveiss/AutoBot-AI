@@ -15,7 +15,9 @@ import ast
 import asyncio
 import html
 import json
+import os
 import re
+import uuid
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from async_chat_workflow import WorkflowMessage
@@ -46,6 +48,18 @@ logger = get_logger(__name__)
 CODEEXEC_ENABLED: bool = env_flag("AUTOBOT_CODEEXEC_ENABLED", default=False)
 CODEEXEC_AUTOAPPROVE_READONLY: bool = env_flag("AUTOBOT_CODEEXEC_AUTOAPPROVE_READONLY", default=True)
 CODEEXEC_MAX_SCRIPT_RETRIES: int = env_int("AUTOBOT_CODEEXEC_MAX_SCRIPT_RETRIES", default=1)
+# GH#11568 BLOCKER-4: the read-only tool set eligible for auto-approval (design §3.1).
+# Auto-approve fires ONLY when every shimmed tool is in this set. Env-overridable so it
+# tracks the injectable default; sensitive tools are structurally excluded upstream.
+CODEEXEC_READONLY_TOOLS: frozenset[str] = frozenset(
+    os.environ.get(
+        "AUTOBOT_CODEEXEC_READONLY_TOOLS",
+        "web_search,scrape_url,map_site,extract_structured_data",
+    ).split(",")
+)
+# Approval-wait polling knobs (mirrors terminal-command approval loop).
+CODEEXEC_APPROVAL_WAIT_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_WAIT_SECONDS", default=1800)
+CODEEXEC_APPROVAL_POLL_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_POLL_SECONDS", default=2)
 
 # Issue #4482: Default retry count for schema self-correction loop.
 _DEFAULT_SCHEMA_RETRIES = 3
@@ -2914,27 +2928,44 @@ class ToolHandlerMixin:
             metadata={"tool_name": "compose", "ast_violations": verdict.violations},
         )
 
-    async def _approve_compose(
-        self, program: str, shim_snapshot: list[str], session_id: str
-    ) -> "WorkflowMessage | None":
-        """Create a WORKFLOW_GATE approval when auto-approve is off (GH#11568).
+    @staticmethod
+    def _compose_auto_approvable(shim_snapshot: list[str]) -> bool:
+        """Auto-approve only when the flag is on AND all shims are read-only (design §3.1)."""
+        return CODEEXEC_AUTOAPPROVE_READONLY and set(shim_snapshot) <= CODEEXEC_READONLY_TOOLS
 
-        Returns an approval_required WorkflowMessage carrying the persisted
-        approval id, or ``None`` when the read-only auto-approve posture applies.
+    async def _approve_compose(self, program: str, shim_snapshot: list[str], session_id: str) -> "str | None":
+        """Return an approval id requiring a gate, or ``None`` to auto-approve (GH#11568).
+
+        Auto-approval requires the flag AND a fully read-only shim set; any
+        non-read-only shim forces the WORKFLOW_GATE even with the flag on.
         """
-        if CODEEXEC_AUTOAPPROVE_READONLY:
+        if self._compose_auto_approvable(shim_snapshot):
             return None
-        approval_id = await self._persist_compose_approval(program, shim_snapshot, session_id)
-        return WorkflowMessage(
-            type="approval_required",
-            content="compose script requires approval before execution",
-            metadata={
-                "tool": "compose",
-                "approval_required": True,
-                "approval_id": approval_id,
-                "shim_snapshot": shim_snapshot,
-            },
-        )
+        return await self._persist_compose_approval(program, shim_snapshot, session_id)
+
+    async def _poll_compose_approval(self, approval_id: str) -> str:
+        """Poll the WORKFLOW_GATE until decided; return its terminal status (GH#11568 MINOR-2).
+
+        Mirrors the terminal-command approval loop: a bounded poll on the persisted
+        gate. Returns ``approved``/``rejected``/``revision_requested``, or
+        ``timeout`` when no decision lands within the wait budget.
+        """
+        import uuid as _uuid
+
+        from services.approval_gate_service import ApprovalGateService
+        from user_management.database import get_async_session_factory
+
+        elapsed = 0
+        session_factory = get_async_session_factory()
+        while elapsed < CODEEXEC_APPROVAL_WAIT_SECONDS:
+            async with session_factory() as db:
+                approval = await ApprovalGateService(db).get(_uuid.UUID(approval_id))
+            status = getattr(approval, "status", None)
+            if status and status != "pending":
+                return status
+            await asyncio.sleep(CODEEXEC_APPROVAL_POLL_SECONDS)
+            elapsed += CODEEXEC_APPROVAL_POLL_SECONDS
+        return "timeout"
 
     async def _persist_compose_approval(self, program: str, shim_snapshot: list[str], session_id: str) -> "str | None":
         """Persist a WORKFLOW_GATE Approval carrying program + shims + budgets (GH#11568)."""
@@ -3033,6 +3064,27 @@ class ToolHandlerMixin:
             metadata={"tool_name": "compose"},
         )
 
+    def _compose_gate_request_msg(self, approval_id: str, shim_snapshot: list[str]) -> "WorkflowMessage":
+        """Build the WORKFLOW_GATE approval-required notification (GH#11568)."""
+        return WorkflowMessage(
+            type="approval_required",
+            content="compose script requires approval before execution",
+            metadata={
+                "tool": "compose",
+                "approval_required": True,
+                "approval_id": approval_id,
+                "shim_snapshot": shim_snapshot,
+            },
+        )
+
+    def _compose_gate_refusal_msg(self, status: str) -> "WorkflowMessage":
+        """Terminal refusal message for a non-approved gate (GH#11568)."""
+        return WorkflowMessage(
+            type="tool_result",
+            content=f"compose execution not approved (gate status: {status}).",
+            metadata={"tool_name": "compose", "approval_status": status, "denied": True},
+        )
+
     async def _handle_compose_tool(
         self,
         tool_call: dict[str, Any],
@@ -3041,8 +3093,6 @@ class ToolHandlerMixin:
         ctx: "LLMIterationContext | None",
     ):
         """Handle the compose tool call — main chat agent only (GH#11568)."""
-        import uuid
-
         program: str = tool_call.get("params", {}).get("program", "")
         agent_id: str | None = ctx.agent_context.agent_id if (ctx and ctx.agent_context) else None
         subagent_msg = self._reject_delegated_compose(agent_id)
@@ -3057,11 +3107,14 @@ class ToolHandlerMixin:
             return
 
         shim_snapshot = self._compose_shim_snapshot(agent_id)
-        approval_msg = await self._approve_compose(program, shim_snapshot, session_id)
-        if approval_msg is not None:
-            execution_results.append({"tool": "compose", "status": "pending_approval"})
-            yield approval_msg
-            return
+        approval_id = await self._approve_compose(program, shim_snapshot, session_id)
+        if approval_id is not None:
+            yield self._compose_gate_request_msg(approval_id, shim_snapshot)
+            status = await self._poll_compose_approval(approval_id)
+            if status != "approved":
+                execution_results.append({"tool": "compose", "status": "gated", "approval_status": status})
+                yield self._compose_gate_refusal_msg(status)
+                return
 
         run_id = str(uuid.uuid4())
         result_msg = await self._execute_compose(program, agent_id, run_id, session_id, ctx)
