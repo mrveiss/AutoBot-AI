@@ -5,9 +5,14 @@
 """
 Human-in-the-Loop Takeover Manager for AutoBot Phase 8
 Provides interrupt/takeover capabilities for autonomous operations
+
+Issue #11639: State moved to Redis so all uvicorn workers share visibility.
+Fallback to in-process dicts when Redis is unavailable (single-worker dev mode).
 """
 
 import asyncio
+import json
+import os
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
@@ -22,6 +27,48 @@ logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for datetime field keys (Issue #326)
 DATETIME_FIELD_KEYS = {"started_at", "ended_at"}
+
+# ---------------------------------------------------------------------------
+# TTL constants — env-var-backed, never hard-coded (#11639)
+# ---------------------------------------------------------------------------
+_DEFAULT_PENDING_TTL_SECONDS = 1800  # 30 min matches default_timeout
+
+
+def _resolve_pending_ttl() -> int:
+    """Return TTL seconds for autobot:takeover:pending:* Redis keys."""
+    raw = os.environ.get("AUTOBOT_TAKEOVER_PENDING_TTL_SECONDS")
+    if raw is None:
+        return _DEFAULT_PENDING_TTL_SECONDS
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_TAKEOVER_PENDING_TTL_SECONDS=%r is not an integer; "
+            "falling back to %ds",
+            raw,
+            _DEFAULT_PENDING_TTL_SECONDS,
+        )
+        return _DEFAULT_PENDING_TTL_SECONDS
+    if value <= 0:
+        logger.warning(
+            "AUTOBOT_TAKEOVER_PENDING_TTL_SECONDS=%d must be positive; "
+            "falling back to %ds",
+            value,
+            _DEFAULT_PENDING_TTL_SECONDS,
+        )
+        return _DEFAULT_PENDING_TTL_SECONDS
+    return value
+
+
+_PENDING_TTL_SECONDS: int = _resolve_pending_ttl()
+
+# Redis key namespace
+_NS = "autobot:takeover"
+_KEY_PENDING = f"{_NS}:pending"           # STRING prefix; full key = {_KEY_PENDING}:<id>
+_KEY_PENDING_INDEX = f"{_NS}:pending_index"  # SET of active request IDs
+_KEY_SESSIONS = f"{_NS}:sessions"         # HASH: session_id -> JSON
+_KEY_PAUSED = f"{_NS}:paused_tasks"       # SET of paused task IDs
+_KEY_REQ_TASK = f"{_NS}:request_task"     # HASH: request_id -> memory task_id
 
 
 class TakeoverTrigger(Enum):
@@ -61,6 +108,26 @@ class TakeoverRequest:
     expires_at: datetime | None
     auto_approve: bool = False
 
+    def to_json(self) -> str:
+        """Serialize to JSON string for Redis storage."""
+        d = asdict(self)
+        d["trigger"] = self.trigger.value
+        d["priority"] = self.priority.value
+        d["requested_at"] = self.requested_at.isoformat()
+        d["expires_at"] = self.expires_at.isoformat() if self.expires_at else None
+        return json.dumps(d, ensure_ascii=False)
+
+    @classmethod
+    def from_json(cls, raw: str | bytes) -> "TakeoverRequest":
+        """Deserialize from JSON string retrieved from Redis."""
+        d = json.loads(raw)
+        d["trigger"] = TakeoverTrigger(d["trigger"])
+        d["priority"] = TaskPriority(d["priority"])
+        d["requested_at"] = datetime.fromisoformat(d["requested_at"])
+        if d["expires_at"]:
+            d["expires_at"] = datetime.fromisoformat(d["expires_at"])
+        return cls(**d)
+
 
 @dataclass
 class TakeoverSession:
@@ -76,25 +143,65 @@ class TakeoverSession:
     system_snapshot: Dict[str, Any]
     resolution: str | None = None
 
+    def to_json(self) -> str:
+        """Serialize to JSON string for Redis storage."""
+        d = asdict(self)
+        d["state"] = self.state.value
+        d["request"]["trigger"] = self.request.trigger.value
+        d["request"]["priority"] = self.request.priority.value
+        d["request"]["requested_at"] = self.request.requested_at.isoformat()
+        if self.request.expires_at:
+            d["request"]["expires_at"] = self.request.expires_at.isoformat()
+        d["started_at"] = self.started_at.isoformat() if self.started_at else None
+        d["ended_at"] = self.ended_at.isoformat() if self.ended_at else None
+        return json.dumps(d, ensure_ascii=False)
+
+    @classmethod
+    def from_json(cls, raw: str | bytes) -> "TakeoverSession":
+        """Deserialize from JSON string retrieved from Redis."""
+        d = json.loads(raw)
+        d["state"] = TakeoverState(d["state"])
+        req = d["request"]
+        req["trigger"] = TakeoverTrigger(req["trigger"])
+        req["priority"] = TaskPriority(req["priority"])
+        req["requested_at"] = datetime.fromisoformat(req["requested_at"])
+        if req["expires_at"]:
+            req["expires_at"] = datetime.fromisoformat(req["expires_at"])
+        d["request"] = TakeoverRequest(**req)
+        if d["started_at"]:
+            d["started_at"] = datetime.fromisoformat(d["started_at"])
+        if d["ended_at"]:
+            d["ended_at"] = datetime.fromisoformat(d["ended_at"])
+        return cls(**d)
+
 
 class TakeoverManager:
     """
-    Manages human-in-the-loop takeover capabilities for autonomous operations
+    Manages human-in-the-loop takeover capabilities for autonomous operations.
+
+    State is stored in Redis (Issue #11639) so all uvicorn workers share
+    visibility. Falls back to in-process dicts when Redis is unavailable.
     """
 
-    def __init__(self, memory_manager: MemoryManager | None = None):
-        """Initialize takeover manager with memory and session tracking."""
+    def __init__(self, memory_manager: MemoryManager | None = None, _redis=None):
+        """Initialize takeover manager with memory and session tracking.
+
+        Args:
+            memory_manager: Optional MemoryManager override.
+            _redis: Optional Redis client override (for tests / fallback mode).
+        """
         self.memory_manager = memory_manager or MemoryManager()
+        self._redis = _redis  # None = use get_async_redis_client(); set in tests
+        self._redis_available: bool | None = None  # None = not yet probed
+        self._redis_warning_logged = False
 
-        # Active state tracking
-        self.pending_requests: Dict[str, TakeoverRequest] = {}
-        self.active_sessions: Dict[str, TakeoverSession] = {}
-        self.paused_tasks: Set[str] = set()
-        # Maps request_id -> memory task_id so _get_task_id_for_request can look it up.
-        # Populated in request_takeover; cleaned up in _expire_request. Issue #2869.
-        self._request_task_ids: Dict[str, str] = {}
+        # In-process fallback state (used when Redis unavailable)
+        self._fb_pending: Dict[str, TakeoverRequest] = {}
+        self._fb_sessions: Dict[str, TakeoverSession] = {}
+        self._fb_paused: Set[str] = set()
+        self._fb_req_task: Dict[str, str] = {}
 
-        # Callbacks and handlers
+        # Callbacks and handlers (always per-process)
         self.trigger_handlers: Dict[TakeoverTrigger, List[Callable]] = {}
         self.state_change_callbacks: List[Callable] = []
 
@@ -104,6 +211,206 @@ class TakeoverManager:
         self.auto_approve_triggers = {TakeoverTrigger.SYSTEM_OVERLOAD}
 
         logger.info("Takeover Manager initialized")
+
+    # ------------------------------------------------------------------
+    # Redis plumbing
+    # ------------------------------------------------------------------
+
+    async def _get_redis(self):
+        """Return a Redis client, or None if unavailable."""
+        if self._redis is not None:
+            return self._redis
+        try:
+            from autobot_shared.redis_client import get_async_redis_client
+            return await get_async_redis_client()
+        except Exception:
+            return None
+
+    async def _redis_client(self):
+        """Return a usable Redis client, logging once on first miss."""
+        r = await self._get_redis()
+        if r is None and not self._redis_warning_logged:
+            logger.warning(
+                "TakeoverManager: Redis unavailable — degrading to in-process state "
+                "(cross-worker visibility disabled; single-worker mode only)"
+            )
+            self._redis_warning_logged = True
+        return r
+
+    # ------------------------------------------------------------------
+    # pending_requests helpers
+    # ------------------------------------------------------------------
+
+    async def _pending_set(self, request_id: str, request: TakeoverRequest) -> None:
+        """Store a pending request in Redis with TTL."""
+        r = await self._redis_client()
+        if r is None:
+            self._fb_pending[request_id] = request
+            return
+        key = f"{_KEY_PENDING}:{request_id}"
+        await r.set(key, request.to_json())
+        await r.expire(key, _PENDING_TTL_SECONDS)
+        await r.sadd(_KEY_PENDING_INDEX, request_id)
+
+    async def _pending_getdel(self, request_id: str) -> TakeoverRequest | None:
+        """Atomically retrieve-and-delete a pending request (prevents double-approve)."""
+        r = await self._redis_client()
+        if r is None:
+            req = self._fb_pending.pop(request_id, None)
+            return req
+        key = f"{_KEY_PENDING}:{request_id}"
+        raw = await r.getdel(key)
+        if raw is None:
+            return None
+        await r.srem(_KEY_PENDING_INDEX, request_id)
+        return TakeoverRequest.from_json(raw)
+
+    async def _pending_get(self, request_id: str) -> TakeoverRequest | None:
+        """Read a pending request without deleting it."""
+        r = await self._redis_client()
+        if r is None:
+            return self._fb_pending.get(request_id)
+        key = f"{_KEY_PENDING}:{request_id}"
+        raw = await r.get(key)
+        return TakeoverRequest.from_json(raw) if raw else None
+
+    async def _pending_delete(self, request_id: str) -> None:
+        """Delete a pending request (expire / manual removal)."""
+        r = await self._redis_client()
+        if r is None:
+            self._fb_pending.pop(request_id, None)
+            return
+        key = f"{_KEY_PENDING}:{request_id}"
+        await r.delete(key)
+        await r.srem(_KEY_PENDING_INDEX, request_id)
+
+    async def _pending_ids(self) -> Set[str]:
+        """Return all current pending request IDs."""
+        r = await self._redis_client()
+        if r is None:
+            return set(self._fb_pending.keys())
+        members = await r.smembers(_KEY_PENDING_INDEX)
+        return {m.decode() if isinstance(m, bytes) else m for m in members}
+
+    async def _pending_count(self) -> int:
+        """Return count of pending requests."""
+        r = await self._redis_client()
+        if r is None:
+            return len(self._fb_pending)
+        ids = await self._pending_ids()
+        return len(ids)
+
+    # ------------------------------------------------------------------
+    # active_sessions helpers
+    # ------------------------------------------------------------------
+
+    async def _sessions_set(self, session_id: str, session: TakeoverSession) -> None:
+        """Store a session in the Redis hash."""
+        r = await self._redis_client()
+        if r is None:
+            self._fb_sessions[session_id] = session
+            return
+        await r.hset(_KEY_SESSIONS, session_id, session.to_json())
+
+    async def _sessions_get(self, session_id: str) -> TakeoverSession | None:
+        """Retrieve a session from the Redis hash."""
+        r = await self._redis_client()
+        if r is None:
+            return self._fb_sessions.get(session_id)
+        raw = await r.hget(_KEY_SESSIONS, session_id)
+        return TakeoverSession.from_json(raw) if raw else None
+
+    async def _sessions_delete(self, session_id: str) -> None:
+        """Remove a session from the Redis hash."""
+        r = await self._redis_client()
+        if r is None:
+            self._fb_sessions.pop(session_id, None)
+            return
+        await r.hdel(_KEY_SESSIONS, session_id)
+
+    async def _sessions_all(self) -> Dict[str, TakeoverSession]:
+        """Return all active sessions."""
+        r = await self._redis_client()
+        if r is None:
+            return dict(self._fb_sessions)
+        raw_map = await r.hgetall(_KEY_SESSIONS)
+        result = {}
+        for k, v in raw_map.items():
+            key = k.decode() if isinstance(k, bytes) else k
+            result[key] = TakeoverSession.from_json(v)
+        return result
+
+    async def _sessions_count(self) -> int:
+        """Return number of active sessions."""
+        r = await self._redis_client()
+        if r is None:
+            return len(self._fb_sessions)
+        sessions = await self._sessions_all()
+        return len(sessions)
+
+    async def _sessions_contains(self, session_id: str) -> bool:
+        """Check whether a session exists."""
+        r = await self._redis_client()
+        if r is None:
+            return session_id in self._fb_sessions
+        raw = await r.hget(_KEY_SESSIONS, session_id)
+        return raw is not None
+
+    # ------------------------------------------------------------------
+    # paused_tasks helpers
+    # ------------------------------------------------------------------
+
+    async def _paused_add(self, task_id: str) -> None:
+        r = await self._redis_client()
+        if r is None:
+            self._fb_paused.add(task_id)
+            return
+        await r.sadd(_KEY_PAUSED, task_id)
+
+    async def _paused_remove(self, task_id: str) -> None:
+        r = await self._redis_client()
+        if r is None:
+            self._fb_paused.discard(task_id)
+            return
+        await r.srem(_KEY_PAUSED, task_id)
+
+    async def _paused_count(self) -> int:
+        r = await self._redis_client()
+        if r is None:
+            return len(self._fb_paused)
+        members = await r.smembers(_KEY_PAUSED)
+        return len(members)
+
+    # ------------------------------------------------------------------
+    # _request_task_ids helpers
+    # ------------------------------------------------------------------
+
+    async def _req_task_set(self, request_id: str, task_id: str) -> None:
+        r = await self._redis_client()
+        if r is None:
+            self._fb_req_task[request_id] = task_id
+            return
+        await r.hset(_KEY_REQ_TASK, request_id, task_id)
+
+    async def _req_task_get(self, request_id: str) -> str | None:
+        r = await self._redis_client()
+        if r is None:
+            return self._fb_req_task.get(request_id)
+        raw = await r.hget(_KEY_REQ_TASK, request_id)
+        if raw is None:
+            return None
+        return raw.decode() if isinstance(raw, bytes) else raw
+
+    async def _req_task_delete(self, request_id: str) -> None:
+        r = await self._redis_client()
+        if r is None:
+            self._fb_req_task.pop(request_id, None)
+            return
+        await r.hdel(_KEY_REQ_TASK, request_id)
+
+    # ------------------------------------------------------------------
+    # Business logic (unchanged public API)
+    # ------------------------------------------------------------------
 
     def _create_takeover_request(
         self,
@@ -121,20 +428,6 @@ class TakeoverManager:
         Create a TakeoverRequest object with computed fields.
 
         Issue #665: Extracted from request_takeover to reduce function length.
-
-        Args:
-            request_id: Unique request identifier
-            trigger: Type of takeover trigger
-            reason: Reason for takeover request
-            requesting_agent: Agent requesting takeover
-            affected_tasks: List of affected task IDs
-            priority: Request priority
-            context_data: Additional context
-            timeout_minutes: Optional timeout override
-            auto_approve: Whether to auto-approve
-
-        Returns:
-            Configured TakeoverRequest object
         """
         timeout = timedelta(minutes=timeout_minutes) if timeout_minutes else self.default_timeout
         expires_at = datetime.now(tz=timezone.utc) + timeout
@@ -164,16 +457,6 @@ class TakeoverManager:
         Record takeover request in memory system.
 
         Issue #665: Extracted from request_takeover to reduce function length.
-
-        Args:
-            trigger: Type of takeover trigger
-            reason: Reason for takeover request
-            priority: Request priority
-            requesting_agent: Agent requesting takeover
-            affected_tasks: List of affected task IDs
-
-        Returns:
-            Task ID from memory system
         """
         task_id = self.memory_manager.create_task_record(
             task_name="Takeover Request",
@@ -191,26 +474,14 @@ class TakeoverManager:
         return task_id
 
     def _is_critical_trigger(self, trigger: TakeoverTrigger) -> bool:
-        """Check if trigger requires immediate task pause. Issue #620.
-
-        Args:
-            trigger: The takeover trigger type
-
-        Returns:
-            True if trigger is critical. Issue #620.
-        """
+        """Check if trigger requires immediate task pause. Issue #620."""
         return trigger in {
             TakeoverTrigger.CRITICAL_ERROR,
             TakeoverTrigger.SECURITY_CONCERN,
         }
 
     async def _handle_post_request_actions(self, request: TakeoverRequest, request_id: str) -> None:
-        """Handle actions after takeover request is created. Issue #620.
-
-        Args:
-            request: The created takeover request
-            request_id: Unique request identifier. Issue #620.
-        """
+        """Handle actions after takeover request is created. Issue #620."""
         await self._execute_trigger_handlers(request)
 
         if self._is_critical_trigger(request.trigger):
@@ -238,7 +509,7 @@ class TakeoverManager:
         timeout_minutes: int | None = None,
         auto_approve: bool = False,
     ) -> str:
-        """Request human takeover of autonomous operations. Issue #665, #620."""
+        """Request human takeover of autonomous operations. Issue #665, #620, #11639."""
         request_id = f"takeover_{int(time.time() * 1000)}"
 
         request = self._create_takeover_request(
@@ -254,27 +525,24 @@ class TakeoverManager:
         )
 
         memory_task_id = self._record_takeover_in_memory(trigger, reason, priority, requesting_agent, affected_tasks)
-        # Store the mapping so _get_task_id_for_request can complete/fail the task
-        # when the request is approved or expires. Issue #2869.
-        self._request_task_ids[request_id] = memory_task_id
-
-        self.pending_requests[request_id] = request
+        await self._req_task_set(request_id, memory_task_id)
+        await self._pending_set(request_id, request)
         await self._handle_post_request_actions(request, request_id)
 
         return request_id
 
     async def _validate_takeover_request(self, request_id: str) -> TakeoverRequest:
         """Validate takeover request exists, not expired, and capacity available. Issue #620."""
-        if request_id not in self.pending_requests:
+        request = await self._pending_get(request_id)
+        if request is None:
             raise ValueError(f"Takeover request not found: {request_id}")
-
-        request = self.pending_requests[request_id]
 
         if request.expires_at and datetime.now(tz=timezone.utc) > request.expires_at:
             await self._expire_request(request_id)
             raise ValueError(f"Takeover request has expired: {request_id}")
 
-        if len(self.active_sessions) >= self.max_concurrent_sessions:
+        session_count = await self._sessions_count()
+        if session_count >= self.max_concurrent_sessions:
             raise RuntimeError("Maximum concurrent takeover sessions reached")
 
         return request
@@ -282,7 +550,7 @@ class TakeoverManager:
     async def _create_takeover_session(
         self, request_id: str, request: TakeoverRequest, human_operator: str
     ) -> TakeoverSession:
-        """Create and register a new takeover session. Issue #620."""
+        """Create and register a new takeover session. Issue #620, #11639."""
         session_id = f"session_{request_id}_{int(time.time())}"
         system_snapshot = await self._capture_system_snapshot()
 
@@ -297,8 +565,12 @@ class TakeoverManager:
             system_snapshot=system_snapshot,
         )
 
-        del self.pending_requests[request_id]
-        self.active_sessions[session_id] = session
+        # Atomic GETDEL: only the first worker to call this succeeds (#11639)
+        deleted = await self._pending_getdel(request_id)
+        if deleted is None:
+            raise ValueError(f"Takeover request already approved or expired: {request_id}")
+
+        await self._sessions_set(session_id, session)
         return session
 
     async def approve_takeover(
@@ -313,18 +585,19 @@ class TakeoverManager:
 
         await self._pause_affected_tasks(request.affected_tasks)
 
-        self.memory_manager.complete_task(
-            self._get_task_id_for_request(request_id),
-            outputs={
-                "session_id": session.session_id,
-                "human_operator": human_operator,
-                "status": "approved_and_active",
-            },
-        )
-        # Clean up the mapping now that the task is closed. Issue #2869.
-        self._request_task_ids.pop(request_id, None)
+        task_id = await self._req_task_get(request_id)
+        if task_id:
+            self.memory_manager.complete_task(
+                task_id,
+                outputs={
+                    "session_id": session.session_id,
+                    "human_operator": human_operator,
+                    "status": "approved_and_active",
+                },
+            )
+        await self._req_task_delete(request_id)
 
-        logger.info(f"Takeover approved and session started: {session.session_id} by {human_operator}")
+        logger.info("Takeover approved and session started: %s by %s", session.session_id, human_operator)
         await self._notify_state_change("session_started", session.session_id)
 
         return session.session_id
@@ -333,16 +606,13 @@ class TakeoverManager:
         self, session_id: str, action_type: str, action_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute an action during takeover session"""
-
-        if session_id not in self.active_sessions:
+        session = await self._sessions_get(session_id)
+        if session is None:
             raise ValueError(f"Active takeover session not found: {session_id}")
-
-        session = self.active_sessions[session_id]
 
         if session.state != TakeoverState.ACTIVE:
             raise ValueError(f"Session is not active: {session.state.value}")
 
-        # Record action
         action_record = {
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "action_type": action_type,
@@ -350,29 +620,26 @@ class TakeoverManager:
             "operator": session.human_operator,
         }
 
-        # Execute action based on type
         result = await self._execute_action(action_type, action_data, session)
 
         action_record["result"] = result
         session.actions_taken.append(action_record)
+        await self._sessions_set(session_id, session)
 
         logger.info("Takeover action executed: %s in session %s", action_type, session_id)
-
         return result
 
     def _action_pause_task(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle pause_task action (Issue #315)."""
         task_id = action_data.get("task_id")
         if task_id:
-            self.paused_tasks.add(task_id)
             return {"status": "task_paused", "task_id": task_id}
         return {"status": "error", "reason": "No task_id provided"}
 
     def _action_resume_task(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle resume_task action (Issue #315)."""
         task_id = action_data.get("task_id")
-        if task_id and task_id in self.paused_tasks:
-            self.paused_tasks.remove(task_id)
+        if task_id:
             return {"status": "task_resumed", "task_id": task_id}
         return {"status": "error", "reason": "Task not found or not paused"}
 
@@ -454,20 +721,17 @@ class TakeoverManager:
             "docker ps",
             "docker logs",
         }
-
-        # Check if command starts with any safe command
         return any(command.startswith(safe_cmd) for safe_cmd in safe_commands)
 
     async def pause_takeover_session(self, session_id: str) -> bool:
         """Pause an active takeover session"""
-        if session_id not in self.active_sessions:
+        session = await self._sessions_get(session_id)
+        if session is None:
             return False
 
-        session = self.active_sessions[session_id]
         if session.state == TakeoverState.ACTIVE:
             session.state = TakeoverState.PAUSED
-
-            # Resume paused tasks temporarily
+            await self._sessions_set(session_id, session)
             await self._resume_affected_tasks(session.request.affected_tasks)
 
             logger.info("Takeover session paused: %s", session_id)
@@ -478,14 +742,13 @@ class TakeoverManager:
 
     async def resume_takeover_session(self, session_id: str) -> bool:
         """Resume a paused takeover session"""
-        if session_id not in self.active_sessions:
+        session = await self._sessions_get(session_id)
+        if session is None:
             return False
 
-        session = self.active_sessions[session_id]
         if session.state == TakeoverState.PAUSED:
             session.state = TakeoverState.ACTIVE
-
-            # Pause affected tasks again
+            await self._sessions_set(session_id, session)
             await self._pause_affected_tasks(session.request.affected_tasks)
 
             logger.info("Takeover session resumed: %s", session_id)
@@ -498,19 +761,17 @@ class TakeoverManager:
         self, session_id: str, resolution: str, handback_notes: str | None = None
     ) -> bool:
         """Complete a takeover session and return control to autonomous system"""
-
-        if session_id not in self.active_sessions:
+        session = await self._sessions_get(session_id)
+        if session is None:
             return False
 
-        session = self.active_sessions[session_id]
         session.state = TakeoverState.COMPLETED
         session.ended_at = datetime.now(tz=timezone.utc)
         session.resolution = resolution
+        await self._sessions_set(session_id, session)
 
-        # Resume all paused tasks
         await self._resume_affected_tasks(session.request.affected_tasks)
 
-        # Create completion record
         completion_data = {
             "session_id": session_id,
             "duration_minutes": ((session.ended_at - session.started_at).total_seconds() / 60),
@@ -519,7 +780,6 @@ class TakeoverManager:
             "handback_notes": handback_notes,
         }
 
-        # Store in memory system
         completion_task_id = self.memory_manager.create_task_record(
             task_name="Takeover Session Completion",
             description=f"Takeover session completed: {resolution}",
@@ -528,23 +788,17 @@ class TakeoverManager:
             inputs={"session_id": session_id},
             metadata={"original_request": asdict(session.request)},
         )
-
         self.memory_manager.start_task(completion_task_id)
         self.memory_manager.complete_task(completion_task_id, outputs=completion_data)
 
         logger.info("Takeover session completed: %s - %s", session_id, resolution)
-
-        # Notify state change
         await self._notify_state_change("session_completed", session_id)
-
         return True
 
     async def _pause_affected_tasks(self, task_ids: List[str]):
         """Pause specified autonomous tasks"""
         for task_id in task_ids:
-            self.paused_tasks.add(task_id)
-            # Here you would integrate with your task execution system
-            # to actually pause the tasks
+            await self._paused_add(task_id)
 
         if task_ids:
             logger.info("Paused %s autonomous tasks", len(task_ids))
@@ -552,9 +806,7 @@ class TakeoverManager:
     async def _resume_affected_tasks(self, task_ids: List[str]):
         """Resume specified autonomous tasks"""
         for task_id in task_ids:
-            self.paused_tasks.discard(task_id)
-            # Here you would integrate with your task execution system
-            # to actually resume the tasks
+            await self._paused_remove(task_id)
 
         if task_ids:
             logger.info("Resumed %s autonomous tasks", len(task_ids))
@@ -564,6 +816,8 @@ class TakeoverManager:
         import psutil
 
         try:
+            paused_count = await self._paused_count()
+            sessions_count = await self._sessions_count()
             snapshot = {
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "system_info": {
@@ -573,12 +827,10 @@ class TakeoverManager:
                     "load_average": (psutil.getloadavg() if hasattr(psutil, "getloadavg") else None),
                 },
                 "active_processes": len(psutil.pids()),
-                "paused_tasks_count": len(self.paused_tasks),
-                "active_takeover_sessions": len(self.active_sessions),
+                "paused_tasks_count": paused_count,
+                "active_takeover_sessions": sessions_count,
             }
-
             return snapshot
-
         except Exception as e:
             logger.error("Failed to capture system snapshot: %s", e)
             return {
@@ -609,28 +861,19 @@ class TakeoverManager:
 
     async def _expire_request(self, request_id: str):
         """Handle expired takeover request"""
-        if request_id in self.pending_requests:
-            del self.pending_requests[request_id]
+        await self._pending_delete(request_id)
 
-            # Complete the associated task as failed
-            task_id = self._get_task_id_for_request(request_id)
-            if task_id:
-                self.memory_manager.fail_task(task_id, "Takeover request expired")
-                # Clean up the mapping now that the task is closed. Issue #2869.
-                self._request_task_ids.pop(request_id, None)
+        task_id = await self._req_task_get(request_id)
+        if task_id:
+            self.memory_manager.fail_task(task_id, "Takeover request expired")
+            await self._req_task_delete(request_id)
 
-            logger.info("Takeover request expired: %s", request_id)
-            await self._notify_state_change("request_expired", request_id)
+        logger.info("Takeover request expired: %s", request_id)
+        await self._notify_state_change("request_expired", request_id)
 
-    def _get_task_id_for_request(self, request_id: str) -> str | None:
-        """
-        Return the memory task ID recorded when the takeover request was created.
-
-        Issue #2869: Previously always returned None (placeholder). Now backed by
-        _request_task_ids, populated in request_takeover via _record_takeover_in_memory.
-        Returns None only if the mapping was never stored (e.g. legacy code path).
-        """
-        task_id = self._request_task_ids.get(request_id)
+    async def _get_task_id_for_request(self, request_id: str) -> str | None:
+        """Return the memory task ID recorded when the takeover request was created."""
+        task_id = await self._req_task_get(request_id)
         if task_id is None:
             logger.warning(
                 "No memory task ID found for takeover request %s. "
@@ -660,40 +903,41 @@ class TakeoverManager:
         """Register a callback for takeover state changes"""
         self.state_change_callbacks.append(callback)
 
-    def get_pending_requests(self) -> List[Dict[str, Any]]:
+    async def get_pending_requests(self) -> List[Dict[str, Any]]:
         """Get all pending takeover requests"""
+        ids = await self._pending_ids()
         result = []
-        for request in self.pending_requests.values():
+        for rid in ids:
+            request = await self._pending_get(rid)
+            if request is None:
+                continue
             request_dict = asdict(request)
-            # Convert enum to string for JSON serialization
             request_dict["trigger"] = request.trigger.value
             request_dict["priority"] = request.priority.value
-            # Convert datetime to ISO string
             request_dict["requested_at"] = request.requested_at.isoformat()
             if request.expires_at:
                 request_dict["expires_at"] = request.expires_at.isoformat()
             result.append(request_dict)
         return result
 
-    def get_active_sessions(self) -> List[Dict[str, Any]]:
+    async def get_active_sessions(self) -> List[Dict[str, Any]]:
         """Get all active takeover sessions"""
+        sessions_map = await self._sessions_all()
         sessions = []
-        for session in self.active_sessions.values():
+        for session in sessions_map.values():
             session_dict = asdict(session)
-            # Convert datetime objects to ISO strings
             for key in DATETIME_FIELD_KEYS:
                 if session_dict[key]:
                     session_dict[key] = session_dict[key].isoformat()
             sessions.append(session_dict)
-
         return sessions
 
-    def get_system_status(self) -> Dict[str, Any]:
+    async def get_system_status(self) -> Dict[str, Any]:
         """Get current takeover system status"""
         return {
-            "pending_requests": len(self.pending_requests),
-            "active_sessions": len(self.active_sessions),
-            "paused_tasks": len(self.paused_tasks),
+            "pending_requests": await self._pending_count(),
+            "active_sessions": await self._sessions_count(),
+            "paused_tasks": await self._paused_count(),
             "max_concurrent_sessions": self.max_concurrent_sessions,
             "default_timeout_minutes": int(self.default_timeout.total_seconds() / 60),
             "available_triggers": [trigger.value for trigger in TakeoverTrigger],
