@@ -448,3 +448,72 @@ p {
   white-space: nowrap;
   border: 0;
 }
+
+/* ─── Shared view layout primitive (#11515 Task 3) ────────────────
+ * A consistent page container + header for every SLM view, so views stop
+ * rolling their own padding / max-width / title styling (Tailwind p-6, ad-hoc
+ * `.*-view` classes). Token-driven: adapts to the active theme via --a11y-* and
+ * uses the sizing scales added in Task 2.3. Mirrors the user frontend's
+ * view.css so both frontends' views are structured the same way. Adopt by
+ * adding `view-container` (or `view-container-constrained`) to a view root and
+ * `view-header`/`view-title`/`view-description` to its heading (Task 3.2). */
+:root {
+  --content-max-width: 1400px;
+  --content-padding: var(--spacing-6);
+}
+
+.view-container {
+  padding: var(--content-padding);
+  color: var(--a11y-text);
+}
+
+/* Centred, width-capped content for wide dashboards. */
+.view-container-constrained {
+  max-width: var(--content-max-width);
+  margin-inline: auto;
+  padding: var(--content-padding);
+  color: var(--a11y-text);
+}
+
+.view-header {
+  margin-bottom: var(--spacing-6);
+}
+
+.view-title {
+  margin: 0 0 var(--spacing-2) 0;
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--a11y-text);
+}
+
+.view-description {
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--a11y-text-muted);
+}
+
+/* Sub-nav tab row within a view. */
+.view-nav {
+  display: flex;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.view-nav-link {
+  padding: var(--spacing-2) var(--spacing-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--a11y-text-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+
+.view-nav-link:hover {
+  color: var(--a11y-text);
+}
+
+.view-nav-link.is-active {
+  color: var(--color-primary-500);
+  border-bottom-color: var(--color-primary-500);
+}
