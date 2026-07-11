@@ -397,7 +397,24 @@ if "llm_shared" not in sys.modules:
     if "llm_shared.optimization.model_inspector" not in sys.modules:
         _mi_stub = _make_pkg_stub("llm_shared.optimization.model_inspector")
         _mi_stub.inspect_model = MagicMock(return_value=None)  # type: ignore[attr-defined]
+        _mi_stub.ModelInfo = MagicMock()  # type: ignore[attr-defined]
         sys.modules["llm_shared.optimization.model_inspector"] = _mi_stub
+
+    # #11618: Real-load llm_shared.hardware so patch("llm_shared.hardware.X") in
+    # test_hardware.py targets the real module globals instead of the MagicMock
+    # package stub.  Deps: autobot_shared.logging_manager (already patched) and
+    # llm_shared.optimization.model_inspector (stubbed just above).
+    _load_real_mod("llm_shared.hardware", _llm_root / "hardware.py")
+    _hw_mod = sys.modules.get("llm_shared.hardware")
+    if _hw_mod is not None:
+        # Bind on parent stub so patch("llm_shared.hardware.X") resolves via
+        # getattr(sys.modules["llm_shared"], "hardware") rather than the stub's
+        # catch-all __getattr__ which always returns the same MagicMock.
+        setattr(_llm_stub, "hardware", _hw_mod)
+        if hasattr(_hw_mod, "HardwareDetector"):
+            _llm_stub.HardwareDetector = _hw_mod.HardwareDetector  # type: ignore[attr-defined]
+        if hasattr(_hw_mod, "TORCH_AVAILABLE"):
+            _llm_stub.TORCH_AVAILABLE = _hw_mod.TORCH_AVAILABLE  # type: ignore[attr-defined]
 
     # llm_shared.cache — provide symbols consumed by services.llm_service
     _cache_stub = sys.modules["llm_shared.cache"]
