@@ -429,22 +429,56 @@ class SecureSandboxExecutor:
             except Exception as e:
                 self.logger.debug("Failed to cleanup script file %s: %s", script_path, e)
 
+    def _codeexec_config(self, timeout: int) -> "SandboxConfig":
+        """Build the HIGH-security, no-network sandbox config for compose (GH#11568)."""
+        return SandboxConfig(
+            security_level=SandboxSecurityLevel.HIGH,
+            execution_mode=SandboxExecutionMode.SCRIPT,
+            enable_network=False,
+            timeout=timeout,
+        )
+
+    async def _pump_broker_io(self, container, broker: Any) -> None:
+        """Drive the shim RPC loop: read stdout lines, reply on stdin (GH#11568).
+
+        Each line the sandboxed script writes is a JSON-RPC request; the broker
+        validates and dispatches it, and the reply is written back to the
+        container's stdin. Budget exhaustion aborts the container via teardown.
+        """
+        sock = container.attach_socket(params={"stdin": 1, "stdout": 1, "stream": 1})
+        stream = getattr(sock, "_sock", sock)
+        buf = b""
+        while True:
+            chunk = await asyncio.to_thread(stream.recv, 4096)
+            if not chunk:
+                break
+            buf += chunk
+            while b"\n" in buf:
+                raw, buf = buf.split(b"\n", 1)
+                reply = await broker.handle_line(raw.decode("utf-8", errors="replace"))
+                await asyncio.to_thread(stream.sendall, (reply + "\n").encode("utf-8"))
+                if broker.budget_exhausted:
+                    await asyncio.to_thread(container.kill)
+                    return
+
     async def execute_with_stdio_broker(
         self,
         script_content: str,
         shim_src: str,
+        broker: Any,
         timeout: int,
         run_id: str,
     ) -> "SandboxResult":
-        """Execute *script_content* with the shim module prepended (GH#11568).
+        """Execute *script_content* driving shim RPC through *broker* (GH#11568).
 
-        The combined source (shim + user script) runs inside the sandbox at
-        HIGH security with no network.  For v1 the broker is driven by the
-        caller (tool_handler) which processes stdout JSON lines after execution.
+        The combined source (shim + user script) runs inside the sandbox at HIGH
+        security with no network; ``broker`` is the live server-side capability
+        channel that re-validates and dispatches every shim call (design §3).
 
         Args:
             script_content: User-supplied Python script.
             shim_src: Generated autobot_tools shim module source.
+            broker: CodeExecBroker driving the stdio RPC loop.
             timeout: Wall-clock execution limit in seconds.
             run_id: Correlation ID for audit/logging.
 
@@ -452,14 +486,27 @@ class SecureSandboxExecutor:
             SandboxResult from the sandbox executor.
         """
         combined = shim_src + "\n\n" + script_content
-        cfg = SandboxConfig(
-            security_level=SandboxSecurityLevel.HIGH,
-            execution_mode=SandboxExecutionMode.SCRIPT,
-            enable_network=False,
-            timeout=timeout,
-        )
+        cfg = self._codeexec_config(timeout)
         self.logger.debug("execute_with_stdio_broker run_id=%s timeout=%d", run_id, timeout)
-        return await self.execute_script(combined, "python", cfg)
+        return await self._run_broker_script(combined, cfg, broker)
+
+    async def _run_broker_script(self, combined: str, cfg: "SandboxConfig", broker: Any) -> "SandboxResult":
+        """Run the combined script with a duplex broker pump (GH#11568)."""
+        container_id = f"{self.container_prefix}{uuid.uuid4().hex[:8]}"
+        start_time = time.time()
+        try:
+            container_config = self._prepare_container_config(["/usr/bin/python3", "-c", combined], cfg)
+            container_config["stdin_open"] = True
+            container = self.docker_client.containers.create(**container_config)
+            self.active_containers[container_id] = container.id
+            container.start()
+            await self._pump_broker_io(container, broker)
+            return await self._run_container_and_collect_results(container, container_id, cfg, start_time)
+        except Exception as e:  # noqa: BLE001
+            self.logger.error("Broker script execution error: %s", e)
+            return self._create_execution_error_result(e, start_time, container_id)
+        finally:
+            await self._cleanup_container(container_id)
 
     def _validate_command(self, command: str | List[str], config: SandboxConfig) -> bool:
         """Validate command against security policies."""

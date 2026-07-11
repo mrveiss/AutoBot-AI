@@ -35,7 +35,7 @@ def _shim_for(tool: str) -> str:
         f"async def {tool}(**kwargs):\n"
         f'    """Call the {tool} tool via the broker."""\n'
         f'    req = json.dumps({{"id": "{tool}", "tool": "{tool}", "params": kwargs}})\n'
-        "    sys.stdout.write(req + \"\\n\")\n"
+        '    sys.stdout.write(req + "\\n")\n'
         "    sys.stdout.flush()\n"
         "    line = await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)\n"
         "    reply = json.loads(line)\n"
@@ -47,8 +47,5 @@ def _shim_for(tool: str) -> str:
 
 def generate_shim_module(tools: list[str]) -> str:
     """Return Python source for the ``autobot_tools`` shim module."""
-    header = (
-        '"""autobot_tools — generated RPC shims. Do not edit."""\n'
-        "import asyncio, json, sys\n\n"
-    )
+    header = '"""autobot_tools — generated RPC shims. Do not edit."""\n' "import asyncio, json, sys\n\n"
     return header + "\n".join(_shim_for(t) for t in tools)

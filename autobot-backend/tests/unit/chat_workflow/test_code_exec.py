@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for chat_workflow.code_exec package (GH#11568)."""
 
+import asyncio
 import json
 import pathlib
 import sys
@@ -172,12 +173,27 @@ async def test_broker_budget_cap():
 
 
 def test_compose_absent_from_schemas_when_flag_off():
-    """When CODEEXEC_ENABLED is False, 'compose' must not be in _BUILTIN_TOOL_SCHEMAS."""
+    """Flag-off zero-change: 'compose' absent from schemas AND uniform routing."""
     import chat_workflow.tool_handler as th
 
-    # Re-read current value; if flag is off by default this should hold
-    if not th.CODEEXEC_ENABLED:
-        assert "compose" not in th._BUILTIN_TOOL_SCHEMAS
+    assert th.CODEEXEC_ENABLED is False  # default posture
+    assert "compose" not in th._BUILTIN_TOOL_SCHEMAS
+    assert "compose" not in th._UNIFORM_BUILTIN_TOOLS
+
+
+def test_compose_schema_registration_helper_matches_flag():
+    """The COMPOSE_TOOL_SCHEMA is only merged into _BUILTIN_TOOL_SCHEMAS under the flag."""
+    import chat_workflow.tool_handler as th
+
+    # Directly exercise the registration predicate the module uses at import time.
+    schemas = dict(th._BUILTIN_TOOL_SCHEMAS)
+    if th.CODEEXEC_ENABLED:
+        schemas["compose"] = th.COMPOSE_TOOL_SCHEMA
+        assert schemas["compose"]["required"] == ["program"]
+    else:
+        assert "compose" not in schemas
+    # The schema constant always exists (definition is unconditional); only registration is gated.
+    assert th.COMPOSE_TOOL_SCHEMA["properties"]["program"]["type"] == "string"
 
 
 # ---------------------------------------------------------------------------
@@ -228,19 +244,123 @@ async def test_compose_ast_violation_rejected():
 
 @pytest.mark.asyncio
 async def test_compose_approval_gate_creates_record():
-    """When CODEEXEC_AUTOAPPROVE_READONLY is False, compose yields approval_required."""
+    """When auto-approve is off, compose persists a WORKFLOW_GATE record and yields approval_required."""
     import chat_workflow.tool_handler as th
 
     handler = object.__new__(th.ToolHandlerMixin)
-    # A syntactically valid program that passes AST guard
     program = "import asyncio\nresult = 1\n"
     tool_call = {"name": "compose", "params": {"program": program}}
     msgs = []
+    handler._persist_compose_approval = AsyncMock(return_value="approval-uuid-1")
+
     with patch.object(th, "CODEEXEC_AUTOAPPROVE_READONLY", False):
         async for msg in handler._handle_compose_tool(tool_call, "s1", [], _FakeCtx()):
             msgs.append(msg)
-    assert msgs
+
     assert any(m.type == "approval_required" for m in msgs)
+    # AC: the persist path receives program text + shim snapshot to record on the gate.
+    handler._persist_compose_approval.assert_awaited_once()
+    call_args = handler._persist_compose_approval.await_args.args
+    assert call_args[0] == program
+    assert isinstance(call_args[1], list)
+
+
+@pytest.mark.asyncio
+async def test_persist_compose_approval_builds_workflow_gate_context():
+    """_persist_compose_approval must create a WORKFLOW_GATE Approval carrying program+shims+budgets."""
+    import chat_workflow.tool_handler as th
+
+    handler = object.__new__(th.ToolHandlerMixin)
+    created: dict = {}
+
+    class _FakeApproval:
+        id = "approval-uuid-2"
+
+    class _FakeSvc:
+        def __init__(self, _db):
+            pass
+
+        async def create_approval(self, **kwargs):
+            created.update(kwargs)
+            return _FakeApproval()
+
+    class _FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+    import services.approval_gate_service as svc_mod
+    import user_management.database as db_mod
+
+    with (
+        patch.object(svc_mod, "ApprovalGateService", _FakeSvc),
+        patch.object(db_mod, "get_async_session_factory", return_value=lambda: _FakeSession()),
+    ):
+        approval_id = await handler._persist_compose_approval("result = 1", ["web_search"], "s9")
+
+    assert approval_id == "approval-uuid-2"
+    assert created["approval_type"] == "workflow_gate"
+    assert created["context"]["program"] == "result = 1"
+    assert created["context"]["shim_snapshot"] == ["web_search"]
+    assert "max_tool_calls" in created["context"]["budgets"]
+    assert "timeout_seconds" in created["context"]["budgets"]
+
+
+@pytest.mark.asyncio
+async def test_broker_progress_emitted_dual_bus():
+    """A successful shim call emits an audit event AND an EventBus progress event (dual-bus)."""
+    from chat_workflow.code_exec.broker import CodeExecBroker
+
+    broker = CodeExecBroker(
+        dispatch_fn=AsyncMock(return_value="ok"),
+        tools=["web_search"],
+        forbidden=frozenset(),
+        run_id="run-prog",
+        security_event_key="autobot:codeexec:audit",
+    )
+    broker._emit_audit = AsyncMock()
+    broker._emit_progress = AsyncMock()
+    reply = json.loads(await broker.handle_line(json.dumps({"id": "p", "tool": "web_search", "params": {}})))
+    assert reply["ok"] is True
+    await asyncio.sleep(0)  # let create_task fire
+    broker._emit_progress.assert_awaited()
+    broker._emit_audit.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_execute_compose_wires_broker_into_executor():
+    """_execute_compose must build a CodeExecBroker and pass it to the executor (production caller)."""
+    import chat_workflow.tool_handler as th
+    from secure_sandbox_executor import SandboxResult
+
+    handler = object.__new__(th.ToolHandlerMixin)
+    fake_result = SandboxResult(
+        success=True,
+        exit_code=0,
+        stdout="done\n",
+        stderr="",
+        execution_time=0.1,
+        container_id="c",
+        security_events=[],
+        resource_usage={},
+        metadata={},
+    )
+    passed = {}
+
+    async def _fake_exec(program, shim_src, broker, timeout, run_id):
+        passed["broker"] = broker
+        return fake_result
+
+    fake_executor = MagicMock()
+    fake_executor.execute_with_stdio_broker = _fake_exec
+    with patch("secure_sandbox_executor.SecureSandboxExecutor", return_value=fake_executor):
+        msg = await handler._execute_compose("result = 1", None, "rid", "s1", _FakeCtx())
+    from chat_workflow.code_exec.broker import CodeExecBroker
+
+    assert isinstance(passed["broker"], CodeExecBroker)
+    assert "done" in msg.content
 
 
 @pytest.mark.asyncio

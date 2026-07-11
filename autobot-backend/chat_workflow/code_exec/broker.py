@@ -13,6 +13,7 @@ import asyncio
 import hashlib
 import json
 import logging
+from typing import Any
 
 from autobot_shared.env_utils import env_int
 
@@ -31,13 +32,20 @@ class CodeExecBroker:
         forbidden: frozenset[str],
         run_id: str,
         security_event_key: str,
+        progress_channel: str = "",
     ) -> None:
         self._dispatch = dispatch_fn
         self._tools = set(tools)
         self._forbidden = forbidden
         self._run_id = run_id
         self._security_key = security_event_key
+        self._progress_channel = progress_channel or f"workflow:{run_id}"
         self._call_count = 0
+
+    @property
+    def budget_exhausted(self) -> bool:
+        """True once the per-run tool-call budget has been hit (GH#11568)."""
+        return self._call_count >= CODEEXEC_MAX_TOOL_CALLS
 
     async def handle_line(self, line: str) -> str:
         """Process one JSON-RPC line; return a JSON reply string."""
@@ -54,16 +62,22 @@ class CodeExecBroker:
             return json.dumps({"id": req_id, "ok": False, "error": f"tool not injectable: {tool!r}"})
         if tool in self._forbidden:
             return json.dumps({"id": req_id, "ok": False, "error": f"tool forbidden: {tool!r}"})
-        if self._call_count >= CODEEXEC_MAX_TOOL_CALLS:
+        if self.budget_exhausted:
             return json.dumps({"id": req_id, "ok": False, "error": "tool call budget exhausted"})
 
+        return await self._dispatch_and_reply(req_id, tool, params)
+
+    async def _dispatch_and_reply(self, req_id: Any, tool: str, params: dict) -> str:
+        """Dispatch one validated call, emit audit + progress, return reply JSON."""
         try:
             result = await self._dispatch(tool, params)
             self._call_count += 1
             params_hash = hashlib.sha256(json.dumps(params, sort_keys=True).encode()).hexdigest()[:12]
             asyncio.create_task(self._emit_audit(tool, params_hash, ok=True))
+            asyncio.create_task(self._emit_progress(self._progress_channel, tool))
             return json.dumps({"id": req_id, "ok": True, "result": result})
         except Exception as exc:  # noqa: BLE001
+            asyncio.create_task(self._emit_audit(tool, "", ok=False))
             return json.dumps({"id": req_id, "ok": False, "error": str(exc)})
 
     async def _emit_audit(self, tool: str, params_hash: str, ok: bool) -> None:

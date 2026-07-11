@@ -370,7 +370,9 @@ COMPOSE_TOOL_SCHEMA: dict = {
     "properties": {
         "program": {
             "type": "string",
-            "description": "Python program to execute. Import autobot_tools and call tool functions as async coroutines.",
+            "description": (
+                "Python program to execute. Import autobot_tools and call tool " "functions as async coroutines."
+            ),
         },
         "description": {
             "type": "string",
@@ -2912,20 +2914,74 @@ class ToolHandlerMixin:
             metadata={"tool_name": "compose", "ast_violations": verdict.violations},
         )
 
-    def _approve_compose(self, tool_call: dict) -> "WorkflowMessage | None":
-        """Return approval_required WorkflowMessage when auto-approve is off, else None."""
+    async def _approve_compose(
+        self, program: str, shim_snapshot: list[str], session_id: str
+    ) -> "WorkflowMessage | None":
+        """Create a WORKFLOW_GATE approval when auto-approve is off (GH#11568).
+
+        Returns an approval_required WorkflowMessage carrying the persisted
+        approval id, or ``None`` when the read-only auto-approve posture applies.
+        """
         if CODEEXEC_AUTOAPPROVE_READONLY:
             return None
+        approval_id = await self._persist_compose_approval(program, shim_snapshot, session_id)
         return WorkflowMessage(
             type="approval_required",
             content="compose script requires approval before execution",
-            metadata={"tool": "compose", "approval_required": True},
+            metadata={
+                "tool": "compose",
+                "approval_required": True,
+                "approval_id": approval_id,
+                "shim_snapshot": shim_snapshot,
+            },
         )
 
+    async def _persist_compose_approval(self, program: str, shim_snapshot: list[str], session_id: str) -> "str | None":
+        """Persist a WORKFLOW_GATE Approval carrying program + shims + budgets (GH#11568)."""
+        from chat_workflow.code_exec.broker import CODEEXEC_MAX_TOOL_CALLS
+        from models.approval import ApprovalType
+        from secure_sandbox_executor import CODEEXEC_TIMEOUT_SECONDS
+        from services.approval_gate_service import ApprovalGateService
+        from user_management.database import get_async_session_factory
+
+        context = {
+            "program": program,
+            "shim_snapshot": shim_snapshot,
+            "budgets": {"max_tool_calls": CODEEXEC_MAX_TOOL_CALLS, "timeout_seconds": CODEEXEC_TIMEOUT_SECONDS},
+        }
+        session_factory = get_async_session_factory()
+        async with session_factory() as db:
+            approval = await ApprovalGateService(db).create_approval(
+                title="compose script execution",
+                approval_type=ApprovalType.WORKFLOW_GATE.value,
+                requested_by_agent="chat_agent",
+                description="Sandboxed Python compose script awaiting approval.",
+                workflow_id=session_id,
+                workflow_step="compose",
+                context=context,
+            )
+            return str(approval.id)
+
+    def _build_compose_dispatch(self, session_id: str, ctx: "LLMIterationContext | None"):
+        """Return an async dispatch callable routing shim calls through the seam (GH#11568)."""
+
+        async def _dispatch(tool: str, params: dict) -> Any:
+            sub_results: list[dict[str, Any]] = []
+            sub_call = {"name": tool, "params": params}
+            async for _ in self._dispatch_tool_call(sub_call, session_id, session_id, "", "", sub_results, [], ctx=ctx):
+                pass
+            last = sub_results[-1] if sub_results else {}
+            if last.get("status") == "error":
+                raise RepairableException(last.get("error", "tool dispatch failed"))
+            return last.get("output", last)
+
+        return _dispatch
+
     async def _execute_compose(
-        self, program: str, agent_id: "str | None", run_id: str
+        self, program: str, agent_id: "str | None", run_id: str, session_id: str, ctx: "LLMIterationContext | None"
     ) -> "WorkflowMessage":
-        """Run the script inside the sandbox; return result WorkflowMessage."""
+        """Run the script inside the sandbox via a live broker; return result msg."""
+        from chat_workflow.code_exec.broker import CodeExecBroker
         from chat_workflow.code_exec.shim_codegen import generate_shim_module, injectable_tool_set
         from orchestration.agent_registry import resolve_forbidden_tools
         from secure_sandbox_executor import CODEEXEC_TIMEOUT_SECONDS, SecureSandboxExecutor  # lazy
@@ -2933,8 +2989,20 @@ class ToolHandlerMixin:
         forbidden = resolve_forbidden_tools(agent_id)
         tools = injectable_tool_set([], forbidden)
         shim_src = generate_shim_module(tools)
+        broker = CodeExecBroker(
+            self._build_compose_dispatch(session_id, ctx),
+            tools,
+            forbidden,
+            run_id,
+            f"autobot:codeexec:security:events:{run_id}",
+            progress_channel=f"workflow:{session_id}",
+        )
         executor = SecureSandboxExecutor()
-        result = await executor.execute_with_stdio_broker(program, shim_src, CODEEXEC_TIMEOUT_SECONDS, run_id)
+        result = await executor.execute_with_stdio_broker(program, shim_src, broker, CODEEXEC_TIMEOUT_SECONDS, run_id)
+        return self._compose_result_message(result, run_id)
+
+    def _compose_result_message(self, result: Any, run_id: str) -> "WorkflowMessage":
+        """Build the tool_result WorkflowMessage from a SandboxResult (GH#11568)."""
         if result.success:
             return WorkflowMessage(
                 type="tool_result",
@@ -2948,6 +3016,23 @@ class ToolHandlerMixin:
             metadata={"tool_name": "compose", "run_id": run_id, "failed": True},
         )
 
+    def _compose_shim_snapshot(self, agent_id: "str | None") -> list[str]:
+        """Injectable-tool snapshot for this agent (allowlist ∩ allowed − forbidden)."""
+        from chat_workflow.code_exec.shim_codegen import injectable_tool_set
+        from orchestration.agent_registry import resolve_forbidden_tools
+
+        return injectable_tool_set([], resolve_forbidden_tools(agent_id))
+
+    def _reject_delegated_compose(self, agent_id: "str | None") -> "WorkflowMessage | None":
+        """Main-chat-only: reject compose for any profile-bound (delegated) agent (GH#11568)."""
+        if agent_id is None:
+            return None
+        return WorkflowMessage(
+            type="tool_result",
+            content="compose is not available for delegated subagents",
+            metadata={"tool_name": "compose"},
+        )
+
     async def _handle_compose_tool(
         self,
         tool_call: dict[str, Any],
@@ -2955,18 +3040,14 @@ class ToolHandlerMixin:
         execution_results: list[dict[str, Any]],
         ctx: "LLMIterationContext | None",
     ):
-        """Handle the compose tool call (GH#11568)."""
+        """Handle the compose tool call — main chat agent only (GH#11568)."""
         import uuid
 
-        params = tool_call.get("params", {})
-        program: str = params.get("program", "")
+        program: str = tool_call.get("params", {}).get("program", "")
         agent_id: str | None = ctx.agent_context.agent_id if (ctx and ctx.agent_context) else None
-        if agent_id is not None:
-            yield WorkflowMessage(
-                type="tool_result",
-                content="compose is not available for delegated subagents",
-                metadata={"tool_name": "compose"},
-            )
+        subagent_msg = self._reject_delegated_compose(agent_id)
+        if subagent_msg is not None:
+            yield subagent_msg
             return
 
         guard_msg = self._guard_compose(program, agent_id)
@@ -2975,13 +3056,15 @@ class ToolHandlerMixin:
             yield guard_msg
             return
 
-        approval_msg = self._approve_compose(tool_call)
+        shim_snapshot = self._compose_shim_snapshot(agent_id)
+        approval_msg = await self._approve_compose(program, shim_snapshot, session_id)
         if approval_msg is not None:
+            execution_results.append({"tool": "compose", "status": "pending_approval"})
             yield approval_msg
             return
 
         run_id = str(uuid.uuid4())
-        result_msg = await self._execute_compose(program, agent_id, run_id)
+        result_msg = await self._execute_compose(program, agent_id, run_id, session_id, ctx)
         execution_results.append({"tool": "compose", "status": "executed", "run_id": run_id})
         yield result_msg
 
