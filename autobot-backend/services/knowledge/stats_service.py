@@ -21,12 +21,9 @@ so each endpoint can still shape its own response model independently.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
-
-if TYPE_CHECKING:
-    pass
 
 logger = get_logger(__name__)
 
