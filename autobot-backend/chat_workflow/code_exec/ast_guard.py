@@ -6,10 +6,13 @@
 
 Validates Python source before sandbox execution (hard gate):
 - import allowlist (top-level module names only)
-- exec/eval/compile/__import__/globals/vars/locals/breakpoint call block
-- getattr/setattr smuggling on the autobot_tools module (incl. import aliases)
+- exec/eval/compile/__import__/globals/vars/locals/breakpoint AND the reflective
+  accessors getattr/setattr/delattr/hasattr blocked as a bare Name reference ANYWHERE
+  (call, decorator, rebind, argument), not only as a call func — closes ``@eval``,
+  ``f = eval``, and ``g = getattr; g(...)`` aliasing escapes
+- method-style ``obj.exec()``/``obj.eval()`` calls
 - ANY dunder attribute access (``.__class__``, ``.__bases__``, ``.__subclasses__``, ...)
-- subscripting ``__builtins__``
+- subscripting ``__builtins__`` (or any dunder name)
 - forbidden_work token name references
 """
 
@@ -22,11 +25,15 @@ CODEEXEC_IMPORT_ALLOWLIST: frozenset[str] = frozenset(
 )
 
 # Names that grant reflective / eval-like reach into the runtime; unrepresentable in v1.
+# These are rejected as a bare Name load ANYWHERE (call func, decorator, RHS, arg),
+# not only when directly called — ``@eval`` and ``f = eval`` are equally unsafe.
 _BLOCKED_CALLS: frozenset[str] = frozenset(
     {"exec", "eval", "compile", "__import__", "globals", "vars", "locals", "breakpoint"}
 )
-_GETSET_ATTR: frozenset[str] = frozenset({"getattr", "setattr", "delattr"})
-_TOOLS_MODULE = "autobot_tools"
+# Reflective attribute accessors — rejected as bare Name references anywhere. They are
+# never needed by the clean read-only shims, and permitting them re-opens computed-name,
+# dunder-target, and accessor-aliasing (``g = getattr``) smuggling paths.
+_GETSET_ATTR: frozenset[str] = frozenset({"getattr", "setattr", "delattr", "hasattr"})
 
 
 @dataclass
@@ -40,19 +47,6 @@ class ASTGuardResult:
 def _is_dunder(name: str) -> bool:
     """True for a Python dunder identifier (starts AND ends with ``__``)."""
     return len(name) > 4 and name.startswith("__") and name.endswith("__")
-
-
-def _tools_aliases(tree: ast.AST) -> frozenset[str]:
-    """Local names bound to the autobot_tools module (``import autobot_tools as t``)."""
-    aliases = {_TOOLS_MODULE}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.name.split(".")[0] == _TOOLS_MODULE:
-                    aliases.add(alias.asname or alias.name.split(".")[0])
-        elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Name) and node.value.id in aliases:
-            aliases.update(t.id for t in node.targets if isinstance(t, ast.Name))
-    return frozenset(aliases)
 
 
 def _check_import_node(node: ast.stmt) -> list[dict]:
@@ -69,25 +63,17 @@ def _check_import_node(node: ast.stmt) -> list[dict]:
     return violations
 
 
-def _arg_targets_tools(arg: ast.expr, tools_aliases: frozenset[str]) -> bool:
-    """True when *arg* references the tools module (a bound Name, or any Attribute)."""
-    if isinstance(arg, ast.Name):
-        return arg.id in tools_aliases
-    return isinstance(arg, ast.Attribute)
+def _check_call_node(node: ast.Call) -> list[dict]:
+    """Reject method-style ``obj.exec()``/``obj.eval()`` etc.
 
-
-def _check_call_node(node: ast.Call, tools_aliases: frozenset[str]) -> list[dict]:
-    violations: list[dict] = []
-    lineno = getattr(node, "lineno", 0)
+    Bare-Name references to blocked builtins and reflective accessors are handled by
+    ``_check_name_node`` (which fires in the call-func position too); this only adds
+    the attribute-call form that has no bare Name to catch.
+    """
     func = node.func
-    if isinstance(func, ast.Name):
-        if func.id in _BLOCKED_CALLS:
-            violations.append({"line": lineno, "message": f"forbidden call: {func.id!r}"})
-        if func.id in _GETSET_ATTR and node.args and _arg_targets_tools(node.args[0], tools_aliases):
-            violations.append({"line": lineno, "message": f"attribute smuggling via {func.id!r}"})
-    elif isinstance(func, ast.Attribute) and func.attr in _BLOCKED_CALLS:
-        violations.append({"line": lineno, "message": f"forbidden call: .{func.attr!r}"})
-    return violations
+    if isinstance(func, ast.Attribute) and func.attr in _BLOCKED_CALLS:
+        return [{"line": getattr(node, "lineno", 0), "message": f"forbidden call: .{func.attr!r}"}]
+    return []
 
 
 def _check_attribute_node(node: ast.Attribute) -> list[dict]:
@@ -106,9 +92,21 @@ def _check_subscript_node(node: ast.Subscript) -> list[dict]:
 
 
 def _check_name_node(node: ast.Name, forbidden_work_tokens: frozenset[str]) -> list[dict]:
-    if node.id in forbidden_work_tokens or _is_dunder(node.id):
-        reason = "forbidden token reference" if node.id in forbidden_work_tokens else "dunder name reference"
-        return [{"line": getattr(node, "lineno", 0), "message": f"{reason}: {node.id!r}"}]
+    """Reject a blocked-builtin, reflective-accessor, forbidden-token, or dunder name.
+
+    Blocking these as a bare Name (not just a call func) closes decorator (``@eval``),
+    rebind (``f = eval``), and accessor-aliasing (``g = getattr; g(...)``) escapes.
+    The clean shims never reference eval/exec/getattr/hasattr/etc. at all.
+    """
+    lineno = getattr(node, "lineno", 0)
+    if node.id in _BLOCKED_CALLS:
+        return [{"line": lineno, "message": f"forbidden builtin reference: {node.id!r}"}]
+    if node.id in _GETSET_ATTR:
+        return [{"line": lineno, "message": f"reflective accessor reference: {node.id!r}"}]
+    if node.id in forbidden_work_tokens:
+        return [{"line": lineno, "message": f"forbidden token reference: {node.id!r}"}]
+    if _is_dunder(node.id):
+        return [{"line": lineno, "message": f"dunder name reference: {node.id!r}"}]
     return []
 
 
@@ -119,13 +117,12 @@ def check_script(script: str, forbidden_work_tokens: frozenset[str]) -> ASTGuard
     except SyntaxError as exc:
         return ASTGuardResult(ok=False, violations=[{"line": 0, "message": f"SyntaxError: {exc}"}])
 
-    tools_aliases = _tools_aliases(tree)
     violations: list[dict] = []
     for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             violations.extend(_check_import_node(node))
         elif isinstance(node, ast.Call):
-            violations.extend(_check_call_node(node, tools_aliases))
+            violations.extend(_check_call_node(node))
         elif isinstance(node, ast.Attribute):
             violations.extend(_check_attribute_node(node))
         elif isinstance(node, ast.Subscript):

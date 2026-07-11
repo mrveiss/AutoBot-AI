@@ -59,13 +59,13 @@ def test_ast_guard_blocked_exec():
 
 
 def test_ast_guard_blocked_getattr_smuggling():
-    """getattr(autobot_tools, computed_name) must be rejected."""
+    """getattr against the tools module must be rejected (reflective accessor blocked)."""
     from chat_workflow.code_exec.ast_guard import check_script
 
     script = "import autobot_tools\nfn = getattr(autobot_tools, 'web_search')\n"
     result = check_script(script, frozenset())
     assert not result.ok
-    assert any("smuggling" in v["message"] for v in result.violations)
+    assert any("getattr" in v["message"] for v in result.violations)
 
 
 def test_ast_guard_blocked_forbidden_token():
@@ -413,6 +413,15 @@ _ESCAPE_CORPUS = [
     "locals()",
     "import autobot_tools as t\nfn = getattr(t, 'web_search')\n",
     "x = ().__reduce__()",
+    # LEAK-1: computed / concatenated attribute name reaching a dunder via getattr.
+    "getattr(object(), '__cl' + 'ass__')",
+    "g = getattr\ng(object(), '__class__')",
+    # LEAK-2: eval/exec/... as a bare Name (decorator, rebind), not a call func.
+    "@eval\ndef f():\n    pass\n",
+    "f = eval\nf('1')",
+    # LEAK-3: delattr smuggling + hasattr with a dunder/computed name.
+    "delattr(object, 'x')",
+    "hasattr(o, '__class__')",
 ]
 
 
@@ -426,18 +435,25 @@ def test_ast_guard_rejects_escape_corpus(script):
     assert result.violations
 
 
-def test_ast_guard_accepts_clean_script():
-    """A legitimate multi-tool script still passes after the gap fixes."""
-    from chat_workflow.code_exec.ast_guard import check_script
-
-    script = (
+_CLEAN_CORPUS = [
+    (
         "import autobot_tools\n"
         "import asyncio\n"
         "async def main():\n"
         "    r = await autobot_tools.web_search(query='x')\n"
         "    return r\n"
-    )
-    assert check_script(script, frozenset()).ok
+    ),
+    ("import asyncio, json\n" "async def run():\n" "    r = await scrape_url(url='x')\n" "    return json.dumps(r)\n"),
+]
+
+
+@pytest.mark.parametrize("script", _CLEAN_CORPUS)
+def test_ast_guard_accepts_clean_scripts(script):
+    """Legitimate multi-tool scripts still pass after the gap fixes."""
+    from chat_workflow.code_exec.ast_guard import check_script
+
+    result = check_script(script, frozenset())
+    assert result.ok, f"clean script wrongly rejected: {result.violations}"
 
 
 # ---------------------------------------------------------------------------
