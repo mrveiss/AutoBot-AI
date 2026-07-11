@@ -21,6 +21,7 @@ register tasks on a lightweight in-process Celery app.
 
 from __future__ import annotations
 
+import importlib
 import sys
 import types
 from unittest.mock import MagicMock
@@ -78,3 +79,16 @@ _async_compat_stub.run_or_schedule = MagicMock()  # type: ignore[attr-defined]
 _type_defs = _ensure_stub("type_defs")
 _type_defs_common = _ensure_stub("type_defs.common")
 _type_defs_common.Metadata = dict  # type: ignore[attr-defined]
+
+# ---------------------------------------------------------------------------
+# 4. Real-load services.knowledge.doc_indexer (#11606).
+#    The root conftest replaces the ``services`` package with a stub whose
+#    catch-all ``__getattr__`` returns a MagicMock.  ``mock.patch`` resolves
+#    dotted targets via getattr() on the parent package, so
+#    ``patch("services.knowledge.doc_indexer.get_doc_indexer_service")``
+#    silently patched a MagicMock while the code under test imported (and
+#    called) the real module.  Importing the real module here binds it as an
+#    attribute on the parent stub, so patch() targets the real module.
+# ---------------------------------------------------------------------------
+
+importlib.import_module("services.knowledge.doc_indexer")

@@ -8,7 +8,7 @@ Tests for knowledge-base cleanup Celery tasks (Issue #4455).
 Covers:
 - cleanup_orphan_documents: dry-run, orphan detection, batch deletion.
 - cleanup_generated_files: TTL filtering, dry-run, bytes_freed accounting.
-- _crontab_from_string: malformed cron fallback.
+- crontab_from_string: malformed cron fallback (utils.celery_schedules, #11606).
 """
 
 from __future__ import annotations
@@ -320,7 +320,9 @@ def test_cleanup_exclude_patterns_is_tuple():
 
 
 # ---------------------------------------------------------------------------
-# _crontab_from_string
+# crontab_from_string (#11606: extracted to utils.celery_schedules — the
+# celery_app module is replaced by a stub in sys.modules during tests, which
+# made the helper unimportable from there)
 # ---------------------------------------------------------------------------
 
 
@@ -339,9 +341,9 @@ def _have_real_celery() -> bool:
     reason="requires real celery package (test stub cannot parse cron expressions)",
 )
 def test_crontab_from_string_accepts_valid_expression():
-    from celery_app import _crontab_from_string
+    from utils.celery_schedules import crontab_from_string
 
-    cron = _crontab_from_string("30 4 * * *")
+    cron = crontab_from_string("30 4 * * *")
     # crontab stores minute/hour as sets of ints
     assert 30 in cron.minute
     assert 4 in cron.hour
@@ -352,8 +354,8 @@ def test_crontab_from_string_accepts_valid_expression():
     reason="requires real celery package",
 )
 def test_crontab_from_string_falls_back_on_malformed():
-    from celery_app import _crontab_from_string
+    from utils.celery_schedules import crontab_from_string
 
-    cron = _crontab_from_string("not a cron")
+    cron = crontab_from_string("not a cron")
     assert 0 in cron.minute
     assert 3 in cron.hour
