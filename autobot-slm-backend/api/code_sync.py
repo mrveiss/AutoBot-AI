@@ -63,6 +63,7 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
+from autobot_shared.db_url import assemble_postgres_url
 from services.deploy_artifacts import rsync_artifact_excludes
 from services.drift_checker import (
     ALLOWED_COMPONENTS,
@@ -1487,14 +1488,22 @@ def _prune_old_backups(backup_dir: Path, component: str, max_keep: int) -> None:
             logger.warning("pg_dump prune: failed to remove %s: %s", old, exc)
 
 
+_PG_COMPONENT_KEYS = (
+    "AUTOBOT_POSTGRES_HOST",
+    "AUTOBOT_POSTGRES_PORT",
+    "AUTOBOT_POSTGRES_USER",
+    "AUTOBOT_POSTGRES_PASSWORD",
+    "AUTOBOT_POSTGRES_DB",
+)
+
+
 def _resolve_pg_db_url(env_vars: Dict[str, str]) -> str:
-    """Resolve the Postgres connection URL from env vars (#11431).
+    """Resolve the Postgres connection URL from env vars (#11431, #11466).
 
     Resolution order (mirrors migrations/db_url.py and alembic env.py):
       1. AUTOBOT_DATABASE_URL  — explicit full URL (set by db-credentials.env.j2)
       2. DATABASE_URL          — bare alias some deployments use
-      3. AUTOBOT_POSTGRES_*   — component vars from backend.env.j2
-      4. os.environ fallbacks — in case the process already has them
+      3. AUTOBOT_POSTGRES_*   — component vars from backend.env.j2 / os.environ
 
     Returns an empty string when no DB config can be found at all, which the
     caller treats as "proceed with warning" rather than "abort deploy".
@@ -1507,16 +1516,15 @@ def _resolve_pg_db_url(env_vars: Dict[str, str]) -> str:
     url = env_vars.get("DATABASE_URL") or os.environ.get("DATABASE_URL", "")
     if url:
         return url
-    # 3. Assemble from AUTOBOT_POSTGRES_* component vars (backend.env.j2 style)
-    host = env_vars.get("AUTOBOT_POSTGRES_HOST") or os.environ.get("AUTOBOT_POSTGRES_HOST", "")
-    if host:
-        port = env_vars.get("AUTOBOT_POSTGRES_PORT") or os.environ.get("AUTOBOT_POSTGRES_PORT", "5432")
-        user = env_vars.get("AUTOBOT_POSTGRES_USER") or os.environ.get("AUTOBOT_POSTGRES_USER", "autobot_app")
-        pw = env_vars.get("AUTOBOT_POSTGRES_PASSWORD") or os.environ.get("AUTOBOT_POSTGRES_PASSWORD", "")
-        db = env_vars.get("AUTOBOT_POSTGRES_DB") or os.environ.get("AUTOBOT_POSTGRES_DB", "autobot_users")
-        auth = f"{user}:{pw}@" if pw else f"{user}@"
-        return f"postgresql://{auth}{host}:{port}/{db}"
-    return ""
+    # 3. Assemble from AUTOBOT_POSTGRES_* component vars (backend.env.j2 style).
+    # Merge env_vars (higher precedence) over os.environ; filter empty strings so
+    # assemble_postgres_url falls back to its per-key defaults correctly (#11466).
+    merged = {k: v for k in _PG_COMPONENT_KEYS if (v := env_vars.get(k) or os.environ.get(k, ""))}
+    return assemble_postgres_url(
+        merged,
+        default_user="autobot_app",
+        default_db="autobot_users",
+    )
 
 
 async def _pg_dump_before_migration(component: str, deployed_dir: str, steps: List[str]) -> Optional[str]:
