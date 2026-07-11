@@ -8694,5 +8694,8 @@
   },
   "knowledge.health.tagDocCount": "{count} מסמכים",
   "knowledge.health.activityCreated": "{title} נוצר",
-  "knowledge.health.activityUpdated": "{title} עודכן"
+  "knowledge.health.activityUpdated": "{title} עודכן",
+  "chat.modelPicker.label": "מודל",
+  "chat.modelPicker.auto": "אוטומטי (מודל ברירת מחדל)",
+  "chat.modelPicker.title": "בחרו מודל וספק לשיחה זו"
 }

@@ -111,6 +111,22 @@
 
           <!-- Input Actions -->
           <div class="input-actions">
+            <!-- #11585: Per-conversation model/provider picker -->
+            <label class="model-picker" :title="$t('chat.modelPicker.title')">
+              <span class="sr-only">{{ $t('chat.modelPicker.label') }}</span>
+              <select
+                v-model="selectedModel"
+                class="model-picker-select"
+                :disabled="isDisabled"
+                :aria-label="$t('chat.modelPicker.label')"
+              >
+                <option value="">{{ $t('chat.modelPicker.auto') }}</option>
+                <option v-for="m in pickerModels" :key="m.name" :value="m.name">
+                  {{ m.provider ? `${m.name} · ${m.provider}` : m.name }}
+                </option>
+              </select>
+            </label>
+
             <!-- Issue #249: Knowledge Base Toggle -->
             <label class="knowledge-toggle" :class="{ 'active': useKnowledge }" :title="$t('chat.input.useKnowledge')">
               <input
@@ -465,6 +481,7 @@ import type { SlashCommandPreset } from '@/types/api'
 import { useImageGeneration } from '@/composables/useImageGeneration'
 import { useThinkingMode, BUDGET_STEPS, BUDGET_STEP_LABELS } from '@/composables/useThinkingMode'
 import { usePreferences } from '@/composables/usePreferences'
+import { useChatModelSelection } from '@/composables/chat/useChatModelSelection'
 
 // Minimal Web Speech API event shapes (not in TS lib.dom): only the fields this
 // component reads. SpeechRecognitionResult / *Alternative come from lib.dom.
@@ -573,6 +590,8 @@ const { generating: imageGenerating, generateImage } = useImageGeneration()
 const { enabled: thinkingEnabled, budgetTokens: thinkingBudget, load: loadThinkingPrefs, toggle: toggleThinking, setBudget: setThinkingBudget } = useThinkingMode(() => store.currentSessionId)
 // #9460/#9471: per-user reasoning-effort default, passed per-conversation
 const { reasoningEffort } = usePreferences()
+// #11585: per-conversation model/provider override picker
+const { selectedModel, pickerModels, overrideFields, fetchModels: fetchAvailableModels } = useChatModelSelection()
 const showImageGenModal = ref(false)
 const imagePrompt = ref('')
 const imageProvider = ref<'dalle' | 'flux' | 'stable_diffusion'>('dalle')
@@ -759,7 +778,9 @@ const sendMessage = async () => {
         logger.warn('[ChatInput] Overseer submission failed, falling back to normal flow')
         // Fallback: send as normal message
         await controller.sendMessage(message, {
-          use_knowledge: useKnowledge.value
+          use_knowledge: useKnowledge.value,
+          // #11585: per-request model/provider override (empty when "auto")
+          ...overrideFields.value,
         })
       }
     } else {
@@ -777,6 +798,8 @@ const sendMessage = async () => {
         ...(thinkingEnabled.value ? { thinking_enabled: true, thinking_budget_tokens: thinkingBudget.value } : {}),
         // #9460/#9471: per-conversation reasoning effort (omit 'auto' so request stays inert)
         ...(reasoningEffort.value !== 'auto' ? { reasoning_effort: reasoningEffort.value } : {}),
+        // #11585: per-request model/provider override (empty when "auto")
+        ...overrideFields.value,
       })
     }
 
@@ -1190,6 +1213,9 @@ onMounted(() => {
 
   // GH#8993: load thinking preferences for current session
   loadThinkingPrefs()
+
+  // #11585: load live model list for the model/provider picker
+  fetchAvailableModels()
 })
 
 onUnmounted(() => {
@@ -1295,6 +1321,30 @@ onUnmounted(() => {
 .action-divider {
   @apply w-px h-6 bg-autobot-border mx-2;
   flex-shrink: 0;
+}
+
+/* #11585: Model/provider picker */
+.model-picker {
+  @apply flex items-center;
+  flex-shrink: 0;
+  max-width: 12rem;
+}
+
+.model-picker-select {
+  @apply w-full text-xs font-medium rounded px-2 py-1 cursor-pointer transition-all duration-200;
+  @apply bg-autobot-bg-tertiary text-autobot-text-muted border border-autobot-border;
+}
+
+.model-picker-select:hover {
+  @apply text-autobot-text-secondary;
+}
+
+.model-picker-select:focus {
+  @apply outline-hidden text-autobot-primary border-autobot-primary;
+}
+
+.model-picker-select:disabled {
+  @apply opacity-50 cursor-not-allowed;
 }
 
 /* Issue #249: Knowledge Base Toggle Styles */
