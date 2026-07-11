@@ -19,7 +19,7 @@ import pytest
 def _build():
     try:
         from chat_workflow.graph import _build_llm_iteration_context
-    except Exception as exc:  # noqa: BLE001 — env-dependent import chain
+    except ImportError as exc:  # env-dependent chain; a real regression still fails
         pytest.skip(f"chat_workflow not importable here: {exc}")
     return _build_llm_iteration_context
 
@@ -55,3 +55,14 @@ def test_missing_context_is_empty_not_crash():
     assert ctx.context == {}
     ctx2 = build(_state(None))
     assert ctx2.context == {}
+
+
+def test_shallow_copy_isolates_graph_state():
+    """#11552 review: the seam mutates ctx.context in place (delegations,
+    fact-forcing scratch) — that must NOT corrupt the persisted graph
+    state["context"]."""
+    build = _build()
+    state = _state({"company_id": "co-1"})
+    ctx = build(state)
+    ctx.context["delegations_this_turn"] = 3  # simulate an in-seam write
+    assert "delegations_this_turn" not in state["context"]  # original untouched
