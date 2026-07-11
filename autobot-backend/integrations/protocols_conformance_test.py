@@ -18,7 +18,7 @@ Tests:
 from __future__ import annotations
 
 import inspect
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -377,3 +377,155 @@ class TestSTTProtocolConformance:
         assert len(resolved) == 1
         assert isinstance(resolved[0], STTProtocol)
         assert isinstance(resolved[0], SpeechProviderSTTAdapter)
+
+
+# ---------------------------------------------------------------------------
+# 7. Multi-language STT registration (#11617)
+# ---------------------------------------------------------------------------
+
+
+class _FakeSpeechRegistry:
+    """Minimal stand-in for ``voice_processing.providers.ProviderRegistry``.
+
+    Mirrors the real registry's ``_providers`` dict structure
+    (``{lang: [(provider, priority), ...]}``) and ``get_provider`` API.
+    """
+
+    def __init__(self, providers_by_lang: dict) -> None:
+        # providers_by_lang: {lang: SpeechProvider}
+        # Build the (provider, priority) tuple structure the real registry uses.
+        self._providers = {lang: [(provider, 0)] for lang, provider in providers_by_lang.items()}
+
+    def get_provider(self, language: str):
+        entries = self._providers.get(language)
+        if not entries:
+            return None
+        return entries[0][0]
+
+    def languages(self):
+        """Match the real ProviderRegistry.languages() public accessor (#11617)."""
+        return list(self._providers.keys())
+
+
+def _make_mock_provider(name: str):
+    """Return a MagicMock SpeechProvider with provider_name set."""
+    provider = MagicMock()
+    provider.provider_name = name
+    return provider
+
+
+class TestSTTMultiLanguageRegistration:
+    """#11617 — every language in the speech registry must get an STT adapter."""
+
+    def _run_register(self, fake_speech_registry):
+        """Run ``_register_stt_language`` per language with a fake registry injected."""
+        from integrations.capability_registry import _register_stt_language
+
+        registry = CapabilityRegistry()
+        for lang in fake_speech_registry.languages():
+            _register_stt_language(registry, fake_speech_registry, lang, SpeechProviderSTTAdapter)
+        return registry
+
+    def test_register_stt_if_available_enumerates_via_languages(self):
+        """End-to-end: the production entry point enumerates via .languages() (#11617).
+
+        Drives the real ``_register_stt_if_available`` with the fake speech
+        registry injected, so the public-accessor enumeration path is covered —
+        not just the per-language helper.
+        """
+        import integrations.capability_registry as cr
+        from voice_processing import providers as vp
+
+        fake_reg = _FakeSpeechRegistry(
+            {"en": _make_mock_provider("whisper-en"), "lv": _make_mock_provider("whisper-lv")}
+        )
+        registry = CapabilityRegistry()
+        with patch.object(vp, "get_speech_provider_registry", return_value=fake_reg):
+            cr._register_stt_if_available(registry)
+
+        resolved = registry.resolve(STT)
+        assert len(resolved) == 2
+        assert all(isinstance(a, STTProtocol) for a in resolved)
+
+    def test_single_language_registers_one_adapter(self):
+        """A registry with one language produces exactly one STT adapter."""
+        fake_reg = _FakeSpeechRegistry({"en": _make_mock_provider("whisper-en")})
+        registry = self._run_register(fake_reg)
+
+        resolved = registry.resolve(STT)
+        assert len(resolved) == 1
+        assert isinstance(resolved[0], STTProtocol)
+        assert isinstance(resolved[0], SpeechProviderSTTAdapter)
+
+    def test_multi_language_registers_one_adapter_per_language(self):
+        """Each language in the speech registry gets its own STT adapter (#11617)."""
+        fake_reg = _FakeSpeechRegistry(
+            {
+                "en": _make_mock_provider("whisper-en"),
+                "lv": _make_mock_provider("whisper-lv"),
+                "de": _make_mock_provider("whisper-de"),
+            }
+        )
+        registry = self._run_register(fake_reg)
+
+        resolved = registry.resolve(STT)
+        assert len(resolved) == 3
+        for adapter in resolved:
+            assert isinstance(adapter, STTProtocol)
+            assert isinstance(adapter, SpeechProviderSTTAdapter)
+
+    def test_en_provider_still_resolvable_alongside_others(self):
+        """Existing 'en' behaviour is preserved when other languages are present."""
+        en_provider = _make_mock_provider("whisper-en")
+        fake_reg = _FakeSpeechRegistry({"en": en_provider, "fr": _make_mock_provider("whisper-fr")})
+        registry = self._run_register(fake_reg)
+
+        resolved = registry.resolve(STT)
+        assert len(resolved) == 2
+        # The first registered language is 'en'; its adapter wraps en_provider.
+        assert resolved[0]._provider is en_provider
+
+    def test_empty_speech_registry_registers_no_adapters(self):
+        """An empty speech registry results in no STT capability entries."""
+        fake_reg = _FakeSpeechRegistry({})
+        registry = self._run_register(fake_reg)
+
+        assert registry.resolve(STT) == []
+
+    def test_language_with_no_provider_is_skipped(self):
+        """If get_provider returns None for a language, that language is skipped."""
+        from integrations.capability_registry import _register_stt_language
+
+        # Build a registry that has a language key but the provider returns None.
+        fake_reg = _FakeSpeechRegistry({"en": _make_mock_provider("whisper-en")})
+        # Patch get_provider to return None for 'en'.
+        fake_reg.get_provider = lambda lang: None
+
+        registry = CapabilityRegistry()
+        _register_stt_language(registry, fake_reg, "en", SpeechProviderSTTAdapter)
+
+        assert registry.resolve(STT) == []
+
+    def test_failing_language_does_not_block_others(self):
+        """A per-language registration failure is caught; other languages still register."""
+        from integrations.capability_registry import _register_stt_language
+
+        en_provider = _make_mock_provider("whisper-en")
+        fr_provider = _make_mock_provider("whisper-fr")
+
+        # Simulate 'lv' provider raising on construction.
+        def bad_adapter(provider):
+            if provider.provider_name == "whisper-lv":
+                raise RuntimeError("deps missing")
+            return SpeechProviderSTTAdapter(provider)
+
+        fake_reg = _FakeSpeechRegistry({"en": en_provider, "lv": _make_mock_provider("whisper-lv"), "fr": fr_provider})
+        registry = CapabilityRegistry()
+        for lang in ["en", "lv", "fr"]:
+            _register_stt_language(registry, fake_reg, lang, bad_adapter)
+
+        resolved = registry.resolve(STT)
+        # 'lv' failed — only 'en' and 'fr' should be registered.
+        assert len(resolved) == 2
+        provider_names = {a._provider.provider_name for a in resolved}
+        assert provider_names == {"whisper-en", "whisper-fr"}
