@@ -13,7 +13,14 @@ paths resolve to the SAME classes and the SAME singleton registries.
 New code should import from ``autobot_shared.plugin_sdk`` directly.
 """
 
-from autobot_shared.plugin_sdk.base import BasePlugin, PluginManifest, PluginRegistry
+from autobot_shared.plugin_sdk.base import (
+    BasePlugin,
+    PluginLoadError,
+    PluginManifest,
+    PluginRegistry,
+    PluginStatus,
+    RequiredEnvVar,
+)
 from autobot_shared.plugin_sdk.capabilities import (
     Capability,
     CapabilityChecker,
@@ -21,16 +28,23 @@ from autobot_shared.plugin_sdk.capabilities import (
     CapabilityError,
     TrustTier,
 )
-from autobot_shared.plugin_sdk.loader import PluginLoader
+from autobot_shared.plugin_sdk.hooks import Hook, HookRegistry
+from autobot_shared.plugin_sdk.loader import PluginLoader, validate_plugin_config
 
 __all__ = [
     "BasePlugin",
+    "PluginLoadError",
     "PluginManifest",
     "PluginRegistry",
+    "PluginStatus",
+    "RequiredEnvVar",
     "PluginLoader",
+    "validate_plugin_config",
     "Capability",
     "CapabilityChecker",
     "CapabilityContext",
     "CapabilityError",
     "TrustTier",
+    "Hook",
+    "HookRegistry",
 ]

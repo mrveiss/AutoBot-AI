@@ -48,3 +48,16 @@ def test_capability_checker_singleton_shared_across_import_paths():
     shim_checker = shim_capabilities.CapabilityChecker()
     shared_checker = shared_capabilities.CapabilityChecker()
     assert shim_checker is shared_checker
+
+
+def test_hooks_module_identical():
+    """Core plugins import `plugin_sdk.hooks` — the shim must provide it."""
+    from autobot_shared.plugin_sdk import hooks as shared_hooks
+
+    from plugin_sdk import hooks as shim_hooks
+
+    assert shim_hooks.Hook is shared_hooks.Hook
+    assert shim_hooks.HookRegistry is shared_hooks.HookRegistry
+    assert shim_hooks.HookSignature is shared_hooks.HookSignature
+    assert shim_hooks.HOOK_REGISTRY is shared_hooks.HOOK_REGISTRY
+    assert shim_hooks.validate_hook_names is shared_hooks.validate_hook_names
