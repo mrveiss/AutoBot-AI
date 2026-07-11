@@ -483,15 +483,18 @@ async def get_system_health(
 
     Issue #744: Requires admin authentication.
     """
+    # C1: attributes removed in #11639 Redis refactor; use async helpers instead.
     try:
+        dsm = get_desktop_streaming()
+        tm = get_takeover_manager()
         health_status = {
             "status": "healthy",
-            "desktop_streaming_available": get_desktop_streaming().vnc_manager.vnc_available,
-            "novnc_available": get_desktop_streaming().vnc_manager.novnc_available,
-            "active_streaming_sessions": len(get_desktop_streaming().vnc_manager.active_sessions),
-            "pending_takeovers": len(get_takeover_manager().pending_requests),
-            "active_takeovers": len(get_takeover_manager().active_sessions),
-            "paused_tasks": len(get_takeover_manager().paused_tasks),
+            "desktop_streaming_available": dsm.vnc_manager.vnc_available,
+            "novnc_available": dsm.vnc_manager.novnc_available,
+            "active_streaming_sessions": len(dsm.vnc_manager.active_sessions),
+            "pending_takeovers": len(await tm.get_pending_requests()),
+            "active_takeovers": len(await tm.get_active_sessions()),
+            "paused_tasks": await tm._paused_count(),
         }
 
         return health_status
