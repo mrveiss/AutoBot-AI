@@ -2932,7 +2932,8 @@
       "tabTools": "ابزارها",
       "feedAll": "همه",
       "feedCreated": "ایجادشده",
-      "feedUpdated": "به‌روزشده"
+      "feedUpdated": "به‌روزشده",
+      "dangerZone": "منطقه خطر"
     },
     "upload": {
       "selectCategory": "Select category...",

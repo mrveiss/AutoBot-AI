@@ -2602,7 +2602,8 @@
       "tabTools": "Rīki",
       "feedAll": "Visi",
       "feedCreated": "Izveidots",
-      "feedUpdated": "Atjaunināts"
+      "feedUpdated": "Atjaunināts",
+      "dangerZone": "Bīstamā zona"
     },
     "backup": {
       "title": "Dublēšana un atjaunošana",

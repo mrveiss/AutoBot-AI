@@ -2602,7 +2602,8 @@
       "tabTools": "Outils",
       "feedAll": "Tout",
       "feedCreated": "Créé",
-      "feedUpdated": "Mis à jour"
+      "feedUpdated": "Mis à jour",
+      "dangerZone": "Zone de danger"
     },
     "backup": {
       "title": "Sauvegarde et restauration",

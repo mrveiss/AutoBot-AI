@@ -2932,7 +2932,8 @@
       "tabTools": "כלים",
       "feedAll": "הכל",
       "feedCreated": "נוצר",
-      "feedUpdated": "עודכן"
+      "feedUpdated": "עודכן",
+      "dangerZone": "אזור סכנה"
     },
     "upload": {
       "selectCategory": "Select category...",

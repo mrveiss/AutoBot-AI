@@ -2602,7 +2602,8 @@
       "tabTools": "Ferramentas",
       "feedAll": "Tudo",
       "feedCreated": "Criado",
-      "feedUpdated": "Atualizado"
+      "feedUpdated": "Atualizado",
+      "dangerZone": "Zona de perigo"
     },
     "backup": {
       "title": "Backup e restauração",

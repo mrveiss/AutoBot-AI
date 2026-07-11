@@ -2602,7 +2602,8 @@
       "tabTools": "Narzędzia",
       "feedAll": "Wszystkie",
       "feedCreated": "Utworzone",
-      "feedUpdated": "Zaktualizowane"
+      "feedUpdated": "Zaktualizowane",
+      "dangerZone": "Strefa niebezpieczeństwa"
     },
     "backup": {
       "title": "Kopia zapasowa i przywracanie",

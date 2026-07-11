@@ -2602,7 +2602,8 @@
       "tabTools": "الأدوات",
       "feedAll": "الكل",
       "feedCreated": "تم الإنشاء",
-      "feedUpdated": "تم التحديث"
+      "feedUpdated": "تم التحديث",
+      "dangerZone": "منطقة الخطر"
     },
     "backup": {
       "title": "Backup & Restore",

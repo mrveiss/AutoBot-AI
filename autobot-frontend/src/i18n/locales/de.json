@@ -2602,7 +2602,8 @@
       "tabTools": "Tools",
       "feedAll": "Alle",
       "feedCreated": "Erstellt",
-      "feedUpdated": "Aktualisiert"
+      "feedUpdated": "Aktualisiert",
+      "dangerZone": "Gefahrenzone"
     },
     "backup": {
       "title": "Sicherung & Wiederherstellung",

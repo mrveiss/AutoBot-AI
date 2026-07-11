@@ -2665,7 +2665,8 @@
       "tabTools": "Tools",
       "feedAll": "All",
       "feedCreated": "Created",
-      "feedUpdated": "Updated"
+      "feedUpdated": "Updated",
+      "dangerZone": "Danger zone"
     },
     "backup": {
       "title": "Backup & Restore",
