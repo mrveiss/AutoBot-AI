@@ -405,8 +405,6 @@ const refreshStats = async () => {
   }
 }
 
-
-
 const exportStats = async () => {
   const stats = {
     overview: {
@@ -916,27 +914,14 @@ onMounted(async () => {
 
 .tag-cloud-item {
   color: var(--color-info);
-  cursor: pointer;
   transition: var(--transition-all);
   padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-default);
-  outline: none;
 }
 
-.tag-cloud-item:hover,
-.tag-cloud-item:focus {
+.tag-cloud-item:hover {
   color: var(--color-info-hover);
   transform: scale(1.1);
-}
-
-.tag-cloud-item:focus {
-  box-shadow: 0 0 0 2px var(--color-info);
-  background: var(--color-info-bg);
-}
-
-.tag-cloud-item:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
 }
 
 /* Actions */

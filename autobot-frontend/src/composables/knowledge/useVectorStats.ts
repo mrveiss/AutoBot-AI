@@ -26,6 +26,26 @@ export interface VectorStats {
 export const EMBEDDING_MODEL = 'nomic-embed-text'
 export const EMBEDDING_DIMENSIONS = 768
 
+/**
+ * Zeroed fallback for consumers whose UI must render a stats strip even when
+ * the store has no facts yet or the backend is unreachable (KnowledgeHealth).
+ * Mirrors the previous offline/error fallback in KnowledgeHealth.vue.
+ */
+export const EMPTY_VECTOR_STATS: Readonly<VectorStats> = Object.freeze({
+  total_facts: 0,
+  total_documents: 0,
+  total_vectors: 0,
+  indexed_documents: 0,
+  db_size: 0,
+  status: 'offline' as const,
+  rag_available: false,
+  initialized: false,
+  llama_index_configured: false,
+  index_available: false,
+  redis_db: 0,
+  index_name: 'unknown'
+})
+
 export interface UseVectorStatsReturn {
   vectorStats: ComputedRef<VectorStats | null>
   refresh: () => Promise<void>

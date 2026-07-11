@@ -264,7 +264,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useKnowledgeMaintenance } from '@/composables/knowledge/useKnowledgeMaintenance'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
-import { useVectorStats } from '@/composables/knowledge/useVectorStats'
+import { useVectorStats, EMPTY_VECTOR_STATS } from '@/composables/knowledge/useVectorStats'
 import type { VectorStats } from '@/composables/knowledge/useVectorStats'
 import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
 import KnowledgeHealthAnalytics from '@/components/knowledge/KnowledgeHealthAnalytics.vue'
@@ -283,7 +283,16 @@ const pendingVerificationsTotal = computed(() => store.pendingVerificationsTotal
 
 // State
 const isRefreshing = ref(false)
-const { vectorStats, refresh: refreshVectorStats } = useVectorStats()
+
+// Shared stats mapping (#11571). The strip must stay visible after the first
+// load even when the store is factless or the backend is unreachable (same
+// visibility as the previous local zeroed fallback), so fall back to
+// EMPTY_VECTOR_STATS once a load has completed.
+const { vectorStats: sharedVectorStats, refresh: refreshVectorStats } = useVectorStats()
+const vectorStatsLoaded = ref(false)
+const vectorStats = computed<VectorStats | null>(() =>
+  sharedVectorStats.value ?? (vectorStatsLoaded.value ? EMPTY_VECTOR_STATS : null)
+)
 
 // Tab state — initialized from the route at setup time so deep links
 // (?tab=verification|tools) mount the right tab on first render (#11558)
@@ -316,6 +325,8 @@ const loadVectorHealth = async () => {
     await refreshVectorStats()
   } catch (error) {
     logger.error('Failed to load vector health stats:', error)
+  } finally {
+    vectorStatsLoaded.value = true
   }
 }
 

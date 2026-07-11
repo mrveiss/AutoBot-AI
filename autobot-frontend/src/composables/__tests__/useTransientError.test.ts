@@ -1,6 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { effectScope } from 'vue'
 import { useTransientError } from '../useTransientError'
 
 describe('useTransientError', () => {
@@ -46,5 +47,20 @@ describe('useTransientError', () => {
   it('message starts null', () => {
     const { message } = useTransientError()
     expect(message.value).toBeNull()
+  })
+
+  it('cancels the pending timer when the effect scope disposes', () => {
+    const scope = effectScope()
+    const api = scope.run(() => useTransientError())!
+    api.show('error')
+    scope.stop()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('does not warn when used outside an effect scope', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    useTransientError().show('error')
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
   })
 })
