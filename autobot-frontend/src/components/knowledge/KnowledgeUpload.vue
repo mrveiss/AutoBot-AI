@@ -395,7 +395,7 @@
     <BaseAlert
       v-if="errorMessage"
       variant="error"
-      :message="errorMessage"
+      :message="errorMessage ?? ''"
     />
   </div>
 </template>
@@ -423,6 +423,7 @@ import { resetFormFields } from '@/utils/formHelpers'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { useUploadProgress } from '@/composables/useUploadProgress'
 import { useExpansion } from '@/composables/useExpansion'
+import { useTransientError } from '@/composables/useTransientError'
 import BaseAlert from '@/components/ui/BaseAlert.vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -499,7 +500,7 @@ const selectedFiles = ref<FileItem[]>([])
 const { isExpanded: isFileExpanded, expand: expandFile, collapseAll: collapseAllFiles } = useExpansion<string>()
 const fileInput = ref<HTMLInputElement | null>(null)
 const successMessage = ref('')
-const errorMessage = ref('')
+const { message: errorMessage, show: showError, clear: clearError } = useTransientError(5000)
 
 // =============================================================================
 // Constants
@@ -582,12 +583,12 @@ async function addTextEntry(): Promise<void> {
   })
 
   if (validationError) {
-    errorMessage.value = validationError
+    showError(validationError)
     return
   }
 
   isSubmitting.value = true
-  errorMessage.value = ''
+  clearError()
   successMessage.value = ''
 
   try {
@@ -614,7 +615,7 @@ async function addTextEntry(): Promise<void> {
 
   } catch (error: unknown) {
     const err = error as Error
-    errorMessage.value = err.message || t('knowledge.upload.errorAddText')
+    showError(err.message || t('knowledge.upload.errorAddText'))
   } finally {
     isSubmitting.value = false
   }
@@ -628,7 +629,7 @@ async function importFromUrl(): Promise<void> {
   if (!isValidUrl(urlEntry.url)) return
 
   isSubmitting.value = true
-  errorMessage.value = ''
+  clearError()
   successMessage.value = ''
 
   startProgress('Importing from URL', 'Fetching content...')
@@ -656,7 +657,7 @@ async function importFromUrl(): Promise<void> {
 
   } catch (error: unknown) {
     const err = error as Error
-    errorMessage.value = err.message || t('knowledge.upload.errorImportUrl')
+    showError(err.message || t('knowledge.upload.errorImportUrl'))
     hideProgress()
   } finally {
     isSubmitting.value = false
@@ -723,19 +724,19 @@ function handleFileSelect(event: Event): void {
 // =============================================================================
 
 async function addFiles(files: File[]): Promise<void> {
-  errorMessage.value = ''
+  clearError()
 
   for (const file of files) {
     // Validate file size
     if (file.size > MAX_FILE_SIZE) {
-      errorMessage.value = t('knowledge.upload.errorFileTooLarge', { name: file.name })
+      showError(t('knowledge.upload.errorFileTooLarge', { name: file.name }))
       continue
     }
 
     // Validate file type
     const ext = getFileExtension(file.name).toLowerCase()
     if (!SUPPORTED_EXTENSIONS.includes(ext)) {
-      errorMessage.value = t('knowledge.upload.errorUnsupportedFormat', { name: file.name })
+      showError(t('knowledge.upload.errorUnsupportedFormat', { name: file.name }))
       continue
     }
 
@@ -824,7 +825,7 @@ async function uploadFiles(): Promise<void> {
   if (selectedFiles.value.length === 0) return
 
   isSubmitting.value = true
-  errorMessage.value = ''
+  clearError()
   successMessage.value = ''
 
   const totalFiles = selectedFiles.value.length
@@ -893,7 +894,7 @@ async function uploadFiles(): Promise<void> {
 
   } catch (error: unknown) {
     const err = error as Error
-    errorMessage.value = err.message || t('knowledge.upload.errorUploadFiles')
+    showError(err.message || t('knowledge.upload.errorUploadFiles'))
     hideProgress()
   } finally {
     isSubmitting.value = false

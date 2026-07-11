@@ -247,3 +247,149 @@ class TestAsyncLazySingleton:
         results = await asyncio.gather(*[get() for _ in range(20)])
         assert all(r is results[0] for r in results)
         assert len(calls) == 1
+
+
+# ---------------------------------------------------------------------------
+# reset() / set_for_test() seams (#11635)
+# ---------------------------------------------------------------------------
+
+
+class TestLazySingletonSeams:
+    def test_reset_reconstructs(self):
+        calls = []
+
+        def factory():
+            calls.append(1)
+            return object()
+
+        get = lazy_singleton(factory)
+        a = get()
+        get.reset()
+        b = get()
+        assert a is not b
+        assert len(calls) == 2
+
+    def test_reset_clears_arg_guard(self):
+        get = lazy_singleton(lambda x: x)
+        get(1)
+        get.reset()
+        assert get(2) == 2  # no RuntimeError: guard state cleared
+
+    def test_set_for_test_returns_double(self):
+        sentinel = object()
+        calls = []
+
+        def factory():
+            calls.append(1)
+            return object()
+
+        get = lazy_singleton(factory)
+        get.set_for_test(sentinel)
+        assert get() is sentinel
+        assert not calls  # factory never invoked
+
+    def test_set_for_test_then_reset_restores_factory(self):
+        sentinel = object()
+        real = object()
+        get = lazy_singleton(lambda: real)
+        get.set_for_test(sentinel)
+        get.reset()
+        assert get() is real
+
+    def test_arg_guard_after_set_for_test(self):
+        """Injection pins the guard to no-args; arg calls afterwards raise."""
+        sentinel = object()
+        get = lazy_singleton(lambda x: x)
+        get.set_for_test(sentinel)
+        with pytest.raises(RuntimeError, match="different args"):
+            get(1)
+
+
+class TestLazyOptionalSingletonSeams:
+    def test_reset_reconstructs(self):
+        call_count = 0
+
+        def factory():
+            nonlocal call_count
+            call_count += 1
+            return object()
+
+        get = lazy_optional_singleton(factory)
+        a = get()
+        get.reset()
+        b = get()
+        assert a is not b
+        assert call_count == 2
+
+    def test_reset_after_cached_none_reinvokes_factory(self):
+        call_count = 0
+
+        def factory():
+            nonlocal call_count
+            call_count += 1
+            return None
+
+        get = lazy_optional_singleton(factory)
+        assert get() is None
+        get.reset()
+        assert get() is None
+        assert call_count == 2
+
+    def test_set_for_test_accepts_none(self):
+        call_count = 0
+
+        def factory():
+            nonlocal call_count
+            call_count += 1
+            return object()
+
+        get = lazy_optional_singleton(factory)
+        get.set_for_test(None)
+        assert get() is None
+        assert call_count == 0  # cached None distinct from _UNSET
+
+    def test_set_for_test_returns_double(self):
+        sentinel = object()
+        get = lazy_optional_singleton(object)
+        get.set_for_test(sentinel)
+        assert get() is sentinel
+
+
+class TestAsyncLazySingletonSeams:
+    @pytest.mark.asyncio
+    async def test_reset_reconstructs(self):
+        calls = []
+
+        async def factory():
+            calls.append(1)
+            return object()
+
+        get = async_lazy_singleton(factory)
+        a = await get()
+        await get.reset()
+        b = await get()
+        assert a is not b
+        assert len(calls) == 2
+
+    @pytest.mark.asyncio
+    async def test_set_for_test_returns_double(self):
+        sentinel = object()
+        calls = []
+
+        def factory():
+            calls.append(1)
+            return object()
+
+        get = async_lazy_singleton(factory)
+        get.set_for_test(sentinel)
+        assert await get() is sentinel
+        assert not calls
+
+    @pytest.mark.asyncio
+    async def test_set_for_test_then_reset_restores_factory(self):
+        sentinel = object()
+        real = object()
+        get = async_lazy_singleton(lambda: real)
+        get.set_for_test(sentinel)
+        await get.reset()
+        assert await get() is real

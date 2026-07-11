@@ -1029,3 +1029,21 @@ def start_autonomous_loop(llm_service: Any) -> None:
         name="autonomous_loop_runner",
     )
     logger.info("AutonomousLoopRunner: task created")
+
+
+async def stop_autonomous_loop() -> None:
+    """Cancel the autonomous improvement loop background task.
+
+    Issue #11638: the task was created at startup but never tracked for
+    shutdown, so it survived lifespan cleanup. Call from application
+    lifespan cleanup; safe to call when the loop was never started.
+    """
+    global _autonomous_loop_task
+    if _autonomous_loop_task is not None and not _autonomous_loop_task.done():
+        _autonomous_loop_task.cancel()
+        try:
+            await _autonomous_loop_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("AutonomousLoopRunner: task cancelled")
+    _autonomous_loop_task = None
