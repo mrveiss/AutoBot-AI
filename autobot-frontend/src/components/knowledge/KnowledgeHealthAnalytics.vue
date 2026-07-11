@@ -60,7 +60,6 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
-import { useKnowledgeStats } from '@/composables/knowledge/useKnowledgeStats'
 import { useKnowledgeController } from '@/models/controllers/index'
 import DocumentChangeFeed from '@/components/knowledge/DocumentChangeFeed.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
@@ -109,9 +108,6 @@ try {
     getDetailedStats: async () => ({})
   }
 }
-
-// Composable: category facts fetching
-const { refreshCategoryFacts } = useKnowledgeStats()
 
 // State
 const recentActivities = ref<Activity[]>([])
@@ -315,16 +311,10 @@ const capitalize = (str: string): string => {
   return str && str.length > 0 ? str.charAt(0).toUpperCase() + str.slice(1) : str || ''
 }
 
-// Load stats on mount: unified refreshStats + refreshCategoryFacts
+// Load stats on mount (category fact counts are fetched by VectorStatsSection
+// on its own useKnowledgeStats instance — the composable state is per-instance)
 onMounted(async () => {
-  // Fetch stats (controller + store) and populate recent activities
   await refreshStats()
-
-  // Fetch category fact counts for the distribution chart (owned by VectorStatsSection)
-  const factsResult = await refreshCategoryFacts()
-  if (factsResult === null) {
-    logger.warn('Failed to fetch category facts, continuing with basic stats')
-  }
 })
 </script>
 

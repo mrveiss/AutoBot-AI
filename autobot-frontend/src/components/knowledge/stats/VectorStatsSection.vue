@@ -40,13 +40,27 @@
  * Issue #11562: Wire in orphaned stats subpanels
  */
 
+import { onMounted } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useVectorStats } from '@/composables/knowledge/useVectorStats'
 import { useKnowledgeStats } from '@/composables/knowledge/useKnowledgeStats'
 import { formatCategoryName } from '@/utils/formatHelpers'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('VectorStatsSection')
 
 const { vectorStats } = useVectorStats()
-const { categoryFactCounts } = useKnowledgeStats()
+// useKnowledgeStats is per-instance state: the fetch must happen on the SAME
+// instance this section reads from (a parent-side refresh populates a
+// different ref and the chart renders 0% bars).
+const { categoryFactCounts, refreshCategoryFacts } = useKnowledgeStats()
+
+onMounted(async () => {
+  const result = await refreshCategoryFacts()
+  if (result === null) {
+    logger.warn('Failed to fetch category facts; distribution chart shows zero counts')
+  }
+})
 
 const getCategoryFactCount = (category: string): number => {
   return categoryFactCounts.value[category] || 0
