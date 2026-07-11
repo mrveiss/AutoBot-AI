@@ -144,9 +144,10 @@ def _register_stt_if_available(registry: CapabilityRegistry) -> None:
     Imports lazily so voice-processing heavy deps are not pulled in at module
     load time.  Skips silently when no provider is configured.
 
-    Enumerates ``ProviderRegistry._providers`` (language → priority-list) and
-    registers a ``SpeechProviderSTTAdapter`` for each language's highest-priority
-    provider, so every configured language is reachable via the STT capability.
+    Enumerates the speech registry's languages (via its public ``languages()``
+    accessor) and registers a ``SpeechProviderSTTAdapter`` for each language's
+    highest-priority provider, so every configured language is reachable via the
+    STT capability.
     """
     try:
         from integrations.stt_adapter import SpeechProviderSTTAdapter
@@ -157,7 +158,7 @@ def _register_stt_if_available(registry: CapabilityRegistry) -> None:
 
     try:
         speech_registry = get_speech_provider_registry()
-        languages = list(getattr(speech_registry, "_providers", {}).keys())
+        languages = list(speech_registry.languages())
         if not languages:
             logger.debug("No STT providers registered in speech registry — STT capability skipped")
             return

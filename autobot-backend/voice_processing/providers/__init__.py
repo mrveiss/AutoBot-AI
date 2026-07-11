@@ -117,6 +117,10 @@ class ProviderRegistry:
         providers = self._providers.get(language, [])
         return [p for p, _ in providers]
 
+    def languages(self) -> List[str]:
+        """Return the language codes that have at least one registered provider."""
+        return list(self._providers.keys())
+
 
 # Global registry instance
 _registry = ProviderRegistry()

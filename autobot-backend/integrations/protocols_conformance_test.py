@@ -18,7 +18,7 @@ Tests:
 from __future__ import annotations
 
 import inspect
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -402,6 +402,10 @@ class _FakeSpeechRegistry:
             return None
         return entries[0][0]
 
+    def languages(self):
+        """Match the real ProviderRegistry.languages() public accessor (#11617)."""
+        return list(self._providers.keys())
+
 
 def _make_mock_provider(name: str):
     """Return a MagicMock SpeechProvider with provider_name set."""
@@ -414,14 +418,34 @@ class TestSTTMultiLanguageRegistration:
     """#11617 — every language in the speech registry must get an STT adapter."""
 
     def _run_register(self, fake_speech_registry):
-        """Run ``_register_stt_if_available`` with a fake speech registry injected."""
+        """Run ``_register_stt_language`` per language with a fake registry injected."""
         from integrations.capability_registry import _register_stt_language
 
         registry = CapabilityRegistry()
-        languages = list(getattr(fake_speech_registry, "_providers", {}).keys())
-        for lang in languages:
+        for lang in fake_speech_registry.languages():
             _register_stt_language(registry, fake_speech_registry, lang, SpeechProviderSTTAdapter)
         return registry
+
+    def test_register_stt_if_available_enumerates_via_languages(self):
+        """End-to-end: the production entry point enumerates via .languages() (#11617).
+
+        Drives the real ``_register_stt_if_available`` with the fake speech
+        registry injected, so the public-accessor enumeration path is covered —
+        not just the per-language helper.
+        """
+        import integrations.capability_registry as cr
+        from voice_processing import providers as vp
+
+        fake_reg = _FakeSpeechRegistry(
+            {"en": _make_mock_provider("whisper-en"), "lv": _make_mock_provider("whisper-lv")}
+        )
+        registry = CapabilityRegistry()
+        with patch.object(vp, "get_speech_provider_registry", return_value=fake_reg):
+            cr._register_stt_if_available(registry)
+
+        resolved = registry.resolve(STT)
+        assert len(resolved) == 2
+        assert all(isinstance(a, STTProtocol) for a in resolved)
 
     def test_single_language_registers_one_adapter(self):
         """A registry with one language produces exactly one STT adapter."""
