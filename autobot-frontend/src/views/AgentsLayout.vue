@@ -3,7 +3,6 @@
     <nav
       class="flex shrink-0 border-b border-autobot-border bg-autobot-bg-secondary px-4"
       :aria-label="$t('agent.nav.label')"
-      role="tablist"
     >
       <router-link
         v-for="tab in tabs"
@@ -13,8 +12,7 @@
           'px-4 py-3 text-sm font-medium border-b-2 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-autobot-primary',
           isActive(tab) ? activeClass : inactiveClass,
         ]"
-        role="tab"
-        :aria-selected="isActive(tab)"
+        :aria-current="isActive(tab) ? 'page' : undefined"
       >
         <i :class="['fas', tab.icon, 'mr-2']" aria-hidden="true"></i>
         {{ $t(tab.labelKey) }}
