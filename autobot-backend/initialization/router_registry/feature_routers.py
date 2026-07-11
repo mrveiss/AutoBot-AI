@@ -230,9 +230,12 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["video-generation", "media"],
         "video_generation",
     ),
+    # #11665: empty prefix — the router self-prefixes /web-research, so the
+    # canonical live path is /api/web-research/* (was the stacked
+    # /api/web-research-settings/web-research/*).
     (
         "api.web_research_settings",
-        "/web-research-settings",
+        "",
         ["web-research-settings"],
         "web_research_settings",
     ),
