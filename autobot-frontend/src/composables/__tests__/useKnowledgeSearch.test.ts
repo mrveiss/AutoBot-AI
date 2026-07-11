@@ -1,4 +1,5 @@
-// Copyright (c) 2026 mrveiss
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 // Unit tests for useKnowledgeSearch (extracted from KnowledgeSearch.vue)
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
