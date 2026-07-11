@@ -40,11 +40,15 @@ def lazy_optional_singleton(factory: Callable[[], T | None]) -> Callable[[], T |
 
     def _get() -> T | None:
         nonlocal _instance
-        if _instance is _UNSET:
+        # Read into a local: reset() can flip _instance back to _UNSET after
+        # the unlocked check, and the sentinel must never leak to callers.
+        result = _instance
+        if result is _UNSET:
             with _lock:
                 if _instance is _UNSET:
                     _instance = factory()
-        return _instance  # type: ignore[return-value]
+                result = _instance
+        return result  # type: ignore[return-value]
 
     def _reset() -> None:
         nonlocal _instance
@@ -83,20 +87,27 @@ def lazy_singleton(factory: Callable[..., T]) -> Callable[..., T]:
 
     def get(*args, **kwargs) -> T:
         nonlocal instance, _first_args, _first_kwargs
-        if instance is None:
+        # Read into a local: reset() can flip instance back to None after the
+        # unlocked check, and callers must never observe that transition.
+        result = instance
+        if result is None:
             with lock:
                 if instance is None:
                     instance = factory(*args, **kwargs)
                     _first_args = args
                     _first_kwargs = dict(kwargs)
+                result = instance
         elif args or kwargs:
-            if args != _first_args or kwargs != _first_kwargs:
+            with lock:  # guard state is mutated by reset(); snapshot under lock
+                first_args = _first_args
+                first_kwargs = _first_kwargs
+            if args != first_args or kwargs != first_kwargs:
                 raise RuntimeError(
                     f"lazy_singleton: called with different args after first construction. "
-                    f"First: args={_first_args!r}, kwargs={_first_kwargs!r}. "
+                    f"First: args={first_args!r}, kwargs={first_kwargs!r}. "
                     f"Now: args={args!r}, kwargs={kwargs!r}."
                 )
-        return instance
+        return result
 
     def _reset() -> None:
         nonlocal instance, _first_args, _first_kwargs
@@ -128,10 +139,12 @@ def async_lazy_singleton(factory: Callable[..., Any]) -> Callable[[], Awaitable[
     Issue #5632: extracted from ~7 repeated async double-checked locking patterns.
 
     The returned factory exposes ``await reset()`` (clear the cached instance
-    under the construction lock) and ``set_for_test(instance)`` (synchronous
-    injection of a test double; safe on the event-loop thread because no
-    construction can be in flight concurrently). Test seams only — production
-    code must not call them.
+    under the construction lock — note it is a coroutine and MUST be awaited;
+    a bare ``get.reset()`` is a silent no-op) and ``set_for_test(instance)``
+    (synchronous injection of a test double; only call while no ``get()`` is
+    pending — a ``get()`` suspended inside the factory will overwrite the
+    injected double when it resumes). Test seams only — production code must
+    not call them.
     """
     instance: T | None = None  # type: ignore[valid-type]  # GH#7105: T unbound in closure; async singleton pattern  # noqa: E501
     lock = asyncio.Lock()

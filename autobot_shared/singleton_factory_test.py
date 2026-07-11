@@ -296,6 +296,14 @@ class TestLazySingletonSeams:
         get.reset()
         assert get() is real
 
+    def test_arg_guard_after_set_for_test(self):
+        """Injection pins the guard to no-args; arg calls afterwards raise."""
+        sentinel = object()
+        get = lazy_singleton(lambda x: x)
+        get.set_for_test(sentinel)
+        with pytest.raises(RuntimeError, match="different args"):
+            get(1)
+
 
 class TestLazyOptionalSingletonSeams:
     def test_reset_reconstructs(self):
