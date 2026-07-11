@@ -27,7 +27,7 @@ Issue #3850: useWebResearchStore exists but has no view
         <button
           class="btn btn-secondary"
           :disabled="isLoading"
-          @click="fetchStatus"
+          @click="store.loadFromBackend()"
         >
           <svg v-if="!isLoading" class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -432,13 +432,14 @@ Issue #3850: useWebResearchStore exists but has no view
 /**
  * WebResearchSettings — Issue #3850
  *
- * Settings panel for useWebResearchStore. Fetches live status from the backend
- * on mount, exposes all WebResearchSettings fields, and POSTs changes via
- * PUT /web-research-settings/web-research/settings. Toggle enable/disable uses
- * the dedicated /web-research-settings/web-research/enable|disable endpoints.
+ * Settings panel for useWebResearchStore. Hydrates settings + status from the
+ * backend on mount (store.loadFromBackend, #11665), exposes all
+ * WebResearchSettings fields, and saves changes via PUT /web-research/settings.
+ * Toggle enable/disable uses the dedicated /web-research/enable|disable
+ * endpoints. All paths come from the shared WEB_RESEARCH_API constant.
  */
 import { ref, computed, onMounted } from 'vue'
-import { useWebResearchStore } from '@/stores/useWebResearchStore'
+import { useWebResearchStore, WEB_RESEARCH_API } from '@/stores/useWebResearchStore'
 import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
@@ -460,31 +461,10 @@ const circuitBreakerEntries = computed<[string, unknown][]>(() => {
   return Object.entries(cb as Record<string, unknown>)
 })
 
-async function fetchStatus(): Promise<void> {
-  store.setLoading(true)
-  store.clearError()
-  try {
-    const data = await ApiClient.get<Record<string, unknown>>(`${getApiBase()}/web-research-settings/web-research/status`) as Record<string, unknown>
-    store.updateStatus({
-      enabled: Boolean(data.enabled),
-      preferred_method: String(data.preferred_method ?? store.status.preferred_method),
-      cache_stats: (data.cache_stats as typeof store.status.cache_stats) ?? null,
-      circuit_breakers: (data.circuit_breakers as Record<string, unknown> | null) ?? null
-    })
-    store.updateSettings({ enabled: Boolean(data.enabled) })
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    logger.warn('Failed to fetch web research status:', msg)
-    store.setError('Failed to load status from backend. Displaying cached settings.')
-  } finally {
-    store.setLoading(false)
-  }
-}
-
 async function handleToggle(): Promise<void> {
   isToggling.value = true
   store.clearError()
-  const endpoint = store.settings.enabled ? '/web-research-settings/web-research/disable' : '/web-research-settings/web-research/enable'
+  const endpoint = store.settings.enabled ? WEB_RESEARCH_API.disable : WEB_RESEARCH_API.enable
   try {
     await ApiClient.post<unknown>(`${getApiBase()}${endpoint}`, {})
     store.toggleWebResearch()
@@ -504,7 +484,7 @@ async function saveSettings(): Promise<void> {
   saveSuccess.value = false
   store.clearError()
   try {
-    await ApiClient.put<unknown>(`${getApiBase()}/web-research-settings/web-research/settings`, {
+    await ApiClient.put<unknown>(`${getApiBase()}${WEB_RESEARCH_API.settings}`, {
       enabled: store.settings.enabled,
       require_user_confirmation: store.settings.require_user_confirmation,
       preferred_method: store.settings.preferred_method,
@@ -533,7 +513,7 @@ async function clearCache(): Promise<void> {
   isClearingCache.value = true
   store.clearError()
   try {
-    await ApiClient.post<unknown>(`${getApiBase()}/web-research-settings/web-research/clear-cache`, {})
+    await ApiClient.post<unknown>(`${getApiBase()}${WEB_RESEARCH_API.clearCache}`, {})
     store.updateStatus({ cache_stats: { cache_size: 0, rate_limiter: store.status.cache_stats?.rate_limiter } })
     logger.info('Web research cache cleared')
   } catch (err: unknown) {
@@ -549,7 +529,7 @@ async function resetCircuitBreakers(): Promise<void> {
   isResettingBreakers.value = true
   store.clearError()
   try {
-    await ApiClient.post<unknown>(`${getApiBase()}/web-research-settings/web-research/reset-circuit-breakers`, {})
+    await ApiClient.post<unknown>(`${getApiBase()}${WEB_RESEARCH_API.resetCircuitBreakers}`, {})
     store.updateStatus({ circuit_breakers: null })
     logger.info('Web research circuit breakers reset')
   } catch (err: unknown) {
@@ -562,7 +542,7 @@ async function resetCircuitBreakers(): Promise<void> {
 }
 
 onMounted(() => {
-  fetchStatus()
+  store.loadFromBackend()
 })
 </script>
 

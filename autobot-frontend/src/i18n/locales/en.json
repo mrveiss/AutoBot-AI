@@ -5035,6 +5035,9 @@
     "scope": "Knowledge Root K-Z (20 components)",
     "generated": "2026-03-04"
   },
+  "knowledge.webResearch.banner.disabled": "Web research is turned off. Enable it in Web Research Settings to run page fetches, crawls, and data extraction.",
+  "knowledge.webResearch.banner.dismiss": "Dismiss",
+  "knowledge.webResearch.banner.unavailable": "Web research is unavailable: the browser (Playwright) failed to initialize at startup. Check the backend logs and restart AutoBot to restore it.",
   "knowledge.qualityScore.title": "Quality: {score}%",
   "knowledge.vectorization.statusVectorized": "Vectorized",
   "knowledge.vectorization.statusPending": "Pending",

@@ -14,6 +14,9 @@ const logger = createLogger('ExtractTab')
 const { t } = useI18n()
 const { extractData } = useWebResearch()
 
+// #11665: parent blocks submits when the researcher is unavailable/disabled.
+const props = defineProps<{ disabled?: boolean }>()
+
 // ── State ──────────────────────────────────────────────────────────────────
 
 const url = ref('')
@@ -40,7 +43,7 @@ function parseSchema(): Record<string, unknown> | null {
 }
 
 async function submit() {
-  if (!url.value.trim()) return
+  if (props.disabled || !url.value.trim()) return
   const schema = parseSchema()
   if (!schema) return
 
@@ -120,7 +123,7 @@ function reset() {
       </div>
 
       <div class="wr-form-actions">
-        <button type="submit" class="wr-btn wr-btn--primary" :disabled="isLoading || !url.trim() || !!schemaError">
+        <button type="submit" class="wr-btn wr-btn--primary" :disabled="isLoading || disabled || !url.trim() || !!schemaError">
           <span v-if="isLoading" class="wr-spinner" aria-hidden="true" />
           {{ isLoading ? t('knowledge.webResearch.extracting') : t('knowledge.webResearch.extract.submitLabel') }}
         </button>

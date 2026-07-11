@@ -5035,6 +5035,9 @@
     "scope": "Korzeń wiedzy K-Z (20 komponentów)",
     "generated": "2026-03-04"
   },
+  "knowledge.webResearch.banner.disabled": "Badanie sieci jest wyłączone. Włącz je w ustawieniach badania sieci, aby pobierać strony, indeksować witryny i wyodrębniać dane.",
+  "knowledge.webResearch.banner.dismiss": "Zamknij",
+  "knowledge.webResearch.banner.unavailable": "Badanie sieci jest niedostępne: przeglądarka (Playwright) nie zainicjowała się podczas uruchamiania. Sprawdź logi backendu i uruchom AutoBot ponownie.",
   "knowledge.qualityScore.title": "Jakość: {score}%",
   "knowledge.vectorization.statusVectorized": "Zwektoryzowany",
   "knowledge.vectorization.statusPending": "Oczekuje",

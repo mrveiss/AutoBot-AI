@@ -4,14 +4,32 @@
 <!-- WebResearchPanel — 4-tab web research UI (MVA-344) -->
 
 <script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTabs } from '@/composables/useTabs'
+import { useWebResearchStore } from '@/stores/useWebResearchStore'
 import ScrapeTab from '@/components/knowledge/web-research/ScrapeTab.vue'
 import CrawlTab from '@/components/knowledge/web-research/CrawlTab.vue'
 import SiteMapTab from '@/components/knowledge/web-research/SiteMapTab.vue'
 import ExtractTab from '@/components/knowledge/web-research/ExtractTab.vue'
 
 const { t } = useI18n()
+
+// #11665: pre-flight — hydrate settings/status from the backend on mount and
+// block submits when the researcher is unavailable or research is disabled.
+const store = useWebResearchStore()
+const bannerDismissed = ref(false)
+
+const researchBlocked = computed(() => !store.researcherAvailable || !store.isEnabled)
+const bannerText = computed(() =>
+  !store.researcherAvailable
+    ? t('knowledge.webResearch.banner.unavailable')
+    : t('knowledge.webResearch.banner.disabled')
+)
+
+onMounted(() => {
+  store.loadFromBackend()
+})
 
 const TAB_IDS = ['scrape', 'crawl', 'sitemap', 'extract'] as const
 type TabId = (typeof TAB_IDS)[number]
@@ -64,6 +82,25 @@ const tabs: Tab[] = [
       </div>
     </div>
 
+    <!-- Pre-flight banner (#11665) -->
+    <div v-if="researchBlocked && !bannerDismissed" class="wrp-banner" role="alert">
+      <svg class="wrp-banner__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <span class="wrp-banner__text">{{ bannerText }}</span>
+      <button
+        type="button"
+        class="wrp-banner__dismiss"
+        :aria-label="t('knowledge.webResearch.banner.dismiss')"
+        @click="bannerDismissed = true"
+      >
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" class="wrp-banner__dismiss-icon">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
     <!-- Tab bar -->
     <div
       ref="tablistRef"
@@ -87,16 +124,16 @@ const tabs: Tab[] = [
 
     <!-- Tab panels -->
     <div v-if="activeTab === 'scrape'" v-bind="panelAttrs('scrape')" class="wrp-content">
-      <ScrapeTab />
+      <ScrapeTab :disabled="researchBlocked" />
     </div>
     <div v-else-if="activeTab === 'crawl'" v-bind="panelAttrs('crawl')" class="wrp-content">
-      <CrawlTab />
+      <CrawlTab :disabled="researchBlocked" />
     </div>
     <div v-else-if="activeTab === 'sitemap'" v-bind="panelAttrs('sitemap')" class="wrp-content">
-      <SiteMapTab />
+      <SiteMapTab :disabled="researchBlocked" />
     </div>
     <div v-else-if="activeTab === 'extract'" v-bind="panelAttrs('extract')" class="wrp-content">
-      <ExtractTab />
+      <ExtractTab :disabled="researchBlocked" />
     </div>
   </div>
 </template>
@@ -146,6 +183,54 @@ const tabs: Tab[] = [
   font-size: 0.875rem;
   color: var(--text-muted);
   margin: 0;
+}
+
+/* ── Pre-flight banner (#11665) ─────────────────────────────────────────── */
+
+.wrp-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 24px 0;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--status-warning) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-warning) 35%, transparent);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.wrp-banner__icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--status-warning);
+}
+
+.wrp-banner__text {
+  flex: 1;
+  line-height: 1.5;
+}
+
+.wrp-banner__dismiss {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.wrp-banner__dismiss:hover {
+  color: var(--text-primary);
+}
+
+.wrp-banner__dismiss-icon {
+  width: 16px;
+  height: 16px;
 }
 
 /* ── Tab bar ────────────────────────────────────────────────────────────── */
