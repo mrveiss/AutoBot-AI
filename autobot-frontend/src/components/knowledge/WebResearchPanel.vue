@@ -175,7 +175,7 @@ const tabs: Tab[] = [
 .wrp-header__icon {
   width: 22px;
   height: 22px;
-  color: var(--accent-primary, #00d4ff);
+  color: var(--color-primary);
   flex-shrink: 0;
 }
 
@@ -263,12 +263,12 @@ const tabs: Tab[] = [
 }
 
 .wrp-tab--active {
-  color: var(--accent-primary, #00d4ff);
-  border-bottom-color: var(--accent-primary, #00d4ff);
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
 }
 
 .wrp-tab:focus-visible {
-  outline: 2px solid var(--accent-primary, #00d4ff);
+  outline: 2px solid var(--color-primary);
   outline-offset: -2px;
 }
 
@@ -338,7 +338,7 @@ const tabs: Tab[] = [
 }
 
 .wr-input:focus {
-  border-color: var(--accent-primary, #00d4ff);
+  border-color: var(--color-primary);
 }
 
 .wr-input:disabled {
@@ -385,7 +385,7 @@ const tabs: Tab[] = [
 }
 
 .wr-textarea:focus {
-  border-color: var(--accent-primary, #00d4ff);
+  border-color: var(--color-primary);
 }
 
 .wr-checkbox-label {
@@ -399,7 +399,7 @@ const tabs: Tab[] = [
 
 .wr-field-error {
   font-size: 0.8rem;
-  color: var(--status-error, #f87171);
+  color: var(--color-error);
   margin: 0;
 }
 
@@ -426,7 +426,7 @@ const tabs: Tab[] = [
 }
 
 .wr-btn:focus-visible {
-  outline: 2px solid var(--accent-primary, #00d4ff);
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
@@ -436,8 +436,8 @@ const tabs: Tab[] = [
 }
 
 .wr-btn--primary {
-  background: var(--accent-primary, #00d4ff);
-  color: var(--bg-primary, #0a0a0a);
+  background: var(--color-primary);
+  color: var(--bg-primary);
 }
 
 .wr-btn--primary:not(:disabled):hover {
@@ -481,7 +481,7 @@ const tabs: Tab[] = [
 }
 
 .wr-skeleton {
-  background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary, #1a1a1a) 50%, var(--bg-secondary) 75%);
+  background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
   background-size: 200% 100%;
   border-radius: 4px;
   animation: wr-shimmer 1.4s infinite;
@@ -515,7 +515,7 @@ const tabs: Tab[] = [
 
 .wr-progress-bar__fill {
   height: 100%;
-  background: var(--accent-primary, #00d4ff);
+  background: var(--color-primary);
   border-radius: 2px;
   transition: width 0.3s ease;
 }
@@ -543,11 +543,11 @@ const tabs: Tab[] = [
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  background: color-mix(in srgb, var(--status-error, #f87171) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--status-error, #f87171) 30%, transparent);
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
   border-radius: 8px;
   font-size: 0.875rem;
-  color: var(--status-error, #f87171);
+  color: var(--color-error);
 }
 
 .wr-error__icon {
@@ -623,7 +623,7 @@ const tabs: Tab[] = [
 
 .wr-result__url a {
   font-size: 0.8rem;
-  color: var(--accent-primary, #00d4ff);
+  color: var(--color-primary);
   word-break: break-all;
   text-decoration: none;
 }
@@ -648,7 +648,7 @@ const tabs: Tab[] = [
 }
 
 .wr-result__content--json {
-  color: var(--text-code, #a3e635);
+  color: var(--code-string);
 }
 
 .wr-result__content--markdown {
@@ -670,23 +670,23 @@ const tabs: Tab[] = [
 }
 
 .wr-badge--success {
-  background: color-mix(in srgb, var(--status-success, #4ade80) 15%, transparent);
-  color: var(--status-success, #4ade80);
+  background: color-mix(in srgb, var(--color-success) 15%, transparent);
+  color: var(--color-success);
 }
 
 .wr-badge--error {
-  background: color-mix(in srgb, var(--status-error, #f87171) 15%, transparent);
-  color: var(--status-error, #f87171);
+  background: color-mix(in srgb, var(--color-error) 15%, transparent);
+  color: var(--color-error);
 }
 
 .wr-badge--warning {
-  background: color-mix(in srgb, var(--status-warning, #fbbf24) 15%, transparent);
-  color: var(--status-warning, #fbbf24);
+  background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+  color: var(--color-warning);
 }
 
 .wr-badge--info {
-  background: color-mix(in srgb, var(--accent-primary, #00d4ff) 15%, transparent);
-  color: var(--accent-primary, #00d4ff);
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  color: var(--color-primary);
 }
 
 /* ── URL list ────────────────────────────────────────────────────────────── */
@@ -740,7 +740,7 @@ const tabs: Tab[] = [
 }
 
 .wr-url-list__link {
-  color: var(--accent-primary, #00d4ff);
+  color: var(--color-primary);
   text-decoration: none;
   overflow: hidden;
   text-overflow: ellipsis;

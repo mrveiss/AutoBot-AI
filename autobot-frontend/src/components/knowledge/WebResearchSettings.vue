@@ -605,11 +605,11 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-error-bg, #fef2f2);
-  border: 1px solid var(--color-error, #ef4444);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
 }
 
 .error-icon {
@@ -653,8 +653,8 @@ onMounted(() => {
 }
 
 .status-card.status-enabled {
-  border-color: var(--color-success, #22c55e);
-  background: var(--color-success-bg, #f0fdf4);
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
 }
 
 .status-card.status-disabled {
@@ -679,7 +679,7 @@ onMounted(() => {
 }
 
 .status-enabled .status-card-icon {
-  color: var(--color-success, #22c55e);
+  color: var(--color-success);
 }
 
 .status-card-body {
@@ -821,7 +821,7 @@ onMounted(() => {
 }
 
 .toggle-on {
-  background: var(--color-success, #22c55e);
+  background: var(--color-success);
 }
 
 .toggle-off {
@@ -834,7 +834,7 @@ onMounted(() => {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--text-inverse);
   transition: transform var(--duration-200);
   box-shadow: var(--shadow-sm);
 }
@@ -879,14 +879,14 @@ onMounted(() => {
   text-transform: capitalize;
 }
 
-.cb-closed { border-color: var(--color-success, #22c55e); }
-.cb-closed .cb-state { color: var(--color-success, #22c55e); }
+.cb-closed { border-color: var(--color-success); }
+.cb-closed .cb-state { color: var(--color-success); }
 
-.cb-open { border-color: var(--color-error, #ef4444); }
-.cb-open .cb-state { color: var(--color-error, #ef4444); }
+.cb-open { border-color: var(--color-error); }
+.cb-open .cb-state { color: var(--color-error); }
 
-.cb-half-open { border-color: var(--color-warning, #f59e0b); }
-.cb-half-open .cb-state { color: var(--color-warning, #f59e0b); }
+.cb-half-open { border-color: var(--color-warning); }
+.cb-half-open .cb-state { color: var(--color-warning); }
 
 /* ── Form Actions ─────────────────────────── */
 
@@ -931,7 +931,7 @@ onMounted(() => {
 
 .btn-primary {
   background: var(--color-info);
-  color: #ffffff;
+  color: var(--text-inverse);
   border-color: var(--color-info);
 }
 
@@ -950,14 +950,14 @@ onMounted(() => {
 }
 
 .btn-danger {
-  background: var(--color-error-bg, #fef2f2);
-  color: var(--color-error, #ef4444);
-  border-color: var(--color-error, #ef4444);
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  border-color: var(--color-error);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: var(--color-error, #ef4444);
-  color: #ffffff;
+  background: var(--color-error);
+  color: var(--text-on-error);
 }
 
 .btn-icon {
@@ -973,11 +973,11 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-xs);
   padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-success-bg, #f0fdf4);
-  border: 1px solid var(--color-success, #22c55e);
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
-  color: var(--color-success, #22c55e);
+  color: var(--color-success);
   font-weight: 500;
 }
 
