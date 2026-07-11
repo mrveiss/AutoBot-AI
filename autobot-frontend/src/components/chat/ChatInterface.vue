@@ -977,7 +977,7 @@ const syncConnectionFromStore = (): void => {
     : t('status.disconnected')
 }
 
-// React to OptimizedHealthMonitor → appStore updates immediately.
+// React to HealthMonitor → appStore updates immediately.
 watch(() => appStore.backendStatus.class, syncConnectionFromStore, { immediate: false })
 
 // #6746: autosave poller deleted. Backend now persists every chat message
@@ -1138,7 +1138,7 @@ onMounted(async () => {
   await loadNovncUrl()
 
   // #6773: connection state mirrors appStore.backendStatus (driven by
-  // OptimizedHealthMonitor). Seed once from current store state so initial
+  // HealthMonitor). Seed once from current store state so initial
   // render reflects the latest known status without an extra fetch.
   syncConnectionFromStore()
   // #6746: autosave removed; backend persists messages directly

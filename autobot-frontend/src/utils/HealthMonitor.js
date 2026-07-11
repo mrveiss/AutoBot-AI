@@ -468,11 +468,14 @@ class HealthMonitor {
      * Used to recover from accumulated error-notification floods (#11640).
      */
     resetFailures() {
+        // Reset to 'healthy' (legacy semantics), NOT 'unknown': the App.vue
+        // listener maps non-healthy/degraded to Disconnected, and the next
+        // real check can be up to intervals.healthy away.
         this.consecutiveFailures = { backend: 0, websocket: 0 };
         this.healthStatus.overall = 'healthy';
-        this.healthStatus.backend = 'unknown';
+        this.healthStatus.backend = 'healthy';
         this.healthStatus.frontend = 'healthy';
-        this.healthStatus.websocket = 'unknown';
+        this.healthStatus.websocket = 'healthy';
         this.healthStatus.router = 'healthy';
         this.notifyHealthChange();
     }
