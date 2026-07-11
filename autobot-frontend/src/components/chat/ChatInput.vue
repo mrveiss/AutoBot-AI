@@ -1613,7 +1613,7 @@ onUnmounted(() => {
 }
 
 .image-gen-dialog {
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   border-radius: 0.75rem;
   padding: 1.5rem;
   width: 100%;
@@ -1630,30 +1630,30 @@ onUnmounted(() => {
   gap: 0.5rem;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .image-gen-label {
   font-size: 0.8125rem;
   font-weight: 500;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .image-gen-prompt {
   width: 100%;
   padding: 0.625rem 0.75rem;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   font-size: 0.875rem;
   resize: none;
   font-family: inherit;
-  color: var(--text-primary, #111827);
-  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
+  background: var(--bg-surface);
 }
 
 .image-gen-prompt:focus {
-  outline: 2px solid var(--color-primary, #3b82f6);
+  outline: 2px solid var(--color-primary);
   outline-offset: 1px;
 }
 
@@ -1670,7 +1670,7 @@ onUnmounted(() => {
   gap: 0.375rem;
   font-size: 0.8125rem;
   cursor: pointer;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
 }
 
 .image-gen-actions {
@@ -1682,12 +1682,12 @@ onUnmounted(() => {
 
 .image-gen-cancel {
   padding: 0.5rem 1rem;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   background: transparent;
   font-size: 0.875rem;
   cursor: pointer;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .image-gen-submit {
@@ -1695,7 +1695,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.375rem;
   padding: 0.5rem 1.25rem;
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
   border: none;
   border-radius: 0.5rem;
@@ -1706,7 +1706,7 @@ onUnmounted(() => {
 }
 
 .image-gen-submit:hover:not(:disabled) {
-  background: var(--color-primary-dark, #2563eb);
+  background: var(--color-primary-dark);
 }
 
 .image-gen-submit:disabled {
