@@ -3,7 +3,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Conformance tests for MessagingProtocol, TTSProtocol, and the CapabilityRegistry (#11524).
+Conformance tests for MessagingProtocol, TTSProtocol, STTProtocol, and the CapabilityRegistry.
 
 Tests:
 1. ``MessagingProtocol`` runtime isinstance check for all registered adapters.
@@ -11,6 +11,8 @@ Tests:
 3. Registry: register / resolve / absent-capability returns empty list.
 4. Functional smoke: send_message and fetch_messages with mocked HTTP (no live calls).
 5. TTSClient structural conformance to TTSProtocol (static assertion via issubclass).
+6. Discord fetch_messages (#11560): real normalised history against a mocked HTTP call.
+7. STTProtocol adapter (#11559): isinstance check + registry registration.
 """
 
 from __future__ import annotations
@@ -21,10 +23,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from integrations.base import IntegrationConfig
-from integrations.capability_registry import MESSAGING, TTS, CapabilityRegistry
+from integrations.capability_registry import MESSAGING, STT, TTS, CapabilityRegistry
 from integrations.communication_integration import DiscordIntegration, SlackIntegration
 from integrations.messaging_adapters import DiscordMessagingAdapter, SlackMessagingAdapter
-from integrations.protocols import MessagingProtocol, TTSProtocol
+from integrations.protocols import MessagingProtocol, STTProtocol, TTSProtocol
+from integrations.stt_adapter import SpeechProviderSTTAdapter
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -213,9 +216,43 @@ class TestDiscordAdapterFunctional:
         assert result == {"id": "msg1"}
 
     @pytest.mark.asyncio
-    async def test_fetch_messages_returns_empty_list(self, discord_adapter):
+    async def test_fetch_messages_returns_normalised_history(self, discord_adapter):
+        """#11560: fetch_messages routes through get_channel_history and normalises (#11560)."""
+        raw_messages = [
+            {"id": "1", "content": "hello", "author": {"username": "alice"}},
+            {"id": "2", "content": "world", "author": {"username": "bob"}},
+        ]
+        discord_adapter._integration.execute_action = AsyncMock(
+            return_value={"messages": raw_messages, "channel_id": "CH456"}
+        )
+        result = await discord_adapter.fetch_messages("CH456", limit=2)
+        discord_adapter._integration.execute_action.assert_awaited_once_with(
+            "get_channel_history", {"channel_id": "CH456", "limit": 2}
+        )
+        assert result == raw_messages
+
+    @pytest.mark.asyncio
+    async def test_fetch_messages_returns_empty_on_bad_payload(self, discord_adapter):
+        """fetch_messages returns [] when response has no 'messages' key."""
+        discord_adapter._integration.execute_action = AsyncMock(return_value={"error": "not_found"})
         result = await discord_adapter.fetch_messages("CH456")
         assert result == []
+
+    @pytest.mark.asyncio
+    async def test_discord_get_channel_history_action_mocked_http(self, discord_adapter):
+        """#11560: integration-level: get_channel_history action builds correct URL / auth."""
+        integration = discord_adapter._integration
+        raw_body = [{"id": "3", "content": "hi"}]
+
+        # Patch _make_discord_request so no live HTTP occurs.
+        integration._make_discord_request = AsyncMock(return_value={"status_code": 200, "body": raw_body})
+        result = await integration.execute_action("get_channel_history", {"channel_id": "789", "limit": 5})
+
+        # Verify the method was called with correct URL fragment and auth header.
+        call_kwargs = integration._make_discord_request.call_args
+        assert "channels/789/messages" in call_kwargs[0][1]  # url positional arg
+        assert call_kwargs[0][2]["Authorization"] == f"Bot {integration.config.token}"
+        assert result == {"messages": raw_body, "channel_id": "789"}
 
 
 # ---------------------------------------------------------------------------
@@ -258,3 +295,85 @@ class TestTTSProtocolConformance:
                 return b""
 
         assert not isinstance(IncompleteTTS(), TTSProtocol)
+
+
+# ---------------------------------------------------------------------------
+# 6. STTProtocol conformance and adapter (#11559)
+# ---------------------------------------------------------------------------
+
+
+class _FakeSegment:
+    """Minimal stand-in for ``voice_processing.providers.TranscriptSegment``."""
+
+    def __init__(self, text, start_time, end_time, confidence):
+        self.text = text
+        self.start_time = start_time
+        self.end_time = end_time
+        self.confidence = confidence
+
+
+class TestSTTProtocolConformance:
+    def test_adapter_satisfies_stt_protocol(self):
+        """SpeechProviderSTTAdapter must satisfy STTProtocol at runtime."""
+        mock_provider = MagicMock()
+        adapter = SpeechProviderSTTAdapter(mock_provider)
+        assert isinstance(adapter, STTProtocol), "SpeechProviderSTTAdapter must satisfy STTProtocol"
+
+    def test_concrete_class_satisfies_stt_protocol(self):
+        """Any class with ``transcribe`` is isinstance-compatible with STTProtocol."""
+
+        class MockSTT:
+            async def transcribe(self, audio_path: str, language=None) -> list:
+                return []
+
+        assert isinstance(MockSTT(), STTProtocol)
+
+    def test_object_without_transcribe_fails_isinstance(self):
+        """A class lacking ``transcribe`` does not satisfy STTProtocol."""
+
+        class NotSTT:
+            pass
+
+        assert not isinstance(NotSTT(), STTProtocol)
+
+    @pytest.mark.asyncio
+    async def test_adapter_transcribe_normalises_segments(self):
+        """Adapter converts TranscriptSegment objects to plain dicts."""
+        segments = [
+            _FakeSegment("hello world", 0.0, 1.5, 0.95),
+            _FakeSegment("goodbye", 1.5, 2.8, 0.88),
+        ]
+        mock_provider = MagicMock()
+        mock_provider.transcribe = AsyncMock(return_value=segments)
+        adapter = SpeechProviderSTTAdapter(mock_provider)
+
+        result = await adapter.transcribe("/tmp/audio.wav", language="en")
+
+        assert result == [
+            {"text": "hello world", "start_time": 0.0, "end_time": 1.5, "confidence": 0.95},
+            {"text": "goodbye", "start_time": 1.5, "end_time": 2.8, "confidence": 0.88},
+        ]
+        mock_provider.transcribe.assert_awaited_once_with("/tmp/audio.wav", language="en")
+
+    @pytest.mark.asyncio
+    async def test_adapter_returns_empty_on_provider_error(self):
+        """Adapter swallows provider exceptions and returns empty list."""
+        mock_provider = MagicMock()
+        mock_provider.transcribe = AsyncMock(side_effect=RuntimeError("provider down"))
+        adapter = SpeechProviderSTTAdapter(mock_provider)
+
+        result = await adapter.transcribe("/tmp/audio.wav")
+        assert result == []
+
+    def test_stt_registered_in_capability_registry(self):
+        """SpeechProviderSTTAdapter is resolvable via CapabilityRegistry (#11559)."""
+        registry = CapabilityRegistry()
+        mock_provider = MagicMock()
+        mock_provider.provider_name = "mock-stt"
+        adapter = SpeechProviderSTTAdapter(mock_provider)
+        registry.register(STT, adapter)
+
+        resolved = registry.resolve(STT)
+        assert len(resolved) == 1
+        assert isinstance(resolved[0], STTProtocol)
+        assert isinstance(resolved[0], SpeechProviderSTTAdapter)
