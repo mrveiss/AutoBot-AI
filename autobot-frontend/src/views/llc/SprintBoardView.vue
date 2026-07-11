@@ -91,13 +91,13 @@
             <line
               :x1="0" :y1="0"
               :x2="CHART_W" :y2="CHART_H"
-              stroke="#d1d5db" stroke-width="1" stroke-dasharray="4 4"
+              stroke="var(--text-secondary)" stroke-width="1" stroke-dasharray="4 4"
             />
             <!-- Actual line -->
             <polyline
               :points="burndownPoints"
               fill="none"
-              stroke="#3b82f6"
+              stroke="var(--color-primary)"
               stroke-width="2"
               stroke-linejoin="round"
             />
@@ -289,7 +289,7 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .sprint-info {
@@ -307,7 +307,7 @@ onMounted(async () => {
 
 .sprint-dates {
   font-size: 0.875rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .sprint-status-badge {
@@ -364,7 +364,7 @@ onMounted(async () => {
 
 .stat-label {
   font-size: 0.7rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -384,7 +384,7 @@ onMounted(async () => {
 }
 
 .sprint-header-skeleton {
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
@@ -406,9 +406,9 @@ onMounted(async () => {
 
 .board-column {
   flex: 0 0 260px;
-  background: var(--bg-elevated, #f9fafb);
+  background: var(--bg-elevated);
   border-radius: 0.5rem;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   /* #10750 C2: bounded by .board-columns height, not the viewport (unify w/ Kanban) */
@@ -423,12 +423,12 @@ onMounted(async () => {
   padding: 0.75rem 1rem;
   font-weight: 600;
   font-size: 0.875rem;
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .column-count {
-  background: var(--bg-surface, #fff);
-  border: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 9999px;
   padding: 0 0.5rem;
   font-size: 0.75rem;
@@ -446,8 +446,8 @@ onMounted(async () => {
 }
 
 .work-card {
-  background: var(--bg-surface, #fff);
-  border: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   padding: 0.625rem 0.75rem;
   cursor: grab;
@@ -474,7 +474,7 @@ onMounted(async () => {
 .card-identifier {
   font-family: monospace;
   font-size: 0.7rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 
 .card-title {
@@ -494,7 +494,7 @@ onMounted(async () => {
 .card-points {
   font-size: 0.7rem;
   font-weight: 600;
-  background: var(--bg-elevated, #f3f4f6);
+  background: var(--bg-elevated);
   padding: 0.1rem 0.4rem;
   border-radius: 0.25rem;
 }
@@ -507,7 +507,7 @@ onMounted(async () => {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 50%;
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
   font-size: 0.6rem;
   font-weight: 600;
@@ -517,16 +517,16 @@ onMounted(async () => {
   text-align: center;
   padding: 1.5rem 0.5rem;
   font-size: 0.75rem;
-  color: var(--text-secondary, #9ca3af);
-  border: 2px dashed var(--border-default, #e5e7eb);
+  color: var(--text-secondary);
+  border: 2px dashed var(--border-default);
   border-radius: 0.375rem;
 }
 
 .burndown-sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: var(--bg-elevated, #f9fafb);
-  border: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   padding: 1rem;
   display: flex;
@@ -553,17 +553,17 @@ onMounted(async () => {
 
 .legend-ideal::before {
   content: '- ';
-  color: #d1d5db;
+  color: var(--text-secondary);
 }
 
 .legend-actual::before {
   content: '— ';
-  color: #3b82f6;
+  color: var(--color-primary);
 }
 
 .chart-empty {
   font-size: 0.75rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
   text-align: center;
   padding: 1rem 0;
 }
