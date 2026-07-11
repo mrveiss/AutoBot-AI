@@ -41,11 +41,20 @@ class CodeExecBroker:
         self._security_key = security_event_key
         self._progress_channel = progress_channel or f"workflow:{run_id}"
         self._call_count = 0
+        self._budget_lock = asyncio.Lock()
 
     @property
     def budget_exhausted(self) -> bool:
         """True once the per-run tool-call budget has been hit (GH#11568)."""
         return self._call_count >= CODEEXEC_MAX_TOOL_CALLS
+
+    async def _reserve_budget(self) -> bool:
+        """Atomically claim one budget slot; False when exhausted (GH#11568 MINOR-3)."""
+        async with self._budget_lock:
+            if self._call_count >= CODEEXEC_MAX_TOOL_CALLS:
+                return False
+            self._call_count += 1
+            return True
 
     async def handle_line(self, line: str) -> str:
         """Process one JSON-RPC line; return a JSON reply string."""
@@ -62,16 +71,15 @@ class CodeExecBroker:
             return json.dumps({"id": req_id, "ok": False, "error": f"tool not injectable: {tool!r}"})
         if tool in self._forbidden:
             return json.dumps({"id": req_id, "ok": False, "error": f"tool forbidden: {tool!r}"})
-        if self.budget_exhausted:
+        if not await self._reserve_budget():
             return json.dumps({"id": req_id, "ok": False, "error": "tool call budget exhausted"})
 
         return await self._dispatch_and_reply(req_id, tool, params)
 
     async def _dispatch_and_reply(self, req_id: Any, tool: str, params: dict) -> str:
-        """Dispatch one validated call, emit audit + progress, return reply JSON."""
+        """Dispatch one already-budgeted call, emit audit + progress, return reply JSON."""
         try:
             result = await self._dispatch(tool, params)
-            self._call_count += 1
             params_hash = hashlib.sha256(json.dumps(params, sort_keys=True).encode()).hexdigest()[:12]
             asyncio.create_task(self._emit_audit(tool, params_hash, ok=True))
             asyncio.create_task(self._emit_progress(self._progress_channel, tool))
@@ -93,14 +101,33 @@ class CodeExecBroker:
             logger.warning("code_exec audit emit failed: %s", exc)
 
     async def _emit_progress(self, session_channel: str, tool: str) -> None:
+        """Publish a throttled progress event to BOTH event buses (design §4)."""
+        payload = {"tool": tool, "call_count": self._call_count, "run_id": self._run_id}
+        await self._emit_progress_live(session_channel, payload)
+        await self._emit_progress_stream(tool)
+
+    async def _emit_progress_live(self, session_channel: str, payload: dict) -> None:
+        """LiveEventManager (WebSocket fan-out) via the EventBus facade."""
         try:
             from events.bus import PersistStrategy, get_event_bus  # lazy import
 
             await get_event_bus().publish(
-                session_channel,
-                "code_exec_progress",
-                {"tool": tool, "call_count": self._call_count},
-                persist=PersistStrategy.MEMORY,
+                session_channel, "code_exec_progress", payload, persist=PersistStrategy.MEMORY
             )
         except Exception as exc:  # noqa: BLE001
-            logger.warning("code_exec progress emit failed: %s", exc)
+            logger.warning("code_exec live progress emit failed: %s", exc)
+
+    async def _emit_progress_stream(self, tool: str) -> None:
+        """RedisEventStreamManager (durable, task-scoped) — the second bus."""
+        try:
+            from events import AgentEvent, EventType, RedisEventStreamManager  # lazy import
+
+            event = AgentEvent(
+                event_type=EventType.ACTION,
+                content={"tool": tool, "call_count": self._call_count, "kind": "code_exec_progress"},
+                source="tool",
+                task_id=self._run_id,
+            )
+            await RedisEventStreamManager().publish(event)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("code_exec stream progress emit failed: %s", exc)
