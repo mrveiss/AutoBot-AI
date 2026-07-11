@@ -569,7 +569,8 @@ async def stop_forwarding(
         if not forwarder.running:
             return {"message": "Log forwarding service is not running"}
 
-        forwarder.stop()
+        # Off-loop: stop() drains the queue synchronously (#11638)
+        await asyncio.to_thread(forwarder.stop)
 
         return {"message": "Log forwarding service stopped"}
     except Exception as e:
