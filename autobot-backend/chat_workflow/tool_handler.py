@@ -488,12 +488,18 @@ def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
 # Issue #650: Pre-compiled regex for tool call parsing (performance optimization)
 # Handles both uppercase and lowercase TOOL_CALL tags with nested JSON in params
 # #11545: the closing `>` is optional — some chat models emit `</TOOL_CALL`
-# (newline/prose after) without it, which previously left the whole tool call
-# unparsed (raw tag leaked to the user, tool never executed). `\b` guards
-# against matching `</tool_callable…`. The opening tag's `>` (after params) is
-# still required.
+# (newline/prose after) without it.
+# #11552: the closing tag itself is often TRUNCATED to `</TOOL` (the model drops
+# `_CALL`) or spaced (`</TOOL_ CALL>`), then a hallucinated success line follows.
+# Both previously left the tool call unparsed → raw tag leaked, tool never ran
+# (0 work items, CEO chat). The close now tolerates `</TOOL[_[ ]CALL][>]`: the
+# `_CALL` and trailing `>` are both optional. The close requires a word boundary
+# after `tool` (either the proper `_call\b` continuation, or `\b` when `_CALL` is
+# dropped) so `</tool_callable…`/`</toolbox…` never match; the opening tag
+# (`<TOOL_CALL name=… params=…>`) is still required, so a bare `</tool>` in prose
+# can never match on its own.
 _TOOL_CALL_PATTERN = re.compile(
-    r'<tool_call\s+name="([^"]+)"\s+params=(["\'])(.+?)\2>([^<]*)</tool_call\b\s*>?',
+    r'<tool_call\s+name="([^"]+)"\s+params=(["\'])(.+?)\2>([^<]*)</tool(?:_?\s*call\b|\b)\s*>?',
     re.IGNORECASE | re.DOTALL,
 )
 

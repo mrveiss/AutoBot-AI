@@ -63,7 +63,11 @@ _TOOL_CALL_CLOSE_RE = re.compile(r"</TOOL_\s+CALL>")
 # Matches </tool_call>, </TOOL_CALL>, and </TOOL_ CALL> (underscore variant).
 # #11545: the trailing `>` is optional — some models omit it (`</TOOL_CALL` +
 # newline); `\b` keeps `</tool_callable` from matching.
-_TOOL_CALL_COMPLETE_RE = re.compile(r"</\s*tool_?\s*call\b\s*>?", re.IGNORECASE)
+# #11552: the close is often TRUNCATED to `</TOOL` (model drops `_CALL`) before a
+# hallucinated success line; detecting it stops the stream at the close so the
+# fabricated "task created" prose is never emitted. Kept in sync with
+# tool_handler._TOOL_CALL_PATTERN's tolerant close.
+_TOOL_CALL_COMPLETE_RE = re.compile(r"</\s*tool(?:_?\s*call\b|\b)\s*>?", re.IGNORECASE)
 
 # Issue #716: Patterns for internal prompts that should not be shown to users
 # These are continuation instructions that LLM sometimes echoes back
