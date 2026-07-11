@@ -2915,7 +2915,8 @@
       "facts": "fatos",
       "documentsSelected": "{count} documento(s) selecionado(s)",
       "backToRoot": "Voltar à raiz",
-      "filters": "Filtros"
+      "filters": "Filtros",
+      "editCategory": "Editar categoria"
     },
     "contentViewer": {
       "noFileSelected": "Nenhum arquivo selecionado",

@@ -2915,7 +2915,8 @@
       "facts": "faktów",
       "documentsSelected": "Zaznaczono {count} dokument(ów)",
       "backToRoot": "Powrót do katalogu głównego",
-      "filters": "Filtry"
+      "filters": "Filtry",
+      "editCategory": "Edytuj kategorię"
     },
     "contentViewer": {
       "noFileSelected": "Nie wybrano pliku",

@@ -2588,7 +2588,8 @@
       "loadingFileTree": "Loading file tree...",
       "closeFileViewer": "Close file viewer",
       "facts": "facts",
-      "status": "Status"
+      "status": "Status",
+      "editCategory": "زمرہ ترمیم کریں"
     },
     "entityGraph": {
       "viewGraph": "View Graph",

@@ -2915,7 +2915,8 @@
       "facts": "facts",
       "documentsSelected": "{count} document(s) selected",
       "backToRoot": "Back to root",
-      "filters": "عوامل التصفية"
+      "filters": "عوامل التصفية",
+      "editCategory": "تعديل الفئة"
     },
     "contentViewer": {
       "noFileSelected": "No file selected",

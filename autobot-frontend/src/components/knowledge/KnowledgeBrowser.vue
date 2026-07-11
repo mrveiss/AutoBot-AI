@@ -15,6 +15,7 @@
       @select="selectMainCategory"
       @populate="handlePopulate"
       @import="() => router.push('/knowledge/upload')"
+      @edit="handleEditCategory"
     />
 
     <!-- Header -->
@@ -118,6 +119,14 @@
         <Icon name="chevron-right" class="breadcrumb-sep" v-if="idx < breadcrumbParts.length - 1" />
       </span>
     </div>
+
+    <!-- Issue #11555: Category edit modal wired into the browser -->
+    <CategoryEditModal
+      v-model="showCategoryEditModal"
+      :category="categoryToEdit"
+      @updated="handleCategoryUpdated"
+      @deleted="handleCategoryDeleted"
+    />
 
     <!-- Split pane layout -->
     <div class="split-pane">
@@ -250,6 +259,8 @@ import AIDocumentEditor from '@/components/documents/AIDocumentEditor.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import KnowledgeMainCategories from './KnowledgeMainCategories.vue'
+import CategoryEditModal from './modals/CategoryEditModal.vue'
+import type { Category } from './modals/CategoryEditModal.vue'
 
 // Create scoped logger for KnowledgeBrowser
 const logger = createLogger('KnowledgeBrowser')
@@ -352,6 +363,10 @@ const populationStates = ref<Record<string, { isPopulating: boolean; progress: n
   'autobot-documentation': { isPopulating: false, progress: 0 },
   'system-knowledge': { isPopulating: false, progress: 0 }
 })
+
+// Issue #11555: category edit modal state
+const showCategoryEditModal = ref(false)
+const categoryToEdit = ref<Category | null>(null)
 
 // Search, document editor and branch state (Issue #11526)
 const search = useKnowledgeSearch(selectedCategory)
@@ -624,6 +639,27 @@ const selectMainCategory = (mainCatId: string) => {
   selectedMainCategory.value = mainCatId
   // Filter subcategories based on main category
   // This will be handled by filteredTree computed property
+}
+
+// Issue #11555: open the category edit modal from the browser card
+const handleEditCategory = (cat: MainCategory) => {
+  categoryToEdit.value = cat as Category
+  showCategoryEditModal.value = true
+}
+
+const handleCategoryUpdated = (updated: Category) => {
+  const idx = mainCategories.value.findIndex(c => c.id === updated.id)
+  if (idx !== -1) {
+    mainCategories.value[idx] = { ...mainCategories.value[idx], ...updated }
+  }
+  showCategoryEditModal.value = false
+  categoryToEdit.value = null
+}
+
+const handleCategoryDeleted = (categoryId: string) => {
+  mainCategories.value = mainCategories.value.filter(c => c.id !== categoryId)
+  showCategoryEditModal.value = false
+  categoryToEdit.value = null
 }
 
 const loadMainCategories = async () => {

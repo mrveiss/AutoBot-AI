@@ -2978,7 +2978,8 @@
       "facts": "facts",
       "documentsSelected": "{count} document(s) selected",
       "backToRoot": "Back to root",
-      "filters": "Filters"
+      "filters": "Filters",
+      "editCategory": "Edit category"
     },
     "contentViewer": {
       "noFileSelected": "No file selected",

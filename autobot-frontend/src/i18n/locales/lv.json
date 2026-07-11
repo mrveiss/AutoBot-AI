@@ -2915,7 +2915,8 @@
       "facts": "fakti",
       "documentsSelected": "{count} dokuments(-i) atlasīts(-i)",
       "backToRoot": "Atpakaļ uz sakni",
-      "filters": "Filtri"
+      "filters": "Filtri",
+      "editCategory": "Rediģēt kategoriju"
     },
     "contentViewer": {
       "noFileSelected": "Nav atlasīts fails",

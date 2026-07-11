@@ -2915,7 +2915,8 @@
       "facts": "Fakten",
       "documentsSelected": "{count} Dokument(e) ausgewählt",
       "backToRoot": "Zurück zum Stammverzeichnis",
-      "filters": "Filter"
+      "filters": "Filter",
+      "editCategory": "Kategorie bearbeiten"
     },
     "contentViewer": {
       "noFileSelected": "Keine Datei ausgewählt",
