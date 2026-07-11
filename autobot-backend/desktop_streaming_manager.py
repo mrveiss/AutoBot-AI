@@ -10,6 +10,8 @@ for remote desktop access and control.
 
 Issue #358: Converted blocking subprocess.Popen to asyncio.create_subprocess_exec.
 Issue #401: Improved code quality - proper imports, type hints, security fixes.
+Issue #11639: Session metadata moved to Redis for cross-worker visibility;
+    cross-worker broadcast via Redis pub/sub relay.
 """
 
 import asyncio
@@ -20,6 +22,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -38,6 +41,15 @@ SessionDict = dict[str, Any]
 ProcessType = asyncio.subprocess.Process
 
 logger = get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# Cross-worker constants — env-var-backed, never hard-coded (#11639)
+# ---------------------------------------------------------------------------
+_DESKTOP_EVENTS_CHANNEL: str = os.environ.get(
+    "AUTOBOT_DESKTOP_EVENTS_CHANNEL", "autobot:desktop:events"
+)
+_DESKTOP_SESSIONS_KEY: str = "autobot:desktop:sessions"  # HASH: session_id -> JSON metadata
+_WORKER_ID: str = str(uuid.uuid4())  # unique per-process; set once at import time
 
 # Performance optimization: O(1) lookup for VNC process keys (Issue #326)
 ALL_VNC_PROCESS_KEYS: frozenset[str] = frozenset({"novnc_process", "vnc_process", "xvfb_process"})
@@ -698,23 +710,187 @@ class DesktopStreamingManager:
     Provides a unified interface for creating and managing desktop streaming
     sessions with VNC backend and WebSocket client communication.
 
+    Issue #11639: session metadata (active_sessions) stored in Redis so every
+    worker can list/validate sessions.  WebSocket connection objects stay
+    per-worker in session_clients (sockets cannot be serialized).
+    Cross-worker broadcast: publish events to Redis pub/sub; a background
+    subscriber relays foreign events to local WebSocket clients.
+
     Attributes:
         vnc_manager: VNC server manager instance.
-        websocket_clients: Connected WebSocket clients.
-        session_clients: Mapping of session IDs to client IDs.
+        websocket_clients: Connected WebSocket clients (per-worker).
+        session_clients: Mapping of session IDs to client IDs (per-worker).
     """
 
-    def __init__(self) -> None:
-        """Initialize desktop streaming manager."""
+    def __init__(self, _redis=None) -> None:
+        """Initialize desktop streaming manager.
+
+        Args:
+            _redis: Optional Redis client override (for tests / single-worker dev).
+        """
         self.vnc_manager = VNCServerManager()
         self.websocket_clients: dict[str, websockets.WebSocketServerProtocol] = {}
         self.session_clients: dict[str, list[str]] = {}
+        self._redis = _redis  # None = use get_async_redis_client(); set in tests
+        self._redis_warning_logged = False
+        self._subscriber_task: asyncio.Task | None = None
 
-        logger.info("Desktop Streaming Manager initialized")
+        logger.info("Desktop Streaming Manager initialized (worker=%s)", _WORKER_ID)
+
+    # ------------------------------------------------------------------
+    # Lifecycle (start/stop subscriber)
+    # ------------------------------------------------------------------
+
+    async def start(self) -> None:
+        """Start the cross-worker pub/sub subscriber task."""
+        if self._subscriber_task is None or self._subscriber_task.done():
+            self._subscriber_task = asyncio.create_task(
+                self._pubsub_relay_loop(), name="desktop-pubsub-relay"
+            )
+            logger.info("Desktop streaming pub/sub relay started (worker=%s)", _WORKER_ID)
+
+    async def stop(self) -> None:
+        """Stop the cross-worker pub/sub subscriber task."""
+        if self._subscriber_task and not self._subscriber_task.done():
+            self._subscriber_task.cancel()
+            try:
+                await self._subscriber_task
+            except asyncio.CancelledError:
+                pass
+            self._subscriber_task = None
+            logger.info("Desktop streaming pub/sub relay stopped (worker=%s)", _WORKER_ID)
+
+    # ------------------------------------------------------------------
+    # Redis helpers
+    # ------------------------------------------------------------------
+
+    async def _get_redis(self):
+        """Return a Redis client, or None if unavailable."""
+        if self._redis is not None:
+            return self._redis
+        try:
+            from autobot_shared.redis_client import get_async_redis_client
+            return await get_async_redis_client()
+        except Exception:
+            return None
+
+    async def _redis_client(self):
+        """Return a usable Redis client, logging once on first miss."""
+        r = await self._get_redis()
+        if r is None and not self._redis_warning_logged:
+            logger.warning(
+                "DesktopStreamingManager: Redis unavailable — sessions not shared "
+                "across workers; cross-worker broadcast disabled"
+            )
+            self._redis_warning_logged = True
+        return r
+
+    # ------------------------------------------------------------------
+    # Session metadata (Redis-backed)
+    # ------------------------------------------------------------------
+
+    async def _meta_set(self, session_id: str, meta: dict) -> None:
+        """Store session metadata in Redis hash."""
+        r = await self._redis_client()
+        if r is None:
+            return
+        await r.hset(_DESKTOP_SESSIONS_KEY, session_id, json.dumps(meta, ensure_ascii=False))
+
+    async def _meta_get(self, session_id: str) -> dict | None:
+        """Retrieve session metadata from Redis hash."""
+        r = await self._redis_client()
+        if r is None:
+            return None
+        raw = await r.hget(_DESKTOP_SESSIONS_KEY, session_id)
+        if raw is None:
+            return None
+        return json.loads(raw)
+
+    async def _meta_delete(self, session_id: str) -> None:
+        """Remove session metadata from Redis hash."""
+        r = await self._redis_client()
+        if r is None:
+            return
+        await r.hdel(_DESKTOP_SESSIONS_KEY, session_id)
+
+    async def _meta_all(self) -> dict[str, dict]:
+        """Return all session metadata from Redis."""
+        r = await self._redis_client()
+        if r is None:
+            return {}
+        raw_map = await r.hgetall(_DESKTOP_SESSIONS_KEY)
+        result = {}
+        for k, v in raw_map.items():
+            key = k.decode() if isinstance(k, bytes) else k
+            result[key] = json.loads(v)
+        return result
+
+    # ------------------------------------------------------------------
+    # Cross-worker broadcast (pub/sub)
+    # ------------------------------------------------------------------
+
+    async def _publish_event(self, event_type: str, payload: dict) -> None:
+        """Publish a desktop event to all workers via Redis pub/sub."""
+        r = await self._redis_client()
+        if r is None:
+            return
+        msg = json.dumps(
+            {"worker_id": _WORKER_ID, "type": event_type, "payload": payload},
+            ensure_ascii=False,
+        )
+        await r.publish(_DESKTOP_EVENTS_CHANNEL, msg)
+
+    async def _pubsub_relay_loop(self) -> None:
+        """Subscribe to desktop events and relay foreign ones to local clients."""
+        while True:
+            try:
+                await self._run_pubsub_subscription()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning(
+                    "Desktop pub/sub relay error (worker=%s): %s — retrying in 5s",
+                    _WORKER_ID, e,
+                )
+                await asyncio.sleep(5)
+
+    async def _run_pubsub_subscription(self) -> None:
+        """Run one pub/sub subscription session (called from relay loop)."""
+        r = await self._get_redis()
+        if r is None:
+            await asyncio.sleep(10)
+            return
+        pubsub = r.pubsub()
+        await pubsub.subscribe(_DESKTOP_EVENTS_CHANNEL)
+        try:
+            async for message in pubsub.listen():
+                if message.get("type") != "message":
+                    continue
+                await self._handle_pubsub_message(message.get("data", b""))
+        finally:
+            await pubsub.unsubscribe(_DESKTOP_EVENTS_CHANNEL)
+            await pubsub.close()
+
+    async def _handle_pubsub_message(self, data: bytes | str) -> None:
+        """Relay a received pub/sub message to local clients if from another worker."""
+        try:
+            msg = json.loads(data)
+            if msg.get("worker_id") == _WORKER_ID:
+                return  # local event already delivered directly
+            session_id = msg.get("payload", {}).get("session_id", "")
+            if session_id not in self.session_clients:
+                return
+            outbound = json.dumps({"type": msg["type"], "data": msg["payload"]})
+            await self._broadcast_to_local_clients(session_id, outbound)
+        except Exception as e:
+            logger.warning("Desktop pub/sub message decode error: %s", e)
 
     async def create_streaming_session(self, user_id: str, session_config: SessionDict | None = None) -> SessionDict:
         """
         Create a new desktop streaming session.
+
+        Issue #11639: Session metadata also written to Redis so other workers
+        can validate sessions without a local entry.
 
         Args:
             user_id: User requesting the session.
@@ -723,19 +899,29 @@ class DesktopStreamingManager:
         Returns:
             Dictionary with session details and endpoints.
         """
-        config = session_config or {}
+        cfg = session_config or {}
         session_id = f"stream_{user_id}_{int(time.time())}"
 
         # Create VNC session
         vnc_info = await self.vnc_manager.create_session(
             session_id=session_id,
             user_id=user_id,
-            resolution=config.get("resolution", "1024x768"),
-            depth=config.get("depth", 24),
+            resolution=cfg.get("resolution", "1024x768"),
+            depth=cfg.get("depth", 24),
         )
 
-        # Initialize client tracking
+        # Initialize per-worker client tracking
         self.session_clients[session_id] = []
+
+        # Persist metadata to Redis for cross-worker visibility (#11639)
+        meta = {
+            "session_id": session_id,
+            "user_id": user_id,
+            "worker_id": _WORKER_ID,
+            "created_at": time.time(),
+            **{k: v for k, v in vnc_info.items() if isinstance(v, (str, int, float, bool, type(None)))},
+        }
+        await self._meta_set(session_id, meta)
 
         return {
             **vnc_info,
@@ -803,13 +989,17 @@ class DesktopStreamingManager:
 
     def _validate_session(self, session_id: str) -> bool:
         """
-        Validate that session exists.
+        Validate that session exists locally (per-worker check).
+
+        Issue #11639: For cross-worker validation use _validate_session_redis().
+        Local check is sufficient for WebSocket path since the WS connects to
+        the worker that owns the session.
 
         Args:
             session_id: Session to validate.
 
         Returns:
-            True if session exists, False otherwise.
+            True if session exists locally, False otherwise.
         """
         return session_id in self.session_clients
 
@@ -985,11 +1175,38 @@ class DesktopStreamingManager:
 
         return None
 
+    async def _broadcast_to_local_clients(self, session_id: str, message: str) -> None:
+        """Send a message to all local WebSocket clients for a session.
+
+        Args:
+            session_id: Target session.
+            message: JSON string to send.
+        """
+        for client_id in list(self.session_clients.get(session_id, [])):
+            if client_id not in self.websocket_clients:
+                continue
+            try:
+                await self.websocket_clients[client_id].send(message)
+            except Exception as e:
+                logger.warning("Error sending to client %s: %s", client_id, e)
+
+    async def list_all_sessions(self) -> list[dict]:
+        """List sessions from all workers via Redis metadata.
+
+        Returns per-worker local sessions when Redis is unavailable.
+        """
+        meta_map = await self._meta_all()
+        if meta_map:
+            return list(meta_map.values())
+        # Fallback: local sessions only
+        return [{"session_id": sid} for sid in self.session_clients]
+
     async def terminate_streaming_session(self, session_id: str) -> bool:
         """
         Terminate a desktop streaming session.
 
         Issue #315: Refactored.
+        Issue #11639: Also removes Redis metadata and publishes termination event.
 
         Args:
             session_id: Session to terminate.
@@ -1001,6 +1218,12 @@ class DesktopStreamingManager:
         if session_id in self.session_clients:
             await self._notify_session_clients_terminated(session_id)
             del self.session_clients[session_id]
+
+        # Remove Redis metadata (#11639)
+        await self._meta_delete(session_id)
+
+        # Publish termination for other workers' relay loops
+        await self._publish_event("session_terminated", {"session_id": session_id})
 
         # Terminate VNC session
         return await self.vnc_manager.terminate_session(session_id)
@@ -1015,7 +1238,7 @@ class DesktopStreamingManager:
             session_id: Terminated session.
         """
         termination_msg = json.dumps({"type": "session_terminated", "data": {"session_id": session_id}})
-        for client_id in self.session_clients[session_id].copy():
+        for client_id in list(self.session_clients.get(session_id, [])):
             await self._notify_client_and_close(client_id, termination_msg)
 
     async def _notify_client_and_close(self, client_id: str, message: str) -> None:
