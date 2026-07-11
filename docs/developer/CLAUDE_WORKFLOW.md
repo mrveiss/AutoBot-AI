@@ -160,6 +160,10 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 
 **Always close the issue after implementation.** PRs targeting `Dev_new_gui` will NOT auto-close issues — verify with `gh issue view`.
 
+**CI diagnosis:** queued checks on self-hosted runners are NOT stuck — confirm failure before acting.
+
+**Posting comments:** write literal markdown — never raw JSON or a file path.
+
 **GitHub CLI Workarounds:**
 
 - **`gh pr edit --body` silently fails** when the repo has classic Projects attached. The command exits non-zero and leaves the body unchanged. Error output:
