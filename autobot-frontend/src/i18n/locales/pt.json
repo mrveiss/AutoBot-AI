@@ -5146,8 +5146,6 @@
   "knowledge.mainCategories.facts": "fatos",
   "knowledge.mainCategories.populate": "Popular",
   "knowledge.mainCategories.import": "Importar",
-  "knowledge.maintenance.title": "Manutenção da base de conhecimento",
-  "knowledge.maintenance.subtitle": "Monitorar e manter a saúde da base de conhecimento, gerenciar duplicatas e limpar dados órfãos",
   "knowledge.maintenance.refreshAll": "Atualizar tudo",
   "knowledge.maintenance.refreshing": "Atualizando...",
   "knowledge.maintenance.healthDashboard": "Painel de saúde",
@@ -8702,5 +8700,8 @@
       "rawJsonLabel": "Configuração do plugin (JSON)",
       "invalidJson": "JSON inválido — corrija antes de salvar."
     }
-  }
+  },
+  "knowledge.health.tagDocCount": "{count} documentos",
+  "knowledge.health.activityCreated": "{title} foi criado",
+  "knowledge.health.activityUpdated": "{title} foi atualizado"
 }

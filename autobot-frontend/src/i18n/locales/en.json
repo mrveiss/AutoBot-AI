@@ -5146,8 +5146,6 @@
   "knowledge.mainCategories.facts": "facts",
   "knowledge.mainCategories.populate": "Populate",
   "knowledge.mainCategories.import": "Import",
-  "knowledge.maintenance.title": "Knowledge Base Maintenance",
-  "knowledge.maintenance.subtitle": "Monitor and maintain knowledge base health, handle duplicates, and clean up orphaned data",
   "knowledge.maintenance.refreshAll": "Refresh All",
   "knowledge.maintenance.refreshing": "Refreshing...",
   "knowledge.maintenance.healthDashboard": "Health Dashboard",
@@ -8702,5 +8700,8 @@
       "rawJsonLabel": "Plugin configuration (JSON)",
       "invalidJson": "Invalid JSON — please fix before saving."
     }
-  }
+  },
+  "knowledge.health.tagDocCount": "{count} documents",
+  "knowledge.health.activityCreated": "{title} was created",
+  "knowledge.health.activityUpdated": "{title} was updated"
 }

@@ -5146,8 +5146,6 @@
   "knowledge.mainCategories.facts": "fakty",
   "knowledge.mainCategories.populate": "Wypełnij",
   "knowledge.mainCategories.import": "Importuj",
-  "knowledge.maintenance.title": "Konserwacja bazy wiedzy",
-  "knowledge.maintenance.subtitle": "Monitoruj i utrzymuj zdrowie bazy wiedzy, obsługuj duplikaty i czyść osierocone dane",
   "knowledge.maintenance.refreshAll": "Odśwież wszystko",
   "knowledge.maintenance.refreshing": "Odświeżanie...",
   "knowledge.maintenance.healthDashboard": "Panel kondycji",
@@ -8702,5 +8700,8 @@
       "rawJsonLabel": "Konfiguracja wtyczki (JSON)",
       "invalidJson": "Nieprawidłowy JSON — popraw przed zapisaniem."
     }
-  }
+  },
+  "knowledge.health.tagDocCount": "{count} dokumentów",
+  "knowledge.health.activityCreated": "{title} został utworzony",
+  "knowledge.health.activityUpdated": "{title} został zaktualizowany"
 }

@@ -5146,8 +5146,6 @@
   "knowledge.mainCategories.facts": "faits",
   "knowledge.mainCategories.populate": "Peupler",
   "knowledge.mainCategories.import": "Importer",
-  "knowledge.maintenance.title": "Maintenance de la base de connaissances",
-  "knowledge.maintenance.subtitle": "Surveiller et maintenir la santé de la base de connaissances, gérer les doublons et nettoyer les données orphelines",
   "knowledge.maintenance.refreshAll": "Tout actualiser",
   "knowledge.maintenance.refreshing": "Actualisation...",
   "knowledge.maintenance.healthDashboard": "Tableau de bord de santé",
@@ -8702,5 +8700,8 @@
       "rawJsonLabel": "Configuration du plugin (JSON)",
       "invalidJson": "JSON invalide — veuillez corriger avant d'enregistrer."
     }
-  }
+  },
+  "knowledge.health.tagDocCount": "{count} documents",
+  "knowledge.health.activityCreated": "{title} a été créé",
+  "knowledge.health.activityUpdated": "{title} a été mis à jour"
 }

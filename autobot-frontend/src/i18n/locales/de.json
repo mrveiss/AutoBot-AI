@@ -5146,8 +5146,6 @@
   "knowledge.mainCategories.facts": "Fakten",
   "knowledge.mainCategories.populate": "Befüllen",
   "knowledge.mainCategories.import": "Importieren",
-  "knowledge.maintenance.title": "Wissensdatenbank-Wartung",
-  "knowledge.maintenance.subtitle": "Gesundheit der Wissensdatenbank überwachen und warten, Duplikate verwalten und verwaiste Daten bereinigen",
   "knowledge.maintenance.refreshAll": "Alles aktualisieren",
   "knowledge.maintenance.refreshing": "Wird aktualisiert...",
   "knowledge.maintenance.healthDashboard": "Gesundheits-Dashboard",
@@ -8702,5 +8700,8 @@
       "rawJsonLabel": "Plugin-Konfiguration (JSON)",
       "invalidJson": "Ungültiges JSON — bitte vor dem Speichern korrigieren."
     }
-  }
+  },
+  "knowledge.health.tagDocCount": "{count} Dokumente",
+  "knowledge.health.activityCreated": "{title} wurde erstellt",
+  "knowledge.health.activityUpdated": "{title} wurde aktualisiert"
 }

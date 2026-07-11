@@ -7350,8 +7350,6 @@
   "knowledge.mainCategories.facts": "facts",
   "knowledge.mainCategories.populate": "Populate",
   "knowledge.mainCategories.import": "Import",
-  "knowledge.maintenance.title": "Knowledge Base Maintenance",
-  "knowledge.maintenance.subtitle": "Monitor and maintain knowledge base health, handle duplicates, and clean up orphaned data",
   "knowledge.maintenance.refreshAll": "Refresh All",
   "knowledge.maintenance.refreshing": "Refreshing...",
   "knowledge.maintenance.healthDashboard": "Health Dashboard",
@@ -8702,5 +8700,8 @@
       "rawJsonLabel": "پلگ ان کنفیگریشن (JSON)",
       "invalidJson": "JSON غلط ہے — براہ کرم محفوظ کرنے سے پہلے درست کریں۔"
     }
-  }
+  },
+  "knowledge.health.tagDocCount": "{count} دستاویزات",
+  "knowledge.health.activityCreated": "{title} بنایا گیا",
+  "knowledge.health.activityUpdated": "{title} کو اپ ڈیٹ کیا گیا"
 }

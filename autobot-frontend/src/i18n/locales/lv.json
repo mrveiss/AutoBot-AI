@@ -5146,8 +5146,6 @@
   "knowledge.mainCategories.facts": "fakti",
   "knowledge.mainCategories.populate": "Aizpildīt",
   "knowledge.mainCategories.import": "Importēt",
-  "knowledge.maintenance.title": "Zināšanu bāzes uzturēšana",
-  "knowledge.maintenance.subtitle": "Uzraudžīt un uzturēt zināšanu bāzes veselību, apstrādāt dublējumus un tīrīt bāreņu datus",
   "knowledge.maintenance.refreshAll": "Atjaunināt visu",
   "knowledge.maintenance.refreshing": "Atjaunina...",
   "knowledge.maintenance.healthDashboard": "Veselības panelis",
@@ -8702,5 +8700,8 @@
       "rawJsonLabel": "Spraudņa konfigurācija (JSON)",
       "invalidJson": "Nederīgs JSON — lūdzu labojiet pirms saglabāšanas."
     }
-  }
+  },
+  "knowledge.health.tagDocCount": "{count} dokumenti",
+  "knowledge.health.activityCreated": "{title} tika izveidots",
+  "knowledge.health.activityUpdated": "{title} tika atjaunots"
 }
