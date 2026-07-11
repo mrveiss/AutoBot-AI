@@ -45,7 +45,9 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Cross-worker constants — env-var-backed, never hard-coded (#11639)
 # ---------------------------------------------------------------------------
-_DESKTOP_EVENTS_CHANNEL: str = os.environ.get("AUTOBOT_DESKTOP_EVENTS_CHANNEL", "autobot:desktop:events")
+_DESKTOP_EVENTS_CHANNEL: str = os.environ.get(
+    "AUTOBOT_DESKTOP_EVENTS_CHANNEL", "autobot:desktop:events"
+)
 _DESKTOP_SESSIONS_KEY: str = "autobot:desktop:sessions"  # HASH: session_id -> JSON metadata
 _WORKER_ID: str = str(uuid.uuid4())  # unique per-process; set once at import time
 
@@ -730,6 +732,9 @@ class DesktopStreamingManager:
         self.websocket_clients: dict[str, websockets.WebSocketServerProtocol] = {}
         self.session_clients: dict[str, list[str]] = {}
         self._redis = _redis  # None = use get_async_redis_client(); set in tests
+        # H2: per-process latch — once any Redis op fails, stay in fallback mode.
+        # None = not yet probed; True = working; False = latched to fallback.
+        self._redis_available: bool | None = None
         self._redis_warning_logged = False
         self._subscriber_task: asyncio.Task | None = None
 
@@ -742,7 +747,9 @@ class DesktopStreamingManager:
     async def start(self) -> None:
         """Start the cross-worker pub/sub subscriber task."""
         if self._subscriber_task is None or self._subscriber_task.done():
-            self._subscriber_task = asyncio.create_task(self._pubsub_relay_loop(), name="desktop-pubsub-relay")
+            self._subscriber_task = asyncio.create_task(
+                self._pubsub_relay_loop(), name="desktop-pubsub-relay"
+            )
             # Register for construct-free shutdown via stop_desktop_relay()
             global _relay_manager
             _relay_manager = self
@@ -769,21 +776,41 @@ class DesktopStreamingManager:
             return self._redis
         try:
             from autobot_shared.redis_client import get_async_redis_client
-
             return await get_async_redis_client()
         except Exception:
             return None
 
     async def _redis_client(self):
-        """Return a usable Redis client, logging once on first miss."""
+        """Return a usable Redis client, or None when latched to fallback.
+
+        H2: Once any Redis op raises, _redis_available is set False and we
+        stay in local-only mode for the lifetime of this worker process.
+        """
+        if self._redis_available is False:
+            return None
         r = await self._get_redis()
-        if r is None and not self._redis_warning_logged:
-            logger.warning(
-                "DesktopStreamingManager: Redis unavailable — sessions not shared "
-                "across workers; cross-worker broadcast disabled"
-            )
-            self._redis_warning_logged = True
+        if r is None:
+            if not self._redis_warning_logged:
+                logger.warning(
+                    "DesktopStreamingManager: Redis unavailable — sessions not shared "
+                    "across workers; cross-worker broadcast disabled"
+                )
+                self._redis_warning_logged = True
+            self._redis_available = False
+            return None
+        if self._redis_available is None:
+            self._redis_available = True
         return r
+
+    def _latch_redis_fallback(self, exc: Exception) -> None:
+        """H2: Log once and latch this process to local-only mode."""
+        if self._redis_available is not False:
+            logger.warning(
+                "DesktopStreamingManager: Redis op failed (%s) — latching to local-only "
+                "mode for the lifetime of this worker",
+                exc,
+            )
+            self._redis_available = False
 
     # ------------------------------------------------------------------
     # Session metadata (Redis-backed)
@@ -794,36 +821,50 @@ class DesktopStreamingManager:
         r = await self._redis_client()
         if r is None:
             return
-        await r.hset(_DESKTOP_SESSIONS_KEY, session_id, json.dumps(meta, ensure_ascii=False))
+        try:
+            await r.hset(_DESKTOP_SESSIONS_KEY, session_id, json.dumps(meta, ensure_ascii=False))
+        except (ConnectionError, TimeoutError, OSError) as exc:
+            self._latch_redis_fallback(exc)
 
     async def _meta_get(self, session_id: str) -> dict | None:
         """Retrieve session metadata from Redis hash."""
         r = await self._redis_client()
         if r is None:
             return None
-        raw = await r.hget(_DESKTOP_SESSIONS_KEY, session_id)
-        if raw is None:
+        try:
+            raw = await r.hget(_DESKTOP_SESSIONS_KEY, session_id)
+            if raw is None:
+                return None
+            return json.loads(raw)
+        except (ConnectionError, TimeoutError, OSError) as exc:
+            self._latch_redis_fallback(exc)
             return None
-        return json.loads(raw)
 
     async def _meta_delete(self, session_id: str) -> None:
         """Remove session metadata from Redis hash."""
         r = await self._redis_client()
         if r is None:
             return
-        await r.hdel(_DESKTOP_SESSIONS_KEY, session_id)
+        try:
+            await r.hdel(_DESKTOP_SESSIONS_KEY, session_id)
+        except (ConnectionError, TimeoutError, OSError) as exc:
+            self._latch_redis_fallback(exc)
 
     async def _meta_all(self) -> dict[str, dict]:
         """Return all session metadata from Redis."""
         r = await self._redis_client()
         if r is None:
             return {}
-        raw_map = await r.hgetall(_DESKTOP_SESSIONS_KEY)
-        result = {}
-        for k, v in raw_map.items():
-            key = k.decode() if isinstance(k, bytes) else k
-            result[key] = json.loads(v)
-        return result
+        try:
+            raw_map = await r.hgetall(_DESKTOP_SESSIONS_KEY)
+            result = {}
+            for k, v in raw_map.items():
+                key = k.decode() if isinstance(k, bytes) else k
+                result[key] = json.loads(v)
+            return result
+        except (ConnectionError, TimeoutError, OSError) as exc:
+            self._latch_redis_fallback(exc)
+            return {}
 
     # ------------------------------------------------------------------
     # Cross-worker broadcast (pub/sub)
@@ -838,10 +879,18 @@ class DesktopStreamingManager:
             {"worker_id": _WORKER_ID, "type": event_type, "payload": payload},
             ensure_ascii=False,
         )
-        await r.publish(_DESKTOP_EVENTS_CHANNEL, msg)
+        try:
+            await r.publish(_DESKTOP_EVENTS_CHANNEL, msg)
+        except (ConnectionError, TimeoutError, OSError) as exc:
+            self._latch_redis_fallback(exc)
 
     async def _pubsub_relay_loop(self) -> None:
-        """Subscribe to desktop events and relay foreign ones to local clients."""
+        """Subscribe to desktop events and relay foreign ones to local clients.
+
+        M5: sleep on clean return too (prevents hot-loop when the subscription
+        ends immediately, e.g. when the fake stub's listen() drains in tests).
+        """
+        _RETRY_DELAY = 5
         while True:
             try:
                 await self._run_pubsub_subscription()
@@ -849,17 +898,20 @@ class DesktopStreamingManager:
                 raise
             except Exception as e:
                 logger.warning(
-                    "Desktop pub/sub relay error (worker=%s): %s — retrying in 5s",
-                    _WORKER_ID,
-                    e,
+                    "Desktop pub/sub relay error (worker=%s): %s — retrying in %ds",
+                    _WORKER_ID, e, _RETRY_DELAY,
                 )
-                await asyncio.sleep(5)
+            # M5: always sleep between subscription passes (error or clean exit)
+            await asyncio.sleep(_RETRY_DELAY)
 
     async def _run_pubsub_subscription(self) -> None:
-        """Run one pub/sub subscription session (called from relay loop)."""
+        """Run one pub/sub subscription session (called from relay loop).
+
+        M5: wrap unsubscribe and close each in separate try/except so a
+        failure in one does not skip the other.  Use aclose() when available.
+        """
         r = await self._get_redis()
         if r is None:
-            await asyncio.sleep(10)
             return
         pubsub = r.pubsub()
         await pubsub.subscribe(_DESKTOP_EVENTS_CHANNEL)
@@ -869,22 +921,63 @@ class DesktopStreamingManager:
                     continue
                 await self._handle_pubsub_message(message.get("data", b""))
         finally:
-            await pubsub.unsubscribe(_DESKTOP_EVENTS_CHANNEL)
-            await pubsub.close()
+            try:
+                await pubsub.unsubscribe(_DESKTOP_EVENTS_CHANNEL)
+            except Exception as e:
+                logger.warning("Desktop pubsub unsubscribe error (worker=%s): %s", _WORKER_ID, e)
+            try:
+                # M5: prefer aclose() when available (redis-py >= 4.2)
+                close_fn = getattr(pubsub, "aclose", None) or pubsub.close
+                await close_fn()
+            except Exception as e:
+                logger.warning("Desktop pubsub close error (worker=%s): %s", _WORKER_ID, e)
 
     async def _handle_pubsub_message(self, data: bytes | str) -> None:
-        """Relay a received pub/sub message to local clients if from another worker."""
+        """Relay a received pub/sub message to local clients if from another worker.
+
+        H3: Handles the special 'session_terminate_requested' event: if this
+        worker owns the session locally it runs the full local terminate path
+        (kill processes, notify clients, delete Redis metadata, publish
+        'session_terminated').  All other message types are relayed to local
+        WebSocket clients as before.
+        """
         try:
             msg = json.loads(data)
             if msg.get("worker_id") == _WORKER_ID:
                 return  # local event already delivered directly
+            msg_type = msg.get("type", "")
             session_id = msg.get("payload", {}).get("session_id", "")
+
+            if msg_type == "session_terminate_requested":
+                # H3: only act if this worker owns the session
+                if session_id in self.session_clients or session_id in self.vnc_manager.active_sessions:
+                    logger.info(
+                        "Desktop relay: terminate_requested for owned session %s (worker=%s)",
+                        session_id, _WORKER_ID,
+                    )
+                    await self._local_terminate(session_id)
+                return
+
             if session_id not in self.session_clients:
                 return
-            outbound = json.dumps({"type": msg["type"], "data": msg["payload"]})
+            outbound = json.dumps({"type": msg_type, "data": msg["payload"]})
             await self._broadcast_to_local_clients(session_id, outbound)
         except Exception as e:
             logger.warning("Desktop pub/sub message decode error: %s", e)
+
+    async def _local_terminate(self, session_id: str) -> None:
+        """Full local terminate: kill processes, notify clients, delete metadata.
+
+        H3: Used by the pub/sub relay when this worker is the session owner and
+        another worker requested termination.
+        """
+        if session_id in self.session_clients:
+            await self._notify_session_clients_terminated(session_id)
+            del self.session_clients[session_id]
+        await self._meta_delete(session_id)
+        await self.vnc_manager.terminate_session(session_id)
+        await self._publish_event("session_terminated", {"session_id": session_id})
+        logger.info("Desktop relay: locally terminated session %s (worker=%s)", session_id, _WORKER_ID)
 
     async def create_streaming_session(self, user_id: str, session_config: SessionDict | None = None) -> SessionDict:
         """
@@ -1213,13 +1306,38 @@ class DesktopStreamingManager:
         Issue #315: Refactored.
         Issue #11639: Also removes Redis metadata and publishes termination event.
 
+        H3: If this worker does NOT own the session locally (not in
+        session_clients or vnc_manager.active_sessions) we publish a
+        'session_terminate_requested' event so the owner worker handles the
+        local teardown (process kills + client notification) and returns True
+        (accepted).  The owner's relay loop calls _local_terminate which then
+        publishes 'session_terminated' and deletes the metadata.
+
         Args:
             session_id: Session to terminate.
 
         Returns:
-            True if termination succeeded, False otherwise.
+            True if termination succeeded or was accepted, False otherwise.
         """
-        # Notify all connected clients
+        locally_owned = (
+            session_id in self.session_clients
+            or session_id in self.vnc_manager.active_sessions
+        )
+
+        if not locally_owned:
+            # H3: delegate to the owner worker via pub/sub
+            meta = await self._meta_get(session_id)
+            if meta is None:
+                return False
+            logger.info(
+                "terminate_streaming_session: session %s not local — "
+                "publishing terminate_requested (worker=%s)",
+                session_id, _WORKER_ID,
+            )
+            await self._publish_event("session_terminate_requested", {"session_id": session_id})
+            return True  # accepted; owner will complete teardown asynchronously
+
+        # Owner path: local teardown
         if session_id in self.session_clients:
             await self._notify_session_clients_terminated(session_id)
             del self.session_clients[session_id]
