@@ -1,5 +1,10 @@
 <template>
   <div class="tools-grid">
+    <!-- Transient notice (e.g. cancelled danger-zone confirmation) -->
+    <div v-if="noticeMessage" class="tools-notice" role="status" aria-live="polite">
+      {{ noticeMessage }}
+    </div>
+
     <!-- Deduplication Manager -->
     <div class="tools-section">
       <DeduplicationManager />
@@ -85,6 +90,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
+import { useTransientError } from '@/composables/useTransientError'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers/index'
 import ApiClient from '@/utils/ApiClient'
@@ -108,6 +114,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { confirm } = useConfirmDialog()
+const { message: noticeMessage, show: showNotice } = useTransientError()
 const store = useKnowledgeStore()
 
 interface KnowledgeController {
@@ -186,7 +193,10 @@ const clearAllKnowledge = async () => {
   if (!secondConfirm) return
 
   const userInput = prompt(t('knowledge.advanced.promptDeleteAll'))
-  if (userInput !== 'DELETE ALL') return
+  if (userInput !== 'DELETE ALL') {
+    showNotice(t('knowledge.advanced.clearCancelled'))
+    return
+  }
 
   isClearing.value = true
   try {
@@ -264,8 +274,19 @@ const clearAllKnowledge = async () => {
   cursor: not-allowed;
 }
 
+.tools-notice {
+  grid-column: 1 / -1;
+  padding: var(--spacing-3) var(--spacing-4);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  font-size: var(--text-sm);
+}
+
 /* Issue #11555: danger zone section */
 .danger-zone-section {
+  grid-column: 1 / -1;
   padding: var(--spacing-6);
   border: 1px solid var(--color-error-light);
   background: var(--color-error-bg);
