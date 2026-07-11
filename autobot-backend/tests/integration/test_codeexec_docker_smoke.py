@@ -96,9 +96,10 @@ async def test_smoke_two_readonly_tools_merge_in_one_dispatch():
     """A script calling two shim tools returns a merged result in ONE executor call.
 
     Asserts the broker dispatched exactly the two calls the script made and that
-    the script's final answer is cleanly retrievable — if the final-result
-    channel is polluted by the RPC stream (see discovery on result multiplexing),
-    this assertion fails loudly on-box, which is the point of the gate.
+    the script's final answer is cleanly retrievable. Since GH#11613 the RPC
+    stream is sentinel-framed and the pump captures only non-RPC stdout as the
+    result, so ``result.stdout`` holds the script's RESULT line with no RPC
+    transcript mixed in.
     """
 
     async def dispatch(tool, params):

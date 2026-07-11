@@ -782,3 +782,92 @@ async def test_broker_budget_no_overshoot_concurrent():
         replies = await asyncio.gather(*(b.handle_line(x) for x in lines))
     ok_count = sum(1 for r in replies if json.loads(r)["ok"])
     assert ok_count == 3  # never overshoots the cap
+
+
+# ---------------------------------------------------------------------------
+# GH#11613: RPC sentinel separates broker traffic from the script's result
+# ---------------------------------------------------------------------------
+
+
+def test_shim_rpc_lines_carry_sentinel_prefix():
+    """Generated shim writes RPC requests prefixed with RPC_SENTINEL."""
+    from chat_workflow.code_exec.protocol import RPC_SENTINEL
+    from chat_workflow.code_exec.shim_codegen import generate_shim_module
+
+    src = generate_shim_module(["web_search"])
+    assert repr(RPC_SENTINEL) in src
+    assert "_RPC_SENTINEL + req" in src
+
+
+@pytest.mark.asyncio
+async def test_drain_lines_routes_sentinel_to_broker_and_output_to_script():
+    """A sentinel line hits the broker; a plain script line goes to script_out (not the broker)."""
+    from chat_workflow.code_exec.protocol import RPC_SENTINEL
+    from secure_sandbox_executor import SecureSandboxExecutor
+
+    ex = object.__new__(SecureSandboxExecutor)
+    broker = MagicMock()
+    broker.handle_line = AsyncMock(return_value='{"id": 1, "ok": true, "result": {}}')
+    broker.budget_exhausted = False
+    stream = MagicMock()
+
+    rpc = (RPC_SENTINEL + json.dumps({"id": 1, "tool": "web_search", "params": {}})).encode("utf-8")
+    plain = b'RESULT {"answer": 42}'
+    line_buf = rpc + b"\n" + plain + b"\n"
+    script_out: list[str] = []
+
+    aborted, remaining = await ex._drain_lines(stream, broker, line_buf, MagicMock(), script_out)
+
+    assert aborted is False
+    # The broker saw ONLY the RPC payload, with the sentinel stripped.
+    broker.handle_line.assert_awaited_once()
+    handed = broker.handle_line.await_args[0][0]
+    assert not handed.startswith(RPC_SENTINEL)
+    assert json.loads(handed)["tool"] == "web_search"
+    # The script's own line was captured, never routed to the broker.
+    assert script_out == ['RESULT {"answer": 42}']
+
+
+@pytest.mark.asyncio
+async def test_drain_lines_script_print_is_not_a_bogus_tool_call():
+    """Regression for #11613: a bare print() must NOT reach broker.handle_line."""
+    from secure_sandbox_executor import SecureSandboxExecutor
+
+    ex = object.__new__(SecureSandboxExecutor)
+    broker = MagicMock()
+    broker.handle_line = AsyncMock()
+    broker.budget_exhausted = False
+
+    script_out: list[str] = []
+    line_buf = b"hello from the script\n" + json.dumps({"tool": "", "id": 0}).encode("utf-8") + b"\n"
+    await ex._drain_lines(MagicMock(), broker, line_buf, MagicMock(), script_out)
+
+    broker.handle_line.assert_not_awaited()
+    assert script_out == ["hello from the script", json.dumps({"tool": "", "id": 0})]
+
+
+@pytest.mark.asyncio
+async def test_collect_broker_results_uses_script_stdout_not_rpc_logs():
+    """#11613: result.stdout is the captured script output, not container.logs()."""
+    from secure_sandbox_executor import SandboxSecurityLevel, SecureSandboxExecutor
+
+    ex = object.__new__(SecureSandboxExecutor)
+    ex.logger = MagicMock()
+    container = MagicMock()
+    container.wait.return_value = {"StatusCode": 0}
+    # Simulate polluted logs: if the code used logs() for stdout, this RPC noise would leak.
+    container.logs.return_value = b'\x1eCXRPC\x1e{"id": 1}\nRESULT clean'
+    ex._parse_logs = SecureSandboxExecutor._parse_logs.__get__(ex)
+    ex._collect_security_events = AsyncMock(return_value=[])
+    ex._build_sandbox_result = SecureSandboxExecutor._build_sandbox_result.__get__(ex)
+    ex._log_execution_metrics = AsyncMock()
+
+    cfg = SecureSandboxExecutor._codeexec_config(ex, 30)
+    cfg.security_level = SandboxSecurityLevel.HIGH
+    result = await ex._collect_broker_results(container, "cid", cfg, 0.0, "RESULT clean")
+
+    assert result.stdout == "RESULT clean"
+    assert "CXRPC" not in result.stdout
+    # stdout must NOT have been sourced from container.logs (called with stdout=False).
+    _, kwargs = container.logs.call_args
+    assert kwargs.get("stdout") is False

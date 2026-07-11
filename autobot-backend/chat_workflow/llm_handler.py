@@ -655,6 +655,8 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             "via the `autobot_tools` module (e.g. `await autobot_tools.web_search(query=...)`). "
             "Scripts must only import from the allowlist (autobot_tools, asyncio, json, re, math). "
             "Do NOT use exec, eval, compile, or __import__.\n"
+            "Return your final answer by writing it to stdout (e.g. `print(json.dumps(result))`); "
+            "that printed output is what you receive back — tool-call plumbing is handled for you.\n"
         )
 
     def _build_conversation_context(self, session: WorkflowSession) -> str:
