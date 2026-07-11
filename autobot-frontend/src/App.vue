@@ -1118,8 +1118,8 @@ export default {
   position: absolute;
   top: -40px;
   left: 0;
-  background: #000;
-  color: #fff;
+  background: var(--text-primary);
+  color: var(--bg-primary);
   padding: var(--spacing-2) var(--spacing-4);
   text-decoration: none;
   border-radius: 0 0 var(--radius-default) 0;
@@ -1131,7 +1131,7 @@ export default {
 
 .skip-link:focus {
   top: 0;
-  outline: 2px solid #fff;
+  outline: 2px solid var(--bg-primary);
   outline-offset: 2px;
 }
 
