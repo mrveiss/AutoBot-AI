@@ -433,8 +433,21 @@ export function useAutobotApi() {
   // =============================================================================
 
   async function getPromptTemplates(): Promise<PromptTemplate[]> {
-    const response = await client.get<{ templates: PromptTemplate[] }>('/prompts')
-    return response.data.templates
+    // Backend GET /api/prompts returns { prompts: [...], defaults: {...} }
+    // where each prompt has { id, name, type, path, content } (Issue #11555)
+    const response = await client.get<{
+      prompts: Array<{ id: string; name: string; type: string; path: string; content: string }>
+      defaults: Record<string, string>
+    }>('/prompts')
+    const defaults = response.data.defaults ?? {}
+    return (response.data.prompts ?? []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      content: p.content,
+      category: p.type,
+      is_default: Object.prototype.hasOwnProperty.call(defaults, p.id),
+      modified_at: '',
+    }))
   }
 
   async function getPromptTemplate(id: string): Promise<PromptTemplate> {
@@ -453,7 +466,8 @@ export function useAutobotApi() {
     id: string,
     data: Partial<PromptTemplate>
   ): Promise<PromptTemplate> {
-    const response = await client.patch<PromptTemplate>(`/prompts/${id}`, data)
+    // Backend exposes PUT /api/prompts/:id (also POST) — PATCH is not supported (Issue #11555)
+    const response = await client.put<PromptTemplate>(`/prompts/${id}`, data)
     return response.data
   }
 
