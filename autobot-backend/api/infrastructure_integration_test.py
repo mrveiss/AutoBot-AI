@@ -127,7 +127,7 @@ def test_celery_worker_status():
             logs = f.read()
             if "ready" in logs and "autobot-worker" in logs:
                 print("✅ Test 9: Celery Worker - PASSED")  # noqa: print
-                print("   Worker is running with queues: deployments, provisioning, services")  # noqa: print
+                print("   Worker is running with queues: celery, deployments")  # noqa: print
                 return True
             else:
                 print("❌ Test 9: Celery Worker - FAILED")  # noqa: print
