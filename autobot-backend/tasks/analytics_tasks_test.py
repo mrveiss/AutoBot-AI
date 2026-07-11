@@ -13,16 +13,32 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+_EAGER_CONF_KEYS = ("task_always_eager", "task_eager_propagates", "task_store_eager_result")
+
 
 @pytest.fixture(autouse=True)
-def celery_eager(monkeypatch):
-    """Force Celery to run tasks synchronously (no broker needed)."""
+def celery_eager():
+    """Force Celery to run tasks synchronously (no broker needed).
+
+    #11606: ``task_store_eager_result`` makes the terminal SUCCESS/FAILURE
+    state overwrite the intermediate PROGRESS meta that ``update_state``
+    writes to the shared ``cache+memory://`` backend — without it a fresh
+    ``AsyncResult(id)`` reads the stale PROGRESS meta and reports "running".
+    Teardown restores the prior config and wipes the backend cache so no
+    result state bleeds between tests.
+    """
     from celery_app import celery_app
 
+    previous = {key: getattr(celery_app.conf, key, False) for key in _EAGER_CONF_KEYS}
     celery_app.conf.task_always_eager = True
     celery_app.conf.task_eager_propagates = True
+    celery_app.conf.task_store_eager_result = True
     yield
-    celery_app.conf.task_always_eager = False
+    for key, value in previous.items():
+        setattr(celery_app.conf, key, value)
+    backend_cache = getattr(getattr(celery_app.backend, "client", None), "cache", None)
+    if backend_cache is not None:
+        backend_cache.clear()
 
 
 class TestRunDashboardAnalysis:
