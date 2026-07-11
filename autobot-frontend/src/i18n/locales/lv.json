@@ -8694,5 +8694,8 @@
   },
   "knowledge.health.tagDocCount": "{count} dokumenti",
   "knowledge.health.activityCreated": "{title} tika izveidots",
-  "knowledge.health.activityUpdated": "{title} tika atjaunots"
+  "knowledge.health.activityUpdated": "{title} tika atjaunots",
+  "chat.modelPicker.label": "Modelis",
+  "chat.modelPicker.auto": "Automātiski (noklusējuma modelis)",
+  "chat.modelPicker.title": "Izvēlieties modeli un pakalpojumu sniedzēju šai sarunai"
 }

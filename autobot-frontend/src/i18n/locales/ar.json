@@ -8694,5 +8694,8 @@
   },
   "knowledge.health.tagDocCount": "{count} وثائق",
   "knowledge.health.activityCreated": "تم إنشاء {title}",
-  "knowledge.health.activityUpdated": "تم تحديث {title}"
+  "knowledge.health.activityUpdated": "تم تحديث {title}",
+  "chat.modelPicker.label": "النموذج",
+  "chat.modelPicker.auto": "تلقائي (النموذج الافتراضي)",
+  "chat.modelPicker.title": "اختر النموذج والمزوّد لهذه المحادثة"
 }

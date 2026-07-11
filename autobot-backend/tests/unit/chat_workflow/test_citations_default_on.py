@@ -44,6 +44,9 @@ def _make_chat_message(use_knowledge_base: bool = True) -> MagicMock:
     msg.metadata = {}
     msg.reasoning_effort = None
     msg.use_knowledge_base = use_knowledge_base
+    # #11585: per-request model/provider override fields
+    msg.model = None
+    msg.provider = None
     return msg
 
 

@@ -8694,5 +8694,8 @@
   },
   "knowledge.health.tagDocCount": "{count} documentos",
   "knowledge.health.activityCreated": "{title} fue creado",
-  "knowledge.health.activityUpdated": "{title} fue actualizado"
+  "knowledge.health.activityUpdated": "{title} fue actualizado",
+  "chat.modelPicker.label": "Modelo",
+  "chat.modelPicker.auto": "Automático (modelo predeterminado)",
+  "chat.modelPicker.title": "Elige el modelo y el proveedor para esta conversación"
 }

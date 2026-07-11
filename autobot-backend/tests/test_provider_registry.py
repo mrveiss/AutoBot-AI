@@ -295,7 +295,7 @@ class TestHealthChecks:
         # Second check should return cached result (not failed)
         result2 = await registry._check_health_cached("mock_test")
 
-        assert result1 == result2 == True
+        assert result1 is True and result2 is True
 
     @pytest.mark.asyncio
     async def test_health_check_all_parallel(self):
@@ -576,6 +576,62 @@ class TestEdgeCases:
         # Should gracefully fall back to available providers
         selected = await registry.get_provider_for_request(conversation_id="conv-id", request=request)
         assert selected is provider
+
+
+# ============================================================================
+# #11585 — resolution precedence: per-request > per-conversation > org > global
+# ============================================================================
+
+
+class TestResolutionPrecedence:
+    """Full precedence chain for get_provider_for_request (#11585)."""
+
+    def _registry_with(self, names: List[str]):
+        registry = ProviderRegistry()
+        providers = {}
+        for name in names:
+            provider = MockProvider()
+            provider.provider_name = name
+            registry.register(provider)
+            providers[name] = provider
+        return registry, providers
+
+    @pytest.mark.asyncio
+    async def test_per_request_beats_conversation_org_and_global(self):
+        registry, providers = self._registry_with(["req", "conv", "org", "glob"])
+        registry.set_fallback_chain(["glob"])
+        registry.set_conversation_provider("c1", "conv")
+        registry._resolve_org_provider = AsyncMock(return_value="org")
+
+        selected = await registry.get_provider_for_request(provider_name="req", conversation_id="c1", org_id="o1")
+        assert selected is providers["req"]
+
+    @pytest.mark.asyncio
+    async def test_conversation_beats_org_and_global(self):
+        registry, providers = self._registry_with(["conv", "org", "glob"])
+        registry.set_fallback_chain(["glob"])
+        registry.set_conversation_provider("c1", "conv")
+        registry._resolve_org_provider = AsyncMock(return_value="org")
+
+        selected = await registry.get_provider_for_request(conversation_id="c1", org_id="o1")
+        assert selected is providers["conv"]
+
+    @pytest.mark.asyncio
+    async def test_org_beats_global(self):
+        registry, providers = self._registry_with(["org", "glob"])
+        registry.set_fallback_chain(["glob"])
+        registry._resolve_org_provider = AsyncMock(return_value="org")
+
+        selected = await registry.get_provider_for_request(org_id="o1")
+        assert selected is providers["org"]
+
+    @pytest.mark.asyncio
+    async def test_global_fallback_when_no_overrides(self):
+        registry, providers = self._registry_with(["glob", "other"])
+        registry.set_fallback_chain(["glob"])
+
+        selected = await registry.get_provider_for_request()
+        assert selected is providers["glob"]
 
 
 # ============================================================================
