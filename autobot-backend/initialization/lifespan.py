@@ -2088,6 +2088,16 @@ async def cleanup_services(app: FastAPI):
         except Exception as _npu_err:
             logger.warning("NPU worker manager shutdown failed: %s", _npu_err)
 
+        # Issue #11639: Stop desktop streaming pub/sub relay (Redis
+        # subscription — stop BEFORE closing Redis pools). No-op if no
+        # streaming session ever started the relay.
+        try:
+            from desktop_streaming_manager import stop_desktop_relay
+
+            await stop_desktop_relay()
+        except Exception as _dsm_err:
+            logger.warning("Desktop streaming relay shutdown failed: %s", _dsm_err)
+
         # Issue #1233: Shutdown dedicated I/O thread pools
         shutdown_io_executors()
 
