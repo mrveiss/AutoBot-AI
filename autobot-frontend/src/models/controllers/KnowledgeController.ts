@@ -393,11 +393,6 @@ export class KnowledgeController {
     this.knowledgeStore.toggleAdvancedSearch()
   }
 
-  // Tab operations
-  setActiveTab(tab: 'search' | 'manage' | 'upload' | 'categories'): void {
-    this.knowledgeStore.setActiveTab(tab)
-  }
-
   // Statistics and maintenance
   async refreshStats(): Promise<void> {
     try {
