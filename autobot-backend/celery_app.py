@@ -109,10 +109,11 @@ celery_app.conf.update(
     task_queue_max_priority=_MAX_PRIORITY,
     task_default_priority=_PRIORITY_NORMAL,
     # Task routing - route tasks to appropriate queues
+    # #11608: phantom routes for tasks.deploy_host / tasks.provision_ssh_key /
+    # tasks.manage_service removed — those tasks moved to the SLM server (#729)
+    # and nothing sends those names to this broker anymore. The orphaned
+    # `provisioning` and `services` queues were dropped with them.
     task_routes={
-        "tasks.deploy_host": {"queue": "deployments"},
-        "tasks.provision_ssh_key": {"queue": "provisioning"},
-        "tasks.manage_service": {"queue": "services"},
         # Issue #687: RBAC initialization tasks
         "tasks.initialize_rbac": {"queue": "deployments"},
         # Issue #544: System update tasks

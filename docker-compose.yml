@@ -325,7 +325,9 @@ services:
       - celery_app
       - worker
       - --loglevel=info
-      - --queues=celery,deployments,provisioning,services
+      # provisioning/services queues removed — no tasks route to them since
+      # deployment tasks moved to the SLM server (#729, cleanup #11608)
+      - --queues=celery,deployments
       - --concurrency=2
     working_dir: /app/autobot-backend
     env_file:

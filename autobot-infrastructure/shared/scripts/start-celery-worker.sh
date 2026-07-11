@@ -89,7 +89,7 @@ echo "[4/4] Starting Celery worker..."
 echo ""
 echo "Worker Configuration:"
 echo "  - Concurrency: 4 workers"
-echo "  - Queues: deployments, provisioning, services"
+echo "  - Queues: deployments"
 echo "  - Max tasks per child: 50"
 echo "  - Time limit: 600s (10 minutes)"
 echo "  - Soft time limit: 540s (9 minutes)"
@@ -99,10 +99,12 @@ echo "=========================================="
 echo ""
 
 # Start Celery worker with appropriate configuration
+# provisioning/services queues removed — no tasks route to them since
+# deployment tasks moved to the SLM server (#729, cleanup #11608)
 exec celery -A backend.celery_app worker \
     --loglevel=info \
     --concurrency=4 \
-    --queues=deployments,provisioning,services \
+    --queues=deployments \
     --max-tasks-per-child=50 \
     --time-limit=600 \
     --soft-time-limit=540 \

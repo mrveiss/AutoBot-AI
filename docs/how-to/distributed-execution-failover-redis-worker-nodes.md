@@ -179,9 +179,9 @@ For Celery-based distributed execution, tasks are routed by type:
 ```python
 # autobot-backend/celery_app.py
 task_routes = {
-    "tasks.deploy_host":       {"queue": "deployments"},
-    "tasks.provision_ssh_key": {"queue": "provisioning"},
-    "tasks.manage_service":    {"queue": "services"},
+    "tasks.initialize_rbac":         {"queue": "deployments"},
+    "tasks.run_system_update":       {"queue": "deployments"},
+    "tasks.check_available_updates": {"queue": "deployments"},
 }
 
 # Celery uses Redis as both broker and result backend:
@@ -193,7 +193,7 @@ Start workers per queue:
 
 ```bash
 celery -A celery_app worker -Q deployments -c 2 --loglevel=info
-celery -A celery_app worker -Q services    -c 4 --loglevel=info
+celery -A celery_app worker -Q memory      -c 4 --loglevel=info
 ```
 
 ## Architecture reference
