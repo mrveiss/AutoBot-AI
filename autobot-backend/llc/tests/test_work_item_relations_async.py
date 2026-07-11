@@ -67,3 +67,22 @@ async def test_relations_to_list_empty_for_freshly_created_item():
 
     item = SimpleNamespace(awaitable_attrs=_Awaitable(outgoing_relations=[]))
     assert await work_items._relations_to_list(item) == []
+
+
+@pytest.mark.asyncio
+async def test_relations_to_list_handles_null_target():
+    # A relation whose target could not be resolved serializes None fields, not a crash.
+    from llc.api import work_items
+
+    item = SimpleNamespace(awaitable_attrs=_Awaitable(outgoing_relations=[_rel("r-2", None)]))
+    rows = await work_items._relations_to_list(item)
+    assert rows == [
+        {
+            "id": "r-2",
+            "type": "blocks",
+            "target_id": "t-1",
+            "target_identifier": None,
+            "target_title": None,
+            "target_status": None,
+        }
+    ]

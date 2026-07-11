@@ -316,7 +316,9 @@ async def _relations_to_list(item: Any) -> List[Dict[str, Any]]:
     not-yet-loaded relationship raises ``MissingGreenlet`` (sync IO in an async
     context) → the endpoint 500s even though the row exists. ``awaitable_attrs``
     returns the cached value when already loaded and awaits a load otherwise, so
-    every path serializes correctly with no duplicate query.
+    every path serializes correctly. (``outgoing_relations`` is ``lazy=selectin``;
+    each relation's ``target`` is lazy=select — an N+1 when an item has many
+    relations, tracked as a fast-follow.)
     """
     rows = []
     outgoing = await item.awaitable_attrs.outgoing_relations
@@ -983,7 +985,11 @@ async def set_or_clear_coworker(
                 caller_role="owner",
             )
         await session.commit()
-        return _item_to_dict(item)
+        # #11684: was `return _item_to_dict(item)` — unawaited and missing the
+        # session arg (latent since _item_to_dict became an async 2-arg fn); the
+        # awaitable_attrs relation load makes it a guaranteed crash. Match every
+        # other caller.
+        return await _item_to_dict(item, session)
     except CoWorkingPermissionError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=403, detail="Internal server error")
