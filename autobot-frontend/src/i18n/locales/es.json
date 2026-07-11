@@ -2596,7 +2596,17 @@
       "watchFolders": "Watch Folders",
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "Navegador",
-      "browserAriaLabel": "Explorar, buscar y editar documentos de conocimiento"
+      "browserAriaLabel": "Explorar, buscar y editar documentos de conocimiento",
+      "health": "Salud",
+      "healthAriaLabel": "Salud del conocimiento, análisis, verificación y herramientas"
+    },
+    "health": {
+      "tabAnalytics": "Análisis",
+      "tabVerification": "Verificación",
+      "tabTools": "Herramientas",
+      "feedAll": "Todo",
+      "feedCreated": "Creado",
+      "feedUpdated": "Actualizado"
     },
     "backup": {
       "title": "Copia de seguridad y restauración",

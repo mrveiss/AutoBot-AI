@@ -35,7 +35,7 @@ import KnowledgeCategories from './KnowledgeCategories.vue'
 // Lazy load heavier components using direct dynamic imports for Vue Router compatibility
 const KnowledgeEntries = () => import('./KnowledgeEntries.vue')
 const KnowledgeUpload = () => import('./KnowledgeUpload.vue')
-const KnowledgeStats = () => import('./KnowledgeStats.vue')
+const KnowledgeHealth = () => import('./KnowledgeHealth.vue')
 const KnowledgeAdvanced = () => import('./KnowledgeAdvanced.vue')
 // Issue #3270: wire up existing but previously unreachable components
 const KnowledgeSystemDocs = () => import('./KnowledgeSystemDocs.vue')
@@ -63,7 +63,7 @@ const componentMap = {
   categories: KnowledgeCategories,
   upload: KnowledgeUpload,
   manage: KnowledgeEntries,
-  stats: KnowledgeStats,
+  stats: KnowledgeHealth,
   'system-docs': KnowledgeSystemDocs,
   'prompt-editor': KnowledgePromptEditor,
   advanced: KnowledgeAdvanced

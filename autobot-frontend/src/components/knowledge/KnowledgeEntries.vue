@@ -16,35 +16,10 @@
       >
         <Icon name="edit" class="mr-2" />{{ $t('knowledge.entries.manageTab') }}
       </BaseButton>
-      <BaseButton
-        variant="ghost"
-        @click="manageTab = 'advanced'"
-        :class="['manage-tab-btn', { active: manageTab === 'advanced' }]"
-      >
-        <Icon name="cog" class="mr-2" />{{ $t('knowledge.entries.advancedTab') }}
-      </BaseButton>
     </div>
 
     <!-- Upload Tab Content -->
     <KnowledgeUpload v-if="manageTab === 'upload'" />
-
-    <!-- Advanced Tab Content -->
-    <div v-if="manageTab === 'advanced'" class="advanced-content">
-      <!-- System Knowledge Management: Initialize, Reindex, Repopulate -->
-      <SystemKnowledgeManager />
-
-      <!-- Deduplication & Orphan Management: Remove duplicates and clean up orphaned documents -->
-      <DeduplicationManager />
-
-      <!-- Session Orphan Cleanup: Remove KB facts from deleted conversations (Issue #547) -->
-      <SessionOrphanManager />
-
-      <!-- Failed Vectorizations Manager: Retry or Clear Failed Vectorization Jobs -->
-      <FailedVectorizationsManager />
-
-      <!-- Man Page Management: Search, Browse, and Integrate Man Pages -->
-      <ManPageManager />
-    </div>
 
     <!-- Manage Tab Content -->
     <div v-if="manageTab === 'manage'" class="entries-content">
@@ -443,11 +418,6 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import KnowledgeUpload from './KnowledgeUpload.vue'
-import SystemKnowledgeManager from '@/components/knowledge/SystemKnowledgeManager.vue'
-import ManPageManager from '@/components/manpage/ManPageManager.vue'
-import FailedVectorizationsManager from '@/components/knowledge/FailedVectorizationsManager.vue'
-import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vue'
-import SessionOrphanManager from '@/components/knowledge/SessionOrphanManager.vue'
 import BulkActionsToolbar from '@/components/knowledge/BulkActionsToolbar.vue'
 import BulkEditModal from '@/components/knowledge/modals/BulkEditModal.vue'
 import type { BulkEditMode, BulkEditEntry } from '@/components/knowledge/modals/BulkEditModal.vue'
@@ -473,7 +443,7 @@ const store = useKnowledgeStore()
 const controller = useKnowledgeController()
 
 // Manage tab state
-const manageTab = ref<'upload' | 'manage' | 'advanced'>('upload')
+const manageTab = ref<'upload' | 'manage'>('upload')
 
 // Search and filter state
 const searchQuery = ref('')
@@ -1351,13 +1321,6 @@ tr.selected {
   flex: 1;
   display: flex;
   flex-direction: column;
-}
-
-.advanced-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
 }
 
 /* System Knowledge Content */

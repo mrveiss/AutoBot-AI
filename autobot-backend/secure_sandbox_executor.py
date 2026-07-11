@@ -42,6 +42,7 @@ except ImportError:
         """Stub raised when docker SDK is not installed."""
 
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_optional_singleton
@@ -49,6 +50,9 @@ from autobot_shared.ssot_config import config as _ssot_config
 from constants.ttl_constants import TTL_1_HOUR
 
 logger = get_logger(__name__)
+
+# GH#11568: default timeout for compose-tool sandbox execution.
+CODEEXEC_TIMEOUT_SECONDS: int = env_int("AUTOBOT_CODEEXEC_TIMEOUT_SECONDS", default=120)
 
 
 class SandboxSecurityLevel(Enum):
@@ -424,6 +428,150 @@ class SecureSandboxExecutor:
                 await asyncio.to_thread(os.unlink, script_path)
             except Exception as e:
                 self.logger.debug("Failed to cleanup script file %s: %s", script_path, e)
+
+    def _codeexec_config(self, timeout: int) -> "SandboxConfig":
+        """Build the HIGH-security, no-network sandbox config for compose (GH#11568)."""
+        return SandboxConfig(
+            security_level=SandboxSecurityLevel.HIGH,
+            execution_mode=SandboxExecutionMode.SCRIPT,
+            enable_network=False,
+            timeout=timeout,
+        )
+
+    @staticmethod
+    def _demux_frames(buf: bytes) -> "Tuple[bytes, bytes]":
+        """Strip Docker's 8-byte stdout/stderr multiplexing headers (GH#11568 BLOCKER-3).
+
+        A non-tty ``attach_socket`` yields framed output: an 8-byte header
+        ``[stream(1)][000][size BE(4)]`` followed by ``size`` payload bytes. This
+        returns ``(decoded_stdout_payload, remaining_incomplete_bytes)``.
+        """
+        out = b""
+        while len(buf) >= 8:
+            size = int.from_bytes(buf[4:8], "big")
+            if len(buf) < 8 + size:
+                break
+            stream_type = buf[0]
+            payload = buf[8 : 8 + size]
+            if stream_type == 1:  # stdout only; stderr(2) is diagnostics, not RPC
+                out += payload
+            buf = buf[8 + size :]
+        return out, buf
+
+    async def _pump_broker_io(self, container, broker: Any) -> None:
+        """Drive the shim RPC loop: read stdout lines, reply on stdin (GH#11568).
+
+        Reads Docker's multiplexed frames from the attach socket, demuxes stdout,
+        line-splits JSON-RPC requests, and writes the broker's reply to stdin.
+        Budget exhaustion aborts the container via teardown.
+        """
+        sock = container.attach_socket(params={"stdin": 1, "stdout": 1, "stream": 1})
+        stream = getattr(sock, "_sock", sock)
+        raw_buf = b""
+        line_buf = b""
+        while True:
+            chunk = await asyncio.to_thread(stream.recv, 4096)
+            if not chunk:
+                break
+            raw_buf += chunk
+            decoded, raw_buf = self._demux_frames(raw_buf)
+            line_buf += decoded
+            aborted = await self._drain_lines(stream, broker, line_buf, container)
+            line_buf = aborted[1]
+            if aborted[0]:
+                return
+
+    async def _drain_lines(self, stream, broker: Any, line_buf: bytes, container) -> "Tuple[bool, bytes]":
+        """Process complete JSON lines in *line_buf*; return (aborted, remaining)."""
+        while b"\n" in line_buf:
+            raw, line_buf = line_buf.split(b"\n", 1)
+            reply = await broker.handle_line(raw.decode("utf-8", errors="replace"))
+            await asyncio.to_thread(stream.sendall, (reply + "\n").encode("utf-8"))
+            if broker.budget_exhausted:
+                await asyncio.to_thread(container.kill)
+                return True, line_buf
+        return False, line_buf
+
+    async def execute_with_stdio_broker(
+        self,
+        script_content: str,
+        shim_src: str,
+        broker: Any,
+        timeout: int,
+        run_id: str,
+    ) -> "SandboxResult":
+        """Execute *script_content* driving shim RPC through *broker* (GH#11568).
+
+        The combined source (shim + user script) runs inside the sandbox at HIGH
+        security with no network; ``broker`` is the live server-side capability
+        channel that re-validates and dispatches every shim call (design §3). The
+        source is delivered via a mounted file (not argv) to avoid ARG_MAX limits.
+
+        Returns:
+            SandboxResult from the sandbox executor.
+        """
+        combined = shim_src + "\n\n" + script_content
+        cfg = self._codeexec_config(timeout)
+        self.logger.debug("execute_with_stdio_broker run_id=%s timeout=%d", run_id, timeout)
+        return await self._run_broker_script(combined, cfg, broker)
+
+    def _write_script_file(self, combined: str) -> str:
+        """Persist the combined source to a host temp file for read-only mounting."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
+            f.write(combined)
+            return f.name
+
+    async def _run_broker_script(self, combined: str, cfg: "SandboxConfig", broker: Any) -> "SandboxResult":
+        """Run the combined script (via mounted file) with a duplex broker pump (GH#11568)."""
+        container_id = f"{self.container_prefix}{uuid.uuid4().hex[:8]}"
+        start_time = time.time()
+        script_path = self._write_script_file(combined)
+        guest_path = "/sandbox/compose_script.py"
+        try:
+            cc = self._prepare_container_config(["/usr/bin/python3", guest_path], cfg)
+            cc["stdin_open"] = True
+            cc.setdefault("volumes", {})[script_path] = {"bind": guest_path, "mode": "ro"}
+            container = self.docker_client.containers.create(**cc)
+            self.active_containers[container_id] = container.id
+            container.start()
+            await self._pump_broker_io(container, broker)
+            return await self._collect_broker_results(container, container_id, cfg, start_time)
+        except Exception as e:  # noqa: BLE001
+            self.logger.error("Broker script execution error: %s", e)
+            return self._create_execution_error_result(e, start_time, container_id)
+        finally:
+            await self._cleanup_container(container_id)
+            await asyncio.to_thread(self._safe_unlink, script_path)
+
+    @staticmethod
+    def _safe_unlink(path: str) -> None:
+        """Best-effort removal of a host temp file."""
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+    async def _collect_broker_results(
+        self, container, container_id: str, cfg: "SandboxConfig", start_time: float
+    ) -> "SandboxResult":
+        """Wait for an already-started broker container, then collect results (GH#11568 BLOCKER-2).
+
+        Unlike ``_run_container_and_collect_results`` this never calls ``start()``
+        again (the pump already started the container) — avoiding a 409 Conflict.
+        """
+        try:
+            exit_code = await asyncio.to_thread(lambda: container.wait(timeout=cfg.timeout)["StatusCode"])
+        except Exception:  # noqa: BLE001
+            await asyncio.to_thread(container.kill)
+            exit_code = -9
+        logs = await asyncio.to_thread(lambda: container.logs(stdout=True, stderr=True, stream=False))
+        stdout_logs, stderr_logs = self._parse_logs(logs)
+        security_events = await self._collect_security_events(container_id)
+        result = self._build_sandbox_result(
+            exit_code, stdout_logs, stderr_logs, time.time() - start_time, container_id, security_events, {}, cfg
+        )
+        await self._log_execution_metrics(container_id, result)
+        return result
 
     def _validate_command(self, command: str | List[str], config: SandboxConfig) -> bool:
         """Validate command against security policies."""

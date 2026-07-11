@@ -14,6 +14,8 @@ import os
 
 from sqlalchemy.engine import make_url
 
+from autobot_shared.db_url import assemble_postgres_url
+
 
 def get_url() -> str:
     """Get database URL from deployment config or environment."""
@@ -28,9 +30,15 @@ def get_url() -> str:
         deployment_config = get_deployment_config()
         return deployment_config.postgres_sync_url
     except Exception:
-        # Default fallback for development
-        db_host = os.environ.get("AUTOBOT_POSTGRES_HOST", "autobot-postgres")
-        return f"postgresql://autobot:autobot@{db_host}:5432/autobot"
+        # Default fallback for development: assemble from AUTOBOT_POSTGRES_HOST
+        # only; user/password/db are fixed to their dev values (#11466).
+        return assemble_postgres_url(
+            {"AUTOBOT_POSTGRES_HOST": os.environ.get("AUTOBOT_POSTGRES_HOST", "autobot-postgres")},
+            default_host="autobot-postgres",
+            default_user="autobot",
+            default_db="autobot",
+            password_default="autobot",  # nosec B106 — dev-env placeholder, not a real credential
+        )
 
 
 def as_async_url(url: str) -> str:

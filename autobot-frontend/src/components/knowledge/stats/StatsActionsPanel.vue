@@ -23,7 +23,8 @@
  * Stats Actions Panel Component
  *
  * Action buttons for exporting, optimizing, and reporting.
- * Extracted from KnowledgeStats.vue for better maintainability.
+ * Extracted from the former KnowledgeStats.vue (#184); currently unmounted —
+ * see orphaned-subpanels discovery issue.
  *
  * Issue #184: Split oversized Vue components
  */

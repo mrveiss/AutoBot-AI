@@ -2596,7 +2596,17 @@
       "watchFolders": "Watch Folders",
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "متصفح",
-      "browserAriaLabel": "تصفح وبحث وتعديل مستندات المعرفة"
+      "browserAriaLabel": "تصفح وبحث وتعديل مستندات المعرفة",
+      "health": "صحة المعرفة",
+      "healthAriaLabel": "صحة المعرفة والتحليلات والتحقق والأدوات"
+    },
+    "health": {
+      "tabAnalytics": "تحليلات",
+      "tabVerification": "التحقق",
+      "tabTools": "الأدوات",
+      "feedAll": "الكل",
+      "feedCreated": "تم الإنشاء",
+      "feedUpdated": "تم التحديث"
     },
     "backup": {
       "title": "Backup & Restore",
