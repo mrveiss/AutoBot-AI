@@ -2,6 +2,18 @@
 
 **NEVER close an issue without 100% verification. Issues remain OPEN until ALL acceptance criteria are proven met.**
 
+## The Three Mechanical Gates (#11599 — post-mortem of #6828/#8082)
+
+These compare the delivery against the ORIGINAL ISSUE BODY — implementation health (tests pass, modules have callers) is necessary but not sufficient.
+
+1. **Verbatim ACs.** The closure comment quotes the original issue-body acceptance criteria verbatim, one per line, each followed by evidence or an explicit `❌ NOT met → follow-up #X`. Never restate/paraphrase what was shipped — an AC that can't be quoted-and-checked can't be silently rescoped.
+2. **Dangling-reference grep.** Before `gh issue close N`, run:
+   ```bash
+   pipeline-scripts/check-issue-close-refs.sh <N>
+   ```
+   Forward-tracking references (`tracked in #N`, `TODO(#N)`, `deferred to #N`, wrapped across lines included) **block closure** until a real follow-up issue exists and each reference is updated. Historical mentions pass. Also eyeball the credited PR diff for `#N`. Exit 1 ⇒ do not close.
+3. **No partial close.** A bundled/multi-issue PR's `Closes #N` requires the FULL AC set of N. If a PR delivers a subset: check off the delivered subtask on the issue and either leave it open or name the follow-up issue number in the same comment. Riding along on a bundle's momentum never closes an issue.
+
 ## Before Closing an Issue
 
 1. **Read the issue description fully** — identify ALL acceptance criteria (stated and implicit)
@@ -29,16 +41,17 @@
    - `✅ Criterion 1`, `✅ Criterion 2`, etc.
    - Evidence: test output, curl response, screenshot, or CI check reference
 
-5. **Close with proof comment:**
+5. **Close with proof comment** (Gate 1: criteria are QUOTED VERBATIM from the issue body, not restated):
 ```bash
 gh api repos/mrveiss/AutoBot-AI/issues/<number>/comments -f body="✅ Closed with proof of implementation
 
 **Commit(s):** <hash1> (<msg1>), <hash2> (<msg2>)
+**Gate 2:** \`check-issue-close-refs.sh <number>\` → clear
 
-**Acceptance Criteria Met:**
-- ✅ Criterion 1 — evidence here
-- ✅ Criterion 2 — evidence here
-- ✅ Criterion 3 — evidence here"
+**Acceptance Criteria (quoted verbatim from issue body):**
+- \"<exact AC text from issue>\" — ✅ evidence here
+- \"<exact AC text from issue>\" — ✅ evidence here
+- \"<exact AC text from issue>\" — ❌ NOT met → follow-up #XXXX"
 ```
 
 ---

@@ -138,16 +138,19 @@ Before making ANY code changes:
     git branch -d fix/issue-{issue_number}
     ```
 
-15. **Close issue:**
+15. **Close issue** — run the closure gates first ([`CLAUDE_CLOSURE.md`](../../../docs/developer/CLAUDE_CLOSURE.md)):
     ```bash
-    gh issue close {issue_number} --comment "Implemented in PR #{pr_number}.
+    # Gate 2: forward-tracking references block closure (exit 1 → do NOT close)
+    pipeline-scripts/check-issue-close-refs.sh {issue_number}
 
-    Changes:
-    - <summary of what was done>
-    - <acceptance criteria met>
+    gh issue close {issue_number} --comment "Implemented in PR #{pr_number}. Gate 2 clear.
 
-    All tests passing."
+    Acceptance criteria (quoted verbatim from issue body):
+    - \"<exact AC text>\" — ✅ <evidence>
+    - \"<exact AC text>\" — ❌ NOT met → follow-up #XXXX"
     ```
+    - Gate 1: quote each issue-body AC verbatim — never paraphrase what shipped
+    - Gate 3: if this PR bundled several issues, close {issue_number} only if its FULL AC set is delivered; a subset → check off the subtask and keep it open (or name the follow-up in the same comment)
 
 16. **Store in memory:**
     - Use `mcp__memory__create_entities` to record:
