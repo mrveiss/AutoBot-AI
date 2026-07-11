@@ -198,7 +198,11 @@ async function quickApprove(approvalId: string) {
 }
 
 function launchCeoChat() {
-  router.push({ path: '/chat', query: { mode: 'ceo' } })
+  // #11552 follow-up: the CEO Chat button must open THIS company's CEO chat, not
+  // the global assistant. Route to the company-scoped ceo-chat view (mirrors
+  // LlcSidebar's nav target) so the company context (and its LLC tools) apply.
+  if (!companyId.value) return
+  router.push({ path: `/llc/companies/${companyId.value}/ceo-chat` })
 }
 
 function formatDuration(ms: number | null): string {
