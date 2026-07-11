@@ -113,6 +113,7 @@ One-paragraph summary — what this project/article is about, who made it, matur
 
 ### Weaknesses / Limitations
 - What's missing, fragile, or poorly done
+- Hidden metrics: costs the source doesn't advertise (maintenance burden, complexity, ops load, lock-in)
 ```
 
 **Then STOP and ask:** *"Want me to compare this against AutoBot? If so, any specific areas to focus on?"*
@@ -142,6 +143,7 @@ Only after explicit user go-ahead. Read relevant AutoBot files guided by Phase 1
 - Specific patterns, techniques, or approaches from the source
 - For each: which AutoBot module/file it would apply to
 - For each: already-exists audit — the greps/files checked proving AutoBot lacks it (cite paths)
+- For each: hidden metrics next to visible gains — integration/maintenance burden, complexity added, failure modes, ops load; a hidden cost can veto an adopt
 - Effort estimate: trivial / moderate / significant
 
 ### What We Already Do Better
