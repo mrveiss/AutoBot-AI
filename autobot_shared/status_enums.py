@@ -49,11 +49,12 @@ class TaskStatus(Enum):
     BLOCKED = "blocked"
     WAITING = "waiting"
     TIMEOUT = "timeout"  # #6520: services/agent_analytics + subagent_manager use TIMEOUT
+    PARKED = "parked"  # #11586: dead-letter terminal state — retries exhausted, awaiting operator review
 
     @classmethod
     def is_terminal(cls, status: "TaskStatus") -> bool:
         """Check if status is a terminal state (no further transitions)."""
-        return status in {cls.COMPLETED, cls.FAILED, cls.CANCELLED}
+        return status in {cls.COMPLETED, cls.FAILED, cls.CANCELLED, cls.PARKED}
 
     @classmethod
     def is_active(cls, status: "TaskStatus") -> bool:

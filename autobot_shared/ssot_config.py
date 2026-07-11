@@ -1367,7 +1367,11 @@ class MiscConfig(BaseSettings):
         alias="AUTOBOT_CACHE_L2_TTL",
         description="L2 Redis LLM response cache TTL in seconds",
     )
+    celery_dead_letter_max: str = Field(default="", alias="AUTOBOT_CELERY_DEAD_LETTER_MAX")
+    celery_dedup_ttl: str = Field(default="", alias="AUTOBOT_CELERY_DEDUP_TTL")
+    celery_max_retries: str = Field(default="", alias="AUTOBOT_CELERY_MAX_RETRIES")
     celery_result_expires: str = Field(default="", alias="AUTOBOT_CELERY_RESULT_EXPIRES")
+    celery_retry_backoff_max: str = Field(default="", alias="AUTOBOT_CELERY_RETRY_BACKOFF_MAX")
     celery_visibility_timeout: int = Field(default=0, alias="AUTOBOT_CELERY_VISIBILITY_TIMEOUT")
     chats_directory: str = Field(default="", alias="AUTOBOT_CHATS_DIRECTORY")
     chat_history_file: str = Field(default="", alias="AUTOBOT_CHAT_HISTORY_FILE")
