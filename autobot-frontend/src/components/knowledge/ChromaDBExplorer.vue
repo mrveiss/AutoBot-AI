@@ -19,7 +19,7 @@
           d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = ''" :aria-label="'Close error'">
+      <button @click="clearError()" :aria-label="'Close error'">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -241,6 +241,7 @@
 import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useTransientError } from '@/composables/useTransientError'
 
 const logger = createLogger('ChromaDBExplorer')
 const apiClient = useApiClient()
@@ -273,7 +274,7 @@ const searchResults = ref<SearchResultItem[]>([])
 const isLoading = ref(false)
 const isLoadingDocuments = ref(false)
 const isSearching = ref(false)
-const errorMessage = ref('')
+const { message: errorMessage, show: showError, clear: clearError } = useTransientError(5000)
 const currentPage = ref(0)
 const currentOffset = ref(0)
 const pageSize = ref(50)
@@ -284,7 +285,7 @@ const expandedDocs = ref(new Set<number>())
 // Methods
 async function loadCollections() {
   isLoading.value = true
-  errorMessage.value = ''
+  clearError()
 
   try {
     const response = await apiClient.get<{ success: boolean; data: CollectionMetadata[]; error?: string }>(
@@ -294,11 +295,11 @@ async function loadCollections() {
       collections.value = response.data
       logger.info(`Loaded ${collections.value.length} collections`)
     } else {
-      errorMessage.value = response.error || 'Failed to load collections'
+      showError(response.error || 'Failed to load collections')
     }
   } catch (error) {
     logger.error('Failed to load collections:', error)
-    errorMessage.value = error instanceof Error ? error.message : 'Failed to load collections'
+    showError(error instanceof Error ? error.message : 'Failed to load collections')
   } finally {
     isLoading.value = false
   }
@@ -317,7 +318,7 @@ async function loadDocuments() {
   if (!selectedCollection.value) return
 
   isLoadingDocuments.value = true
-  errorMessage.value = ''
+  clearError()
 
   try {
     const params = new URLSearchParams({
@@ -350,11 +351,11 @@ async function loadDocuments() {
 
       logger.info(`Loaded ${documents.value.length} documents`)
     } else {
-      errorMessage.value = response.error || 'Failed to load documents'
+      showError(response.error || 'Failed to load documents')
     }
   } catch (error) {
     logger.error('Failed to load documents:', error)
-    errorMessage.value = error instanceof Error ? error.message : 'Failed to load documents'
+    showError(error instanceof Error ? error.message : 'Failed to load documents')
   } finally {
     isLoadingDocuments.value = false
   }
@@ -364,7 +365,7 @@ async function performSearch() {
   if (!selectedCollection.value || !searchQuery.value) return
 
   isSearching.value = true
-  errorMessage.value = ''
+  clearError()
 
   try {
     const response = await apiClient.post<{
@@ -384,11 +385,11 @@ async function performSearch() {
       searchResults.value = response.data
       logger.info(`Found ${searchResults.value.length} search results`)
     } else {
-      errorMessage.value = response.error || 'Search failed'
+      showError(response.error || 'Search failed')
     }
   } catch (error) {
     logger.error('Search failed:', error)
-    errorMessage.value = error instanceof Error ? error.message : 'Search failed'
+    showError(error instanceof Error ? error.message : 'Search failed')
   } finally {
     isSearching.value = false
   }
