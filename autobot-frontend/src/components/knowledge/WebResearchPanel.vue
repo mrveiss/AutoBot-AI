@@ -4,8 +4,8 @@
 <!-- WebResearchPanel — 4-tab web research UI (MVA-344) -->
 
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useTabs } from '@/composables/useTabs'
 import ScrapeTab from '@/components/knowledge/web-research/ScrapeTab.vue'
 import CrawlTab from '@/components/knowledge/web-research/CrawlTab.vue'
 import SiteMapTab from '@/components/knowledge/web-research/SiteMapTab.vue'
@@ -13,9 +13,10 @@ import ExtractTab from '@/components/knowledge/web-research/ExtractTab.vue'
 
 const { t } = useI18n()
 
-type TabId = 'scrape' | 'crawl' | 'sitemap' | 'extract'
+const TAB_IDS = ['scrape', 'crawl', 'sitemap', 'extract'] as const
+type TabId = (typeof TAB_IDS)[number]
 
-const activeTab = ref<TabId>('scrape')
+const { activeTab, tabAttrs, panelAttrs, handleKeydown, tablistRef } = useTabs(TAB_IDS)
 
 interface Tab {
   id: TabId
@@ -64,27 +65,38 @@ const tabs: Tab[] = [
     </div>
 
     <!-- Tab bar -->
-    <div class="wrp-tabs" role="tablist" :aria-label="t('knowledge.webResearch.tabListAriaLabel')">
+    <div
+      ref="tablistRef"
+      class="wrp-tabs"
+      role="tablist"
+      :aria-label="t('knowledge.webResearch.tabListAriaLabel')"
+    >
       <button
         v-for="tab in tabs"
         :key="tab.id"
+        v-bind="tabAttrs(tab.id)"
         class="wrp-tab"
         :class="{ 'wrp-tab--active': activeTab === tab.id }"
-        role="tab"
-        :aria-selected="activeTab === tab.id"
         :aria-label="tab.ariaLabel"
         @click="activeTab = tab.id"
+        @keydown="handleKeydown"
       >
         {{ tab.label }}
       </button>
     </div>
 
-    <!-- Tab content -->
-    <div class="wrp-content" role="tabpanel">
-      <ScrapeTab v-if="activeTab === 'scrape'" />
-      <CrawlTab v-else-if="activeTab === 'crawl'" />
-      <SiteMapTab v-else-if="activeTab === 'sitemap'" />
-      <ExtractTab v-else-if="activeTab === 'extract'" />
+    <!-- Tab panels -->
+    <div v-if="activeTab === 'scrape'" v-bind="panelAttrs('scrape')" class="wrp-content">
+      <ScrapeTab />
+    </div>
+    <div v-else-if="activeTab === 'crawl'" v-bind="panelAttrs('crawl')" class="wrp-content">
+      <CrawlTab />
+    </div>
+    <div v-else-if="activeTab === 'sitemap'" v-bind="panelAttrs('sitemap')" class="wrp-content">
+      <SiteMapTab />
+    </div>
+    <div v-else-if="activeTab === 'extract'" v-bind="panelAttrs('extract')" class="wrp-content">
+      <ExtractTab />
     </div>
   </div>
 </template>

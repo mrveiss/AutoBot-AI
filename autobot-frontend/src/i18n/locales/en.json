@@ -1390,7 +1390,8 @@
         "codeQuality": "Code Quality",
         "codeReview": "Code Review",
         "evolution": "Evolution",
-        "overview": "Overview"
+        "overview": "Overview",
+        "ariaLabel": "Project analytics"
       }
     },
     "patterns": {

@@ -797,7 +797,8 @@
         "overview": "Overview",
         "codeReview": "Code Review",
         "codeQuality": "Code Quality",
-        "codeGeneration": "Code Generation"
+        "codeGeneration": "Code Generation",
+        "ariaLabel": "پروجیکٹ کے تجزیات"
       }
     },
     "patterns": {
