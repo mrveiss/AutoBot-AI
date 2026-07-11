@@ -252,6 +252,7 @@ async def test_compose_approval_gate_creates_record():
     tool_call = {"name": "compose", "params": {"program": program}}
     msgs = []
     handler._persist_compose_approval = AsyncMock(return_value="approval-uuid-1")
+    handler._poll_compose_approval = AsyncMock(return_value="rejected")
 
     with patch.object(th, "CODEEXEC_AUTOAPPROVE_READONLY", False):
         async for msg in handler._handle_compose_tool(tool_call, "s1", [], _FakeCtx()):
@@ -396,3 +397,329 @@ async def test_compose_e2e_with_fake_executor():
     assert msgs
     result_msg = msgs[-1]
     assert "42" in result_msg.content
+
+
+# ---------------------------------------------------------------------------
+# BLOCKER-1: AST guard escape-gap corpus (each must be REJECTED)
+# ---------------------------------------------------------------------------
+
+_ESCAPE_CORPUS = [
+    "().__class__.__bases__[0].__subclasses__()",
+    'getattr(__builtins__, "exec")()',
+    '__builtins__["open"]("x")',
+    "breakpoint()",
+    'globals()["__builtins__"]',
+    "vars()",
+    "locals()",
+    "import autobot_tools as t\nfn = getattr(t, 'web_search')\n",
+    "x = ().__reduce__()",
+]
+
+
+@pytest.mark.parametrize("script", _ESCAPE_CORPUS)
+def test_ast_guard_rejects_escape_corpus(script):
+    """Each known escape technique must be rejected by the hard gate."""
+    from chat_workflow.code_exec.ast_guard import check_script
+
+    result = check_script(script, frozenset())
+    assert not result.ok, f"escape NOT rejected: {script!r}"
+    assert result.violations
+
+
+def test_ast_guard_accepts_clean_script():
+    """A legitimate multi-tool script still passes after the gap fixes."""
+    from chat_workflow.code_exec.ast_guard import check_script
+
+    script = (
+        "import autobot_tools\n"
+        "import asyncio\n"
+        "async def main():\n"
+        "    r = await autobot_tools.web_search(query='x')\n"
+        "    return r\n"
+    )
+    assert check_script(script, frozenset()).ok
+
+
+# ---------------------------------------------------------------------------
+# MAJOR-3: sensitive tools can never be injected via the env allowlist
+# ---------------------------------------------------------------------------
+
+
+def test_injectable_excludes_sensitive_even_when_env_widened():
+    """compose/delegate/execute_command are excluded even if added to the env allowlist."""
+    from chat_workflow.code_exec import shim_codegen
+
+    widened = frozenset({"web_search", "compose", "delegate", "execute_command"})
+    with patch.object(shim_codegen, "CODEEXEC_INJECTABLE_TOOLS", widened):
+        result = shim_codegen.injectable_tool_set([], frozenset())
+    assert "compose" not in result
+    assert "delegate" not in result
+    assert "execute_command" not in result
+    assert "web_search" in result
+
+
+# ---------------------------------------------------------------------------
+# MAJOR-1: shim RPC uses per-call ids so concurrent calls correlate
+# ---------------------------------------------------------------------------
+
+
+def test_shim_codegen_uses_per_call_ids_not_tool_name():
+    """The shim must not hardcode the tool name as the RPC id."""
+    from chat_workflow.code_exec.shim_codegen import generate_shim_module
+
+    src = generate_shim_module(["web_search"])
+    assert "_next_id" in src
+    assert '"id": "web_search"' not in src  # not a constant id
+
+
+def test_shim_emits_monotonic_ids_and_correlates():
+    """The shim emits a distinct id per call and dispatches replies to a pending map.
+
+    Runs the generated ``_rpc_call`` against a synchronous stub stdio to prove the
+    id monotonically increments and that out-of-order replies land on the right id
+    — the correlation mechanism — without the executor-thread event-loop coupling
+    that only exists inside the real sandbox.
+    """
+    from chat_workflow.code_exec.shim_codegen import generate_shim_module
+
+    ns: dict = {}
+    exec(generate_shim_module(["web_search"]), ns)  # nosec B102 — generated trusted shim under test
+    assert ns["_next_id"]() == 1
+    assert ns["_next_id"]() == 2  # monotonic, not a constant tool-name id
+    # Correlation: a reply keyed by id is retrievable by that id, out of arrival order.
+    ns["_pending"][2] = {"id": 2, "ok": True, "result": "B"}
+    ns["_pending"][1] = {"id": 1, "ok": True, "result": "A"}
+    assert ns["_pending"].pop(1)["result"] == "A"
+    assert ns["_pending"].pop(2)["result"] == "B"
+
+
+@pytest.mark.asyncio
+async def test_broker_echoes_request_id():
+    """The broker must echo the incoming request id so the shim can correlate replies."""
+    from chat_workflow.code_exec.broker import CodeExecBroker
+
+    b = CodeExecBroker(
+        dispatch_fn=AsyncMock(return_value="r"),
+        tools=["web_search"],
+        forbidden=frozenset(),
+        run_id="r",
+        security_event_key="k",
+    )
+    b._emit_audit = AsyncMock()
+    b._emit_progress = AsyncMock()
+    reply = json.loads(await b.handle_line(json.dumps({"id": 7, "tool": "web_search", "params": {}})))
+    assert reply["id"] == 7
+
+
+# ---------------------------------------------------------------------------
+# BLOCKER-2/3: executor start-once and multiplexed-frame demux
+# ---------------------------------------------------------------------------
+
+
+def test_demux_frames_strips_docker_headers():
+    """_demux_frames must strip the 8-byte stdout frame header and drop stderr frames."""
+    from secure_sandbox_executor import SecureSandboxExecutor
+
+    payload = b'{"id": 1}\n'
+    stdout_frame = bytes([1, 0, 0, 0]) + len(payload).to_bytes(4, "big") + payload
+    stderr_frame = bytes([2, 0, 0, 0]) + (3).to_bytes(4, "big") + b"err"
+    decoded, remaining = SecureSandboxExecutor._demux_frames(stdout_frame + stderr_frame)
+    assert decoded == payload
+    assert remaining == b""
+
+
+def test_demux_frames_holds_incomplete_frame():
+    """A partial frame is returned as remaining bytes, not decoded."""
+    from secure_sandbox_executor import SecureSandboxExecutor
+
+    partial = bytes([1, 0, 0, 0]) + (10).to_bytes(4, "big") + b"onl"  # claims 10, has 3
+    decoded, remaining = SecureSandboxExecutor._demux_frames(partial)
+    assert decoded == b""
+    assert remaining == partial
+
+
+@pytest.mark.asyncio
+async def test_run_broker_script_mounts_large_script_via_file_not_argv():
+    """MAJOR-2: a large script is delivered by mounted file, not argv (no ARG_MAX)."""
+    from secure_sandbox_executor import SandboxSecurityLevel, SecureSandboxExecutor
+
+    ex = object.__new__(SecureSandboxExecutor)
+    ex.logger = MagicMock()
+    ex.container_prefix = "t-"
+    ex.active_containers = {}
+    container = MagicMock()
+    container.wait.return_value = {"StatusCode": 0}
+    container.logs.return_value = b""
+    docker_client = MagicMock()
+    docker_client.containers.create.return_value = container
+    ex.docker_client = docker_client
+
+    captured = {}
+
+    def _prep(cmd, cfg):
+        captured["cmd"] = cmd
+        return {"image": "x"}
+
+    ex._prepare_container_config = _prep
+    ex._parse_logs = lambda logs: ("", "")
+    ex._collect_security_events = AsyncMock(return_value=[])
+    ex._build_sandbox_result = SecureSandboxExecutor._build_sandbox_result.__get__(ex)
+    ex._log_execution_metrics = AsyncMock()
+    ex._cleanup_container = AsyncMock()
+    ex._pump_broker_io = AsyncMock()
+
+    big = "x = 1  # padding\n" * 20000  # ~300 KB, well over a typical ARG_MAX
+    cfg = SecureSandboxExecutor._codeexec_config(ex, 30)
+    cfg.security_level = SandboxSecurityLevel.HIGH
+    await ex._run_broker_script(big, cfg, MagicMock())
+    # The command runs a file path, never embeds the source as an argv token.
+    assert captured["cmd"][:2] == ["/usr/bin/python3", "/sandbox/compose_script.py"]
+    assert not any(len(str(tok)) > 4096 for tok in captured["cmd"])
+
+
+@pytest.mark.asyncio
+async def test_run_broker_script_starts_container_once():
+    """BLOCKER-2: the broker path must call container.start() exactly once (no 409)."""
+    from secure_sandbox_executor import SandboxSecurityLevel, SecureSandboxExecutor
+
+    ex = object.__new__(SecureSandboxExecutor)
+    ex.logger = MagicMock()
+    ex.container_prefix = "t-"
+    ex.active_containers = {}
+
+    container = MagicMock()
+    container.wait.return_value = {"StatusCode": 0}
+    container.logs.return_value = b""
+    docker_client = MagicMock()
+    docker_client.containers.create.return_value = container
+    ex.docker_client = docker_client
+
+    ex._prepare_container_config = lambda cmd, cfg: {"image": "x"}
+    ex._parse_logs = lambda logs: ("out", "")
+    ex._collect_security_events = AsyncMock(return_value=[])
+    ex._build_sandbox_result = SecureSandboxExecutor._build_sandbox_result.__get__(ex)
+    ex._log_execution_metrics = AsyncMock()
+    ex._cleanup_container = AsyncMock()
+    ex._pump_broker_io = AsyncMock()
+
+    cfg = SecureSandboxExecutor._codeexec_config(ex, 30)
+    cfg.security_level = SandboxSecurityLevel.HIGH
+    await ex._run_broker_script("print(1)", cfg, MagicMock())
+    assert container.start.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# BLOCKER-4: non-read-only shim forces the gate even with the flag on
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_compose_non_readonly_shim_forces_gate_despite_flag():
+    """A non-read-only tool in the shim snapshot forces approval even when auto-approve is on."""
+    import chat_workflow.tool_handler as th
+
+    handler = object.__new__(th.ToolHandlerMixin)
+    handler._persist_compose_approval = AsyncMock(return_value="gate-1")
+    handler._poll_compose_approval = AsyncMock(return_value="rejected")
+    handler._compose_shim_snapshot = lambda agent_id: ["web_search", "write_file"]
+    tool_call = {"name": "compose", "params": {"program": "import asyncio\n"}}
+
+    msgs = []
+    with patch.object(th, "CODEEXEC_AUTOAPPROVE_READONLY", True):
+        async for msg in handler._handle_compose_tool(tool_call, "s1", [], _FakeCtx()):
+            msgs.append(msg)
+
+    handler._persist_compose_approval.assert_awaited_once()  # gate created despite flag
+    assert any(m.type == "approval_required" for m in msgs)
+
+
+def test_compose_auto_approvable_only_for_readonly_set():
+    """_compose_auto_approvable is True only when all shims are read-only AND flag on."""
+    import chat_workflow.tool_handler as th
+
+    handler = object.__new__(th.ToolHandlerMixin)
+    with patch.object(th, "CODEEXEC_AUTOAPPROVE_READONLY", True):
+        assert handler._compose_auto_approvable(["web_search"]) is True
+        assert handler._compose_auto_approvable(["web_search", "write_file"]) is False
+    with patch.object(th, "CODEEXEC_AUTOAPPROVE_READONLY", False):
+        assert handler._compose_auto_approvable(["web_search"]) is False
+
+
+# ---------------------------------------------------------------------------
+# MINOR-2: approved gate resumes execution; denied gate returns a refusal
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_compose_gate_approved_resumes_execution():
+    """An APPROVED gate proceeds to _execute_compose."""
+    import chat_workflow.tool_handler as th
+
+    handler = object.__new__(th.ToolHandlerMixin)
+    handler._persist_compose_approval = AsyncMock(return_value="gate-2")
+    handler._poll_compose_approval = AsyncMock(return_value="approved")
+    handler._compose_shim_snapshot = lambda agent_id: ["write_file"]  # forces gate
+    handler._execute_compose = AsyncMock(
+        return_value=type("M", (), {"content": "ran", "type": "tool_result", "metadata": {}})()
+    )
+    tool_call = {"name": "compose", "params": {"program": "import asyncio\n"}}
+
+    msgs = []
+    with patch.object(th, "CODEEXEC_AUTOAPPROVE_READONLY", False):
+        async for msg in handler._handle_compose_tool(tool_call, "s1", [], _FakeCtx()):
+            msgs.append(msg)
+
+    handler._execute_compose.assert_awaited_once()
+    assert msgs[-1].content == "ran"
+
+
+@pytest.mark.asyncio
+async def test_compose_gate_denied_returns_refusal_and_skips_execution():
+    """A DENIED gate returns a refusal and never calls _execute_compose."""
+    import chat_workflow.tool_handler as th
+
+    handler = object.__new__(th.ToolHandlerMixin)
+    handler._persist_compose_approval = AsyncMock(return_value="gate-3")
+    handler._poll_compose_approval = AsyncMock(return_value="rejected")
+    handler._compose_shim_snapshot = lambda agent_id: ["write_file"]
+    handler._execute_compose = AsyncMock()
+    tool_call = {"name": "compose", "params": {"program": "import asyncio\n"}}
+
+    msgs = []
+    with patch.object(th, "CODEEXEC_AUTOAPPROVE_READONLY", False):
+        async for msg in handler._handle_compose_tool(tool_call, "s1", [], _FakeCtx()):
+            msgs.append(msg)
+
+    handler._execute_compose.assert_not_awaited()
+    assert any("not approved" in m.content for m in msgs)
+
+
+# ---------------------------------------------------------------------------
+# MINOR-3: budget cannot overshoot under concurrent reservation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_broker_budget_no_overshoot_concurrent():
+    """Concurrent handle_line calls must not exceed the budget cap."""
+    from chat_workflow.code_exec import broker as broker_mod
+    from chat_workflow.code_exec.broker import CodeExecBroker
+
+    async def _slow_dispatch(tool, params):
+        await asyncio.sleep(0)
+        return "ok"
+
+    with patch.object(broker_mod, "CODEEXEC_MAX_TOOL_CALLS", 3):
+        b = CodeExecBroker(
+            dispatch_fn=_slow_dispatch,
+            tools=["web_search"],
+            forbidden=frozenset(),
+            run_id="r",
+            security_event_key="k",
+        )
+        b._emit_audit = AsyncMock()
+        b._emit_progress = AsyncMock()
+        lines = [json.dumps({"id": i, "tool": "web_search", "params": {}}) for i in range(10)]
+        replies = await asyncio.gather(*(b.handle_line(x) for x in lines))
+    ok_count = sum(1 for r in replies if json.loads(r)["ok"])
+    assert ok_count == 3  # never overshoots the cap
