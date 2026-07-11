@@ -13,11 +13,33 @@ Stubs maintained for backward compatibility with existing API endpoints.
 
 from autobot_shared.logging_manager import get_logger
 from celery_app import celery_app
+from utils.celery_reliability import (
+    CELERY_MAX_RETRIES,
+    CELERY_RETRY_BACKOFF_MAX,
+    CELERY_TRANSIENT_ERRORS,
+    DeadLetterTask,
+    idempotent_task,
+)
 
 logger = get_logger(__name__)
 
+# #11586: shared reliability options for the side-effectful queue tasks below
+# (deployments queue). Transient errors back off with jitter; validation errors
+# fail fast; terminal failures are parked by DeadLetterTask; duplicate broker
+# deliveries are skipped by @idempotent_task.
+_RELIABLE_TASK_OPTIONS = {
+    "bind": True,
+    "base": DeadLetterTask,
+    "autoretry_for": CELERY_TRANSIENT_ERRORS,
+    "retry_backoff": True,
+    "retry_jitter": True,
+    "retry_backoff_max": CELERY_RETRY_BACKOFF_MAX,
+    "max_retries": CELERY_MAX_RETRIES,
+}
 
-@celery_app.task(bind=True, name="tasks.initialize_rbac")
+
+@celery_app.task(name="tasks.initialize_rbac", **_RELIABLE_TASK_OPTIONS)
+@idempotent_task
 def initialize_rbac(self, create_admin: bool = False, admin_username: str = "admin"):
     """
     Initialize RBAC system using Ansible playbook (Issue #687).
@@ -39,7 +61,8 @@ def initialize_rbac(self, create_admin: bool = False, admin_username: str = "adm
     raise NotImplementedError("RBAC initialization moved to SLM server. Use SLM API for RBAC setup (#729).")
 
 
-@celery_app.task(bind=True, name="tasks.run_system_update")
+@celery_app.task(name="tasks.run_system_update", **_RELIABLE_TASK_OPTIONS)
+@idempotent_task
 def run_system_update(
     self,
     update_type: str = "dependencies",
@@ -69,7 +92,8 @@ def run_system_update(
     raise NotImplementedError("System updates moved to SLM server. Use SLM API for system updates (#729).")
 
 
-@celery_app.task(bind=True, name="tasks.check_available_updates")
+@celery_app.task(name="tasks.check_available_updates", **_RELIABLE_TASK_OPTIONS)
+@idempotent_task
 def check_available_updates(self):
     """
     Check for available updates without applying them (Issue #544).
