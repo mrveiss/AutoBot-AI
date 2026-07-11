@@ -167,6 +167,7 @@ import services.pricing_refresh  # noqa: F401
 
 # GH#4463: Mobile device tasks module
 import tasks.mobile_device_tasks  # noqa: F401
+from utils.celery_schedules import crontab_from_string  # noqa: E402
 
 # =========================================================================
 # Issue #4455: Periodic knowledge-base cleanup schedule
@@ -174,7 +175,6 @@ import tasks.mobile_device_tasks  # noqa: F401
 # importable when the test conftest stubs this module in sys.modules.
 # =========================================================================
 
-from utils.celery_schedules import crontab_from_string  # noqa: E402
 
 celery_app.conf.beat_schedule = {
     "knowledge-cleanup-orphan-documents": {
