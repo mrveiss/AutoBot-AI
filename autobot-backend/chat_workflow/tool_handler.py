@@ -2915,10 +2915,12 @@ class ToolHandlerMixin:
     def _guard_compose(self, program: str, agent_id: "str | None") -> "WorkflowMessage | None":
         """Run AST guard; return error WorkflowMessage on violation, else None."""
         from chat_workflow.code_exec.ast_guard import check_script
+        from chat_workflow.code_exec.shim_codegen import injectable_tool_set
         from orchestration.agent_registry import resolve_forbidden_tools
 
         forbidden = resolve_forbidden_tools(agent_id)
-        verdict = check_script(program, frozenset(forbidden))
+        injected = frozenset(injectable_tool_set([], forbidden))
+        verdict = check_script(program, frozenset(forbidden), injected_tools=injected)
         if verdict.ok:
             return None
         lines = "; ".join(f"line {v['line']}: {v['message']}" for v in verdict.violations)

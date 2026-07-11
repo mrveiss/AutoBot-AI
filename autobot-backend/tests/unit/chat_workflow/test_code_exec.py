@@ -422,6 +422,19 @@ _ESCAPE_CORPUS = [
     # LEAK-3: delattr smuggling + hasattr with a dunder/computed name.
     "delattr(object, 'x')",
     "hasattr(o, '__class__')",
+    # Builtin-ALLOWLIST wave: dangerous builtins caught by allowlist, not blocklist.
+    # print/open/input MUST reject — the broker RPC uses the script's stdout for
+    # requests and stdin for replies, so print() corrupts the request stream and
+    # input() steals a broker reply (protocol integrity, not just sandboxing).
+    "open('/etc/passwd')",
+    "input()",
+    "print('x')",
+    "type('X',(object,),{})",
+    "memoryview(b'x')",
+    "id(o)",
+    "dir()",
+    "object()",
+    "super",
 ]
 
 
@@ -444,6 +457,13 @@ _CLEAN_CORPUS = [
         "    return r\n"
     ),
     ("import asyncio, json\n" "async def run():\n" "    r = await scrape_url(url='x')\n" "    return json.dumps(r)\n"),
+    # Uses SAFE_BUILTINS range/len + math + a comprehension — must pass.
+    (
+        "import math\n"
+        "vals = extract_structured_data(url='u', schema={})\n"
+        "n = math.floor(1.5)\n"
+        "items = [x for x in range(len(vals))]\n"
+    ),
 ]
 
 
@@ -454,6 +474,29 @@ def test_ast_guard_accepts_clean_scripts(script):
 
     result = check_script(script, frozenset())
     assert result.ok, f"clean script wrongly rejected: {result.violations}"
+
+
+def test_ast_guard_allows_locally_shadowed_builtin_name():
+    """A user-defined function shadowing a builtin name is not a builtin violation."""
+    from chat_workflow.code_exec.ast_guard import check_script
+
+    script = "def helper(x):\n    return x + 1\n" "result = helper(1)\n"
+    assert check_script(script, frozenset()).ok
+
+
+def test_ast_guard_builtins_allowlist_is_env_extendable():
+    """AUTOBOT_CODEEXEC_BUILTINS_ALLOWLIST content is honored (env-extendable constant)."""
+    import importlib
+
+    import chat_workflow.code_exec.ast_guard as guard
+
+    # 'print' is excluded by default; a reload with it whitelisted must accept it.
+    with patch.dict("os.environ", {"AUTOBOT_CODEEXEC_BUILTINS_ALLOWLIST": "len,range,print"}):
+        reloaded = importlib.reload(guard)
+        try:
+            assert reloaded.check_script("print('x')", frozenset()).ok
+        finally:
+            importlib.reload(guard)  # restore default module state for other tests
 
 
 # ---------------------------------------------------------------------------
