@@ -89,15 +89,16 @@
           <svg :viewBox="`0 0 ${CHART_W} ${CHART_H}`" class="burndown-svg">
             <!-- Ideal line -->
             <line
+              class="burndown-ideal-line"
               :x1="0" :y1="0"
               :x2="CHART_W" :y2="CHART_H"
-              stroke="var(--text-secondary)" stroke-width="1" stroke-dasharray="4 4"
+              stroke-width="1" stroke-dasharray="4 4"
             />
             <!-- Actual line -->
             <polyline
+              class="burndown-actual-line"
               :points="burndownPoints"
               fill="none"
-              stroke="var(--color-primary)"
               stroke-width="2"
               stroke-linejoin="round"
             />
@@ -543,6 +544,15 @@ onMounted(async () => {
 .burndown-svg {
   width: 100%;
   height: auto;
+}
+
+/* stroke via CSS (not SVG presentation attr) so var() resolves cross-browser incl. Safari */
+.burndown-ideal-line {
+  stroke: var(--text-secondary);
+}
+
+.burndown-actual-line {
+  stroke: var(--color-primary);
 }
 
 .burndown-legend {
