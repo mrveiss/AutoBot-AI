@@ -1,7 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Type definitions for OptimizedHealthMonitor
+ * Type definitions for HealthMonitor
  */
 
 export interface MonitorHealthStatus {
@@ -65,7 +65,7 @@ export interface HealthCheckResult {
   reason?: unknown;
 }
 
-declare class OptimizedHealthMonitor {
+declare class HealthMonitor {
   isMonitoring: boolean;
   performanceBudget: PerformanceBudget;
   healthStatus: MonitorHealthStatus;
@@ -108,8 +108,9 @@ declare class OptimizedHealthMonitor {
     consecutiveFailures: ConsecutiveFailures;
     lastHealthCheck: number;
   };
+  resetFailures(): void;
   destroy(): void;
 }
 
-export const optimizedHealthMonitor: OptimizedHealthMonitor;
-export default OptimizedHealthMonitor;
+export const healthMonitor: HealthMonitor;
+export default HealthMonitor;

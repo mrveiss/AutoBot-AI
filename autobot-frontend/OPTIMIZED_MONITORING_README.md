@@ -22,7 +22,7 @@ The AutoBot frontend has been enhanced with an **Optimized Performance Monitorin
 
 ### Core Components
 
-1. **OptimizedHealthMonitor** (`/utils/OptimizedHealthMonitor.js`)
+1. **HealthMonitor** (`/utils/HealthMonitor.js`)
    - Event-driven health monitoring with adaptive intervals
    - Performance budget tracking (<50ms per minute)
    - Circuit breaker pattern for self-regulation
@@ -163,18 +163,18 @@ USER_ACTIVITY_DETECTION: true,     // Faster refresh when user active
 
 ```javascript
 // Access optimized health monitor
-import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js'
+import { healthMonitor } from '@/utils/HealthMonitor.js'
 
 // Listen for health changes
-optimizedHealthMonitor.onHealthChange((healthData) => {
+healthMonitor.onHealthChange((healthData) => {
   console.log('System health:', healthData.status.overall)
 })
 
 // Manual health check
-await optimizedHealthMonitor.performManualHealthCheck()
+await healthMonitor.performManualHealthCheck()
 
 // Get current status
-const status = optimizedHealthMonitor.getHealthStatus()
+const status = healthMonitor.getHealthStatus()
 ```
 
 ## 📈 Performance Impact
@@ -185,7 +185,7 @@ const status = optimizedHealthMonitor.getHealthStatus()
 - **Total Overhead**: ~3.6 seconds per minute = 6% constant overhead
 
 ### After Optimization
-- **OptimizedHealthMonitor**: <10ms every 2 minutes = <5ms per minute
+- **HealthMonitor**: <10ms every 2 minutes = <5ms per minute
 - **OptimizedRumDashboard**: User-controlled, default 1 minute
 - **Total Overhead**: <50ms per minute = <0.08% overhead
 - **Performance Improvement**: 98.5% reduction in monitoring overhead

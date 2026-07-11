@@ -14,8 +14,13 @@ import { KnowledgeRepository } from './KnowledgeRepository'
 import { SystemRepository } from './SystemRepository'
 
 export const apiRepository = new ApiRepository()
-export const chatRepository = new ChatRepository()
-export const knowledgeRepository = new KnowledgeRepository()
+// Issue #11640: chat/knowledge singletons live in their class files — re-export
+// them instead of constructing SECOND instances here. (Latent, not live:
+// `models/repositories.ts` shadows this directory index for `@/models/repositories`
+// importers, so the duplicate constructions were dead — see follow-up on barrel
+// consolidation.)
+export { chatRepository } from './ChatRepository'
+export { knowledgeRepository } from './KnowledgeRepository'
 export const systemRepository = new SystemRepository()
 
 // Repository factory for creating instances with custom config

@@ -38,29 +38,13 @@ export async function clearAllSystemNotifications() {
   }
 }
 
-export function resetHealthMonitor() {
+export async function resetHealthMonitor() {
   try {
-    // Reset the frontend health monitor consecutive failures
-    if (window.frontendHealthMonitor) {
-      if (window.frontendHealthMonitor.consecutiveFailures) {
-        window.frontendHealthMonitor.consecutiveFailures = {
-          backend: 0,
-          websocket: 0,
-          router: 0
-        }
-      }
-
-      if (window.frontendHealthMonitor.healthStatus) {
-        window.frontendHealthMonitor.healthStatus = {
-          overall: 'healthy',
-          frontend: 'healthy',
-          backend: 'healthy',
-          router: 'healthy',
-          cache: 'healthy',
-          websocket: 'healthy'
-        }
-      }
-    }
+    // Issue #11640: reset the canonical health monitor via its own seam.
+    // (Previously poked window.frontendHealthMonitor — an orphaned monitor
+    // that was never imported, so this function silently no-oped.)
+    const { healthMonitor } = await import('@/utils/HealthMonitor.js')
+    healthMonitor.resetFailures()
 
     return true
   } catch (error) {

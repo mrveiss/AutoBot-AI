@@ -641,7 +641,7 @@ provide('submitOverseerQuery', submitOverseerQuery)
 
 // Connection state with stabilized status management.
 // #6773: backend-health is now sourced from `appStore.backendStatus`, which is
-// driven by `OptimizedHealthMonitor` (the canonical /api/system/health poller
+// driven by `HealthMonitor` (the canonical /api/system/health poller
 // wired in App.vue). Removed the local 60 s heartbeat poller that previously
 // also hit /api/system/health, eliminating duplicate polling.
 const baseConnectionStatus = ref(t('status.connected'))
@@ -962,9 +962,9 @@ const onCommandCommented = async (commentData: { command: string; comment: strin
 }
 
 // #6773: connection state is mirrored from `appStore.backendStatus`, which
-// `OptimizedHealthMonitor` updates from /api/system/health. Replaces the
+// `HealthMonitor` updates from /api/system/health. Replaces the
 // previous 60 s `appConfig.validateConnection()` poller — that poller was
-// hitting the same endpoint as `OptimizedHealthMonitor`, producing duplicate
+// hitting the same endpoint as `HealthMonitor`, producing duplicate
 // /api/system/health requests per polling interval.
 const syncConnectionFromStore = (): void => {
   const cls = appStore.backendStatus.class
@@ -977,7 +977,7 @@ const syncConnectionFromStore = (): void => {
     : t('status.disconnected')
 }
 
-// React to OptimizedHealthMonitor → appStore updates immediately.
+// React to HealthMonitor → appStore updates immediately.
 watch(() => appStore.backendStatus.class, syncConnectionFromStore, { immediate: false })
 
 // #6746: autosave poller deleted. Backend now persists every chat message
@@ -1138,7 +1138,7 @@ onMounted(async () => {
   await loadNovncUrl()
 
   // #6773: connection state mirrors appStore.backendStatus (driven by
-  // OptimizedHealthMonitor). Seed once from current store state so initial
+  // HealthMonitor). Seed once from current store state so initial
   // render reflects the latest known status without an extra fetch.
   syncConnectionFromStore()
   // #6746: autosave removed; backend persists messages directly
@@ -1436,9 +1436,9 @@ function _extractCompleteSentences(text: string): string[] {
 .tool-approval-btn { @apply flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors; }
 .tool-approval-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .tool-approval-btn--deny { background: var(--color-error-bg); color: var(--color-error); border: 1px solid var(--color-error-border); }
-.tool-approval-btn--deny:hover:not(:disabled) { background: var(--color-error); color: #fff; }
+.tool-approval-btn--deny:hover:not(:disabled) { background: var(--color-error); color: var(--text-on-error); }
 .tool-approval-btn--approve { background: var(--color-success-bg); color: var(--color-success); border: 1px solid var(--color-success-border); }
-.tool-approval-btn--approve:hover:not(:disabled) { background: var(--color-success); color: #fff; }
+.tool-approval-btn--approve:hover:not(:disabled) { background: var(--color-success); color: var(--text-on-success); }
 /* Issue #4960: countdown timer */
 .tool-approval-countdown { @apply flex flex-col gap-1 pt-1; }
 .tool-approval-countdown-bar-track { @apply w-full rounded-full overflow-hidden; height: 4px; background: var(--bg-tertiary); }

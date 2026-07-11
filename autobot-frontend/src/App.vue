@@ -575,7 +575,7 @@ import NavOverflowMenu from '@/components/layout/NavOverflowMenu.vue'
 import CommandPalette from '@/components/CommandPalette.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { cacheBuster } from '@/utils/CacheBuster.js';
-import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js';
+import { healthMonitor } from '@/utils/HealthMonitor.js';
 import { initializeNotificationBridge } from '@/utils/notificationBridge';
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js';
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
@@ -838,7 +838,7 @@ export default {
       logger.debug('Starting optimized health monitoring system...');
 
       // Listen for health changes from optimized monitor
-      optimizedHealthMonitor.onHealthChange((healthData) => {
+      healthMonitor.onHealthChange((healthData) => {
         // Update app store with health status
         if (appStore && typeof appStore.setBackendStatus === 'function') {
           const backendStatus = healthData.status.backend;
@@ -994,8 +994,8 @@ export default {
       stopOptimizedNotificationCleanup();
 
       // Destroy optimized health monitor
-      if (optimizedHealthMonitor && typeof optimizedHealthMonitor.destroy === 'function') {
-        optimizedHealthMonitor.destroy();
+      if (healthMonitor && typeof healthMonitor.destroy === 'function') {
+        healthMonitor.destroy();
       }
     });
 
@@ -1118,8 +1118,8 @@ export default {
   position: absolute;
   top: -40px;
   left: 0;
-  background: #000;
-  color: #fff;
+  background: var(--text-primary);
+  color: var(--bg-primary);
   padding: var(--spacing-2) var(--spacing-4);
   text-decoration: none;
   border-radius: 0 0 var(--radius-default) 0;
@@ -1131,7 +1131,7 @@ export default {
 
 .skip-link:focus {
   top: 0;
-  outline: 2px solid #fff;
+  outline: 2px solid var(--bg-primary);
   outline-offset: 2px;
 }
 

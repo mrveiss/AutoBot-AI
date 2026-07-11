@@ -27,7 +27,7 @@ global.document = {
 };
 
 // Import the optimized components
-import { optimizedHealthMonitor } from '../src/utils/OptimizedHealthMonitor.js';
+import { healthMonitor } from '../src/utils/HealthMonitor.js';
 import {
   smartMonitoringController,
   performanceBudgetTracker,
@@ -66,7 +66,7 @@ async function runMonitoringTests() {
 
   try {
     // Test health monitor initialization
-    const healthStatus = optimizedHealthMonitor.getHealthStatus();
+    const healthStatus = healthMonitor.getHealthStatus();
     testResults.healthMonitor = healthStatus.overall !== undefined;
 
     // Test performance tracking

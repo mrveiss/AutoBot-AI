@@ -10,10 +10,10 @@ import { cacheBuster } from './CacheBuster.js';
 import { createLogger } from '@/utils/debugUtils';
 import { getApiBase } from '@/config/ssot-config';
 
-// Create scoped logger for OptimizedHealthMonitor
-const logger = createLogger('OptimizedHealthMonitor');
+// Create scoped logger for HealthMonitor
+const logger = createLogger('HealthMonitor');
 
-class OptimizedHealthMonitor {
+class HealthMonitor {
     constructor() {
         this.isMonitoring = false;
         this.performanceBudget = {
@@ -464,6 +464,23 @@ class OptimizedHealthMonitor {
     }
 
     /**
+     * Reset failure counters and health state to healthy defaults.
+     * Used to recover from accumulated error-notification floods (#11640).
+     */
+    resetFailures() {
+        // Reset to 'healthy' (legacy semantics), NOT 'unknown': the App.vue
+        // listener maps non-healthy/degraded to Disconnected, and the next
+        // real check can be up to intervals.healthy away.
+        this.consecutiveFailures = { backend: 0, websocket: 0 };
+        this.healthStatus.overall = 'healthy';
+        this.healthStatus.backend = 'healthy';
+        this.healthStatus.frontend = 'healthy';
+        this.healthStatus.websocket = 'healthy';
+        this.healthStatus.router = 'healthy';
+        this.notifyHealthChange();
+    }
+
+    /**
      * Cleanup resources
      */
     destroy() {
@@ -481,11 +498,11 @@ class OptimizedHealthMonitor {
 }
 
 // Export singleton instance
-export const optimizedHealthMonitor = new OptimizedHealthMonitor();
+export const healthMonitor = new HealthMonitor();
 
 // Make available globally for debugging
 if (typeof window !== 'undefined') {
-    window.optimizedHealthMonitor = optimizedHealthMonitor;
+    window.healthMonitor = healthMonitor;
 }
 
-export default OptimizedHealthMonitor;
+export default HealthMonitor;
