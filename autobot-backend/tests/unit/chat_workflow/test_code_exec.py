@@ -871,3 +871,6 @@ async def test_collect_broker_results_uses_script_stdout_not_rpc_logs():
     # stdout must NOT have been sourced from container.logs (called with stdout=False).
     _, kwargs = container.logs.call_args
     assert kwargs.get("stdout") is False
+    # stderr-only logs are surfaced (not silently dropped): _parse_logs lumps
+    # them into element 0, so the broker path reads them from there (#11613 review).
+    assert "RESULT clean" in result.stderr

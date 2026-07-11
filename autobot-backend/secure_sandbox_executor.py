@@ -486,7 +486,14 @@ class SecureSandboxExecutor:
     async def _drain_lines(
         self, stream, broker: Any, line_buf: bytes, container, script_out: "list[str]"
     ) -> "Tuple[bool, bytes]":
-        """Route complete lines: sentinel -> broker RPC, others -> *script_out*."""
+        """Route complete lines: sentinel -> broker RPC, others -> *script_out*.
+
+        The sentinel is a MUX separator, not an auth token: a script CAN forge a
+        sentinel-prefixed line, but ``broker.handle_line`` re-validates every call
+        against the injectable allowlist + forbidden_work + per-run budget, so a
+        forged call is exactly equivalent to calling the shim it already has —
+        it gains nothing (GH#11613 security review).
+        """
         from chat_workflow.code_exec.protocol import RPC_SENTINEL_BYTES  # lazy
 
         while b"\n" in line_buf:
@@ -578,7 +585,10 @@ class SecureSandboxExecutor:
             await asyncio.to_thread(container.kill)
             exit_code = -9
         logs = await asyncio.to_thread(lambda: container.logs(stdout=False, stderr=True, stream=False))
-        _, stderr_logs = self._parse_logs(logs)
+        # logs holds stderr only (stdout=False); _parse_logs lumps all text into
+        # its first element, so that IS the stderr here (result stdout comes from
+        # the pump-captured script_stdout, not logs).
+        stderr_logs, _ = self._parse_logs(logs)
         security_events = await self._collect_security_events(container_id)
         result = self._build_sandbox_result(
             exit_code, script_stdout, stderr_logs, time.time() - start_time, container_id, security_events, {}, cfg
