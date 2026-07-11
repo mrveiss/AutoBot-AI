@@ -339,13 +339,22 @@ describe('API Service Integration Tests', () => {
     })
 
     it('handles system API errors', async () => {
-      server.use(
-        http.get(`${API_BASE}/api/health`, () => {
-          return new HttpResponse(null, { status: 503 })
-        })
-      )
+      // 503 is retried 3x with real-time backoff — fake timers keep this
+      // deterministic under parallel-suite CPU load (#11572).
+      vi.useFakeTimers()
+      try {
+        server.use(
+          http.get(`${API_BASE}/api/health`, () => {
+            return new HttpResponse(null, { status: 503 })
+          })
+        )
 
-      await expect(apiService.getSystemHealth()).rejects.toThrow()
+        const expectation = expect(apiService.getSystemHealth()).rejects.toThrow()
+        await vi.runAllTimersAsync()
+        await expectation
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 
@@ -494,53 +503,73 @@ describe('API Service Integration Tests', () => {
 
   describe('Error Handling and Resilience', () => {
     it('handles network connectivity issues', async () => {
-      server.use(
-        http.get(`${API_BASE}/api/health`, () => {
-          return HttpResponse.error()
-        })
-      )
+      // ApiClient.get retries network errors 3x with real-time exponential
+      // backoff (1s + 2s) — fake timers keep this deterministic (#11572).
+      vi.useFakeTimers()
+      try {
+        server.use(
+          http.get(`${API_BASE}/api/health`, () => {
+            return HttpResponse.error()
+          })
+        )
 
-      await expect(apiService.getSystemHealth()).rejects.toThrow()
+        const expectation = expect(apiService.getSystemHealth()).rejects.toThrow()
+        await vi.runAllTimersAsync()
+        await expectation
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('handles malformed JSON responses', async () => {
-      server.use(
-        http.get(`${API_BASE}/api/health`, () => {
-          return new HttpResponse('invalid json{', {
-            headers: { 'Content-Type': 'application/json' }
+      // JSON parse errors are retried like network errors — fake timers
+      // advance through the backoff delays deterministically (#11572).
+      vi.useFakeTimers()
+      try {
+        server.use(
+          http.get(`${API_BASE}/api/health`, () => {
+            return new HttpResponse('invalid json{', {
+              headers: { 'Content-Type': 'application/json' }
+            })
           })
-        })
-      )
+        )
 
-      // Malformed JSON with 200 status — response.json() throws in ApiClient.get
-      await expect(apiService.getSystemHealth()).rejects.toThrow()
+        // Malformed JSON with 200 status — response.json() throws in ApiClient.get
+        const expectation = expect(apiService.getSystemHealth()).rejects.toThrow()
+        await vi.runAllTimersAsync()
+        await expectation
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('handles partial API failures gracefully', async () => {
       vi.useFakeTimers()
-      let callCount = 0
+      try {
+        let callCount = 0
 
-      server.use(
-        http.get(`${API_BASE}/api/health`, () => {
-          callCount++
-          if (callCount <= 3) {
-            // ApiClient retries up to 3 times for 5xx errors,
-            // so fail all 3 retry attempts to ensure the first call rejects
-            return new HttpResponse(null, { status: 500 })
-          }
-          return HttpResponse.json(
-            createMockApiResponse({ status: 'healthy' })
-          )
-        })
-      )
+        server.use(
+          http.get(`${API_BASE}/api/health`, () => {
+            callCount++
+            if (callCount <= 3) {
+              // ApiClient retries up to 3 times for 5xx errors,
+              // so fail all 3 retry attempts to ensure the first call rejects
+              return new HttpResponse(null, { status: 500 })
+            }
+            return HttpResponse.json(
+              createMockApiResponse({ status: 'healthy' })
+            )
+          })
+        )
 
-      // First call should fail (after exhausting retries).
-      // Use fake timers to advance through exponential backoff delays.
-      const failPromise = expect(apiService.getSystemHealth()).rejects.toThrow()
-      await vi.runAllTimersAsync()
-      await failPromise
-
-      vi.useRealTimers()
+        // First call should fail (after exhausting retries).
+        // Use fake timers to advance through exponential backoff delays.
+        const failPromise = expect(apiService.getSystemHealth()).rejects.toThrow()
+        await vi.runAllTimersAsync()
+        await failPromise
+      } finally {
+        vi.useRealTimers()
+      }
 
       // Second call should succeed (simulating recovery)
       const result = await apiService.getSystemHealth()
