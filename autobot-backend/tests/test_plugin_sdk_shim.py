@@ -13,7 +13,6 @@ there is exactly ONE PluginRegistry / CapabilityChecker singleton at runtime.
 from autobot_shared.plugin_sdk import base as shared_base
 from autobot_shared.plugin_sdk import capabilities as shared_capabilities
 from autobot_shared.plugin_sdk import loader as shared_loader
-
 from plugin_sdk import base as shim_base
 from plugin_sdk import capabilities as shim_capabilities
 from plugin_sdk import loader as shim_loader
