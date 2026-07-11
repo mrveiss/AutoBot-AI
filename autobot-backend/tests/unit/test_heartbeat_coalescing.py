@@ -20,7 +20,6 @@ is inspected by the tests.
 from __future__ import annotations
 
 import importlib.util
-import sys
 import types
 import uuid
 from pathlib import Path
@@ -29,17 +28,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from tests.fixtures.mocks import ModuleStubRegistry  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Stubs + direct-file module loading
 # ---------------------------------------------------------------------------
 
 
+_stubs = ModuleStubRegistry()
+
+
 def _make_stub(name: str, **attrs: Any) -> types.ModuleType:
-    mod = types.ModuleType(name)
-    for k, v in attrs.items():
-        setattr(mod, k, v)
-    sys.modules[name] = mod
-    return mod
+    return _stubs.stub(name, **attrs)
 
 
 def _load_scheduler() -> types.ModuleType:
@@ -62,20 +62,21 @@ def _load_scheduler() -> types.ModuleType:
         HEARTBEAT_RUN_STARTED="heartbeat_run_started",
     )
     _make_stub("live_event_manager", publish_live_event=AsyncMock())
+    _make_stub("events.bus", publish_event=AsyncMock())
 
     # models.heartbeat — loaded directly so Column/JSONB work; we swap Base
     backend_root = Path(__file__).parents[3] / "autobot-backend"
     hb_spec = importlib.util.spec_from_file_location("models.heartbeat", backend_root / "models" / "heartbeat.py")
     assert hb_spec and hb_spec.loader
     hb_mod = importlib.util.module_from_spec(hb_spec)
-    sys.modules["models"] = types.ModuleType("models")
-    sys.modules["models.heartbeat"] = hb_mod
+    _stubs.register("models", types.ModuleType("models"))
+    _stubs.register("models.heartbeat", hb_mod)
     hb_spec.loader.exec_module(hb_mod)  # type: ignore[union-attr]
 
     # models.agent
     _make_stub("models.agent", Agent=MagicMock())
 
-    # services.run_jwt
+    # services.run_jwt / task_claim / task_workspace
     _make_stub("services")
     _make_stub(
         "services.run_jwt",
@@ -83,6 +84,8 @@ def _load_scheduler() -> types.ModuleType:
         mint_run_jwt=AsyncMock(),
         revoke_run_jwt_async=AsyncMock(),
     )
+    _make_stub("services.task_claim", renew_claim=AsyncMock())
+    _make_stub("services.task_workspace")
 
     # Load the scheduler
     sched_spec = importlib.util.spec_from_file_location(
@@ -90,12 +93,15 @@ def _load_scheduler() -> types.ModuleType:
     )
     assert sched_spec and sched_spec.loader
     sched_mod = importlib.util.module_from_spec(sched_spec)
-    sys.modules["services.heartbeat_scheduler"] = sched_mod
+    _stubs.register("services.heartbeat_scheduler", sched_mod)
     sched_spec.loader.exec_module(sched_mod)  # type: ignore[union-attr]
     return sched_mod
 
 
 _mod = _load_scheduler()
+# Undo the sys.modules stubs so later test modules import the real code
+# (GH#11604 — the stubs shadowed services.task_claim for the whole session).
+_stubs.restore()
 HeartbeatScheduler = _mod.HeartbeatScheduler
 
 
