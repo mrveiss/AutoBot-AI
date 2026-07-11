@@ -575,7 +575,7 @@ import NavOverflowMenu from '@/components/layout/NavOverflowMenu.vue'
 import CommandPalette from '@/components/CommandPalette.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { cacheBuster } from '@/utils/CacheBuster.js';
-import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js';
+import { healthMonitor } from '@/utils/HealthMonitor.js';
 import { initializeNotificationBridge } from '@/utils/notificationBridge';
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js';
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
@@ -838,7 +838,7 @@ export default {
       logger.debug('Starting optimized health monitoring system...');
 
       // Listen for health changes from optimized monitor
-      optimizedHealthMonitor.onHealthChange((healthData) => {
+      healthMonitor.onHealthChange((healthData) => {
         // Update app store with health status
         if (appStore && typeof appStore.setBackendStatus === 'function') {
           const backendStatus = healthData.status.backend;
@@ -994,8 +994,8 @@ export default {
       stopOptimizedNotificationCleanup();
 
       // Destroy optimized health monitor
-      if (optimizedHealthMonitor && typeof optimizedHealthMonitor.destroy === 'function') {
-        optimizedHealthMonitor.destroy();
+      if (healthMonitor && typeof healthMonitor.destroy === 'function') {
+        healthMonitor.destroy();
       }
     });
 

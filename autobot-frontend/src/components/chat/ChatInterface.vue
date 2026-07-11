@@ -641,7 +641,7 @@ provide('submitOverseerQuery', submitOverseerQuery)
 
 // Connection state with stabilized status management.
 // #6773: backend-health is now sourced from `appStore.backendStatus`, which is
-// driven by `OptimizedHealthMonitor` (the canonical /api/system/health poller
+// driven by `HealthMonitor` (the canonical /api/system/health poller
 // wired in App.vue). Removed the local 60 s heartbeat poller that previously
 // also hit /api/system/health, eliminating duplicate polling.
 const baseConnectionStatus = ref(t('status.connected'))
@@ -962,9 +962,9 @@ const onCommandCommented = async (commentData: { command: string; comment: strin
 }
 
 // #6773: connection state is mirrored from `appStore.backendStatus`, which
-// `OptimizedHealthMonitor` updates from /api/system/health. Replaces the
+// `HealthMonitor` updates from /api/system/health. Replaces the
 // previous 60 s `appConfig.validateConnection()` poller — that poller was
-// hitting the same endpoint as `OptimizedHealthMonitor`, producing duplicate
+// hitting the same endpoint as `HealthMonitor`, producing duplicate
 // /api/system/health requests per polling interval.
 const syncConnectionFromStore = (): void => {
   const cls = appStore.backendStatus.class
