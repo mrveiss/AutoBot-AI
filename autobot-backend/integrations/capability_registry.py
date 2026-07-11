@@ -156,6 +156,7 @@ def _register_stt_if_available(registry: CapabilityRegistry) -> None:
         # Use the first available provider from the speech registry.  The
         # language-keyed registry exposes providers per-language; we surface a
         # generic "en" provider as the default STT capability endpoint.
+        # Non-en language registration in the capability layer is tracked in #11617.
         provider = speech_registry.get_provider("en")
         if provider is None:
             logger.debug("No STT provider registered for 'en' — STT capability skipped")

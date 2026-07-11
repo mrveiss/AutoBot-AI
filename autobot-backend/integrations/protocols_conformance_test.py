@@ -41,7 +41,7 @@ def slack_config() -> IntegrationConfig:
 
 @pytest.fixture()
 def discord_config() -> IntegrationConfig:
-    return IntegrationConfig(name="discord", provider="discord", token="Bot test-token")
+    return IntegrationConfig(name="discord", provider="discord", token="test-token")
 
 
 @pytest.fixture()
@@ -251,7 +251,7 @@ class TestDiscordAdapterFunctional:
         # Verify the method was called with correct URL fragment and auth header.
         call_kwargs = integration._make_discord_request.call_args
         assert "channels/789/messages" in call_kwargs[0][1]  # url positional arg
-        assert call_kwargs[0][2]["Authorization"] == f"Bot {integration.config.token}"
+        assert call_kwargs[0][2]["Authorization"] == "Bot test-token"
         assert result == {"messages": raw_body, "channel_id": "789"}
 
 
