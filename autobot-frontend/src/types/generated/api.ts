@@ -33705,7 +33705,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/status": {
+    "/api/web-research/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -33716,7 +33716,7 @@ export interface paths {
          * Get Research Status
          * @description Get current web research status and configuration
          */
-        get: operations["get_research_status_api_web_research_settings_web_research_status_get"];
+        get: operations["get_research_status_api_web_research_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -33725,7 +33725,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/enable": {
+    "/api/web-research/enable": {
         parameters: {
             query?: never;
             header?: never;
@@ -33738,14 +33738,14 @@ export interface paths {
          * Enable Web Research
          * @description Enable web research functionality
          */
-        post: operations["enable_web_research_api_web_research_settings_web_research_enable_post"];
+        post: operations["enable_web_research_api_web_research_enable_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/disable": {
+    "/api/web-research/disable": {
         parameters: {
             query?: never;
             header?: never;
@@ -33758,14 +33758,14 @@ export interface paths {
          * Disable Web Research
          * @description Disable web research functionality
          */
-        post: operations["disable_web_research_api_web_research_settings_web_research_disable_post"];
+        post: operations["disable_web_research_api_web_research_disable_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/settings": {
+    "/api/web-research/settings": {
         parameters: {
             query?: never;
             header?: never;
@@ -33776,12 +33776,12 @@ export interface paths {
          * Get Research Settings
          * @description Get current web research settings
          */
-        get: operations["get_research_settings_api_web_research_settings_web_research_settings_get"];
+        get: operations["get_research_settings_api_web_research_settings_get"];
         /**
          * Update Research Settings
          * @description Update web research settings
          */
-        put: operations["update_research_settings_api_web_research_settings_web_research_settings_put"];
+        put: operations["update_research_settings_api_web_research_settings_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -33789,7 +33789,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/test": {
+    "/api/web-research/test": {
         parameters: {
             query?: never;
             header?: never;
@@ -33802,14 +33802,14 @@ export interface paths {
          * Test Web Research
          * @description Test web research functionality
          */
-        post: operations["test_web_research_api_web_research_settings_web_research_test_post"];
+        post: operations["test_web_research_api_web_research_test_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/clear-cache": {
+    "/api/web-research/clear-cache": {
         parameters: {
             query?: never;
             header?: never;
@@ -33822,14 +33822,14 @@ export interface paths {
          * Clear Research Cache
          * @description Clear web research cache
          */
-        post: operations["clear_research_cache_api_web_research_settings_web_research_clear_cache_post"];
+        post: operations["clear_research_cache_api_web_research_clear_cache_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/reset-circuit-breakers": {
+    "/api/web-research/reset-circuit-breakers": {
         parameters: {
             query?: never;
             header?: never;
@@ -33842,14 +33842,14 @@ export interface paths {
          * Reset Circuit Breakers
          * @description Reset all circuit breakers for web research
          */
-        post: operations["reset_circuit_breakers_api_web_research_settings_web_research_reset_circuit_breakers_post"];
+        post: operations["reset_circuit_breakers_api_web_research_reset_circuit_breakers_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/usage-stats": {
+    "/api/web-research/usage-stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -33860,7 +33860,7 @@ export interface paths {
          * Get Usage Stats
          * @description Get web research usage statistics
          */
-        get: operations["get_usage_stats_api_web_research_settings_web_research_usage_stats_get"];
+        get: operations["get_usage_stats_api_web_research_usage_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -144813,7 +144813,7 @@ export interface operations {
             };
         };
     };
-    get_research_status_api_web_research_settings_web_research_status_get: {
+    get_research_status_api_web_research_status_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -144833,7 +144833,7 @@ export interface operations {
             };
         };
     };
-    enable_web_research_api_web_research_settings_web_research_enable_post: {
+    enable_web_research_api_web_research_enable_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -144853,7 +144853,7 @@ export interface operations {
             };
         };
     };
-    disable_web_research_api_web_research_settings_web_research_disable_post: {
+    disable_web_research_api_web_research_disable_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -144873,7 +144873,7 @@ export interface operations {
             };
         };
     };
-    get_research_settings_api_web_research_settings_web_research_settings_get: {
+    get_research_settings_api_web_research_settings_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -144893,7 +144893,7 @@ export interface operations {
             };
         };
     };
-    update_research_settings_api_web_research_settings_web_research_settings_put: {
+    update_research_settings_api_web_research_settings_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -144926,7 +144926,7 @@ export interface operations {
             };
         };
     };
-    test_web_research_api_web_research_settings_web_research_test_post: {
+    test_web_research_api_web_research_test_post: {
         parameters: {
             query?: {
                 query?: string;
@@ -144957,7 +144957,7 @@ export interface operations {
             };
         };
     };
-    clear_research_cache_api_web_research_settings_web_research_clear_cache_post: {
+    clear_research_cache_api_web_research_clear_cache_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -144977,7 +144977,7 @@ export interface operations {
             };
         };
     };
-    reset_circuit_breakers_api_web_research_settings_web_research_reset_circuit_breakers_post: {
+    reset_circuit_breakers_api_web_research_reset_circuit_breakers_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -144997,7 +144997,7 @@ export interface operations {
             };
         };
     };
-    get_usage_stats_api_web_research_settings_web_research_usage_stats_get: {
+    get_usage_stats_api_web_research_usage_stats_get: {
         parameters: {
             query?: never;
             header?: never;
