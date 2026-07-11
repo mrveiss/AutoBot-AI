@@ -52,7 +52,6 @@ sys.modules["redis.asyncio"].Redis = MagicMock  # type: ignore[attr-defined]
 
 from services.knowledge.stats_service import fetch_kb_core_stats  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -144,9 +143,11 @@ class TestBothEndpointsShareSameSource:
         fetch_mock = AsyncMock(return_value=dict(_STATS_FIXTURE))
 
         # Patch at the import site inside api.knowledge
-        with patch("api.knowledge.fetch_kb_core_stats", fetch_mock), patch(
-            "api.knowledge.get_or_create_knowledge_base", AsyncMock(return_value=kb)
-        ), patch("api.knowledge.RAG_AVAILABLE", False):
+        with (
+            patch("api.knowledge.fetch_kb_core_stats", fetch_mock),
+            patch("api.knowledge.get_or_create_knowledge_base", AsyncMock(return_value=kb)),
+            patch("api.knowledge.RAG_AVAILABLE", False),
+        ):
             from api.knowledge import get_knowledge_stats
 
             # Build a minimal fake FastAPI request
@@ -163,8 +164,9 @@ class TestBothEndpointsShareSameSource:
         kb = _FakeKB()
         fetch_mock = AsyncMock(return_value=dict(_STATS_FIXTURE))
 
-        with patch("api.knowledge_maintenance.fetch_kb_core_stats", fetch_mock), patch(
-            "api.knowledge_maintenance.get_or_create_knowledge_base", AsyncMock(return_value=kb)
+        with (
+            patch("api.knowledge_maintenance.fetch_kb_core_stats", fetch_mock),
+            patch("api.knowledge_maintenance.get_or_create_knowledge_base", AsyncMock(return_value=kb)),
         ):
             from api.knowledge_maintenance import get_health_dashboard
 
