@@ -225,7 +225,9 @@ if echo "$COMMAND_TO_CHECK" | grep -qE '(curl|wget)[[:space:]].*\|[[:space:]]*(b
   deny "Blocked: piping downloaded content directly to a shell is dangerous. Download first, inspect, then execute."
 fi
 
-if echo "$COMMAND_TO_CHECK" | grep -qE '(mkfs|dd[[:space:]]+if=|>[[:space:]]*/dev/)'; then
+# Redirect guard targets raw block devices only — matching all of /dev/ would
+# false-positive on the ubiquitous stderr/stdout null-discard idiom (#11593).
+if echo "$COMMAND_TO_CHECK" | grep -qE '(mkfs|dd[[:space:]]+if=|>[[:space:]]*/dev/(sd|hd|nvme|vd|xvd|mmcblk|loop|dm-|md))'; then
   deny "Blocked: destructive disk operation detected. This can cause irreversible data loss."
 fi
 
