@@ -17,14 +17,16 @@ Key functions:
 """
 
 import asyncio
+import fcntl
 import json
 import os
 import re
 import subprocess
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 from autobot_shared.logging_manager import get_logger
 
@@ -37,7 +39,41 @@ _REPO_ROOT = Path(os.environ.get("AUTOBOT_WORKSPACE_REPO_ROOT") or Path(__file__
 _WORKSPACE_BASE_NAME = ".task-workspaces"
 _META_FILENAME = ".workspace-meta.json"
 _ACTIVE_LOCK_FILENAME = ".active-lock"
+# GH#11059: an flock-backed guard file serialises "mark active" (resume/create)
+# against "check-and-evict" (cleanup/limit) across processes — the Celery-beat
+# cleanup worker and the request-handler resume path run in different processes.
+_GUARD_LOCK_FILENAME = ".wt-guard"
 _MAX_WORKTREES_PER_AGENT = 5
+
+
+@contextmanager
+def _worktree_guard(workspace_dir: Path, *, blocking: bool = True) -> Iterator[bool]:
+    """Hold a cross-process exclusive ``flock`` on a per-worktree guard file.
+
+    Serialises a resume/create's ``.active-lock`` touch against a cleanup/limit
+    eviction so a just-resumed worktree can never be force-evicted in the TOCTOU
+    window (GH#11059). Yields ``True`` while the lock is held. With
+    ``blocking=False`` it yields ``False`` (instead of raising) when another
+    holder — a resume in progress — already owns the guard.
+    """
+    fd = os.open(str(workspace_dir / _GUARD_LOCK_FILENAME), os.O_CREAT | os.O_RDWR, 0o600)
+    acquired = False
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+            acquired = True
+        except OSError:
+            if blocking:
+                raise
+        yield acquired
+    finally:
+        if acquired:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except OSError:
+                pass
+        os.close(fd)
+
 
 # task_id must be a safe identifier: UUID hex chars + hyphens, max 128 chars.
 # Rejects path-traversal payloads like "../../etc/passwd" (GH#6471 blocker 2).
@@ -86,14 +122,21 @@ def allocate(
     meta_file = workspace_dir / _META_FILENAME
     if workspace_dir.exists() and meta_file.exists():
         try:
-            with meta_file.open() as fh:
-                meta = json.load(fh)
+            # Mark active UNDER the guard so a concurrent cleanup/eviction can't
+            # remove this worktree between our touch and its check (GH#11059).
+            with _worktree_guard(workspace_dir):
+                # Re-check under the guard: an eviction may have removed the
+                # worktree between the exists() check above and the lock.
+                if not (workspace_dir.exists() and meta_file.exists()):
+                    raise FileNotFoundError(str(workspace_dir))
+                with meta_file.open() as fh:
+                    meta = json.load(fh)
+                (workspace_dir / _ACTIVE_LOCK_FILENAME).touch()
             logger.info(
                 "Resuming existing workspace for task=%s at %s",
                 task_id,
                 workspace_dir,
             )
-            (workspace_dir / _ACTIVE_LOCK_FILENAME).touch()
             return WorkspaceInfo(
                 task_id=task_id,
                 agent_id=agent_id,
@@ -118,7 +161,8 @@ def allocate(
         "branch": branch,
     }
     (workspace_dir / _META_FILENAME).write_text(json.dumps(meta, indent=2), encoding="utf-8")
-    (workspace_dir / _ACTIVE_LOCK_FILENAME).touch()
+    with _worktree_guard(workspace_dir):  # GH#11059: mark active under the guard
+        (workspace_dir / _ACTIVE_LOCK_FILENAME).touch()
 
     logger.info(
         "Allocated new workspace for task=%s agent=%s at %s",
@@ -140,6 +184,7 @@ def release(
     task_id: str,
     repo_root: Optional[Path] = None,
     keep_on_failure: bool = False,
+    force_branch: bool = True,
 ) -> None:
     """
     Remove the worktree for task_id.
@@ -147,6 +192,12 @@ def release(
     Deletes the branch as well unless it has unpushed commits.  When
     keep_on_failure is True the worktree is left in place for inspection
     and only a warning is logged on error.
+
+    ``force_branch`` controls the branch delete: ``True`` (explicit release)
+    uses ``git branch -D`` (force); ``False`` (automatic cleanup/eviction) uses
+    ``git branch -d``, which refuses to drop a branch with unmerged commits so
+    an aged-out worktree can never silently destroy committed-but-unmerged work
+    (GH#11059).
 
     Raises ValueError if task_id is not a safe identifier.
     """
@@ -170,9 +221,11 @@ def release(
             capture_output=True,
             text=True,
         )
-        # Best-effort branch deletion — ignore failures (e.g. branch pushed / not found)
+        # Best-effort branch deletion — ignore failures (e.g. branch pushed / not
+        # found). Cleanup/eviction passes force_branch=False → ``-d`` keeps a
+        # branch with unmerged commits rather than force-dropping it (GH#11059).
         subprocess.run(  # nosec B603 B607 - fixed git argv; branch name constructed from task_id
-            ["git", "branch", "-D", branch],
+            ["git", "branch", "-D" if force_branch else "-d", branch],
             cwd=str(root),
             check=False,
             capture_output=True,
@@ -225,14 +278,17 @@ def cleanup_stale(
         if age_ts > cutoff:
             continue  # too young
 
-        if (entry / _ACTIVE_LOCK_FILENAME).exists():
-            logger.debug("Skipping locked workspace task=%s during stale cleanup", entry.name[len("task-") :])
-            continue
-
         task_id = entry.name[len("task-") :]
         try:
-            release(task_id, root, keep_on_failure=True)
-            cleaned.append(task_id)
+            # Guard the check-and-evict so a resume that touches .active-lock in
+            # the TOCTOU window is respected: skip if a resume holds the guard, or
+            # if .active-lock appeared once we hold it (GH#11059).
+            with _worktree_guard(entry, blocking=False) as guarded:
+                if not guarded or (entry / _ACTIVE_LOCK_FILENAME).exists():
+                    logger.debug("Skipping in-use workspace task=%s during stale cleanup", task_id)
+                    continue
+                release(task_id, root, keep_on_failure=True, force_branch=False)
+                cleaned.append(task_id)
         except Exception as exc:
             logger.warning("Stale cleanup failed for task=%s: %s", task_id, exc)
 
@@ -362,13 +418,21 @@ def _enforce_limit(agent_id: str, max_per_agent: int, root: Path) -> None:
 
     eviction_candidates.sort()  # oldest first
     for _, oldest_task_id in eviction_candidates[:overage]:
-        logger.info(
-            "Evicting oldest workspace task=%s for agent=%s (limit=%d)",
-            oldest_task_id,
-            agent_id,
-            max_per_agent,
-        )
+        entry = workspace_base / f"task-{oldest_task_id}"
         try:
-            release(oldest_task_id, root)
+            # Guard the check-and-evict against a concurrent resume of this
+            # worktree (GH#11059): a resume between candidate-selection and here
+            # holds the guard / re-adds .active-lock → skip it.
+            with _worktree_guard(entry, blocking=False) as guarded:
+                if not guarded or (entry / _ACTIVE_LOCK_FILENAME).exists():
+                    logger.debug("Skipping now-active workspace task=%s during limit eviction", oldest_task_id)
+                    continue
+                logger.info(
+                    "Evicting oldest workspace task=%s for agent=%s (limit=%d)",
+                    oldest_task_id,
+                    agent_id,
+                    max_per_agent,
+                )
+                release(oldest_task_id, root, force_branch=False)
         except Exception as exc:
             logger.warning("Eviction failed for task=%s: %s", oldest_task_id, exc)
