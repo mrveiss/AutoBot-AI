@@ -15,18 +15,23 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, func
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, declared_attr, mapped_column
 from sqlalchemy.types import Uuid
 
 from autobot_shared.time_utils import now_utc
 
 
-class Base(DeclarativeBase):
+class Base(AsyncAttrs, DeclarativeBase):
     """Base class for all SQLAlchemy models.
 
     Provides automatic created_at/updated_at timestamp columns to all models.
     Models should inherit from Base only — do not inherit from TimestampMixin
     separately, as it will cause metaclass conflicts (#4300).
+
+    #11684: mixes in ``AsyncAttrs`` so every model exposes ``awaitable_attrs`` —
+    greenlet-safe async access to un-loaded relationships/columns under an
+    AsyncSession. Purely additive (adds one accessor; no behavioral change).
     """
 
     # Timestamp columns provided to all models
