@@ -246,7 +246,7 @@ class _FakeRedis:
         return len(self._lists[key])
 
     async def ltrim(self, key: str, start: int, stop: int) -> None:
-        self._lists[key] = self._lists[key][start: stop + 1]
+        self._lists[key] = self._lists[key][start : stop + 1]
 
     # PIPELINE (M4 optimistic CAS)
     @asynccontextmanager
@@ -470,9 +470,7 @@ class TestTakeoverManagerCrossWorker:
         session_id = await b.approve_takeover(request_id, human_operator="op")
 
         # Execute pause_task action
-        result = await a.execute_takeover_action(
-            session_id, "pause_task", {"task_id": "task-X"}
-        )
+        result = await a.execute_takeover_action(session_id, "pause_task", {"task_id": "task-X"})
         assert result.get("status") == "task_paused"
 
         # task-X must now be in the shared paused set
@@ -481,9 +479,7 @@ class TestTakeoverManagerCrossWorker:
         assert "task-X" in encoded, f"task-X not in paused set: {encoded}"
 
         # Execute resume_task action
-        result2 = await a.execute_takeover_action(
-            session_id, "resume_task", {"task_id": "task-X"}
-        )
+        result2 = await a.execute_takeover_action(session_id, "resume_task", {"task_id": "task-X"})
         assert result2.get("status") == "task_resumed"
 
         members_after = await redis.smembers("autobot:takeover:paused_tasks")
@@ -694,11 +690,13 @@ class TestDesktopStreamingManagerCrossWorker:
 
         # B publishes terminate_requested (different worker_id)
         b_worker_id = "worker-B-different"
-        msg = json.dumps({
-            "worker_id": b_worker_id,
-            "type": "session_terminate_requested",
-            "payload": {"session_id": session_id},
-        })
+        msg = json.dumps(
+            {
+                "worker_id": b_worker_id,
+                "type": "session_terminate_requested",
+                "payload": {"session_id": session_id},
+            }
+        )
 
         await a._handle_pubsub_message(msg.encode())
 

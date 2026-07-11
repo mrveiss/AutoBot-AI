@@ -45,9 +45,7 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Cross-worker constants — env-var-backed, never hard-coded (#11639)
 # ---------------------------------------------------------------------------
-_DESKTOP_EVENTS_CHANNEL: str = os.environ.get(
-    "AUTOBOT_DESKTOP_EVENTS_CHANNEL", "autobot:desktop:events"
-)
+_DESKTOP_EVENTS_CHANNEL: str = os.environ.get("AUTOBOT_DESKTOP_EVENTS_CHANNEL", "autobot:desktop:events")
 _DESKTOP_SESSIONS_KEY: str = "autobot:desktop:sessions"  # HASH: session_id -> JSON metadata
 _WORKER_ID: str = str(uuid.uuid4())  # unique per-process; set once at import time
 
@@ -747,9 +745,7 @@ class DesktopStreamingManager:
     async def start(self) -> None:
         """Start the cross-worker pub/sub subscriber task."""
         if self._subscriber_task is None or self._subscriber_task.done():
-            self._subscriber_task = asyncio.create_task(
-                self._pubsub_relay_loop(), name="desktop-pubsub-relay"
-            )
+            self._subscriber_task = asyncio.create_task(self._pubsub_relay_loop(), name="desktop-pubsub-relay")
             # Register for construct-free shutdown via stop_desktop_relay()
             global _relay_manager
             _relay_manager = self
@@ -776,6 +772,7 @@ class DesktopStreamingManager:
             return self._redis
         try:
             from autobot_shared.redis_client import get_async_redis_client
+
             return await get_async_redis_client()
         except Exception:
             return None
@@ -899,7 +896,9 @@ class DesktopStreamingManager:
             except Exception as e:
                 logger.warning(
                     "Desktop pub/sub relay error (worker=%s): %s — retrying in %ds",
-                    _WORKER_ID, e, _RETRY_DELAY,
+                    _WORKER_ID,
+                    e,
+                    _RETRY_DELAY,
                 )
             # M5: always sleep between subscription passes (error or clean exit)
             await asyncio.sleep(_RETRY_DELAY)
@@ -953,7 +952,8 @@ class DesktopStreamingManager:
                 if session_id in self.session_clients or session_id in self.vnc_manager.active_sessions:
                     logger.info(
                         "Desktop relay: terminate_requested for owned session %s (worker=%s)",
-                        session_id, _WORKER_ID,
+                        session_id,
+                        _WORKER_ID,
                     )
                     await self._local_terminate(session_id)
                 return
@@ -1319,10 +1319,7 @@ class DesktopStreamingManager:
         Returns:
             True if termination succeeded or was accepted, False otherwise.
         """
-        locally_owned = (
-            session_id in self.session_clients
-            or session_id in self.vnc_manager.active_sessions
-        )
+        locally_owned = session_id in self.session_clients or session_id in self.vnc_manager.active_sessions
 
         if not locally_owned:
             # H3: delegate to the owner worker via pub/sub
@@ -1330,9 +1327,9 @@ class DesktopStreamingManager:
             if meta is None:
                 return False
             logger.info(
-                "terminate_streaming_session: session %s not local — "
-                "publishing terminate_requested (worker=%s)",
-                session_id, _WORKER_ID,
+                "terminate_streaming_session: session %s not local — " "publishing terminate_requested (worker=%s)",
+                session_id,
+                _WORKER_ID,
             )
             await self._publish_event("session_terminate_requested", {"session_id": session_id})
             return True  # accepted; owner will complete teardown asynchronously

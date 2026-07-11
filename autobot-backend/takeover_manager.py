@@ -43,16 +43,14 @@ def _resolve_pending_ttl() -> int:
         value = int(raw)
     except ValueError:
         logger.warning(
-            "AUTOBOT_TAKEOVER_PENDING_TTL_SECONDS=%r is not an integer; "
-            "falling back to %ds",
+            "AUTOBOT_TAKEOVER_PENDING_TTL_SECONDS=%r is not an integer; " "falling back to %ds",
             raw,
             _DEFAULT_PENDING_TTL_SECONDS,
         )
         return _DEFAULT_PENDING_TTL_SECONDS
     if value <= 0:
         logger.warning(
-            "AUTOBOT_TAKEOVER_PENDING_TTL_SECONDS=%d must be positive; "
-            "falling back to %ds",
+            "AUTOBOT_TAKEOVER_PENDING_TTL_SECONDS=%d must be positive; " "falling back to %ds",
             value,
             _DEFAULT_PENDING_TTL_SECONDS,
         )
@@ -64,13 +62,13 @@ _PENDING_TTL_SECONDS: int = _resolve_pending_ttl()
 
 # Redis key namespace
 _NS = "autobot:takeover"
-_KEY_PENDING = f"{_NS}:pending"           # STRING prefix; full key = {_KEY_PENDING}:<id>
+_KEY_PENDING = f"{_NS}:pending"  # STRING prefix; full key = {_KEY_PENDING}:<id>
 _KEY_PENDING_INDEX = f"{_NS}:pending_index"  # SET of active request IDs
 # M4: sessions stored as individual STRING keys (WATCHable) rather than one HASH.
-_KEY_SESSION = f"{_NS}:session"           # STRING prefix; full key = {_KEY_SESSION}:<id>
+_KEY_SESSION = f"{_NS}:session"  # STRING prefix; full key = {_KEY_SESSION}:<id>
 _KEY_SESSION_INDEX = f"{_NS}:session_index"  # SET of live session IDs
-_KEY_PAUSED = f"{_NS}:paused_tasks"       # SET of paused task IDs
-_KEY_REQ_TASK = f"{_NS}:request_task"     # HASH: request_id -> memory task_id
+_KEY_PAUSED = f"{_NS}:paused_tasks"  # SET of paused task IDs
+_KEY_REQ_TASK = f"{_NS}:request_task"  # HASH: request_id -> memory task_id
 # Completed-session history: capped list of compact JSON records (ring buffer).
 _KEY_SESSION_HISTORY = f"{_NS}:session_history"
 _SESSION_HISTORY_MAX = 200  # keep last 200 completed/cancelled records
@@ -236,6 +234,7 @@ class TakeoverManager:
             return self._redis
         try:
             from autobot_shared.redis_client import get_async_redis_client
+
             return await get_async_redis_client()
         except Exception:
             return None
@@ -277,9 +276,7 @@ class TakeoverManager:
     # pending_requests helpers
     # ------------------------------------------------------------------
 
-    async def _pending_set(
-        self, request_id: str, request: TakeoverRequest, timeout_seconds: int | None = None
-    ) -> None:
+    async def _pending_set(self, request_id: str, request: TakeoverRequest, timeout_seconds: int | None = None) -> None:
         """Store a pending request in Redis with TTL.
 
         M3: Single atomic SET with ex= so TTL is set atomically; honours the
@@ -488,9 +485,7 @@ class TakeoverManager:
             self._latch_redis_fallback(exc)
             return session_id in self._fb_sessions
 
-    async def _session_mutate(
-        self, session_id: str, mutate_fn: Callable, attempts: int = 3
-    ) -> TakeoverSession | None:
+    async def _session_mutate(self, session_id: str, mutate_fn: Callable, attempts: int = 3) -> TakeoverSession | None:
         """Optimistic read-modify-write on a session STRING key.
 
         M4: WATCH the session key; if another writer commits between our GET
@@ -978,6 +973,7 @@ class TakeoverManager:
 
         M4: Uses _session_mutate for read-modify-write safety.
         """
+
         def _mutate(session: TakeoverSession) -> TakeoverSession | None:
             if session.state != TakeoverState.ACTIVE:
                 return None
@@ -998,6 +994,7 @@ class TakeoverManager:
 
         M4: Uses _session_mutate for read-modify-write safety.
         """
+
         def _mutate(session: TakeoverSession) -> TakeoverSession | None:
             if session.state != TakeoverState.PAUSED:
                 return None
@@ -1066,9 +1063,7 @@ class TakeoverManager:
         await self._notify_state_change("session_completed", session_id)
         return True
 
-    async def _archive_completed_session(
-        self, session: TakeoverSession, handback_notes: str | None
-    ) -> None:
+    async def _archive_completed_session(self, session: TakeoverSession, handback_notes: str | None) -> None:
         """Push a compact history record to the capped Redis list."""
         r = await self._redis_client()
         if r is None:
@@ -1312,9 +1307,23 @@ def _execute_action_sync(action_type: str, action_data: Dict[str, Any]) -> Dict[
     if action_type == "system_command":
         command = action_data.get("command", "")
         safe_commands = {
-            "ps", "top", "htop", "d", "free", "uptime", "whoami", "pwd",
-            "ls", "cat", "less", "head", "tail", "grep",
-            "systemctl status", "docker ps", "docker logs",
+            "ps",
+            "top",
+            "htop",
+            "d",
+            "free",
+            "uptime",
+            "whoami",
+            "pwd",
+            "ls",
+            "cat",
+            "less",
+            "head",
+            "tail",
+            "grep",
+            "systemctl status",
+            "docker ps",
+            "docker logs",
         }
         if any(command.startswith(c) for c in safe_commands):
             return {"status": "command_executed", "command": command}
