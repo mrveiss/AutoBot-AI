@@ -198,6 +198,9 @@ for _svc_mod in [
 # still work (patch targets a real module just as well).
 import importlib.util as _svc_ilu  # noqa: E402
 
+# Also bind on the parent package: `import services.tool_output_filter as mod`
+# resolves via getattr(services, "tool_output_filter"), not sys.modules directly,
+# so without this the package stub's catch-all __getattr__ returns a MagicMock.
 for _real_svc, _real_rel in [
     ("services.tool_output_filter", "services/tool_output_filter.py"),
 ]:
@@ -207,6 +210,9 @@ for _real_svc, _real_rel in [
         sys.modules[_real_svc] = _rmod
         try:
             _rspec.loader.exec_module(_rmod)
+            _parent_name, _, _child_name = _real_svc.rpartition(".")
+            if _parent_name in sys.modules:
+                setattr(sys.modules[_parent_name], _child_name, _rmod)
         except Exception:
             # Fall back to the stub if the real module can't load in this env.
             sys.modules[_real_svc] = _make_pkg_stub(_real_svc)
