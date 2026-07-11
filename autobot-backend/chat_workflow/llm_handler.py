@@ -741,8 +741,13 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             prefix += trajectory_context + "\n"
         return prefix + conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
 
-    def _get_selected_model(self) -> str:
-        """Get selected LLM model from config with fallback."""
+    def _get_selected_model(self, requested_model: str | None = None) -> str:
+        """Get the LLM model: per-request/per-conversation override, else global config (#11585)."""
+        if requested_model:
+            logger.info(
+                "Using per-request LLM model override: %s", requested_model
+            )  # codeql[py/clear-text-logging-sensitive-data]
+            return requested_model
         try:
             default_model = get_config().get_default_llm_model()
             selected = get_config().get_nested("backend.llm.ollama.selected_model", default_model)
@@ -770,8 +775,12 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
 
         Issue #1325: Accepts language for system prompt resolution.
         Issue MVA-1992: lightweight_mode bypasses RAG/memory for trivial queries.
+        Issue #11585: session.metadata["model_override"] (per-request/per-conversation
+        choice) takes priority over the global config default.
         """
-        selected_model = self._get_selected_model()
+        selected_model = self._get_selected_model(
+            session.metadata.get("model_override") if session and session.metadata else None
+        )
         # Issue #1214: Try SLM service discovery first (fleet-managed endpoint),
         # then fall back to local config-based resolution (#1070 model routing).
         slm_base = await self._discover_ollama_from_slm()
