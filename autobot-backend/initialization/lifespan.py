@@ -1114,12 +1114,13 @@ async def _init_slm_client():
         logger.warning("SLM client initialization failed (continuing without): %s", slm_error)
 
 
-async def _init_metrics_collection():
+async def _init_metrics_collection(app: FastAPI):
     """
     Initialize system metrics collection (NON-CRITICAL).
 
     Issue #876: Start metrics collection AFTER backend initialization completes.
     Previously started at module load time causing self-health-check deadlock.
+    Issue #11638: task stored on app.state so cleanup_services can cancel it.
     """
     logger.info("✅ [ 91%] Metrics Collection: Starting system metrics collection...")
     try:
@@ -1137,7 +1138,10 @@ async def _init_metrics_collection():
         if hasattr(collector, "_is_collecting") and not collector._is_collecting:
             import asyncio
 
-            asyncio.create_task(collector.start_collection())
+            app.state.metrics_collection_task = asyncio.create_task(
+                collector.start_collection(),
+                name="metrics_collection",
+            )
             logger.info("✅ [ 91%] Metrics Collection: Started successfully")
         else:
             logger.info("✅ [ 91%] Metrics Collection: Already running")
@@ -1801,7 +1805,7 @@ async def initialize_background_services(app: FastAPI):
         await _start_connector_scheduler()
         await _init_trigger_service(app)
         await _init_slm_reconciler(app)
-        await _init_metrics_collection()
+        await _init_metrics_collection(app)
         await _recover_index_queue()
         await _ensure_agent_memory_index()
         await _init_process_adapter(app)
@@ -2001,6 +2005,73 @@ async def cleanup_services(app: FastAPI):
             await app.state.process_adapter_service.stop()
             logger.info("✅ Process adapter stopped")
 
+        # Issue #11638: Stop autonomous improvement loop background task
+        try:
+            from workflow_scheduler import stop_autonomous_loop
+
+            await stop_autonomous_loop()
+        except Exception as _al_err:
+            logger.warning("Autonomous loop shutdown failed: %s", _al_err)
+
+        # Issue #11638: Stop metrics collection loop and cancel its task
+        try:
+            from api.analytics import analytics_controller
+
+            await analytics_controller.metrics_collector.stop_collection()
+            metrics_task = getattr(app.state, "metrics_collection_task", None)
+            if metrics_task is not None and not metrics_task.done():
+                metrics_task.cancel()
+                await asyncio.gather(metrics_task, return_exceptions=True)
+            logger.info("✅ Metrics collection stopped")
+        except Exception as _mc_err:
+            logger.warning("Metrics collection shutdown failed: %s", _mc_err)
+
+        # Issue #11638: Shutdown orchestrator singleton (agent pools, memory)
+        try:
+            from orchestrator import shutdown_orchestrator
+
+            await shutdown_orchestrator()
+            logger.info("✅ Orchestrator shutdown")
+        except Exception as _orch_err:
+            logger.warning("Orchestrator shutdown failed: %s", _orch_err)
+
+        # Issue #11638: Close WebResearcher browser resources
+        try:
+            web_researcher = getattr(app.state, "web_researcher", None)
+            if web_researcher is not None:
+                await web_researcher.close()
+                logger.info("✅ WebResearcher closed")
+        except Exception as _wr_err:
+            logger.warning("WebResearcher shutdown failed: %s", _wr_err)
+
+        # Issue #11638: Close AI Stack client session and retry loop
+        try:
+            from services.ai_stack_client import close_ai_stack_client
+
+            await close_ai_stack_client()
+            logger.info("✅ AI Stack client closed")
+        except Exception as _as_err:
+            logger.warning("AI Stack client shutdown failed: %s", _as_err)
+
+        # Issue #11638: Dispose skills DB engine
+        try:
+            from skills.db import close_skills_engine
+
+            await close_skills_engine()
+            logger.info("✅ Skills DB engine closed")
+        except Exception as _sk_err:
+            logger.warning("Skills engine shutdown failed: %s", _sk_err)
+
+        # Issue #11638: Stop log forwarder threads if one was created
+        try:
+            import api.log_forwarding as _log_fwd
+
+            if _log_fwd._forwarder is not None:
+                _log_fwd._forwarder.stop()
+                logger.info("✅ Log forwarder stopped")
+        except Exception as _lf_err:
+            logger.warning("Log forwarder shutdown failed: %s", _lf_err)
+
         # Issue #1233: Shutdown dedicated I/O thread pools
         shutdown_io_executors()
 
@@ -2044,7 +2115,33 @@ async def cleanup_services(app: FastAPI):
         except Exception as obs_err:
             logger.warning("LLM observer flush failed: %s", obs_err)
 
-        # Redis connections automatically managed by get_redis_client()
+        # Issue #11638: Dispose PostgreSQL async engine (was never disposed)
+        try:
+            from user_management.database import close_database
+
+            await close_database()
+        except Exception as _db_err:
+            logger.warning("Database engine dispose failed: %s", _db_err)
+
+        # Issue #11638: Close all Redis pools LAST — earlier shutdown steps
+        # above may still publish events or flush state through Redis.
+        try:
+            from autobot_shared.redis_client import close_all_redis_connections
+
+            await close_all_redis_connections()
+            logger.info("✅ Redis connections closed")
+        except Exception as _redis_err:
+            logger.warning("Redis close failed: %s", _redis_err)
+
+        # Issue #11638: Intentional no-ops (documented triage):
+        # - ChatHistoryManager / ConversationFileManager / ChatWorkflowManager
+        #   hold no owned connections — they operate through the shared Redis
+        #   pools closed above and per-call file handles.
+        # - GraphRAGService / EntityExtractor / mesh components hold in-memory
+        #   model state only; reclaimed at process exit.
+        # - NPUWorkerManager WebSocket subscriptions close with the server's
+        #   WebSocket shutdown; DocIndexerService / OperationIntegrationManager /
+        #   ContentReachRegistry own no background tasks requiring cancellation.
         logger.info("✅ Cleanup completed successfully")
     except Exception as e:
         logger.error("Error during shutdown: %s", e)
