@@ -7979,7 +7979,9 @@
       "burndown": "Burndown",
       "ideal": "Ideal",
       "actual": "Real",
-      "noBurndown": "Sin datos de burndown"
+      "noBurndown": "Sin datos de burndown",
+      "timelineView": "Cronograma",
+      "switchToTimeline": "Cambiar a vista de cronograma"
     },
     "gantt": {
       "title": "Cronograma",
