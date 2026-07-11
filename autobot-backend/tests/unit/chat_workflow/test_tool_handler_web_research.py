@@ -188,3 +188,105 @@ async def test_exec_scrape_url_failure() -> None:
 
     assert "Fetch failed" in output
     assert "connection" in output
+
+
+# ---------------------------------------------------------------------------
+# Chat dispatch verification (#11665)
+# ---------------------------------------------------------------------------
+
+_DISPATCH_ARGS = {
+    "session_id": "sess-wr",
+    "terminal_session_id": "term-wr",
+    "ollama_endpoint": "http://127.0.0.1:11434",
+    "selected_model": "test-model",
+}
+
+
+def _dispatch_mixin():
+    """ToolHandlerMixin with governance gates quieted (covered by own suites)."""
+    from chat_workflow.tool_handler import ToolHandlerMixin
+
+    mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
+    mixin._enforce_forbidden_work = lambda *a, **k: None
+    mixin._enforce_config_protection = lambda *a, **k: None
+    mixin._enforce_fact_forcing = lambda *a, **k: None
+    mixin._enforce_work_item_approval = lambda *a, **k: None
+    return mixin
+
+
+async def _drain_dispatch(mixin, tool_call: dict, execution_results: list) -> list:
+    return [
+        msg
+        async for msg in mixin._dispatch_tool_call(
+            tool_call,
+            execution_results=execution_results,
+            additional_response_parts=[],
+            **_DISPATCH_ARGS,
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_scrape_url_returns_fetched_content() -> None:
+    """scrape_url executed via the chat dispatch seam yields the fetched markdown (#11665)."""
+    mixin = _dispatch_mixin()
+
+    mock_result = MagicMock()
+    mock_result.success = True
+    mock_result.url = "https://example.com"
+    mock_result.title = "Example"
+    mock_result.markdown = "Hello from chat dispatch"
+    mock_result.status_code = 200
+    mock_result.source = "bs4"
+
+    execution_results: list = []
+    with patch("web_fetch.WebFetcher.fetch", new_callable=AsyncMock, return_value=mock_result):
+        messages = await _drain_dispatch(
+            mixin,
+            {"name": "scrape_url", "params": {"url": "https://example.com"}},
+            execution_results,
+        )
+
+    outputs = [m for m in messages if getattr(m, "type", "") == "command_output"]
+    assert outputs, f"no command_output yielded; got: {[getattr(m, 'type', m) for m in messages]}"
+    assert "Hello from chat dispatch" in outputs[0].content
+    assert execution_results[-1] == {
+        "tool": "scrape_url",
+        "status": "success",
+        "output": outputs[0].content,
+    }
+
+
+@pytest.mark.asyncio
+async def test_dispatch_web_search_all_backends_empty_returns_actionable_message() -> None:
+    """web_search with empty registry + no Playwright + no browser VM yields the
+    actionable configuration hint — never an empty string (#11665)."""
+    mixin = _dispatch_mixin()
+    # Registry + Playwright yielded nothing; browser VM unreachable.
+    mixin._web_search_structured_entries = AsyncMock(return_value=[])
+    mixin._web_search_via_browser_vm = AsyncMock(side_effect=RuntimeError("no browser vm"))
+
+    execution_results: list = []
+    with (
+        patch(
+            "chat_workflow.tool_handler._emit_before_tool_execute",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "chat_workflow.tool_handler._emit_after_tool_execute",
+            new=AsyncMock(side_effect=lambda _tool, result, *_rest: result),
+        ),
+    ):
+        messages = await _drain_dispatch(
+            mixin,
+            {"name": "web_search", "params": {"query": "anything"}},
+            execution_results,
+        )
+
+    outputs = [m for m in messages if getattr(m, "type", "") == "command_output"]
+    assert outputs, f"no command_output yielded; got: {[getattr(m, 'type', m) for m in messages]}"
+    content = outputs[0].content
+    assert content.strip() != ""
+    assert "SEARXNG_INSTANCE_URL" in content
+    assert "BRAVE_SEARCH_API_KEY" in content
+    assert execution_results[-1]["status"] == "success"

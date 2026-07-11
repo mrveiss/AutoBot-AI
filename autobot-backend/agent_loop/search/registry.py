@@ -133,6 +133,23 @@ def _populate_default_providers(registry: SearchProviderRegistry) -> None:
     logger.debug("Registered content_reach as fallback web-search provider")
 
 
+def _warn_if_topic_search_degraded(registry: SearchProviderRegistry) -> None:
+    """Log ONE startup warning when no configured search provider is registered (#11665).
+
+    ``is_available`` is async, so probe cheaply and synchronously instead:
+    content_reach is the always-registered keyless fallback — when it is the
+    only provider (or registration failed entirely), topic search runs in
+    best-effort degraded mode. Never blocks startup.
+    """
+    configured = [name for name in registry.list_providers() if name != "content_reach"]
+    if not configured:
+        logger.warning(
+            "No configured web-search provider registered — topic search is degraded to the "
+            "keyless content_reach fallback; set SEARXNG_INSTANCE_URL or BRAVE_SEARCH_API_KEY "
+            "to enable reliable topic search"
+        )
+
+
 def get_search_registry() -> SearchProviderRegistry:
     """Return the process-wide registry, populating it on first use."""
     global _registry
@@ -144,6 +161,7 @@ def get_search_registry() -> SearchProviderRegistry:
                     _populate_default_providers(registry)
                 except Exception as exc:  # never let config issues break callers
                     logger.warning("Search provider auto-registration failed: %s", exc)
+                _warn_if_topic_search_degraded(registry)
                 _registry = registry
     return _registry
 
