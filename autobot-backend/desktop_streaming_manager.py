@@ -45,9 +45,7 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Cross-worker constants — env-var-backed, never hard-coded (#11639)
 # ---------------------------------------------------------------------------
-_DESKTOP_EVENTS_CHANNEL: str = os.environ.get(
-    "AUTOBOT_DESKTOP_EVENTS_CHANNEL", "autobot:desktop:events"
-)
+_DESKTOP_EVENTS_CHANNEL: str = os.environ.get("AUTOBOT_DESKTOP_EVENTS_CHANNEL", "autobot:desktop:events")
 _DESKTOP_SESSIONS_KEY: str = "autobot:desktop:sessions"  # HASH: session_id -> JSON metadata
 _WORKER_ID: str = str(uuid.uuid4())  # unique per-process; set once at import time
 
@@ -744,9 +742,7 @@ class DesktopStreamingManager:
     async def start(self) -> None:
         """Start the cross-worker pub/sub subscriber task."""
         if self._subscriber_task is None or self._subscriber_task.done():
-            self._subscriber_task = asyncio.create_task(
-                self._pubsub_relay_loop(), name="desktop-pubsub-relay"
-            )
+            self._subscriber_task = asyncio.create_task(self._pubsub_relay_loop(), name="desktop-pubsub-relay")
             # Register for construct-free shutdown via stop_desktop_relay()
             global _relay_manager
             _relay_manager = self
@@ -773,6 +769,7 @@ class DesktopStreamingManager:
             return self._redis
         try:
             from autobot_shared.redis_client import get_async_redis_client
+
             return await get_async_redis_client()
         except Exception:
             return None
@@ -853,7 +850,8 @@ class DesktopStreamingManager:
             except Exception as e:
                 logger.warning(
                     "Desktop pub/sub relay error (worker=%s): %s — retrying in 5s",
-                    _WORKER_ID, e,
+                    _WORKER_ID,
+                    e,
                 )
                 await asyncio.sleep(5)
 

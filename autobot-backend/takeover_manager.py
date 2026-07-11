@@ -43,16 +43,14 @@ def _resolve_pending_ttl() -> int:
         value = int(raw)
     except ValueError:
         logger.warning(
-            "AUTOBOT_TAKEOVER_PENDING_TTL_SECONDS=%r is not an integer; "
-            "falling back to %ds",
+            "AUTOBOT_TAKEOVER_PENDING_TTL_SECONDS=%r is not an integer; " "falling back to %ds",
             raw,
             _DEFAULT_PENDING_TTL_SECONDS,
         )
         return _DEFAULT_PENDING_TTL_SECONDS
     if value <= 0:
         logger.warning(
-            "AUTOBOT_TAKEOVER_PENDING_TTL_SECONDS=%d must be positive; "
-            "falling back to %ds",
+            "AUTOBOT_TAKEOVER_PENDING_TTL_SECONDS=%d must be positive; " "falling back to %ds",
             value,
             _DEFAULT_PENDING_TTL_SECONDS,
         )
@@ -64,11 +62,11 @@ _PENDING_TTL_SECONDS: int = _resolve_pending_ttl()
 
 # Redis key namespace
 _NS = "autobot:takeover"
-_KEY_PENDING = f"{_NS}:pending"           # STRING prefix; full key = {_KEY_PENDING}:<id>
+_KEY_PENDING = f"{_NS}:pending"  # STRING prefix; full key = {_KEY_PENDING}:<id>
 _KEY_PENDING_INDEX = f"{_NS}:pending_index"  # SET of active request IDs
-_KEY_SESSIONS = f"{_NS}:sessions"         # HASH: session_id -> JSON
-_KEY_PAUSED = f"{_NS}:paused_tasks"       # SET of paused task IDs
-_KEY_REQ_TASK = f"{_NS}:request_task"     # HASH: request_id -> memory task_id
+_KEY_SESSIONS = f"{_NS}:sessions"  # HASH: session_id -> JSON
+_KEY_PAUSED = f"{_NS}:paused_tasks"  # SET of paused task IDs
+_KEY_REQ_TASK = f"{_NS}:request_task"  # HASH: request_id -> memory task_id
 
 
 class TakeoverTrigger(Enum):
@@ -222,6 +220,7 @@ class TakeoverManager:
             return self._redis
         try:
             from autobot_shared.redis_client import get_async_redis_client
+
             return await get_async_redis_client()
         except Exception:
             return None

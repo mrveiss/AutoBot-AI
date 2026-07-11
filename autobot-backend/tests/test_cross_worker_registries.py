@@ -27,7 +27,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Fake async-Redis stub
 # ---------------------------------------------------------------------------
@@ -321,9 +320,7 @@ class TestDesktopStreamingManagerCrossWorker:
 
         sessions_b = await b.list_all_sessions()
         session_ids = [s.get("session_id") for s in sessions_b]
-        assert any("u1" in sid for sid in session_ids), (
-            f"B must see session created by A; got {session_ids}"
-        )
+        assert any("u1" in sid for sid in session_ids), f"B must see session created by A; got {session_ids}"
 
     @pytest.mark.asyncio
     async def test_event_published_by_a_relayed_by_b(self):
@@ -341,11 +338,14 @@ class TestDesktopStreamingManagerCrossWorker:
         # Simulate A publishing with a different worker_id (different from B's _WORKER_ID)
         a_worker_id = "worker-A-different-from-B"
 
-        msg = json.dumps({
-            "worker_id": a_worker_id,
-            "type": "screenshot",
-            "payload": {"session_id": "sess-1", "data": "base64..."},
-        }, ensure_ascii=False)
+        msg = json.dumps(
+            {
+                "worker_id": a_worker_id,
+                "type": "screenshot",
+                "payload": {"session_id": "sess-1", "data": "base64..."},
+            },
+            ensure_ascii=False,
+        )
         await redis.publish(dsm_mod._DESKTOP_EVENTS_CHANNEL, msg)
 
         # Run B's relay handler once
@@ -372,11 +372,14 @@ class TestDesktopStreamingManagerCrossWorker:
         b.websocket_clients["client-b2"] = fake_ws
 
         # Publish with B's own worker_id — must NOT be relayed to B's clients
-        msg = json.dumps({
-            "worker_id": dsm_mod._WORKER_ID,  # same as B (module-level constant)
-            "type": "screenshot",
-            "payload": {"session_id": "sess-2", "data": "base64..."},
-        }, ensure_ascii=False)
+        msg = json.dumps(
+            {
+                "worker_id": dsm_mod._WORKER_ID,  # same as B (module-level constant)
+                "type": "screenshot",
+                "payload": {"session_id": "sess-2", "data": "base64..."},
+            },
+            ensure_ascii=False,
+        )
         await redis.publish(dsm_mod._DESKTOP_EVENTS_CHANNEL, msg)
 
         raw_msgs = redis._pubsub_queues.get(dsm_mod._DESKTOP_EVENTS_CHANNEL, [])
