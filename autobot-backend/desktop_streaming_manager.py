@@ -747,6 +747,9 @@ class DesktopStreamingManager:
             self._subscriber_task = asyncio.create_task(
                 self._pubsub_relay_loop(), name="desktop-pubsub-relay"
             )
+            # Register for construct-free shutdown via stop_desktop_relay()
+            global _relay_manager
+            _relay_manager = self
             logger.info("Desktop streaming pub/sub relay started (worker=%s)", _WORKER_ID)
 
     async def stop(self) -> None:
@@ -901,6 +904,10 @@ class DesktopStreamingManager:
         """
         cfg = session_config or {}
         session_id = f"stream_{user_id}_{int(time.time())}"
+
+        # Lazy-start the cross-worker relay with the first session (#11639) —
+        # idempotent; avoids a standing Redis subscription on idle backends.
+        await self.start()
 
         # Create VNC session
         vnc_info = await self.vnc_manager.create_session(
@@ -1282,3 +1289,15 @@ class DesktopStreamingManager:
 
 
 get_desktop_streaming = lazy_singleton(DesktopStreamingManager)
+
+# Set by DesktopStreamingManager.start(); lets shutdown stop the relay
+# WITHOUT constructing a manager when none was ever used (#11639).
+_relay_manager: DesktopStreamingManager | None = None
+
+
+async def stop_desktop_relay() -> None:
+    """Stop the cross-worker pub/sub relay if one was started (#11639)."""
+    global _relay_manager
+    if _relay_manager is not None:
+        await _relay_manager.stop()
+        _relay_manager = None

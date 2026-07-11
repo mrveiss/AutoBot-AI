@@ -348,7 +348,7 @@ async def get_pending_takeovers(
 
     Issue #744: Requires admin authentication.
     """
-    pending = get_takeover_manager().get_pending_requests()
+    pending = await get_takeover_manager().get_pending_requests()
     return {"pending_requests": pending, "count": len(pending)}
 
 
@@ -366,7 +366,7 @@ async def get_active_takeovers(
 
     Issue #744: Requires admin authentication.
     """
-    active = get_takeover_manager().get_active_sessions()
+    active = await get_takeover_manager().get_active_sessions()
     return {"active_sessions": active, "count": len(active)}
 
 
@@ -384,7 +384,7 @@ async def get_takeover_status(
 
     Issue #744: Requires admin authentication.
     """
-    status = get_takeover_manager().get_system_status()
+    status = await get_takeover_manager().get_system_status()
     return status
 
 
@@ -418,8 +418,8 @@ async def get_system_status(
     streaming_sessions = get_desktop_streaming().vnc_manager.list_active_sessions()
 
     # Get takeover data
-    pending_takeovers = get_takeover_manager().get_pending_requests()
-    active_takeovers = get_takeover_manager().get_active_sessions()
+    pending_takeovers = await get_takeover_manager().get_pending_requests()
+    active_takeovers = await get_takeover_manager().get_active_sessions()
     system_status = {
         "status": "healthy",
         "timestamp": psutil.boot_time(),
