@@ -170,49 +170,27 @@ import tasks.mobile_device_tasks  # noqa: F401
 
 # =========================================================================
 # Issue #4455: Periodic knowledge-base cleanup schedule
+# Issue #11606: cron parser extracted to utils.celery_schedules so it stays
+# importable when the test conftest stubs this module in sys.modules.
 # =========================================================================
 
-
-def _crontab_from_string(cron_expr: str) -> crontab:
-    """Parse a 5-field cron string ('m h dom mon dow') into a Celery crontab.
-
-    Falls back to a daily 03:00 UTC schedule if the expression is malformed,
-    logging a warning so misconfiguration does not prevent Beat from starting.
-    """
-
-    _log = _get_logger(__name__)
-    parts = cron_expr.strip().split()
-    if len(parts) != 5:
-        _log.warning(
-            "Invalid cron expression %r (expected 5 fields); falling back to '0 3 * * *'",
-            cron_expr,
-        )
-        parts = ["0", "3", "*", "*", "*"]
-    minute, hour, day_of_month, month_of_year, day_of_week = parts
-    return crontab(
-        minute=minute,
-        hour=hour,
-        day_of_month=day_of_month,
-        month_of_year=month_of_year,
-        day_of_week=day_of_week,
-    )
-
+from utils.celery_schedules import crontab_from_string  # noqa: E402
 
 celery_app.conf.beat_schedule = {
     "knowledge-cleanup-orphan-documents": {
         "task": "tasks.cleanup_orphan_documents",
-        "schedule": _crontab_from_string(ssot_config.knowledge_orphan_cleanup_schedule),
+        "schedule": crontab_from_string(ssot_config.knowledge_orphan_cleanup_schedule),
         "kwargs": {"dry_run": False},
     },
     "knowledge-cleanup-generated-files": {
         "task": "tasks.cleanup_generated_files",
-        "schedule": _crontab_from_string(ssot_config.knowledge_generated_files_cleanup_schedule),
+        "schedule": crontab_from_string(ssot_config.knowledge_generated_files_cleanup_schedule),
         "kwargs": {"dry_run": False},
     },
     # Issue #5081: prune expired entries from the doc_sync:queue:done zset
     "knowledge-sync-queue-prune": {
         "task": "tasks.prune_sync_queue_done",
-        "schedule": _crontab_from_string(ssot_config.knowledge_sync_queue_prune_schedule),
+        "schedule": crontab_from_string(ssot_config.knowledge_sync_queue_prune_schedule),
     },
     # GH#8224: detect expired active sprints and queue SPRINT_CLOSE approvals daily
     "llc-sprint-autoclose-daily": {
@@ -277,22 +255,22 @@ celery_app.conf.beat_schedule = {
     # Schedules are configurable via AUTOBOT_*_RETENTION_SCHEDULE env vars (5-field cron).
     "data-retention-chats-nightly": {
         "task": "tasks.cleanup_expired_chats",
-        "schedule": _crontab_from_string(getattr(ssot_config.misc, "chat_retention_schedule", None) or "0 1 * * *"),
+        "schedule": crontab_from_string(getattr(ssot_config.misc, "chat_retention_schedule", None) or "0 1 * * *"),
         "kwargs": {"dry_run": False},
     },
     "data-retention-files-nightly": {
         "task": "tasks.cleanup_expired_files",
-        "schedule": _crontab_from_string(getattr(ssot_config.misc, "file_retention_schedule", None) or "15 1 * * *"),
+        "schedule": crontab_from_string(getattr(ssot_config.misc, "file_retention_schedule", None) or "15 1 * * *"),
         "kwargs": {"dry_run": False},
     },
     "data-retention-audit-nightly": {
         "task": "tasks.cleanup_expired_audit_logs",
-        "schedule": _crontab_from_string(getattr(ssot_config.misc, "audit_retention_schedule", None) or "30 1 * * *"),
+        "schedule": crontab_from_string(getattr(ssot_config.misc, "audit_retention_schedule", None) or "30 1 * * *"),
         "kwargs": {"dry_run": False},
     },
     "data-retention-kb-nightly": {
         "task": "tasks.cleanup_expired_kb_entries",
-        "schedule": _crontab_from_string(getattr(ssot_config.misc, "kb_retention_schedule", None) or "45 1 * * *"),
+        "schedule": crontab_from_string(getattr(ssot_config.misc, "kb_retention_schedule", None) or "45 1 * * *"),
         "kwargs": {"dry_run": False},
     },
 }
