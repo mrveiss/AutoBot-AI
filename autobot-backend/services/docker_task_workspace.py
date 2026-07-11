@@ -64,6 +64,23 @@ _WORKSPACE_IMAGE: str = os.environ.get("AUTOBOT_WORKSPACE_IMAGE", "alpine:3.18")
 _CONTAINER_PREFIX: str = "autobot-workspace-"
 _REDIS_KEY_PREFIX: str = "autobot:workspace:"
 
+# GH#11694 (#11059 defence-in-depth) — both default-OFF so existing installs are
+# unchanged; enable + verify on the deploy host (see the storage-driver / volume
+# ownership notes in #11694):
+#  * _RUN_AS_UID: run agent command execs as a non-root "uid[:gid]". The container
+#    itself stays root so it can chown its root-owned named volume; /workspace is
+#    chowned to this uid on create so the non-root execs can write to it.
+#  * _DISK_QUOTA_ENABLED: apply a storage_opt size quota. Only overlay2+pquota /
+#    btrfs / zfs / devicemapper honour storage_opt, so container creation falls
+#    back WITHOUT the quota (with a warning) on drivers that reject it.
+_RUN_AS_UID: str = os.environ.get("AUTOBOT_WORKSPACE_RUN_AS_UID", "").strip()
+_DISK_QUOTA_ENABLED: bool = os.environ.get("AUTOBOT_WORKSPACE_DISK_QUOTA_ENABLED", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
 # Commands that are never permitted inside a workspace exec (reuse from
 # SecureSandboxExecutor._is_command_blocked default_blocked list)
 _BLOCKED_EXEC_COMMANDS: frozenset[str] = frozenset(
@@ -391,12 +408,38 @@ class TaskWorkspaceManager:
         # pre-existing container with this name first (idempotent). Lookups are
         # always by container id, never name, so this reconcile is safe.
         self._reap_container_by_name(name)
-        container = self._docker.containers.run(
-            image=image,
-            name=name,
-            **_apply_sandbox_security(task_id, volume_name),
-        )
+        cfg = _apply_sandbox_security(task_id, volume_name)
+        try:
+            container = self._docker.containers.run(image=image, name=name, **cfg)
+        except APIError as exc:
+            # GH#11694: storage_opt is only honoured by overlay2+pquota / btrfs /
+            # zfs / devicemapper; other drivers reject it at create. Fall back
+            # WITHOUT the quota so the workspace still starts on any driver.
+            if "storage_opt" in cfg and _is_storage_opt_error(exc):
+                logger.warning(
+                    "workspace: storage_opt not supported by the Docker storage driver "
+                    "(%s) — creating task=%s without a disk quota (GH#11694)",
+                    exc,
+                    task_id,
+                )
+                cfg.pop("storage_opt", None)
+                self._reap_container_by_name(name)  # remove any half-created container
+                container = self._docker.containers.run(image=image, name=name, **cfg)
+            else:
+                raise
+        # GH#11694: chown the mount so non-root command execs can write to it. The
+        # container runs as root, so it can chown its own (root-owned) volume.
+        if _RUN_AS_UID:
+            self._chown_workspace(container.id)
         return container.id
+
+    def _chown_workspace(self, container_id: str) -> None:
+        """Give _RUN_AS_UID ownership of /workspace so its non-root execs can write (GH#11694)."""
+        try:
+            container = self._docker.containers.get(container_id)
+            container.exec_run(["chown", "-R", _RUN_AS_UID, "/workspace"], user="root")
+        except (NotFound, APIError) as exc:
+            logger.warning("workspace: chown /workspace to %s failed: %s (GH#11694)", _RUN_AS_UID, exc)
 
     def _reap_container_by_name(self, name: str) -> None:
         """Force-remove a pre-existing container with *name*, if any (GH#11059)."""
@@ -413,7 +456,10 @@ class TaskWorkspaceManager:
     def _exec_sync(self, container_id: str, cmd: list[str]) -> dict[str, Any]:
         try:
             container = self._docker.containers.get(container_id)
-            exec_result = container.exec_run(cmd, demux=True)
+            exec_kwargs: dict[str, Any] = {"demux": True}
+            if _RUN_AS_UID:  # GH#11694: run agent commands as a non-root uid
+                exec_kwargs["user"] = _RUN_AS_UID
+            exec_result = container.exec_run(cmd, **exec_kwargs)
             stdout_b, stderr_b = exec_result.output or (b"", b"")
             return {
                 "exit_code": exec_result.exit_code,
@@ -443,7 +489,10 @@ class TaskWorkspaceManager:
 
     def _create_exec_handle_sync(self, container_id: str, cmd: list[str], tty: bool) -> Any:
         container = self._docker.containers.get(container_id)
-        exec_id = self._docker.api.exec_create(container.id, cmd, stdin=True, tty=tty)
+        exec_kwargs: dict[str, Any] = {"stdin": True, "tty": tty}
+        if _RUN_AS_UID:  # GH#11694: interactive shell runs as a non-root uid too
+            exec_kwargs["user"] = _RUN_AS_UID
+        exec_id = self._docker.api.exec_create(container.id, cmd, **exec_kwargs)
         sock = self._docker.api.exec_start(exec_id, detach=False, tty=tty, socket=True)
         return {"exec_id": exec_id, "socket": sock, "container_id": container_id}
 
@@ -490,7 +539,7 @@ def _apply_sandbox_security(task_id: str, volume_name: str) -> dict[str, Any]:
     Kept as a standalone function so it can be unit-tested independently and
     so both the per-command and per-task paths share one canonical definition.
     """
-    return {
+    cfg: dict[str, Any] = {
         "command": ["tail", "-f", "/dev/null"],  # long-running: container stays up
         "detach": True,
         "remove": False,
@@ -517,6 +566,17 @@ def _apply_sandbox_security(task_id: str, volume_name: str) -> dict[str, Any]:
             "com.autobot.created_at": str(time.time()),
         },
     }
+    # GH#11694: disk quota (opt-in). Driver-dependent — _start_container_sync falls
+    # back without it when the storage driver rejects storage_opt.
+    if _DISK_QUOTA_ENABLED:
+        cfg["storage_opt"] = {"size": f"{_DISK_QUOTA_MB}m"}
+    return cfg
+
+
+def _is_storage_opt_error(exc: Exception) -> bool:
+    """True when *exc* is a container-create failure caused by an unsupported storage_opt (GH#11694)."""
+    msg = str(exc).lower()
+    return "storage-opt" in msg or "storage_opt" in msg or "pquota" in msg
 
 
 def validate_exec_command(cmd: list[str]) -> bool:

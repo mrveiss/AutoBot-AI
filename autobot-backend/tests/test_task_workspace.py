@@ -319,6 +319,63 @@ def test_start_no_stale_container_skips_reap(manager, mock_docker):
 
 
 # ---------------------------------------------------------------------------
+# GH#11694: opt-in non-root execs + storage_opt disk quota (both default-off)
+# ---------------------------------------------------------------------------
+
+
+def test_defaults_off_no_quota_no_uid(manager, mock_docker):
+    """With both flags off (the default), the config carries no storage_opt and
+    execs pass no user — existing installs are unchanged."""
+    cfg = dtw._apply_sandbox_security("t", "v")
+    assert "storage_opt" not in cfg
+
+    manager._exec_sync("cid", ["ls"])
+    _, kwargs = mock_docker.containers.get.return_value.exec_run.call_args
+    assert "user" not in kwargs
+
+
+def test_disk_quota_enabled_adds_storage_opt(monkeypatch):
+    monkeypatch.setattr(dtw, "_DISK_QUOTA_ENABLED", True)
+    monkeypatch.setattr(dtw, "_DISK_QUOTA_MB", 2048)
+    cfg = dtw._apply_sandbox_security("t", "v")
+    assert cfg["storage_opt"] == {"size": "2048m"}
+
+
+def test_storage_opt_fallback_on_unsupported_driver(manager, mock_docker, monkeypatch):
+    """A driver that rejects storage_opt must not stop the workspace: create falls
+    back WITHOUT the quota (GH#11694)."""
+    monkeypatch.setattr(dtw, "_DISK_QUOTA_ENABLED", True)
+    container = mock_docker.containers.run.return_value
+    mock_docker.containers.run.side_effect = [
+        dtw.APIError("--storage-opt is supported only for overlay2 backed by xfs with 'pquota' mount option"),
+        container,
+    ]
+
+    cid = manager._start_container_sync("task-quota", "vol-quota", "alpine:3.18")
+
+    assert mock_docker.containers.run.call_count == 2
+    _, second_kwargs = mock_docker.containers.run.call_args_list[1]
+    assert "storage_opt" not in second_kwargs  # quota dropped on the retry
+    assert cid == container.id
+
+
+def test_run_as_uid_execs_as_nonroot(manager, mock_docker, monkeypatch):
+    monkeypatch.setattr(dtw, "_RUN_AS_UID", "1000:1000")
+    manager._exec_sync("cid", ["whoami"])
+    _, kwargs = mock_docker.containers.get.return_value.exec_run.call_args
+    assert kwargs.get("user") == "1000:1000"
+
+
+def test_run_as_uid_chowns_workspace_on_create(manager, mock_docker, monkeypatch):
+    monkeypatch.setattr(dtw, "_RUN_AS_UID", "1000:1000")
+    manager._start_container_sync("task-uid", "vol-uid", "alpine:3.18")
+    # The (root) container chowns /workspace so the non-root execs can write to it.
+    mock_docker.containers.get.return_value.exec_run.assert_called_once_with(
+        ["chown", "-R", "1000:1000", "/workspace"], user="root"
+    )
+
+
+# ---------------------------------------------------------------------------
 # TaskWorkspaceManager.exec_command
 # ---------------------------------------------------------------------------
 
