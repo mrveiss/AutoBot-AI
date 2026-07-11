@@ -194,6 +194,16 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // Issue #11555: System documentation viewer and exporter
+        path: 'system-docs',
+        name: 'knowledge-system-docs',
+        component: () => import('@/components/knowledge/KnowledgeSystemDocs.vue'),
+        meta: {
+          title: 'System Docs',
+          parent: 'knowledge'
+        }
+      },
+      {
         path: 'upload',
         redirect: '/knowledge/manage'
       },

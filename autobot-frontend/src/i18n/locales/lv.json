@@ -2591,6 +2591,8 @@
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "Pārlūks",
       "browserAriaLabel": "Pārlūkot, meklēt un rediģēt zināšanu dokumentus",
+      "systemDocs": "Sistēmas dokumentācija",
+      "systemDocsAriaLabel": "Pārlūkot un eksportēt AutoBot sistēmas dokumentāciju",
       "health": "Veselība",
       "healthAriaLabel": "Zināšanu veselība, analītika, verifikācija un rīki"
     },

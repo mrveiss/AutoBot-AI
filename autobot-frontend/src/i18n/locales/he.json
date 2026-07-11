@@ -2920,6 +2920,8 @@
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "דפדפן",
       "browserAriaLabel": "עיון, חיפוש ועריכת מסמכי ידע",
+      "systemDocs": "מסמכי מערכת",
+      "systemDocsAriaLabel": "עיון ויצוא תיעוד מערכת AutoBot",
       "health": "בריאות",
       "healthAriaLabel": "בריאות הידע, ניתוחים, אימות וכלים"
     },

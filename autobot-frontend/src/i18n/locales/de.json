@@ -2591,6 +2591,8 @@
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "Browser",
       "browserAriaLabel": "Wissensdokumente durchsuchen, suchen und bearbeiten",
+      "systemDocs": "Systemdokumentation",
+      "systemDocsAriaLabel": "AutoBot-Systemdokumentation durchsuchen und exportieren",
       "health": "Gesundheit",
       "healthAriaLabel": "Wissensdatenbank-Gesundheit, Analysen, Verifizierung und Tools"
     },

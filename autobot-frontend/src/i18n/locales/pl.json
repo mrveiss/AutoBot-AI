@@ -2591,6 +2591,8 @@
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "Przeglądarka",
       "browserAriaLabel": "Przeglądaj, wyszukuj i edytuj dokumenty wiedzy",
+      "systemDocs": "Dokumentacja systemowa",
+      "systemDocsAriaLabel": "Przeglądaj i eksportuj dokumentację systemu AutoBot",
       "health": "Kondycja",
       "healthAriaLabel": "Kondycja wiedzy, analityka, weryfikacja i narzędzia"
     },

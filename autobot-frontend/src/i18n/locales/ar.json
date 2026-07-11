@@ -2591,6 +2591,8 @@
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "متصفح",
       "browserAriaLabel": "تصفح وبحث وتعديل مستندات المعرفة",
+      "systemDocs": "المستندات النظامية",
+      "systemDocsAriaLabel": "استعراض وتصدير وثائق نظام AutoBot",
       "health": "صحة المعرفة",
       "healthAriaLabel": "صحة المعرفة والتحليلات والتحقق والأدوات"
     },

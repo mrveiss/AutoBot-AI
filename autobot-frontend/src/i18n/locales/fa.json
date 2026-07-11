@@ -2920,6 +2920,8 @@
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "مرورگر",
       "browserAriaLabel": "مرور، جستجو و ویرایش اسناد دانش",
+      "systemDocs": "مستندات سیستم",
+      "systemDocsAriaLabel": "مرور و خروجی مستندات سیستم AutoBot",
       "health": "سلامت",
       "healthAriaLabel": "سلامت دانش، تحلیل‌ها، تأیید و ابزارها"
     },

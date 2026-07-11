@@ -2920,6 +2920,8 @@
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "براؤزر",
       "browserAriaLabel": "علمی دستاویزات کو دیکھیں، تلاش کیجیں اور ترمیم کیجیں",
+      "systemDocs": "سسٹم دستاویزات",
+      "systemDocsAriaLabel": "AutoBot سسٹم دستاویزات کو دیکھیں اور برآمد کریں",
       "health": "صحت",
       "healthAriaLabel": "علمی صحت، تجزیات، تصدیق اور اوزار"
     },
