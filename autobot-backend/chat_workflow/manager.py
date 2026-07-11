@@ -65,6 +65,17 @@ _TOOL_CALL_CLOSE_RE = re.compile(r"</TOOL_\s+CALL>")
 # newline); `\b` keeps `</tool_callable` from matching.
 _TOOL_CALL_COMPLETE_RE = re.compile(r"</\s*tool_?\s*call\b\s*>?", re.IGNORECASE)
 
+# #11552: chat models frequently TRUNCATE the close to a bare `</TOOL` (dropping
+# `_CALL`) and then hallucinate a success line. Detecting that stops the stream so
+# the fabricated prose is never shown — but a bare `</tool…` also appears in
+# legitimate prose (HTML/XML/JSX talk), and this detector scans the WHOLE response
+# with no structural anchor. So the bare close only counts as a completed tool
+# call when a well-formed opening `<TOOL_CALL …>` is already in the buffer (the
+# only way a real truncated call can occur). `\b` after `tool` keeps `</tool_call`
+# (handled above) and `</toolbox` from matching here.
+_TOOL_CALL_BARE_CLOSE_RE = re.compile(r"</\s*tool\b", re.IGNORECASE)
+_TOOL_CALL_OPENING_RE = re.compile(r"<\s*tool_?\s*call\b[^>]*>", re.IGNORECASE)
+
 # Issue #716: Patterns for internal prompts that should not be shown to users
 # These are continuation instructions that LLM sometimes echoes back
 _INTERNAL_PROMPT_PATTERNS = [
@@ -674,7 +685,15 @@ class ChatWorkflowManager(
         Returns:
             True if tool call is now complete, False otherwise. Issue #620.
         """
-        if not tool_call_completed and _TOOL_CALL_COMPLETE_RE.search(llm_response):
+        if tool_call_completed:
+            return tool_call_completed
+        # A well-formed close, OR (#11552) a truncated bare `</tool` close but only
+        # once a real opening tag is present — so legit prose mentioning `</tool>`
+        # never truncates a general-chat response.
+        completed = bool(_TOOL_CALL_COMPLETE_RE.search(llm_response)) or bool(
+            _TOOL_CALL_OPENING_RE.search(llm_response) and _TOOL_CALL_BARE_CLOSE_RE.search(llm_response)
+        )
+        if completed:
             logger.info(
                 "[Issue #727] Tool call completion detected - stopping frontend streaming "
                 "to prevent hallucination display. Response length: %d",
