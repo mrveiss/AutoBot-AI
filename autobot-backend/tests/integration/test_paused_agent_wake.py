@@ -34,12 +34,13 @@ import sqlalchemy.dialects.postgresql as pg
 from sqlalchemy import JSON, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from tests.fixtures.mocks import ModuleStubRegistry  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Stub helpers (same pattern as test_paused_agent_wakeup_drain.py)
 # ---------------------------------------------------------------------------
 
 
-from tests.fixtures.mocks import ModuleStubRegistry  # noqa: E402
 
 _stubs = ModuleStubRegistry()
 

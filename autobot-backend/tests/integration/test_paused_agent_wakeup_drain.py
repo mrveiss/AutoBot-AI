@@ -29,12 +29,13 @@ import sqlalchemy.dialects.postgresql as pg
 from sqlalchemy import JSON, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from tests.fixtures.mocks import ModuleStubRegistry  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Stub helpers (mirrors test_agent_status.py / test_heartbeat_coalescing.py)
 # ---------------------------------------------------------------------------
 
 
-from tests.fixtures.mocks import ModuleStubRegistry  # noqa: E402
 
 _stubs = ModuleStubRegistry()
 

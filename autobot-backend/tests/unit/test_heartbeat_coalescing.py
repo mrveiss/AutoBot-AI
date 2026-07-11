@@ -28,12 +28,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from tests.fixtures.mocks import ModuleStubRegistry  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Stubs + direct-file module loading
 # ---------------------------------------------------------------------------
 
 
-from tests.fixtures.mocks import ModuleStubRegistry  # noqa: E402
 
 _stubs = ModuleStubRegistry()
 
