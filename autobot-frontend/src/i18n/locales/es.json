@@ -2592,6 +2592,8 @@
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "Navegador",
       "browserAriaLabel": "Explorar, buscar y editar documentos de conocimiento",
+      "systemDocs": "Documentación del sistema",
+      "systemDocsAriaLabel": "Explorar y exportar la documentación del sistema AutoBot",
       "health": "Salud",
       "healthAriaLabel": "Salud del conocimiento, análisis, verificación y herramientas"
     },
@@ -2601,7 +2603,8 @@
       "tabTools": "Herramientas",
       "feedAll": "Todo",
       "feedCreated": "Creado",
-      "feedUpdated": "Actualizado"
+      "feedUpdated": "Actualizado",
+      "dangerZone": "Zona de peligro"
     },
     "backup": {
       "title": "Copia de seguridad y restauración",
@@ -2914,7 +2917,8 @@
       "facts": "hechos",
       "documentsSelected": "{count} documento(s) seleccionado(s)",
       "backToRoot": "Volver a la raíz",
-      "filters": "Filtros"
+      "filters": "Filtros",
+      "editCategory": "Editar categoría"
     },
     "contentViewer": {
       "noFileSelected": "Ningún archivo seleccionado",

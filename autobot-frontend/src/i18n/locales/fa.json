@@ -2589,7 +2589,8 @@
       "loadingFileTree": "Loading file tree...",
       "closeFileViewer": "Close file viewer",
       "facts": "facts",
-      "status": "Status"
+      "status": "Status",
+      "editCategory": "ویرایش دسته‌بندی"
     },
     "entityGraph": {
       "viewGraph": "View Graph",
@@ -2921,6 +2922,8 @@
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "مرورگر",
       "browserAriaLabel": "مرور، جستجو و ویرایش اسناد دانش",
+      "systemDocs": "مستندات سیستم",
+      "systemDocsAriaLabel": "مرور و خروجی مستندات سیستم AutoBot",
       "health": "سلامت",
       "healthAriaLabel": "سلامت دانش، تحلیل‌ها، تأیید و ابزارها"
     },
@@ -2930,7 +2933,8 @@
       "tabTools": "ابزارها",
       "feedAll": "همه",
       "feedCreated": "ایجادشده",
-      "feedUpdated": "به‌روزشده"
+      "feedUpdated": "به‌روزشده",
+      "dangerZone": "منطقه خطر"
     },
     "upload": {
       "selectCategory": "Select category...",

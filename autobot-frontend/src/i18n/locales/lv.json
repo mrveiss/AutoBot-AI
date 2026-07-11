@@ -2592,6 +2592,8 @@
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "Pārlūks",
       "browserAriaLabel": "Pārlūkot, meklēt un rediģēt zināšanu dokumentus",
+      "systemDocs": "Sistēmas dokumentācija",
+      "systemDocsAriaLabel": "Pārlūkot un eksportēt AutoBot sistēmas dokumentāciju",
       "health": "Veselība",
       "healthAriaLabel": "Zināšanu veselība, analītika, verifikācija un rīki"
     },
@@ -2601,7 +2603,8 @@
       "tabTools": "Rīki",
       "feedAll": "Visi",
       "feedCreated": "Izveidots",
-      "feedUpdated": "Atjaunināts"
+      "feedUpdated": "Atjaunināts",
+      "dangerZone": "Bīstamā zona"
     },
     "backup": {
       "title": "Dublēšana un atjaunošana",
@@ -2914,7 +2917,8 @@
       "facts": "fakti",
       "documentsSelected": "{count} dokuments(-i) atlasīts(-i)",
       "backToRoot": "Atpakaļ uz sakni",
-      "filters": "Filtri"
+      "filters": "Filtri",
+      "editCategory": "Rediģēt kategoriju"
     },
     "contentViewer": {
       "noFileSelected": "Nav atlasīts fails",

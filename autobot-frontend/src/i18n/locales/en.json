@@ -2655,6 +2655,8 @@
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "Browser",
       "browserAriaLabel": "Browse, search and edit knowledge documents",
+      "systemDocs": "System Docs",
+      "systemDocsAriaLabel": "Browse and export AutoBot system documentation",
       "health": "Health",
       "healthAriaLabel": "Knowledge health, analytics, verification and tools"
     },
@@ -2664,7 +2666,8 @@
       "tabTools": "Tools",
       "feedAll": "All",
       "feedCreated": "Created",
-      "feedUpdated": "Updated"
+      "feedUpdated": "Updated",
+      "dangerZone": "Danger zone"
     },
     "backup": {
       "title": "Backup & Restore",
@@ -2977,7 +2980,8 @@
       "facts": "facts",
       "documentsSelected": "{count} document(s) selected",
       "backToRoot": "Back to root",
-      "filters": "Filters"
+      "filters": "Filters",
+      "editCategory": "Edit category"
     },
     "contentViewer": {
       "noFileSelected": "No file selected",

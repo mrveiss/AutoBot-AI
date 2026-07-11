@@ -2589,7 +2589,8 @@
       "loadingFileTree": "Loading file tree...",
       "closeFileViewer": "Close file viewer",
       "facts": "facts",
-      "status": "Status"
+      "status": "Status",
+      "editCategory": "زمرہ ترمیم کریں"
     },
     "entityGraph": {
       "viewGraph": "View Graph",
@@ -2921,6 +2922,8 @@
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "براؤزر",
       "browserAriaLabel": "علمی دستاویزات کو دیکھیں، تلاش کیجیں اور ترمیم کیجیں",
+      "systemDocs": "سسٹم دستاویزات",
+      "systemDocsAriaLabel": "AutoBot سسٹم دستاویزات کو دیکھیں اور برآمد کریں",
       "health": "صحت",
       "healthAriaLabel": "علمی صحت، تجزیات، تصدیق اور اوزار"
     },
@@ -2930,7 +2933,8 @@
       "tabTools": "اوزار",
       "feedAll": "سب",
       "feedCreated": "تخلیق شدہ",
-      "feedUpdated": "تازہ کاری شدہ"
+      "feedUpdated": "تازہ کاری شدہ",
+      "dangerZone": "خطرناک علاقہ"
     },
     "upload": {
       "selectCategory": "Select category...",

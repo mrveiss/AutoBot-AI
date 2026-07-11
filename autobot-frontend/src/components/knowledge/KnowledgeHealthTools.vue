@@ -1,5 +1,10 @@
 <template>
   <div class="tools-grid">
+    <!-- Transient notice (e.g. cancelled danger-zone confirmation) -->
+    <div v-if="noticeMessage" class="tools-notice" role="status" aria-live="polite">
+      {{ noticeMessage }}
+    </div>
+
     <!-- Deduplication Manager -->
     <div class="tools-section">
       <DeduplicationManager />
@@ -45,6 +50,38 @@
         </button>
       </div>
     </div>
+
+    <!-- Issue #11555: Danger zone — clear-all moved from KnowledgeAdvanced -->
+    <div class="tools-section danger-zone-section">
+      <h3 class="section-heading danger-heading">
+        <Icon name="exclamation-triangle" />
+        {{ $t('knowledge.health.dangerZone') }}
+      </h3>
+      <div class="danger-card">
+        <div class="danger-content">
+          <div class="danger-icon">
+            <Icon name="trash-alt" />
+          </div>
+          <div class="danger-text">
+            <h4>{{ $t('knowledge.advanced.clearAllKnowledge') }}</h4>
+            <p>
+              {{ $t('knowledge.advanced.clearAllDescription') }}
+              <strong>{{ $t('knowledge.advanced.clearAllWarning') }}</strong>
+            </p>
+            <small class="danger-meta">{{ $t('knowledge.advanced.clearAllMeta') }}</small>
+          </div>
+        </div>
+        <button
+          class="action-btn danger-btn"
+          :disabled="isClearing"
+          @click="clearAllKnowledge"
+        >
+          <Icon name="spinner" class="animate-spin" v-if="isClearing" />
+          <Icon name="exclamation-triangle" v-else />
+          {{ isClearing ? $t('knowledge.advanced.clearing') : $t('knowledge.advanced.clearAll') }}
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -53,8 +90,11 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
+import { useTransientError } from '@/composables/useTransientError'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers/index'
+import ApiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vue'
 import SessionOrphanManager from '@/components/knowledge/SessionOrphanManager.vue'
 import CleanupStatistics from '@/components/knowledge/CleanupStatistics.vue'
@@ -74,6 +114,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { confirm } = useConfirmDialog()
+const { message: noticeMessage, show: showNotice } = useTransientError()
 const store = useKnowledgeStore()
 
 interface KnowledgeController {
@@ -96,6 +137,15 @@ try {
 }
 
 const isOptimizing = ref(false)
+// Issue #11555: clear-all danger zone state
+const isClearing = ref(false)
+
+// Shape of the clear_all endpoint response
+interface ClearAllResponse {
+  status?: string
+  message?: string
+  items_removed?: number
+}
 
 const refreshStats = async () => {
   try {
@@ -129,6 +179,38 @@ const optimizeKnowledge = async () => {
     logger.error('Failed to optimize knowledge base:', error)
   } finally {
     isOptimizing.value = false
+  }
+}
+
+// Issue #11555: clear-all danger zone — same flow as KnowledgeAdvanced
+const clearAllKnowledge = async () => {
+  if (isClearing.value) return
+
+  const firstConfirm = await confirm({ title: t('common.confirm'), message: t('knowledge.advanced.confirmClearAll') })
+  if (!firstConfirm) return
+
+  const secondConfirm = await confirm({ title: t('common.confirm'), message: t('knowledge.advanced.confirmClearFinal') })
+  if (!secondConfirm) return
+
+  const userInput = prompt(t('knowledge.advanced.promptDeleteAll'))
+  if (userInput !== 'DELETE ALL') {
+    showNotice(t('knowledge.advanced.clearCancelled'))
+    return
+  }
+
+  isClearing.value = true
+  try {
+    const response = await ApiClient.post<ClearAllResponse>(`${getApiBase()}/knowledge_base/clear_all`, {})
+    if (response.status === 'success') {
+      await store.refreshStats()
+      logger.info(`Cleared knowledge base: ${response.items_removed ?? 0} entries removed`)
+    } else {
+      throw new Error(response.message || 'Failed to clear knowledge base')
+    }
+  } catch (error) {
+    logger.error('Failed to clear knowledge base:', error)
+  } finally {
+    isClearing.value = false
   }
 }
 </script>
@@ -190,6 +272,91 @@ const optimizeKnowledge = async () => {
 .action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.tools-notice {
+  grid-column: 1 / -1;
+  padding: var(--spacing-3) var(--spacing-4);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  font-size: var(--text-sm);
+}
+
+/* Issue #11555: danger zone section */
+.danger-zone-section {
+  grid-column: 1 / -1;
+  padding: var(--spacing-6);
+  border: 1px solid var(--color-error-light);
+  background: var(--color-error-bg);
+}
+
+.danger-heading {
+  color: var(--color-error-dark);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.danger-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+  flex-wrap: wrap;
+}
+
+.danger-content {
+  display: flex;
+  gap: var(--spacing-4);
+  align-items: flex-start;
+  flex: 1;
+  min-width: 0;
+}
+
+.danger-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xl);
+  background: var(--color-error-bg-hover);
+  color: var(--color-error);
+  flex-shrink: 0;
+}
+
+.danger-text h4 {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-1) 0;
+}
+
+.danger-text p {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: 0 0 var(--spacing-1) 0;
+  line-height: 1.5;
+}
+
+.danger-meta {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.danger-btn {
+  color: var(--color-error);
+  border-color: var(--color-error-light);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.danger-btn:hover:not(:disabled) {
+  background: var(--color-error-bg-hover);
+  border-color: var(--color-error);
 }
 
 @media (max-width: 1024px) {

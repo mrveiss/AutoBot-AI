@@ -2592,6 +2592,8 @@
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "متصفح",
       "browserAriaLabel": "تصفح وبحث وتعديل مستندات المعرفة",
+      "systemDocs": "المستندات النظامية",
+      "systemDocsAriaLabel": "استعراض وتصدير وثائق نظام AutoBot",
       "health": "صحة المعرفة",
       "healthAriaLabel": "صحة المعرفة والتحليلات والتحقق والأدوات"
     },
@@ -2601,7 +2603,8 @@
       "tabTools": "الأدوات",
       "feedAll": "الكل",
       "feedCreated": "تم الإنشاء",
-      "feedUpdated": "تم التحديث"
+      "feedUpdated": "تم التحديث",
+      "dangerZone": "منطقة الخطر"
     },
     "backup": {
       "title": "Backup & Restore",
@@ -2914,7 +2917,8 @@
       "facts": "facts",
       "documentsSelected": "{count} document(s) selected",
       "backToRoot": "Back to root",
-      "filters": "عوامل التصفية"
+      "filters": "عوامل التصفية",
+      "editCategory": "تعديل الفئة"
     },
     "contentViewer": {
       "noFileSelected": "No file selected",

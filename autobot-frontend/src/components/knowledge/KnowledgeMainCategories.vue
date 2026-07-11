@@ -62,6 +62,15 @@
         :style="{ borderColor: mainCat.color }"
         @click="$emit('select', mainCat.id)"
       >
+        <!-- Issue #11555: per-card edit affordance -->
+        <button
+          class="category-edit-btn"
+          :title="$t('knowledge.browser.editCategory')"
+          :aria-label="$t('knowledge.browser.editCategory')"
+          @click.stop="$emit('edit', mainCat)"
+        >
+          <Icon name="pencil-alt" />
+        </button>
         <div class="category-icon" :style="{ backgroundColor: mainCat.color }">
           <Icon :name="categoryIcon(mainCat)" />
         </div>
@@ -158,6 +167,7 @@ interface Emits {
   (e: 'select', categoryId: string): void
   (e: 'populate', categoryId: string): void
   (e: 'import'): void
+  (e: 'edit', category: MainCategory): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -202,6 +212,33 @@ const showEmptyStateHint = computed(
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   transition: all var(--duration-200) var(--ease-in-out);
+  position: relative;
+}
+
+/* Issue #11555: per-card edit button */
+.category-edit-btn {
+  position: absolute;
+  top: var(--spacing-3);
+  right: var(--spacing-3);
+  width: 1.75rem;
+  height: 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  transition: all var(--duration-150) var(--ease-in-out);
+  z-index: 1;
+}
+
+.category-edit-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--color-info);
+  border-color: var(--color-info);
 }
 
 .main-category-card:hover {

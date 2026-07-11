@@ -2589,7 +2589,8 @@
       "loadingFileTree": "Loading file tree...",
       "closeFileViewer": "Close file viewer",
       "facts": "facts",
-      "status": "Status"
+      "status": "Status",
+      "editCategory": "ערוך קטגוריה"
     },
     "entityGraph": {
       "viewGraph": "View Graph",
@@ -2921,6 +2922,8 @@
       "watchFoldersAriaLabel": "Watch Folders",
       "browser": "דפדפן",
       "browserAriaLabel": "עיון, חיפוש ועריכת מסמכי ידע",
+      "systemDocs": "מסמכי מערכת",
+      "systemDocsAriaLabel": "עיון ויצוא תיעוד מערכת AutoBot",
       "health": "בריאות",
       "healthAriaLabel": "בריאות הידע, ניתוחים, אימות וכלים"
     },
@@ -2930,7 +2933,8 @@
       "tabTools": "כלים",
       "feedAll": "הכל",
       "feedCreated": "נוצר",
-      "feedUpdated": "עודכן"
+      "feedUpdated": "עודכן",
+      "dangerZone": "אזור סכנה"
     },
     "upload": {
       "selectCategory": "Select category...",
