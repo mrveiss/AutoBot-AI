@@ -860,27 +860,54 @@ def set_test_environment():
     os.environ.update(original_env)
 
 
-def pytest_configure(config):  # noqa: ANN001
-    """#11248: real-load lightweight service modules whose unit tests need the real
-    helpers, AFTER every module-level stub above is in place.
+def _real_load_service(name: str, rel_path: str) -> None:  # noqa: ANN001
+    """Real-load a services.* module by path, overwriting any existing stub.
 
-    ``services.llm_api_key_service`` imports ``autobot_shared.redis_client`` /
-    ``logging_manager`` / ``singleton_factory`` at module top — all stubbed/patched
-    during conftest import — so it can only be real-loaded once conftest import has
-    fully completed. pytest_configure runs after that and before collection, so the
-    real module (LLMApiKeyRecord, model_allowed, _parse_key_id_from_bearer, …) is in
-    place when tests/services/test_llm_api_key_service.py is imported. Overwrites the
-    services-package MagicMock stub; falls back to the stub if it can't load here.
+    Must be called from pytest_configure (after all module-level stubs are in
+    place but before collection imports test modules).  Falls back to the
+    existing stub silently if the real file can't be loaded in this env.
+
+    #11532 note: after inserting the real module into sys.modules we ALSO bind
+    it as an attribute on the parent package stub.  ``unittest.mock.patch``
+    resolves ``"services.foo.BAR"`` by calling ``__import__("services.foo")``
+    then ``getattr(services, "foo")``.  Without the setattr the parent stub's
+    ``__getattr__`` always returns a MagicMock singleton, so patch silently
+    patches the wrong object and the real module's globals are never updated.
     """
-    import importlib.util as _cfg_ilu
+    import importlib.util as _rl_ilu
 
-    _spec = _cfg_ilu.spec_from_file_location(
-        "services.llm_api_key_service", str(backend_root / "services" / "llm_api_key_service.py")
-    )
+    _spec = _rl_ilu.spec_from_file_location(name, str(backend_root / rel_path))
     if _spec and _spec.loader:
-        _mod = _cfg_ilu.module_from_spec(_spec)
-        sys.modules["services.llm_api_key_service"] = _mod
+        _mod = _rl_ilu.module_from_spec(_spec)
+        sys.modules[name] = _mod
         try:
             _spec.loader.exec_module(_mod)
         except Exception:
-            sys.modules["services.llm_api_key_service"] = _make_pkg_stub("services.llm_api_key_service")
+            sys.modules[name] = _make_pkg_stub(name)
+            return
+        # Bind on parent so patch() resolves via getattr(parent, child_name).
+        _parent, _, _child = name.rpartition(".")
+        if _parent and _parent in sys.modules:
+            setattr(sys.modules[_parent], _child, sys.modules[name])
+
+
+def pytest_configure(config):  # noqa: ANN001
+    """#11248/#11532: real-load lightweight service modules whose unit tests need the
+    real helpers, AFTER every module-level stub above is in place.
+
+    These modules import ``autobot_shared.redis_client`` / ``logging_manager`` /
+    ``singleton_factory`` at module top — all stubbed/patched during conftest import —
+    so they can only be real-loaded once conftest import has fully completed.
+    pytest_configure runs after that and before collection, so real symbols
+    (LLMApiKeyRecord, MODEL_PRICING, _check_pricing_staleness, …) are in place when
+    test modules are imported.  Each overwrites the services-package MagicMock stub.
+
+    #11532: ``services.llm_cost_tracker`` was stubbed at conftest-import time.
+    Tests that called ``patch("services.llm_cost_tracker.PRICING_VERSION", ...)``
+    were patching the *stub* module object while ``_check_pricing_staleness``
+    executed in the *real* module's globals — the patch was completely inert.
+    Real-loading here ensures ``sys.modules["services.llm_cost_tracker"]`` is the
+    same object as ``_check_pricing_staleness.__globals__`` so patch() is effective.
+    """
+    _real_load_service("services.llm_api_key_service", "services/llm_api_key_service.py")
+    _real_load_service("services.llm_cost_tracker", "services/llm_cost_tracker.py")
