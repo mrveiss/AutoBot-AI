@@ -19,6 +19,7 @@ import re
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
@@ -40,6 +41,11 @@ from chat_workflow.session_handler import (
 )
 
 logger = get_logger(__name__)
+
+# GH#11568: compose tool feature flag and tuning constants.
+CODEEXEC_ENABLED: bool = env_flag("AUTOBOT_CODEEXEC_ENABLED", default=False)
+CODEEXEC_AUTOAPPROVE_READONLY: bool = env_flag("AUTOBOT_CODEEXEC_AUTOAPPROVE_READONLY", default=True)
+CODEEXEC_MAX_SCRIPT_RETRIES: int = env_int("AUTOBOT_CODEEXEC_MAX_SCRIPT_RETRIES", default=1)
 
 # Issue #4482: Default retry count for schema self-correction loop.
 _DEFAULT_SCHEMA_RETRIES = 3
@@ -357,6 +363,25 @@ _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     # existing llc/services. Merged below so they validate like any built-in.
     **LLC_TOOL_SCHEMAS,
 }
+
+# GH#11568: compose tool — sandboxed Python script with injectable RPC shims.
+COMPOSE_TOOL_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "program": {
+            "type": "string",
+            "description": "Python program to execute. Import autobot_tools and call tool functions as async coroutines.",
+        },
+        "description": {
+            "type": "string",
+            "description": "Human-readable description of what this program does.",
+        },
+    },
+    "required": ["program"],
+}
+
+if CODEEXEC_ENABLED:
+    _BUILTIN_TOOL_SCHEMAS["compose"] = COMPOSE_TOOL_SCHEMA
 
 
 def _validate_builtin_tool_arguments(tool_name: str, tool_call: dict[str, Any]) -> WorkflowMessage | None:
@@ -2701,6 +2726,14 @@ class ToolHandlerMixin:
             yield approval_msg
             return
 
+        # GH#11568: sandboxed Python composition tool (main-chat only).
+        if tool_name == "compose" and CODEEXEC_ENABLED:
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
+            async for msg in self._handle_compose_tool(tool_call, session_id, execution_results, ctx):
+                yield msg
+            return
+
         if tool_name == "respond":
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
@@ -2858,6 +2891,99 @@ class ToolHandlerMixin:
             additional_response_parts,
         ):
             yield msg
+
+    # ------------------------------------------------------------------ #
+    # GH#11568: compose tool handlers                                     #
+    # ------------------------------------------------------------------ #
+
+    def _guard_compose(self, program: str, agent_id: "str | None") -> "WorkflowMessage | None":
+        """Run AST guard; return error WorkflowMessage on violation, else None."""
+        from chat_workflow.code_exec.ast_guard import check_script
+        from orchestration.agent_registry import resolve_forbidden_tools
+
+        forbidden = resolve_forbidden_tools(agent_id)
+        verdict = check_script(program, frozenset(forbidden))
+        if verdict.ok:
+            return None
+        lines = "; ".join(f"line {v['line']}: {v['message']}" for v in verdict.violations)
+        return WorkflowMessage(
+            type="tool_result",
+            content=f"compose script rejected by AST guard: {lines}",
+            metadata={"tool_name": "compose", "ast_violations": verdict.violations},
+        )
+
+    def _approve_compose(self, tool_call: dict) -> "WorkflowMessage | None":
+        """Return approval_required WorkflowMessage when auto-approve is off, else None."""
+        if CODEEXEC_AUTOAPPROVE_READONLY:
+            return None
+        return WorkflowMessage(
+            type="approval_required",
+            content="compose script requires approval before execution",
+            metadata={"tool": "compose", "approval_required": True},
+        )
+
+    async def _execute_compose(
+        self, program: str, agent_id: "str | None", run_id: str
+    ) -> "WorkflowMessage":
+        """Run the script inside the sandbox; return result WorkflowMessage."""
+        from chat_workflow.code_exec.shim_codegen import generate_shim_module, injectable_tool_set
+        from orchestration.agent_registry import resolve_forbidden_tools
+        from secure_sandbox_executor import CODEEXEC_TIMEOUT_SECONDS, SecureSandboxExecutor  # lazy
+
+        forbidden = resolve_forbidden_tools(agent_id)
+        tools = injectable_tool_set([], forbidden)
+        shim_src = generate_shim_module(tools)
+        executor = SecureSandboxExecutor()
+        result = await executor.execute_with_stdio_broker(program, shim_src, CODEEXEC_TIMEOUT_SECONDS, run_id)
+        if result.success:
+            return WorkflowMessage(
+                type="tool_result",
+                content=result.stdout or "(no output)",
+                metadata={"tool_name": "compose", "run_id": run_id},
+            )
+        content = f"compose execution failed (exit {result.exit_code}): {result.stderr or result.stdout}"
+        return WorkflowMessage(
+            type="tool_result",
+            content=content,
+            metadata={"tool_name": "compose", "run_id": run_id, "failed": True},
+        )
+
+    async def _handle_compose_tool(
+        self,
+        tool_call: dict[str, Any],
+        session_id: str,
+        execution_results: list[dict[str, Any]],
+        ctx: "LLMIterationContext | None",
+    ):
+        """Handle the compose tool call (GH#11568)."""
+        import uuid
+
+        params = tool_call.get("params", {})
+        program: str = params.get("program", "")
+        agent_id: str | None = ctx.agent_context.agent_id if (ctx and ctx.agent_context) else None
+        if agent_id is not None:
+            yield WorkflowMessage(
+                type="tool_result",
+                content="compose is not available for delegated subagents",
+                metadata={"tool_name": "compose"},
+            )
+            return
+
+        guard_msg = self._guard_compose(program, agent_id)
+        if guard_msg is not None:
+            execution_results.append({"tool": "compose", "status": "ast_rejected"})
+            yield guard_msg
+            return
+
+        approval_msg = self._approve_compose(tool_call)
+        if approval_msg is not None:
+            yield approval_msg
+            return
+
+        run_id = str(uuid.uuid4())
+        result_msg = await self._execute_compose(program, agent_id, run_id)
+        execution_results.append({"tool": "compose", "status": "executed", "run_id": run_id})
+        yield result_msg
 
     async def _process_tool_calls(
         self,

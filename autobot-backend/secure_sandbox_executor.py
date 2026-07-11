@@ -42,6 +42,7 @@ except ImportError:
         """Stub raised when docker SDK is not installed."""
 
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_optional_singleton
@@ -49,6 +50,9 @@ from autobot_shared.ssot_config import config as _ssot_config
 from constants.ttl_constants import TTL_1_HOUR
 
 logger = get_logger(__name__)
+
+# GH#11568: default timeout for compose-tool sandbox execution.
+CODEEXEC_TIMEOUT_SECONDS: int = env_int("AUTOBOT_CODEEXEC_TIMEOUT_SECONDS", default=120)
 
 
 class SandboxSecurityLevel(Enum):
@@ -424,6 +428,38 @@ class SecureSandboxExecutor:
                 await asyncio.to_thread(os.unlink, script_path)
             except Exception as e:
                 self.logger.debug("Failed to cleanup script file %s: %s", script_path, e)
+
+    async def execute_with_stdio_broker(
+        self,
+        script_content: str,
+        shim_src: str,
+        timeout: int,
+        run_id: str,
+    ) -> "SandboxResult":
+        """Execute *script_content* with the shim module prepended (GH#11568).
+
+        The combined source (shim + user script) runs inside the sandbox at
+        HIGH security with no network.  For v1 the broker is driven by the
+        caller (tool_handler) which processes stdout JSON lines after execution.
+
+        Args:
+            script_content: User-supplied Python script.
+            shim_src: Generated autobot_tools shim module source.
+            timeout: Wall-clock execution limit in seconds.
+            run_id: Correlation ID for audit/logging.
+
+        Returns:
+            SandboxResult from the sandbox executor.
+        """
+        combined = shim_src + "\n\n" + script_content
+        cfg = SandboxConfig(
+            security_level=SandboxSecurityLevel.HIGH,
+            execution_mode=SandboxExecutionMode.SCRIPT,
+            enable_network=False,
+            timeout=timeout,
+        )
+        self.logger.debug("execute_with_stdio_broker run_id=%s timeout=%d", run_id, timeout)
+        return await self.execute_script(combined, "python", cfg)
 
     def _validate_command(self, command: str | List[str], config: SandboxConfig) -> bool:
         """Validate command against security policies."""
