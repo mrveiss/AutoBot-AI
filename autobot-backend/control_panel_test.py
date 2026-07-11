@@ -93,7 +93,7 @@ async def test_takeover_manager():
 
     # Test 1: System status
     print("\n1. Testing System Status...")  # noqa: print
-    status = takeover_manager.get_system_status()
+    status = await takeover_manager.get_system_status()
     print(f"✅ Takeover system status: {status}")  # noqa: print
 
     # Test 2: Request takeover
@@ -110,7 +110,7 @@ async def test_takeover_manager():
 
     # Test 3: Check pending requests
     print("\n3. Testing Pending Requests...")  # noqa: print
-    pending = takeover_manager.get_pending_requests()
+    pending = await takeover_manager.get_pending_requests()
     print(f"✅ Pending requests: {len(pending)}")  # noqa: print
 
     # Test 4: Approve takeover (simulate)
@@ -144,7 +144,7 @@ async def test_takeover_manager():
 
     # Test 7: Check final status
     print("\n7. Testing Final Status...")  # noqa: print
-    final_status = takeover_manager.get_system_status()
+    final_status = await takeover_manager.get_system_status()
     print(f"✅ Final system status: {final_status}")  # noqa: print
 
     return True
@@ -241,7 +241,7 @@ async def test_integration():
         task_context.set_outputs(
             {
                 "desktop_streaming_available": desktop_streaming.vnc_manager.vnc_available,
-                "takeover_system_ready": len(takeover_manager.get_system_status()) > 0,
+                "takeover_system_ready": len(await takeover_manager.get_system_status()) > 0,
                 "integration_status": "success",
             }
         )
@@ -263,7 +263,7 @@ async def test_integration():
     print(f"✅ Cross-component takeover request: {request_id}")  # noqa: print
 
     # Check that the request is properly tracked
-    pending = takeover_manager.get_pending_requests()
+    pending = await takeover_manager.get_pending_requests()
     integration_request = next((req for req in pending if req["request_id"] == request_id), None)
 
     if integration_request:
