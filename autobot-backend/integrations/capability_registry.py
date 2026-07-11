@@ -135,6 +135,37 @@ def _populate_default_providers(registry: CapabilityRegistry) -> None:
     except Exception as exc:
         logger.warning("Failed to register TTS capability: %s", exc)
 
+    _register_stt_if_available(registry)
+
+
+def _register_stt_if_available(registry: CapabilityRegistry) -> None:
+    """Credential-gate STT registration via SpeechProvider registry (#11559).
+
+    Imports lazily so voice-processing heavy deps are not pulled in at module
+    load time.  Skips silently when no provider is configured.
+    """
+    try:
+        from integrations.stt_adapter import SpeechProviderSTTAdapter
+        from voice_processing.providers import get_speech_provider_registry
+    except Exception as exc:
+        logger.debug("voice_processing unavailable — STT capability not registered: %s", exc)
+        return
+
+    try:
+        speech_registry = get_speech_provider_registry()
+        # Use the first available provider from the speech registry.  The
+        # language-keyed registry exposes providers per-language; we surface a
+        # generic "en" provider as the default STT capability endpoint.
+        # Non-en language registration in the capability layer is tracked in #11617.
+        provider = speech_registry.get_provider("en")
+        if provider is None:
+            logger.debug("No STT provider registered for 'en' — STT capability skipped")
+            return
+        registry.register(STT, SpeechProviderSTTAdapter(provider))
+        logger.debug("Registered SpeechProviderSTTAdapter (%s) for capability=%s", provider.provider_name, STT)
+    except Exception as exc:
+        logger.warning("Failed to register STT capability: %s", exc)
+
 
 def get_capability_registry() -> CapabilityRegistry:
     """Return the process-wide registry, populating it lazily on first use."""
