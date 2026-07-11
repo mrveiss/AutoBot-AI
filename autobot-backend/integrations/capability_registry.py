@@ -139,10 +139,15 @@ def _populate_default_providers(registry: CapabilityRegistry) -> None:
 
 
 def _register_stt_if_available(registry: CapabilityRegistry) -> None:
-    """Credential-gate STT registration via SpeechProvider registry (#11559).
+    """Register one STT adapter per available language in the SpeechProvider registry (#11617).
 
     Imports lazily so voice-processing heavy deps are not pulled in at module
     load time.  Skips silently when no provider is configured.
+
+    Enumerates the speech registry's languages (via its public ``languages()``
+    accessor) and registers a ``SpeechProviderSTTAdapter`` for each language's
+    highest-priority provider, so every configured language is reachable via the
+    STT capability.
     """
     try:
         from integrations.stt_adapter import SpeechProviderSTTAdapter
@@ -153,18 +158,32 @@ def _register_stt_if_available(registry: CapabilityRegistry) -> None:
 
     try:
         speech_registry = get_speech_provider_registry()
-        # Use the first available provider from the speech registry.  The
-        # language-keyed registry exposes providers per-language; we surface a
-        # generic "en" provider as the default STT capability endpoint.
-        # Non-en language registration in the capability layer is tracked in #11617.
-        provider = speech_registry.get_provider("en")
-        if provider is None:
-            logger.debug("No STT provider registered for 'en' — STT capability skipped")
+        languages = list(speech_registry.languages())
+        if not languages:
+            logger.debug("No STT providers registered in speech registry — STT capability skipped")
             return
-        registry.register(STT, SpeechProviderSTTAdapter(provider))
-        logger.debug("Registered SpeechProviderSTTAdapter (%s) for capability=%s", provider.provider_name, STT)
+        for lang in languages:
+            _register_stt_language(registry, speech_registry, lang, SpeechProviderSTTAdapter)
     except Exception as exc:
         logger.warning("Failed to register STT capability: %s", exc)
+
+
+def _register_stt_language(registry: CapabilityRegistry, speech_registry, lang: str, adapter_cls) -> None:
+    """Register one STT adapter for *lang* if its highest-priority provider exists."""
+    try:
+        provider = speech_registry.get_provider(lang)
+        if provider is None:
+            logger.debug("No STT provider for language '%s' — skipped", lang)
+            return
+        registry.register(STT, adapter_cls(provider))
+        logger.debug(
+            "Registered SpeechProviderSTTAdapter (%s, lang=%s) for capability=%s",
+            provider.provider_name,
+            lang,
+            STT,
+        )
+    except Exception as exc:
+        logger.warning("Failed to register STT capability for language '%s': %s", lang, exc)
 
 
 def get_capability_registry() -> CapabilityRegistry:
