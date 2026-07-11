@@ -738,7 +738,7 @@ def test_filter_savings_not_inflated_by_tee_hint(tmp_path, monkeypatch):
 
 
 def test_cap_unmatched_output_under_cap_untouched():
-    import services.tool_output_filter as mod
+    pass
 
     small_output = "just a normal short unmatched output\n"
     result = cap_unmatched_output("some-unknown-tool", small_output, exit_code=0)
