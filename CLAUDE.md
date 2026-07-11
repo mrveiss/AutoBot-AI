@@ -61,5 +61,5 @@ Correctness → Speed → Maintainability. No wasted motion. No speculative work
 - **PR queue limit:** ≥5 open PRs → defer implementation and notify
 - **Codebase is source of truth:** never edit `/opt/autobot/` or `/var/log/autobot/`
 - **System updates (test AND prod):** ONLY via the builtin updater a user reaches at `/slm/maintenance/updates/code-sync` (code-sync API / self-update); if the builtin can't do it, fix that gap (issue + PR) — never side-channel via ad-hoc ansible/shell
-- **One issue per session** — don't auto-start others after completing one
+- **Batch similar-scope issues per PR:** one PR may close several similar-scope issues (`Closes #A, #B, …`) — each MUST be fully delivered (closure Gate 3: partial delivery never closes); genuinely independent or different-risk changes still get separate PRs
 - **Model tiers:** Haiku (`claude-haiku-4-5-20251001`) for status/labels/simple transitions; Sonnet for implementation and reviews
