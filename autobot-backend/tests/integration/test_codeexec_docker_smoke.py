@@ -153,8 +153,8 @@ async def test_smoke_network_is_disabled_in_sandbox():
 @pytest.mark.asyncio
 async def test_smoke_budget_exhaustion_aborts_container():
     """A script exceeding the tool-call budget is aborted by the broker."""
-    from secure_sandbox_executor import SecureSandboxExecutor  # noqa: F401
     from chat_workflow.code_exec.broker import CODEEXEC_MAX_TOOL_CALLS
+    from secure_sandbox_executor import SecureSandboxExecutor  # noqa: F401
 
     async def dispatch(tool, params):
         return {"ok": True}
