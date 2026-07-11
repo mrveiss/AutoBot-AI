@@ -1879,3 +1879,132 @@ def test_refresh_message_does_not_imply_deploy() -> None:
     assert "refreshed" in up.lower() and "refreshed" in current.lower()
     assert "available" in up.lower()  # signals a pending, undeployed update
     assert "up to date" in current.lower()
+
+
+# ---------------------------------------------------------------------------
+# #11466 — _resolve_pg_db_url: byte-identical output after shared-helper refactor
+# ---------------------------------------------------------------------------
+#
+# These tests prove the refactored _resolve_pg_db_url produces EXACTLY the
+# same strings as the inline version it replaced, for every significant input
+# combination.  The "before" values are the literal strings from the original
+# inline assembly removed in #11466.
+
+
+def test_resolve_pg_db_url_byte_identical_autobot_database_url_in_env_vars() -> None:
+    """AUTOBOT_DATABASE_URL in env_vars → returned as-is (unchanged)."""
+    env_vars = {"AUTOBOT_DATABASE_URL": "postgresql://u:p@host:5432/db"}
+    result = _resolve_pg_db_url(env_vars)
+    assert result == "postgresql://u:p@host:5432/db"
+
+
+def test_resolve_pg_db_url_byte_identical_autobot_database_url_in_os_environ() -> None:
+    """AUTOBOT_DATABASE_URL in os.environ → returned as-is (unchanged)."""
+    env_backup = os.environ.pop("AUTOBOT_DATABASE_URL", None)
+    try:
+        os.environ["AUTOBOT_DATABASE_URL"] = "postgresql://env_u:env_p@envhost/envdb"
+        result = _resolve_pg_db_url({})
+    finally:
+        if env_backup is not None:
+            os.environ["AUTOBOT_DATABASE_URL"] = env_backup
+        else:
+            os.environ.pop("AUTOBOT_DATABASE_URL", None)
+    assert result == "postgresql://env_u:env_p@envhost/envdb"
+
+
+def test_resolve_pg_db_url_byte_identical_database_url_fallback() -> None:
+    """DATABASE_URL in env_vars → returned as-is (unchanged)."""
+    env_vars = {"DATABASE_URL": "postgresql://u2:p2@host2/db2"}
+    result = _resolve_pg_db_url(env_vars)
+    assert result == "postgresql://u2:p2@host2/db2"
+
+
+def test_resolve_pg_db_url_byte_identical_component_vars_no_password() -> None:
+    """AUTOBOT_POSTGRES_* without password → 'user@host:port/db' (no colon before @).
+
+    Before (#11466 inline code):
+        auth = f"{user}@"  # pw is falsy
+        return f"postgresql://{auth}{host}:{port}/{db}"
+    """
+    env_vars = {
+        "AUTOBOT_POSTGRES_HOST": "pg-host",
+        "AUTOBOT_POSTGRES_PORT": "5432",
+        "AUTOBOT_POSTGRES_USER": "autobot_app",
+        "AUTOBOT_POSTGRES_DB": "autobot_users",
+    }
+    result = _resolve_pg_db_url(env_vars)
+    assert result == "postgresql://autobot_app@pg-host:5432/autobot_users"
+
+
+def test_resolve_pg_db_url_byte_identical_component_vars_with_password() -> None:
+    """AUTOBOT_POSTGRES_* with password → 'user:pw@host:port/db'.
+
+    Before (#11466 inline code):
+        auth = f"{user}:{pw}@"  # pw is truthy
+        return f"postgresql://{auth}{host}:{port}/{db}"
+    """
+    env_vars = {
+        "AUTOBOT_POSTGRES_HOST": "pg-host",
+        "AUTOBOT_POSTGRES_PORT": "5433",
+        "AUTOBOT_POSTGRES_USER": "svc",
+        "AUTOBOT_POSTGRES_PASSWORD": "s3cr3t",
+        "AUTOBOT_POSTGRES_DB": "autobot",
+    }
+    result = _resolve_pg_db_url(env_vars)
+    assert result == "postgresql://svc:s3cr3t@pg-host:5433/autobot"
+
+
+def test_resolve_pg_db_url_byte_identical_component_vars_defaults() -> None:
+    """When only HOST is set, defaults match the original hardcoded values.
+
+    Before (#11466 inline code):
+        user = ... os.environ.get("AUTOBOT_POSTGRES_USER", "autobot_app")
+        db   = ... os.environ.get("AUTOBOT_POSTGRES_DB",   "autobot_users")
+        port = ... os.environ.get("AUTOBOT_POSTGRES_PORT", "5432")
+    """
+    clear_keys = {
+        "AUTOBOT_POSTGRES_PORT",
+        "AUTOBOT_POSTGRES_USER",
+        "AUTOBOT_POSTGRES_PASSWORD",
+        "AUTOBOT_POSTGRES_DB",
+    }
+    env_backup = {k: os.environ.pop(k) for k in clear_keys if k in os.environ}
+    try:
+        result = _resolve_pg_db_url({"AUTOBOT_POSTGRES_HOST": "myhost"})
+    finally:
+        os.environ.update(env_backup)
+    assert result == "postgresql://autobot_app@myhost:5432/autobot_users"
+
+
+def test_resolve_pg_db_url_byte_identical_nothing_set_returns_empty() -> None:
+    """When nothing is configured, '' is returned (not None, not an exception).
+
+    Before (#11466 inline code):
+        return ""  # final line of the function
+    """
+    clear_keys = {
+        "AUTOBOT_DATABASE_URL",
+        "DATABASE_URL",
+        "AUTOBOT_POSTGRES_HOST",
+        "AUTOBOT_POSTGRES_PORT",
+        "AUTOBOT_POSTGRES_USER",
+        "AUTOBOT_POSTGRES_PASSWORD",
+        "AUTOBOT_POSTGRES_DB",
+    }
+    env_backup = {k: os.environ.pop(k) for k in clear_keys if k in os.environ}
+    try:
+        result = _resolve_pg_db_url({})
+    finally:
+        os.environ.update(env_backup)
+    assert result == ""
+
+
+def test_resolve_pg_db_url_env_vars_takes_precedence_over_os_environ() -> None:
+    """env_vars takes precedence over os.environ for AUTOBOT_POSTGRES_* keys."""
+    os.environ["AUTOBOT_POSTGRES_HOST"] = "os-environ-host"
+    try:
+        result = _resolve_pg_db_url({"AUTOBOT_POSTGRES_HOST": "env-vars-host"})
+    finally:
+        os.environ.pop("AUTOBOT_POSTGRES_HOST", None)
+    assert "env-vars-host" in result
+    assert "os-environ-host" not in result

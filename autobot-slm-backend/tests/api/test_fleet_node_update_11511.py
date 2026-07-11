@@ -270,7 +270,7 @@ def test_sync_fleet_node_skips_degraded_node() -> None:
     degraded = _fake_node(
         node_id="node-vnc",
         hostname="VNC",
-        ip_address="172.16.168.26",
+        ip_address="203.0.113.26",  # RFC 5737 TEST-NET-3 doc IP (no real fleet IPs in tests — SSOT)
         status=_STATUS_DEGRADED,
         last_heartbeat=None,
     )
