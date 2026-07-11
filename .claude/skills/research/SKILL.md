@@ -141,6 +141,7 @@ Only after explicit user go-ahead. Read relevant AutoBot files guided by Phase 1
 ### What We Can Adopt
 - Specific patterns, techniques, or approaches from the source
 - For each: which AutoBot module/file it would apply to
+- For each: already-exists audit — the greps/files checked proving AutoBot lacks it (cite paths)
 - Effort estimate: trivial / moderate / significant
 
 ### What We Already Do Better
@@ -188,4 +189,5 @@ If source is too large for single analysis, summarize sections and focus on what
 - Phase 2 MUST NOT start without explicit user approval after Phase 1
 - Always cite specific files, functions, or sections when making claims
 - When comparing to AutoBot, read actual code — don't assume based on file names
+- **Audit-first gate:** no item enters "What We Can Adopt" without an already-exists audit (grep + read the candidate AutoBot modules, cite what was checked); capability already exists → it moves to "What We Already Do Better"; partially exists → describe only the missing delta
 - Keep each section concise — depth over breadth
