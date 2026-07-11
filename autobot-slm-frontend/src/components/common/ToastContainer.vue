@@ -83,38 +83,40 @@ const getIconPath = (type: string): string => {
   pointer-events: auto;
   min-width: 300px;
   max-width: 400px;
-  background: white;
+  background: var(--a11y-bg-surface);
 }
 
+/* #11515 Task 4: status colors → tokens. Light full-border is a theme-aware
+ * tint of the status hue over the surface; the bold left edge + icon use the
+ * status -500 token. */
 .toast-info {
-  border-left: 4px solid #3b82f6;
-  border: 1px solid #93c5fd;
-  border-left: 4px solid #3b82f6;
+  border: 1px solid color-mix(in srgb, var(--color-primary-500) 45%, var(--a11y-bg-surface));
+  border-left: 4px solid var(--color-primary-500);
 }
 
 .toast-success {
-  border: 1px solid #86efac;
-  border-left: 4px solid #22c55e;
+  border: 1px solid color-mix(in srgb, var(--color-success-500) 45%, var(--a11y-bg-surface));
+  border-left: 4px solid var(--color-success-500);
 }
 
 .toast-warning {
-  border: 1px solid #fcd34d;
-  border-left: 4px solid #f59e0b;
+  border: 1px solid color-mix(in srgb, var(--color-warning-500) 45%, var(--a11y-bg-surface));
+  border-left: 4px solid var(--color-warning-500);
 }
 
 .toast-error {
-  border: 1px solid #fca5a5;
-  border-left: 4px solid #ef4444;
+  border: 1px solid color-mix(in srgb, var(--color-danger-500) 45%, var(--a11y-bg-surface));
+  border-left: 4px solid var(--color-danger-500);
 }
 
 .toast-icon {
   flex-shrink: 0;
 }
 
-.toast-info .toast-icon { color: #3b82f6; }
-.toast-success .toast-icon { color: #22c55e; }
-.toast-warning .toast-icon { color: #f59e0b; }
-.toast-error .toast-icon { color: #ef4444; }
+.toast-info .toast-icon { color: var(--color-primary-500); }
+.toast-success .toast-icon { color: var(--color-success-500); }
+.toast-warning .toast-icon { color: var(--color-warning-500); }
+.toast-error .toast-icon { color: var(--color-danger-500); }
 
 .toast-content {
   flex: 1;
@@ -126,17 +128,17 @@ const getIconPath = (type: string): string => {
   font-weight: 500;
   line-height: 1.5;
   word-break: break-word;
-  color: #111827;
+  color: var(--a11y-text);
 }
 
 .toast-close {
   flex-shrink: 0;
   background: transparent;
   border: none;
-  color: #6b7280;
+  color: var(--a11y-text-muted);
   min-width: 32px;
   min-height: 32px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -145,12 +147,12 @@ const getIconPath = (type: string): string => {
 }
 
 .toast-close:hover {
-  background: #f3f4f6;
-  color: #111827;
+  background: var(--a11y-bg-muted);
+  color: var(--a11y-text);
 }
 
 .toast-close:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--a11y-focus-ring);
   outline-offset: 2px;
 }
 
