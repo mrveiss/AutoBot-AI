@@ -16,6 +16,7 @@ Issue #9049 - Plugin capability manifest system.
 from __future__ import annotations
 
 import logging
+import threading
 import re
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -231,12 +232,15 @@ class PluginRegistry:
     """
 
     _instance: "PluginRegistry" | None = None
+    _instance_lock = threading.Lock()
     _plugins: Dict[str, BasePlugin] = {}
 
     def __new__(cls):
-        """Singleton pattern."""
+        """Singleton pattern (double-checked locking, #11637)."""
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            with cls._instance_lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
         return cls._instance
 
     def register(self, plugin: BasePlugin) -> None:

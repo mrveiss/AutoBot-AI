@@ -12,6 +12,7 @@ Issue #9049 - Plugin capability manifest system.
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -117,13 +118,16 @@ class CapabilityChecker:
     """
 
     _instance: Optional[CapabilityChecker] = None
+    _instance_lock = threading.Lock()
 
     def __new__(cls) -> CapabilityChecker:
-        """Ensure singleton instance."""
+        """Ensure singleton instance (double-checked locking, #11637)."""
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._granted_capabilities: Dict[str, List[Capability]] = {}
-            cls._logger = get_logger(__name__)
+            with cls._instance_lock:
+                if cls._instance is None:
+                    cls._granted_capabilities: Dict[str, List[Capability]] = {}
+                    cls._logger = get_logger(__name__)
+                    cls._instance = super().__new__(cls)
         return cls._instance
 
     def grant_capabilities(

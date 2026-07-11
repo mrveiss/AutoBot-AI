@@ -4,6 +4,7 @@
 # Author: mrveiss
 """External Provider Factory (Issue #4344)"""
 
+import threading
 from enum import Enum
 
 from autobot_shared.logging_manager import get_logger
@@ -23,12 +24,16 @@ class ExternalProviderFactory:
     """Factory for creating and managing external memory providers."""
 
     _instance = None
+    _instance_lock = threading.Lock()
     _external_provider = None
     _provider_type: ProviderType | None = None
 
     def __new__(cls):
+        # Issue #11637: double-checked locking for concurrent first access.
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            with cls._instance_lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
         return cls._instance
 
     @classmethod

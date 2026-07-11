@@ -15,6 +15,7 @@ Issue #6970 - Hook registry with signatures and validation.
 from __future__ import annotations
 
 import asyncio
+import threading
 import logging
 import warnings
 from enum import Enum
@@ -183,12 +184,15 @@ class HookRegistry:
     """
 
     _instance: "HookRegistry" | None = None
+    _instance_lock = threading.Lock()
     _hooks: Dict[str, List[Any]] = {}  # Each entry is a dict with callback and plugin_name keys
 
     def __new__(cls):
-        """Singleton pattern."""
+        """Singleton pattern (double-checked locking, #11637)."""
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            with cls._instance_lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
         return cls._instance
 
     def register_hook(

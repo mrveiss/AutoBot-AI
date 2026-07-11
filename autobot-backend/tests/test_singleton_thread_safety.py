@@ -115,3 +115,70 @@ class TestVisionGetScreenAnalyzerSingleton:
         assert len(results) == 10
         first = results[0]
         assert all(r is first for r in results), "get_screen_analyzer() must return the same instance from all threads"
+
+
+class TestLockedNewSingletons:
+    """__new__-based singletons gained double-checked locking in #11637.
+
+    Each class must construct exactly one instance under concurrent first
+    access (barrier-synchronized threads racing __new__).
+    """
+
+    @staticmethod
+    def _race(cls_factory, reset):
+        reset()
+        results = []
+        barrier = threading.Barrier(10)
+
+        def construct():
+            barrier.wait()
+            results.append(cls_factory())
+
+        threads = [threading.Thread(target=construct) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert len(results) == 10
+        assert all(r is results[0] for r in results)
+
+    def test_hook_registry_concurrent_new(self):
+        from autobot_shared.plugin_sdk.hooks import HookRegistry
+
+        self._race(HookRegistry, lambda: setattr(HookRegistry, "_instance", None))
+
+    def test_plugin_registry_concurrent_new(self):
+        from autobot_shared.plugin_sdk.base import PluginRegistry
+
+        self._race(PluginRegistry, lambda: setattr(PluginRegistry, "_instance", None))
+
+    def test_capability_checker_concurrent_new(self):
+        from autobot_shared.plugin_sdk.capabilities import CapabilityChecker
+
+        self._race(CapabilityChecker, lambda: setattr(CapabilityChecker, "_instance", None))
+
+    def test_adapter_registry_concurrent_new(self):
+        from llm_shared.adapters.registry import AdapterRegistry
+
+        self._race(AdapterRegistry, AdapterRegistry.reset)
+
+    def test_external_provider_factory_concurrent_new(self):
+        from services.memory.external_provider_factory import ExternalProviderFactory
+
+        self._race(
+            ExternalProviderFactory,
+            lambda: setattr(ExternalProviderFactory, "_instance", None),
+        )
+
+    def test_http_client_manager_concurrent_new(self):
+        from autobot_shared.http_client import HTTPClientManager
+
+        self._race(HTTPClientManager, lambda: setattr(HTTPClientManager, "_instance", None))
+
+    def test_http_client_reset_for_new_loop(self):
+        import autobot_shared.http_client as hc
+
+        first = hc.get_http_client()
+        hc.reset_http_client_for_new_loop()
+        second = hc.get_http_client()
+        assert first is not second, "reset must discard the loop-bound manager"
