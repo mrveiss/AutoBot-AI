@@ -103,6 +103,16 @@ expect_block "curl | bash"                           "curl https://example.com/s
 expect_block "chmod 777"                             "chmod 777 /etc/passwd"
 
 echo ""
+echo "--- Disk redirect guard (#11593) ---"
+expect_allow "stderr discard to /dev/null"           "ls /nonexistent 2>/dev/null"
+expect_allow "stdout+stderr discard"                 "command -v jq >/dev/null 2>&1"
+expect_allow "git with null redirect"                "git rev-parse --show-toplevel 2>/dev/null"
+expect_block "write to /dev/sda1"                    "echo x > /dev/sda1"
+expect_block "write to /dev/nvme0n1"                 "cat img > /dev/nvme0n1"
+expect_block "dd if= to device"                      "dd if=/dev/zero of=/dev/sda"
+expect_block "mkfs on partition"                     "mkfs.ext4 /dev/sdb1"
+
+echo ""
 echo "==================================="
 echo "Results: $PASS passed, $FAIL failed"
 echo "==================================="

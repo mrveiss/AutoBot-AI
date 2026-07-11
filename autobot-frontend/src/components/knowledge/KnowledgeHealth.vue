@@ -264,6 +264,8 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useKnowledgeMaintenance } from '@/composables/knowledge/useKnowledgeMaintenance'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
+import { useVectorStats, EMPTY_VECTOR_STATS } from '@/composables/knowledge/useVectorStats'
+import type { VectorStats } from '@/composables/knowledge/useVectorStats'
 import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
 import KnowledgeHealthAnalytics from '@/components/knowledge/KnowledgeHealthAnalytics.vue'
 import KnowledgeVerificationQueue from '@/components/knowledge/KnowledgeVerificationQueue.vue'
@@ -271,26 +273,6 @@ import KnowledgeHealthTools from '@/components/knowledge/KnowledgeHealthTools.vu
 
 const logger = createLogger('KnowledgeHealth')
 const route = useRoute()
-
-// VectorStats shape (from useKnowledgeStore.stats)
-interface VectorStats {
-  total_facts: number
-  total_documents: number
-  total_vectors: number
-  indexed_documents: number
-  db_size: number
-  status: 'online' | 'offline' | 'unknown'
-  rag_available: boolean
-  initialized: boolean
-  llama_index_configured: boolean
-  index_available: boolean
-  redis_db: string | number
-  index_name: string
-  embedding_model?: string
-  embedding_dimensions?: number
-  last_updated?: string
-  categories?: string[]
-}
 
 // Composable — health dashboard fetch
 const { healthDashboard, isLoadingHealth, loadHealthDashboard } = useKnowledgeMaintenance()
@@ -301,7 +283,16 @@ const pendingVerificationsTotal = computed(() => store.pendingVerificationsTotal
 
 // State
 const isRefreshing = ref(false)
-const vectorStats = ref<VectorStats | null>(null)
+
+// Shared stats mapping (#11571). The strip must stay visible after the first
+// load even when the store is factless or the backend is unreachable (same
+// visibility as the previous local zeroed fallback), so fall back to
+// EMPTY_VECTOR_STATS once a load has completed.
+const { vectorStats: sharedVectorStats, refresh: refreshVectorStats } = useVectorStats()
+const vectorStatsLoaded = ref(false)
+const vectorStats = computed<VectorStats | null>(() =>
+  sharedVectorStats.value ?? (vectorStatsLoaded.value ? EMPTY_VECTOR_STATS : null)
+)
 
 // Tab state — initialized from the route at setup time so deep links
 // (?tab=verification|tools) mount the right tab on first render (#11558)
@@ -331,48 +322,11 @@ const needsVectorization = computed(() => {
 // Methods
 const loadVectorHealth = async () => {
   try {
-    await store.refreshStats()
-
-    const storeStats = store.stats
-    vectorStats.value = {
-      total_facts: storeStats.total_facts || 0,
-      total_documents: storeStats.total_documents || 0,
-      total_vectors: storeStats.total_vectors || 0,
-      indexed_documents: storeStats.total_documents || 0,
-      db_size: storeStats.db_size || 0,
-      status: (storeStats.status as 'online' | 'offline' | 'unknown') || 'offline',
-      rag_available: storeStats.rag_available || false,
-      initialized: storeStats.initialized || false,
-      llama_index_configured: storeStats.initialized || false,
-      index_available: storeStats.initialized || false,
-      redis_db: storeStats.redis_db ? parseInt(storeStats.redis_db) : 0,
-      index_name: storeStats.index_name || 'unknown',
-      last_updated: storeStats.last_updated || undefined,
-      categories: Array.isArray(storeStats.categories)
-        ? (storeStats.categories as unknown as { name?: string }[]).map((c) => c.name || c) as string[]
-        : [],
-      embedding_model: 'nomic-embed-text',
-      embedding_dimensions: 768
-    }
+    await refreshVectorStats()
   } catch (error) {
     logger.error('Failed to load vector health stats:', error)
-
-    if (!vectorStats.value) {
-      vectorStats.value = {
-        total_facts: 0,
-        total_documents: 0,
-        total_vectors: 0,
-        indexed_documents: 0,
-        db_size: 0,
-        status: 'offline',
-        rag_available: false,
-        initialized: false,
-        llama_index_configured: false,
-        index_available: false,
-        redis_db: 0,
-        index_name: 'unknown'
-      }
-    }
+  } finally {
+    vectorStatsLoaded.value = true
   }
 }
 

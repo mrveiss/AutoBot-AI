@@ -2572,16 +2572,10 @@
       "graphAriaLabel": "Voir le graphe de connaissances",
       "manage": "Gérer",
       "manageAriaLabel": "Gérer la base de connaissances",
-      "verification": "Vérification",
-      "verificationAriaLabel": "File de vérification des sources",
       "connectors": "Connecteurs",
       "connectorsAriaLabel": "Connecteurs de sources",
       "entities": "Entités",
       "entitiesAriaLabel": "Voir les entités",
-      "maintenance": "Maintenance",
-      "maintenanceAriaLabel": "Maintenance de la base de connaissances",
-      "analytics": "Analytique",
-      "statistics": "Statistiques",
       "webResearch": "Web Research",
       "webResearchAriaLabel": "4-tab web research panel",
       "openSidebar": "Open navigation menu",
@@ -2930,7 +2924,6 @@
     "entries": {
       "uploadTab": "Téléverser",
       "manageTab": "Gérer",
-      "advancedTab": "Avancé",
       "searchPlaceholder": "Rechercher des entrées...",
       "searchAriaLabel": "Rechercher dans les entrées de la base de connaissances",
       "entries": "entrées",
@@ -3877,8 +3870,6 @@
       "qualityScore": "Quality Score",
       "refreshAll": "Refresh All",
       "refreshing": "Refreshing...",
-      "subtitle": "Monitor and maintain your knowledge base health",
-      "title": "Knowledge Maintenance",
       "topRecommendations": "Top Recommendations",
       "totalFacts": "Total Facts",
       "totalVectors": "Total Vectors",
@@ -5146,8 +5137,6 @@
   "knowledge.mainCategories.facts": "faits",
   "knowledge.mainCategories.populate": "Peupler",
   "knowledge.mainCategories.import": "Importer",
-  "knowledge.maintenance.title": "Maintenance de la base de connaissances",
-  "knowledge.maintenance.subtitle": "Surveiller et maintenir la santé de la base de connaissances, gérer les doublons et nettoyer les données orphelines",
   "knowledge.maintenance.refreshAll": "Tout actualiser",
   "knowledge.maintenance.refreshing": "Actualisation...",
   "knowledge.maintenance.healthDashboard": "Tableau de bord de santé",
@@ -8702,5 +8691,8 @@
       "rawJsonLabel": "Configuration du plugin (JSON)",
       "invalidJson": "JSON invalide — veuillez corriger avant d'enregistrer."
     }
-  }
+  },
+  "knowledge.health.tagDocCount": "{count} documents",
+  "knowledge.health.activityCreated": "{title} a été créé",
+  "knowledge.health.activityUpdated": "{title} a été mis à jour"
 }

@@ -311,3 +311,76 @@ class TestActiveLock:
 
         assert task_id not in cleaned
         assert workspace_dir.exists()
+
+
+def _backdate(workspace_dir: Path) -> None:
+    """Make a worktree look ancient so cleanup treats it as stale."""
+    import json as _json
+
+    meta_file = workspace_dir / ".workspace-meta.json"
+    meta = _json.loads(meta_file.read_text())
+    meta["created_at"] = "2000-01-01T00:00:00+00:00"
+    meta_file.write_text(_json.dumps(meta))
+
+
+def _commit_in_worktree(wt: Path, msg: str) -> None:
+    (wt / "work.txt").write_text(msg)
+    subprocess.run(["git", "-C", str(wt), "add", "."], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(wt), "commit", "-m", msg], check=True, capture_output=True)
+
+
+def _branch_exists(git_repo: Path, branch: str) -> bool:
+    r = subprocess.run(["git", "-C", str(git_repo), "branch", "--list", branch], capture_output=True, text=True)
+    return bool(r.stdout.strip())
+
+
+class TestCleanupTOCTOU:
+    """GH#11059: cleanup/eviction must not force-evict a worktree a resume is
+    touching (flock guard) nor force-drop unmerged work (git branch -d)."""
+
+    def test_cleanup_skips_worktree_whose_guard_is_held(self, git_repo: Path) -> None:
+        task_id = "eeeeeee0-0000-0000-0000-000000000040"
+        ws = allocate(task_id, "agent-toctou", repo_root=git_repo)
+        workspace_dir = Path(ws.worktree_path)
+        _backdate(workspace_dir)
+        # Remove .active-lock so, absent the guard, it WOULD be an eviction candidate.
+        (workspace_dir / ".active-lock").unlink()
+
+        # Hold the guard (simulating a resume in progress): flock is per open-file
+        # description, so cleanup's own non-blocking flock must fail → it skips.
+        with _tw._worktree_guard(workspace_dir):
+            cleaned = cleanup_stale(max_age_days=0, repo_root=git_repo)
+        assert task_id not in cleaned
+        assert workspace_dir.exists()
+
+        # Guard released → the now-idle worktree is reclaimed.
+        cleaned2 = cleanup_stale(max_age_days=0, repo_root=git_repo)
+        assert task_id in cleaned2
+        assert not workspace_dir.exists()
+
+    def test_cleanup_uses_fail_safe_branch_delete_keeps_unmerged(self, git_repo: Path) -> None:
+        task_id = "eeeeeee0-0000-0000-0000-000000000041"
+        ws = allocate(task_id, "agent-toctou", repo_root=git_repo)
+        workspace_dir = Path(ws.worktree_path)
+        _commit_in_worktree(workspace_dir, "unmerged commit")  # branch now ahead of base
+        _backdate(workspace_dir)
+        (workspace_dir / ".active-lock").unlink()
+
+        cleaned = cleanup_stale(max_age_days=0, repo_root=git_repo)
+
+        assert task_id in cleaned
+        assert not workspace_dir.exists()  # worktree removed
+        # git branch -d refused (unmerged) → the branch + its commit survive for recovery.
+        assert _branch_exists(git_repo, f"task-{task_id}")
+
+    def test_explicit_release_force_deletes_unmerged_branch(self, git_repo: Path) -> None:
+        task_id = "eeeeeee0-0000-0000-0000-000000000042"
+        ws = allocate(task_id, "agent-toctou", repo_root=git_repo)
+        workspace_dir = Path(ws.worktree_path)
+        _commit_in_worktree(workspace_dir, "unmerged commit")
+
+        # Explicit release (default force_branch=True) force-deletes the branch.
+        release(task_id, repo_root=git_repo)
+
+        assert not workspace_dir.exists()
+        assert not _branch_exists(git_repo, f"task-{task_id}")

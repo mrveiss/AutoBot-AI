@@ -418,6 +418,12 @@ def _build_llm_iteration_context(state: ChatState):
         system_prompt=state["llm_params"].get("system_prompt"),
         initial_prompt=initial_prompt,
         message=state["user_message"],
+        # #11552: thread the request context (company_id, user_id, …) into the
+        # iteration context so the tool-dispatch seam is company-scoped in the
+        # GRAPH path too. The legacy _create_llm_iteration_context already passes
+        # context=; without it here, ctx.context was {} and company-scoped tools
+        # (e.g. LLC create_task, #11501) could never resolve company_id.
+        context=dict(state.get("context", {}) or {}),
         agent_context=agent_context,
         work_item_id=work_item_id,
         requires_approval_before=approval_cats,

@@ -1323,16 +1323,4 @@ tr.selected {
   flex-direction: column;
 }
 
-/* System Knowledge Content */
-.system-knowledge-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--spacing-4);
-}
-
-.man-pages-section {
-  margin-top: var(--spacing-8);
-  border-top: 2px solid var(--border-default);
-  padding-top: var(--spacing-8);
-}
 </style>
