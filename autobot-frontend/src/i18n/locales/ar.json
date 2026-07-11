@@ -2572,16 +2572,10 @@
       "graphAriaLabel": "View knowledge graph",
       "manage": "Manage",
       "manageAriaLabel": "Manage knowledge base",
-      "verification": "Verification",
-      "verificationAriaLabel": "Source verification queue",
       "connectors": "Connectors",
       "connectorsAriaLabel": "Source connectors",
       "entities": "Entities",
       "entitiesAriaLabel": "View entities",
-      "maintenance": "Maintenance",
-      "maintenanceAriaLabel": "Knowledge base maintenance",
-      "analytics": "التحليلات",
-      "statistics": "Statistics",
       "webResearch": "Web Research",
       "webResearchAriaLabel": "4-tab web research panel",
       "openSidebar": "Open navigation menu",
@@ -2930,7 +2924,6 @@
     "entries": {
       "uploadTab": "Upload",
       "manageTab": "Manage",
-      "advancedTab": "Advanced",
       "searchPlaceholder": "Search entries...",
       "searchAriaLabel": "Search knowledge base entries",
       "entries": "entries",
@@ -3877,8 +3870,6 @@
       "qualityScore": "Quality Score",
       "refreshAll": "Refresh All",
       "refreshing": "Refreshing...",
-      "subtitle": "Monitor and maintain your knowledge base health",
-      "title": "Knowledge Maintenance",
       "topRecommendations": "Top Recommendations",
       "totalFacts": "Total Facts",
       "totalVectors": "Total Vectors",
@@ -5146,8 +5137,6 @@
   "knowledge.mainCategories.facts": "facts",
   "knowledge.mainCategories.populate": "Populate",
   "knowledge.mainCategories.import": "استيراد",
-  "knowledge.maintenance.title": "Knowledge Base Maintenance",
-  "knowledge.maintenance.subtitle": "Monitor and maintain knowledge base health, handle duplicates, and clean up orphaned data",
   "knowledge.maintenance.refreshAll": "Refresh All",
   "knowledge.maintenance.refreshing": "Refreshing...",
   "knowledge.maintenance.healthDashboard": "Health Dashboard",
@@ -8702,5 +8691,8 @@
       "rawJsonLabel": "تكوين المكوّن الإضافي (JSON)",
       "invalidJson": "JSON غير صالح — يُرجى التصحيح قبل الحفظ."
     }
-  }
+  },
+  "knowledge.health.tagDocCount": "{count} وثائق",
+  "knowledge.health.activityCreated": "تم إنشاء {title}",
+  "knowledge.health.activityUpdated": "تم تحديث {title}"
 }

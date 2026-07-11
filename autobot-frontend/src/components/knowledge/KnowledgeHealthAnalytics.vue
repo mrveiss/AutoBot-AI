@@ -4,7 +4,7 @@
     <div v-if="errorMessage" class="error-notification" role="alert" aria-live="assertive">
       <Icon name="exclamation-circle" />
       <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = ''" class="close-btn" :aria-label="$t('knowledge.stats.closeError')">
+      <button @click="clearError()" class="close-btn" :aria-label="$t('knowledge.stats.closeError')">
         <Icon name="times" />
       </button>
     </div>
@@ -184,12 +184,9 @@
           :key="tag.name"
           class="tag-cloud-item"
           :style="{ fontSize: `${tag.size}rem` }"
-          :title="`${tag.count} documents`"
-          :aria-label="`${tag.name}: ${tag.count} documents`"
+          :title="$t('knowledge.health.tagDocCount', { count: tag.count })"
+          :aria-label="`${tag.name}: ${$t('knowledge.health.tagDocCount', { count: tag.count })}`"
           role="listitem"
-          tabindex="0"
-          @click="() => {}"
-          @keypress.enter="() => {}"
         >
           {{ tag.name }}
         </span>
@@ -214,7 +211,9 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
+import { useVectorStats } from '@/composables/knowledge/useVectorStats'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import { useKnowledgeStats } from '@/composables/knowledge/useKnowledgeStats'
 import { useKnowledgeController } from '@/models/controllers/index'
@@ -227,33 +226,16 @@ import {
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useTransientError } from '@/composables/useTransientError'
 
 // Import shared document feed wrapper styles
 import '@/styles/document-feed-wrapper.css'
 
 // Create scoped logger
 const logger = createLogger('KnowledgeHealthAnalytics')
+const { t } = useI18n()
 
 // TypeScript Interfaces
-interface VectorStats {
-  total_facts: number
-  total_documents: number
-  total_vectors: number
-  indexed_documents: number
-  db_size: number
-  status: 'online' | 'offline' | 'unknown'
-  rag_available: boolean
-  initialized: boolean
-  llama_index_configured: boolean
-  index_available: boolean
-  redis_db: string | number
-  index_name: string
-  embedding_model?: string
-  embedding_dimensions?: number
-  last_updated?: string
-  categories?: string[]
-}
-
 interface Activity {
   id: string | number
   type: 'created' | 'updated'
@@ -286,33 +268,12 @@ const { categoryFactCounts, refreshCategoryFacts } = useKnowledgeStats()
 
 // State
 const recentActivities = ref<Activity[]>([])
-const errorMessage = ref<string>('')
+const { message: errorMessage, show: showErrorNotification, clear: clearError } = useTransientError()
 
 // Vector stats for the category-distribution chart — computed over store.stats
 // so it stays in sync no matter which caller (shell loadVectorHealth or local
 // refreshStats) lands last (#11558)
-const vectorStats = computed<VectorStats | null>(() => {
-  const storeStats = store.stats
-  if (!storeStats || !storeStats.total_facts) return null
-  return {
-    total_facts: storeStats.total_facts || 0,
-    total_documents: storeStats.total_documents || 0,
-    total_vectors: storeStats.total_vectors || 0,
-    indexed_documents: storeStats.total_documents || 0,
-    db_size: storeStats.db_size || 0,
-    status: (storeStats.status as 'online' | 'offline' | 'unknown') || 'offline',
-    rag_available: storeStats.rag_available || false,
-    initialized: storeStats.initialized || false,
-    llama_index_configured: storeStats.initialized || false,
-    index_available: storeStats.initialized || false,
-    redis_db: storeStats.redis_db ? parseInt(storeStats.redis_db) : 0,
-    index_name: storeStats.index_name || 'unknown',
-    last_updated: storeStats.last_updated || undefined,
-    categories: Array.isArray(storeStats.categories)
-      ? (storeStats.categories as unknown as { name?: string }[]).map((c) => c.name || c) as string[]
-      : []
-  }
-})
+const { vectorStats } = useVectorStats()
 
 // Feed filter: 'all' | 'created' | 'updated'
 type FeedFilter = 'all' | 'created' | 'updated'
@@ -408,14 +369,17 @@ const generateRecentActivities = () => {
   const activities: Activity[] = store.documents
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 10)
-    .map(doc => ({
-      id: doc.id,
-      type: (new Date(doc.createdAt).getTime() === new Date(doc.updatedAt).getTime() ? 'created' : 'updated') as 'created' | 'updated',
-      description: `${doc.title || 'Document'} was ${
-        new Date(doc.createdAt).getTime() === new Date(doc.updatedAt).getTime() ? 'created' : 'updated'
-      }`,
-      timestamp: doc.updatedAt
-    }))
+    .map(doc => {
+      const actionType = new Date(doc.createdAt).getTime() === new Date(doc.updatedAt).getTime() ? 'created' : 'updated'
+      return {
+        id: doc.id,
+        type: actionType as 'created' | 'updated',
+        description: actionType === 'created'
+          ? t('knowledge.health.activityCreated', { title: doc.title || 'Document' })
+          : t('knowledge.health.activityUpdated', { title: doc.title || 'Document' }),
+        timestamp: doc.updatedAt
+      }
+    })
   recentActivities.value = activities
 }
 
@@ -439,15 +403,6 @@ const refreshStats = async () => {
     const errorMsg = error instanceof Error ? error.message : String(error)
     showErrorNotification(`Failed to load statistics: ${errorMsg}`)
   }
-}
-
-// Helper function to show error notifications
-const showErrorNotification = (message: string) => {
-  errorMessage.value = message
-  logger.error(message)
-  setTimeout(() => {
-    errorMessage.value = ''
-  }, 5000)
 }
 
 const exportStats = async () => {
@@ -959,27 +914,14 @@ onMounted(async () => {
 
 .tag-cloud-item {
   color: var(--color-info);
-  cursor: pointer;
   transition: var(--transition-all);
   padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-default);
-  outline: none;
 }
 
-.tag-cloud-item:hover,
-.tag-cloud-item:focus {
+.tag-cloud-item:hover {
   color: var(--color-info-hover);
   transform: scale(1.1);
-}
-
-.tag-cloud-item:focus {
-  box-shadow: 0 0 0 2px var(--color-info);
-  background: var(--color-info-bg);
-}
-
-.tag-cloud-item:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
 }
 
 /* Actions */

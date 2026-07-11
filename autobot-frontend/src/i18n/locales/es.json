@@ -2572,16 +2572,10 @@
       "graphAriaLabel": "Ver grafo de conocimiento",
       "manage": "Gestionar",
       "manageAriaLabel": "Gestionar base de conocimientos",
-      "verification": "Verificación",
-      "verificationAriaLabel": "Cola de verificación de fuentes",
       "connectors": "Conectores",
       "connectorsAriaLabel": "Conectores de fuentes",
       "entities": "Entidades",
       "entitiesAriaLabel": "Ver entidades",
-      "maintenance": "Mantenimiento",
-      "maintenanceAriaLabel": "Mantenimiento de la base de conocimientos",
-      "analytics": "Analíticas",
-      "statistics": "Estadísticas",
       "webResearch": "Web Research",
       "webResearchAriaLabel": "4-tab web research panel",
       "openSidebar": "Open navigation menu",
@@ -2930,7 +2924,6 @@
     "entries": {
       "uploadTab": "Subir",
       "manageTab": "Gestionar",
-      "advancedTab": "Avanzado",
       "searchPlaceholder": "Buscar entradas...",
       "searchAriaLabel": "Buscar entradas en la base de conocimientos",
       "entries": "entradas",
@@ -3877,8 +3870,6 @@
       "qualityScore": "Quality Score",
       "refreshAll": "Refresh All",
       "refreshing": "Refreshing...",
-      "subtitle": "Monitor and maintain your knowledge base health",
-      "title": "Knowledge Maintenance",
       "topRecommendations": "Top Recommendations",
       "totalFacts": "Total Facts",
       "totalVectors": "Total Vectors",
@@ -5146,8 +5137,6 @@
   "knowledge.mainCategories.facts": "hechos",
   "knowledge.mainCategories.populate": "Poblar",
   "knowledge.mainCategories.import": "Importar",
-  "knowledge.maintenance.title": "Mantenimiento de la base de conocimiento",
-  "knowledge.maintenance.subtitle": "Supervisar y mantener la salud de la base de conocimiento, gestionar duplicados y limpiar datos huérfanos",
   "knowledge.maintenance.refreshAll": "Actualizar todo",
   "knowledge.maintenance.refreshing": "Actualizando...",
   "knowledge.maintenance.healthDashboard": "Panel de salud",
@@ -8702,5 +8691,8 @@
       "rawJsonLabel": "Configuración del plugin (JSON)",
       "invalidJson": "JSON inválido — corrija antes de guardar."
     }
-  }
+  },
+  "knowledge.health.tagDocCount": "{count} documentos",
+  "knowledge.health.activityCreated": "{title} fue creado",
+  "knowledge.health.activityUpdated": "{title} fue actualizado"
 }

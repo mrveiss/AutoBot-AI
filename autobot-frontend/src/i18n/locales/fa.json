@@ -2478,7 +2478,6 @@
       "editCategory": "Category",
       "unverified": "Unverified",
       "unknown": "Unknown",
-      "advancedTab": "Advanced",
       "pendingReview": "Pending review",
       "pageInfo": "Page {current} of {total} ({count} entries)",
       "thUpdated": "Updated",
@@ -2889,7 +2888,6 @@
       }
     },
     "views": {
-      "maintenance": "Maintenance",
       "searchAriaLabel": "Search knowledge base",
       "connectorsAriaLabel": "Source connectors",
       "researchAriaLabel": "Live research with browser observation",
@@ -2899,18 +2897,13 @@
       "graph": "Graph",
       "search": "Search",
       "entitiesAriaLabel": "View entities",
-      "verification": "Verification",
       "manageAriaLabel": "Manage knowledge base",
-      "maintenanceAriaLabel": "Knowledge base maintenance",
       "connectors": "Connectors",
-      "statistics": "Statistics",
       "manage": "Manage",
       "categories": "Categories",
-      "verificationAriaLabel": "Source verification queue",
       "research": "Research",
       "graphAriaLabel": "View knowledge graph",
       "title": "Knowledge Base",
-      "analytics": "Analytics",
       "entities": "Entities",
       "webResearch": "Web Research",
       "webResearchAriaLabel": "4-tab web research panel",
@@ -3232,7 +3225,6 @@
     },
     "maintenance": {
       "qualityDimensions": "Quality Dimensions",
-      "subtitle": "Monitor and maintain your knowledge base health",
       "totalVectors": "Total Vectors",
       "issuesFound": "Issues Found",
       "qualityScore": "Quality Score",
@@ -3241,7 +3233,6 @@
       "totalFacts": "Total Facts",
       "refreshAll": "Refresh All",
       "warnings": "Warnings",
-      "title": "Knowledge Maintenance",
       "databaseSize": "Database Size",
       "critical": "Critical",
       "topRecommendations": "Top Recommendations",
@@ -7350,8 +7341,6 @@
   "knowledge.mainCategories.facts": "facts",
   "knowledge.mainCategories.populate": "Populate",
   "knowledge.mainCategories.import": "Import",
-  "knowledge.maintenance.title": "Knowledge Base Maintenance",
-  "knowledge.maintenance.subtitle": "Monitor and maintain knowledge base health, handle duplicates, and clean up orphaned data",
   "knowledge.maintenance.refreshAll": "Refresh All",
   "knowledge.maintenance.refreshing": "Refreshing...",
   "knowledge.maintenance.healthDashboard": "Health Dashboard",
@@ -8702,5 +8691,8 @@
       "rawJsonLabel": "پیکربندی افزونه (JSON)",
       "invalidJson": "JSON نامعتبر است — لطفاً قبل از ذخیره اصلاح کنید."
     }
-  }
+  },
+  "knowledge.health.tagDocCount": "{count} اسناد",
+  "knowledge.health.activityCreated": "{title} ایجاد شد",
+  "knowledge.health.activityUpdated": "{title} به‌روز شد"
 }
