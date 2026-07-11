@@ -123,10 +123,13 @@ class CapabilityChecker:
     def __new__(cls) -> CapabilityChecker:
         """Ensure singleton instance (double-checked locking, #11637)."""
         if cls._instance is None:
+            # get_logger takes LoggingManager's lock — keep foreign locking
+            # outside our locked region (idempotent, safe to pre-compute).
+            logger_for_instance = get_logger(__name__)
             with cls._instance_lock:
                 if cls._instance is None:
                     cls._granted_capabilities: Dict[str, List[Capability]] = {}
-                    cls._logger = get_logger(__name__)
+                    cls._logger = logger_for_instance
                     cls._instance = super().__new__(cls)
         return cls._instance
 

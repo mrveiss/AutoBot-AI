@@ -408,6 +408,10 @@ def reset_http_client_for_new_loop() -> None:
     reused across loop boundaries. The old session is discarded, not closed;
     its connections are reclaimed by GC exactly as discarded Redis pools are.
 
+    Limitation (same as ``reset_async_redis_pools``): objects that cached the
+    manager instance at construction keep the old, loop-bound one — the reset
+    only affects future ``get_http_client()`` / ``HTTPClientManager()`` calls.
+
     Issue #11637.
     """
     global _http_client
@@ -415,7 +419,9 @@ def reset_http_client_for_new_loop() -> None:
         _http_client = None
         with HTTPClientManager._instance_lock:
             HTTPClientManager._instance = None
-            HTTPClientManager._session = None
+            # A contended asyncio.Lock binds permanently to the loop that
+            # contended it — rebind so the new loop gets a fresh lock.
+            HTTPClientManager._lock = asyncio.Lock()
 
 
 def sign_request(

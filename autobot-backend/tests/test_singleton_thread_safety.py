@@ -182,3 +182,36 @@ class TestLockedNewSingletons:
         hc.reset_http_client_for_new_loop()
         second = hc.get_http_client()
         assert first is not second, "reset must discard the loop-bound manager"
+
+    def test_http_client_reset_rebinds_asyncio_lock(self):
+        """Reset must replace the class-level asyncio.Lock — a contended lock
+        stays bound to the loop that contended it (#11654 review M1)."""
+        import autobot_shared.http_client as hc
+
+        old_lock = hc.HTTPClientManager._lock
+        hc.reset_http_client_for_new_loop()
+        assert hc.HTTPClientManager._lock is not old_lock
+
+    def test_http_client_usable_across_loops_after_reset(self):
+        """Contend the lock in loop A, reset, then acquire it in loop B."""
+        import asyncio
+
+        import autobot_shared.http_client as hc
+
+        async def _contend():
+            lock = hc.HTTPClientManager._lock
+
+            async def hold():
+                async with lock:
+                    await asyncio.sleep(0.01)
+
+            await asyncio.gather(hold(), hold())  # forces the contended path
+
+        asyncio.run(_contend())
+        hc.reset_http_client_for_new_loop()
+
+        async def _acquire_in_new_loop():
+            async with hc.HTTPClientManager._lock:
+                return True
+
+        assert asyncio.run(_acquire_in_new_loop())
