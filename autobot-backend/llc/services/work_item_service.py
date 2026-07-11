@@ -12,10 +12,10 @@ Status transitions:
   transition raises ``InvalidTransition``.
 
 Identifier generation:
-  PostgreSQL advisory lock on the company's numeric hash, then RETURNING on an
-  UPDATE to ``llc_companies.issue_counter`` — producing ``<prefix>-<counter>``.
-  Falls back to a UUID-based placeholder when the companies table is absent
-  (unit-test environments without full schema).
+  UPDATE … RETURNING on ``organizations.issue_counter`` (the row lock enforces
+  uniqueness) — producing ``<prefix>-<counter>``. Falls back to a UUID-based
+  placeholder when the organizations table is absent (unit-test environments
+  without full schema).
 
 Co-working (GH#8230):
   enable_coworking / disable_coworking manage the secondary co-worker slot.
@@ -976,26 +976,35 @@ class WorkItemService(LLCServiceBase):
     async def _next_identifier(self, session: AsyncSession, company_id: str) -> str:
         """Generate the next ``<prefix>-<counter>`` identifier for this company.
 
-        Uses PostgreSQL advisory lock + UPDATE RETURNING on ``llc_companies`` to
-        ensure uniqueness under concurrent inserts. Falls back to a random
-        identifier in test environments that lack the ``llc_companies`` table.
+        Bumps ``organizations.issue_counter`` with UPDATE … RETURNING (the row
+        lock guarantees uniqueness under concurrent inserts). Companies are
+        ``Organization`` rows — the counter lives on ``organizations``, NOT the
+        legacy ``llc_companies`` name (#11675: that phantom table never existed;
+        the failed UPDATE aborted the whole create transaction, so every work-item
+        INSERT died with InFailedSQLTransactionError).
+
+        Runs inside a SAVEPOINT (``begin_nested``) so that if the counter bump
+        fails — e.g. a test DB without the ``organizations`` table — only the
+        nested transaction rolls back and the UUID fallback stays usable; the
+        outer create transaction is never poisoned.
         """
         try:
-            row = await session.execute(
-                text("""
-                    UPDATE llc_companies
-                       SET issue_counter = issue_counter + 1
-                     WHERE id = :company_id
-                    RETURNING issue_prefix, issue_counter
-                    """),
-                {"company_id": company_id},
-            )
-            rec = row.fetchone()
-            if rec:
+            async with session.begin_nested():
+                row = await session.execute(
+                    text("""
+                        UPDATE organizations
+                           SET issue_counter = issue_counter + 1
+                         WHERE id = :company_id
+                        RETURNING issue_prefix, issue_counter
+                        """),
+                    {"company_id": company_id},
+                )
+                rec = row.fetchone()
+            if rec and rec.issue_prefix:
                 return f"{rec.issue_prefix}-{rec.issue_counter}"
         except Exception as exc:
             if isinstance(exc, (ProgrammingError, OperationalError)):
-                logger.debug("llc_companies table not available — using UUID identifier fallback")
+                logger.debug("organizations table not available — using UUID identifier fallback")
             else:
                 logger.warning(
                     "Unexpected error generating identifier for company %s — using UUID fallback",

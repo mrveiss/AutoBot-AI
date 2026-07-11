@@ -343,7 +343,9 @@ class ControlsService:
 
     async def _get_company_row(self, session: AsyncSession, company_id: str) -> Optional[dict]:
         result = await session.execute(
-            text("SELECT id FROM llc_companies WHERE id = :id LIMIT 1"),
+            # #11675: companies are Organization rows in `organizations`; the
+            # legacy `llc_companies` table never existed.
+            text("SELECT id FROM organizations WHERE id = :id LIMIT 1"),
             {"id": company_id},
         )
         row = result.fetchone()
