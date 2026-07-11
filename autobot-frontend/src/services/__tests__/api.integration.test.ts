@@ -1,6 +1,6 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { apiService } from '../api.js'
 import {
@@ -517,6 +517,7 @@ describe('API Service Integration Tests', () => {
     })
 
     it('handles partial API failures gracefully', async () => {
+      vi.useFakeTimers()
       let callCount = 0
 
       server.use(
@@ -533,8 +534,13 @@ describe('API Service Integration Tests', () => {
         })
       )
 
-      // First call should fail (after exhausting retries)
-      await expect(apiService.getSystemHealth()).rejects.toThrow()
+      // First call should fail (after exhausting retries).
+      // Use fake timers to advance through exponential backoff delays.
+      const failPromise = expect(apiService.getSystemHealth()).rejects.toThrow()
+      await vi.runAllTimersAsync()
+      await failPromise
+
+      vi.useRealTimers()
 
       // Second call should succeed (simulating recovery)
       const result = await apiService.getSystemHealth()
