@@ -2,15 +2,11 @@
   <div class="stats-actions">
     <button @click="$emit('export')" class="action-btn">
       <Icon name="download" />
-      {{ $t('knowledge.stats.actions.exportStatistics') }}
-    </button>
-    <button @click="$emit('optimize')" class="action-btn">
-      <Icon name="compress" />
-      {{ $t('knowledge.stats.actions.optimizeDatabase') }}
+      {{ $t('knowledge.stats.exportStats') }}
     </button>
     <button @click="$emit('generate-report')" class="action-btn primary">
       <Icon name="file-chart-line" />
-      {{ $t('knowledge.stats.actions.generateReport') }}
+      {{ $t('knowledge.stats.generateReport') }}
     </button>
   </div>
 </template>
@@ -22,17 +18,16 @@
 /**
  * Stats Actions Panel Component
  *
- * Action buttons for exporting, optimizing, and reporting.
- * Extracted from the former KnowledgeStats.vue (#184); currently unmounted —
- * see orphaned-subpanels discovery issue.
+ * Action buttons for exporting stats and generating reports.
+ * Wired into KnowledgeHealthAnalytics.vue (#11562).
  *
  * Issue #184: Split oversized Vue components
+ * Issue #11562: Wire in orphaned stats subpanels
  */
 import Icon from '@/components/ui/Icon.vue'
 
 interface Emits {
   (e: 'export'): void
-  (e: 'optimize'): void
   (e: 'generate-report'): void
 }
 
@@ -59,7 +54,7 @@ defineEmits<Emits>()
   font-weight: var(--font-medium);
   color: var(--text-primary);
   cursor: pointer;
-  transition: all var(--duration-200) var(--ease-in-out);
+  transition: var(--transition-all);
 }
 
 .action-btn:hover {
@@ -67,14 +62,14 @@ defineEmits<Emits>()
 }
 
 .action-btn.primary {
-  background: var(--color-primary);
+  background: var(--color-info);
   color: var(--text-on-primary);
-  border-color: var(--color-primary);
+  border-color: var(--color-info);
 }
 
 .action-btn.primary:hover {
-  background: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
+  background: var(--color-info-hover);
+  border-color: var(--color-info-hover);
 }
 
 @media (max-width: 768px) {

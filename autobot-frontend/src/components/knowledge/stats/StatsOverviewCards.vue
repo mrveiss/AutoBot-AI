@@ -1,42 +1,27 @@
 <template>
-  <div class="stats-overview" role="region" :aria-label="$t('knowledge.stats.overview.ariaLabel')">
-    <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="facts-title">
-      <div class="stat-icon facts" aria-hidden="true">
-        <Icon name="lightbulb" />
-      </div>
-      <div class="stat-content">
-        <h4 id="facts-title">{{ $t('knowledge.stats.overview.totalFacts') }}</h4>
-        <p class="stat-value" aria-live="polite">{{ totalFacts }}</p>
-        <p class="stat-change" :aria-label="$t('knowledge.stats.overview.factsAriaLabel')">
-          {{ $t('knowledge.stats.overview.factsDescription') }}
-        </p>
-      </div>
-    </BasePanel>
-
-    <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="documents-title">
+  <div class="stats-overview" role="region" :aria-label="$t('knowledge.stats.overviewAriaLabel')">
+    <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="analytics-documents-title">
       <div class="stat-icon documents" aria-hidden="true">
         <Icon name="file-alt" />
       </div>
       <div class="stat-content">
-        <h4 id="documents-title">{{ $t('knowledge.stats.overview.totalDocuments') }}</h4>
-        <p class="stat-value" aria-live="polite">{{ totalDocuments }}</p>
-        <p class="stat-change" :class="{ 'needs-vectorization': needsVectorization }"
-           :aria-label="needsVectorization ? $t('knowledge.stats.overview.notVectorizedAria') : $t('knowledge.stats.overview.vectorizedAria')">
-          <Icon name="exclamation-triangle" v-if="needsVectorization"  aria-hidden="true" />
-          {{ needsVectorization ? $t('knowledge.stats.overview.notVectorized') : $t('knowledge.stats.overview.vectorizedForRag') }}
+        <h4 id="analytics-documents-title">{{ $t('knowledge.stats.totalDocuments') }}</h4>
+        <p class="stat-value" aria-live="polite">{{ documentCount }}</p>
+        <p class="stat-change">
+          {{ $t('knowledge.stats.avgDocsPerCategoryValue', { count: avgDocsPerCategory }) }}
         </p>
       </div>
     </BasePanel>
 
-    <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="categories-title">
+    <BasePanel variant="elevated" size="sm" role="article" aria-labelledby="analytics-categories-title">
       <div class="stat-icon categories" aria-hidden="true">
         <Icon name="folder" />
       </div>
       <div class="stat-content">
-        <h4 id="categories-title">{{ $t('knowledge.stats.overview.categories') }}</h4>
+        <h4 id="analytics-categories-title">{{ $t('knowledge.stats.categories') }}</h4>
         <p class="stat-value" aria-live="polite">{{ categoryCount }}</p>
-        <p class="stat-change" :aria-label="$t('knowledge.stats.overview.avgDocsPerCategoryAria')">
-          {{ $t('knowledge.stats.overview.avgDocsPerCategory', { count: avgDocsPerCategory }) }}
+        <p class="stat-change">
+          {{ $t('knowledge.stats.avgDocsPerCategoryValue', { count: avgDocsPerCategory }) }}
         </p>
       </div>
     </BasePanel>
@@ -46,10 +31,10 @@
         <Icon name="tags" />
       </div>
       <div class="stat-content">
-        <h4>{{ $t('knowledge.stats.overview.uniqueTags') }}</h4>
+        <h4>{{ $t('knowledge.stats.uniqueTags') }}</h4>
         <p class="stat-value">{{ uniqueTagsCount }}</p>
         <p class="stat-change">
-          {{ $t('knowledge.stats.overview.avgTagsPerDoc', { count: avgTagsPerDoc }) }}
+          {{ $t('knowledge.stats.avgTagsPerDoc', { count: avgTagsPerDoc }) }}
         </p>
       </div>
     </BasePanel>
@@ -59,10 +44,10 @@
         <Icon name="database" />
       </div>
       <div class="stat-content">
-        <h4>{{ $t('knowledge.stats.overview.storageUsed') }}</h4>
+        <h4>{{ $t('knowledge.stats.storageUsedTitle') }}</h4>
         <p class="stat-value">{{ formatFileSize(totalStorageSize) }}</p>
         <p class="stat-change">
-          {{ $t('knowledge.stats.overview.avgPerDoc', { size: formatFileSize(avgDocSize) }) }}
+          {{ $t('knowledge.stats.avgPerDoc', { size: formatFileSize(avgDocSize) }) }}
         </p>
       </div>
     </BasePanel>
@@ -76,11 +61,11 @@
 /**
  * Stats Overview Cards Component
  *
- * Displays overview statistics cards for knowledge base.
- * Extracted from the former KnowledgeStats.vue (#184); currently unmounted —
- * see orphaned-subpanels discovery issue.
+ * Displays overview statistics cards for knowledge base (4-card layout:
+ * documents, categories, tags, storage). Wired into KnowledgeHealthAnalytics.vue (#11562).
  *
  * Issue #184: Split oversized Vue components
+ * Issue #11562: Wire in orphaned stats subpanels
  */
 
 import Icon from '@/components/ui/Icon.vue'
@@ -88,15 +73,13 @@ import BasePanel from '@/components/base/BasePanel.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 
 interface Props {
-  totalFacts: number
-  totalDocuments: number
+  documentCount: number
   categoryCount: number
   uniqueTagsCount: number
   avgDocsPerCategory: number
   avgTagsPerDoc: string
   totalStorageSize: number
   avgDocSize: number
-  needsVectorization: boolean
 }
 
 defineProps<Props>()
@@ -106,15 +89,14 @@ defineProps<Props>()
 /* Issue #704: Migrated to CSS design tokens */
 .stats-overview {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--spacing-6);
-  margin-bottom: var(--spacing-8);
-  contain: layout style;}
+}
 
 .stat-icon {
   width: 3.5rem;
   height: 3.5rem;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -122,8 +104,7 @@ defineProps<Props>()
   color: var(--text-on-primary);
 }
 
-.stat-icon.facts { background: var(--chart-pink); }
-.stat-icon.documents { background: var(--color-primary); }
+.stat-icon.documents { background: var(--color-info); }
 .stat-icon.categories { background: var(--color-success); }
 .stat-icon.tags { background: var(--color-warning); }
 .stat-icon.storage { background: var(--chart-purple); }
@@ -149,13 +130,6 @@ defineProps<Props>()
   display: flex;
   align-items: center;
   gap: var(--spacing-1);
-}
-
-.stat-change.positive { color: var(--color-success); }
-
-.stat-change.needs-vectorization {
-  color: var(--color-warning);
-  font-weight: var(--font-medium);
 }
 
 @media (max-width: 768px) {
