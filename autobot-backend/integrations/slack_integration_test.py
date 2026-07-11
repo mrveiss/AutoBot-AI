@@ -29,7 +29,7 @@ def slack_config():
     """Create a test Slack integration config."""
     return IntegrationConfig(
         name="slack",
-        type="communication",
+        provider="slack",
         token="xoxb-test-token",
         base_url="https://slack.com/api",
     )
@@ -221,7 +221,7 @@ class TestPostAgentStatus:
 
         assert result["ok"] is True
         call_args = slack_integration._make_slack_request.call_args
-        assert call_args[0][2]["thread_ts"] == "1234567890.0"
+        assert call_args[0][3]["thread_ts"] == "1234567890.0"
 
     @pytest.mark.asyncio
     async def test_post_agent_status_rate_limit(self, slack_integration):
@@ -388,8 +388,8 @@ class TestChannelMapping:
         """Channel mapping saves successfully to Redis."""
         mock_redis = AsyncMock()
         with patch(
-            "integrations.slack_integration.get_redis_client",
-            return_value=mock_redis,
+            "integrations.slack_integration.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             result = await slack_integration.save_channel_mapping(channel_mapping)
 
@@ -400,8 +400,8 @@ class TestChannelMapping:
     async def test_save_channel_mapping_redis_unavailable(self, slack_integration, channel_mapping):
         """Channel mapping gracefully handles Redis unavailability."""
         with patch(
-            "integrations.slack_integration.get_redis_client",
-            return_value=None,
+            "integrations.slack_integration.get_async_redis_client",
+            new=AsyncMock(return_value=None),
         ):
             result = await slack_integration.save_channel_mapping(channel_mapping)
 
@@ -414,8 +414,8 @@ class TestChannelMapping:
         mock_redis.set.side_effect = Exception("Redis connection failed")
 
         with patch(
-            "integrations.slack_integration.get_redis_client",
-            return_value=mock_redis,
+            "integrations.slack_integration.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             result = await slack_integration.save_channel_mapping(channel_mapping)
 
@@ -429,8 +429,8 @@ class TestChannelMapping:
         mock_redis.get.return_value = mapping_data
 
         with patch(
-            "integrations.slack_integration.get_redis_client",
-            return_value=mock_redis,
+            "integrations.slack_integration.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             result = await slack_integration.load_channel_mapping("proj-123")
 
@@ -445,8 +445,8 @@ class TestChannelMapping:
         mock_redis.get.return_value = None
 
         with patch(
-            "integrations.slack_integration.get_redis_client",
-            return_value=mock_redis,
+            "integrations.slack_integration.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             result = await slack_integration.load_channel_mapping("proj-nonexistent")
 
@@ -459,8 +459,8 @@ class TestChannelMapping:
         mock_redis.get.return_value = "{invalid json"
 
         with patch(
-            "integrations.slack_integration.get_redis_client",
-            return_value=mock_redis,
+            "integrations.slack_integration.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             result = await slack_integration.load_channel_mapping("proj-123")
 
@@ -473,8 +473,8 @@ class TestChannelMapping:
         mock_redis.get.side_effect = Exception("Redis connection failed")
 
         with patch(
-            "integrations.slack_integration.get_redis_client",
-            return_value=mock_redis,
+            "integrations.slack_integration.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             result = await slack_integration.load_channel_mapping("proj-123")
 
@@ -489,8 +489,8 @@ class TestApprovalThreadStorage:
         """Approval thread stores successfully."""
         mock_redis = AsyncMock()
         with patch(
-            "integrations.slack_integration.get_redis_client",
-            return_value=mock_redis,
+            "integrations.slack_integration.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             result = await slack_integration._store_approval_thread("approval-123", "C12345", "1234567890.0")
 
@@ -504,8 +504,8 @@ class TestApprovalThreadStorage:
         mock_redis.set.side_effect = Exception("Redis write failed")
 
         with patch(
-            "integrations.slack_integration.get_redis_client",
-            return_value=mock_redis,
+            "integrations.slack_integration.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             result = await slack_integration._store_approval_thread("approval-123", "C12345", "1234567890.0")
 
@@ -519,8 +519,8 @@ class TestApprovalThreadStorage:
         mock_redis.get.return_value = thread_data
 
         with patch(
-            "integrations.slack_integration.get_redis_client",
-            return_value=mock_redis,
+            "integrations.slack_integration.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             result = await slack_integration._load_approval_thread("approval-123")
 
@@ -535,8 +535,8 @@ class TestApprovalThreadStorage:
         mock_redis.get.return_value = None
 
         with patch(
-            "integrations.slack_integration.get_redis_client",
-            return_value=mock_redis,
+            "integrations.slack_integration.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             result = await slack_integration._load_approval_thread("approval-nonexistent")
 
@@ -549,8 +549,8 @@ class TestApprovalThreadStorage:
         mock_redis.get.return_value = "{corrupted"
 
         with patch(
-            "integrations.slack_integration.get_redis_client",
-            return_value=mock_redis,
+            "integrations.slack_integration.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             result = await slack_integration._load_approval_thread("approval-123")
 
