@@ -94,6 +94,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/health/celery-dead-letter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Celery Dead Letter Health
+         * @description Parked Celery tasks (retries exhausted) from the dead-letter list (#11586).
+         *
+         *     Returns the parked count plus the most recent entries recorded by
+         *     ``utils.celery_reliability.DeadLetterTask`` so terminally failed tasks
+         *     stay queryable after the Celery result TTL expires.
+         */
+        get: operations["celery_dead_letter_health_api_health_celery_dead_letter_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/version": {
         parameters: {
             query?: never;
@@ -100672,6 +100696,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    celery_dead_letter_health_api_health_celery_dead_letter_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
