@@ -5,7 +5,8 @@
 """Shim module codegen for the compose tool (GH#11568).
 
 Generates the ``autobot_tools`` Python module that is prepended to user scripts.
-Each shim function calls the server-side broker via JSON-RPC over stdio.
+Each shim function calls the server-side broker via JSON-RPC over stdio, using a
+per-call monotonic id so concurrent same-tool calls correlate their replies.
 """
 
 import os
@@ -17,14 +18,36 @@ CODEEXEC_INJECTABLE_TOOLS: frozenset[str] = frozenset(
     ).split(",")
 )
 
+# GH#11568 MAJOR-3: tools that must NEVER be injectable, regardless of the env
+# allowlist. Subtracted unconditionally so an operator who widens
+# AUTOBOT_CODEEXEC_INJECTABLE_TOOLS can never shim compose/delegate/execute_command.
+SENSITIVE_TOOLS: frozenset[str] = frozenset(
+    {
+        "execute_command",
+        "compose",
+        "delegate",
+        "deploy",
+        "git_push",
+        "navigate",
+        "click",
+        "fill",
+        "select",
+        "evaluate",
+        "write_file",
+        "edit_file",
+        "delete_file",
+    }
+)
+
 
 def injectable_tool_set(allowed_work: list[str], forbidden_work: frozenset[str]) -> list[str]:
-    """Return sorted list of injectable tool names for this agent.
+    """Return the sorted injectable tool names for this agent.
 
-    If *allowed_work* is non-empty (profile-bound agent), intersect with CODEEXEC_INJECTABLE_TOOLS.
-    If empty (main chat agent), use all CODEEXEC_INJECTABLE_TOOLS minus forbidden.
+    Intersects the declarative allowlist with ``allowed_work`` (when the agent is
+    profile-bound), removes ``forbidden_work``, and ALWAYS removes SENSITIVE_TOOLS
+    so sensitive tools can never be injected even if added to the env allowlist.
     """
-    base = CODEEXEC_INJECTABLE_TOOLS - forbidden_work
+    base = (CODEEXEC_INJECTABLE_TOOLS - forbidden_work) - SENSITIVE_TOOLS
     if allowed_work:
         return sorted(base & set(allowed_work))
     return sorted(base)
@@ -34,18 +57,36 @@ def _shim_for(tool: str) -> str:
     return (
         f"async def {tool}(**kwargs):\n"
         f'    """Call the {tool} tool via the broker."""\n'
-        f'    req = json.dumps({{"id": "{tool}", "tool": "{tool}", "params": kwargs}})\n'
+        f'    return await _rpc_call("{tool}", kwargs)\n'
+    )
+
+
+def _rpc_helper() -> str:
+    """Shared RPC helper: per-call monotonic id + reply correlation on that id."""
+    return (
+        "_call_seq = 0\n"
+        "_pending = {}\n\n"
+        "def _next_id():\n"
+        "    global _call_seq\n"
+        "    _call_seq += 1\n"
+        "    return _call_seq\n\n"
+        "async def _rpc_call(tool, params):\n"
+        "    call_id = _next_id()\n"
+        '    req = json.dumps({"id": call_id, "tool": tool, "params": params})\n'
         '    sys.stdout.write(req + "\\n")\n'
         "    sys.stdout.flush()\n"
-        "    line = await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)\n"
-        "    reply = json.loads(line)\n"
+        "    while call_id not in _pending:\n"
+        "        line = await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)\n"
+        "        reply = json.loads(line)\n"
+        '        _pending[reply.get("id")] = reply\n'
+        "    reply = _pending.pop(call_id)\n"
         '    if not reply.get("ok"):\n'
         '        raise RuntimeError(reply.get("error", "tool call failed"))\n'
-        '    return reply.get("result")\n'
+        '    return reply.get("result")\n\n'
     )
 
 
 def generate_shim_module(tools: list[str]) -> str:
     """Return Python source for the ``autobot_tools`` shim module."""
     header = '"""autobot_tools — generated RPC shims. Do not edit."""\n' "import asyncio, json, sys\n\n"
-    return header + "\n".join(_shim_for(t) for t in tools)
+    return header + _rpc_helper() + "\n".join(_shim_for(t) for t in tools)
