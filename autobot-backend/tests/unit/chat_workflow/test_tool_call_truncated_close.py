@@ -17,7 +17,7 @@ import pytest
 # The verbatim assistant body persisted by the live managed backend (2026-07-11).
 LIVE_BODY = (
     'Creating task "Write Q3 financial report" with high priority.\n\n'
-    "<TOOL_CALL name=\"create_task\" params='"
+    '<TOOL_CALL name="create_task" params=\''
     '{"title":"Write Q3 financial report","priority":"high",'
     '"description":"Generate the Q3 financial report for the company"}'
     "'>Create task</TOOL\n\n"
@@ -53,9 +53,7 @@ def test_parser_extracts_create_task_from_truncated_close():
     ["</TOOL", "</TOOL_CALL", "</TOOL_CALL>", "</tool_call>", "</TOOL_ CALL>", "</Tool "],
 )
 def test_parser_tolerates_all_close_variants(close):
-    body = (
-        "<TOOL_CALL name=\"create_task\" params='{\"title\":\"X\"}'>desc" + close + "\nprose"
-    )
+    body = '<TOOL_CALL name="create_task" params=\'{"title":"X"}\'>desc' + close + "\nprose"
     matches = list(_pattern().finditer(body))
     assert len(matches) == 1 and matches[0].group(1) == "create_task"
 
