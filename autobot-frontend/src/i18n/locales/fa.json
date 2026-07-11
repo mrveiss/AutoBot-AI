@@ -797,7 +797,8 @@
         "overview": "Overview",
         "codeReview": "Code Review",
         "codeQuality": "Code Quality",
-        "codeGeneration": "Code Generation"
+        "codeGeneration": "Code Generation",
+        "ariaLabel": "تحلیل‌های پروژه"
       }
     },
     "patterns": {
@@ -8698,5 +8699,8 @@
   },
   "knowledge.health.tagDocCount": "{count} اسناد",
   "knowledge.health.activityCreated": "{title} ایجاد شد",
-  "knowledge.health.activityUpdated": "{title} به‌روز شد"
+  "knowledge.health.activityUpdated": "{title} به‌روز شد",
+  "chat.modelPicker.label": "مدل",
+  "chat.modelPicker.auto": "خودکار (مدل پیش‌فرض)",
+  "chat.modelPicker.title": "مدل و ارائه‌دهنده را برای این گفتگو انتخاب کنید"
 }

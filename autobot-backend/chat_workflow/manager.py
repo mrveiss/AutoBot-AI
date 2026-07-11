@@ -2866,6 +2866,10 @@ before summarizing.
             # #11501 T2: CEO-chat path carries company_id — used to append the
             # board-tool teaching to the system prompt for this turn only.
             session.metadata["company_id"] = context.get("company_id") or ""
+            # #11585: per-request model override — persisted on the session so
+            # later messages in this conversation inherit the choice.
+            if context.get("model"):
+                session.metadata["model_override"] = str(context["model"])
 
         # Issue MVA-1992: Determine if query qualifies for lightweight mode.
         # Trivial tier (GH#9050, score < trivial_threshold) is the primary

@@ -29,22 +29,22 @@
             </button>
           </header>
 
-          <div class="modal-tabs" role="tablist">
+          <div ref="pluginTablistRef" class="modal-tabs" role="tablist">
             <button
+              v-bind="tabAttrs('zip')"
               class="modal-tab"
               :class="{ active: activeTab === 'zip' }"
-              role="tab"
-              :aria-selected="activeTab === 'zip'"
               @click="activeTab = 'zip'"
+              @keydown="handleTabKeydown"
             >
               {{ $t('views.plugins.install.zipTab') }}
             </button>
             <button
+              v-bind="tabAttrs('git')"
               class="modal-tab"
               :class="{ active: activeTab === 'git' }"
-              role="tab"
-              :aria-selected="activeTab === 'git'"
               @click="activeTab = 'git'"
+              @keydown="handleTabKeydown"
             >
               {{ $t('views.plugins.install.gitTab') }}
             </button>
@@ -52,7 +52,7 @@
 
           <div class="modal-body">
             <!-- ZIP tab -->
-            <div v-if="activeTab === 'zip'" class="tab-pane">
+            <div v-if="activeTab === 'zip'" v-bind="panelAttrs('zip')" class="tab-pane">
               <p class="hint">{{ $t('views.plugins.install.zipHint') }}</p>
               <label class="file-drop" :class="{ 'has-file': zipFile }">
                 <input
@@ -85,7 +85,7 @@
             </div>
 
             <!-- Git tab -->
-            <div v-if="activeTab === 'git'" class="tab-pane">
+            <div v-if="activeTab === 'git'" v-bind="panelAttrs('git')" class="tab-pane">
               <p class="hint">{{ $t('views.plugins.install.gitHint') }}</p>
               <label class="form-field">
                 <span class="form-label">{{ $t('views.plugins.install.gitUrlLabel') }}</span>
@@ -140,6 +140,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlugins } from '@/composables/usePlugins'
+import { useTabs } from '@/composables/useTabs'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{
@@ -151,7 +152,9 @@ const { t } = useI18n()
 const { installFromZip, installFromGit, error: composableError } = usePlugins()
 let closeTimer: ReturnType<typeof setTimeout> | null = null
 
-const activeTab = ref<'zip' | 'git'>('zip')
+const PLUGIN_TAB_IDS = ['zip', 'git'] as const
+const { activeTab, tabAttrs, panelAttrs, handleKeydown: handleTabKeydown, tablistRef: pluginTablistRef } =
+  useTabs(PLUGIN_TAB_IDS)
 const zipFile = ref<File | null>(null)
 const gitUrl = ref('')
 const gitRef = ref('')

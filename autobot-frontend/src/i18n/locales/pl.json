@@ -1390,7 +1390,8 @@
         "codeReview": "Code Review",
         "evolution": "Evolution",
         "codeGeneration": "Code Generation",
-        "codeQuality": "Code Quality"
+        "codeQuality": "Code Quality",
+        "ariaLabel": "Analityka projektu"
       }
     },
     "patterns": {
@@ -8698,5 +8699,8 @@
   },
   "knowledge.health.tagDocCount": "{count} dokumentów",
   "knowledge.health.activityCreated": "{title} został utworzony",
-  "knowledge.health.activityUpdated": "{title} został zaktualizowany"
+  "knowledge.health.activityUpdated": "{title} został zaktualizowany",
+  "chat.modelPicker.label": "Model",
+  "chat.modelPicker.auto": "Automatycznie (model domyślny)",
+  "chat.modelPicker.title": "Wybierz model i dostawcę dla tej rozmowy"
 }

@@ -59856,6 +59856,16 @@ export interface components {
              * @description Per-conversation reasoning effort override (low, medium, high, auto). Overrides the user's account-level default. Omit to use the user default. When 'auto' or absent the provider's own defaults are used (#9017).
              */
             reasoning_effort?: string | null;
+            /**
+             * Model
+             * @description Per-request model override. Overrides the per-conversation and global default model for this message; omit to use the current default (#11585).
+             */
+            model?: string | null;
+            /**
+             * Provider
+             * @description Per-request LLM provider override. Validated against registered providers (422 on unknown names) and pinned to the conversation so later messages inherit it (#11585).
+             */
+            provider?: string | null;
         } & {
             [key: string]: unknown;
         };

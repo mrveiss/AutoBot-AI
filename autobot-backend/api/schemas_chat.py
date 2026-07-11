@@ -534,6 +534,20 @@ class ChatMessage(BaseModel):
         "Overrides the user's account-level default. Omit to use the user default. "
         "When 'auto' or absent the provider's own defaults are used (#9017).",
     )
+    # Per-request model/provider override (#11585)
+    model: str | None = Field(
+        None,
+        max_length=200,
+        description="Per-request model override. Overrides the per-conversation and "
+        "global default model for this message; omit to use the current default (#11585).",
+    )
+    provider: str | None = Field(
+        None,
+        max_length=100,
+        description="Per-request LLM provider override. Validated against registered "
+        "providers (422 on unknown names) and pinned to the conversation so later "
+        "messages inherit it (#11585).",
+    )
 
 
 class ChatResponse(BaseModel):

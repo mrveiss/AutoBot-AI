@@ -64,8 +64,7 @@ class DiscordMessagingAdapter:
 
     Maps:
     - ``send_message``   → ``execute_action("send_message", ...)``
-    - ``fetch_messages`` → Discord has no native history action in the current
-                           integration; returns ``[]`` and logs a debug note.
+    - ``fetch_messages`` → ``execute_action("get_channel_history", ...)``
     """
 
     def __init__(self, integration: DiscordIntegration) -> None:
@@ -81,19 +80,22 @@ class DiscordMessagingAdapter:
         return await self._integration.execute_action("send_message", params)
 
     async def fetch_messages(self, channel_id: str, limit: int = 100) -> list[dict]:
-        """Return message history for Discord channel *channel_id*.
+        """Fetch up to *limit* messages from Discord channel *channel_id* (#11560).
 
-        The current DiscordIntegration does not expose a ``get_channel_history``
-        action, so this method returns an empty list. The Discord REST endpoint
-        ``GET /channels/{id}/messages`` can be added to DiscordIntegration in a
-        follow-up without changing this Protocol surface.
+        Routes through ``DiscordIntegration.execute_action("get_channel_history", …)``
+        which calls ``GET /channels/{channel_id}/messages?limit={limit}`` with Bot
+        authentication.  Normalises the payload to the same shape as
+        ``SlackMessagingAdapter.fetch_messages``: a plain ``list[dict]``.
         """
-        logger.debug(
-            "DiscordMessagingAdapter.fetch_messages: fetch not yet implemented — #11560 " "(channel_id=%s, limit=%d)",
-            channel_id,
-            limit,
+        result = await self._integration.execute_action(
+            "get_channel_history",
+            {"channel_id": channel_id, "limit": limit},
         )
-        return []
+        messages = result.get("messages", [])
+        if not isinstance(messages, list):
+            logger.warning("DiscordMessagingAdapter.fetch_messages: unexpected payload shape")
+            return []
+        return messages
 
 
 # Static structural assertion — checked at import time, not at runtime:

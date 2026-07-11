@@ -1390,7 +1390,8 @@
         "codeQuality": "Code Quality",
         "codeReview": "Code Review",
         "evolution": "Evolution",
-        "overview": "Overview"
+        "overview": "Overview",
+        "ariaLabel": "Project analytics"
       }
     },
     "patterns": {
@@ -8698,5 +8699,8 @@
   },
   "knowledge.health.tagDocCount": "{count} documents",
   "knowledge.health.activityCreated": "{title} was created",
-  "knowledge.health.activityUpdated": "{title} was updated"
+  "knowledge.health.activityUpdated": "{title} was updated",
+  "chat.modelPicker.label": "Model",
+  "chat.modelPicker.auto": "Auto (default model)",
+  "chat.modelPicker.title": "Choose the model and provider for this conversation"
 }

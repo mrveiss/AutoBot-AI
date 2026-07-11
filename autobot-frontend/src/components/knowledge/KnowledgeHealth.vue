@@ -204,15 +204,11 @@
     <div ref="tablistRef" class="health-tabs" role="tablist" :aria-label="$t('knowledge.views.healthAriaLabel')">
       <button
         v-for="tab in tabs"
-        :id="`tab-${tab.id}`"
         :key="tab.id"
-        role="tab"
-        :aria-selected="activeTab === tab.id"
-        :aria-controls="`tabpanel-${tab.id}`"
-        :tabindex="activeTab === tab.id ? 0 : -1"
+        v-bind="tabAttrs(tab.id)"
         :class="['health-tab-btn', { active: activeTab === tab.id }]"
         @click="activeTab = tab.id"
-        @keydown="handleTabKeydown($event, tab.id)"
+        @keydown="handleTabKeydown"
       >
         <Icon :name="tab.icon" />
         {{ $t(tab.labelKey) }}
@@ -226,28 +222,13 @@
 
     <!-- Tab Bodies (v-if for lazy mount — each tab's onMounted fires on first open) -->
     <div class="health-tab-content">
-      <div
-        v-if="activeTab === 'analytics'"
-        id="tabpanel-analytics"
-        role="tabpanel"
-        aria-labelledby="tab-analytics"
-      >
+      <div v-if="activeTab === 'analytics'" v-bind="panelAttrs('analytics')">
         <KnowledgeHealthAnalytics />
       </div>
-      <div
-        v-if="activeTab === 'verification'"
-        id="tabpanel-verification"
-        role="tabpanel"
-        aria-labelledby="tab-verification"
-      >
+      <div v-if="activeTab === 'verification'" v-bind="panelAttrs('verification')">
         <KnowledgeVerificationQueue />
       </div>
-      <div
-        v-if="activeTab === 'tools'"
-        id="tabpanel-tools"
-        role="tabpanel"
-        aria-labelledby="tab-tools"
-      >
+      <div v-if="activeTab === 'tools'" v-bind="panelAttrs('tools')">
         <KnowledgeHealthTools @refresh-strip="loadHealthDashboard" />
       </div>
     </div>
@@ -257,8 +238,9 @@
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
 import type { IconName } from '@/components/ui/Icon.vue'
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { useTabs } from '@/composables/useTabs'
 import { formatFileSize, formatDateTime as formatDateTimeHelper } from '@/utils/formatHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -297,21 +279,21 @@ const vectorStats = computed<VectorStats | null>(() =>
 // Tab state — initialized from the route at setup time so deep links
 // (?tab=verification|tools) mount the right tab on first render (#11558)
 type TabId = 'analytics' | 'verification' | 'tools'
-const VALID_TAB_IDS: TabId[] = ['analytics', 'verification', 'tools']
+const TAB_IDS = ['analytics', 'verification', 'tools'] as const satisfies readonly TabId[]
 const routeTab = route.query.tab
 const initialTab: TabId =
-  typeof routeTab === 'string' && (VALID_TAB_IDS as string[]).includes(routeTab)
+  typeof routeTab === 'string' && (TAB_IDS as readonly string[]).includes(routeTab)
     ? (routeTab as TabId)
     : 'analytics'
-const activeTab = ref<TabId>(initialTab)
+
+const { activeTab, tabAttrs, panelAttrs, handleKeydown: handleTabKeydown, tablistRef } =
+  useTabs(TAB_IDS, { initial: initialTab })
 
 const tabs: Array<{ id: TabId; labelKey: string; icon: IconName }> = [
   { id: 'analytics', labelKey: 'knowledge.health.tabAnalytics', icon: 'chart-bar' },
   { id: 'verification', labelKey: 'knowledge.health.tabVerification', icon: 'check-double' },
   { id: 'tools', labelKey: 'knowledge.health.tabTools', icon: 'cog' },
 ]
-
-const tablistRef = ref<HTMLElement | null>(null)
 
 // Computed
 const needsVectorization = computed(() => {
@@ -367,33 +349,6 @@ const getEmbeddingModelDisplay = (): string => {
     return model
   } else {
     return 'Not configured'
-  }
-}
-
-const handleTabKeydown = async (event: KeyboardEvent, currentId: TabId) => {
-  const tabIds = VALID_TAB_IDS
-  const currentIndex = tabIds.indexOf(currentId)
-  let newIndex: number | null = null
-
-  if (event.key === 'ArrowLeft') {
-    event.preventDefault()
-    newIndex = (currentIndex - 1 + tabIds.length) % tabIds.length
-  } else if (event.key === 'ArrowRight') {
-    event.preventDefault()
-    newIndex = (currentIndex + 1) % tabIds.length
-  } else if (event.key === 'Home') {
-    event.preventDefault()
-    newIndex = 0
-  } else if (event.key === 'End') {
-    event.preventDefault()
-    newIndex = tabIds.length - 1
-  }
-
-  if (newIndex !== null) {
-    activeTab.value = tabIds[newIndex]
-    await nextTick()
-    const tabBtns = tablistRef.value?.querySelectorAll<HTMLElement>('[role="tab"]')
-    tabBtns?.[newIndex]?.focus()
   }
 }
 

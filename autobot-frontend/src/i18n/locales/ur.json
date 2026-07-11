@@ -797,7 +797,8 @@
         "overview": "Overview",
         "codeReview": "Code Review",
         "codeQuality": "Code Quality",
-        "codeGeneration": "Code Generation"
+        "codeGeneration": "Code Generation",
+        "ariaLabel": "پروجیکٹ کے تجزیات"
       }
     },
     "patterns": {
@@ -8698,5 +8699,8 @@
   },
   "knowledge.health.tagDocCount": "{count} دستاویزات",
   "knowledge.health.activityCreated": "{title} بنایا گیا",
-  "knowledge.health.activityUpdated": "{title} کو اپ ڈیٹ کیا گیا"
+  "knowledge.health.activityUpdated": "{title} کو اپ ڈیٹ کیا گیا",
+  "chat.modelPicker.label": "ماڈل",
+  "chat.modelPicker.auto": "خودکار (طے شدہ ماڈل)",
+  "chat.modelPicker.title": "اس گفتگو کے لیے ماڈل اور فراہم کنندہ منتخب کریں"
 }

@@ -558,6 +558,8 @@ async def _generate_ai_response(
     session_id: str,
     request_id: str,
     reasoning_effort: str | None = None,
+    model: str | None = None,
+    provider: str | None = None,
 ) -> tuple[Dict, Any]:
     """
     Generate AI response using LLM service with fallback handling.
@@ -565,6 +567,7 @@ async def _generate_ai_response(
     Issue #281: Extracted helper for AI response generation.
     Issue #9043: Returns full LLMResponse for token tracking.
     Issue #9017: reasoning_effort threaded to provider via metadata["api_kwargs"].
+    Issue #11585: model/provider threaded into registry resolution.
 
     Args:
         llm_service: LLM service instance
@@ -572,20 +575,24 @@ async def _generate_ai_response(
         session_id: Session ID
         request_id: Request ID
         reasoning_effort: Optional effort level; None/'auto' → no change (#9017)
+        model: Optional per-request model override (#11585)
+        provider: Optional per-request provider override (#11585)
 
     Returns:
         Tuple of (AI response dict with content and role, LLMResponse object or None)
     """
     try:
-        # LLMService.chat() accepts OpenAI-format messages and uses
-        # conversation_id for per-conversation provider/model overrides.
-        # request_id flows through via **kwargs for tracing.
+        # #11585: conversation_id lets the registry apply the per-conversation
+        # provider pin; explicit model_name/provider_name (per-request override)
+        # take priority over it. request_id flows through **kwargs for tracing.
         extra_kwargs: Dict[str, Any] = {}
         if reasoning_effort and reasoning_effort != "auto":
             extra_kwargs["metadata"] = {"api_kwargs": {"reasoning_effort": reasoning_effort}}
         response = await llm_service.chat(
             messages=llm_context,
             conversation_id=session_id,
+            provider_name=provider,
+            model_name=model,
             request_id=request_id,
             **extra_kwargs,
         )
@@ -685,6 +692,34 @@ async def _store_and_log_ai_response(
     return ai_message_id
 
 
+def _validate_and_pin_provider(provider: str | None, session_id: str | None) -> None:
+    """Validate a per-request provider override and pin it to the conversation (#11585).
+
+    Unknown provider names raise 422 so the client gets an actionable error
+    instead of a silent fallback-chain substitution. Model names are NOT
+    validated here — the live model list is provider-side and any invalid
+    model surfaces as a request-time provider error (matches existing
+    pass-through behavior for ``metadata.model``).
+    """
+    if not provider:
+        return
+    from llm_shared.provider_registry import get_provider_registry
+
+    registry = get_provider_registry()
+    if registry.get_provider_by_name(provider) is None:
+        registered = sorted(str(p["name"]) for p in registry.list_providers())
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Unknown LLM provider '{provider}'. "
+                f"Registered providers: {', '.join(registered) if registered else 'none'}"
+            ),
+        )
+    if session_id:
+        # Persist so later messages in this conversation inherit the choice.
+        registry.set_conversation_provider(session_id, provider)
+
+
 async def _resolve_chat_reasoning_effort(message: "ChatMessage", user_id: str | None) -> str:
     """Resolve reasoning effort for /chat endpoint (#9017).
 
@@ -721,11 +756,16 @@ async def process_chat_message(
 
     session_id = message.session_id
 
+    # #11585: Per-request provider override — validate (422 on unknown) and pin
+    # to the conversation so later messages in this session inherit it.
+    _validate_and_pin_provider(message.provider, session_id)
+
     # Store user message (Issue #281: uses helper, Issue #3282: author_id)
     await _store_and_log_user_message(message, session_id, chat_history_manager, author_id)
 
     # Get chat context (Issue #281: uses helper)
-    model_name = message.metadata.get("model") if message.metadata else None
+    # #11585: prefer the explicit per-request model field over legacy metadata.model.
+    model_name = message.model or (message.metadata.get("model") if message.metadata else None)
     chat_context = await _get_chat_context(chat_history_manager, session_id, model_name)
 
     # Build LLM context (Issue #281: uses helper)
@@ -736,7 +776,13 @@ async def process_chat_message(
 
     # Generate AI response (Issue #281: uses helper, Issue #9043: returns LLMResponse for token tracking)
     ai_response, llm_response = await _generate_ai_response(
-        llm_service, llm_context, session_id, request_id, reasoning_effort=resolved_effort
+        llm_service,
+        llm_context,
+        session_id,
+        request_id,
+        reasoning_effort=resolved_effort,
+        model=message.model,
+        provider=message.provider,
     )
 
     # Store AI response (Issue #281: uses helper)
@@ -1444,6 +1490,15 @@ async def send_chat_message_by_id(
     reasoning_effort = request_data.get("reasoning_effort")
     if reasoning_effort is not None:
         context["reasoning_effort"] = reasoning_effort
+
+    # #11585: per-request model/provider override — validate the provider (422 on
+    # unknown) and pin it to this conversation; the model rides in context so the
+    # workflow's request-scoped model resolution picks it up.
+    model_override = request_data.get("model") or context.get("model")
+    provider_override = request_data.get("provider") or context.get("provider")
+    _validate_and_pin_provider(provider_override, chat_id)
+    if model_override:
+        context["model"] = model_override
 
     return _create_streaming_response(
         _stream_chat_workflow_messages(
