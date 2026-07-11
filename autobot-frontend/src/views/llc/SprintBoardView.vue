@@ -9,6 +9,18 @@
         <h2 class="sprint-title">{{ sprint.name }}</h2>
         <span class="sprint-dates">{{ formatDate(sprint.start_date) }} – {{ formatDate(sprint.end_date) }}</span>
         <span class="sprint-status-badge" :class="`status-${sprint.status}`">{{ sprintStatusLabel(sprint.status) }}</span>
+        <button
+          class="view-toggle-btn"
+          :title="$t('llc.sprint.switchToTimeline')"
+          @click="switchToTimeline"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="2" y="4" width="6" height="2" fill="currentColor" />
+            <rect x="2" y="8" width="10" height="2" fill="currentColor" />
+            <rect x="2" y="12" width="4" height="2" fill="currentColor" />
+          </svg>
+          {{ $t('llc.sprint.timelineView') }}
+        </button>
       </div>
       <div class="sprint-stats">
         <div class="stat">
@@ -111,7 +123,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
@@ -123,6 +135,7 @@ import { formatDate as fmtDate } from '@/utils/formatHelpers'
 const logger = createLogger('SprintBoardView')
 const api = useApiClient()
 const route = useRoute()
+const router = useRouter()
 const live = useLiveEvents()
 const { sprintStatusLabel } = useWorkItemLabels()
 
@@ -183,6 +196,13 @@ function initials(name: string) {
 
 function formatDate(iso: string) {
   return fmtDate(iso, { month: 'short', day: 'numeric' })
+}
+
+function switchToTimeline() {
+  router.push({
+    name: 'llc-timeline',
+    params: { companyId: companyId.value },
+  })
 }
 
 function openDetail(item: WorkItem) {
@@ -296,6 +316,32 @@ onMounted(async () => {
   font-size: 0.75rem;
   font-weight: 500;
   text-transform: capitalize;
+}
+
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.view-toggle-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--bg-elevated);
+}
+
+.view-toggle-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* sprint status palette — theme-adaptive (GH#10868) */

@@ -7979,7 +7979,9 @@
       "burndown": "Burndown",
       "ideal": "Ideal",
       "actual": "Actual",
-      "noBurndown": "No burndown data"
+      "noBurndown": "No burndown data",
+      "timelineView": "Laika skala",
+      "switchToTimeline": "Pārslēgties uz laika skalas skatu"
     },
     "gantt": {
       "title": "Timeline",

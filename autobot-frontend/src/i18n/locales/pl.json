@@ -7979,7 +7979,9 @@
       "burndown": "Burndown",
       "ideal": "Ideal",
       "actual": "Actual",
-      "noBurndown": "No burndown data"
+      "noBurndown": "No burndown data",
+      "timelineView": "Oś czasu",
+      "switchToTimeline": "Przełącz na widok osi czasu"
     },
     "gantt": {
       "title": "Timeline",
