@@ -511,6 +511,10 @@ services:
       - SLM_POSTGRES_HOST=autobot-postgres
       - SLM_ADMIN_PASSWORD=${SLM_ADMIN_PASSWORD:-admin}
       - SLM_DATA_DIR=/app/data
+      # Point LoggingManager at the writable slm_logs volume so read_only: true
+      # in the hardened overlay doesn't fail with EROFS when mkdir("logs") is
+      # called relative to the /app/autobot-slm-backend working directory (#11574).
+      - AUTOBOT_LOGS_DIR=/app/logs
       # Surface each compose service container as a fleet node (#9761). Off by
       # default so production/Ansible VM fleets are unaffected; on for compose.
       - SLM_COMPOSE_NODES=${SLM_COMPOSE_NODES:-true}

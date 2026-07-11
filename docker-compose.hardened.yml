@@ -129,7 +129,9 @@ services:
       - /var/run
       - /app/data/tmp:mode=1777
       - /app/autobot-slm-backend/config:mode=1777
-      # /app/logs is writable via slm_logs named volume in base compose
+      # /app/logs is writable via slm_logs named volume in base compose;
+      # AUTOBOT_LOGS_DIR=/app/logs in base compose ensures LoggingManager.mkdir()
+      # targets the volume, not the read-only image layer (#11574).
       # /app/data is writable via slm_data named volume; SLM_DATA_DIR=/app/data in base compose
       # ensures .slm_keys is written there, not to the image-layer /app/autobot-slm-backend/data
       # /app/autobot-slm-backend/config is tmpfs; config.py creates it on init
