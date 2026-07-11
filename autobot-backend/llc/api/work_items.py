@@ -306,11 +306,22 @@ def _coworker_display(item: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _relations_to_list(item: Any) -> List[Dict[str, Any]]:
-    """Serialize outgoing + incoming relations for GET response (GH#8252)."""
+async def _relations_to_list(item: Any) -> List[Dict[str, Any]]:
+    """Serialize outgoing relations for the response (GH#8252).
+
+    #11684: use ``awaitable_attrs`` so relationship access is async-safe. Items
+    reach here loaded three ways — eager-loaded (list path), bare-loaded
+    (get/update/transition via ``_service().get()``), or freshly created
+    (create path). Under an AsyncSession a plain ``item.outgoing_relations`` on a
+    not-yet-loaded relationship raises ``MissingGreenlet`` (sync IO in an async
+    context) → the endpoint 500s even though the row exists. ``awaitable_attrs``
+    returns the cached value when already loaded and awaits a load otherwise, so
+    every path serializes correctly with no duplicate query.
+    """
     rows = []
-    for rel in getattr(item, "outgoing_relations", []) or []:
-        tgt = rel.target
+    outgoing = await item.awaitable_attrs.outgoing_relations
+    for rel in outgoing or []:
+        tgt = await rel.awaitable_attrs.target
         rows.append(
             {
                 "id": str(rel.id),
@@ -365,7 +376,7 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
         "has_human_handoff_context": bool(getattr(item, "review_brief", None)),
         "created_at": item.created_at.isoformat() if item.created_at else None,
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,
-        "relations": _relations_to_list(item),
+        "relations": await _relations_to_list(item),
     }
 
 

@@ -61,7 +61,7 @@ class TestSerialization:
         session = AsyncMock()
         with (
             patch.object(work_items, "_assignee_display", new=AsyncMock(return_value=None)),
-            patch.object(work_items, "_relations_to_list", return_value=[]),
+            patch.object(work_items, "_relations_to_list", new=AsyncMock(return_value=[])),
         ):
             result = await work_items._item_to_dict(item, session)
         assert result["acceptance_criteria_done"] == [True, False]
@@ -77,7 +77,7 @@ class TestSerialization:
         session = AsyncMock()
         with (
             patch.object(work_items, "_assignee_display", new=AsyncMock(return_value=None)),
-            patch.object(work_items, "_relations_to_list", return_value=[]),
+            patch.object(work_items, "_relations_to_list", new=AsyncMock(return_value=[])),
         ):
             result = await work_items._item_to_dict(item, session)
         assert result["acceptance_criteria_done"] == []
