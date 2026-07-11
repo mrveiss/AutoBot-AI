@@ -912,6 +912,19 @@ def _format_full_search_results(query: str, entries: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _search_unavailable_message(query: str) -> str:
+    """Actionable message when every search backend yields nothing (#11665).
+
+    Flows straight into LLM context, so it stays one sentence and names the
+    exact configuration that unlocks topic search instead of a silent "".
+    """
+    return (
+        f'Web search for "{query}" returned no results because no search backend is available — '
+        "configure SEARXNG_INSTANCE_URL or BRAVE_SEARCH_API_KEY (or make a Playwright browser "
+        "reachable) to enable topic search."
+    )
+
+
 def _format_crawl_results(seed_urls: list, results: list) -> str:
     """Format BFS crawl FetchResults into a markdown index. Issue #7509.
 
@@ -2396,7 +2409,7 @@ class ToolHandlerMixin:
             logger.debug("[Issue #2306] Playwright search unavailable: %s", e)
 
         # Fallback: browser VM with DuckDuckGo HTML
-        return await self._web_search_via_browser_vm(query)
+        return await self._web_search_final_fallback(query)
 
     async def _execute_web_search_full(self, query: str, max_pages: int) -> str:
         """Search + full-page fetch mode. Issue #7404.
@@ -2414,7 +2427,7 @@ class ToolHandlerMixin:
         """
         entries = await self._web_search_structured_entries(query, max_pages)
         if not entries:
-            return await self._web_search_via_browser_vm(query)
+            return await self._web_search_final_fallback(query)
         enriched = await _fetch_pages_concurrent(entries, max_pages)
         return _format_full_search_results(query, enriched)
 
@@ -2470,6 +2483,22 @@ class ToolHandlerMixin:
             snippet = entry.get("snippet", entry.get("description", ""))
             lines.append(f"{i}. **{title}**\n   {url}\n   {snippet}\n")
         return "\n".join(lines)
+
+    async def _web_search_final_fallback(self, query: str) -> str:
+        """Browser-VM last resort with actionable guidance instead of silence (#11665).
+
+        When the registry and Playwright yielded nothing and even the browser
+        VM is unreachable (or returns nothing), the model used to receive ""
+        or a generic "Web search failed" — now it gets one sentence naming the
+        configuration that unlocks topic search.
+        """
+        try:
+            result = await self._web_search_via_browser_vm(query)
+            if result:
+                return result
+        except Exception as exc:
+            logger.debug("[#11665] Browser VM search fallback unavailable: %s", exc)
+        return _search_unavailable_message(query)
 
     async def _web_search_via_browser_vm(self, query: str) -> str:
         """Fallback: search via browser VM DuckDuckGo HTML page. Issue #2306."""

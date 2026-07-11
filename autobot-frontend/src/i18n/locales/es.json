@@ -5035,6 +5035,9 @@
     "scope": "Raíz de conocimiento K-Z (20 componentes)",
     "generated": "2026-03-04"
   },
+  "knowledge.webResearch.banner.disabled": "La investigación web está desactivada. Actívala en la configuración de investigación web para ejecutar capturas de páginas, rastreos y extracción de datos.",
+  "knowledge.webResearch.banner.dismiss": "Descartar",
+  "knowledge.webResearch.banner.unavailable": "La investigación web no está disponible: el navegador (Playwright) no se pudo inicializar al arrancar. Revisa los registros del backend y reinicia AutoBot.",
   "knowledge.qualityScore.title": "Calidad: {score}%",
   "knowledge.vectorization.statusVectorized": "Vectorizado",
   "knowledge.vectorization.statusPending": "Pendiente",

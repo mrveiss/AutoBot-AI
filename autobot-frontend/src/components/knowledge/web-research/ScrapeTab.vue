@@ -14,6 +14,9 @@ const logger = createLogger('ScrapeTab')
 const { t } = useI18n()
 const { scrapePage } = useWebResearch()
 
+// #11665: parent blocks submits when the researcher is unavailable/disabled.
+const props = defineProps<{ disabled?: boolean }>()
+
 // ── State ──────────────────────────────────────────────────────────────────
 
 const url = ref('')
@@ -28,7 +31,7 @@ const result = ref<ScrapeResponse | null>(null)
 // ── Actions ────────────────────────────────────────────────────────────────
 
 async function submit() {
-  if (!url.value.trim()) return
+  if (props.disabled || !url.value.trim()) return
   isLoading.value = true
   errorMsg.value = null
   result.value = null
@@ -99,7 +102,7 @@ function reset() {
       </div>
 
       <div class="wr-form-actions">
-        <button type="submit" class="wr-btn wr-btn--primary" :disabled="isLoading || !url.trim()">
+        <button type="submit" class="wr-btn wr-btn--primary" :disabled="isLoading || disabled || !url.trim()">
           <span v-if="isLoading" class="wr-spinner" aria-hidden="true" />
           {{ isLoading ? t('knowledge.webResearch.fetching') : t('knowledge.webResearch.scrape.submitLabel') }}
         </button>

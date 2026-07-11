@@ -7239,6 +7239,9 @@
     "offline": "Offline",
     "connecting": "Connecting..."
   },
+  "knowledge.webResearch.banner.disabled": "ویب ریسرچ بند ہے۔ صفحات حاصل کرنے، کرال اور ڈیٹا نکالنے کے لیے اسے ویب ریسرچ کی ترتیبات میں فعال کریں۔",
+  "knowledge.webResearch.banner.dismiss": "بند کریں",
+  "knowledge.webResearch.banner.unavailable": "ویب ریسرچ دستیاب نہیں: براؤزر (Playwright) اسٹارٹ اپ پر شروع نہیں ہو سکا۔ بیک اینڈ لاگز دیکھیں اور AutoBot دوبارہ شروع کریں۔",
   "knowledge.qualityScore.title": "Quality: {score}%",
   "knowledge.vectorization.statusVectorized": "Vectorized",
   "knowledge.vectorization.statusPending": "Pending",

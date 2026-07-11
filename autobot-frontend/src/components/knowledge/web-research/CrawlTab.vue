@@ -14,6 +14,9 @@ const logger = createLogger('CrawlTab')
 const { t } = useI18n()
 const { crawlSite } = useWebResearch()
 
+// #11665: parent blocks submits when the researcher is unavailable/disabled.
+const props = defineProps<{ disabled?: boolean }>()
+
 // ── State ──────────────────────────────────────────────────────────────────
 
 const seedUrl = ref('')
@@ -38,7 +41,7 @@ const progressPct = computed(() =>
 // ── Actions ────────────────────────────────────────────────────────────────
 
 async function submit() {
-  if (!seedUrl.value.trim()) return
+  if (props.disabled || !seedUrl.value.trim()) return
   isLoading.value = true
   errorMsg.value = null
   result.value = null
@@ -148,7 +151,7 @@ function reset() {
       </div>
 
       <div class="wr-form-actions">
-        <button type="submit" class="wr-btn wr-btn--primary" :disabled="isLoading || !seedUrl.trim()">
+        <button type="submit" class="wr-btn wr-btn--primary" :disabled="isLoading || disabled || !seedUrl.trim()">
           <span v-if="isLoading" class="wr-spinner" aria-hidden="true" />
           {{ isLoading ? t('knowledge.webResearch.crawling') : t('knowledge.webResearch.crawl.submitLabel') }}
         </button>

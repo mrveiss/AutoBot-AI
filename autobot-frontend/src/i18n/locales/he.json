@@ -7239,6 +7239,9 @@
     "offline": "Offline",
     "connecting": "Connecting..."
   },
+  "knowledge.webResearch.banner.disabled": "מחקר אינטרנט כבוי. הפעילו אותו בהגדרות מחקר האינטרנט כדי להריץ אחזור דפים, סריקות וחילוץ נתונים.",
+  "knowledge.webResearch.banner.dismiss": "סגירה",
+  "knowledge.webResearch.banner.unavailable": "מחקר אינטרנט אינו זמין: הדפדפן (Playwright) נכשל באתחול בעת ההפעלה. בדקו את יומני הצד-שרת והפעילו מחדש את AutoBot.",
   "knowledge.qualityScore.title": "Quality: {score}%",
   "knowledge.vectorization.statusVectorized": "Vectorized",
   "knowledge.vectorization.statusPending": "Pending",

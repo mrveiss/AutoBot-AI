@@ -7239,6 +7239,9 @@
     "offline": "Offline",
     "connecting": "Connecting..."
   },
+  "knowledge.webResearch.banner.disabled": "پژوهش وب خاموش است. آن را در تنظیمات پژوهش وب فعال کنید تا واکشی صفحه، خزش و استخراج داده اجرا شود.",
+  "knowledge.webResearch.banner.dismiss": "بستن",
+  "knowledge.webResearch.banner.unavailable": "پژوهش وب در دسترس نیست: مرورگر (Playwright) هنگام راه‌اندازی مقداردهی نشد. گزارش‌های بک‌اند را بررسی و AutoBot را دوباره راه‌اندازی کنید.",
   "knowledge.qualityScore.title": "Quality: {score}%",
   "knowledge.vectorization.statusVectorized": "Vectorized",
   "knowledge.vectorization.statusPending": "Pending",

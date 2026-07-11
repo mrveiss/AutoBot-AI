@@ -145,3 +145,37 @@ def test_populate_default_providers_registers_content_reach_without_creds(monkey
     assert "content_reach" in registry.list_providers()
     # No SearXNG or Brave keys → only content_reach registered.
     assert registry.list_providers() == ["content_reach"]
+
+
+def test_degraded_warning_when_only_content_reach(caplog):
+    """One warning fires when only the keyless fallback is registered (#11665)."""
+    import logging
+
+    from agent_loop.search.registry import _warn_if_topic_search_degraded
+
+    registry = SearchProviderRegistry()
+    registry.register(_StubProvider("content_reach"))
+
+    with caplog.at_level(logging.WARNING, logger="agent_loop.search.registry"):
+        _warn_if_topic_search_degraded(registry)
+
+    degraded = [r for r in caplog.records if "degraded" in r.getMessage()]
+    assert len(degraded) == 1
+    assert "SEARXNG_INSTANCE_URL" in degraded[0].getMessage()
+    assert "BRAVE_SEARCH_API_KEY" in degraded[0].getMessage()
+
+
+def test_no_degraded_warning_with_configured_provider(caplog):
+    """A configured (credentialed) provider suppresses the degraded warning (#11665)."""
+    import logging
+
+    from agent_loop.search.registry import _warn_if_topic_search_degraded
+
+    registry = SearchProviderRegistry()
+    registry.register(_StubProvider("brave"))
+    registry.register(_StubProvider("content_reach"))
+
+    with caplog.at_level(logging.WARNING, logger="agent_loop.search.registry"):
+        _warn_if_topic_search_degraded(registry)
+
+    assert not [r for r in caplog.records if "degraded" in r.getMessage()]

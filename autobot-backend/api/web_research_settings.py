@@ -10,7 +10,7 @@ Provides endpoints for managing web research configuration and preferences.
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
@@ -31,6 +31,23 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/web-research", tags=["web-research"])
 
+_RESEARCHER_UNAVAILABLE_DETAIL = (
+    "web researcher unavailable — browser/Playwright initialization failed at startup; see logs"
+)
+
+
+def _require_web_researcher(request: Request):
+    """Return the startup-initialized WebResearcher or raise 503 (#11665).
+
+    Phase-2 init failure leaves ``app.state.web_researcher = None``
+    (initialization/lifespan.py), so every endpoint that needs the researcher
+    must fail actionably instead of touching an uninitialized instance.
+    """
+    researcher = getattr(request.app.state, "web_researcher", None)
+    if researcher is None:
+        raise HTTPException(status_code=503, detail=_RESEARCHER_UNAVAILABLE_DETAIL)
+    return researcher
+
 
 @router.get("/status", response_model=DataResponse[WebResearchStatusData])
 @with_error_handling(
@@ -38,14 +55,10 @@ router = APIRouter(prefix="/web-research", tags=["web-research"])
     operation="get_research_status",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-async def get_research_status():
+async def get_research_status(request: Request):
     """Get current web research status and configuration"""
+    integration = _require_web_researcher(request)
     try:
-        from agents.web_researcher import get_web_researcher as get_web_research_integration
-
-        # Get web research integration instance
-        integration = get_web_research_integration()
-
         # Get health check
         health_status = await integration.health_check()
 
@@ -87,16 +100,15 @@ async def get_research_status():
     operation="enable_web_research",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-async def enable_web_research():
+async def enable_web_research(request: Request):
     """Enable web research functionality"""
+    integration = _require_web_researcher(request)
     try:
         from unified_unified_config_manager import unified_unified_config_manager
 
-        from agents.web_researcher import get_web_researcher as get_web_research_integration
         from services.config_service import ConfigService
 
         # Enable in integration
-        integration = get_web_research_integration()
         success = await integration.enable_research(user_confirmed=True)
 
         if success:
@@ -139,16 +151,15 @@ async def enable_web_research():
     operation="disable_web_research",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-async def disable_web_research():
+async def disable_web_research(request: Request):
     """Disable web research functionality"""
+    integration = _require_web_researcher(request)
     try:
         from unified_unified_config_manager import unified_unified_config_manager
 
-        from agents.web_researcher import get_web_researcher as get_web_research_integration
         from services.config_service import ConfigService
 
         # Disable in integration
-        integration = get_web_research_integration()
         success = await integration.disable_research()
 
         if success:
@@ -283,15 +294,14 @@ async def update_research_settings(settings: WebResearchSettings):
     operation="test_web_research",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-async def test_web_research(query: str = "test query"):
+async def test_web_research(request: Request, query: str = "test query"):
     """Test web research functionality"""
+    integration = _require_web_researcher(request)
     try:
-        from agents.web_researcher import conduct_web_research
-
         logger.info("Testing web research with query: %s", query)
 
         # Conduct test research
-        result = await conduct_web_research(
+        result = await integration.conduct_research(
             query=query,
             max_results=3,
             # Remove timeout - let research complete naturally
@@ -326,13 +336,10 @@ async def test_web_research(query: str = "test query"):
     operation="clear_research_cache",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-async def clear_research_cache():
+async def clear_research_cache(request: Request):
     """Clear web research cache"""
+    integration = _require_web_researcher(request)
     try:
-        from agents.web_researcher import get_web_researcher as get_web_research_integration
-
-        integration = get_web_research_integration()
-
         # Clear cache
         integration._cache.clear()
 
@@ -358,13 +365,10 @@ async def clear_research_cache():
     operation="reset_circuit_breakers",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-async def reset_circuit_breakers():
+async def reset_circuit_breakers(request: Request):
     """Reset all circuit breakers for web research"""
+    integration = _require_web_researcher(request)
     try:
-        from agents.web_researcher import get_web_researcher as get_web_research_integration
-
-        integration = get_web_research_integration()
-
         # Reset circuit breakers
         integration.reset_circuit_breakers()
 
@@ -390,13 +394,10 @@ async def reset_circuit_breakers():
     operation="get_usage_stats",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-async def get_usage_stats():
+async def get_usage_stats(request: Request):
     """Get web research usage statistics"""
+    integration = _require_web_researcher(request)
     try:
-        from agents.web_researcher import get_web_researcher as get_web_research_integration
-
-        integration = get_web_research_integration()
-
         # Get basic stats
         cache_stats = integration.get_cache_stats()
         circuit_status = integration.get_circuit_breaker_status()
