@@ -83,6 +83,13 @@ export const useChatStore = defineStore('chat', () => {
   const sessions = ref<ChatSession[]>([])
   const currentSessionId = ref<string | null>(null)
   const isTyping = ref(false)
+  // #11690: extra request-context merged into every send (e.g. { company_id }
+  // when the CEO-chat route is active). Empty by default so the general /chat
+  // is unaffected; scoped views set it on mount and clear it on unmount.
+  const activeChatContext = ref<Record<string, unknown>>({})
+  function setActiveChatContext(ctx: Record<string, unknown>) {
+    activeChatContext.value = { ...ctx }
+  }
   // Issue #691: Track streaming preview text for real-time feedback
   const streamingPreview = ref<string>('')
   // Issue #680: Track pending approval state to prevent polling race conditions
@@ -877,6 +884,8 @@ export const useChatStore = defineStore('chat', () => {
     sessions,
     currentSessionId,
     isTyping,
+    activeChatContext,       // #11690: request-context merged into sends
+    setActiveChatContext,    // #11690
     streamingPreview,  // Issue #691: Streaming preview text
     hasPendingApproval,  // Issue #680: Pending approval state
     sidebarCollapsed,

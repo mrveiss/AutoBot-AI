@@ -94,6 +94,15 @@ export class ChatController {
       // duration of the request. chatStore.setTyping is the per-message UX.
       this.chatStore.setTyping(true)
 
+      // #11690: merge any active request-context (e.g. { company_id } for the
+      // CEO-chat route) so scoped views get their tools without ChatInterface
+      // needing props. Explicit call-site options win. Empty by default → the
+      // general /chat send is unchanged.
+      const activeCtx = this.chatStore.activeChatContext
+      if (activeCtx && Object.keys(activeCtx).length > 0) {
+        options = { ...activeCtx, ...(options || {}) }
+      }
+
       // Validate message content
       const validation = this.validateMessage(content)
       if (!validation.valid) {

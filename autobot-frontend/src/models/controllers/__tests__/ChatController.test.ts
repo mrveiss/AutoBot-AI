@@ -38,6 +38,8 @@ vi.mock('@/stores/useChatStore', () => ({
     updateSettings: vi.fn(),
     toggleSidebar: vi.fn(),
     isTyping: false,
+    activeChatContext: {},          // #11690: no scope in the general path
+    setActiveChatContext: vi.fn(),  // #11690
     settings: { autoSave: false, persistHistory: true }
   }))
 }))
