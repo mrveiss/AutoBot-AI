@@ -18,13 +18,58 @@ Provides mock implementations of core components for tests and the
 - MockCommandValidator - Mock validator for command safety testing.
 - MockKnowledgeBase    - In-memory knowledge base for testing.
 - MockWorkerNode       - Mock NPU/worker node for distributed-flow tests.
+- ModuleStubRegistry   - Recording sys.modules stubber that restores the
+                         originals after import-time module loading (#11604).
 """
 
 from __future__ import annotations
 
+import sys
+import types
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
+
+if TYPE_CHECKING:
+    from unittest.mock import AsyncMock
+
+
+class ModuleStubRegistry:
+    """Install module stubs in ``sys.modules`` and restore originals afterwards.
+
+    Test modules that exec production files against lightweight module stubs
+    (the heartbeat-scheduler family) previously left those stubs in
+    ``sys.modules`` forever, shadowing the real modules for every test module
+    collected later in the same session (GH#11604).  This registry records the
+    original entry for each stubbed name; call :meth:`restore` once the
+    import-time load is done — the exec'd module keeps its bound references,
+    while later test modules import the real code again.
+    """
+
+    def __init__(self) -> None:
+        self._originals: Dict[str, types.ModuleType | None] = {}
+
+    def stub(self, name: str, **attrs: Any) -> types.ModuleType:
+        """Create a bare module with the given attributes and register it."""
+        mod = types.ModuleType(name)
+        for key, value in attrs.items():
+            setattr(mod, key, value)
+        return self.register(name, mod)
+
+    def register(self, name: str, module: types.ModuleType) -> types.ModuleType:
+        """Register an existing module object, recording the prior entry."""
+        self._originals.setdefault(name, sys.modules.get(name))
+        sys.modules[name] = module
+        return module
+
+    def restore(self) -> None:
+        """Put back every recorded original; drop names that did not exist."""
+        for name, original in self._originals.items():
+            if original is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = original
+        self._originals.clear()
 
 
 class MockLLMInterface:
@@ -618,6 +663,7 @@ __all__ = [
     "MockCommandValidator",
     "MockKnowledgeBase",
     "MockWorkerNode",
+    "ModuleStubRegistry",
     "make_llm_response",
     "make_async_redis",
     "make_redis_pipeline",
