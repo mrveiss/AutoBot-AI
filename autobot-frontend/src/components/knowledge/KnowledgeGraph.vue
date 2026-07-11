@@ -450,7 +450,10 @@ const {
 } = useKnowledgeGraph()
 
 const { message: errorMessage, show: showError, clear: clearError } = useTransientError(5000)
-watch(graphError, (msg) => { if (msg) showError(msg) })
+watch(graphError, (msg) => {
+  if (msg) showError(msg)
+  else clearError()
+})
 
 const isCreating = ref(false)
 const selectedEntity = ref<Entity | null>(null)
