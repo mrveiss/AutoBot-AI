@@ -56,7 +56,8 @@
               :class="msg.author_type === 'human' ? 'row-right' : 'row-left'"
             >
               <div class="message-bubble" :class="msg.author_type === 'human' ? 'bubble-human' : 'bubble-system'">
-                <div class="message-body">{{ msg.body }}</div>
+                <!-- #11501 T3: markdown links + DOMPurify sanitize + strip raw tool tags (same as /chat) -->
+                <div class="message-body" v-html="formatBody(msg.body)" @click="handleEntityClick"></div>
                 <div v-if="msg.author_type === 'system' && activeThread.resolved_entity_type" class="entity-link">
                   {{ activeThread.resolved_entity_type }}
                   <template v-if="activeThread.resolved_entity_id">
@@ -116,15 +117,31 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { formatDate as fmtDate, formatTime as fmtTime } from '@/utils/formatHelpers'
 import { useI18n } from 'vue-i18n'
 import { useNotificationBus } from '@/composables/useNotificationBus'
+import { createEntityAnchorClickHandler, renderMarkdownLinks } from '@/composables/chat/useEntityAnchors'
+import { sanitizeChatHtml } from '@/utils/sanitize'
 import { BaseModal } from '@autobot/ui'
 
 const logger = createLogger('CeoChatView')
+
+// #11501 T3: route entity-anchor links (#kind-id) via the router, same as
+// MessageItem in /chat, so board replies that reference work items navigate.
+const handleEntityClick = createEntityAnchorClickHandler(useRouter())
+
+// #11501 T3: render board replies with the same link + sanitize pipeline the
+// main /chat uses, and strip any raw <TOOL_CALL> fragments the model emits so
+// tool syntax never renders to the user (until #11552 lands, the reply can
+// contain an unparsed tag; this keeps the UX clean regardless).
+const _TOOL_CALL_RE = /<tool_call\b[\s\S]*?(?:<\/tool_call\b\s*>?|$)/gi
+function formatBody(body: string): string {
+  const stripped = (body || '').replace(_TOOL_CALL_RE, '').trim()
+  return sanitizeChatHtml(renderMarkdownLinks(stripped))
+}
 const api = useApiClient()
 const route = useRoute()
 const { t } = useI18n()
