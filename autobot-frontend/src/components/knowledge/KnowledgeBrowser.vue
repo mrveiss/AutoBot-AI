@@ -183,7 +183,7 @@
             :selected-doc-id="selectedDocId"
             @select="onDocSelect"
             @deleted="onDocDeleted"
-            @error="docBranchError = $event"
+            @error="showDocBranchError($event)"
           />
         </div>
       </div>
@@ -193,8 +193,8 @@
         v-if="rightPane === 'editor'"
         :doc-id="selectedDocId!"
         class="content-pane"
-        @error="docBranchError = $event"
-        @load-error="(msg: string) => { docBranchError = msg; selectedDocId = null }"
+        @error="showDocBranchError($event)"
+        @load-error="(msg: string) => { showDocBranchError(msg); selectedDocId = null }"
       />
       <KnowledgeSearchResults
         v-else-if="rightPane === 'results'"
@@ -238,6 +238,7 @@ import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorizati
 import { useLoadingState } from '@/composables/useLoadingState'
 import { useDebounce } from '@/composables/useTimeout'
 import { useKnowledgeSearch } from '@/composables/knowledge/useKnowledgeSearch'
+import { useTransientError } from '@/composables/useTransientError'
 import TreeNodeComponent, { type TreeNode } from './TreeNodeComponent.vue'
 import VectorizationProgressModal from './VectorizationProgressModal.vue'
 import KnowledgeBrowserHeader from './KnowledgeBrowserHeader.vue'
@@ -355,16 +356,7 @@ const populationStates = ref<Record<string, { isPopulating: boolean; progress: n
 // Search, document editor and branch state (Issue #11526)
 const search = useKnowledgeSearch(selectedCategory)
 const selectedDocId = ref<string | null>(null)
-const docBranchError = ref<string | null>(null)
-
-// Auto-clear docBranchError after 5000ms (mirrors DocumentsView showError semantics)
-let _docBranchErrorTimer: ReturnType<typeof setTimeout> | null = null
-watch(docBranchError, (msg) => {
-  if (_docBranchErrorTimer) clearTimeout(_docBranchErrorTimer)
-  if (msg) {
-    _docBranchErrorTimer = setTimeout(() => { docBranchError.value = null }, 5000)
-  }
-})
+const { message: docBranchError, show: showDocBranchError } = useTransientError()
 
 // Right-pane priority: document editor > search results > content viewer
 const rightPane = computed<'editor' | 'results' | 'viewer'>(() => {
@@ -1174,7 +1166,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (_docBranchErrorTimer) clearTimeout(_docBranchErrorTimer)
   cleanupVectorization()
 })
 
