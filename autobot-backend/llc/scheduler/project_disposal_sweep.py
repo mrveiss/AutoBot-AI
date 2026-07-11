@@ -30,11 +30,29 @@ from llc.models.enums import ApprovalStatus
 from llc.models.sprint import LLCProject
 from llc.services.project_disposal import dispose
 from user_management.database import get_async_session_factory
+from utils.celery_reliability import (
+    CELERY_MAX_RETRIES,
+    CELERY_RETRY_BACKOFF_MAX,
+    CELERY_TRANSIENT_ERRORS,
+    DeadLetterTask,
+)
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name="llc.scheduler.project_disposal_sweep.run_disposal_sweep", bind=True, max_retries=3)
+# #11586: transient errors (ConnectionError/TimeoutError/OSError) retry with
+# jittered exponential backoff; validation errors fail fast; terminal failures
+# are parked in the Redis dead-letter list by DeadLetterTask.
+@shared_task(
+    name="llc.scheduler.project_disposal_sweep.run_disposal_sweep",
+    bind=True,
+    base=DeadLetterTask,
+    autoretry_for=CELERY_TRANSIENT_ERRORS,
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_backoff_max=CELERY_RETRY_BACKOFF_MAX,
+    max_retries=CELERY_MAX_RETRIES,
+)
 def run_disposal_sweep(self: object) -> dict:  # type: ignore[type-arg]
     """Sync Celery entry point — disposes projects whose retention has elapsed."""
     try:
