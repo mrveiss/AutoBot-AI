@@ -41,7 +41,6 @@ from tests.fixtures.mocks import ModuleStubRegistry  # noqa: E402
 # ---------------------------------------------------------------------------
 
 
-
 _stubs = ModuleStubRegistry()
 
 
