@@ -15,8 +15,8 @@ Issue #6970 - Hook registry with signatures and validation.
 from __future__ import annotations
 
 import asyncio
-import threading
 import logging
+import threading
 import warnings
 from enum import Enum
 from typing import Any, Callable, Dict, List

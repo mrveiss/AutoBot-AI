@@ -16,8 +16,8 @@ Issue #9049 - Plugin capability manifest system.
 from __future__ import annotations
 
 import logging
-import threading
 import re
+import threading
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Dict, List
