@@ -31,23 +31,23 @@
   },
   "devDependencies": {
     "@vue/test-utils": "^2.4.11",
-    "jsdom": "^26.1.0",
-    "vitest": "^4.1.5",
-    "@storybook/addon-docs": "^10.4.6",
-    "@storybook/vue3": "^10.4.6",
-    "@storybook/vue3-vite": "^10.4.6",
+    "jsdom": "^29.1.1",
+    "vitest": "^4.1.10",
+    "@storybook/addon-docs": "^10.5.0",
+    "@storybook/vue3": "^10.5.0",
+    "@storybook/vue3-vite": "^10.5.0",
     "@tailwindcss/postcss": "^4.3.2",
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.1",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/tsconfig": "^0.9.1",
-    "eslint": "^10.6.0",
+    "eslint": "^10.7.0",
     "eslint-plugin-vue": "^10.9.2",
-    "postcss": "^8.5.16",
+    "postcss": "^8.5.19",
     "storybook": "^10.4.6",
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.62.1",
+    "typescript-eslint": "^8.63.0",
     "vite": "^8.0.13",
-    "vue-tsc": "^3.3.6"
+    "vue-tsc": "^3.3.7"
   }
 }
