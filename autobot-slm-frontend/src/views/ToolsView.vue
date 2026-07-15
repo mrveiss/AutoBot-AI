@@ -16,54 +16,56 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 import { getSlmApiBase } from '@/config/ssot-config'
 
 const fleetStore = useFleetStore()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 // Tool definitions - all tools integrated into SLM (Issue #729)
 const tools = [
   {
     id: 'network-test',
-    name: 'Network Connectivity Test',
-    description: 'Test SSH and network connectivity to nodes',
+    name: t('toolsView.networkConnectivityTest'),
+    description: t('toolsView.networkConnectivityTestDescription'),
     icon: 'network',
     available: true,
   },
   {
     id: 'redis-cli',
-    name: 'Redis CLI',
-    description: 'Execute Redis commands on the cluster',
+    name: t('toolsView.redisCli'),
+    description: t('toolsView.redisCliDescription'),
     icon: 'database',
     available: true,
   },
   {
     id: 'service-restart',
-    name: 'Service Manager',
-    description: 'Start, stop, or restart services on nodes',
+    name: t('toolsView.serviceManager'),
+    description: t('toolsView.serviceManagerDescription'),
     icon: 'refresh',
     available: true,
   },
   {
     id: 'log-viewer',
-    name: 'Service Logs',
-    description: 'View service logs from nodes via journalctl',
+    name: t('toolsView.logViewer'),
+    description: t('toolsView.logViewerDescription'),
     icon: 'document',
     available: true,
   },
   {
     id: 'health-check',
-    name: 'Deep Health Check',
-    description: 'Run comprehensive health diagnostics',
+    name: t('toolsView.deepHealthCheck'),
+    description: t('toolsView.deepHealthCheckDescription'),
     icon: 'heart',
     available: true,
   },
   {
     id: 'ansible-runner',
-    name: 'Ansible Ad-Hoc',
-    description: 'Run ad-hoc Ansible commands on nodes',
+    name: t('toolsView.ansibleAdHoc'),
+    description: t('toolsView.ansibleAdHocDescription'),
     icon: 'terminal',
     available: true,
   },
@@ -104,7 +106,7 @@ function closeTool(): void {
 
 async function runNetworkTest(): Promise<void> {
   if (!selectedNode.value) {
-    error.value = 'Please select a node'
+    error.value = t('toolsView.pleaseSelectANode')
     return
   }
 
@@ -129,15 +131,19 @@ async function runNetworkTest(): Promise<void> {
 
     if (!response.ok) {
       const err = await response.json()
-      throw new Error(err.detail || 'Connection test failed')
+      throw new Error(err.detail || t('toolsView.connectionTestFailed'))
     }
 
     const data = await response.json()
     result.value = data.success
-      ? `Connection successful!\n\nHost: ${data.hostname || 'unknown'}\nOS: ${data.os_info || 'unknown'}\nLatency: ${data.latency_ms || 'N/A'}ms`
-      : `Connection failed: ${data.error || 'Unknown error'}`
+      ? t('toolsView.connectionSuccessfulResult', {
+          hostname: data.hostname || t('toolsView.unknown'),
+          os: data.os_info || t('toolsView.unknown'),
+          latency: data.latency_ms || 'N/A',
+        })
+      : t('toolsView.connectionFailed', { error: data.error || 'Unknown error' })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Test failed'
+    error.value = e instanceof Error ? e.message : t('toolsView.testFailed')
   } finally {
     loading.value = false
   }
@@ -145,7 +151,7 @@ async function runNetworkTest(): Promise<void> {
 
 async function runHealthCheck(): Promise<void> {
   if (!selectedNode.value) {
-    error.value = 'Please select a node'
+    error.value = t('toolsView.pleaseSelectANode')
     return
   }
 
@@ -159,19 +165,20 @@ async function runHealthCheck(): Promise<void> {
     })
 
     if (!response.ok) {
-      throw new Error('Health check failed')
+      throw new Error(t('toolsView.healthCheckFailed'))
     }
 
     const data = await response.json()
-    result.value = `Health Check Results:\n\n` +
-      `Status: ${data.status || 'unknown'}\n` +
-      `CPU: ${data.cpu_percent?.toFixed(1) || 'N/A'}%\n` +
-      `Memory: ${data.memory_percent?.toFixed(1) || 'N/A'}%\n` +
-      `Disk: ${data.disk_percent?.toFixed(1) || 'N/A'}%\n` +
-      `Last Heartbeat: ${data.last_heartbeat || 'N/A'}\n\n` +
-      `Services:\n${(data.services || []).map((s: { name: string; status: string }) => `  - ${s.name}: ${s.status}`).join('\n') || '  No services found'}`
+    result.value = t('toolsView.healthCheckResult', {
+      status: data.status || t('toolsView.unknown'),
+      cpu: data.cpu_percent?.toFixed(1) || 'N/A',
+      memory: data.memory_percent?.toFixed(1) || 'N/A',
+      disk: data.disk_percent?.toFixed(1) || 'N/A',
+      lastHeartbeat: data.last_heartbeat || 'N/A',
+      services: (data.services || []).map((s: { name: string; status: string }) => `  - ${s.name}: ${s.status}`).join('\n') || `  ${t('toolsView.noServicesFound')}`,
+    })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Health check failed'
+    error.value = e instanceof Error ? e.message : t('toolsView.healthCheckFailed')
   } finally {
     loading.value = false
   }
@@ -179,7 +186,7 @@ async function runHealthCheck(): Promise<void> {
 
 async function getServiceLogs(): Promise<void> {
   if (!selectedNode.value || !selectedService.value) {
-    error.value = 'Please select a node and service'
+    error.value = t('toolsView.pleaseSelectANodeAndService')
     return
   }
 
@@ -195,13 +202,13 @@ async function getServiceLogs(): Promise<void> {
 
     if (!response.ok) {
       const err = await response.json()
-      throw new Error(err.detail || 'Failed to fetch logs')
+      throw new Error(err.detail || t('toolsView.failedToFetchLogs'))
     }
 
     const data = await response.json()
-    result.value = data.logs || 'No logs available'
+    result.value = data.logs || t('toolsView.noLogsAvailable')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to fetch logs'
+    error.value = e instanceof Error ? e.message : t('toolsView.failedToFetchLogs')
   } finally {
     loading.value = false
   }
@@ -209,7 +216,7 @@ async function getServiceLogs(): Promise<void> {
 
 async function serviceAction(action: 'start' | 'stop' | 'restart'): Promise<void> {
   if (!selectedNode.value || !selectedService.value) {
-    error.value = 'Please select a node and service'
+    error.value = t('toolsView.pleaseSelectANodeAndService')
     return
   }
 
@@ -228,15 +235,15 @@ async function serviceAction(action: 'start' | 'stop' | 'restart'): Promise<void
 
     if (!response.ok) {
       const err = await response.json()
-      throw new Error(err.detail || `Failed to ${action} service`)
+      throw new Error(err.detail || t('toolsView.failedTo', { action }))
     }
 
     const data = await response.json()
     result.value = data.success
-      ? `Service ${action} successful!\n\n${data.message || ''}`
-      : `Service ${action} failed: ${data.message || 'Unknown error'}`
+      ? t('toolsView.serviceActionSuccessful', { action, message: data.message || '' })
+      : t('toolsView.serviceActionFailed', { action, message: data.message || 'Unknown error' })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : `Failed to ${action} service`
+    error.value = e instanceof Error ? e.message : t('toolsView.failedTo', { action })
   } finally {
     loading.value = false
   }
@@ -244,7 +251,7 @@ async function serviceAction(action: 'start' | 'stop' | 'restart'): Promise<void
 
 async function runRedisCommand(): Promise<void> {
   if (!redisCommand.value.trim()) {
-    error.value = 'Please enter a Redis command'
+    error.value = t('toolsView.pleaseEnterARedis')
     return
   }
 
@@ -258,7 +265,7 @@ async function runRedisCommand(): Promise<void> {
     const targetNode = redisNode || (selectedNode.value ? selectedNodeDetails.value : null)
 
     if (!targetNode) {
-      throw new Error('No node selected and no Redis node found')
+      throw new Error(t('toolsView.runNoNodeSelected'))
     }
 
     // Execute via ansible ad-hoc
@@ -275,13 +282,13 @@ async function runRedisCommand(): Promise<void> {
 
     if (!response.ok) {
       const err = await response.json()
-      throw new Error(err.detail || 'Redis command failed')
+      throw new Error(err.detail || t('toolsView.redisCommandFailed'))
     }
 
     const data = await response.json()
-    result.value = `Redis Response:\n\n${data.output || data.stdout || 'No output'}`
+    result.value = t('toolsView.redisResponse', { output: data.output || data.stdout || t('toolsView.noOutput') })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Redis command failed'
+    error.value = e instanceof Error ? e.message : t('toolsView.redisCommandFailed')
   } finally {
     loading.value = false
   }
@@ -289,7 +296,7 @@ async function runRedisCommand(): Promise<void> {
 
 async function runAnsibleCommand(): Promise<void> {
   if (!selectedNode.value || !ansibleCommand.value.trim()) {
-    error.value = 'Please select a node and enter a command'
+    error.value = t('toolsView.pleaseSelectANodeAnd')
     return
   }
 
@@ -311,14 +318,16 @@ async function runAnsibleCommand(): Promise<void> {
 
     if (!response.ok) {
       const err = await response.json()
-      throw new Error(err.detail || 'Command execution failed')
+      throw new Error(err.detail || t('toolsView.commandExecutionFailed'))
     }
 
     const data = await response.json()
-    result.value = `Command Output:\n\n${data.output || data.stdout || 'No output'}\n\n` +
-      (data.stderr ? `Stderr:\n${data.stderr}` : '')
+    result.value = t('toolsView.commandOutputResult', {
+      output: data.output || data.stdout || t('toolsView.noOutput'),
+      stderr: data.stderr ? `Stderr:\n${data.stderr}` : '',
+    })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Command execution failed'
+    error.value = e instanceof Error ? e.message : t('toolsView.commandExecutionFailed')
   } finally {
     loading.value = false
   }
@@ -339,16 +348,16 @@ onMounted(async () => {
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
         </svg>
-        <span>{{ nodes.length }} nodes available for fleet operations</span>
+        <span>{{ $t('toolsView.nodesAvailableForFleet', { count: nodes.length }) }}</span>
       </div>
       <!-- Tools Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6" role="group" aria-label="Available tools">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6" role="group" :aria-label="$t('toolsView.availableToolsAria')">
         <button
           v-for="tool in tools"
           :key="tool.id"
           @click="selectTool(tool.id)"
           :disabled="!tool.available"
-          :aria-label="`${tool.name}: ${tool.description}`"
+          :aria-label="$t('toolsView.toolAria', { name: tool.name, description: tool.description })"
           :aria-pressed="activeTool === tool.id"
           :class="[
             'bg-white rounded-lg shadow-xs border border-gray-200 p-6 text-left transition-all',
@@ -394,16 +403,16 @@ onMounted(async () => {
       </div>
 
       <!-- Tool Interface Panel -->
-      <div v-if="activeTool" class="bg-white rounded-lg shadow-xs border border-gray-200" role="region" :aria-label="tools.find(t => t.id === activeTool)?.name || 'Tool panel'">
+      <div v-if="activeTool" class="bg-white rounded-lg shadow-xs border border-gray-200" role="region" :aria-label="tools.find(tool => tool.id === activeTool)?.name || $t('toolsView.toolPanelFallback')">
         <!-- Panel Header -->
         <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h2 class="text-lg font-semibold text-gray-900">
-            {{ tools.find(t => t.id === activeTool)?.name }}
+            {{ tools.find(tool => tool.id === activeTool)?.name }}
           </h2>
           <button
             @click="closeTool"
             class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            aria-label="Close tool panel"
+            :aria-label="$t('toolsView.closeToolPanelAria')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -437,7 +446,7 @@ onMounted(async () => {
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              {{ loading ? 'Testing...' : 'Run Test' }}
+              {{ loading ? $t('toolsView.testing') : $t('toolsView.runTest') }}
             </button>
           </div>
 
@@ -465,7 +474,7 @@ onMounted(async () => {
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              {{ loading ? 'Checking...' : 'Run Health Check' }}
+              {{ loading ? $t('toolsView.checking') : $t('toolsView.runHealthCheck') }}
             </button>
           </div>
 
@@ -491,17 +500,17 @@ onMounted(async () => {
                   type="text"
                   id="svc-mgr-service"
                   v-model="selectedService"
-                  placeholder="e.g., autobot-agent, redis, nginx"
+                  :placeholder="$t('toolsView.placeholderServiceName')"
                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
             </div>
-            <div class="flex gap-2" role="group" aria-label="Service actions">
+            <div class="flex gap-2" role="group" :aria-label="$t('toolsView.serviceActionsAria')">
               <button
                 @click="serviceAction('start')"
                 :disabled="loading || !selectedNode || !selectedService"
                 class="px-4 py-2 bg-success-600 text-white rounded-lg hover:bg-success-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
-                :aria-label="`Start ${selectedService || 'service'}`"
+                :aria-label="$t('toolsView.startServiceAria', { service: selectedService || 'service' })"
               >
                 {{ $t('toolsView.start') }}
               </button>
@@ -509,7 +518,7 @@ onMounted(async () => {
                 @click="serviceAction('stop')"
                 :disabled="loading || !selectedNode || !selectedService"
                 class="px-4 py-2 bg-danger-600 text-white rounded-lg hover:bg-danger-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
-                :aria-label="`Stop ${selectedService || 'service'}`"
+                :aria-label="$t('toolsView.stopServiceAria', { service: selectedService || 'service' })"
               >
                 {{ $t('toolsView.stop') }}
               </button>
@@ -517,7 +526,7 @@ onMounted(async () => {
                 @click="serviceAction('restart')"
                 :disabled="loading || !selectedNode || !selectedService"
                 class="px-4 py-2 bg-warning-600 text-white rounded-lg hover:bg-warning-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
-                :aria-label="`Restart ${selectedService || 'service'}`"
+                :aria-label="$t('toolsView.restartServiceAria', { service: selectedService || 'service' })"
               >
                 {{ $t('toolsView.restart') }}
               </button>
@@ -546,7 +555,7 @@ onMounted(async () => {
                   type="text"
                   id="log-viewer-service"
                   v-model="selectedService"
-                  placeholder="e.g., autobot-agent"
+                  :placeholder="$t('toolsView.placeholderServiceNameLogViewer')"
                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
@@ -573,7 +582,7 @@ onMounted(async () => {
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              {{ loading ? 'Fetching...' : 'Get Logs' }}
+              {{ loading ? $t('toolsView.fetching') : $t('toolsView.getLogs') }}
             </button>
           </div>
 
@@ -585,7 +594,7 @@ onMounted(async () => {
                 type="text"
                 id="redis-command"
                 v-model="redisCommand"
-                placeholder="e.g., PING, INFO, KEYS *"
+                :placeholder="$t('toolsView.placeholderRedisCommand')"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
               />
             </div>
@@ -601,7 +610,7 @@ onMounted(async () => {
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              {{ loading ? 'Executing...' : 'Execute' }}
+              {{ loading ? $t('toolsView.executing') : $t('toolsView.execute') }}
             </button>
           </div>
 
@@ -627,7 +636,7 @@ onMounted(async () => {
                   type="text"
                   id="ansible-command"
                   v-model="ansibleCommand"
-                  placeholder="e.g., uptime, df -h, free -m"
+                  :placeholder="$t('toolsView.placeholderAnsibleCommand')"
                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
                 />
               </div>
@@ -644,7 +653,7 @@ onMounted(async () => {
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              {{ loading ? 'Running...' : 'Run Command' }}
+              {{ loading ? $t('toolsView.running') : $t('toolsView.runCommand') }}
             </button>
           </div>
 
@@ -654,7 +663,7 @@ onMounted(async () => {
           </div>
 
           <!-- Result Output -->
-          <div v-if="result" class="mt-4" role="region" aria-label="Command output">
+          <div v-if="result" class="mt-4" role="region" :aria-label="$t('toolsView.commandOutputAria')">
             <label for="tool-output" class="block text-sm font-medium text-gray-700 mb-2">{{ $t('toolsView.output') }}</label>
             <pre id="tool-output" class="p-4 bg-gray-900 text-gray-100 rounded-lg overflow-auto max-h-96 text-sm font-mono whitespace-pre-wrap" role="log">{{ result }}</pre>
           </div>
