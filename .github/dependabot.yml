@@ -134,6 +134,12 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "vega-lite"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "@pinia/testing"
+        # #11753: @pinia/testing 2.x requires peer pinia>=4 while the group
+        # keeps pinia 3 — grouped bump re-proposes an unsatisfiable member
+        # (ERESOLVE on every PR, see #11746). Same pattern as the protobuf/
+        # websockets caps above. Unblock when the pinia 4 major is taken.
+        versions: [">=2.0.0"]
 
   - package-ecosystem: "npm"
     directory: "/autobot-slm-frontend"
