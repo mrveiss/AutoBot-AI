@@ -326,8 +326,13 @@ services:
       - worker
       - --loglevel=info
       # provisioning/services queues removed — no tasks route to them since
-      # deployment tasks moved to the SLM server (#729, cleanup #11608)
-      - --queues=celery,deployments
+      # deployment tasks moved to the SLM server (#729, cleanup #11608).
+      # #11631: memory + analytics added — task_routes sends memory write-path
+      # and background-analytics tasks there; with no consumer they sat in
+      # Redis until eviction. Must stay a superset of the queues task_routes
+      # targets (SSOT: task_queues in autobot-backend/celery_app.py; guarded
+      # by autobot-backend/celery_queue_coverage_test.py).
+      - --queues=celery,deployments,memory,analytics
       - --concurrency=2
     working_dir: /app/autobot-backend
     env_file:

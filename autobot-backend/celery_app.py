@@ -17,6 +17,7 @@ from pathlib import Path
 from celery import Celery
 from celery.schedules import crontab
 from celery.signals import worker_process_init
+from kombu import Queue
 
 from autobot_shared.logging_manager import get_logger as _get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
@@ -108,6 +109,18 @@ celery_app.conf.update(
     # GH#11262: enable priority queues so audit preempts low-priority maintenance.
     task_queue_max_priority=_MAX_PRIORITY,
     task_default_priority=_PRIORITY_NORMAL,
+    # #11631: explicit queue set — a worker started WITHOUT -Q (the Ansible
+    # systemd unit autobot-celery.service.j2) consumes exactly these queues;
+    # Celery's default without this is the lone `celery` queue, which left
+    # deployments/memory/analytics tasks unconsumed in that flavor. Every
+    # queue referenced by task_routes below MUST be listed here (guarded by
+    # celery_queue_coverage_test.py) or routed tasks sit in Redis forever.
+    task_queues=(
+        Queue("celery"),
+        Queue("deployments"),
+        Queue("memory"),
+        Queue("analytics"),
+    ),
     # Task routing - route tasks to appropriate queues
     # #11608: phantom routes for tasks.deploy_host / tasks.provision_ssh_key /
     # tasks.manage_service removed — those tasks moved to the SLM server (#729)
