@@ -1108,6 +1108,10 @@ _COMPONENT_BUILD_SCRIPT: Dict[str, str] = {
 # resolve jobs accepted in that window get killed mid-run and (pre-#11437)
 # were reconciled to failed with their migrations silently skipped.
 _SELF_KILLING_COMPONENTS = frozenset({"autobot-slm-backend", "autobot_shared"})
+# #11496: the systemd unit THIS process runs under. Restarting it kills this
+# process (#11460), so restart chains must schedule it last — anything after it
+# in a restart sequence never runs when the self-restart lands.
+_SELF_SERVICE_NAME = "autobot-slm-backend"
 _restart_pending: bool = False
 
 
@@ -1125,13 +1129,16 @@ _COMPONENT_SERVICES: Dict[str, List[str]] = {
     # must restart them all (else they keep running the old shared code and may
     # ImportError on a newly-referenced symbol). Restarts tolerate absent units
     # (distributed nodes won't have every service) — failures are logged, not fatal.
+    # #11496: our own unit (_SELF_SERVICE_NAME) is deliberately LAST — its restart
+    # kills this process (#11460), so any service listed after it would never be
+    # restarted and no post-restart health verification could run.
     "autobot_shared": [
-        "autobot-slm-backend",
         "autobot-backend",
         "autobot-ai-stack",
         "autobot-celery",
         "autobot-celery-beat",
         "autobot-npu-worker",
+        "autobot-slm-backend",
     ],
 }
 
@@ -1835,17 +1842,24 @@ async def _build_npm_frontend_for_component(component: str, steps: List[str]) ->
         return False
 
 
-async def _restart_component_services(component: str, steps: List[str]) -> None:
+async def _restart_component_services(
+    component: str, steps: List[str], services: Optional[List[str]] = None
+) -> None:
     """Restart the systemd service(s) associated with a deployed component (#9982).
+
+    *services* overrides the _COMPONENT_SERVICES lookup so a caller can restart
+    a subset (#11496: the autobot_shared path restarts non-self dependents first,
+    health-verifies them, then restarts our own unit last).
 
     Appends human-readable step notes to *steps*.
     """
     global _restart_pending
+    if services is None:
+        services = _COMPONENT_SERVICES.get(component, [])
     if component in _SELF_KILLING_COMPONENTS:
         # #11437: this chain will restart autobot-slm-backend itself — reject
         # new resolve jobs until the process dies (flag resets on boot).
         _restart_pending = True
-    services = _COMPONENT_SERVICES.get(component, [])
     for service in services:
         steps.append(f"restart: {service}")
         try:
@@ -2097,6 +2111,60 @@ async def _wait_component_healthy(component: str, steps: List[str], *, slow_star
     return True
 
 
+async def _restart_dependents_with_health(
+    component: str, snapshot: Optional[str], steps: List[str]
+) -> bool:
+    """Restart *component*'s dependent services with post-restart verification (#11496).
+
+    A shared-lib (autobot_shared) sync fans out to restart BOTH backends — an
+    import-heavy cold start — yet previously had zero post-restart health
+    verification. Restart every dependent EXCEPT this process's own unit first,
+    health-poll each (slow_start=True — cold re-import), and roll back the
+    component dir when any dependent fails. Dependents without an HTTP health
+    URL are verified via systemd state: a broken shared import surfaces as a
+    'failed' unit. Only when all others are healthy is our own unit restarted
+    last (which kills this process when it lands — #11437/#11460).
+
+    Returns True when all verified dependents are healthy; False after rollback.
+    """
+    global _restart_pending
+    dependents = _COMPONENT_SERVICES.get(component, [])
+    others = [s for s in dependents if s != _SELF_SERVICE_NAME]
+    await _restart_component_services(component, steps, services=others)
+    # The chain is still in flight — its final step (or a rollback) restarts our
+    # own unit. Keep the #11437 guard armed through the verification window (the
+    # surviving return above disarmed it, #11460) so resolve jobs accepted while
+    # we poll aren't killed mid-run by the upcoming self-restart.
+    self_restart_ahead = _SELF_SERVICE_NAME in dependents
+    if self_restart_ahead:
+        _restart_pending = True
+    unhealthy: List[str] = []
+    for dep in others:
+        if dep in _COMPONENT_HEALTH_URLS:
+            if not await _wait_component_healthy(dep, steps, slow_start=True):
+                unhealthy.append(dep)
+        elif await _is_systemd_unit_failed(dep):
+            steps.append(f"health: {dep} unit entered 'failed' state after {component} restart")
+            unhealthy.append(dep)
+    if unhealthy:
+        await _rollback_component(component, snapshot, steps, None)
+        steps.append(
+            "post-sync: rolled back to last-known-good due to unhealthy "
+            f"dependents after {component} restart: {', '.join(unhealthy)}"
+        )
+        # Still alive ⇒ no self-restart landed (rollback restarted us last and
+        # failed, or errored before restarting). Disarm so recovery resolves
+        # aren't 409-blocked forever (#11460).
+        _restart_pending = False
+        return False
+    if self_restart_ahead:
+        # All other dependents verified healthy — restart ourselves last. When
+        # this lands the process dies inside the call; a surviving return means
+        # the self-restart failed (and disarmed the guard, #11460).
+        await _restart_component_services(component, steps, services=[_SELF_SERVICE_NAME])
+    return True
+
+
 # Python backend components that embed an autobot_shared symlink (#10912).
 _BACKEND_COMPONENTS = frozenset(_COMPONENT_PIP_PATHS.keys())
 
@@ -2185,7 +2253,8 @@ async def _run_post_sync_steps(
           constraints deploy (#11322) + venv version check (#11323) +
           pip install + symlink restore (#10912) + alembic + restart + health
       - Frontend (autobot-frontend, autobot-slm-frontend): npm ci (conditional) + build + nginx reload + health
-      - autobot_shared: restore BOTH backends' symlinks (#10912) + restart dependents
+      - autobot_shared: restore BOTH backends' symlinks (#10912) + restart
+          dependents (self last) + per-dependent health + rollback (#11496)
     """
     steps: List[str] = []
     pip_ok = True
@@ -2257,7 +2326,11 @@ async def _run_post_sync_steps(
         for backend in sorted(_BACKEND_COMPONENTS):
             await _ensure_autobot_shared_symlink(backend, steps)
         if restart:
-            await _restart_component_services(component, steps)
+            # #11496: was the only sync path with no post-restart health poll
+            # or rollback — a shared-lib change that broke a backend import
+            # restarted onto a dead service undetected.
+            if not await _restart_dependents_with_health(component, snapshot, steps):
+                pip_ok = False
         else:
             steps.append("post-sync: restart deferred")
     else:
