@@ -32,11 +32,11 @@ from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
 from api.schemas_system import (
+    ChatSecretScope,
     ChatSecretsDeleteData,
     SecretCreatedData,
     SecretCreateRequest,
     SecretModel,
-    ChatSecretScope,
     SecretsListData,
     SecretsStatsData,
     SecretsStatusResponse,
