@@ -167,7 +167,7 @@ async function handleDelete(): Promise<void> {
     <div class="flex items-center justify-between mb-6">
       <div>
         <h2 class="text-lg font-semibold text-gray-900">{{ $t('performance.sLODashboard.serviceLevelObjectives') }}</h2>
-        <p class="text-sm text-gray-500">{{ slos.length }} SLO{{ slos.length !== 1 ? 's' : '' }} defined</p>
+        <p class="text-sm text-gray-500">{{ $t('performance.sLODashboard.countSLOPluralDefined', { count: slos.length, plural: slos.length !== 1 ? 's' : '' }) }}</p>
       </div>
       <button
         @click="openCreateModal"
@@ -224,7 +224,7 @@ async function handleDelete(): Promise<void> {
             <div
               class="absolute top-0 h-2 w-0.5 bg-gray-700"
               :style="{ left: `${Math.min(slo.target_percent, 100)}%` }"
-              :title="`Target: ${slo.target_percent}%`"
+              :title="$t('performance.sLODashboard.targetPercentTitle', { percent: slo.target_percent })"
             ></div>
           </div>
         </div>

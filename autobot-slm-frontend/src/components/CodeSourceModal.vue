@@ -95,7 +95,7 @@ async function handleAssign(): Promise<void> {
   >
     <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
       <h3 class="text-lg font-semibold text-gray-900 mb-4">
-        {{ isEditing ? 'Edit Code Source' : 'Assign Code Source' }}
+        {{ isEditing ? $t('codeSourceModal.editCodeSource') : $t('codeSourceModal.assignCodeSource') }}
       </h3>
 
       <div v-if="isLoading" class="text-gray-500">{{ $t('codeSourceModal.loadingNodes') }}</div>
@@ -144,7 +144,7 @@ async function handleAssign(): Promise<void> {
           :disabled="!selectedNodeId || isSaving"
           class="btn btn-primary"
         >
-          {{ isSaving ? 'Saving...' : (isEditing ? 'Update' : 'Assign') }}
+          {{ isSaving ? $t('codeSourceModal.saving') : (isEditing ? $t('codeSourceModal.update') : $t('codeSourceModal.assign')) }}
         </button>
       </div>
     </div>

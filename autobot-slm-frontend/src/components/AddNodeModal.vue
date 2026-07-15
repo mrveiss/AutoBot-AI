@@ -379,7 +379,7 @@
                       <div v-for="role in selectedRolesDetails" :key="role.id" class="flex items-center gap-2 text-xs">
                         <span class="w-2 h-2 bg-primary-500 rounded-full" aria-hidden="true"></span>
                         <span class="text-gray-700">{{ role.name }}: {{ role.services?.join(', ') || $t('addNodeModal.noServices') }}</span>
-                        <span v-if="role.default_port" class="text-gray-500">(Port {{ role.default_port }})</span>
+                        <span v-if="role.default_port" class="text-gray-500">{{ $t('addNodeModal.portValue0', { value0: role.default_port }) }}</span>
                       </div>
                     </div>
                   </div>

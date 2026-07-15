@@ -89,12 +89,7 @@ function goToCodeSync(): void {
           </div>
           <!-- Message -->
           <p class="text-sm font-medium text-amber-800">
-            <span class="font-semibold">{{ codeSync.outdatedCount.value }}</span>
-            {{ codeSync.outdatedCount.value === 1 ? 'node needs' : 'nodes need' }}
-            code updates
-            <span v-if="codeSync.latestVersionShort.value" class="text-amber-600">
-              (latest: {{ codeSync.latestVersionShort.value }})
-            </span>
+            <span class="font-semibold">{{ codeSync.outdatedCount.value }}</span>{{ $t('updateNotification.value0CodeUpdates', { value0: codeSync.outdatedCount.value === 1 ? $t('updateNotification.nodeNeeds') : $t('updateNotification.nodesNeed') }) }}<span v-if="codeSync.latestVersionShort.value" class="text-amber-600">{{ $t('updateNotification.latestValue0', { value0: codeSync.latestVersionShort.value }) }}</span>
           </p>
         </div>
 

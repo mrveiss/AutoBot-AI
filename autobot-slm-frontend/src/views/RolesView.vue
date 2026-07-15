@@ -328,7 +328,7 @@ onMounted(() => {
         <!-- Fleet health badge -->
         <span v-if="fleetHealth" :class="['px-3 py-1 rounded-full text-xs font-medium capitalize', healthClass]">
           {{ fleetHealth.health }}
-          <span v-if="fleetHealth.required_down.length"> — {{ fleetHealth.required_down.length }} critical</span>
+          <span v-if="fleetHealth.required_down.length">{{ $t('rolesView.countCritical', { count: fleetHealth.required_down.length }) }}</span>
         </span>
         <button @click="fetchRoles(); fetchFleetHealth()" :disabled="isLoading"
           class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
@@ -490,7 +490,7 @@ onMounted(() => {
               <p v-if="role.display_name" class="text-xs text-gray-500">{{ role.name }}</p>
             </td>
             <td class="px-4 py-3">
-              <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">{{ role.sync_type || 'component' }}</span>
+              <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">{{ role.sync_type || $t('rolesView.component2') }}</span>
             </td>
             <td class="px-4 py-3 text-sm text-gray-600 font-mono">{{ role.target_path }}</td>
             <td class="px-4 py-3 text-sm text-gray-600">{{ role.systemd_service || '-' }}</td>

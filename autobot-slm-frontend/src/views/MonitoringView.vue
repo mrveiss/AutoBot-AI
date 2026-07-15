@@ -72,7 +72,7 @@ function getStatusColor(status: string): string {
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
           <h1 class="text-2xl font-bold text-gray-900">{{ $t('monitoringView.monitoring') }}</h1>
-          <div class="flex items-center gap-2" role="status" :aria-label="`System health: ${systemHealth}`">
+          <div class="flex items-center gap-2" role="status" :aria-label="$t('monitoringView.systemHealthStatusAria', { status: systemHealth })">
             <span
               :class="['w-2.5 h-2.5 rounded-full', getStatusColor(systemHealth)]"
               aria-hidden="true"
@@ -87,13 +87,13 @@ function getStatusColor(status: string): string {
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
             </svg>
-            <span>{{ fleetStore.nodeList.length }} Nodes</span>
+            <span>{{ $t('monitoringView.countNodes', { count: fleetStore.nodeList.length }) }}</span>
           </div>
           <div v-if="hasCriticalAlerts" class="flex items-center gap-2 text-danger-600" role="alert">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <span>{{ activeAlertCount }} Alert{{ activeAlertCount !== 1 ? 's' : '' }}</span>
+            <span>{{ $t('monitoringView.value0AlertPlural', { value0: activeAlertCount, plural: activeAlertCount !== 1 ? 's' : '' }) }}</span>
           </div>
         </div>
       </div>
@@ -125,7 +125,7 @@ function getStatusColor(status: string): string {
           <span
             v-if="tab.id === 'alerts' && activeAlertCount > 0"
             class="px-1.5 py-0.5 text-xs font-bold bg-danger-500 text-white rounded-full"
-            :aria-label="`${activeAlertCount} active alerts`"
+            :aria-label="$t('monitoringView.activeAlertsCountAria', { count: activeAlertCount })"
           >
             {{ activeAlertCount }}
           </span>

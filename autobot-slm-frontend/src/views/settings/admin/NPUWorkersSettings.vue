@@ -390,7 +390,7 @@ onUnmounted(() => {
     <!-- Workers List -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
       <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-        <h3 class="font-semibold text-gray-900">Registered Workers ({{ workers.length }})</h3>
+        <h3 class="font-semibold text-gray-900">{{ $t('settings.admin.nPUWorkersSettings.registeredWorkersCount', { count: workers.length }) }}</h3>
         <button
           @click="fetchWorkers"
           :disabled="loading"
@@ -497,7 +497,7 @@ onUnmounted(() => {
 
               <!-- Last Heartbeat -->
               <td class="py-3 px-4 text-sm text-gray-600">
-                {{ worker.last_heartbeat || 'Never' }}
+                {{ worker.last_heartbeat || $t('settings.admin.nPUWorkersSettings.never') }}
               </td>
 
               <!-- Actions -->
@@ -566,7 +566,7 @@ onUnmounted(() => {
       <div class="absolute inset-0 bg-black/50" @click="closeModal"></div>
       <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          {{ editingWorker ? 'Edit Worker' : 'Pair New Worker' }}
+          {{ editingWorker ? $t('settings.admin.nPUWorkersSettings.editWorker') : $t('settings.admin.nPUWorkersSettings.pairNewWorker') }}
         </h3>
 
         <div class="space-y-4">
@@ -630,7 +630,7 @@ onUnmounted(() => {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            {{ editingWorker ? 'Update' : 'Pair Worker' }}
+            {{ editingWorker ? $t('settings.admin.nPUWorkersSettings.update') : $t('settings.admin.nPUWorkersSettings.pairWorker') }}
           </button>
         </div>
       </div>
@@ -671,7 +671,7 @@ onUnmounted(() => {
       <div class="absolute inset-0 bg-black/50" @click="showMetrics = false"></div>
       <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold text-gray-900">{{ selectedWorkerMetrics.hostname }} Metrics</h3>
+          <h3 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.nPUWorkersSettings.hostnameMetrics', { hostname: selectedWorkerMetrics.hostname }) }}</h3>
           <button @click="showMetrics = false" class="text-gray-400 hover:text-gray-600" :aria-label="$t('settings.admin.nPUWorkersSettings.close')">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -708,7 +708,7 @@ onUnmounted(() => {
 
           <div class="p-4 bg-gray-50 rounded-lg">
             <p class="text-sm text-gray-500">{{ $t('settings.admin.nPUWorkersSettings.lastHeartbeat') }}</p>
-            <p class="font-medium text-gray-900">{{ selectedWorkerMetrics.last_heartbeat || 'Never' }}</p>
+            <p class="font-medium text-gray-900">{{ selectedWorkerMetrics.last_heartbeat || $t('settings.admin.nPUWorkersSettings.never') }}</p>
           </div>
         </div>
 

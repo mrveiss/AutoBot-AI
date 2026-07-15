@@ -342,16 +342,12 @@ function formatTime(iso: string | null): string {
       </table>
     </div>
 
-    <div v-else-if="agentId && !loading" class="empty-state">
-      No processes found for agent "{{ agentId }}"
-    </div>
+    <div v-else-if="agentId && !loading" class="empty-state">{{ $t('agents.processMonitorTab.noProcessesFoundForAgentValue0', { value0: agentId }) }}</div>
 
     <!-- Log viewer -->
     <div v-if="selectedProcess" class="log-panel">
       <div class="log-header">
-        <h4>
-          Process {{ selectedProcess.id.slice(0, 8) }}... Logs
-          <span v-if="isStreaming" class="streaming-badge">{{ $t('agents.processMonitorTab.lIVE') }}</span>
+        <h4>{{ $t('agents.processMonitorTab.processValue0Logs', { value0: selectedProcess.id.slice(0, 8) }) }}<span v-if="isStreaming" class="streaming-badge">{{ $t('agents.processMonitorTab.lIVE') }}</span>
         </h4>
         <div class="log-actions">
           <button
@@ -374,11 +370,11 @@ function formatTime(iso: string | null): string {
             :disabled="fullLogLoading"
             @click="fetchFullLog(selectedProcess.id)"
           >
-            {{ fullLogLoading ? 'Loading...' : 'View Full Log' }}
+            {{ fullLogLoading ? $t('agents.processMonitorTab.loading') : $t('agents.processMonitorTab.viewFullLog') }}
           </button>
         </div>
       </div>
-      <pre class="log-content">{{ fullLog || selectedProcess.log_excerpt || 'No log output' }}</pre>
+      <pre class="log-content">{{ fullLog || selectedProcess.log_excerpt || $t('agents.processMonitorTab.noLogOutput') }}</pre>
     </div>
   </div>
 </template>

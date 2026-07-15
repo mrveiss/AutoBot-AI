@@ -107,7 +107,7 @@ onMounted(() => fetchDynamicEndpoints())
 
           <div class="flex items-center gap-2">
             <div class="w-2 h-2 rounded-full" :class="isConnected ? 'bg-green-500' : 'bg-red-500'"></div>
-            <span class="text-xs text-gray-600">{{ isConnected ? 'Connected' : 'Disconnected' }}</span>
+            <span class="text-xs text-gray-600">{{ isConnected ? $t('tools.admin.noVNCTool.connected') : $t('tools.admin.noVNCTool.disconnected') }}</span>
           </div>
         </div>
 
@@ -121,7 +121,7 @@ onMounted(() => fetchDynamicEndpoints())
             ]"
           >
             <span v-if="loading">{{ $t('tools.admin.noVNCTool.connecting') }}</span>
-            <span v-else>{{ isConnected ? 'Disconnect' : 'Connect' }}</span>
+            <span v-else>{{ isConnected ? $t('tools.admin.noVNCTool.disconnect') : $t('tools.admin.noVNCTool.connect') }}</span>
           </button>
         </div>
       </div>
@@ -140,7 +140,7 @@ onMounted(() => fetchDynamicEndpoints())
       <div class="grid grid-cols-2 gap-4 text-sm">
         <div>
           <span class="text-gray-500">{{ $t('tools.admin.noVNCTool.host') }}</span>
-          <span class="ml-2 text-gray-900 font-mono">{{ currentHost?.host || 'Not selected' }}</span>
+          <span class="ml-2 text-gray-900 font-mono">{{ currentHost?.host || $t('tools.admin.noVNCTool.notSelected') }}</span>
         </div>
         <div>
           <span class="text-gray-500">{{ $t('tools.admin.noVNCTool.port') }}</span>
@@ -149,7 +149,7 @@ onMounted(() => fetchDynamicEndpoints())
         <div>
           <span class="text-gray-500">{{ $t('tools.admin.noVNCTool.status') }}</span>
           <span :class="isConnected ? 'text-green-600' : 'text-red-600'" class="ml-2">
-            {{ isConnected ? 'Connected' : 'Disconnected' }}
+            {{ isConnected ? $t('tools.admin.noVNCTool.connected') : $t('tools.admin.noVNCTool.disconnected') }}
           </span>
         </div>
       </div>

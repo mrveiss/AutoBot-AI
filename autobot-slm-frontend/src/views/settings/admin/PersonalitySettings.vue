@@ -250,7 +250,7 @@ onMounted(async () => {
           </button>
         </div>
         <p class="text-xs text-gray-500">
-          {{ enabled ? 'Active — injected into system prompt' : 'Disabled — no personality applied' }}
+          {{ enabled ? $t('settings.admin.personalitySettings.activeInjectedIntoSystemPrompt') : $t('settings.admin.personalitySettings.disabledNoPersonalityApplied') }}
         </p>
       </div>
 
@@ -322,7 +322,7 @@ onMounted(async () => {
           <div>
             <h3 class="text-lg font-semibold text-gray-900">{{ editForm.name }}</h3>
             <p class="text-xs text-gray-400 mt-0.5">
-              {{ editForm.is_system ? 'System profile' : `Created by ${editForm.created_by}` }}
+              {{ editForm.is_system ? $t('settings.admin.personalitySettings.systemProfile') : `Created by ${editForm.created_by}` }}
             </p>
           </div>
           <!-- Action buttons -->
@@ -503,7 +503,7 @@ onMounted(async () => {
                 v-for="v in voiceList"
                 :key="v.id"
                 :value="v.id"
-              >{{ v.name }}{{ v.builtin ? ' (built-in)' : '' }}</option>
+              >{{ v.name }}{{ v.builtin ? $t('settings.admin.personalitySettings.builtIn') : '' }}</option>
             </select>
             <p class="mt-1 text-xs text-gray-400">
               {{ $t('settings.admin.personalitySettings.whenThisPersonalityIs') }}
@@ -518,7 +518,7 @@ onMounted(async () => {
               class="px-5 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
               @click="handleSave"
             >
-              {{ saving ? 'Saving…' : 'Save Changes' }}
+              {{ saving ? $t('settings.admin.personalitySettings.saving') : $t('settings.admin.personalitySettings.saveChanges') }}
             </button>
           </div>
 

@@ -236,7 +236,7 @@ onMounted(() => {
       <!-- Prompts List -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
         <div class="p-4 bg-gray-50 border-b border-gray-200">
-          <h3 class="font-medium text-gray-900">Available Prompts ({{ filteredPrompts.length }})</h3>
+          <h3 class="font-medium text-gray-900">{{ $t('settings.admin.promptsSettings.availablePromptsCount', { count: filteredPrompts.length }) }}</h3>
         </div>
 
         <!-- Loading -->
@@ -253,7 +253,7 @@ onMounted(() => {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           <p class="text-gray-500">
-            {{ prompts.length === 0 ? 'No prompts available' : 'No prompts match your search' }}
+            {{ prompts.length === 0 ? $t('settings.admin.promptsSettings.noPromptsAvailable') : $t('settings.admin.promptsSettings.noPromptsMatchYourSearch') }}
           </p>
         </div>
 
@@ -295,7 +295,7 @@ onMounted(() => {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
         <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
           <h3 class="font-medium text-gray-900">
-            {{ selectedPrompt ? `Editing: ${selectedPrompt.name}` : 'Select a Prompt' }}
+            {{ selectedPrompt ? `Editing: ${selectedPrompt.name}` : $t('settings.admin.promptsSettings.selectAPrompt') }}
           </h3>
           <div v-if="hasUnsavedChanges" class="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-sm text-xs font-medium">
             {{ $t('settings.admin.promptsSettings.unsavedChanges') }}
@@ -323,7 +323,7 @@ onMounted(() => {
                   'ml-2 font-medium',
                   selectedPrompt.is_default ? 'text-blue-600' : 'text-gray-900',
                 ]">
-                  {{ selectedPrompt.is_default ? 'Default' : 'Custom' }}
+                  {{ selectedPrompt.is_default ? $t('settings.admin.promptsSettings.default') : $t('settings.admin.promptsSettings.custom') }}
                 </span>
               </div>
               <div class="col-span-2">

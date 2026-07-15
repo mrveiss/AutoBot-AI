@@ -328,7 +328,7 @@ onBeforeUnmount(() => {
           :disabled="saving || selectedStrategy === currentConfig?.strategy"
           class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap"
         >
-          {{ saving ? 'Saving...' : 'Save Strategy' }}
+          {{ saving ? $t('fleet.loadBalancingView.saving') : $t('fleet.loadBalancingView.saveStrategy') }}
         </button>
       </div>
     </div>
@@ -366,9 +366,7 @@ onBeforeUnmount(() => {
               v-if="worker.queue_depth > 0"
               class="absolute inset-0 flex items-center justify-center text-xs font-medium"
               :class="queueBarWidth(worker.queue_depth) > 40 ? 'text-white' : 'text-gray-700'"
-            >
-              {{ worker.queue_depth }} tasks
-            </span>
+            >{{ $t('fleet.loadBalancingView.value0Tasks', { value0: worker.queue_depth }) }}</span>
           </div>
 
           <!-- Percentage -->
@@ -483,7 +481,7 @@ onBeforeUnmount(() => {
           >
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          {{ loading ? 'Refreshing...' : 'Rebalance Now' }}
+          {{ loading ? $t('fleet.loadBalancingView.refreshing') : $t('fleet.loadBalancingView.rebalanceNow') }}
         </button>
 
         <!-- Auto-rebalance toggle -->

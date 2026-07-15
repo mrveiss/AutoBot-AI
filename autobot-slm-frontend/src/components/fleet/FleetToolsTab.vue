@@ -197,7 +197,7 @@ async function runShellCommand(): Promise<void> {
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
       </svg>
-      <span>{{ nodes.length }} nodes available for fleet operations</span>
+      <span>{{ $t('fleet.fleetToolsTab.countNodesAvailableForFleetOperations', { count: nodes.length }) }}</span>
     </div>
 
     <!-- Tools Grid -->
@@ -304,7 +304,7 @@ async function runShellCommand(): Promise<void> {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            {{ loading ? 'Fetching...' : 'Get Logs' }}
+            {{ loading ? $t('fleet.fleetToolsTab.fetching') : $t('fleet.fleetToolsTab.getLogs') }}
           </button>
         </div>
 
@@ -331,7 +331,7 @@ async function runShellCommand(): Promise<void> {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            {{ loading ? 'Executing...' : 'Execute' }}
+            {{ loading ? $t('fleet.fleetToolsTab.executing') : $t('fleet.fleetToolsTab.execute') }}
           </button>
         </div>
 
@@ -372,7 +372,7 @@ async function runShellCommand(): Promise<void> {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            {{ loading ? 'Running...' : 'Run Command' }}
+            {{ loading ? $t('fleet.fleetToolsTab.running') : $t('fleet.fleetToolsTab.runCommand') }}
           </button>
         </div>
 

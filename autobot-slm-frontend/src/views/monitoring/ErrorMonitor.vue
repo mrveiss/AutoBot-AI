@@ -355,7 +355,7 @@ onUnmounted(() => {
                         getStatusClass(error.resolved),
                       ]"
                     >
-                      {{ error.resolved ? 'resolved' : 'active' }}
+                      {{ error.resolved ? $t('monitoring.errorMonitor.resolved2') : $t('monitoring.errorMonitor.active') }}
                     </span>
                     <span
                       :class="[
@@ -406,9 +406,7 @@ onUnmounted(() => {
             v-if="totalErrors > perPage"
             class="px-4 py-3 border-t border-gray-200 flex items-center justify-between"
           >
-            <span class="text-sm text-gray-500">
-              Page {{ currentPage }} of {{ Math.ceil(totalErrors / perPage) }}
-            </span>
+            <span class="text-sm text-gray-500">{{ $t('monitoring.errorMonitor.pageValue0OfValue1', { value0: currentPage, value1: Math.ceil(totalErrors / perPage) }) }}</span>
             <div class="flex gap-2">
               <button
                 @click="prevPage"
@@ -552,7 +550,7 @@ onUnmounted(() => {
                   getStatusClass(selectedError.resolved),
                 ]"
               >
-                {{ selectedError.resolved ? 'resolved' : 'active' }}
+                {{ selectedError.resolved ? $t('monitoring.errorMonitor.resolved2') : $t('monitoring.errorMonitor.active') }}
               </span>
               <span
                 :class="[

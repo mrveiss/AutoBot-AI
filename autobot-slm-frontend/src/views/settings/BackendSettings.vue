@@ -158,11 +158,9 @@ onMounted(() => {
             ></div>
             <div>
               <p class="font-medium text-gray-900">
-                {{ connectionStatus === 'connected' ? 'Connected to Backend' : connectionStatus === 'failed' ? 'Connection Failed' : 'Checking...' }}
+                {{ connectionStatus === 'connected' ? $t('settings.backendSettings.connectedToBackend') : connectionStatus === 'failed' ? $t('settings.backendSettings.connectionFailed') : $t('settings.backendSettings.checking') }}
               </p>
-              <p v-if="responseTime !== null" class="text-sm text-gray-500">
-                Response time: {{ responseTime }}ms
-              </p>
+              <p v-if="responseTime !== null" class="text-sm text-gray-500">{{ $t('settings.backendSettings.responseTimeValue0Ms', { value0: responseTime }) }}</p>
             </div>
           </div>
           <button

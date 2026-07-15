@@ -80,7 +80,7 @@ function onError(message: string) {
 
         <div class="flex items-center gap-1.5 text-xs">
           <div class="w-2 h-2 rounded-full" :class="isConnected ? 'bg-green-500' : 'bg-red-500'"></div>
-          <span class="text-gray-600">{{ isConnected ? 'Connected' : 'Disconnected' }}</span>
+          <span class="text-gray-600">{{ isConnected ? $t('tools.admin.terminalTool.connected') : $t('tools.admin.terminalTool.disconnected') }}</span>
         </div>
       </div>
 

@@ -71,9 +71,7 @@ const emit = defineEmits<{
           <span class="font-semibold text-gray-900">{{ hostname }}</span>
           <span v-if="ipAddress" class="text-sm text-gray-500">({{ ipAddress }})</span>
         </div>
-        <div class="text-sm text-gray-500">
-          {{ totalServices }} service{{ totalServices !== 1 ? 's' : '' }}
-        </div>
+        <div class="text-sm text-gray-500">{{ $t('orchestration.nodeHealthCard.value0ServicePlural', { value0: totalServices, plural: totalServices !== 1 ? 's' : '' }) }}</div>
       </div>
     </div>
 

@@ -472,7 +472,7 @@ onUnmounted(() => {
             ]"
           ></span>
           <span :class="connected ? 'text-green-600' : 'text-gray-500'">
-            {{ connected ? 'Live' : 'Offline' }}
+            {{ connected ? $t('servicesView.live') : $t('servicesView.offline') }}
           </span>
         </div>
         <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
@@ -562,9 +562,7 @@ onUnmounted(() => {
                 ? 'bg-primary-600 text-white'
                 : 'bg-white text-gray-700 hover:bg-gray-50'
             ]"
-          >
-            AutoBot ({{ categoryCounts.autobot }})
-          </button>
+          >{{ $t('servicesView.autoBotValue0', { value0: categoryCounts.autobot }) }}</button>
           <button
             @click="categoryFilter = 'system'"
             :class="[
@@ -573,9 +571,7 @@ onUnmounted(() => {
                 ? 'bg-primary-600 text-white'
                 : 'bg-white text-gray-700 hover:bg-gray-50'
             ]"
-          >
-            System ({{ categoryCounts.system }})
-          </button>
+          >{{ $t('servicesView.systemValue0', { value0: categoryCounts.system }) }}</button>
           <button
             @click="categoryFilter = 'all'"
             :class="[
@@ -584,9 +580,7 @@ onUnmounted(() => {
                 ? 'bg-primary-600 text-white'
                 : 'bg-white text-gray-700 hover:bg-gray-50'
             ]"
-          >
-            All ({{ categoryCounts.all }})
-          </button>
+          >{{ $t('servicesView.allValue0', { value0: categoryCounts.all }) }}</button>
         </div>
 
         <!-- Search -->
@@ -680,9 +674,7 @@ onUnmounted(() => {
                 <span class="font-semibold text-gray-900">{{ node.hostname }}</span>
                 <span class="text-sm text-gray-500">({{ node.ipAddress }})</span>
               </div>
-              <div class="text-sm text-gray-500">
-                {{ node.services.length }} services
-              </div>
+              <div class="text-sm text-gray-500">{{ $t('servicesView.countServices', { count: node.services.length }) }}</div>
             </div>
           </div>
 
@@ -756,7 +748,7 @@ onUnmounted(() => {
                         getCategoryBadgeClass(service.category)
                       ]"
                     >
-                      {{ service.category === 'autobot' ? 'AutoBot' : 'System' }}
+                      {{ service.category === 'autobot' ? $t('servicesView.autoBot') : $t('servicesView.system') }}
                       <svg class="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                       </svg>

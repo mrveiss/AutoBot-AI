@@ -257,10 +257,7 @@ function getNodeHostname(nodeId: string): string {
         <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
-        <p class="text-sm text-yellow-700">
-          At least 2 nodes with the Redis role are required to set up replication.
-          Currently {{ redisNodes.length }} Redis node(s) available.
-        </p>
+        <p class="text-sm text-yellow-700">{{ $t('replicationView.atLeast2NodesWithThe', { count: redisNodes.length }) }}</p>
       </div>
     </div>
 
@@ -610,9 +607,7 @@ function getNodeHostname(nodeId: string): string {
                     {{ formatLag(selectedReplication.lag_bytes) }}
                   </span>
                 </div>
-                <div v-if="selectedReplication.sync_position" class="text-xs text-gray-500">
-                  Sync position: {{ selectedReplication.sync_position }}
-                </div>
+                <div v-if="selectedReplication.sync_position" class="text-xs text-gray-500">{{ $t('replicationView.syncPositionValue0', { value0: selectedReplication.sync_position }) }}</div>
               </div>
 
               <!-- Sync Verification Results -->
@@ -639,7 +634,7 @@ function getNodeHostname(nodeId: string): string {
                     />
                   </svg>
                   <p :class="['font-medium', syncVerifyResult.is_healthy ? 'text-green-700' : 'text-red-700']">
-                    {{ syncVerifyResult.is_healthy ? 'Replication is healthy and in sync' : 'Replication issues detected' }}
+                    {{ syncVerifyResult.is_healthy ? $t('replicationView.replicationIsHealthyAndInSync') : $t('replicationView.replicationIssuesDetected') }}
                   </p>
                 </div>
 

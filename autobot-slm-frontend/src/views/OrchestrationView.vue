@@ -882,7 +882,7 @@ onUnmounted(() => {
             ]"
           ></span>
           <span :class="orchestration.connected ? 'text-green-600' : 'text-gray-500'">
-            {{ orchestration.connected ? 'Live' : 'Offline' }}
+            {{ orchestration.connected ? $t('orchestrationView.live') : $t('orchestrationView.offline') }}
           </span>
         </div>
         <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
@@ -940,7 +940,7 @@ onUnmounted(() => {
     <div v-if="orchestration.loading && !orchestration.fleetServices?.length" class="mb-4 p-8 bg-blue-50 border border-blue-200 rounded-lg text-center">
       <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-3"></div>
       <p class="text-sm text-blue-700">{{ $t('orchestrationView.loadingOrchestrationData') }}</p>
-      <p class="text-xs text-blue-600 mt-1">Fetching services from {{ orchestration.fleetStore.nodeList.length }} nodes</p>
+      <p class="text-xs text-blue-600 mt-1">{{ $t('orchestrationView.fetchingServicesFromCountNodes', { count: orchestration.fleetStore.nodeList.length }) }}</p>
     </div>
 
     <!-- Tabs -->
@@ -989,9 +989,7 @@ onUnmounted(() => {
                     ? 'bg-primary-100 text-primary-700'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 ]"
-              >
-                AutoBot ({{ categoryCounts.autobot }})
-              </button>
+              >{{ $t('orchestrationView.autoBotValue0', { value0: categoryCounts.autobot }) }}</button>
               <button
                 @click="categoryFilter = 'system'"
                 :class="[
@@ -1000,9 +998,7 @@ onUnmounted(() => {
                     ? 'bg-primary-100 text-primary-700'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 ]"
-              >
-                System ({{ categoryCounts.system }})
-              </button>
+              >{{ $t('orchestrationView.systemValue0', { value0: categoryCounts.system }) }}</button>
               <button
                 @click="categoryFilter = 'all'"
                 :class="[
@@ -1011,9 +1007,7 @@ onUnmounted(() => {
                     ? 'bg-primary-100 text-primary-700'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 ]"
-              >
-                All ({{ categoryCounts.all }})
-              </button>
+              >{{ $t('orchestrationView.allValue0', { value0: categoryCounts.all }) }}</button>
             </div>
 
             <!-- Expand/Collapse -->
@@ -1119,7 +1113,7 @@ onUnmounted(() => {
                             : 'bg-gray-100 text-gray-700'
                         ]"
                       >
-                        {{ service.category === 'autobot' ? 'AutoBot' : 'System' }}
+                        {{ service.category === 'autobot' ? $t('orchestrationView.autoBot') : $t('orchestrationView.system') }}
                       </span>
                     </td>
                     <td class="px-4 py-2">
@@ -1150,10 +1144,10 @@ onUnmounted(() => {
           <p class="text-gray-500 mb-2 font-medium">{{ $t('orchestrationView.noServicesFound') }}</p>
           <p class="text-sm text-gray-400 mb-4">
             {{ orchestration.fleetStore.nodeList.length === 0
-              ? 'No nodes are registered in the fleet. Add nodes to see services.'
+              ? $t('orchestrationView.noNodesAreRegisteredInThe')
               : orchestration.fleetServices?.length === 0
-              ? 'No services are running on any nodes. Services will appear here when deployed.'
-              : 'Try changing the filter or search criteria above.' }}
+              ? $t('orchestrationView.noServicesAreRunningOnAny')
+              : $t('orchestrationView.tryChangingTheFilterOrSearch') }}
           </p>
           <button
             @click="refresh"
@@ -1184,17 +1178,14 @@ onUnmounted(() => {
                 'text-yellow-700': roles.fleetHealth.health === 'degraded',
                 'text-red-700': roles.fleetHealth.health === 'critical',
               }"
-            >
-              Role Fleet Health:
-              {{ roles.fleetHealth.health === 'healthy' ? '✓ Healthy' : roles.fleetHealth.health === 'degraded' ? '⚠ Degraded' : '✗ Critical' }}
-            </p>
+            >{{ $t('orchestrationView.roleFleetHealthValue0', { value0: roles.fleetHealth.health === 'healthy' ? $t('orchestrationView.healthy') : roles.fleetHealth.health === 'degraded' ? $t('orchestrationView.degraded') : $t('orchestrationView.critical') }) }}</p>
             <p class="text-sm text-gray-600 mt-0.5">{{ roles.fleetHealth.detail }}</p>
             <div v-if="roles.fleetHealth.required_down.length > 0" class="mt-2 flex flex-wrap gap-1">
               <span
                 v-for="r in roles.fleetHealth.required_down"
                 :key="r"
                 class="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded-sm font-medium"
-              >{{ r }} (required)</span>
+              >{{ $t('orchestrationView.value0Required', { value0: r }) }}</span>
             </div>
             <div v-if="roles.fleetHealth.optional_down.length > 0" class="mt-1 flex flex-wrap gap-1">
               <span
@@ -1226,9 +1217,7 @@ onUnmounted(() => {
                     ? 'bg-primary-100 text-primary-700'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 ]"
-              >
-                AutoBot ({{ categoryCounts.autobot }})
-              </button>
+              >{{ $t('orchestrationView.autoBotValue0', { value0: categoryCounts.autobot }) }}</button>
               <button
                 @click="fleetCategoryFilter = 'system'"
                 :class="[
@@ -1237,9 +1226,7 @@ onUnmounted(() => {
                     ? 'bg-primary-100 text-primary-700'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 ]"
-              >
-                System ({{ categoryCounts.system }})
-              </button>
+              >{{ $t('orchestrationView.systemValue0', { value0: categoryCounts.system }) }}</button>
               <button
                 @click="fleetCategoryFilter = 'all'"
                 :class="[
@@ -1248,9 +1235,7 @@ onUnmounted(() => {
                     ? 'bg-primary-100 text-primary-700'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 ]"
-              >
-                All ({{ categoryCounts.all }})
-              </button>
+              >{{ $t('orchestrationView.allValue0', { value0: categoryCounts.all }) }}</button>
             </div>
           </div>
         </div>
@@ -1319,7 +1304,7 @@ onUnmounted(() => {
                         </svg>
                       </button>
                       <span class="font-medium text-gray-900">{{ service.service_name }}</span>
-                      <span class="text-xs text-gray-500">({{ service.total_nodes }} nodes)</span>
+                      <span class="text-xs text-gray-500">{{ $t('orchestrationView.value0Nodes', { value0: service.total_nodes }) }}</span>
                     </div>
                   </td>
                   <td class="px-4 py-2">
@@ -1331,7 +1316,7 @@ onUnmounted(() => {
                           : 'bg-gray-100 text-gray-700'
                       ]"
                     >
-                      {{ service.category === 'autobot' ? 'AutoBot' : 'System' }}
+                      {{ service.category === 'autobot' ? $t('orchestrationView.autoBot') : $t('orchestrationView.system') }}
                     </span>
                   </td>
                   <td class="px-4 py-2 text-center text-green-600 font-medium">{{ service.running_count }}</td>
@@ -1420,7 +1405,7 @@ onUnmounted(() => {
               'text-red-700': roles.fleetHealth.health === 'critical',
             }"
           >
-            {{ roles.fleetHealth.health === 'healthy' ? '✓ Healthy' : roles.fleetHealth.health === 'degraded' ? '⚠ Degraded' : '✗ Critical' }}
+            {{ roles.fleetHealth.health === 'healthy' ? $t('orchestrationView.healthy') : roles.fleetHealth.health === 'degraded' ? $t('orchestrationView.degraded') : $t('orchestrationView.critical') }}
           </span>
           <span class="text-sm text-gray-600">{{ roles.fleetHealth.detail }}</span>
         </div>
@@ -1436,7 +1421,7 @@ onUnmounted(() => {
         <div v-if="showRoleForm" class="card mb-6">
           <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
             <h3 class="font-medium text-gray-900">
-              {{ editingRole ? `Edit Role: ${editingRole}` : 'Create Role' }}
+              {{ editingRole ? `Edit Role: ${editingRole}` : $t('orchestrationView.createRole') }}
             </h3>
             <button @click="showRoleForm = false" class="text-gray-400 hover:text-gray-600">
               &times;
@@ -1494,7 +1479,7 @@ onUnmounted(() => {
                 <input
                   v-model="roleFormData.systemd_service"
                   class="w-full px-3 py-2 border rounded-lg text-sm"
-                  placeholder="autobot-slm.service"
+                  :placeholder="$t('orchestrationView.egAutobotSlmService')"
                 />
               </div>
               <div class="flex items-center gap-2 pt-6">
@@ -1530,7 +1515,7 @@ onUnmounted(() => {
             </div>
             <div class="flex gap-2">
               <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-                {{ editingRole ? 'Update' : 'Create' }}
+                {{ editingRole ? $t('orchestrationView.update') : $t('orchestrationView.create') }}
               </button>
               <button
                 type="button"
@@ -1544,7 +1529,7 @@ onUnmounted(() => {
         <!-- Roles Table -->
         <div class="card">
           <div class="px-4 py-3 bg-gray-50 border-b">
-            <h3 class="font-medium text-gray-900">Registered Roles ({{ roles.roles.length }})</h3>
+            <h3 class="font-medium text-gray-900">{{ $t('orchestrationView.registeredRolesCount', { count: roles.roles.length }) }}</h3>
           </div>
           <table class="w-full">
             <thead class="bg-gray-50">
@@ -1579,12 +1564,12 @@ onUnmounted(() => {
                     class="px-1.5 py-0.5 text-xs font-medium rounded-sm"
                     :class="role.required ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'"
                   >
-                    {{ role.required ? 'Required' : 'Optional' }}
+                    {{ role.required ? $t('orchestrationView.required') : $t('orchestrationView.optional') }}
                   </span>
                 </td>
                 <td class="px-4 py-2">
                   <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">
-                    {{ role.sync_type || 'component' }}
+                    {{ role.sync_type || $t('orchestrationView.component2') }}
                   </span>
                 </td>
                 <td class="px-4 py-2 text-sm text-gray-600 font-mono">{{ role.target_path }}</td>
@@ -1686,19 +1671,17 @@ onUnmounted(() => {
                   class="px-1.5 py-0.5 text-xs rounded-sm font-medium"
                   :class="role.required ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'"
                 >
-                  {{ role.required ? 'Required' : 'Optional' }}
+                  {{ role.required ? $t('orchestrationView.required') : $t('orchestrationView.optional') }}
                 </span>
               </div>
               <div class="text-xs text-gray-500 mt-1 truncate">
-                {{ role.systemd_service || 'No systemd service' }}
+                {{ role.systemd_service || $t('orchestrationView.noSystemdService') }}
               </div>
               <div class="flex items-center gap-2 mt-1">
                 <span class="text-xs bg-gray-100 text-gray-600 rounded-sm px-1.5 py-0.5">
-                  {{ role.sync_type || 'full' }}
+                  {{ role.sync_type || $t('orchestrationView.full2') }}
                 </span>
-                <span class="text-xs text-gray-400">
-                  {{ role.source_paths.length }} source path(s)
-                </span>
+                <span class="text-xs text-gray-400">{{ $t('orchestrationView.countSourcePathS', { count: role.source_paths.length }) }}</span>
               </div>
               <div
                 v-if="role.degraded_without && role.degraded_without.length > 0"
@@ -1714,9 +1697,7 @@ onUnmounted(() => {
         <!-- Step 2: Configure migration -->
         <div v-if="migrationRole" class="card p-4">
           <div class="flex items-center justify-between mb-4">
-            <h3 class="font-medium text-gray-900">
-              Migrate: {{ migrationRole.display_name || migrationRole.name }}
-            </h3>
+            <h3 class="font-medium text-gray-900">{{ $t('orchestrationView.migrateName', { name: migrationRole.display_name || migrationRole.name }) }}</h3>
             <button
               @click="resetMigration()"
               class="text-sm text-gray-500 hover:text-gray-700 underline"
@@ -1727,20 +1708,18 @@ onUnmounted(() => {
           <div class="bg-gray-50 rounded-lg p-3 mb-4 text-sm grid grid-cols-2 gap-y-1">
             <div>
               <span class="text-gray-500">{{ $t('orchestrationView.service2') }}</span>
-              {{ migrationRole.systemd_service || 'None' }}
+              {{ migrationRole.systemd_service || $t('orchestrationView.none') }}
             </div>
             <div>
               <span class="text-gray-500">{{ $t('orchestrationView.syncType2') }}</span>
-              {{ migrationRole.sync_type || 'full' }}
+              {{ migrationRole.sync_type || $t('orchestrationView.full2') }}
             </div>
             <div>
               <span class="text-gray-500">{{ $t('orchestrationView.targetPath2') }}</span>
               {{ migrationRole.target_path }}
             </div>
             <div>
-              <span class="text-gray-500">{{ $t('orchestrationView.sources') }}</span>
-              {{ migrationRole.source_paths.length }} path(s)
-            </div>
+              <span class="text-gray-500">{{ $t('orchestrationView.sources') }}</span>{{ $t('orchestrationView.countPathS', { count: migrationRole.source_paths.length }) }}</div>
           </div>
 
           <!-- Node selection -->
@@ -1809,7 +1788,7 @@ onUnmounted(() => {
                 class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 :title="$t('orchestrationView.syncRoleCodeViaGitArchive')"
               >
-                {{ migrationInProgress ? 'Migrating...' : 'Sync &amp; Deploy' }}
+                {{ migrationInProgress ? $t('orchestrationView.migrating') : $t('orchestrationView.syncDeploy') }}
               </button>
               <button
                 v-if="migrationRole && migrationRole.ansible_playbook"
@@ -1843,11 +1822,7 @@ onUnmounted(() => {
           <p
             class="font-medium text-sm mb-2"
             :class="playbookMigrateResult.success ? 'text-green-700' : 'text-red-700'"
-          >
-            {{ playbookMigrateResult.success ? '✓' : '✗' }} Ansible migration of
-            <strong>{{ playbookMigrateResult.role }}</strong>{{ $t('orchestrationView.to') }}<strong>{{ playbookMigrateResult.target_node_id }}</strong>
-            (exit {{ playbookMigrateResult.returncode }})
-          </p>
+          >{{ $t('orchestrationView.value0AnsibleMigrationOf', { value0: playbookMigrateResult.success ? '✓' : '✗' }) }}<strong>{{ playbookMigrateResult.role }}</strong>{{ $t('orchestrationView.to') }}<strong>{{ playbookMigrateResult.target_node_id }}</strong>{{ $t('orchestrationView.exitValue0', { value0: playbookMigrateResult.returncode }) }}</p>
           <pre
             v-if="playbookMigrateResult.output"
             class="text-xs bg-gray-900 text-gray-100 rounded-sm p-3 overflow-auto max-h-48 whitespace-pre-wrap"
@@ -1907,10 +1882,7 @@ onUnmounted(() => {
             >
               {{ roles.fleetHealth.health }}
             </p>
-            <p class="text-xs text-gray-500 mt-1">
-              {{ roles.roles.length - roles.fleetHealth.required_down.length - roles.fleetHealth.optional_down.length }}
-              / {{ roles.roles.length }} roles active
-            </p>
+            <p class="text-xs text-gray-500 mt-1">{{ $t('orchestrationView.countCount2RolesActive', { count: roles.roles.length - roles.fleetHealth.required_down.length - roles.fleetHealth.optional_down.length, count2: roles.roles.length }) }}</p>
           </div>
           <div class="card p-4 col-span-1">
             <p class="text-sm text-gray-500">{{ $t('orchestrationView.requiredRolesDown') }}</p>
@@ -1927,9 +1899,7 @@ onUnmounted(() => {
           <div class="card p-4">
             <p class="text-sm text-gray-500">{{ $t('orchestrationView.totalNodes') }}</p>
             <p class="text-2xl font-bold text-gray-900 mt-1">{{ infrastructureStats.totalNodes }}</p>
-            <p class="text-xs text-gray-500 mt-1">
-              {{ infrastructureStats.onlineNodes }} online, {{ infrastructureStats.offlineNodes }} offline
-            </p>
+            <p class="text-xs text-gray-500 mt-1">{{ $t('orchestrationView.value0OnlineValue1Offline', { value0: infrastructureStats.onlineNodes, value1: infrastructureStats.offlineNodes }) }}</p>
           </div>
           <div class="card p-4">
             <p class="text-sm text-gray-500">{{ $t('orchestrationView.totalServices') }}</p>
@@ -2007,8 +1977,8 @@ onUnmounted(() => {
     <RestartConfirmDialog
       :show="showRestartAllConfirm"
       :title="$t('orchestrationView.restartAllServices')"
-      :message="`Are you sure you want to restart all services on <strong>${restartAllHostname}</strong>?<br><br>Services will be restarted sequentially.`"
-      confirmButtonText="Restart All Services"
+      :message="$t('orchestrationView.restartAllConfirmMessage', { hostname: restartAllHostname })"
+      :confirmButtonText="$t('orchestrationView.restartAllServices')"
       @confirm="confirmRestartAll"
       @cancel="showRestartAllConfirm = false"
     />
@@ -2016,9 +1986,9 @@ onUnmounted(() => {
     <!-- Issue #991: Fleet Bulk Action Confirmation Dialog -->
     <RestartConfirmDialog
       :show="showBulkConfirm"
-      :title="`${pendingBulkAction ? pendingBulkAction.charAt(0).toUpperCase() + pendingBulkAction.slice(1) : ''} All Fleet Services`"
-      :message="`Are you sure you want to <strong>${pendingBulkAction}</strong> ALL services across the entire fleet?<br><br>This will affect all ${orchestration.fleetStore.nodeList.length} nodes simultaneously.`"
-      :confirmButtonText="`${pendingBulkAction ? pendingBulkAction.charAt(0).toUpperCase() + pendingBulkAction.slice(1) : ''} All Services`"
+      :title="$t('orchestrationView.allFleetServicesTitle', { action: pendingBulkAction ? pendingBulkAction.charAt(0).toUpperCase() + pendingBulkAction.slice(1) : '' })"
+      :message="$t('orchestrationView.bulkActionConfirmMessage', { action: pendingBulkAction, count: orchestration.fleetStore.nodeList.length })"
+      :confirmButtonText="$t('orchestrationView.allFleetServicesButton', { action: pendingBulkAction ? pendingBulkAction.charAt(0).toUpperCase() + pendingBulkAction.slice(1) : '' })"
       @confirm="confirmBulkAction"
       @cancel="showBulkConfirm = false"
     />

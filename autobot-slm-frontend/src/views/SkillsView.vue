@@ -198,16 +198,14 @@ function categoryIcon(category: string): string {
         </p>
       </div>
       <div class="flex items-center gap-3">
-        <span class="text-sm text-gray-400">
-          {{ statusCounts.enabled }}/{{ statusCounts.total }} enabled
-        </span>
+        <span class="text-sm text-gray-400">{{ $t('skillsView.value0Value1Enabled', { value0: statusCounts.enabled, value1: statusCounts.total }) }}</span>
         <button
           @click="initializeSkills()"
           :disabled="loading"
           class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-sm
                  disabled:opacity-50 transition-colors"
         >
-          {{ loading ? 'Loading...' : 'Refresh' }}
+          {{ loading ? $t('skillsView.loading') : $t('skillsView.refresh') }}
         </button>
       </div>
     </div>
@@ -386,7 +384,7 @@ function categoryIcon(category: string): string {
     </div>
 
     <div v-else-if="!filteredSkills.length" class="text-center py-12 text-gray-400">
-      No skills found{{ searchQuery ? ` for "${searchQuery}"` : '' }}
+      {{ searchQuery ? $t('skillsView.noSkillsFoundForQuery', { query: searchQuery }) : $t('skillsView.noSkillsFound') }}
     </div>
 
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -433,7 +431,7 @@ function categoryIcon(category: string): string {
           </span>
           <div class="flex items-center gap-2 text-xs text-gray-500">
             <span>{{ categoryIcon(skill.category) }} {{ skill.category }}</span>
-            <span>{{ skill.tools.length }} tools</span>
+            <span>{{ $t('skillsView.countTools', { count: skill.tools.length }) }}</span>
           </div>
         </div>
 
@@ -618,7 +616,7 @@ function categoryIcon(category: string): string {
               class="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm
                      disabled:opacity-50 transition-colors"
             >
-              {{ savingConfig ? 'Saving...' : 'Save Configuration' }}
+              {{ savingConfig ? $t('skillsView.saving') : $t('skillsView.saveConfiguration') }}
             </button>
           </div>
 
@@ -634,13 +632,9 @@ function categoryIcon(category: string): string {
                       ? 'bg-emerald-400' : 'bg-red-400'
                   ]"
                 />
-                <span class="text-gray-300">
-                  Config: {{ selectedSkill.health.config_valid ? 'Valid' : 'Invalid' }}
-                </span>
+                <span class="text-gray-300">{{ $t('skillsView.configValue0', { value0: selectedSkill.health.config_valid ? $t('skillsView.valid') : $t('skillsView.invalid') }) }}</span>
                 <span class="text-gray-500 mx-1">|</span>
-                <span class="text-gray-300">
-                  Deps: {{ selectedSkill.health.dependencies_met ? 'Met' : 'Missing' }}
-                </span>
+                <span class="text-gray-300">{{ $t('skillsView.depsValue0', { value0: selectedSkill.health.dependencies_met ? $t('skillsView.met') : $t('skillsView.missing') }) }}</span>
               </div>
             </div>
           </div>

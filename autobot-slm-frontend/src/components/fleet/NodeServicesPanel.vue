@@ -318,7 +318,7 @@ onUnmounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
       <div class="flex items-center gap-3">
-        <h3 class="text-lg font-semibold text-gray-900">{{ nodeName }} - Services</h3>
+        <h3 class="text-lg font-semibold text-gray-900">{{ $t('fleet.nodeServicesPanel.value0Services', { value0: nodeName }) }}</h3>
         <!-- WebSocket Status -->
         <span
           :class="[
@@ -328,7 +328,7 @@ onUnmounted(() => {
           :title="connected ? 'Live updates active' : 'Live updates offline'"
         >
           <span :class="['w-1.5 h-1.5 rounded-full', connected ? 'bg-green-500' : 'bg-gray-400']"></span>
-          {{ connected ? 'Live' : 'Offline' }}
+          {{ connected ? $t('fleet.nodeServicesPanel.live') : $t('fleet.nodeServicesPanel.offline') }}
         </span>
         <div class="flex items-center gap-2 text-sm">
           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm bg-green-100 text-green-700">
@@ -492,9 +492,7 @@ onUnmounted(() => {
                 <button
                   @click="toggleErrorDetail(service.service_name)"
                   class="text-red-600 hover:text-red-800 underline"
-                >
-                  {{ expandedErrors.has(service.service_name) ? 'Hide' : 'Show' }} error context
-                </button>
+                >{{ $t('fleet.nodeServicesPanel.value0ErrorContext', { value0: expandedErrors.has(service.service_name) ? $t('fleet.nodeServicesPanel.hide') : $t('fleet.nodeServicesPanel.show') }) }}</button>
                 <pre
                   v-if="expandedErrors.has(service.service_name)"
                   class="mt-1 p-2 bg-red-50 border border-red-200 rounded-sm text-red-700 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto"
@@ -510,7 +508,7 @@ onUnmounted(() => {
                   service.enabled ? 'text-green-600' : 'text-gray-400',
                 ]"
               >
-                {{ service.enabled ? 'Yes' : 'No' }}
+                {{ service.enabled ? $t('fleet.nodeServicesPanel.yes') : $t('fleet.nodeServicesPanel.no') }}
               </span>
             </td>
 
@@ -597,13 +595,9 @@ onUnmounted(() => {
           type="checkbox"
           v-model="autoRefresh"
           class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
-        />
-        Auto-refresh (every {{ Math.round(autoRefreshInterval / 1000) }}s)
-      </label>
+        />{{ $t('fleet.nodeServicesPanel.autoRefreshEveryValue0S', { value0: Math.round(autoRefreshInterval / 1000) }) }}</label>
       <div class="text-xs text-gray-500">
-        <span class="font-medium text-gray-700">{{ filteredServices.length }}</span>
-        of {{ totalServices }} services
-        <span v-if="lastRefresh"> &bull; Updated {{ formatRelativeTime(lastRefresh) }}</span>
+        <span class="font-medium text-gray-700">{{ filteredServices.length }}</span>{{ $t('fleet.nodeServicesPanel.ofValue0Services', { value0: totalServices }) }}<span v-if="lastRefresh">{{ $t('fleet.nodeServicesPanel.updatedValue0', { value0: formatRelativeTime(lastRefresh) }) }}</span>
       </div>
     </div>
 
@@ -617,9 +611,7 @@ onUnmounted(() => {
         <div class="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] flex flex-col">
           <!-- Header -->
           <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-            <h3 class="text-lg font-semibold text-gray-900">
-              Logs: {{ logsServiceName }}
-            </h3>
+            <h3 class="text-lg font-semibold text-gray-900">{{ $t('fleet.nodeServicesPanel.logsValue0', { value0: logsServiceName }) }}</h3>
             <button
               @click="closeLogsModal"
               class="text-gray-400 hover:text-gray-600 transition-colors"

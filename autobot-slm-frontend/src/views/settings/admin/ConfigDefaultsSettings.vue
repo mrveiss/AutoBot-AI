@@ -145,7 +145,7 @@ onMounted(() => { fetchDefaults() })
       <div class="flex gap-2">
         <button @click="fetchDefaults" :disabled="isLoading"
           class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm disabled:opacity-50">
-          {{ isLoading ? 'Loading...' : 'Refresh' }}
+          {{ isLoading ? $t('settings.admin.configDefaultsSettings.loading') : $t('settings.admin.configDefaultsSettings.refresh') }}
         </button>
         <button @click="openAddForm"
           class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
@@ -166,7 +166,7 @@ onMounted(() => { fetchDefaults() })
     <!-- Add/Edit Form -->
     <div v-if="showAddForm" class="bg-white rounded-lg border">
       <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
-        <h3 class="font-medium text-gray-900">{{ editingKey ? `Edit: ${editingKey}` : 'Add Config Default' }}</h3>
+        <h3 class="font-medium text-gray-900">{{ editingKey ? `Edit: ${editingKey}` : $t('settings.admin.configDefaultsSettings.addConfigDefault') }}</h3>
         <button @click="showAddForm = false" class="text-gray-400 hover:text-gray-600">{{ $t('settings.admin.configDefaultsSettings.times') }}</button>
       </div>
       <form @submit.prevent="saveConfig" class="p-4 space-y-4">
@@ -180,7 +180,7 @@ onMounted(() => { fetchDefaults() })
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.configDefaultsSettings.value') }}</label>
             <input v-model="newValue" required
-              class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g. 30" />
+              class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('settings.admin.configDefaultsSettings.egThirty')" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.configDefaultsSettings.type') }}</label>
@@ -194,7 +194,7 @@ onMounted(() => { fetchDefaults() })
         </div>
         <div class="flex gap-2">
           <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-            {{ editingKey ? 'Update' : 'Create' }}
+            {{ editingKey ? $t('settings.admin.configDefaultsSettings.update') : $t('settings.admin.configDefaultsSettings.create') }}
           </button>
           <button type="button" @click="showAddForm = false"
             class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">{{ $t('settings.admin.configDefaultsSettings.cancel') }}</button>
@@ -206,7 +206,7 @@ onMounted(() => { fetchDefaults() })
     <div class="flex items-center gap-4">
       <input v-model="prefixFilter" :placeholder="$t('settings.admin.configDefaultsSettings.filterByKey')"
         class="px-3 py-2 border rounded-lg text-sm w-64" />
-      <span class="text-sm text-gray-500">{{ filteredConfigs.length }} of {{ configs.length }} configs</span>
+      <span class="text-sm text-gray-500">{{ $t('settings.admin.configDefaultsSettings.countOfCount2Configs', { count: filteredConfigs.length, count2: configs.length }) }}</span>
     </div>
 
     <!-- Config Table -->

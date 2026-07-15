@@ -287,14 +287,14 @@ onMounted(() => {
                   :disabled="verifyingId === agent.id"
                   @click="verifyAgent(agent)"
                 >
-                  {{ verifyingId === agent.id ? 'Verifying…' : 'Verify' }}
+                  {{ verifyingId === agent.id ? $t('externalAgentsView.verifying') : $t('externalAgentsView.verify') }}
                 </button>
                 <button
                   class="text-xs text-gray-400 hover:text-gray-300 disabled:opacity-50"
                   :disabled="refreshingId === agent.id"
                   @click="refreshCard(agent)"
                 >
-                  {{ refreshingId === agent.id ? 'Queued' : 'Refresh' }}
+                  {{ refreshingId === agent.id ? $t('externalAgentsView.queued') : $t('externalAgentsView.refresh') }}
                 </button>
                 <button
                   class="text-xs text-gray-400 hover:text-gray-200"
@@ -323,7 +323,7 @@ onMounted(() => {
     >
       <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-lg p-6 space-y-4">
         <h2 class="text-lg font-semibold text-gray-100">
-          {{ modalMode === 'create' ? 'Register External Agent' : 'Edit Agent' }}
+          {{ modalMode === 'create' ? $t('externalAgentsView.registerExternalAgent') : $t('externalAgentsView.editAgent') }}
         </h2>
 
         <div class="space-y-3">
@@ -403,7 +403,7 @@ onMounted(() => {
             :disabled="isSaving || !form.name || !form.base_url"
             @click="saveAgent"
           >
-            {{ isSaving ? 'Saving…' : modalMode === 'create' ? 'Register' : 'Save' }}
+            {{ isSaving ? $t('externalAgentsView.saving') : modalMode === 'create' ? $t('externalAgentsView.register') : $t('externalAgentsView.save') }}
           </button>
         </div>
       </div>
@@ -464,9 +464,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <div v-if="detailAgent.card_error" class="p-2 bg-danger-900/30 border border-danger-700 rounded-sm text-danger-300 text-xs">
-            Card error: {{ detailAgent.card_error }}
-          </div>
+          <div v-if="detailAgent.card_error" class="p-2 bg-danger-900/30 border border-danger-700 rounded-sm text-danger-300 text-xs">{{ $t('externalAgentsView.cardErrorValue0', { value0: detailAgent.card_error }) }}</div>
 
           <div v-if="detailCardJson">
             <div class="text-xs text-gray-500 mb-1">{{ $t('externalAgentsView.agentCardJSON') }}</div>

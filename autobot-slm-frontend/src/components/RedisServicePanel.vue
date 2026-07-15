@@ -321,9 +321,7 @@ onUnmounted(() => {
       </button>
 
       <!-- Last checked -->
-      <span v-if="redisStatus?.last_checked" class="ml-auto text-xs text-gray-400">
-        Checked {{ new Date(redisStatus.last_checked).toLocaleTimeString() }}
-      </span>
+      <span v-if="redisStatus?.last_checked" class="ml-auto text-xs text-gray-400">{{ $t('redisServicePanel.checkedValue0', { value0: new Date(redisStatus.last_checked).toLocaleTimeString() }) }}</span>
     </div>
 
     <!-- Stop confirmation dialog -->

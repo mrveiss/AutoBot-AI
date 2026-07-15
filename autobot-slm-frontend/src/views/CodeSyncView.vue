@@ -653,7 +653,7 @@ onUnmounted(() => {
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          {{ codeSync.loading.value ? 'Refreshing...' : 'Refresh' }}
+          {{ codeSync.loading.value ? $t('codeSyncView.refreshing') : $t('codeSyncView.refresh') }}
         </button>
       </div>
     </div>
@@ -954,7 +954,7 @@ onUnmounted(() => {
             d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
           />
         </svg>
-        {{ isPulling ? 'Pulling...' : 'Pull from Source' }}
+        {{ isPulling ? $t('codeSyncView.pulling') : $t('codeSyncView.pullFromSource') }}
       </button>
       <button
         @click="handleSelfUpdate"
@@ -975,7 +975,7 @@ onUnmounted(() => {
             d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
           />
         </svg>
-        {{ selfUpdating ? 'Updating...' : 'Update This Server' }}
+        {{ selfUpdating ? $t('codeSyncView.updateAllRunning') : $t('codeSyncView.updateThisServer') }}
       </button>
     </div>
 
@@ -987,7 +987,7 @@ onUnmounted(() => {
           @click="showCodeSourceModal = true"
           class="btn btn-primary text-sm"
         >
-          {{ codeSourceData ? 'Edit' : 'Configure' }}
+          {{ codeSourceData ? $t('codeSyncView.edit') : $t('codeSyncView.configure') }}
         </button>
       </div>
 
@@ -1065,7 +1065,7 @@ onUnmounted(() => {
                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
               />
             </svg>
-            {{ isDriftLoading ? 'Checking...' : 'Check Drift' }}
+            {{ isDriftLoading ? $t('codeSyncView.checking') : $t('codeSyncView.checkDrift') }}
           </button>
         </div>
       </div>
@@ -1079,21 +1079,15 @@ onUnmounted(() => {
           >
             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            {{ driftReport.drifted_files.length }} drifted file{{ driftReport.drifted_files.length !== 1 ? 's' : '' }} detected
-          </span>
+            </svg>{{ $t('codeSyncView.countDriftedFilePluralDetected', { count: driftReport.drifted_files.length, plural: driftReport.drifted_files.length !== 1 ? 's' : '' }) }}</span>
           <span
             v-else
             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800"
           >
             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
-            No drift detected ({{ driftReport.total_compared }} files compared)
-          </span>
-          <span class="text-sm text-gray-400">
-            Checked {{ formatDate(driftReport.checked_at) }}
-          </span>
+            </svg>{{ $t('codeSyncView.noDriftDetectedValue0FilesCompared', { value0: driftReport.total_compared }) }}</span>
+          <span class="text-sm text-gray-400">{{ $t('codeSyncView.checkedValue0', { value0: formatDate(driftReport.checked_at) }) }}</span>
         </div>
 
         <div class="text-xs text-gray-400 mb-3">
@@ -1107,7 +1101,7 @@ onUnmounted(() => {
             @click="handleResolveDrift"
             :disabled="isResolvingDrift || isDriftLoading"
             class="btn btn-primary flex items-center gap-2 text-sm"
-            :title="`Run rsync from ${driftReport.source_dir} to ${driftReport.deployed_dir}`"
+            :title="$t('codeSyncView.runRsyncFromTo', { source: driftReport.source_dir, dest: driftReport.deployed_dir })"
           >
             <svg
               :class="['w-4 h-4', isResolvingDrift ? 'animate-spin' : '']"
@@ -1122,13 +1116,13 @@ onUnmounted(() => {
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
               />
             </svg>
-            {{ isResolvingDrift ? 'Resyncing...' : 'Resync from Source' }}
+            {{ isResolvingDrift ? $t('codeSyncView.resyncing') : $t('codeSyncView.resyncFromSource') }}
           </button>
           <button
             @click="showDriftDetails = !showDriftDetails"
             class="text-sm text-primary-600 hover:text-primary-800 font-medium"
           >
-            {{ showDriftDetails ? 'Hide details' : 'Show details' }}
+            {{ showDriftDetails ? $t('codeSyncView.hideDetails') : $t('codeSyncView.showDetails') }}
           </button>
         </div>
 
@@ -1157,7 +1151,7 @@ onUnmounted(() => {
                       'text-orange-700 bg-orange-100 px-2 py-0.5 rounded text-xs': file.status === 'deployed_only',
                     }"
                   >
-                    {{ file.status === 'modified' ? 'Modified' : file.status === 'source_only' ? 'Source only' : 'Deployed only' }}
+                    {{ file.status === 'modified' ? $t('codeSyncView.modified') : file.status === 'source_only' ? $t('codeSyncView.sourceOnly') : $t('codeSyncView.deployedOnly') }}
                   </span>
                 </td>
                 <td class="py-2 pr-4 font-mono text-xs text-gray-700">{{ file.path }}</td>
@@ -1258,9 +1252,7 @@ onUnmounted(() => {
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Sync Selected ({{ selectedCount }})
-          </button>
+            </svg>{{ $t('codeSyncView.syncSelectedValue0', { value0: selectedCount }) }}</button>
           <button
             @click="handleSyncAll"
             :disabled="codeSync.loading.value"
@@ -1356,7 +1348,7 @@ onUnmounted(() => {
                 :disabled="syncingNodeId === node.node_id"
                 class="text-primary-600 hover:text-primary-800 font-medium text-sm disabled:opacity-50"
               >
-                {{ syncingNodeId === node.node_id ? 'Syncing...' : 'Sync' }}
+                {{ syncingNodeId === node.node_id ? $t('codeSyncView.syncing') : $t('codeSyncView.sync') }}
               </button>
               <!-- Progress indicator (Issue #880) -->
               <div
@@ -1406,7 +1398,7 @@ onUnmounted(() => {
             :disabled="syncingRole === role.name"
             class="btn btn-primary btn-sm w-full"
           >
-            {{ syncingRole === role.name ? 'Syncing...' : 'Sync All Nodes' }}
+            {{ syncingRole === role.name ? $t('codeSyncView.syncing') : $t('codeSyncView.syncAllNodes') }}
           </button>
         </div>
       </div>
@@ -1467,7 +1459,7 @@ onUnmounted(() => {
             <td class="px-6 py-4 whitespace-nowrap">
               <div class="text-sm font-medium text-gray-900">{{ schedule.name }}</div>
               <div class="text-xs text-gray-500">
-                {{ schedule.target_type === 'all' ? 'All outdated nodes' : `${schedule.target_nodes?.length || 0} specific nodes` }}
+                {{ schedule.target_type === 'all' ? $t('codeSyncView.allOutdatedNodes') : `${schedule.target_nodes?.length || 0} specific nodes` }}
               </div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
@@ -1501,7 +1493,7 @@ onUnmounted(() => {
                   class="text-primary-600 hover:text-primary-800 font-medium disabled:opacity-50"
                   :title="$t('codeSyncView.runNow')"
                 >
-                  {{ runningScheduleId === schedule.id ? 'Running...' : 'Run' }}
+                  {{ runningScheduleId === schedule.id ? $t('codeSyncView.running') : $t('codeSyncView.run') }}
                 </button>
                 <span class="text-gray-300">|</span>
                 <button

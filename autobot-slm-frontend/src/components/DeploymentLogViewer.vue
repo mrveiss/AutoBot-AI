@@ -276,7 +276,7 @@ onUnmounted(() => {
             :aria-valuenow="progress"
             aria-valuemin="0"
             aria-valuemax="100"
-            :aria-label="`Deployment progress: ${progress}%`"
+            :aria-label="$t('deploymentLogViewer.deploymentProgressAria', { percent: progress })"
           >
             <div
               class="bg-blue-500 h-2 rounded-full transition-all duration-300"
@@ -337,7 +337,7 @@ onUnmounted(() => {
             aria-hidden="true"
           />
           <span class="text-sm text-gray-400">
-            {{ isConnected ? 'Connected' : 'Disconnected' }}
+            {{ isConnected ? $t('deploymentLogViewer.connected') : $t('deploymentLogViewer.disconnected') }}
           </span>
         </div>
         <button

@@ -311,7 +311,7 @@ onMounted(async () => {
               {{ $t('settings.admin.logForwardingSettings.logForwardingService') }}
             </h2>
             <p class="text-sm text-gray-500">
-              {{ status.running ? 'Service Running' : 'Service Stopped' }}
+              {{ status.running ? $t('settings.admin.logForwardingSettings.serviceRunning') : $t('settings.admin.logForwardingSettings.serviceStopped') }}
             </p>
           </div>
         </div>
@@ -337,7 +337,7 @@ onMounted(async () => {
               <path v-if="status.running" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
               <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
             </svg>
-            {{ status.running ? 'Stop' : 'Start' }}
+            {{ status.running ? $t('settings.admin.logForwardingSettings.stop') : $t('settings.admin.logForwardingSettings.start') }}
           </button>
 
           <button
@@ -464,7 +464,7 @@ onMounted(async () => {
               <div>
                 <h4 class="font-medium text-gray-900">{{ dest.name }}</h4>
                 <p class="text-sm text-gray-500">
-                  {{ dest.config.url || dest.config.host || dest.config.file_path || 'No endpoint configured' }}
+                  {{ dest.config.url || dest.config.host || dest.config.file_path || $t('settings.admin.logForwardingSettings.noEndpointConfigured') }}
                 </p>
               </div>
             </div>
@@ -509,7 +509,7 @@ onMounted(async () => {
       <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto m-4">
         <div class="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
           <h3 class="text-lg font-semibold text-gray-900">
-            {{ editingDestination ? 'Edit Destination' : 'Add Destination' }}
+            {{ editingDestination ? $t('settings.admin.logForwardingSettings.editDestination') : $t('settings.admin.logForwardingSettings.addDestination') }}
           </h3>
           <button @click="closeModal" class="text-gray-400 hover:text-gray-600" :aria-label="$t('settings.admin.logForwardingSettings.close')">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -692,7 +692,7 @@ onMounted(async () => {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            {{ editingDestination ? 'Update' : 'Create' }}
+            {{ editingDestination ? $t('settings.admin.logForwardingSettings.update') : $t('settings.admin.logForwardingSettings.create') }}
           </button>
         </div>
       </div>

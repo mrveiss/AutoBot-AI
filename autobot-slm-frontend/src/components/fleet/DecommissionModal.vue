@@ -124,9 +124,7 @@ function handleMigrateClick() {
       <!-- Header -->
       <div class="modal-header">
         <span class="header-icon" aria-hidden="true">&#9888;</span>
-        <h3 id="decommission-title">
-          Decommission Node: {{ node.hostname }}
-        </h3>
+        <h3 id="decommission-title">{{ $t('fleet.decommissionModal.decommissionNodeHostname', { hostname: node.hostname }) }}</h3>
         <button
           class="close-btn"
           @click="emit('close')"

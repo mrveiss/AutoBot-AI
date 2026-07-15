@@ -349,7 +349,7 @@ onUnmounted(() => {
 
         <!-- Last Activity -->
         <div class="flex items-center justify-between text-xs text-gray-500 pt-4 border-t border-gray-200">
-          <span>Last activity: {{ formatDate(agent.last_activity) }}</span>
+          <span>{{ $t('tools.admin.agentsTool.lastActivityValue0', { value0: formatDate(agent.last_activity) }) }}</span>
         </div>
 
         <!-- Actions -->

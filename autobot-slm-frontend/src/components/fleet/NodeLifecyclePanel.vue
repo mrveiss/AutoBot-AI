@@ -656,14 +656,10 @@ onUnmounted(() => {
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12" />
               </svg>
-              <span class="font-medium">{{ updatesSummary.count }} update{{ updatesSummary.count === 1 ? '' : 's' }} available</span>
+              <span class="font-medium">{{ $t('fleet.nodeLifecyclePanel.value0UpdatePluralAvailable', { value0: updatesSummary.count, plural: updatesSummary.count === 1 ? '' : 's' }) }}</span>
             </div>
-            <span v-if="updatesSummary.security > 0" class="text-sm text-red-600">
-              ({{ updatesSummary.security }} security)
-            </span>
-            <span v-if="updatesSummary.critical > 0" class="text-sm font-medium text-red-700">
-              {{ updatesSummary.critical }} critical
-            </span>
+            <span v-if="updatesSummary.security > 0" class="text-sm text-red-600">{{ $t('fleet.nodeLifecyclePanel.value0Security', { value0: updatesSummary.security }) }}</span>
+            <span v-if="updatesSummary.critical > 0" class="text-sm font-medium text-red-700">{{ $t('fleet.nodeLifecyclePanel.value0Critical', { value0: updatesSummary.critical }) }}</span>
           </template>
           <template v-else-if="availableUpdates">
             <div class="flex items-center gap-2 text-success-600">
@@ -706,7 +702,7 @@ onUnmounted(() => {
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
             </svg>
-            {{ isCheckingUpdates ? 'Checking...' : 'Check for Updates' }}
+            {{ isCheckingUpdates ? $t('fleet.nodeLifecyclePanel.checking') : $t('fleet.nodeLifecyclePanel.checkForUpdates') }}
           </button>
 
           <button
@@ -736,7 +732,7 @@ onUnmounted(() => {
                 d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
               />
             </svg>
-            {{ isInstallingUpdates ? 'Installing...' : 'Install Updates' }}
+            {{ isInstallingUpdates ? $t('fleet.nodeLifecyclePanel.installing') : $t('fleet.nodeLifecyclePanel.installUpdates') }}
           </button>
         </div>
       </div>
@@ -826,11 +822,7 @@ onUnmounted(() => {
       </div>
 
       <div class="ml-auto text-sm text-gray-500">
-        <span class="font-medium text-gray-700">{{ filteredEvents.length }}</span>
-        event{{ filteredEvents.length === 1 ? '' : 's' }}
-        <span v-if="totalEvents > events.length" class="text-gray-400">
-          (showing {{ events.length }} of {{ totalEvents }})
-        </span>
+        <span class="font-medium text-gray-700">{{ filteredEvents.length }}</span>{{ $t('fleet.nodeLifecyclePanel.eventPlural', { plural: filteredEvents.length === 1 ? '' : 's' }) }}<span v-if="totalEvents > events.length" class="text-gray-400">{{ $t('fleet.nodeLifecyclePanel.showingCountOfValue1', { count: events.length, value1: totalEvents }) }}</span>
       </div>
     </div>
 
@@ -963,7 +955,7 @@ onUnmounted(() => {
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
           </svg>
-          {{ isLoadingMore ? 'Loading...' : 'Load more events' }}
+          {{ isLoadingMore ? $t('fleet.nodeLifecyclePanel.loading') : $t('fleet.nodeLifecyclePanel.loadMoreEvents') }}
         </button>
       </div>
     </div>
@@ -975,12 +967,8 @@ onUnmounted(() => {
           type="checkbox"
           v-model="autoRefresh"
           class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
-        />
-        Auto-refresh (every {{ Math.round(autoRefreshInterval / 1000) }}s)
-      </label>
-      <span v-if="lastRefresh" class="text-xs text-gray-400">
-        Last updated: {{ formatRelativeTime(lastRefresh) }}
-      </span>
+        />{{ $t('fleet.nodeLifecyclePanel.autoRefreshEveryValue0S', { value0: Math.round(autoRefreshInterval / 1000) }) }}</label>
+      <span v-if="lastRefresh" class="text-xs text-gray-400">{{ $t('fleet.nodeLifecyclePanel.lastUpdatedValue0', { value0: formatRelativeTime(lastRefresh) }) }}</span>
     </div>
   </div>
 </template>

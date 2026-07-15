@@ -108,7 +108,7 @@
               <span class="field-label">{{ $t('setupWizardView.iPAddress') }}</span>
               <input
                 v-model="newNode.ip_address"
-                placeholder="e.g. 10.0.0.21"
+                :placeholder="$t('setupWizardView.egIPAddress')"
                 autocomplete="off"
               />
             </label>
@@ -143,7 +143,7 @@
             />
           </label>
           <button class="btn-secondary" @click="addNode" :disabled="addingNode">
-            {{ addingNode ? 'Adding...' : 'Add Node' }}
+            {{ addingNode ? $t('setupWizardView.adding') : $t('setupWizardView.addNode') }}
           </button>
         </div>
 
@@ -170,12 +170,12 @@
             <span
               class="status-badge"
               :class="connectionResults[node.node_id] || 'pending'"
-            >{{ connectionResults[node.node_id] || 'untested' }}</span>
+            >{{ connectionResults[node.node_id] || $t('setupWizardView.untested') }}</span>
           </div>
         </div>
 
         <button class="btn-secondary" @click="testAllConnections" :disabled="testingConnections">
-          {{ testingConnections ? 'Testing...' : 'Test All Connections' }}
+          {{ testingConnections ? $t('setupWizardView.testing') : $t('setupWizardView.testAllConnections') }}
         </button>
         <button
           class="btn-primary"
@@ -205,7 +205,7 @@
         </div>
 
         <button class="btn-secondary" @click="enrollAllNodes" :disabled="enrolling">
-          {{ enrolling ? 'Enrolling...' : 'Enroll All Nodes' }}
+          {{ enrolling ? $t('setupWizardView.enrolling') : $t('setupWizardView.enrollAllNodes') }}
         </button>
         <button
           class="btn-primary"
@@ -329,13 +329,13 @@
               :key="infra"
               class="role-chip infra-chip"
             >
-              {{ infra === 'autobot_shared' ? 'Shared Library' : 'SLM Agent' }}
+              {{ infra === 'autobot_shared' ? $t('setupWizardView.sharedLibrary') : $t('setupWizardView.sLMAgent') }}
             </span>
           </div>
         </div>
 
         <button class="btn-primary" @click="saveAndContinueRoles" :disabled="savingRoles">
-          {{ savingRoles ? 'Saving...' : 'Save & Continue' }}
+          {{ savingRoles ? $t('setupWizardView.saving') : $t('setupWizardView.saveContinue') }}
         </button>
       </div>
 
@@ -367,7 +367,7 @@
         </div>
 
         <button class="btn-secondary" @click="saveSecrets" :disabled="savingSecrets">
-          {{ savingSecrets ? 'Saving...' : 'Save API Keys' }}
+          {{ savingSecrets ? $t('setupWizardView.saving') : $t('setupWizardView.saveAPIKeys') }}
         </button>
         <button class="btn-primary" @click="completeStep('configure_secrets')">
           {{ Object.values(secretValues).some(v => v) ? 'Continue' : 'Skip' }}
@@ -429,7 +429,7 @@
           @click="provisionFleet"
           :disabled="provisioning"
         >
-          {{ provisioning ? 'Provisioning...' : 'Start Provisioning' }}
+          {{ provisioning ? $t('setupWizardView.provisioning') : $t('setupWizardView.startProvisioning') }}
         </button>
         <button
           v-if="provisionComplete"
@@ -453,16 +453,14 @@
             {{ fleetHealth.health }}
           </div>
           <ul>
-            <li>Total nodes: {{ fleetHealth.total_nodes }}</li>
-            <li>Online nodes: {{ fleetHealth.online_nodes }}</li>
-            <li v-if="fleetHealth.missing_required_roles.length > 0">
-              Missing roles: {{ fleetHealth.missing_required_roles.join(', ') }}
-            </li>
+            <li>{{ $t('setupWizardView.totalNodesValue0', { value0: fleetHealth.total_nodes }) }}</li>
+            <li>{{ $t('setupWizardView.onlineNodesValue0', { value0: fleetHealth.online_nodes }) }}</li>
+            <li v-if="fleetHealth.missing_required_roles.length > 0">{{ $t('setupWizardView.missingRolesValue0', { value0: fleetHealth.missing_required_roles.join(', ') }) }}</li>
           </ul>
         </div>
 
         <button class="btn-secondary" @click="checkFleetHealth" :disabled="checkingHealth">
-          {{ checkingHealth ? 'Checking...' : 'Check Fleet Health' }}
+          {{ checkingHealth ? $t('setupWizardView.checking') : $t('setupWizardView.checkFleetHealth') }}
         </button>
         <button
           class="btn-primary"

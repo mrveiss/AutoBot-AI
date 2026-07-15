@@ -472,7 +472,7 @@ onMounted(fetchProviders)
                   ? 'bg-green-100 text-green-700'
                   : 'bg-gray-100 text-gray-600'"
               >
-                {{ provider.is_active ? 'Enabled' : 'Disabled' }}
+                {{ provider.is_active ? $t('settings.admin.sSOSettings.enabled') : $t('settings.admin.sSOSettings.disabled') }}
               </span>
               <!-- Health badge (sourced from /sso-providers/health) -->
               <span
@@ -487,20 +487,13 @@ onMounted(fetchProviders)
               </span>
             </div>
             <div class="mt-2 text-sm text-gray-600 space-y-1">
-              <p>{{ $t('settings.admin.sSOSettings.defaultRole') }}<span class="font-medium">{{ provider.default_role || 'user' }}</span></p>
-              <p>{{ $t('settings.admin.sSOSettings.allowUserCreation') }}<span class="font-medium">{{ provider.allow_user_creation ? 'Yes' : 'No' }}</span></p>
+              <p>{{ $t('settings.admin.sSOSettings.defaultRole') }}<span class="font-medium">{{ provider.default_role || $t('settings.admin.sSOSettings.user2') }}</span></p>
+              <p>{{ $t('settings.admin.sSOSettings.allowUserCreation') }}<span class="font-medium">{{ provider.allow_user_creation ? $t('settings.admin.sSOSettings.yes') : $t('settings.admin.sSOSettings.no') }}</span></p>
               <template v-if="providerHealth(provider.id)">
-                <p class="text-xs text-gray-500">
-                  Recent logins: {{ providerHealth(provider.id)!.success_count }} success /
-                  {{ providerHealth(provider.id)!.failure_count }} failed
-                </p>
-                <p v-if="providerHealth(provider.id)!.last_success_at" class="text-xs text-gray-500">
-                  Last success: {{ new Date(providerHealth(provider.id)!.last_success_at!).toLocaleString() }}
-                </p>
+                <p class="text-xs text-gray-500">{{ $t('settings.admin.sSOSettings.recentLoginsValue0SuccessValue1Failed', { value0: providerHealth(provider.id)!.success_count, value1: providerHealth(provider.id)!.failure_count }) }}</p>
+                <p v-if="providerHealth(provider.id)!.last_success_at" class="text-xs text-gray-500">{{ $t('settings.admin.sSOSettings.lastSuccessValue0', { value0: new Date(providerHealth(provider.id)!.last_success_at!).toLocaleString() }) }}</p>
               </template>
-              <p v-if="provider.last_sync_at" class="text-xs text-gray-500">
-                Last sync: {{ new Date(provider.last_sync_at).toLocaleString() }}
-              </p>
+              <p v-if="provider.last_sync_at" class="text-xs text-gray-500">{{ $t('settings.admin.sSOSettings.lastSyncValue0', { value0: new Date(provider.last_sync_at).toLocaleString() }) }}</p>
             </div>
           </div>
 
@@ -512,7 +505,7 @@ onMounted(fetchProviders)
               :disabled="testing"
               class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
-              {{ testing ? 'Testing...' : 'Test' }}
+              {{ testing ? $t('settings.admin.sSOSettings.testing') : $t('settings.admin.sSOSettings.test') }}
             </button>
 
             <!-- Toggle Enable/Disable -->
@@ -520,7 +513,7 @@ onMounted(fetchProviders)
               @click="toggleProvider(provider)"
               class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              {{ provider.is_active ? 'Disable' : 'Enable' }}
+              {{ provider.is_active ? $t('settings.admin.sSOSettings.disable') : $t('settings.admin.sSOSettings.enable') }}
             </button>
 
             <!-- Edit -->
@@ -547,9 +540,7 @@ onMounted(fetchProviders)
     >
       <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <h3 class="text-lg font-semibold">
-            {{ editingProvider ? 'Edit' : 'Create' }} SSO Provider
-          </h3>
+          <h3 class="text-lg font-semibold">{{ $t('settings.admin.sSOSettings.value0SSOProvider', { value0: editingProvider ? $t('settings.admin.sSOSettings.edit') : $t('settings.admin.sSOSettings.create') }) }}</h3>
           <button @click="closeForm" class="text-gray-400 hover:text-gray-600">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -639,7 +630,7 @@ onMounted(fetchProviders)
                 @blur="autofillEndpoints"
                 type="text"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="e.g., 12345678-1234-1234-1234-123456789012"
+                :placeholder="$t('settings.admin.sSOSettings.egClientIdUuid')"
               />
               <p class="mt-1 text-xs text-gray-500">{{ $t('settings.admin.sSOSettings.endpointsWillBeAutoFilledBased2') }}</p>
             </div>
@@ -756,7 +747,7 @@ onMounted(fetchProviders)
                 v-model="formData.search_filter"
                 type="text"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="(uid={username})"
+                :placeholder="$t('settings.admin.sSOSettings.searchFilterExample', { username: 'username' })"
               />
             </div>
 
@@ -766,7 +757,7 @@ onMounted(fetchProviders)
                 v-model="formData.user_dn_template"
                 type="text"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="uid={username},ou=users,dc=company,dc=com"
+                :placeholder="$t('settings.admin.sSOSettings.userDnTemplateExample', { username: 'username' })"
               />
             </div>
           </div>
@@ -866,7 +857,7 @@ onMounted(fetchProviders)
             :disabled="saving || !formData.name"
             class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {{ saving ? 'Saving...' : (editingProvider ? 'Update Provider' : 'Create Provider') }}
+            {{ saving ? $t('settings.admin.sSOSettings.saving') : (editingProvider ? $t('settings.admin.sSOSettings.updateProvider') : $t('settings.admin.sSOSettings.createProvider')) }}
           </button>
         </div>
       </div>

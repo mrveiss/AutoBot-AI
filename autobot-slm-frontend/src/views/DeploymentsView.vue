@@ -624,7 +624,7 @@ function getNodeHostname(nodeId: string): string {
           </div>
           <div class="flex-1">
             <h4 :class="['font-medium', rollbackNotification.success ? 'text-green-800' : 'text-red-800']">
-              {{ rollbackNotification.success ? 'Rollback Completed' : 'Rollback Failed' }}
+              {{ rollbackNotification.success ? $t('deploymentsView.rollbackCompleted') : $t('deploymentsView.rollbackFailed') }}
             </h4>
             <p :class="['text-sm', rollbackNotification.success ? 'text-green-600' : 'text-red-600']">
               {{ rollbackNotification.message }}
@@ -1254,9 +1254,7 @@ function getNodeHostname(nodeId: string): string {
                             v-if="role.dependencies.length > 0"
                             class="px-1.5 py-0.5 text-xs bg-amber-100 text-amber-700 rounded-sm"
                             :title="'Requires: ' + role.dependencies.join(', ')"
-                          >
-                            needs: {{ role.dependencies.join(', ') }}
-                          </span>
+                          >{{ $t('deploymentsView.needsValue0', { value0: role.dependencies.join(', ') }) }}</span>
                           <!-- Current Owner Badge (#1389) -->
                           <span
                             v-if="getRoleOwnerHostname(role.name) && roleOwners[role.name] !== newDeployment.node_id"
@@ -1277,7 +1275,7 @@ function getNodeHostname(nodeId: string): string {
 
           <!-- Selected Roles Summary -->
           <div v-if="newDeployment.roles.length > 0" class="bg-green-50 border border-green-200 rounded-md p-3">
-            <p class="text-sm font-medium text-green-800 mb-1">Selected Roles ({{ newDeployment.roles.length }})</p>
+            <p class="text-sm font-medium text-green-800 mb-1">{{ $t('deploymentsView.selectedRolesCount', { count: newDeployment.roles.length }) }}</p>
             <div class="flex flex-wrap gap-1">
               <span
                 v-for="role in newDeployment.roles"
@@ -1391,9 +1389,7 @@ function getNodeHostname(nodeId: string): string {
                   :key="node.node_id"
                   :value="node.node_id"
                   :disabled="node.node_id === newBgDeployment.blue_node_id"
-                >
-                  {{ node.hostname }} ({{ node.available_capacity.toFixed(0) }}% capacity)
-                </option>
+                >{{ $t('deploymentsView.hostnameValue1Capacity', { hostname: node.hostname, value1: node.available_capacity.toFixed(0) }) }}</option>
               </select>
             </div>
             <div v-else-if="newBgDeployment.roles.length > 0" class="text-sm text-yellow-600 py-2">{{ $t('deploymentsView.noEligibleNodesFoundForThese') }}</div>
@@ -1553,7 +1549,7 @@ function getNodeHostname(nodeId: string): string {
                 :disabled="isRollingBack === selectedDeployment.deployment_id"
                 class="btn bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
               >
-                {{ isRollingBack === selectedDeployment.deployment_id ? 'Rolling Back...' : 'Rollback' }}
+                {{ isRollingBack === selectedDeployment.deployment_id ? $t('deploymentsView.rollingBack') : $t('deploymentsView.rollback') }}
               </button>
               <button
                 v-if="selectedDeployment.status === 'failed'"
@@ -1561,7 +1557,7 @@ function getNodeHostname(nodeId: string): string {
                 :disabled="isRetrying === selectedDeployment.deployment_id"
                 class="btn btn-primary disabled:opacity-50"
               >
-                {{ isRetrying === selectedDeployment.deployment_id ? 'Retrying...' : 'Retry Deployment' }}
+                {{ isRetrying === selectedDeployment.deployment_id ? $t('deploymentsView.retrying') : $t('deploymentsView.retryDeployment2') }}
               </button>
               <button @click="closeDetails" class="btn btn-secondary">{{ $t('deploymentsView.close') }}</button>
             </div>
@@ -1606,12 +1602,12 @@ function getNodeHostname(nodeId: string): string {
                 <div class="p-4 bg-blue-50 rounded-lg">
                   <p class="text-sm font-medium text-blue-800 mb-1">{{ $t('deploymentsView.blueNodeSource') }}</p>
                   <p class="text-lg font-semibold text-blue-900">{{ getNodeHostname(selectedBgDeployment.blue_node_id) }}</p>
-                  <p class="text-xs text-blue-600 mt-1">Roles: {{ selectedBgDeployment.blue_roles.join(', ') }}</p>
+                  <p class="text-xs text-blue-600 mt-1">{{ $t('deploymentsView.rolesValue0', { value0: selectedBgDeployment.blue_roles.join(', ') }) }}</p>
                 </div>
                 <div class="p-4 bg-green-50 rounded-lg">
                   <p class="text-sm font-medium text-green-800 mb-1">{{ $t('deploymentsView.greenNodeTarget') }}</p>
                   <p class="text-lg font-semibold text-green-900">{{ getNodeHostname(selectedBgDeployment.green_node_id) }}</p>
-                  <p class="text-xs text-green-600 mt-1">Borrowed: {{ selectedBgDeployment.borrowed_roles.join(', ') || 'None yet' }}</p>
+                  <p class="text-xs text-green-600 mt-1">{{ $t('deploymentsView.borrowedValue0', { value0: selectedBgDeployment.borrowed_roles.join(', ') || $t('deploymentsView.noneYet') }) }}</p>
                 </div>
               </div>
 
@@ -1648,11 +1644,11 @@ function getNodeHostname(nodeId: string): string {
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">{{ $t('deploymentsView.autoRollback') }}</p>
-                  <p class="text-sm font-medium">{{ selectedBgDeployment.auto_rollback ? 'Yes' : 'No' }}</p>
+                  <p class="text-sm font-medium">{{ selectedBgDeployment.auto_rollback ? $t('deploymentsView.yes') : $t('deploymentsView.no') }}</p>
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">{{ $t('deploymentsView.purgeOnComplete') }}</p>
-                  <p class="text-sm font-medium">{{ selectedBgDeployment.purge_on_complete ? 'Yes' : 'No' }}</p>
+                  <p class="text-sm font-medium">{{ selectedBgDeployment.purge_on_complete ? $t('deploymentsView.yes') : $t('deploymentsView.no') }}</p>
                 </div>
                 <div>
                   <p class="text-sm text-gray-500">{{ $t('deploymentsView.started') }}</p>
@@ -1678,7 +1674,7 @@ function getNodeHostname(nodeId: string): string {
                 :disabled="isRetryingBg === selectedBgDeployment.bg_deployment_id"
                 class="btn bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {{ isRetryingBg === selectedBgDeployment.bg_deployment_id ? 'Retrying...' : 'Retry Deployment' }}
+                {{ isRetryingBg === selectedBgDeployment.bg_deployment_id ? $t('deploymentsView.retrying') : $t('deploymentsView.retryDeployment2') }}
               </button>
               <button @click="closeBgDetails" class="btn btn-secondary">{{ $t('deploymentsView.close') }}</button>
             </div>

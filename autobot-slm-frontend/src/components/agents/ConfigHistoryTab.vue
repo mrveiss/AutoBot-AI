@@ -148,14 +148,12 @@ watch([entityType, entityId], () => {
 
     <div v-if="loading" class="loading">{{ $t('agents.configHistoryTab.loadingRevisions') }}</div>
 
-    <div v-else-if="revisions.length === 0 && entityId" class="empty-state">
-      No revisions found for {{ entityType }}/{{ entityId }}
-    </div>
+    <div v-else-if="revisions.length === 0 && entityId" class="empty-state">{{ $t('agents.configHistoryTab.noRevisionsFoundForValue0Value1', { value0: entityType, value1: entityId }) }}</div>
 
     <!-- Revision list -->
     <div v-else-if="revisions.length" class="revisions-layout">
       <div class="revisions-list">
-        <h3>Revision History ({{ revisions.length }})</h3>
+        <h3>{{ $t('agents.configHistoryTab.revisionHistoryCount', { count: revisions.length }) }}</h3>
         <div
           v-for="rev in revisions"
           :key="rev.id"
@@ -170,9 +168,7 @@ watch([entityType, entityId], () => {
             <span class="revision-by">{{ rev.created_by }}</span>
             <span class="revision-time">{{ formatTime(rev.created_at) }}</span>
           </div>
-          <div v-if="rev.changed_keys.length" class="changed-keys">
-            Changed: {{ rev.changed_keys.join(', ') }}
-          </div>
+          <div v-if="rev.changed_keys.length" class="changed-keys">{{ $t('agents.configHistoryTab.changedValue0', { value0: rev.changed_keys.join(', ') }) }}</div>
         </div>
       </div>
 
@@ -195,7 +191,7 @@ watch([entityType, entityId], () => {
                 :disabled="rollbackLoading"
                 @click="rollback(selectedRevision!.id)"
               >
-                {{ rollbackLoading ? 'Rolling back...' : 'Yes, rollback' }}
+                {{ rollbackLoading ? $t('agents.configHistoryTab.rollingBack') : $t('agents.configHistoryTab.yesRollback') }}
               </button>
               <button class="btn-cancel" @click="showRollbackConfirm = false">
                 {{ $t('agents.configHistoryTab.cancel') }}

@@ -442,7 +442,7 @@ function getNodeName(nodeId: string | null): string {
             :disabled="!selectedDrainNode || isDraining"
             class="btn btn-secondary w-full"
           >
-            {{ isDraining ? 'Draining...' : 'Drain Node' }}
+            {{ isDraining ? $t('maintenanceView.draining') : $t('maintenanceView.drainNode') }}
           </button>
         </div>
 
@@ -470,7 +470,7 @@ function getNodeName(nodeId: string | null): string {
             :disabled="!selectedResumeNode || isResuming"
             class="btn btn-success w-full"
           >
-            {{ isResuming ? 'Resuming...' : 'Resume Node' }}
+            {{ isResuming ? $t('maintenanceView.resuming') : $t('maintenanceView.resumeNode') }}
           </button>
         </div>
 
@@ -527,7 +527,7 @@ function getNodeName(nodeId: string | null): string {
         <svg class="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
-        <p>No maintenance windows {{ statusFilter ? `with status "${statusFilter}"` : 'scheduled' }}.</p>
+        <p>{{ statusFilter ? $t('maintenanceView.noMaintenanceWindowsWithStatus', { status: statusFilter }) : $t('maintenanceView.noMaintenanceWindowsScheduled') }}</p>
         <button
           @click="openScheduleDialog()"
           class="btn btn-primary mt-4"
@@ -673,7 +673,7 @@ function getNodeName(nodeId: string | null): string {
           <div class="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-lg font-semibold text-gray-900">
-                {{ editingWindow ? 'Edit Maintenance Window' : 'Schedule Maintenance Window' }}
+                {{ editingWindow ? $t('maintenanceView.editMaintenanceWindow') : $t('maintenanceView.scheduleMaintenanceWindow') }}
               </h3>
               <button
                 @click="closeScheduleDialog"
@@ -805,7 +805,7 @@ function getNodeName(nodeId: string | null): string {
                   :disabled="isSubmitting"
                   class="btn btn-primary"
                 >
-                  {{ isSubmitting ? 'Saving...' : (editingWindow ? 'Update Window' : 'Schedule Window') }}
+                  {{ isSubmitting ? $t('maintenanceView.saving') : (editingWindow ? $t('maintenanceView.updateWindow') : $t('maintenanceView.scheduleWindow')) }}
                 </button>
               </div>
             </form>

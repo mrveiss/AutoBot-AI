@@ -79,9 +79,7 @@ onUnmounted(() => {
         <h2 class="text-2xl font-bold text-gray-900">{{ $t('monitoring.metricsDetailsView.metricsDetails') }}</h2>
         <p class="text-sm text-gray-500 mt-1">
           {{ $t('monitoring.metricsDetailsView.realTimeFleetAnd') }}
-          <span v-if="lastUpdate" class="ml-2">
-            • Last updated: {{ lastUpdate.toLocaleTimeString() }}
-          </span>
+          <span v-if="lastUpdate" class="ml-2">{{ $t('monitoring.metricsDetailsView.lastUpdatedValue0', { value0: lastUpdate.toLocaleTimeString() }) }}</span>
         </p>
       </div>
       <div class="flex gap-2">

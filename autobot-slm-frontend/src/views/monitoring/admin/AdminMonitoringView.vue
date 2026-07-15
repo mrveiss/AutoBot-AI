@@ -221,7 +221,7 @@ onUnmounted(() => {
         <!-- Auto-refresh toggle -->
         <label class="flex items-center gap-2 text-sm">
           <input type="checkbox" v-model="autoRefresh" @change="toggleAutoRefresh" class="rounded-sm" />
-          <span class="text-gray-600">Auto-refresh ({{ refreshInterval }}s)</span>
+          <span class="text-gray-600">{{ $t('monitoring.admin.adminMonitoringView.autoRefreshValue0S', { value0: refreshInterval }) }}</span>
         </label>
 
         <!-- Refresh button -->
@@ -250,11 +250,9 @@ onUnmounted(() => {
             <path v-else-if="healthStatus === 'degraded'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span class="font-medium capitalize">System Status: {{ healthStatus }}</span>
+          <span class="font-medium capitalize">{{ $t('monitoring.admin.adminMonitoringView.systemStatusValue0', { value0: healthStatus }) }}</span>
         </div>
-        <div class="text-sm text-gray-600">
-          Uptime: {{ formatUptime(systemHealth.uptime_seconds ?? 0) }}
-        </div>
+        <div class="text-sm text-gray-600">{{ $t('monitoring.admin.adminMonitoringView.uptimeValue0', { value0: formatUptime(systemHealth.uptime_seconds ?? 0) }) }}</div>
       </div>
     </div>
 

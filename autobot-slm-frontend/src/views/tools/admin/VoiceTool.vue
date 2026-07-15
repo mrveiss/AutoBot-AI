@@ -274,14 +274,14 @@ onUnmounted(() => {
                     class="w-2 h-2 rounded-full"
                     :class="isListening ? 'bg-red-500 animate-pulse' : 'bg-gray-400'"
                   ></div>
-                  <span class="text-gray-600">{{ isListening ? 'Listening...' : 'Not listening' }}</span>
+                  <span class="text-gray-600">{{ isListening ? $t('tools.admin.voiceTool.listening') : $t('tools.admin.voiceTool.notListening') }}</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <div
                     class="w-2 h-2 rounded-full"
                     :class="isSpeaking ? 'bg-green-500 animate-pulse' : 'bg-gray-400'"
                   ></div>
-                  <span class="text-gray-600">{{ isSpeaking ? 'Speaking...' : 'Silent' }}</span>
+                  <span class="text-gray-600">{{ isSpeaking ? $t('tools.admin.voiceTool.speaking') : $t('tools.admin.voiceTool.silent') }}</span>
                 </div>
               </div>
             </div>
@@ -315,7 +315,7 @@ onUnmounted(() => {
           </button>
 
           <p class="mt-4 text-gray-600">
-            {{ isListening ? 'Listening... Click to stop' : 'Click to start listening' }}
+            {{ isListening ? $t('tools.admin.voiceTool.listeningClickToStop') : $t('tools.admin.voiceTool.clickToStartListening') }}
           </p>
 
           <!-- Transcript Display -->
@@ -370,7 +370,7 @@ onUnmounted(() => {
               ]"
             >
               <p class="text-xs text-gray-500 mb-1">
-                {{ msg.role === 'user' ? 'You' : 'AI' }} -
+                {{ msg.role === 'user' ? $t('tools.admin.voiceTool.you') : $t('tools.admin.voiceTool.aI') }} -
                 {{ msg.timestamp.toLocaleTimeString() }}
               </p>
               <p class="text-gray-800">{{ msg.text }}</p>
@@ -404,9 +404,7 @@ onUnmounted(() => {
 
           <!-- Speed -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              Speech Speed: {{ settings.speed.toFixed(1) }}x
-            </label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('tools.admin.voiceTool.speechSpeedValue0X', { value0: settings.speed.toFixed(1) }) }}</label>
             <input
               v-model.number="settings.speed"
               type="range"
@@ -419,9 +417,7 @@ onUnmounted(() => {
 
           <!-- Pitch -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              Pitch: {{ settings.pitch.toFixed(1) }}
-            </label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('tools.admin.voiceTool.pitchValue0', { value0: settings.pitch.toFixed(1) }) }}</label>
             <input
               v-model.number="settings.pitch"
               type="range"

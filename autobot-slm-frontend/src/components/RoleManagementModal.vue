@@ -211,7 +211,7 @@ function formatDate(dateStr: string | null): string {
                     class="btn btn-sm btn-primary"
                     :disabled="isSyncing"
                     @click="handleSyncRole(role.role_name)"
-                    :aria-label="`Sync ${role.role_name}`"
+                    :aria-label="$t('roleManagementModal.syncRoleAria', { roleName: role.role_name })"
                   >
                     {{ $t('roleManagementModal.sync') }}
                   </button>
@@ -220,7 +220,7 @@ function formatDate(dateStr: string | null): string {
                     class="btn btn-sm btn-danger"
                     :disabled="isSaving || isRemoving"
                     @click="handleRemoveRole(role.role_name)"
-                    :aria-label="`Remove ${role.role_name}`"
+                    :aria-label="$t('roleManagementModal.removeRoleAria', { roleName: role.role_name })"
                   >
                     {{ $t('roleManagementModal.remove') }}
                   </button>
@@ -276,7 +276,7 @@ function formatDate(dateStr: string | null): string {
         <!-- Remove Confirmation Dialog (Issue #1041) -->
         <div v-if="showRemoveConfirm" class="confirm-overlay">
           <div class="confirm-dialog" role="alertdialog" aria-labelledby="confirm-title">
-            <h4 id="confirm-title">Remove {{ roleToRemove }}?</h4>
+            <h4 id="confirm-title">{{ $t('roleManagementModal.removeValue0', { value0: roleToRemove }) }}</h4>
             <p v-if="isDataBearingRole" class="confirm-warning">
               {{ $t('roleManagementModal.thisRoleMayContain') }}
             </p>
@@ -295,7 +295,7 @@ function formatDate(dateStr: string | null): string {
                 class="btn btn-sm btn-danger"
                 @click="confirmRemove(false)"
               >
-                {{ isDataBearingRole ? 'Remove without backup' : 'Remove' }}
+                {{ isDataBearingRole ? $t('roleManagementModal.removeWithoutBackup') : $t('roleManagementModal.remove') }}
               </button>
               <button class="btn btn-sm btn-secondary" @click="cancelRemove">
                 {{ $t('roleManagementModal.cancel') }}

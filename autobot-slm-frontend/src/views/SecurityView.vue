@@ -690,14 +690,14 @@ const scoreColor = computed(() => {
                         service.enabled ? 'bg-success-100 text-success-700' : 'bg-gray-100 text-gray-600'
                       ]"
                     >
-                      {{ service.enabled ? 'TLS Enabled' : 'HTTP' }}
+                      {{ service.enabled ? $t('securityView.tLSEnabled') : $t('securityView.hTTP') }}
                     </span>
                   </div>
                   <p class="text-sm text-gray-500 mt-0.5">{{ service.description }}</p>
                 </div>
               </div>
               <div class="text-right">
-                <div class="text-sm font-mono text-gray-600">Port {{ service.port }}</div>
+                <div class="text-sm font-mono text-gray-600">{{ $t('securityView.portValue0', { value0: service.port }) }}</div>
               </div>
             </div>
           </div>
@@ -743,7 +743,7 @@ const scoreColor = computed(() => {
           <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
           </svg>
-          {{ tlsEnabling ? 'Enabling TLS...' : `Enable TLS on ${selectedTlsServices.length} Service${selectedTlsServices.length !== 1 ? 's' : ''}` }}
+          {{ tlsEnabling ? $t('securityView.enablingTLS') : `Enable TLS on ${selectedTlsServices.length} Service${selectedTlsServices.length !== 1 ? 's' : ''}` }}
         </button>
       </div>
 
@@ -759,9 +759,9 @@ const scoreColor = computed(() => {
               <li>{{ $t('securityView.tLSCertificatesAreDeployedToThe') }}</li>
               <li>{{ $t('securityView.serviceConfigurationsAreUpdatedToUse') }}</li>
               <li>{{ $t('securityView.servicesAreRestartedToApplyThe') }}</li>
-              <li>Frontend will be accessible at https://frontend-host:{{ config.port.tlsFrontend }}</li>
-              <li>Backend API will be accessible at https://backend-host:{{ config.port.tlsBackend }}</li>
-              <li>Redis will accept TLS connections on port {{ config.port.tlsRedis }}</li>
+              <li>{{ $t('securityView.frontendAccessibleAt', { port: config.port.tlsFrontend }) }}</li>
+              <li>{{ $t('securityView.backendAccessibleAt', { port: config.port.tlsBackend }) }}</li>
+              <li>{{ $t('securityView.redisWillAcceptTLSConnectionsOn', { value0: config.port.tlsRedis }) }}</li>
             </ul>
           </div>
         </div>
@@ -781,7 +781,7 @@ const scoreColor = computed(() => {
             @click="fetchFleetCerts"
             :aria-label="$t('securityView.refreshFleetCertExpiry')"
           >
-            {{ fleetCertsLoading ? 'Loading…' : 'Refresh' }}
+            {{ fleetCertsLoading ? $t('securityView.loading') : $t('securityView.refresh') }}
           </button>
         </div>
         <div v-if="fleetCerts.length === 0 && !fleetCertsLoading" class="p-4 text-sm text-gray-500">{{ $t('securityView.noCertRecordsYetRun') }}<code class="text-xs bg-gray-100 px-1 rounded-sm">setup-internal-ca.yml</code>{{ $t('securityView.toIssueCASignedCertsAnd') }}</div>
@@ -854,7 +854,7 @@ const scoreColor = computed(() => {
           :disabled="bulkRenewing"
           class="btn btn-secondary"
         >
-          {{ bulkRenewing ? 'Renewing...' : `Renew Expiring (${tlsExpiringSoon})` }}
+          {{ bulkRenewing ? $t('securityView.renewing') : `Renew Expiring (${tlsExpiringSoon})` }}
         </button>
         <button
           @click="openUploadModal"
@@ -905,7 +905,7 @@ const scoreColor = computed(() => {
                     endpoint.is_active ? 'bg-success-100 text-success-700' : 'bg-gray-100 text-gray-700'
                   ]"
                 >
-                  {{ endpoint.is_active ? 'Active' : 'Inactive' }}
+                  {{ endpoint.is_active ? $t('securityView.active') : $t('securityView.inactive') }}
                 </span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm">
@@ -916,7 +916,7 @@ const scoreColor = computed(() => {
                     class="px-2 py-1 rounded-sm text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 disabled:opacity-50"
                     :aria-label="`Renew certificate for ${endpoint.hostname}`"
                   >
-                    {{ renewingCredentialId === endpoint.credential_id ? '...' : 'Renew' }}
+                    {{ renewingCredentialId === endpoint.credential_id ? '...' : $t('securityView.renew') }}
                   </button>
                   <button
                     @click="rotateTlsCertificate(endpoint.credential_id)"
@@ -924,7 +924,7 @@ const scoreColor = computed(() => {
                     class="px-2 py-1 rounded-sm text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 disabled:opacity-50"
                     :aria-label="`Rotate certificate for ${endpoint.hostname}`"
                   >
-                    {{ rotatingCredentialId === endpoint.credential_id ? '...' : 'Rotate' }}
+                    {{ rotatingCredentialId === endpoint.credential_id ? '...' : $t('securityView.rotate') }}
                   </button>
                   <button
                     @click="toggleTlsCertificateActive(endpoint.credential_id, endpoint.is_active)"
@@ -936,7 +936,7 @@ const scoreColor = computed(() => {
                     ]"
                     :aria-label="`${endpoint.is_active ? 'Disable' : 'Enable'} certificate for ${endpoint.hostname}`"
                   >
-                    {{ endpoint.is_active ? 'Disable' : 'Enable' }}
+                    {{ endpoint.is_active ? $t('securityView.disable') : $t('securityView.enable') }}
                   </button>
                   <button
                     @click="deleteTlsCertificate(endpoint.credential_id)"
@@ -1013,15 +1013,13 @@ const scoreColor = computed(() => {
                     log.success ? 'bg-success-100 text-success-700' : 'bg-error-100 text-error-700'
                   ]"
                 >
-                  {{ log.success ? 'Success' : 'Failed' }}
+                  {{ log.success ? $t('securityView.success') : $t('securityView.failed') }}
                 </span>
               </td>
             </tr>
           </tbody>
         </table>
-        <div v-if="auditLogsTotal > perPage" class="px-6 py-4 border-t border-gray-200 text-sm text-gray-500" role="status">
-          Showing {{ auditLogs.length }} of {{ auditLogsTotal }} logs
-        </div>
+        <div v-if="auditLogsTotal > perPage" class="px-6 py-4 border-t border-gray-200 text-sm text-gray-500" role="status">{{ $t('securityView.showingCountOfValue1Logs', { count: auditLogs.length, value1: auditLogsTotal }) }}</div>
       </div>
     </div>
 
@@ -1086,7 +1084,7 @@ const scoreColor = computed(() => {
                 ></div>
                 <div>
                   <div class="font-medium text-gray-900">{{ event.title }}</div>
-                  <div class="text-sm text-gray-500 mt-1">{{ event.description || 'No description' }}</div>
+                  <div class="text-sm text-gray-500 mt-1">{{ event.description || $t('securityView.noDescription') }}</div>
                   <div class="text-xs text-gray-400 mt-2">
                     {{ event.source_ip ? `IP: ${event.source_ip}` : '' }}
                     {{ event.source_user ? ` | User: ${event.source_user}` : '' }}
@@ -1105,7 +1103,7 @@ const scoreColor = computed(() => {
                       : 'bg-gray-100 text-gray-700'
                   ]"
                 >
-                  {{ event.is_resolved ? 'Resolved' : event.is_acknowledged ? 'Acknowledged' : 'New' }}
+                  {{ event.is_resolved ? $t('securityView.resolved') : event.is_acknowledged ? $t('securityView.acknowledged') : $t('securityView.new') }}
                 </span>
                 <div v-if="!event.is_resolved" class="flex gap-1">
                   <button
@@ -1124,9 +1122,7 @@ const scoreColor = computed(() => {
             </div>
           </div>
         </div>
-        <div v-if="eventsTotal > perPage" class="px-6 py-4 border-t border-gray-200 text-sm text-gray-500" role="status">
-          Showing {{ securityEvents.length }} of {{ eventsTotal }} events
-        </div>
+        <div v-if="eventsTotal > perPage" class="px-6 py-4 border-t border-gray-200 text-sm text-gray-500" role="status">{{ $t('securityView.showingCountOfValue1Events', { count: securityEvents.length, value1: eventsTotal }) }}</div>
       </div>
     </div>
 
@@ -1144,15 +1140,11 @@ const scoreColor = computed(() => {
             <div class="flex items-start justify-between">
               <div>
                 <div class="font-medium text-gray-900">{{ policy.name }}</div>
-                <div class="text-sm text-gray-500 mt-1">{{ policy.description || 'No description' }}</div>
+                <div class="text-sm text-gray-500 mt-1">{{ policy.description || $t('securityView.noDescription') }}</div>
                 <div class="flex items-center gap-4 mt-2 text-xs text-gray-400">
-                  <span>Category: {{ policy.category }}</span>
-                  <span v-if="policy.compliance_score !== null">
-                    Compliance: {{ policy.compliance_score?.toFixed(1) }}%
-                  </span>
-                  <span v-if="policy.violations_count > 0" class="text-warning-600">
-                    {{ policy.violations_count }} violations
-                  </span>
+                  <span>{{ $t('securityView.categoryValue0', { value0: policy.category }) }}</span>
+                  <span v-if="policy.compliance_score !== null">{{ $t('securityView.complianceValue0', { value0: policy.compliance_score?.toFixed(1) }) }}</span>
+                  <span v-if="policy.violations_count > 0" class="text-warning-600">{{ $t('securityView.value0Violations', { value0: policy.violations_count }) }}</span>
                 </div>
               </div>
               <div class="flex items-center gap-2">
@@ -1178,15 +1170,13 @@ const scoreColor = computed(() => {
                   ]"
                   :aria-label="`${policy.is_enforced ? 'Disable' : 'Enable'} policy: ${policy.name}`"
                 >
-                  {{ policy.is_enforced ? 'Disable' : 'Enable' }}
+                  {{ policy.is_enforced ? $t('securityView.disable') : $t('securityView.enable') }}
                 </button>
               </div>
             </div>
           </div>
         </div>
-        <div v-if="policiesTotal > perPage" class="px-6 py-4 border-t border-gray-200 text-sm text-gray-500" role="status">
-          Showing {{ policies.length }} of {{ policiesTotal }} policies
-        </div>
+        <div v-if="policiesTotal > perPage" class="px-6 py-4 border-t border-gray-200 text-sm text-gray-500" role="status">{{ $t('securityView.showingCountOfValue1Policies', { count: policies.length, value1: policiesTotal }) }}</div>
       </div>
     </div>
 

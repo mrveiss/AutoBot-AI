@@ -243,9 +243,7 @@ onBeforeUnmount(() => {
 
       <!-- Online / Total indicator -->
       <div class="flex items-center gap-2 text-sm text-gray-500">
-        <span class="inline-block w-2 h-2 rounded-full bg-green-500" />
-        {{ metrics?.online_nodes ?? 0 }} of {{ metrics?.total_nodes ?? 0 }} NPU nodes online
-      </div>
+        <span class="inline-block w-2 h-2 rounded-full bg-green-500" />{{ $t('fleet.nPUPerformanceMetrics.value0OfValue1NPUNodesOnline', { value0: metrics?.online_nodes ?? 0, value1: metrics?.total_nodes ?? 0 }) }}</div>
 
       <!-- Per-Node Metrics -->
       <div class="space-y-3">
@@ -301,9 +299,7 @@ onBeforeUnmount(() => {
               <span
                 v-if="node.error_count > 0"
                 class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700"
-              >
-                {{ node.error_count }} errors
-              </span>
+              >{{ $t('fleet.nPUPerformanceMetrics.value0Errors', { value0: node.error_count }) }}</span>
             </div>
           </button>
 

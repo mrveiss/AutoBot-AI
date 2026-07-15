@@ -408,7 +408,7 @@ onMounted(async () => {
               <div>
                 <h3 class="font-medium text-gray-900">{{ formatDbName(String(dbName)) }} (DB {{ dbInfo.database }})</h3>
                 <div class="flex items-center gap-3 mt-2 text-sm">
-                  <span class="text-gray-600">{{ dbInfo.key_count || 0 }} keys</span>
+                  <span class="text-gray-600">{{ $t('settings.admin.cacheSettings.value0Keys', { value0: dbInfo.key_count || 0 }) }}</span>
                   <span class="text-gray-400">|</span>
                   <span class="text-gray-600">{{ dbInfo.memory_usage || '0B' }}</span>
                   <span
@@ -417,7 +417,7 @@ onMounted(async () => {
                       dbInfo.connected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700',
                     ]"
                   >
-                    {{ dbInfo.connected ? 'Connected' : 'Disconnected' }}
+                    {{ dbInfo.connected ? $t('settings.admin.cacheSettings.connected') : $t('settings.admin.cacheSettings.disconnected') }}
                   </span>
                 </div>
               </div>

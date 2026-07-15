@@ -804,7 +804,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 </td>
                 <td class="py-3 px-4">
                   <span :class="['px-2 py-0.5 rounded-full text-xs font-medium', user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700']">
-                    {{ user.is_active ? 'Active' : 'Inactive' }}
+                    {{ user.is_active ? $t('settings.admin.userManagementSettings.active') : $t('settings.admin.userManagementSettings.inactive') }}
                   </span>
                 </td>
                 <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(user.last_login_at) }}</td>
@@ -871,7 +871,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 </td>
                 <td class="py-3 px-4">
                   <span :class="['px-2 py-0.5 rounded-full text-xs font-medium', user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700']">
-                    {{ user.is_active ? 'Active' : 'Inactive' }}
+                    {{ user.is_active ? $t('settings.admin.userManagementSettings.active') : $t('settings.admin.userManagementSettings.inactive') }}
                   </span>
                 </td>
                 <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(user.last_login_at) }}</td>
@@ -980,7 +980,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 </td>
                 <td class="py-3 px-4">
                   <span :class="['px-2 py-0.5 rounded-full text-xs font-medium', provider.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700']">
-                    {{ provider.is_active ? 'Active' : 'Inactive' }}
+                    {{ provider.is_active ? $t('settings.admin.userManagementSettings.active') : $t('settings.admin.userManagementSettings.inactive') }}
                   </span>
                 </td>
                 <td class="py-3 px-4 text-sm text-gray-600">{{ formatDateTime(provider.last_sync_at ?? null) }}</td>
@@ -1019,7 +1019,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           </svg>
           <div>
             <p :class="['font-medium', rbacStatus.initialized ? 'text-green-800' : 'text-yellow-800']">
-              {{ rbacStatus.initialized ? 'RBAC Initialized' : 'RBAC Not Initialized' }}
+              {{ rbacStatus.initialized ? $t('settings.admin.userManagementSettings.rBACInitialized') : $t('settings.admin.userManagementSettings.rBACNotInitialized') }}
             </p>
             <p :class="['text-sm', rbacStatus.initialized ? 'text-green-600' : 'text-yellow-600']">
               {{ rbacStatus.message }}
@@ -1058,7 +1058,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       <div class="absolute inset-0 bg-black/50" @click="showChangePasswordModal = false; selectedUser = null; selectedUserType = 'legacy'"></div>
       <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          {{ isAdminReset ? `Reset Password for ${selectedUser?.username}` : 'Change Password' }}
+          {{ isAdminReset ? `Reset Password for ${selectedUser?.username}` : $t('settings.admin.userManagementSettings.changePassword') }}
         </h3>
 
         <PasswordChangeForm
@@ -1084,7 +1084,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       <div class="absolute inset-0 bg-black/50" @click="showCreateUserModal = false"></div>
       <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          {{ activeTab === 'slm-admins' ? 'Create SLM Administrator' : 'Create AutoBot User' }}
+          {{ activeTab === 'slm-admins' ? $t('settings.admin.userManagementSettings.createSLMAdministrator') : $t('settings.admin.userManagementSettings.createAutoBotUser') }}
         </h3>
 
         <div class="space-y-4">

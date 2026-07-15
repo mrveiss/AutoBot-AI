@@ -290,7 +290,7 @@ function loadFromHistory(item: AnalysisHistory): void {
                 :disabled="loading"
                 class="flex-1 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
               >
-                {{ loading ? 'Capturing...' : 'Capture from Camera' }}
+                {{ loading ? $t('tools.admin.visionTool.capturing') : $t('tools.admin.visionTool.captureFromCamera') }}
               </button>
 
               <button
@@ -299,7 +299,7 @@ function loadFromHistory(item: AnalysisHistory): void {
                 :disabled="loading"
                 class="flex-1 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
               >
-                {{ loading ? 'Capturing...' : 'Capture Screen' }}
+                {{ loading ? $t('tools.admin.visionTool.capturing') : $t('tools.admin.visionTool.captureScreen') }}
               </button>
             </div>
 
@@ -366,7 +366,7 @@ function loadFromHistory(item: AnalysisHistory): void {
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                {{ loading ? 'Analyzing...' : 'Analyze Image' }}
+                {{ loading ? $t('tools.admin.visionTool.analyzing') : $t('tools.admin.visionTool.analyzeImage') }}
               </button>
 
               <!-- Analysis Result -->
