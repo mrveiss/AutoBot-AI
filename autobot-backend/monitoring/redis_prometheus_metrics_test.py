@@ -15,17 +15,27 @@ from monitoring.prometheus_metrics import get_metrics_manager
 
 @pytest.fixture
 def pool_manager():
-    """Create a Redis pool manager for testing"""
+    """Create a fresh Redis pool manager for each test (#11681 reset seam)."""
+    RedisConnectionManager.reset_instance()
     manager = RedisConnectionManager()
-    return manager
+    yield manager
+    RedisConnectionManager.reset_instance()
 
 
 @pytest.fixture
 def mock_metrics():
-    """Mock the Prometheus metrics manager"""
-    with patch("autobot_shared.monitoring.prometheus_metrics.get_metrics_manager") as mock_get:
-        mock_manager = MagicMock()
-        mock_get.return_value = mock_manager
+    """Mock the Prometheus metrics manager.
+
+    #11681: patch the connection manager's own lazy getter — the old patch
+    target (``autobot_shared.monitoring.prometheus_metrics``) is never read
+    by ``connection_manager``, which lazy-imports and caches
+    ``monitoring.prometheus_metrics.get_metrics_manager`` instead.
+    """
+    mock_manager = MagicMock()
+    with patch(
+        "autobot_shared.redis_management.connection_manager._get_metrics_manager",
+        return_value=mock_manager,
+    ):
         yield mock_manager
 
 

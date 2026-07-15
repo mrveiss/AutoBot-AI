@@ -175,19 +175,18 @@ __all__ = [
 # Lazy initialization prevents Redis connection errors during module imports
 # on dev machines where the Redis VM is unreachable.
 
-_connection_manager: RedisConnectionManager | None = None
-
 
 def _get_connection_manager() -> RedisConnectionManager:
     """Get the singleton RedisConnectionManager, creating it on first use.
 
     Issue #803: Lazy initialization avoids Redis connection errors during
     module imports on dev machines where the Redis VM is unreachable.
+
+    Issue #11681: the class's locked ``__new__`` is the single cache layer —
+    the former module-level ``_connection_manager`` global duplicated it and
+    went stale after ``RedisConnectionManager.reset_instance()``.
     """
-    global _connection_manager
-    if _connection_manager is None:
-        _connection_manager = RedisConnectionManager()
-    return _connection_manager
+    return RedisConnectionManager()
 
 
 # =============================================================================

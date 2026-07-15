@@ -122,10 +122,11 @@ class FileListCache:
     Thread Safety:
         Uses threading.Lock for thread-safe cache access.
         Safe to use from multiple async tasks and threads.
-    """
 
-    _instance: "FileListCache" | None = None
-    _lock = threading.Lock()
+    Singleton access (#11681): the shared instance lives behind the
+    ``get_file_list_cache`` lazy_singleton factory below — direct
+    construction creates an independent (non-shared) cache.
+    """
 
     # CacheProtocol properties - Issue #743
     @property
@@ -144,30 +145,17 @@ class FileListCache:
         """Maximum capacity (0 = unlimited, TTL-based expiration)."""
         return 0  # TTL-based, not size-based
 
-    def __new__(cls) -> "FileListCache":
-        """Singleton pattern for global cache instance."""
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-                    cls._instance._initialized = False
-        return cls._instance
-
     def __init__(
         self,
         ttl: int = DEFAULT_CACHE_TTL,
         root_path: Path | None = None,
     ):
-        """Initialize cache (only runs once due to singleton)."""
-        if self._initialized:
-            return
-
+        """Initialize cache."""
         self._ttl = ttl
         self._root_path = root_path or DEFAULT_ROOT_PATH
         self._cache: Dict[str, CacheEntry] = {}
         self._stats = CacheStats()
         self._cache_lock = threading.Lock()
-        self._initialized = True
 
         logger.info("FileListCache initialized: ttl=%ds, root=%s", self._ttl, self._root_path)
 
@@ -325,18 +313,22 @@ class FileListCache:
 
     @classmethod
     def reset_instance(cls) -> None:
-        """Reset singleton instance (for testing)."""
-        global _cache_instance
-        with cls._lock:
-            cls._instance = None
-            _cache_instance = None
+        """Reset the shared instance (test seam).
+
+        Issue #11681: delegates to the ``lazy_singleton`` factory's reset —
+        the previous hand-rolled ``__new__`` singleton kept a second cache
+        layer that this method never cleared (stale-instance bug).
+        """
+        get_file_list_cache.reset()  # type: ignore[attr-defined]
 
 
 # =============================================================================
 # Convenience Functions (Module-Level API)
 # =============================================================================
 
-_get_cache = lazy_singleton(FileListCache)
+# Issue #11681: canonical singleton seam — replaces the hand-rolled
+# double-checked ``__new__`` pattern. Carries reset()/set_for_test() (#11635).
+get_file_list_cache = lazy_singleton(FileListCache)
 
 
 async def get_python_files(root_path: Path | None = None) -> List[Path]:
@@ -354,7 +346,7 @@ async def get_python_files(root_path: Path | None = None) -> List[Path]:
         for f in python_files:
             logger.info("Processing: %s", f)
     """
-    return await _get_cache().get_files(PYTHON_EXTENSIONS, root_path)
+    return await get_file_list_cache().get_files(PYTHON_EXTENSIONS, root_path)
 
 
 async def get_frontend_files(root_path: Path | None = None) -> List[Path]:
@@ -367,7 +359,7 @@ async def get_frontend_files(root_path: Path | None = None) -> List[Path]:
     Returns:
         List of Path objects for frontend files
     """
-    return await _get_cache().get_files(FRONTEND_EXTENSIONS, root_path)
+    return await get_file_list_cache().get_files(FRONTEND_EXTENSIONS, root_path)
 
 
 async def get_all_code_files(root_path: Path | None = None) -> List[Path]:
@@ -380,7 +372,7 @@ async def get_all_code_files(root_path: Path | None = None) -> List[Path]:
     Returns:
         List of Path objects for all code files
     """
-    return await _get_cache().get_files(ALL_CODE_EXTENSIONS, root_path)
+    return await get_file_list_cache().get_files(ALL_CODE_EXTENSIONS, root_path)
 
 
 def invalidate_file_cache(extensions: FrozenSet[str] | None = None) -> None:
@@ -391,9 +383,13 @@ def invalidate_file_cache(extensions: FrozenSet[str] | None = None) -> None:
         extensions: If provided, only invalidate entries matching these extensions.
                    If None, invalidate all entries.
     """
-    _get_cache().invalidate(extensions)
+    get_file_list_cache().invalidate(extensions)
 
 
 def get_file_cache_stats() -> Dict:
-    """Get file cache statistics as dictionary."""
-    return _get_cache().get_stats().to_dict()
+    """Get file cache statistics as dictionary.
+
+    Issue #11681: ``get_stats()`` already returns a Dict (#743) — the extra
+    ``.to_dict()`` raised AttributeError on every call.
+    """
+    return get_file_list_cache().get_stats()

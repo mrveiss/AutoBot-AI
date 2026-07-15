@@ -64,14 +64,16 @@ def _get_cache_registry() -> List[Tuple[str, str, Callable[[], CacheProtocol]]]:
         return LLMResponseCache()
 
     def _ast_cache_factory() -> CacheProtocol:
-        from code_intelligence.shared.ast_cache import ASTCache
+        # #11681: shared instance now lives behind the lazy_singleton factory;
+        # direct construction would register a private, non-shared cache.
+        from code_intelligence.shared.ast_cache import get_ast_cache
 
-        return ASTCache()
+        return get_ast_cache()
 
     def _file_cache_factory() -> CacheProtocol:
-        from code_intelligence.shared.file_cache import FileListCache
+        from code_intelligence.shared.file_cache import get_file_list_cache
 
-        return FileListCache()
+        return get_file_list_cache()
 
     return [
         ("src.memory.cache", "LRUCacheManager", _lru_cache_factory),

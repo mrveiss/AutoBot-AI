@@ -19,6 +19,7 @@ Part of EPIC #217 - Advanced Code Intelligence Methods
 from code_intelligence.shared.ast_cache import (
     ASTCache,
     get_ast,
+    get_ast_cache,
     get_ast_cache_stats,
     get_ast_safe,
     get_ast_with_content,
@@ -28,6 +29,7 @@ from code_intelligence.shared.file_cache import (
     FileListCache,
     get_all_code_files,
     get_file_cache_stats,
+    get_file_list_cache,
     get_frontend_files,
     get_python_files,
     invalidate_file_cache,
@@ -48,6 +50,7 @@ from code_intelligence.shared.scoring import (
 __all__ = [
     # FileListCache
     "FileListCache",
+    "get_file_list_cache",
     "get_python_files",
     "get_frontend_files",
     "get_all_code_files",
@@ -55,6 +58,7 @@ __all__ = [
     "get_file_cache_stats",
     # ASTCache
     "ASTCache",
+    "get_ast_cache",
     "get_ast",
     "get_ast_safe",
     "get_ast_with_content",

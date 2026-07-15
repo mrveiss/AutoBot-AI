@@ -1329,7 +1329,8 @@ class MiscConfig(BaseSettings):
 
     anthropic_api_base_url: str = Field(default="", alias="ANTHROPIC_API_BASE_URL")
     api_key: str = Field(default="", alias="API_KEY")
-    ast_cache_max_size: int = Field(default=0, alias="AST_CACHE_MAX_SIZE")
+    # #11681: restore pre-#7437 default (1000) — 0 silently disabled the AST cache
+    ast_cache_max_size: int = Field(default=1000, alias="AST_CACHE_MAX_SIZE")
     audit_log_file: str = Field(default="/opt/autobot/logs/audit.log", alias="AUTOBOT_AUDIT_LOG_FILE")
     autoresearch_docker_cpus: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_CPUS")
     autoresearch_data_dir: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DATA_DIR")
@@ -1577,7 +1578,8 @@ class MiscConfig(BaseSettings):
     codebase_parallel_mode: str = Field(default="", alias="CODEBASE_PARALLEL_MODE")
     codebase_scan_parallel_files: str = Field(default="", alias="CODEBASE_SCAN_PARALLEL_FILES")
     config: str = Field(default="", alias="CONFIG")
-    content_cache_max_size: int = Field(default=0, alias="CONTENT_CACHE_MAX_SIZE")
+    # #11681: restore pre-#7437 default (500) — 0 silently disabled the content cache
+    content_cache_max_size: int = Field(default=500, alias="CONTENT_CACHE_MAX_SIZE")
     context_enabled: bool = Field(default=False, alias="CONTEXT_ENABLED")
     context_model: str = Field(default="", alias="CONTEXT_MODEL")
     context_summary_ttl_days: str = Field(default="", alias="CONTEXT_SUMMARY_TTL_DAYS")
@@ -1591,7 +1593,8 @@ class MiscConfig(BaseSettings):
     display_height: str = Field(default="", alias="DISPLAY_HEIGHT")
     display_width: str = Field(default="", alias="DISPLAY_WIDTH")
     encryption_key: str = Field(default="", alias="ENCRYPTION_KEY")  # type: ignore[no-redef]  # GH#7105
-    file_cache_ttl_seconds: int = Field(default=0, alias="FILE_CACHE_TTL_SECONDS")
+    # #11681: restore pre-#7437 default (300 s) — 0 made every file-list entry expire instantly
+    file_cache_ttl_seconds: int = Field(default=300, alias="FILE_CACHE_TTL_SECONDS")
     gateway_enable_sandbox: str = Field(default="", alias="GATEWAY_ENABLE_SANDBOX")
     gateway_heartbeat_interval: str = Field(default="", alias="GATEWAY_HEARTBEAT_INTERVAL")
     gateway_max_message_size: int = Field(default=0, alias="GATEWAY_MAX_MESSAGE_SIZE")
