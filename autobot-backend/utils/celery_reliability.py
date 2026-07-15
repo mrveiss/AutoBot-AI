@@ -15,10 +15,10 @@ non-retryable error) in a bounded Redis list so failures stay queryable via
 ``GET /api/health/celery-dead-letter`` instead of vanishing when the Celery
 result TTL expires.
 
-``CELERY_TRANSIENT_ERRORS`` mirrors the canonical retryable vs non-retryable
-exception split in ``autobot_shared/retry_mechanism.py`` (#7010):
-ConnectionError/TimeoutError/OSError back off with jitter; validation errors
-(ValueError/TypeError) fail fast and are never retried.
+``CELERY_TRANSIENT_ERRORS`` derives from the canonical
+``RETRYABLE_EXCEPTIONS`` in ``autobot_shared/retry_mechanism.py``
+(#7010, #11689): ConnectionError/TimeoutError/OSError back off with jitter;
+validation errors (ValueError/TypeError) fail fast and are never retried.
 """
 
 import json
@@ -30,15 +30,17 @@ from typing import Any, Callable, Dict
 from celery import Task
 
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
+from autobot_shared.retry_mechanism import RETRYABLE_EXCEPTIONS
 from autobot_shared.ssot_config import config
 from autobot_shared.status_enums import TaskStatus
 
 logger = logging.getLogger(__name__)
 
-# Transient errors that trigger Celery autoretry — the retryable set from
-# autobot_shared/retry_mechanism.py (#7010). ValueError/TypeError are
-# intentionally absent so validation failures fail fast without retry.
-CELERY_TRANSIENT_ERRORS = (ConnectionError, TimeoutError, OSError)
+# Transient errors that trigger Celery autoretry — derived from the canonical
+# retryable set in autobot_shared/retry_mechanism.py (#7010, #11689).
+# ValueError/TypeError are intentionally absent so validation failures fail
+# fast without retry.
+CELERY_TRANSIENT_ERRORS = RETRYABLE_EXCEPTIONS
 
 DEDUP_KEY_PREFIX = "celery:dedup:"
 DEAD_LETTER_KEY = "celery:dead_letter"
