@@ -27,9 +27,14 @@ class TestTracingServiceSingleton:
 
     @pytest.fixture(autouse=True)
     def skip_if_opentelemetry_unavailable(self):
-        """Skip tests if OpenTelemetry has import issues"""
+        """Skip tests if OpenTelemetry has import issues.
+
+        #11681: the guarded import had rotted to ``pass`` (autoflake-era),
+        so missing otel instrumentation FAILED these tests instead of
+        skipping them.
+        """
         try:
-            pass
+            import services.tracing_service  # noqa: F401
         except ImportError as e:
             pytest.skip(f"TracingService unavailable: {e}")
 
@@ -48,9 +53,8 @@ class TestTracingServiceSingleton:
         """Test that concurrent access returns same singleton instance"""
         from services.tracing_service import TracingService
 
-        # Reset singleton for clean test
-        TracingService._instance = None
-        TracingService._initialized = False
+        # Reset singleton for clean test (#11681: canonical seam)
+        TracingService.reset_instance()
 
         instances = []
         errors = []
@@ -267,9 +271,14 @@ class TestDoubleCheckedLocking:
 
     @pytest.fixture(autouse=True)
     def skip_if_opentelemetry_unavailable(self):
-        """Skip tests if OpenTelemetry has import issues"""
+        """Skip tests if OpenTelemetry has import issues.
+
+        #11681: the guarded import had rotted to ``pass`` (autoflake-era),
+        so missing otel instrumentation FAILED these tests instead of
+        skipping them.
+        """
         try:
-            pass
+            import services.tracing_service  # noqa: F401
         except ImportError as e:
             pytest.skip(f"TracingService unavailable: {e}")
 

@@ -78,13 +78,32 @@ class TracingService:
     _lock: threading.Lock = threading.Lock()
 
     def __new__(cls) -> "TracingService":
-        """Singleton pattern - only one tracing service per process (thread-safe)."""
+        """Singleton pattern - only one tracing service per process (thread-safe).
+
+        Issue #11681: kept as a locked ``__new__`` (not migrated to
+        ``singleton_factory.lazy_singleton``) — the constructor itself is the
+        public singleton accessor (module-level ``tracing_service`` and
+        thread-safety tests construct ``TracingService()`` directly and rely
+        on identity), so a factory seam would break the constructor contract.
+        """
         if cls._instance is None:
             with cls._lock:
                 # Double-check after acquiring lock (Issue #481 - race condition fix)
                 if cls._instance is None:
                     cls._instance = super().__new__(cls)
         return cls._instance
+
+    @classmethod
+    def reset_instance(cls) -> None:
+        """Drop the singleton so the next construction starts fresh.
+
+        Test seam only (#11681 — uniform reset seams across singletons).
+        Does NOT shut down the tracer provider on the old instance; call
+        ``shutdown()`` first if one was initialized.
+        """
+        with cls._lock:
+            cls._instance = None
+            cls._initialized = False
 
     def __init__(self) -> None:
         """Initialize tracing service (only runs once due to singleton)."""
@@ -528,5 +547,10 @@ tracing_service = TracingService()
 
 
 def get_tracing_service() -> TracingService:
-    """Get the singleton tracing service instance."""
-    return tracing_service
+    """Get the singleton tracing service instance.
+
+    Constructs via ``TracingService()`` (which returns the singleton) instead
+    of the eager module-level instance so ``reset_instance()`` takes effect
+    for accessor callers (#11681).
+    """
+    return TracingService()

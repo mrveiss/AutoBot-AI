@@ -16,6 +16,7 @@ import pytest
 from code_intelligence.shared.ast_cache import (
     ASTCache,
     get_ast,
+    get_ast_cache,
     get_ast_cache_stats,
     get_ast_safe,
     get_ast_with_content,
@@ -24,6 +25,7 @@ from code_intelligence.shared.ast_cache import (
 from code_intelligence.shared.file_cache import (
     FileListCache,
     get_file_cache_stats,
+    get_file_list_cache,
     get_frontend_files,
     get_python_files,
     invalidate_file_cache,
@@ -35,14 +37,9 @@ class TestFileListCache:
 
     @pytest.fixture(autouse=True)
     def reset_cache(self):
-        """Reset singleton before and after each test."""
-        # Reset module-level instance as well
-        import code_intelligence.shared.file_cache as fc
-
-        fc._cache_instance = None
+        """Reset the shared instance before and after each test (#11681)."""
         FileListCache.reset_instance()
         yield
-        fc._cache_instance = None
         FileListCache.reset_instance()
 
     @pytest.mark.asyncio
@@ -114,9 +111,9 @@ class TestFileListCache:
         assert len(files) == 3
 
     def test_singleton_pattern(self):
-        """Test that FileListCache is a singleton."""
-        cache1 = FileListCache()
-        cache2 = FileListCache()
+        """The lazy_singleton factory returns one shared instance (#11681)."""
+        cache1 = get_file_list_cache()
+        cache2 = get_file_list_cache()
         assert cache1 is cache2
 
 
@@ -125,14 +122,9 @@ class TestASTCache:
 
     @pytest.fixture(autouse=True)
     def reset_cache(self):
-        """Reset singleton before and after each test."""
-        # Reset module-level instance as well
-        import code_intelligence.shared.ast_cache as ac
-
-        ac._cache_instance = None
+        """Reset the shared instance before and after each test (#11681)."""
         ASTCache.reset_instance()
         yield
-        ac._cache_instance = None
         ASTCache.reset_instance()
 
     def test_get_ast_parses_python_file(self, tmp_path):
@@ -206,21 +198,15 @@ class TestASTCache:
         assert isinstance(tree, ast.Module)
         assert returned_content == content
 
-    def test_lru_eviction(self, tmp_path, monkeypatch):
-        """Test that LRU eviction works when cache is full."""
-        # Monkeypatch env var BEFORE importing/creating cache
-        monkeypatch.setenv("AST_CACHE_MAX_SIZE", "3")
+    def test_lru_eviction(self, tmp_path):
+        """Test that LRU eviction works when cache is full.
 
-        # Force module reload and reset to pick up new env var
-        import importlib
-
-        import code_intelligence.shared.ast_cache as ac
-
-        ac._cache_instance = None
-        ASTCache.reset_instance()
-        importlib.reload(ac)
-
-        cache = ac.ASTCache()
+        #11681: direct construction now yields an independent instance, so
+        a bounded cache can be built directly instead of the old env-var +
+        importlib.reload dance (which stopped working when config moved to
+        the SSOT proxy that does not re-read env on reload).
+        """
+        cache = ASTCache(max_size=3)
 
         # Create test files
         files = []
@@ -234,14 +220,8 @@ class TestASTCache:
             cache.get(f)
 
         stats = cache.get_stats()
-        assert stats.current_size == 3
-        assert stats.evictions == 2
-
-        # Cleanup - restore default env and reset
-        monkeypatch.setenv("AST_CACHE_MAX_SIZE", "1000")
-        ac._cache_instance = None
-        ac.ASTCache.reset_instance()
-        importlib.reload(ac)
+        assert stats["current_size"] == 3
+        assert stats["evictions"] == 2
 
     def test_invalidate_specific_file(self, tmp_path):
         """Test invalidating a specific file."""
@@ -278,9 +258,9 @@ class TestASTCache:
             get_ast(str(test_file))
 
     def test_singleton_pattern(self):
-        """Test that ASTCache is a singleton."""
-        cache1 = ASTCache()
-        cache2 = ASTCache()
+        """The lazy_singleton factory returns one shared instance (#11681)."""
+        cache1 = get_ast_cache()
+        cache2 = get_ast_cache()
         assert cache1 is cache2
 
 
@@ -289,18 +269,10 @@ class TestIntegration:
 
     @pytest.fixture(autouse=True)
     def reset_caches(self):
-        """Reset all caches before and after each test."""
-        # Reset both module-level instances
-        import code_intelligence.shared.ast_cache as ac
-        import code_intelligence.shared.file_cache as fc
-
-        fc._cache_instance = None
-        ac._cache_instance = None
+        """Reset all shared caches before and after each test (#11681)."""
         FileListCache.reset_instance()
         ASTCache.reset_instance()
         yield
-        fc._cache_instance = None
-        ac._cache_instance = None
         FileListCache.reset_instance()
         ASTCache.reset_instance()
 

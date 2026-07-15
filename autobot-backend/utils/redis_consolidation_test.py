@@ -125,11 +125,18 @@ class TestPhase3ConnectionManager:
         assert hasattr(manager, "_active_async_connections")
 
     def test_tcp_keepalive_configuration(self):
-        """Test TCP keepalive options are configured"""
+        """Test TCP keepalive options are configured.
+
+        #11681: keys are the platform ``socket`` constants (Linux:
+        TCP_KEEPIDLE=4, TCP_KEEPINTVL=5, TCP_KEEPCNT=6) — the old
+        hardcoded 1/2/3 keys never existed on Linux.
+        """
+        import socket
+
         manager = RedisConnectionManager()
-        assert manager._tcp_keepalive_options[1] == 600  # TCP_KEEPIDLE
-        assert manager._tcp_keepalive_options[2] == 60  # TCP_KEEPINTVL
-        assert manager._tcp_keepalive_options[3] == 5  # TCP_KEEPCNT
+        assert manager._tcp_keepalive_options[socket.TCP_KEEPIDLE] == 600
+        assert manager._tcp_keepalive_options[socket.TCP_KEEPINTVL] == 60
+        assert manager._tcp_keepalive_options[socket.TCP_KEEPCNT] == 5
 
 
 class TestPhase4AdvancedFeatures:

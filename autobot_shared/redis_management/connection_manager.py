@@ -149,12 +149,30 @@ class RedisConnectionManager:
     _lock = Lock()
 
     def __new__(cls):
-        """Singleton pattern for connection manager."""
+        """Singleton pattern for connection manager.
+
+        Issue #11681: kept as a locked ``__new__`` (not migrated to
+        ``singleton_factory.lazy_singleton``) — the constructor itself is the
+        public singleton accessor (``RedisConnectionManager()`` call sites
+        across redis_client.py, celery prefork setup, and identity tests rely
+        on it), so a factory seam would break the constructor contract.
+        """
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
                     cls._instance = super().__new__(cls)
         return cls._instance
+
+    @classmethod
+    def reset_instance(cls) -> None:
+        """Drop the singleton so the next construction starts fresh.
+
+        Test seam only (#11681 — uniform reset seams across singletons).
+        Does NOT close pools on the old instance; call ``close_all()`` first
+        if pools were created.
+        """
+        with cls._lock:
+            cls._instance = None
 
     def __init__(self) -> None:
         """

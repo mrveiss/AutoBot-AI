@@ -128,10 +128,11 @@ class ASTCache:
     Thread Safety:
         Uses threading.Lock for thread-safe cache access.
         Safe to use from multiple async tasks and threads.
-    """
 
-    _instance: "ASTCache" | None = None
-    _lock = threading.Lock()
+    Singleton access (#11681): the shared instance lives behind the
+    ``get_ast_cache`` lazy_singleton factory below — direct construction
+    creates an independent (non-shared) cache.
+    """
 
     # CacheProtocol properties - Issue #743
     @property
@@ -150,24 +151,12 @@ class ASTCache:
         """Maximum capacity."""
         return self._max_size
 
-    def __new__(cls) -> "ASTCache":
-        """Singleton pattern for global cache instance."""
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-                    cls._instance._initialized = False
-        return cls._instance
-
     def __init__(
         self,
         max_size: int = DEFAULT_CACHE_SIZE,
         content_cache_size: int = DEFAULT_CONTENT_CACHE_SIZE,
     ):
-        """Initialize cache (only runs once due to singleton)."""
-        if self._initialized:
-            return
-
+        """Initialize cache."""
         self._max_size = max_size
         self._content_cache_size = content_cache_size
 
@@ -177,7 +166,6 @@ class ASTCache:
 
         self._stats = ASTCacheStats(max_size=max_size)
         self._cache_lock = threading.Lock()
-        self._initialized = True
 
         logger.info(
             "ASTCache initialized: max_size=%d, content_cache_size=%d",
@@ -469,18 +457,22 @@ class ASTCache:
 
     @classmethod
     def reset_instance(cls) -> None:
-        """Reset singleton instance (for testing)."""
-        global _cache_instance
-        with cls._lock:
-            cls._instance = None
-            _cache_instance = None
+        """Reset the shared instance (test seam).
+
+        Issue #11681: delegates to the ``lazy_singleton`` factory's reset —
+        the previous hand-rolled ``__new__`` singleton kept a second cache
+        layer that this method never cleared (stale-instance bug).
+        """
+        get_ast_cache.reset()  # type: ignore[attr-defined]
 
 
 # =============================================================================
 # Convenience Functions (Module-Level API)
 # =============================================================================
 
-_get_cache = lazy_singleton(ASTCache)
+# Issue #11681: canonical singleton seam — replaces the hand-rolled
+# double-checked ``__new__`` pattern. Carries reset()/set_for_test() (#11635).
+get_ast_cache = lazy_singleton(ASTCache)
 
 
 def get_ast(file_path: str | Path) -> ast.AST:
@@ -503,7 +495,7 @@ def get_ast(file_path: str | Path) -> ast.AST:
             if isinstance(node, ast.FunctionDef):
                 logger.info("Found function: %s", node.name)
     """
-    return _get_cache().get(file_path)
+    return get_ast_cache().get(file_path)
 
 
 def get_ast_safe(file_path: str | Path) -> ast.AST | None:
@@ -522,7 +514,7 @@ def get_ast_safe(file_path: str | Path) -> ast.AST | None:
             # Process AST
             pass
     """
-    return _get_cache().get_safe(file_path)
+    return get_ast_cache().get_safe(file_path)
 
 
 def get_ast_with_content(file_path: str | Path) -> Tuple[ast.AST | None, str]:
@@ -532,7 +524,7 @@ def get_ast_with_content(file_path: str | Path) -> Tuple[ast.AST | None, str]:
     Returns:
         Tuple of (ast, content) - ast may be None on parse error
     """
-    return _get_cache().get_with_content(file_path)
+    return get_ast_cache().get_with_content(file_path)
 
 
 def invalidate_ast_cache(file_path: str | Path | None = None) -> None:
@@ -543,9 +535,13 @@ def invalidate_ast_cache(file_path: str | Path | None = None) -> None:
         file_path: If provided, only invalidate this file.
                   If None, invalidate all entries.
     """
-    _get_cache().invalidate(file_path)
+    get_ast_cache().invalidate(file_path)
 
 
 def get_ast_cache_stats() -> Dict:
-    """Get AST cache statistics as dictionary."""
-    return _get_cache().get_stats().to_dict()
+    """Get AST cache statistics as dictionary.
+
+    Issue #11681: ``get_stats()`` already returns a Dict (#743) — the extra
+    ``.to_dict()`` raised AttributeError on every call.
+    """
+    return get_ast_cache().get_stats()
