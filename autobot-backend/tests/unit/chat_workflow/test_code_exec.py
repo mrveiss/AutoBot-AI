@@ -518,6 +518,59 @@ def test_injectable_excludes_sensitive_even_when_env_widened():
 
 
 # ---------------------------------------------------------------------------
+# GH#11662: single tool-classification source (tool_policy) + derived views
+# ---------------------------------------------------------------------------
+
+
+def test_tool_policy_is_single_source_for_consumers():
+    """shim_codegen and tool_handler must expose the tool_policy objects, not copies."""
+    import chat_workflow.tool_handler as th
+    from chat_workflow.code_exec import shim_codegen, tool_policy
+
+    assert shim_codegen.SENSITIVE_TOOLS is tool_policy.SENSITIVE_TOOLS
+    assert shim_codegen.CODEEXEC_INJECTABLE_TOOLS is tool_policy.CODEEXEC_INJECTABLE_TOOLS
+    assert th.CODEEXEC_READONLY_TOOLS is tool_policy.CODEEXEC_READONLY_TOOLS
+
+
+def test_tool_policy_invariants_hold():
+    """readonly ⊆ injectable; sensitive ∩ injectable = ∅; mutating = injectable − readonly."""
+    from chat_workflow.code_exec import tool_policy as tp
+
+    assert tp.CODEEXEC_READONLY_TOOLS <= tp.CODEEXEC_INJECTABLE_TOOLS
+    assert not (tp.SENSITIVE_TOOLS & tp.CODEEXEC_INJECTABLE_TOOLS)
+    assert tp.CODEEXEC_MUTATING_TOOLS == tp.CODEEXEC_INJECTABLE_TOOLS - tp.CODEEXEC_READONLY_TOOLS
+    tp._check_invariants()  # explicit call must not raise
+
+
+def test_tool_policy_env_drift_resolves_safer():
+    """A drifted env cannot widen policy: sensitive stays out of injectable, and a
+    readonly-only env entry (not injectable) is dropped rather than auto-approvable."""
+    from chat_workflow.code_exec.tool_policy import derive_views
+
+    injectable, readonly = derive_views(
+        frozenset({"web_search", "write_file", "execute_command"}),
+        frozenset({"web_search", "scrape_url"}),
+    )
+    # sensitive tools never injectable, even when env-listed
+    assert "write_file" not in injectable
+    assert "execute_command" not in injectable
+    assert injectable == frozenset({"web_search"})
+    # readonly entry absent from injectable is dropped (readonly ⊆ injectable)
+    assert "scrape_url" not in readonly
+    assert readonly == frozenset({"web_search"})
+
+
+def test_tool_policy_default_classification_unchanged():
+    """Default posture: the four read-only tools are injectable+readonly; no gray zone."""
+    from chat_workflow.code_exec import tool_policy as tp
+
+    default_four = frozenset({"web_search", "scrape_url", "map_site", "extract_structured_data"})
+    assert tp.CODEEXEC_INJECTABLE_TOOLS == default_four
+    assert tp.CODEEXEC_READONLY_TOOLS == default_four
+    assert tp.CODEEXEC_MUTATING_TOOLS == frozenset()
+
+
+# ---------------------------------------------------------------------------
 # MAJOR-1: shim RPC uses per-call ids so concurrent calls correlate
 # ---------------------------------------------------------------------------
 

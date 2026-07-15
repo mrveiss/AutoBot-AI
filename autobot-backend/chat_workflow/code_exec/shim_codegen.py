@@ -9,36 +9,13 @@ Each shim function calls the server-side broker via JSON-RPC over stdio, using a
 per-call monotonic id so concurrent same-tool calls correlate their replies.
 """
 
-import os
-
 from chat_workflow.code_exec.protocol import RPC_SENTINEL
 
-CODEEXEC_INJECTABLE_TOOLS: frozenset[str] = frozenset(
-    os.environ.get(
-        "AUTOBOT_CODEEXEC_INJECTABLE_TOOLS",
-        "web_search,scrape_url,map_site,extract_structured_data",
-    ).split(",")
-)
-
-# GH#11568 MAJOR-3: tools that must NEVER be injectable, regardless of the env
-# allowlist. Subtracted unconditionally so an operator who widens
-# AUTOBOT_CODEEXEC_INJECTABLE_TOOLS can never shim compose/delegate/execute_command.
-SENSITIVE_TOOLS: frozenset[str] = frozenset(
-    {
-        "execute_command",
-        "compose",
-        "delegate",
-        "deploy",
-        "git_push",
-        "navigate",
-        "click",
-        "fill",
-        "select",
-        "evaluate",
-        "write_file",
-        "edit_file",
-        "delete_file",
-    }
+# GH#11662: classification lives in the single tool-policy source; re-exported
+# here so existing consumers (and test patch points) keep working.
+from chat_workflow.code_exec.tool_policy import (  # noqa: F401
+    CODEEXEC_INJECTABLE_TOOLS,
+    SENSITIVE_TOOLS,
 )
 
 
