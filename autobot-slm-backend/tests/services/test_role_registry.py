@@ -33,19 +33,26 @@ from unittest.mock import MagicMock as _MagicMock
 
 _SERVICES_DIR = str(_Path(__file__).parent.parent.parent / "services")
 
+_TOUCHED_KEYS = (
+    "services",
+    "services.role_registry",
+    "models",
+    "models.database",
+    "sqlalchemy",
+    "sqlalchemy.ext",
+    "sqlalchemy.ext.asyncio",
+    "sqlalchemy.orm",
+)
+
+# #11478: snapshot every key this bootstrap touches so the pre-import state
+# can be restored after the import below.  Leaking the thin models.database
+# shim broke later modules in the same directory sweep (git_tracker's
+# CodeSource import in version_checker_test).
+_SAVED_MODULES = {_key: sys.modules[_key] for _key in _TOUCHED_KEYS if _key in sys.modules}
+
 # Drop MagicMock stubs for everything role_registry transitively imports.
-for _key in list(sys.modules):
-    if _key in (
-        "services",
-        "services.role_registry",
-        "models",
-        "models.database",
-        "sqlalchemy",
-        "sqlalchemy.ext",
-        "sqlalchemy.ext.asyncio",
-        "sqlalchemy.orm",
-    ):
-        del sys.modules[_key]
+for _key in _TOUCHED_KEYS:
+    sys.modules.pop(_key, None)
 
 # Hollow real-path package for services/ so submodule imports work.
 _svc_pkg = _types.ModuleType("services")
@@ -77,6 +84,15 @@ sys.modules["models.database"] = _models_db
 setattr(_models_pkg, "database", _models_db)
 
 _rr = importlib.import_module("services.role_registry")
+
+# #11478: restore the pre-bootstrap sys.modules state.  The tests below only
+# use the _rr reference, so the shims are not needed at runtime — leaving them
+# in sys.modules poisons every module collected after this one.
+for _key in _TOUCHED_KEYS:
+    if _key in _SAVED_MODULES:
+        sys.modules[_key] = _SAVED_MODULES[_key]
+    else:
+        sys.modules.pop(_key, None)
 
 DEFAULT_ROLES = _rr.DEFAULT_ROLES
 ROLE_ANSIBLE_GROUPS = _rr.ROLE_ANSIBLE_GROUPS
@@ -219,6 +235,8 @@ def test_vnc_in_get_role_definitions():
         if hasattr(_rr.get_role_definitions, "__wrapped__")
         else None
     )
+    if defs_by_name is not None:
+        assert "vnc" in defs_by_name, "vnc must be returned by get_role_definitions"
     # Fallback: inspect DEFAULT_ROLES directly (get_role_definitions is async)
     detectable = {r["name"] for r in DEFAULT_ROLES if r.get("target_path") or r.get("systemd_service")}
     assert "vnc" in detectable, "vnc must be in the detectable role set (has target_path or systemd_service)"

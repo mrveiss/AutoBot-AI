@@ -43,6 +43,39 @@ def jwt_secret(monkeypatch):
     return secret
 
 
+def _make_redis_store():
+    """Return a (store dict, async factory) backed by that store.
+
+    FakeRedis mirrors the redis-py ``set`` semantics the production code
+    relies on (GH#11648): ``nx=True`` returns ``None`` without writing when
+    the key already exists, and ``True`` on a successful write.
+    """
+    store: dict = {}
+
+    class FakeRedis:
+        async def set(self, key, value, ex=None, nx=False):
+            if nx and key in store:
+                return None
+            store[key] = value
+            return True
+
+        async def exists(self, key):
+            return 1 if key in store else 0
+
+    async def factory(*args, **kwargs):
+        return FakeRedis()
+
+    return store, factory
+
+
+@pytest.fixture
+def fake_redis(monkeypatch):
+    """Route services.run_jwt Redis access to an in-memory FakeRedis."""
+    store, factory = _make_redis_store()
+    monkeypatch.setattr("services.run_jwt.get_async_redis_client", factory)
+    return store
+
+
 def test_mint_run_jwt_creates_valid_token(jwt_secret):
     """Verify mint_run_jwt() creates a properly signed token."""
     run_id = str(uuid.uuid4())
@@ -59,7 +92,7 @@ def test_mint_run_jwt_creates_valid_token(jwt_secret):
 
 
 @pytest.mark.asyncio
-async def test_validate_run_jwt_accepts_valid_token(jwt_secret):
+async def test_validate_run_jwt_accepts_valid_token(jwt_secret, fake_redis):
     """Verify validate_run_jwt() decodes and accepts a valid token."""
     run_id = str(uuid.uuid4())
     task_id = "task-1"
@@ -80,7 +113,7 @@ async def test_validate_run_jwt_accepts_valid_token(jwt_secret):
 
 
 @pytest.mark.asyncio
-async def test_validate_run_jwt_rejects_expired_token(jwt_secret, monkeypatch):
+async def test_validate_run_jwt_rejects_expired_token(jwt_secret, fake_redis, monkeypatch):
     """Verify validate_run_jwt() rejects expired tokens."""
     monkeypatch.setenv("RUN_JWT_TTL_SECONDS", "1")
     run_id = str(uuid.uuid4())
@@ -97,23 +130,9 @@ async def test_validate_run_jwt_rejects_expired_token(jwt_secret, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_denylist_rejection_with_mock_redis(jwt_secret, monkeypatch):
+async def test_denylist_rejection_with_mock_redis(jwt_secret, fake_redis):
     """Verify validate_run_jwt() raises JWTDecodeError after revocation via Redis denylist."""
     from autobot_shared.auth.jwt_core import JWTDecodeError
-
-    denylist: dict[str, str] = {}
-
-    class FakeRedis:
-        async def set(self, key, value, ex=None):
-            denylist[key] = value
-
-        async def exists(self, key):
-            return 1 if key in denylist else 0
-
-    async def fake_get_redis(*args, **kwargs):
-        return FakeRedis()
-
-    monkeypatch.setattr("services.run_jwt.get_async_redis_client", fake_get_redis)
 
     run_id = str(uuid.uuid4())
     token = mint_run_jwt(run_id, "task-1", "agent-1", "tenant-1", ["task:read"])
@@ -197,23 +216,6 @@ _LONG_SIGNING_KEY = "a" * 40  # deterministic test key ≥32 chars
 _ALT_SIGNING_KEY = "b" * 40  # different key to prove secret isolation
 
 
-def _make_redis_store():
-    """Return a (store dict, async factory) backed by that store."""
-    store: dict = {}
-
-    class FakeRedis:
-        async def set(self, key, value, ex=None):
-            store[key] = value
-
-        async def exists(self, key):
-            return 1 if key in store else 0
-
-    async def factory(*args, **kwargs):
-        return FakeRedis()
-
-    return store, factory
-
-
 @pytest.mark.asyncio
 async def test_refresh_extends_access_for_long_running_task(jwt_secret, monkeypatch):
     """Integration: refresh grants a fresh JWT that validates after original is revoked.
@@ -275,7 +277,7 @@ async def test_expired_jwt_cannot_be_refreshed(jwt_secret, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_user_jwt_auth_unaffected_by_run_jwt_fallback(monkeypatch):
+async def test_user_jwt_auth_unaffected_by_run_jwt_fallback(monkeypatch, real_auth_middleware):
     """Integration: _extract_user_from_run_jwt returns None for a user JWT.
 
     A user JWT signed with a different key must not validate in the run JWT
@@ -298,9 +300,8 @@ async def test_user_jwt_auth_unaffected_by_run_jwt_fallback(monkeypatch):
     request = MagicMock()
     request.headers.get = lambda k, d="": f"Bearer {user_token}" if k == "Authorization" else d
 
-    from auth_middleware import AuthenticationMiddleware
-
-    middleware = AuthenticationMiddleware.__new__(AuthenticationMiddleware)
+    cls = real_auth_middleware.AuthenticationMiddleware
+    middleware = cls.__new__(cls)
     result = await middleware._extract_user_from_run_jwt(request)
     # A JWT signed with ALT_SIGNING_KEY must not validate against LONG_SIGNING_KEY
     assert result is None
@@ -312,7 +313,7 @@ async def test_user_jwt_auth_unaffected_by_run_jwt_fallback(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_run_jwt_blocked_on_non_allowed_path(jwt_secret, monkeypatch):
+async def test_run_jwt_blocked_on_non_allowed_path(jwt_secret, monkeypatch, real_auth_middleware):
     """Integration: get_current_user raises 403 for run JWT on a non-allowed path.
 
     A run JWT must not be usable on arbitrary REST endpoints (e.g. /api/llm/chat).
@@ -336,21 +337,20 @@ async def test_run_jwt_blocked_on_non_allowed_path(jwt_secret, monkeypatch):
     request.cookies = {}
     request.state = MagicMock(spec=[])
 
-    from auth_middleware import AuthenticationMiddleware, get_current_user
-
-    middleware = AuthenticationMiddleware.__new__(AuthenticationMiddleware)
+    cls = real_auth_middleware.AuthenticationMiddleware
+    middleware = cls.__new__(cls)
 
     with (
-        patch("auth_middleware.get_auth_middleware", return_value=middleware),
+        patch.object(real_auth_middleware, "get_auth_middleware", return_value=middleware),
         patch.object(middleware, "get_user_from_request", return_value=None),
     ):
         with pytest.raises(HTTPException) as exc_info:
-            await get_current_user(request)
+            await real_auth_middleware.get_current_user(request)
     assert exc_info.value.status_code == 403
 
 
 @pytest.mark.asyncio
-async def test_run_jwt_allowed_on_refresh_path(jwt_secret, monkeypatch):
+async def test_run_jwt_allowed_on_refresh_path(jwt_secret, monkeypatch, real_auth_middleware):
     """Integration: get_current_user accepts run JWT on /api/runs/ paths.
 
     The refresh endpoint lives under /api/runs/{run_id}/jwt/refresh — confirming
@@ -371,14 +371,13 @@ async def test_run_jwt_allowed_on_refresh_path(jwt_secret, monkeypatch):
     request.cookies = {}
     request.state = MagicMock(spec=[])
 
-    from auth_middleware import AuthenticationMiddleware, get_current_user
-
-    middleware = AuthenticationMiddleware.__new__(AuthenticationMiddleware)
+    cls = real_auth_middleware.AuthenticationMiddleware
+    middleware = cls.__new__(cls)
 
     with (
-        patch("auth_middleware.get_auth_middleware", return_value=middleware),
+        patch.object(real_auth_middleware, "get_auth_middleware", return_value=middleware),
         patch.object(middleware, "get_user_from_request", return_value=None),
     ):
-        user = await get_current_user(request)
+        user = await real_auth_middleware.get_current_user(request)
     assert user["auth_method"] == "run_jwt"
     assert user["run_id"] == run_id

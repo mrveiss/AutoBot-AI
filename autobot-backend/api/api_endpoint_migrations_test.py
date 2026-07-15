@@ -29326,11 +29326,17 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         # Verify WorkflowAutomationManager class exists
         self.assertTrue(hasattr(workflow_automation, "WorkflowAutomationManager"))
 
-        # Verify get_workflow_manager singleton pattern
+        # Verify get_workflow_manager singleton pattern (#11409): it is now a
+        # lazy_singleton(WorkflowAutomationManager) factory — the old
+        # module-global `_workflow_manager`/`global` source-substring assert
+        # rotted when the implementation moved.  Assert the canonical
+        # lazy_singleton contract (callable factory exposing the reset /
+        # set_for_test test seams) instead of matching source text.
         self.assertTrue(hasattr(workflow_automation, "get_workflow_manager"))
-        get_manager_source = inspect.getsource(workflow_automation.get_workflow_manager)
-        self.assertIn("_workflow_manager", get_manager_source)
-        self.assertIn("global", get_manager_source)
+        get_manager = workflow_automation.get_workflow_manager
+        self.assertTrue(callable(get_manager))
+        self.assertTrue(hasattr(get_manager, "reset"))
+        self.assertTrue(hasattr(get_manager, "set_for_test"))
 
     def test_batch_168_migration_preserves_workflow_templates(self):
         """Verify migration preserves workflow template functionality"""
