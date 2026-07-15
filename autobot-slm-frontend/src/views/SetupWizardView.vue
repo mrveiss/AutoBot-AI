@@ -25,8 +25,8 @@
         <button
           class="close-btn"
           @click="exitWizard"
-          title="Exit wizard without completing"
-          aria-label="Exit setup wizard"
+          :title="$t('setupWizardView.exitWizardWithoutCompleting')"
+          :aria-label="$t('setupWizardView.exitSetupWizard')"
         >
           &#10005;
         </button>
@@ -100,7 +100,7 @@
               <span class="field-label">{{ $t('setupWizardView.hostname') }}</span>
               <input
                 v-model="newNode.hostname"
-                placeholder="e.g. frontend-01"
+                :placeholder="$t('setupWizardView.eGFrontend01')"
                 autocomplete="off"
               />
             </label>
@@ -118,7 +118,7 @@
               <span class="field-label">{{ $t('setupWizardView.sSHUser') }}</span>
               <input
                 v-model="newNode.ssh_user"
-                placeholder="default: autobot"
+                :placeholder="$t('setupWizardView.defaultAutobot')"
                 autocomplete="username"
               />
             </label>
@@ -138,7 +138,7 @@
             <input
               v-model="newNode.ssh_password"
               type="password"
-              placeholder="Enter SSH password"
+              :placeholder="$t('setupWizardView.enterSSHPassword')"
               autocomplete="current-password"
             />
           </label>
@@ -351,14 +351,12 @@
             <h3>{{ $t('setupWizardView.huggingFaceToken') }}</h3>
             <p class="secret-desc">
               {{ $t('setupWizardView.requiredForTTSVoice') }}
-              <a href="https://huggingface.co/SWivid/F5-TTS" target="_blank" rel="noopener">{{ $t('setupWizardView.acceptLicense') }}</a>
-              then
-              <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">{{ $t('setupWizardView.createAToken') }}</a>.
+              <a href="https://huggingface.co/SWivid/F5-TTS" target="_blank" rel="noopener">{{ $t('setupWizardView.acceptLicense') }}</a>{{ $t('setupWizardView.then') }}<a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">{{ $t('setupWizardView.createAToken') }}</a>.
             </p>
             <input
               v-model="secretValues.hf_token"
               type="password"
-              placeholder="hf_..."
+              :placeholder="$t('setupWizardView.hf')"
               class="full-width"
             />
           </div>

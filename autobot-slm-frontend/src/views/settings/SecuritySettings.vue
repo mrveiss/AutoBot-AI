@@ -599,7 +599,7 @@ onMounted(async () => {
               v-model="disablePassword"
               type="password"
               class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              placeholder="Enter your password"
+              :placeholder="$t('settings.securitySettings.enterYourPassword')"
             />
           </div>
 
@@ -649,7 +649,7 @@ onMounted(async () => {
               v-model="regeneratePassword"
               type="password"
               class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              placeholder="Enter your password"
+              :placeholder="$t('settings.securitySettings.enterYourPassword')"
             />
           </div>
 
@@ -694,7 +694,7 @@ onMounted(async () => {
               v-model="newKeyForm.name"
               type="text"
               class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              placeholder="My API Key"
+              :placeholder="$t('settings.securitySettings.myAPIKey')"
             />
           </div>
 
@@ -706,7 +706,7 @@ onMounted(async () => {
               v-model="newKeyForm.description"
               type="text"
               class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              placeholder="What this key is for"
+              :placeholder="$t('settings.securitySettings.whatThisKeyIsFor')"
             />
           </div>
 

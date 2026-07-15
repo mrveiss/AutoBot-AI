@@ -327,7 +327,7 @@
                         id="ssh_key"
                         rows="5"
                         :class="['input font-mono text-xs', { 'border-danger-500 focus:ring-danger-500 focus:border-danger-500': errors.ssh_key }]"
-                        placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----"
+                        :placeholder="$t('addNodeModal.bEGINOPENSSHPRIVATEKEYENDOPENSSH')"
                         :aria-invalid="!!errors.ssh_key"
                         :aria-describedby="errors.ssh_key ? 'ssh-key-error' : undefined"
                         @blur="validateField('ssh_key')"

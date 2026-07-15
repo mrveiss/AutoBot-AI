@@ -363,7 +363,7 @@ async function handleDelete(): Promise<void> {
                 type="text"
                 required
                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                placeholder="High Latency Alert"
+                :placeholder="$t('performance.alertRulesView.highLatencyAlert')"
               />
             </div>
             <div>
@@ -372,7 +372,7 @@ async function handleDelete(): Promise<void> {
                 v-model="form.description"
                 type="text"
                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                placeholder="Optional description"
+                :placeholder="$t('performance.alertRulesView.optionalDescription')"
               />
             </div>
             <div class="grid grid-cols-2 gap-4">
@@ -438,7 +438,7 @@ async function handleDelete(): Promise<void> {
                 v-model="form.node_id"
                 type="text"
                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                placeholder="Leave empty for all nodes"
+                :placeholder="$t('performance.alertRulesView.leaveEmptyForAllNodes')"
               />
             </div>
             <div class="flex items-center gap-2">

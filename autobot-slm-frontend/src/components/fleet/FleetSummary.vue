@@ -58,7 +58,7 @@ const stats = computed(() => [
   <div
     class="grid grid-cols-2 md:grid-cols-5 gap-4"
     role="region"
-    aria-label="Fleet health summary"
+    :aria-label="$t('fleet.fleetSummary.fleetHealthSummary')"
   >
     <div
       v-for="stat in stats"

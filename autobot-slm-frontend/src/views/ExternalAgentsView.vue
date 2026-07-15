@@ -233,7 +233,7 @@ onMounted(() => {
         <thead>
           <tr class="border-b border-gray-700 text-gray-400 text-left">
             <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.name') }}</th>
-            <th class="px-4 py-3 font-medium">URL</th>
+            <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.uRL') }}</th>
             <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.status') }}</th>
             <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.skills') }}</th>
             <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.tags') }}</th>
@@ -332,7 +332,7 @@ onMounted(() => {
             <input
               v-model="form.name"
               class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500"
-              placeholder="My External Agent"
+              :placeholder="$t('externalAgentsView.myExternalAgent')"
             />
           </div>
           <div>
@@ -340,7 +340,7 @@ onMounted(() => {
             <input
               v-model="form.base_url"
               class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500 font-mono"
-              placeholder="https://agent.example.com"
+              :placeholder="$t('externalAgentsView.httpsAgentExampleCom')"
               :disabled="modalMode === 'edit'"
             />
           </div>
@@ -349,7 +349,7 @@ onMounted(() => {
             <input
               v-model="form.description"
               class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500"
-              placeholder="Optional description"
+              :placeholder="$t('externalAgentsView.optionalDescription')"
             />
           </div>
           <div>
@@ -357,7 +357,7 @@ onMounted(() => {
             <input
               v-model="form.tags"
               class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500"
-              placeholder="finance, analysis"
+              :placeholder="$t('externalAgentsView.financeAnalysis')"
             />
           </div>
           <div>
@@ -369,7 +369,7 @@ onMounted(() => {
               v-model="form.api_key"
               type="password"
               class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500 font-mono"
-              placeholder="sk-..."
+              :placeholder="$t('externalAgentsView.sk')"
             />
           </div>
           <div class="flex items-center gap-6">
@@ -478,9 +478,7 @@ onMounted(() => {
           <button
             class="px-4 py-2 text-sm text-gray-300 hover:text-gray-100 transition-colors"
             @click="closeDetail"
-          >
-            Close
-          </button>
+          >{{ $t('externalAgentsView.close') }}</button>
         </div>
       </div>
     </div>

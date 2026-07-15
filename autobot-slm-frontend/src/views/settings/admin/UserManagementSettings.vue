@@ -542,7 +542,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
-      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700" aria-label="Dismiss error">
+      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700" :aria-label="$t('settings.admin.userManagementSettings.dismissError')">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -810,12 +810,12 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(user.last_login_at) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex items-center justify-end gap-1">
-                    <button @click="openPasswordChangeModal(user, 'slm')" class="text-amber-600 hover:text-amber-800 p-1" title="Reset password">
+                    <button @click="openPasswordChangeModal(user, 'slm')" class="text-amber-600 hover:text-amber-800 p-1" :title="$t('settings.admin.userManagementSettings.resetPassword')">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                       </svg>
                     </button>
-                    <button @click="deleteSlmUser(user.id)" class="text-red-600 hover:text-red-800 p-1" title="Delete user">
+                    <button @click="deleteSlmUser(user.id)" class="text-red-600 hover:text-red-800 p-1" :title="$t('settings.admin.userManagementSettings.deleteUser')">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
@@ -877,12 +877,12 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(user.last_login_at) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex items-center justify-end gap-1">
-                    <button @click="openPasswordChangeModal(user, 'autobot')" class="text-amber-600 hover:text-amber-800 p-1" title="Reset password">
+                    <button @click="openPasswordChangeModal(user, 'autobot')" class="text-amber-600 hover:text-amber-800 p-1" :title="$t('settings.admin.userManagementSettings.resetPassword')">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                       </svg>
                     </button>
-                    <button @click="deleteAutobotUser(user.id)" class="text-red-600 hover:text-red-800 p-1" title="Delete user">
+                    <button @click="deleteAutobotUser(user.id)" class="text-red-600 hover:text-red-800 p-1" :title="$t('settings.admin.userManagementSettings.deleteUser')">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
@@ -929,7 +929,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 <td class="py-3 px-4 text-sm text-gray-600">{{ team.description || '-' }}</td>
                 <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(team.created_at) }}</td>
                 <td class="py-3 px-4 text-right">
-                  <button @click="deleteTeam(team.id)" class="text-red-600 hover:text-red-800 p-1" title="Delete team">
+                  <button @click="deleteTeam(team.id)" class="text-red-600 hover:text-red-800 p-1" :title="$t('settings.admin.userManagementSettings.deleteTeam')">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
@@ -986,12 +986,12 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 <td class="py-3 px-4 text-sm text-gray-600">{{ formatDateTime(provider.last_sync_at ?? null) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex justify-end gap-2">
-                    <button @click="testSsoProvider(provider.id)" class="text-blue-600 hover:text-blue-800 p-1" title="Test connection">
+                    <button @click="testSsoProvider(provider.id)" class="text-blue-600 hover:text-blue-800 p-1" :title="$t('settings.admin.userManagementSettings.testConnection')">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                     </button>
-                    <button @click="deleteSsoProvider(provider.id)" class="text-red-600 hover:text-red-800 p-1" title="Delete provider">
+                    <button @click="deleteSsoProvider(provider.id)" class="text-red-600 hover:text-red-800 p-1" :title="$t('settings.admin.userManagementSettings.deleteProvider')">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
@@ -1090,7 +1090,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
         <div class="space-y-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.username') }}</label>
-            <input v-model="newUserForm.username" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" placeholder="Lowercase, letters, numbers, underscores" />
+            <input v-model="newUserForm.username" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.lowercaseLettersNumbersUnderscores')" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.email') }}</label>
@@ -1098,7 +1098,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.password') }}</label>
-            <input v-model="newUserForm.password" type="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" placeholder="Min 8 chars, upper + lower + digit" />
+            <input v-model="newUserForm.password" type="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.min8CharsUpperLowerDigit')" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.confirmPassword') }}</label>
@@ -1130,11 +1130,11 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
         <div class="space-y-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.teamName') }}</label>
-            <input v-model="newTeamForm.name" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" placeholder="e.g., Engineering, Design" />
+            <input v-model="newTeamForm.name" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.eGEngineeringDesign')" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.descriptionOptional') }}</label>
-            <textarea v-model="newTeamForm.description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" placeholder="Brief description of the team's purpose"></textarea>
+            <textarea v-model="newTeamForm.description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.briefDescriptionOfTheTeamS')"></textarea>
           </div>
         </div>
 
@@ -1212,7 +1212,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
               <option value="google">{{ $t('settings.admin.userManagementSettings.googleOAuth') }}</option>
               <option value="github">{{ $t('settings.admin.userManagementSettings.gitHub') }}</option>
               <option value="microsoft_entra">{{ $t('settings.admin.userManagementSettings.microsoftEntraID') }}</option>
-              <option value="ldap">LDAP</option>
+              <option value="ldap">{{ $t('settings.admin.userManagementSettings.lDAP') }}</option>
               <option value="active_directory">{{ $t('settings.admin.userManagementSettings.activeDirectory') }}</option>
               <option value="saml">{{ $t('settings.admin.userManagementSettings.sAML20') }}</option>
               <option value="google_workspace">{{ $t('settings.admin.userManagementSettings.googleWorkspace') }}</option>
@@ -1220,7 +1220,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.displayName') }}</label>
-            <input v-model="newProviderForm.name" type="text" placeholder="e.g., Company Google SSO" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
+            <input v-model="newProviderForm.name" type="text" :placeholder="$t('settings.admin.userManagementSettings.eGCompanyGoogleSSO')" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.clientID') }}</label>

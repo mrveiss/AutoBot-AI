@@ -103,7 +103,7 @@ const emit = defineEmits<{
         @click.stop="emit('restartAll', nodeId, hostname)"
         :disabled="isRestartingAll"
         class="px-2.5 py-1 text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 rounded-sm hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-        title="Restart all services on this node"
+        :title="$t('orchestration.nodeHealthCard.restartAllServicesOnThisNode')"
       >
         <svg
           v-if="isRestartingAll"

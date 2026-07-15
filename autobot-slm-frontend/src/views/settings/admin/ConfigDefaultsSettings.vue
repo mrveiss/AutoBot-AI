@@ -175,7 +175,7 @@ onMounted(() => { fetchDefaults() })
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.configDefaultsSettings.key') }}</label>
             <input v-model="newKey" :disabled="!!editingKey" required
               class="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-gray-100"
-              placeholder="e.g. monitoring.interval" />
+              :placeholder="$t('settings.admin.configDefaultsSettings.eGMonitoringInterval')" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.configDefaultsSettings.value') }}</label>
@@ -188,7 +188,7 @@ onMounted(() => { fetchDefaults() })
               <option value="string">{{ $t('settings.admin.configDefaultsSettings.string') }}</option>
               <option value="int">{{ $t('settings.admin.configDefaultsSettings.integer') }}</option>
               <option value="bool">{{ $t('settings.admin.configDefaultsSettings.boolean') }}</option>
-              <option value="json">JSON</option>
+              <option value="json">{{ $t('settings.admin.configDefaultsSettings.jSON') }}</option>
             </select>
           </div>
         </div>
@@ -204,7 +204,7 @@ onMounted(() => { fetchDefaults() })
 
     <!-- Filter -->
     <div class="flex items-center gap-4">
-      <input v-model="prefixFilter" placeholder="Filter by key..."
+      <input v-model="prefixFilter" :placeholder="$t('settings.admin.configDefaultsSettings.filterByKey')"
         class="px-3 py-2 border rounded-lg text-sm w-64" />
       <span class="text-sm text-gray-500">{{ filteredConfigs.length }} of {{ configs.length }} configs</span>
     </div>

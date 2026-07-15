@@ -282,7 +282,7 @@ async function handleDelete(): Promise<void> {
                 type="text"
                 required
                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                placeholder="API Response Time SLO"
+                :placeholder="$t('performance.sLODashboard.aPIResponseTimeSLO')"
               />
             </div>
             <div>
@@ -291,7 +291,7 @@ async function handleDelete(): Promise<void> {
                 v-model="form.description"
                 type="text"
                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                placeholder="Optional description"
+                :placeholder="$t('performance.sLODashboard.optionalDescription')"
               />
             </div>
             <div class="grid grid-cols-2 gap-4">
@@ -358,7 +358,7 @@ async function handleDelete(): Promise<void> {
                 v-model="form.node_id"
                 type="text"
                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                placeholder="Leave empty for global"
+                :placeholder="$t('performance.sLODashboard.leaveEmptyForGlobal')"
               />
             </div>
             <div class="flex items-center gap-2">

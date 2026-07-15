@@ -51,7 +51,7 @@ const iconSize = props.size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4'
       @click.stop="emit('start', nodeId, serviceName)"
       :disabled="isActionInProgress"
       :class="`${buttonSize} text-green-600 hover:bg-green-50 rounded-sm disabled:opacity-50`"
-      title="Start service"
+      :title="$t('orchestration.serviceActionButtons.startService')"
     >
       <svg
         v-if="isActiveAction('start')"
@@ -73,7 +73,7 @@ const iconSize = props.size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4'
       @click.stop="emit('stop', nodeId, serviceName)"
       :disabled="isActionInProgress"
       :class="`${buttonSize} text-red-600 hover:bg-red-50 rounded-sm disabled:opacity-50`"
-      title="Stop service"
+      :title="$t('orchestration.serviceActionButtons.stopService')"
     >
       <svg
         v-if="isActiveAction('stop')"
@@ -94,7 +94,7 @@ const iconSize = props.size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4'
       @click.stop="emit('restart', nodeId, serviceName)"
       :disabled="isActionInProgress"
       :class="`${buttonSize} text-blue-600 hover:bg-blue-50 rounded-sm disabled:opacity-50`"
-      title="Restart service"
+      :title="$t('orchestration.serviceActionButtons.restartService')"
     >
       <svg
         v-if="isActiveAction('restart')"

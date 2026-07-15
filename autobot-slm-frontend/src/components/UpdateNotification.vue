@@ -110,7 +110,7 @@ function goToCodeSync(): void {
           <button
             @click="dismiss"
             class="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-200 rounded-md transition-colors"
-            aria-label="Dismiss update notification"
+            :aria-label="$t('updateNotification.dismissUpdateNotification')"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

@@ -242,7 +242,7 @@ onMounted(fetchTree)
               <textarea
                 v-model="delegateForm.task_description"
                 rows="3"
-                placeholder="Describe the task..."
+                :placeholder="$t('agents.orgChartTab.describeTheTask')"
               />
             </div>
             <div class="form-actions">

@@ -198,7 +198,7 @@ function getMetricColor(value: number): string {
 
           <div class="space-y-2">
             <div class="flex justify-between text-sm">
-              <span class="text-gray-600">CPU</span>
+              <span class="text-gray-600">{{ $t('monitoring.systemMonitor.cPU') }}</span>
               <span :class="getMetricColor(node.cpu)">{{ node.cpu.toFixed(1) }}%</span>
             </div>
             <div class="flex justify-between text-sm">

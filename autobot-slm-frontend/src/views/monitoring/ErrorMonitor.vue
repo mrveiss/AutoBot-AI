@@ -310,7 +310,7 @@ onUnmounted(() => {
               <input
                 v-model="searchQuery"
                 type="text"
-                placeholder="Search errors..."
+                :placeholder="$t('monitoring.errorMonitor.searchErrors')"
                 class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
@@ -527,7 +527,7 @@ onUnmounted(() => {
           class="p-4 border-b border-gray-200 flex items-center justify-between"
         >
           <h3 class="text-lg font-semibold text-gray-900">{{ $t('monitoring.errorMonitor.errorDetails') }}</h3>
-          <button @click="closeDetail" class="text-gray-400 hover:text-gray-600" aria-label="Close">
+          <button @click="closeDetail" class="text-gray-400 hover:text-gray-600" :aria-label="$t('monitoring.errorMonitor.close')">
             <svg
               class="w-5 h-5"
               fill="none"

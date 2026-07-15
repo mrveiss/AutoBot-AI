@@ -348,7 +348,7 @@ onUnmounted(() => {
       <button
         @click="emit('close')"
         class="text-gray-400 hover:text-gray-600 transition-colors"
-        aria-label="Close"
+        :aria-label="$t('fleet.nodeServicesPanel.close')"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -359,7 +359,7 @@ onUnmounted(() => {
     <!-- Error Banner -->
     <div v-if="errorMessage" class="px-4 py-2 bg-red-50 border-b border-red-100 text-sm text-red-700 flex items-center justify-between">
       <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700" aria-label="Dismiss error">
+      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700" :aria-label="$t('fleet.nodeServicesPanel.dismissError')">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -376,7 +376,7 @@ onUnmounted(() => {
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search services..."
+          :placeholder="$t('fleet.nodeServicesPanel.searchServices')"
           class="w-full pl-9 pr-4 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
         />
       </div>
@@ -399,7 +399,7 @@ onUnmounted(() => {
         @click="fetchServices"
         :disabled="isLoading"
         class="p-1.5 text-gray-500 hover:text-gray-700 disabled:opacity-50"
-        title="Refresh"
+        :title="$t('fleet.nodeServicesPanel.refresh')"
       >
         <svg :class="['w-5 h-5', isLoading ? 'animate-spin' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -533,7 +533,7 @@ onUnmounted(() => {
                   @click="handleAction(service.service_name, 'start')"
                   :disabled="isActionInProgress"
                   class="p-1.5 text-green-600 hover:bg-green-50 rounded-sm disabled:opacity-50"
-                  title="Start"
+                  :title="$t('fleet.nodeServicesPanel.start')"
                 >
                   <svg v-if="actionService === service.service_name" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -550,7 +550,7 @@ onUnmounted(() => {
                   @click="handleAction(service.service_name, 'stop')"
                   :disabled="isActionInProgress"
                   class="p-1.5 text-red-600 hover:bg-red-50 rounded-sm disabled:opacity-50"
-                  title="Stop"
+                  :title="$t('fleet.nodeServicesPanel.stop')"
                 >
                   <svg v-if="actionService === service.service_name" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -566,7 +566,7 @@ onUnmounted(() => {
                   @click="handleAction(service.service_name, 'restart')"
                   :disabled="isActionInProgress"
                   class="p-1.5 text-blue-600 hover:bg-blue-50 rounded-sm disabled:opacity-50"
-                  title="Restart"
+                  :title="$t('fleet.nodeServicesPanel.restart')"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -577,7 +577,7 @@ onUnmounted(() => {
                 <button
                   @click="viewLogs(service.service_name)"
                   class="p-1.5 text-gray-500 hover:bg-gray-100 rounded-sm"
-                  title="View Logs"
+                  :title="$t('fleet.nodeServicesPanel.viewLogs')"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -623,7 +623,7 @@ onUnmounted(() => {
             <button
               @click="closeLogsModal"
               class="text-gray-400 hover:text-gray-600 transition-colors"
-              aria-label="Close"
+              :aria-label="$t('fleet.nodeServicesPanel.close')"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

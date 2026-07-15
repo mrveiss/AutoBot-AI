@@ -974,7 +974,7 @@ onUnmounted(() => {
               <input
                 v-model="searchQuery"
                 type="text"
-                placeholder="Search services..."
+                :placeholder="$t('orchestrationView.searchServices')"
                 class="w-full px-3 py-2 border rounded-lg text-sm"
               />
             </div>
@@ -1213,7 +1213,7 @@ onUnmounted(() => {
               <input
                 v-model="fleetSearchQuery"
                 type="text"
-                placeholder="Search services..."
+                :placeholder="$t('orchestrationView.searchServices')"
                 class="w-full px-3 py-2 border rounded-lg text-sm"
               />
             </div>
@@ -1342,17 +1342,17 @@ onUnmounted(() => {
                       <button
                         @click="handleFleetServiceAction(service.service_name, 'start')"
                         class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-sm hover:bg-green-200"
-                        title="Start on all nodes"
+                        :title="$t('orchestrationView.startOnAllNodes')"
                       >{{ $t('orchestrationView.start') }}</button>
                       <button
                         @click="handleFleetServiceAction(service.service_name, 'stop')"
                         class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-sm hover:bg-red-200"
-                        title="Stop on all nodes"
+                        :title="$t('orchestrationView.stopOnAllNodes')"
                       >{{ $t('orchestrationView.stop') }}</button>
                       <button
                         @click="handleFleetServiceAction(service.service_name, 'restart')"
                         class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-sm hover:bg-blue-200"
-                        title="Restart on all nodes"
+                        :title="$t('orchestrationView.restartOnAllNodes')"
                       >{{ $t('orchestrationView.restart') }}</button>
                     </div>
                   </td>
@@ -1429,9 +1429,7 @@ onUnmounted(() => {
           <button
             @click="openCreateRoleForm"
             class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Create Role
-          </button>
+          >{{ $t('orchestrationView.createRole') }}</button>
         </div>
 
         <!-- Role Form -->
@@ -1447,52 +1445,52 @@ onUnmounted(() => {
           <form @submit.prevent="saveRole" class="p-4 space-y-4">
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('orchestrationView.name') }}</label>
                 <input
                   v-model="roleFormData.name"
                   :disabled="!!editingRole"
                   required
                   class="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-gray-100"
-                  placeholder="e.g. redis-server"
+                  :placeholder="$t('orchestrationView.eGRedisServer')"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('orchestrationView.displayName') }}</label>
                 <input
                   v-model="roleFormData.display_name"
                   class="w-full px-3 py-2 border rounded-lg text-sm"
-                  placeholder="e.g. Redis Server"
+                  :placeholder="$t('orchestrationView.eGRedisServer2')"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Sync Type</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('orchestrationView.syncType') }}</label>
                 <select v-model="roleFormData.sync_type" class="w-full px-3 py-2 border rounded-lg text-sm">
-                  <option value="component">Component</option>
-                  <option value="full">Full</option>
-                  <option value="config">Config Only</option>
+                  <option value="component">{{ $t('orchestrationView.component') }}</option>
+                  <option value="full">{{ $t('orchestrationView.full') }}</option>
+                  <option value="config">{{ $t('orchestrationView.configOnly') }}</option>
                 </select>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Target Path *</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('orchestrationView.targetPath') }}</label>
                 <input
                   v-model="roleFormData.target_path"
                   required
                   class="w-full px-3 py-2 border rounded-lg text-sm"
-                  placeholder="/opt/autobot"
+                  :placeholder="$t('orchestrationView.optAutobot')"
                 />
               </div>
               <div class="col-span-2">
                 <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Source Paths (comma-separated)</label
+                  >{{ $t('orchestrationView.sourcePathsCommaSeparated') }}</label
                 >
                 <input
                   v-model="roleFormData.source_paths"
                   class="w-full px-3 py-2 border rounded-lg text-sm"
-                  placeholder="autobot-slm-backend/, autobot_shared/"
+                  :placeholder="$t('orchestrationView.autobotSlmBackendAutobotShared')"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Systemd Service</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('orchestrationView.systemdService') }}</label>
                 <input
                   v-model="roleFormData.systemd_service"
                   class="w-full px-3 py-2 border rounded-lg text-sm"
@@ -1507,7 +1505,7 @@ onUnmounted(() => {
                   class="rounded-sm"
                 />
                 <label for="auto-restart" class="text-sm text-gray-700"
-                  >Auto Restart on Deploy</label
+                  >{{ $t('orchestrationView.autoRestartOnDeploy') }}</label
                 >
               </div>
               <div class="flex items-center gap-2 pt-6">
@@ -1518,17 +1516,15 @@ onUnmounted(() => {
                   class="rounded-sm"
                 />
                 <label for="required-role" class="text-sm text-gray-700"
-                  >Required (critical if offline)</label
+                  >{{ $t('orchestrationView.requiredCriticalIfOffline') }}</label
                 >
               </div>
               <div class="col-span-2">
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Degraded Without (comma-separated descriptions)
-                </label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('orchestrationView.degradedWithoutCommaSeparatedDescriptions') }}</label>
                 <input
                   v-model="roleFormData.degraded_without"
                   class="w-full px-3 py-2 border rounded-lg text-sm"
-                  placeholder="GPU inference offloading — backend falls back to local Ollama"
+                  :placeholder="$t('orchestrationView.gPUInferenceOffloadingBackendFallsBack')"
                 />
               </div>
             </div>
@@ -1540,9 +1536,7 @@ onUnmounted(() => {
                 type="button"
                 @click="showRoleForm = false"
                 class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
-              >
-                Cancel
-              </button>
+              >{{ $t('orchestrationView.cancel') }}</button>
             </div>
           </form>
         </div>
@@ -1555,12 +1549,12 @@ onUnmounted(() => {
           <table class="w-full">
             <thead class="bg-gray-50">
               <tr class="text-xs text-gray-500 uppercase">
-                <th class="px-4 py-2 text-left">Name</th>
-                <th class="px-4 py-2 text-left w-20">Priority</th>
-                <th class="px-4 py-2 text-left">Sync Type</th>
-                <th class="px-4 py-2 text-left">Target</th>
-                <th class="px-4 py-2 text-left">Service</th>
-                <th class="px-4 py-2 text-right">Actions</th>
+                <th class="px-4 py-2 text-left">{{ $t('orchestrationView.name2') }}</th>
+                <th class="px-4 py-2 text-left w-20">{{ $t('orchestrationView.priority') }}</th>
+                <th class="px-4 py-2 text-left">{{ $t('orchestrationView.syncType') }}</th>
+                <th class="px-4 py-2 text-left">{{ $t('orchestrationView.target') }}</th>
+                <th class="px-4 py-2 text-left">{{ $t('orchestrationView.service') }}</th>
+                <th class="px-4 py-2 text-right">{{ $t('orchestrationView.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -1599,15 +1593,11 @@ onUnmounted(() => {
                   <button
                     @click="openEditRoleForm(role)"
                     class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-sm hover:bg-gray-200 mr-1"
-                  >
-                    Edit
-                  </button>
+                  >{{ $t('orchestrationView.edit') }}</button>
                   <button
                     @click="deleteRole(role.name)"
                     class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-sm hover:bg-red-200"
-                  >
-                    Delete
-                  </button>
+                  >{{ $t('orchestrationView.delete') }}</button>
                 </td>
               </tr>
             </tbody>
@@ -1619,16 +1609,14 @@ onUnmounted(() => {
       <div v-if="activeTab === 'migration'" class="space-y-4">
         <!-- Quick Role Assignment Card -->
         <div class="card p-4">
-          <h3 class="font-medium text-gray-900 mb-1">Quick Role Assignment</h3>
-          <p class="text-sm text-gray-600 mb-4">
-            Assign or remove roles from nodes without running a full code sync.
-          </p>
+          <h3 class="font-medium text-gray-900 mb-1">{{ $t('orchestrationView.quickRoleAssignment') }}</h3>
+          <p class="text-sm text-gray-600 mb-4">{{ $t('orchestrationView.assignOrRemoveRolesFromNodes') }}</p>
 
           <!-- Node selector -->
           <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Node</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('orchestrationView.node') }}</label>
             <select v-model="assignNodeId" class="w-full px-3 py-2 border rounded-lg text-sm">
-              <option value="">Select a node...</option>
+              <option value="">{{ $t('orchestrationView.selectANode') }}</option>
               <option
                 v-for="node in orchestration.fleetStore.nodeList"
                 :key="node.node_id"
@@ -1641,12 +1629,8 @@ onUnmounted(() => {
 
           <!-- Role matrix -->
           <div v-if="assignNodeId">
-            <div v-if="loadingRolesForNode[assignNodeId]" class="text-sm text-gray-400 italic py-2">
-              Loading roles...
-            </div>
-            <div v-else-if="roles.roles.length === 0" class="text-sm text-gray-500 py-2">
-              No roles defined. Create roles in the Roles &amp; Deployment tab first.
-            </div>
+            <div v-if="loadingRolesForNode[assignNodeId]" class="text-sm text-gray-400 italic py-2">{{ $t('orchestrationView.loadingRoles') }}</div>
+            <div v-else-if="roles.roles.length === 0" class="text-sm text-gray-500 py-2">{{ $t('orchestrationView.noRolesDefinedCreateRolesIn') }}</div>
             <div v-else class="grid grid-cols-2 gap-2">
               <div
                 v-for="role in roles.roles"
@@ -1671,34 +1655,24 @@ onUnmounted(() => {
                     v-if="!isRoleAssigned(assignNodeId, role.name)"
                     @click="assignRoleToNode(assignNodeId, role.name)"
                     class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-sm hover:bg-blue-200 whitespace-nowrap"
-                  >
-                    Assign
-                  </button>
+                  >{{ $t('orchestrationView.assign') }}</button>
                   <button
                     v-else
                     @click="removeRoleFromNode(assignNodeId, role.name)"
                     class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-sm hover:bg-red-200 whitespace-nowrap"
-                  >
-                    Remove
-                  </button>
+                  >{{ $t('orchestrationView.remove') }}</button>
                 </div>
               </div>
             </div>
           </div>
-          <p v-else class="text-sm text-gray-400 italic">Select a node above to manage its roles.</p>
+          <p v-else class="text-sm text-gray-400 italic">{{ $t('orchestrationView.selectANodeAboveToManage') }}</p>
         </div>
 
         <!-- Step 1: Select a role -->
         <div v-if="!migrationRole" class="card p-4">
-          <h3 class="font-medium text-gray-900 mb-1">Role Migration</h3>
-          <p class="text-sm text-gray-600 mb-4">
-            Select an AutoBot role to migrate. A role consists of all code and services needed to
-            provide a capability. The role will be synced to the target node and optionally removed
-            from the source.
-          </p>
-          <div v-if="roles.roles.length === 0" class="text-sm text-gray-500 py-4 text-center">
-            No roles defined. Create roles in the Roles &amp; Deployment tab first.
-          </div>
+          <h3 class="font-medium text-gray-900 mb-1">{{ $t('orchestrationView.roleMigration') }}</h3>
+          <p class="text-sm text-gray-600 mb-4">{{ $t('orchestrationView.selectAnAutoBotRoleToMigrate') }}</p>
+          <div v-if="roles.roles.length === 0" class="text-sm text-gray-500 py-4 text-center">{{ $t('orchestrationView.noRolesDefinedCreateRolesIn') }}</div>
           <div v-else class="grid grid-cols-2 gap-3">
             <button
               v-for="role in roles.roles"
@@ -1746,27 +1720,25 @@ onUnmounted(() => {
             <button
               @click="resetMigration()"
               class="text-sm text-gray-500 hover:text-gray-700 underline"
-            >
-              Change role
-            </button>
+            >{{ $t('orchestrationView.changeRole') }}</button>
           </div>
 
           <!-- Role summary -->
           <div class="bg-gray-50 rounded-lg p-3 mb-4 text-sm grid grid-cols-2 gap-y-1">
             <div>
-              <span class="text-gray-500">Service:</span>
+              <span class="text-gray-500">{{ $t('orchestrationView.service2') }}</span>
               {{ migrationRole.systemd_service || 'None' }}
             </div>
             <div>
-              <span class="text-gray-500">Sync type:</span>
+              <span class="text-gray-500">{{ $t('orchestrationView.syncType2') }}</span>
               {{ migrationRole.sync_type || 'full' }}
             </div>
             <div>
-              <span class="text-gray-500">Target path:</span>
+              <span class="text-gray-500">{{ $t('orchestrationView.targetPath2') }}</span>
               {{ migrationRole.target_path }}
             </div>
             <div>
-              <span class="text-gray-500">Sources:</span>
+              <span class="text-gray-500">{{ $t('orchestrationView.sources') }}</span>
               {{ migrationRole.source_paths.length }} path(s)
             </div>
           </div>
@@ -1774,15 +1746,13 @@ onUnmounted(() => {
           <!-- Node selection -->
           <div class="space-y-3">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                Source Node
-                <span class="text-gray-400 font-normal">(optional — where role currently runs)</span>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('orchestrationView.sourceNode') }}<span class="text-gray-400 font-normal">{{ $t('orchestrationView.optionalWhereRoleCurrentlyRuns') }}</span>
               </label>
               <select
                 v-model="migrationSourceNode"
                 class="w-full px-3 py-2 border rounded-lg text-sm"
               >
-                <option value="">Not currently assigned / skip</option>
+                <option value="">{{ $t('orchestrationView.notCurrentlyAssignedSkip') }}</option>
                 <option
                   v-for="node in orchestration.fleetStore.nodeList"
                   :key="node.node_id"
@@ -1793,14 +1763,13 @@ onUnmounted(() => {
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                Target Node <span class="text-red-500">*</span>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('orchestrationView.targetNode') }}<span class="text-red-500">*</span>
               </label>
               <select
                 v-model="migrationTargetNode"
                 class="w-full px-3 py-2 border rounded-lg text-sm"
               >
-                <option value="">Select target node...</option>
+                <option value="">{{ $t('orchestrationView.selectTargetNode') }}</option>
                 <option
                   v-for="node in orchestration.fleetStore.nodeList"
                   :key="node.node_id"
@@ -1816,7 +1785,7 @@ onUnmounted(() => {
             <div class="flex flex-col gap-2 pt-1">
               <label class="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="checkbox" v-model="migrationRestart" class="rounded-sm" />
-                <span>Restart services on target node after sync</span>
+                <span>{{ $t('orchestrationView.restartServicesOnTargetNodeAfter') }}</span>
               </label>
               <label
                 class="flex items-center gap-2 text-sm cursor-pointer"
@@ -1828,7 +1797,7 @@ onUnmounted(() => {
                   :disabled="!migrationSourceNode"
                   class="rounded-sm"
                 />
-                <span>Remove role assignment from source node after migration</span>
+                <span>{{ $t('orchestrationView.removeRoleAssignmentFromSourceNode') }}</span>
               </label>
             </div>
 
@@ -1838,7 +1807,7 @@ onUnmounted(() => {
                 @click="executeMigration"
                 :disabled="!migrationTargetNode || migrationInProgress"
                 class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Sync role code via git archive + restart service"
+                :title="$t('orchestrationView.syncRoleCodeViaGitArchive')"
               >
                 {{ migrationInProgress ? 'Migrating...' : 'Sync &amp; Deploy' }}
               </button>
@@ -1847,25 +1816,20 @@ onUnmounted(() => {
                 @click="executePlaybookMigration"
                 :disabled="!migrationTargetNode || migrationInProgress"
                 class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Run Ansible playbook for full role installation"
-              >
-                Run Ansible Playbook
-              </button>
+                :title="$t('orchestrationView.runAnsiblePlaybookForFullRole')"
+              >{{ $t('orchestrationView.runAnsiblePlaybook') }}</button>
               <button
                 @click="resetMigration()"
                 :disabled="migrationInProgress"
                 class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-              >
-                Cancel
-              </button>
+              >{{ $t('orchestrationView.cancel') }}</button>
             </div>
 
             <!-- Ansible playbook info -->
             <div
               v-if="migrationRole && migrationRole.ansible_playbook"
               class="mt-2 text-xs text-gray-500"
-            >
-              Ansible: <span class="font-mono">{{ migrationRole.ansible_playbook }}</span>
+            >{{ $t('orchestrationView.ansible') }}<span class="font-mono">{{ migrationRole.ansible_playbook }}</span>
             </div>
           </div>
         </div>
@@ -1881,8 +1845,7 @@ onUnmounted(() => {
             :class="playbookMigrateResult.success ? 'text-green-700' : 'text-red-700'"
           >
             {{ playbookMigrateResult.success ? '✓' : '✗' }} Ansible migration of
-            <strong>{{ playbookMigrateResult.role }}</strong> to
-            <strong>{{ playbookMigrateResult.target_node_id }}</strong>
+            <strong>{{ playbookMigrateResult.role }}</strong>{{ $t('orchestrationView.to') }}<strong>{{ playbookMigrateResult.target_node_id }}</strong>
             (exit {{ playbookMigrateResult.returncode }})
           </p>
           <pre
@@ -1917,9 +1880,7 @@ onUnmounted(() => {
             v-if="migrationResult.success"
             @click="resetMigration()"
             class="mt-3 text-sm text-blue-600 hover:underline"
-          >
-            Migrate another role
-          </button>
+          >{{ $t('orchestrationView.migrateAnotherRole') }}</button>
         </div>
       </div>
 
@@ -1935,7 +1896,7 @@ onUnmounted(() => {
               'border-red-300': roles.fleetHealth.health === 'critical',
             }"
           >
-            <p class="text-sm text-gray-500">Role Fleet Health</p>
+            <p class="text-sm text-gray-500">{{ $t('orchestrationView.roleFleetHealth') }}</p>
             <p
               class="text-lg font-bold mt-1 capitalize"
               :class="{
@@ -1952,11 +1913,11 @@ onUnmounted(() => {
             </p>
           </div>
           <div class="card p-4 col-span-1">
-            <p class="text-sm text-gray-500">Required Roles Down</p>
+            <p class="text-sm text-gray-500">{{ $t('orchestrationView.requiredRolesDown') }}</p>
             <p class="text-2xl font-bold text-red-600 mt-1">{{ roles.fleetHealth.required_down.length }}</p>
           </div>
           <div class="card p-4 col-span-1">
-            <p class="text-sm text-gray-500">Optional Roles Down</p>
+            <p class="text-sm text-gray-500">{{ $t('orchestrationView.optionalRolesDown') }}</p>
             <p class="text-2xl font-bold text-yellow-600 mt-1">{{ roles.fleetHealth.optional_down.length }}</p>
           </div>
         </div>
@@ -1964,22 +1925,22 @@ onUnmounted(() => {
         <!-- Stats Grid -->
         <div class="grid grid-cols-4 gap-4">
           <div class="card p-4">
-            <p class="text-sm text-gray-500">Total Nodes</p>
+            <p class="text-sm text-gray-500">{{ $t('orchestrationView.totalNodes') }}</p>
             <p class="text-2xl font-bold text-gray-900 mt-1">{{ infrastructureStats.totalNodes }}</p>
             <p class="text-xs text-gray-500 mt-1">
               {{ infrastructureStats.onlineNodes }} online, {{ infrastructureStats.offlineNodes }} offline
             </p>
           </div>
           <div class="card p-4">
-            <p class="text-sm text-gray-500">Total Services</p>
+            <p class="text-sm text-gray-500">{{ $t('orchestrationView.totalServices') }}</p>
             <p class="text-2xl font-bold text-gray-900 mt-1">{{ infrastructureStats.totalServices }}</p>
           </div>
           <div class="card p-4">
-            <p class="text-sm text-gray-500">Running</p>
+            <p class="text-sm text-gray-500">{{ $t('orchestrationView.running') }}</p>
             <p class="text-2xl font-bold text-green-600 mt-1">{{ infrastructureStats.runningServices }}</p>
           </div>
           <div class="card p-4">
-            <p class="text-sm text-gray-500">Stopped/Failed</p>
+            <p class="text-sm text-gray-500">{{ $t('orchestrationView.stoppedFailed') }}</p>
             <p class="text-2xl font-bold text-red-600 mt-1">
               {{ infrastructureStats.stoppedServices + infrastructureStats.failedServices }}
             </p>
@@ -1989,16 +1950,16 @@ onUnmounted(() => {
         <!-- Nodes List -->
         <div class="card">
           <div class="px-4 py-3 bg-gray-50 border-b">
-            <h3 class="font-medium text-gray-900">Fleet Nodes</h3>
+            <h3 class="font-medium text-gray-900">{{ $t('orchestrationView.fleetNodes') }}</h3>
           </div>
           <table class="w-full">
             <thead class="bg-gray-50">
               <tr class="text-xs text-gray-500 uppercase">
-                <th class="px-4 py-2 text-left">Node</th>
-                <th class="px-4 py-2 text-left">IP Address</th>
-                <th class="px-4 py-2 text-left">Status</th>
-                <th class="px-4 py-2 text-left">Services</th>
-                <th class="px-4 py-2 text-left">Roles</th>
+                <th class="px-4 py-2 text-left">{{ $t('orchestrationView.node') }}</th>
+                <th class="px-4 py-2 text-left">{{ $t('orchestrationView.iPAddress') }}</th>
+                <th class="px-4 py-2 text-left">{{ $t('orchestrationView.status') }}</th>
+                <th class="px-4 py-2 text-left">{{ $t('orchestrationView.services') }}</th>
+                <th class="px-4 py-2 text-left">{{ $t('orchestrationView.roles2') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -2045,7 +2006,7 @@ onUnmounted(() => {
     <!-- Restart All Confirmation Dialog (per-node) -->
     <RestartConfirmDialog
       :show="showRestartAllConfirm"
-      title="Restart All Services"
+      :title="$t('orchestrationView.restartAllServices')"
       :message="`Are you sure you want to restart all services on <strong>${restartAllHostname}</strong>?<br><br>Services will be restarted sequentially.`"
       confirmButtonText="Restart All Services"
       @confirm="confirmRestartAll"

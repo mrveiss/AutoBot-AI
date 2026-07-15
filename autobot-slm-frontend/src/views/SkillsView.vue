@@ -347,7 +347,7 @@ function categoryIcon(category: string): string {
           v-model="searchQuery"
           @keyup.enter="handleSearch"
           type="text"
-          placeholder="Search skills by name, description, or tags..."
+          :placeholder="$t('skillsView.searchSkillsByNameDescriptionOr')"
           class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2
                  text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500"
         />
@@ -485,21 +485,21 @@ function categoryIcon(category: string): string {
           <!-- Info Grid -->
           <div class="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <span class="text-gray-500">Version</span>
+              <span class="text-gray-500">{{ $t('skillsView.version') }}</span>
               <div class="text-white">{{ selectedSkill.version }}</div>
             </div>
             <div>
-              <span class="text-gray-500">Author</span>
+              <span class="text-gray-500">{{ $t('skillsView.author') }}</span>
               <div class="text-white">{{ selectedSkill.author }}</div>
             </div>
             <div>
-              <span class="text-gray-500">Category</span>
+              <span class="text-gray-500">{{ $t('skillsView.category') }}</span>
               <div class="text-white">
                 {{ categoryIcon(selectedSkill.category) }} {{ selectedSkill.category }}
               </div>
             </div>
             <div>
-              <span class="text-gray-500">Status</span>
+              <span class="text-gray-500">{{ $t('skillsView.status') }}</span>
               <div :class="statusColor(selectedSkill.status)">
                 {{ selectedSkill.status }}
               </div>
@@ -508,7 +508,7 @@ function categoryIcon(category: string): string {
 
           <!-- Tools -->
           <div>
-            <h3 class="text-sm font-semibold text-gray-300 mb-2">Tools</h3>
+            <h3 class="text-sm font-semibold text-gray-300 mb-2">{{ $t('skillsView.tools') }}</h3>
             <div class="flex flex-wrap gap-2">
               <span
                 v-for="tool in selectedSkill.tools"
@@ -523,7 +523,7 @@ function categoryIcon(category: string): string {
 
           <!-- Triggers -->
           <div v-if="selectedSkill.triggers.length">
-            <h3 class="text-sm font-semibold text-gray-300 mb-2">Triggers</h3>
+            <h3 class="text-sm font-semibold text-gray-300 mb-2">{{ $t('skillsView.triggers') }}</h3>
             <div class="flex flex-wrap gap-2">
               <span
                 v-for="trigger in selectedSkill.triggers"
@@ -538,7 +538,7 @@ function categoryIcon(category: string): string {
 
           <!-- Dependencies -->
           <div v-if="selectedSkill.dependencies.length">
-            <h3 class="text-sm font-semibold text-gray-300 mb-2">Dependencies</h3>
+            <h3 class="text-sm font-semibold text-gray-300 mb-2">{{ $t('skillsView.dependencies') }}</h3>
             <div class="flex flex-wrap gap-2">
               <span
                 v-for="dep in selectedSkill.dependencies"
@@ -553,7 +553,7 @@ function categoryIcon(category: string): string {
 
           <!-- Configuration -->
           <div v-if="Object.keys(selectedSkill.config_schema).length">
-            <h3 class="text-sm font-semibold text-gray-300 mb-2">Configuration</h3>
+            <h3 class="text-sm font-semibold text-gray-300 mb-2">{{ $t('skillsView.configuration') }}</h3>
             <div class="space-y-3">
               <div
                 v-for="(schema, key) in selectedSkill.config_schema"
@@ -624,7 +624,7 @@ function categoryIcon(category: string): string {
 
           <!-- Health -->
           <div>
-            <h3 class="text-sm font-semibold text-gray-300 mb-2">Health</h3>
+            <h3 class="text-sm font-semibold text-gray-300 mb-2">{{ $t('skillsView.health') }}</h3>
             <div class="bg-gray-900 rounded-sm p-3 text-sm">
               <div class="flex items-center gap-2">
                 <span

@@ -98,9 +98,7 @@ function onError(message: string) {
           @disconnected="onDisconnected"
           @error="onError"
         />
-        <div v-else class="h-full flex items-center justify-center text-gray-500 text-sm">
-          Select a host above to start an SSH session.
-        </div>
+        <div v-else class="h-full flex items-center justify-center text-gray-500 text-sm">{{ $t('tools.admin.terminalTool.selectAHostAboveToStart') }}</div>
       </div>
     </div>
 

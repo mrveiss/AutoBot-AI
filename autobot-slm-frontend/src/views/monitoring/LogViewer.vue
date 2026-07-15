@@ -208,7 +208,7 @@ onUnmounted(() => {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Search logs..."
+            :placeholder="$t('monitoring.logViewer.searchLogs')"
             class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>

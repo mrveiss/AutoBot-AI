@@ -322,7 +322,7 @@ function loadFromHistory(item: AnalysisHistory): void {
                   </button>
                 </div>
               </div>
-              <img :src="capturedImage" alt="Captured" class="max-w-full rounded-lg" />
+              <img :src="capturedImage" :alt="$t('tools.admin.visionTool.captured')" class="max-w-full rounded-lg" />
             </div>
           </div>
         </div>
@@ -342,7 +342,7 @@ function loadFromHistory(item: AnalysisHistory): void {
             <div v-else class="space-y-6">
               <!-- Image Display -->
               <div class="border border-gray-200 rounded-lg p-4">
-                <img :src="capturedImage" alt="Analysis target" class="max-w-full max-h-64 mx-auto rounded-lg" />
+                <img :src="capturedImage" :alt="$t('tools.admin.visionTool.analysisTarget')" class="max-w-full max-h-64 mx-auto rounded-lg" />
               </div>
 
               <!-- Analysis Prompt -->
@@ -352,7 +352,7 @@ function loadFromHistory(item: AnalysisHistory): void {
                   v-model="analysisPrompt"
                   rows="3"
                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="Enter your analysis prompt..."
+                  :placeholder="$t('tools.admin.visionTool.enterYourAnalysisPrompt')"
                 ></textarea>
               </div>
 
@@ -397,7 +397,7 @@ function loadFromHistory(item: AnalysisHistory): void {
               class="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
             >
               <div class="flex gap-4">
-                <img :src="item.image" alt="History" class="w-24 h-24 object-cover rounded-lg" />
+                <img :src="item.image" :alt="$t('tools.admin.visionTool.history')" class="w-24 h-24 object-cover rounded-lg" />
                 <div class="flex-1">
                   <p class="text-xs text-gray-500 mb-1">{{ formatDateTime(item.timestamp.toISOString()) }}</p>
                   <p class="text-sm font-medium text-gray-900 mb-2">{{ item.prompt }}</p>

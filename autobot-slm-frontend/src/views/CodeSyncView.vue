@@ -960,7 +960,7 @@ onUnmounted(() => {
         @click="handleSelfUpdate"
         :disabled="selfUpdating || slmRestartPending"
         class="btn btn-secondary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        title="Sync code from source and restart this SLM server (files only — see Advanced warning)"
+        :title="$t('codeSyncView.syncCodeFromSourceAndRestart')"
       >
         <svg
           :class="['w-4 h-4', selfUpdating ? 'animate-spin' : '']"
@@ -1396,9 +1396,7 @@ onUnmounted(() => {
             <span
               v-if="role.auto_restart"
               class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-sm"
-            >
-              auto-restart
-            </span>
+            >{{ $t('codeSyncView.autoRestart') }}</span>
           </div>
           <p class="text-sm text-gray-500 mb-3 truncate" :title="role.target_path">
             {{ role.target_path }}
@@ -1501,7 +1499,7 @@ onUnmounted(() => {
                   @click="handleRunSchedule(schedule)"
                   :disabled="runningScheduleId === schedule.id"
                   class="text-primary-600 hover:text-primary-800 font-medium disabled:opacity-50"
-                  title="Run Now"
+                  :title="$t('codeSyncView.runNow')"
                 >
                   {{ runningScheduleId === schedule.id ? 'Running...' : 'Run' }}
                 </button>

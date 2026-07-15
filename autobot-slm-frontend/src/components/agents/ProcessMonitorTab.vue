@@ -236,7 +236,7 @@ function formatTime(iso: string | null): string {
         <label>{{ $t('agents.processMonitorTab.agentID') }}</label>
         <input
           v-model="agentId"
-          placeholder="e.g. orchestrator"
+          :placeholder="$t('agents.processMonitorTab.eGOrchestrator')"
           @keyup.enter="fetchProcesses"
         />
       </div>
@@ -269,11 +269,11 @@ function formatTime(iso: string | null): string {
         </div>
         <div class="control-group">
           <label>{{ $t('agents.processMonitorTab.command') }}</label>
-          <input v-model="spawnForm.command" placeholder="/usr/bin/python3" />
+          <input v-model="spawnForm.command" :placeholder="$t('agents.processMonitorTab.usrBinPython3')" />
         </div>
         <div class="control-group">
           <label>{{ $t('agents.processMonitorTab.arguments') }}</label>
-          <input v-model="spawnForm.args" placeholder="script.py --flag" />
+          <input v-model="spawnForm.args" :placeholder="$t('agents.processMonitorTab.scriptPyFlag')" />
         </div>
         <div class="control-group">
           <label>{{ $t('agents.processMonitorTab.timeoutS') }}</label>
@@ -351,7 +351,7 @@ function formatTime(iso: string | null): string {
       <div class="log-header">
         <h4>
           Process {{ selectedProcess.id.slice(0, 8) }}... Logs
-          <span v-if="isStreaming" class="streaming-badge">LIVE</span>
+          <span v-if="isStreaming" class="streaming-badge">{{ $t('agents.processMonitorTab.lIVE') }}</span>
         </h4>
         <div class="log-actions">
           <button

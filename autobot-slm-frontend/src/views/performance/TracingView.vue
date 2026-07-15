@@ -269,7 +269,7 @@ onMounted(() => {
         <input
           v-model="nodeFilter"
           type="text"
-          placeholder="Node ID..."
+          :placeholder="$t('performance.tracingView.nodeID')"
           class="text-sm border border-gray-300 rounded-lg px-2 py-1.5 w-36"
           @keyup.enter="onFilterChange"
         />
@@ -431,30 +431,22 @@ onMounted(() => {
           @click="goToPage(1)"
           :disabled="page === 1"
           class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          First
-        </button>
+        >{{ $t('performance.tracingView.first') }}</button>
         <button
           @click="goToPage(page - 1)"
           :disabled="page === 1"
           class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Prev
-        </button>
+        >{{ $t('performance.tracingView.prev') }}</button>
         <button
           @click="goToPage(page + 1)"
           :disabled="page >= totalPages"
           class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Next
-        </button>
+        >{{ $t('performance.tracingView.next') }}</button>
         <button
           @click="goToPage(totalPages)"
           :disabled="page >= totalPages"
           class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Last
-        </button>
+        >{{ $t('performance.tracingView.last') }}</button>
       </div>
     </div>
   </div>

@@ -152,7 +152,7 @@ function formatDate(dateStr: string | null): string {
       <div class="modal-header">
         <h3 id="role-mgmt-title">{{ $t('roleManagementModal.roleManagement') }}</h3>
         <span class="hostname">{{ hostname }}</span>
-        <button class="close-btn" @click="emit('close')" aria-label="Close role management">
+        <button class="close-btn" @click="emit('close')" :aria-label="$t('roleManagementModal.closeRoleManagement')">
           <span aria-hidden="true">{{ $t('roleManagementModal.times') }}</span>
         </button>
       </div>
@@ -163,7 +163,7 @@ function formatDate(dateStr: string | null): string {
 
       <div v-else class="modal-body">
         <!-- Detected Roles Section -->
-        <section class="section" aria-label="Auto-detected roles">
+        <section class="section" :aria-label="$t('roleManagementModal.autoDetectedRoles2')">
           <h4>{{ $t('roleManagementModal.autoDetectedRoles') }}</h4>
           <div v-if="detectedRolesList.length === 0" class="empty-message">
             {{ $t('roleManagementModal.noRolesAutoDetected') }}
@@ -175,13 +175,13 @@ function formatDate(dateStr: string | null): string {
               class="role-item detected"
             >
               <span class="role-name">{{ roleName }}</span>
-              <span class="role-badge auto">auto</span>
+              <span class="role-badge auto">{{ $t('roleManagementModal.auto') }}</span>
             </div>
           </div>
         </section>
 
         <!-- All Role Statuses -->
-        <section class="section" aria-label="Role status table">
+        <section class="section" :aria-label="$t('roleManagementModal.roleStatusTable')">
           <h4>{{ $t('roleManagementModal.roleStatus') }}</h4>
           <table class="role-table" v-if="allNodeRoles.length > 0">
             <thead>
@@ -197,9 +197,7 @@ function formatDate(dateStr: string | null): string {
               <tr v-for="role in allNodeRoles" :key="role.role_name">
                 <td>
                   {{ role.role_name }}
-                  <span v-if="role.assignment_type === 'manual'" class="role-badge manual">
-                    manual
-                  </span>
+                  <span v-if="role.assignment_type === 'manual'" class="role-badge manual">{{ $t('roleManagementModal.manual') }}</span>
                 </td>
                 <td>
                   <span :class="['status', getStatusClass(role.status)]">
@@ -236,7 +234,7 @@ function formatDate(dateStr: string | null): string {
         </section>
 
         <!-- Assign Role Section -->
-        <section class="section" aria-label="Assign role">
+        <section class="section" :aria-label="$t('roleManagementModal.assignRole')">
           <h4>{{ $t('roleManagementModal.assignRoleManually') }}</h4>
           <div class="assign-form">
             <label for="role-select" class="sr-only">{{ $t('roleManagementModal.selectARoleTo') }}</label>
@@ -261,7 +259,7 @@ function formatDate(dateStr: string | null): string {
         </section>
 
         <!-- Listening Ports -->
-        <section class="section" v-if="nodeRoles?.listening_ports?.length" aria-label="Listening ports">
+        <section class="section" v-if="nodeRoles?.listening_ports?.length" :aria-label="$t('roleManagementModal.listeningPorts2')">
           <h4>{{ $t('roleManagementModal.listeningPorts') }}</h4>
           <div class="port-list">
             <span

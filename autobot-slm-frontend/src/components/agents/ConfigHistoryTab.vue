@@ -134,7 +134,7 @@ watch([entityType, entityId], () => {
         <input
           v-if="entityType === 'agent'"
           v-model="entityId"
-          placeholder="e.g. orchestrator, chat, rag..."
+          :placeholder="$t('agents.configHistoryTab.eGOrchestratorChatRag')"
         />
         <select v-else v-model="entityId">
           <option value="" disabled>{{ $t('agents.configHistoryTab.select') }}</option>
@@ -205,21 +205,21 @@ watch([entityType, entityId], () => {
         </div>
 
         <div class="diff-meta">
-          <span><strong>Source:</strong> {{ selectedRevision.source }}</span>
-          <span><strong>By:</strong> {{ selectedRevision.created_by }}</span>
-          <span><strong>At:</strong> {{ formatTime(selectedRevision.created_at) }}</span>
+          <span><strong>{{ $t('agents.configHistoryTab.source') }}</strong> {{ selectedRevision.source }}</span>
+          <span><strong>{{ $t('agents.configHistoryTab.by') }}</strong> {{ selectedRevision.created_by }}</span>
+          <span><strong>{{ $t('agents.configHistoryTab.at') }}</strong> {{ formatTime(selectedRevision.created_at) }}</span>
           <span v-if="selectedRevision.changed_keys.length">
-            <strong>Changed:</strong> {{ selectedRevision.changed_keys.join(', ') }}
+            <strong>{{ $t('agents.configHistoryTab.changed') }}</strong> {{ selectedRevision.changed_keys.join(', ') }}
           </span>
         </div>
 
         <div class="diff-content">
           <div class="diff-column">
-            <h4>Before</h4>
+            <h4>{{ $t('agents.configHistoryTab.before') }}</h4>
             <pre class="json-view">{{ formatJson(selectedRevision.before_config) }}</pre>
           </div>
           <div class="diff-column">
-            <h4>After</h4>
+            <h4>{{ $t('agents.configHistoryTab.after') }}</h4>
             <pre class="json-view">{{ formatJson(selectedRevision.after_config) }}</pre>
           </div>
         </div>

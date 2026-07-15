@@ -231,7 +231,7 @@ function getCategoryIcon(category: string): string {
         <button
           @click="$emit('close')"
           class="text-gray-400 hover:text-gray-600 transition-colors"
-          aria-label="Close"
+          :aria-label="$t('deploymentWizard.close')"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -284,7 +284,7 @@ function getCategoryIcon(category: string): string {
                 v-model="manualHostname"
                 type="text"
                 class="input"
-                placeholder="e.g., web-server-01"
+                :placeholder="$t('deploymentWizard.eGWebServer01')"
               />
             </div>
             <div>

@@ -282,7 +282,7 @@ onMounted(async () => {
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
-      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700" aria-label="Dismiss error">
+      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700" :aria-label="$t('settings.admin.logForwardingSettings.dismissError')">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -473,7 +473,7 @@ onMounted(async () => {
               <button
                 @click="testDestination(dest.id)"
                 class="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-sm"
-                title="Test Connection"
+                :title="$t('settings.admin.logForwardingSettings.testConnection')"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -482,7 +482,7 @@ onMounted(async () => {
               <button
                 @click="openEditModal(dest)"
                 class="p-2 text-gray-400 hover:text-primary-500 hover:bg-primary-50 rounded-sm"
-                title="Edit"
+                :title="$t('settings.admin.logForwardingSettings.edit')"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -491,7 +491,7 @@ onMounted(async () => {
               <button
                 @click="confirmDelete(dest.id)"
                 class="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-sm"
-                title="Delete"
+                :title="$t('settings.admin.logForwardingSettings.delete')"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -511,7 +511,7 @@ onMounted(async () => {
           <h3 class="text-lg font-semibold text-gray-900">
             {{ editingDestination ? 'Edit Destination' : 'Add Destination' }}
           </h3>
-          <button @click="closeModal" class="text-gray-400 hover:text-gray-600" aria-label="Close">
+          <button @click="closeModal" class="text-gray-400 hover:text-gray-600" :aria-label="$t('settings.admin.logForwardingSettings.close')">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -527,7 +527,7 @@ onMounted(async () => {
               type="text"
               :disabled="!!editingDestination"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100"
-              placeholder="e.g., production-syslog"
+              :placeholder="$t('settings.admin.logForwardingSettings.eGProductionSyslog')"
             />
           </div>
 
@@ -582,7 +582,7 @@ onMounted(async () => {
           <!-- HTTP/Webhook Config -->
           <template v-if="formData.type === 'http'">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">URL *</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.uRL') }}</label>
               <input
                 v-model="formData.config.url"
                 type="text"
@@ -591,7 +591,7 @@ onMounted(async () => {
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">API Key (optional)</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.aPIKeyOptional') }}</label>
               <input
                 v-model="formData.config.api_key"
                 type="password"
@@ -603,12 +603,12 @@ onMounted(async () => {
           <!-- File Config -->
           <template v-if="formData.type === 'file'">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">File Path *</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.filePath') }}</label>
               <input
                 v-model="formData.config.file_path"
                 type="text"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                placeholder="/var/log/autobot-forwarded.log"
+                :placeholder="$t('settings.admin.logForwardingSettings.varLogAutobotForwardedLog')"
               />
             </div>
           </template>
@@ -616,7 +616,7 @@ onMounted(async () => {
           <!-- Elasticsearch Config -->
           <template v-if="formData.type === 'elasticsearch'">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">URL *</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.uRL') }}</label>
               <input
                 v-model="formData.config.url"
                 type="text"
@@ -625,17 +625,17 @@ onMounted(async () => {
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Index Name</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.indexName') }}</label>
               <input
                 v-model="formData.config.index"
                 type="text"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                placeholder="autobot-logs"
+                :placeholder="$t('settings.admin.logForwardingSettings.autobotLogs')"
               />
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.username') }}</label>
                 <input
                   v-model="formData.config.username"
                   type="text"
@@ -643,7 +643,7 @@ onMounted(async () => {
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.password') }}</label>
                 <input
                   v-model="formData.config.password"
                   type="password"
@@ -655,16 +655,16 @@ onMounted(async () => {
 
           <!-- Common Options -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Minimum Log Level</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.minimumLogLevel') }}</label>
             <select
               v-model="formData.config.min_level"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             >
-              <option value="Debug">Debug</option>
-              <option value="Information">Information</option>
-              <option value="Warning">Warning</option>
-              <option value="Error">Error</option>
-              <option value="Fatal">Fatal</option>
+              <option value="Debug">{{ $t('settings.admin.logForwardingSettings.debug') }}</option>
+              <option value="Information">{{ $t('settings.admin.logForwardingSettings.information') }}</option>
+              <option value="Warning">{{ $t('settings.admin.logForwardingSettings.warning') }}</option>
+              <option value="Error">{{ $t('settings.admin.logForwardingSettings.error') }}</option>
+              <option value="Fatal">{{ $t('settings.admin.logForwardingSettings.fatal') }}</option>
             </select>
           </div>
 
@@ -674,7 +674,7 @@ onMounted(async () => {
               <input type="checkbox" v-model="formData.enabled" class="sr-only peer" />
               <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
             </label>
-            <span class="text-sm text-gray-700">Enabled</span>
+            <span class="text-sm text-gray-700">{{ $t('settings.admin.logForwardingSettings.enabled') }}</span>
           </div>
         </div>
 
@@ -682,9 +682,7 @@ onMounted(async () => {
           <button
             @click="closeModal"
             class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-          >
-            Cancel
-          </button>
+          >{{ $t('settings.admin.logForwardingSettings.cancel') }}</button>
           <button
             @click="saveDestination"
             :disabled="saving"
@@ -704,17 +702,13 @@ onMounted(async () => {
     <div v-if="deleteTarget" class="fixed inset-0 z-50 flex items-center justify-center">
       <div class="absolute inset-0 bg-black/50" @click="deleteTarget = null"></div>
       <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Delete Destination</h3>
-        <p class="text-gray-600 mb-6">
-          Are you sure you want to delete this destination? This action cannot be undone.
-        </p>
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.logForwardingSettings.deleteDestination') }}</h3>
+        <p class="text-gray-600 mb-6">{{ $t('settings.admin.logForwardingSettings.areYouSureYouWantTo') }}</p>
         <div class="flex justify-end gap-3">
           <button
             @click="deleteTarget = null"
             class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-          >
-            Cancel
-          </button>
+          >{{ $t('settings.admin.logForwardingSettings.cancel') }}</button>
           <button
             @click="deleteDestination"
             :disabled="saving"
@@ -723,9 +717,7 @@ onMounted(async () => {
             <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Delete
-          </button>
+            </svg>{{ $t('settings.admin.logForwardingSettings.delete') }}</button>
         </div>
       </div>
     </div>

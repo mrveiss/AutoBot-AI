@@ -364,13 +364,13 @@ function getNodeHostname(nodeId: string): string {
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="flex items-center gap-2">
-                  <div class="w-3 h-3 rounded-full bg-purple-500" title="Primary"></div>
+                  <div class="w-3 h-3 rounded-full bg-purple-500" :title="$t('replicationView.primary')"></div>
                   <span class="text-sm font-medium text-gray-900">{{ getNodeHostname(replication.source_node_id) }}</span>
                 </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="flex items-center gap-2">
-                  <div class="w-3 h-3 rounded-full bg-cyan-500" title="Replica"></div>
+                  <div class="w-3 h-3 rounded-full bg-cyan-500" :title="$t('replicationView.replica')"></div>
                   <span class="text-sm font-medium text-gray-900">{{ getNodeHostname(replication.target_node_id) }}</span>
                 </div>
               </td>
@@ -397,7 +397,7 @@ function getNodeHostname(nodeId: string): string {
                   <button
                     @click="handleVerifySync(replication)"
                     class="text-blue-600 hover:text-blue-800"
-                    title="Verify sync status"
+                    :title="$t('replicationView.verifySyncStatus')"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -408,7 +408,7 @@ function getNodeHostname(nodeId: string): string {
                   <button
                     @click="showDetails(replication)"
                     class="text-gray-600 hover:text-gray-800"
-                    title="View details"
+                    :title="$t('replicationView.viewDetails')"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -421,7 +421,7 @@ function getNodeHostname(nodeId: string): string {
                     v-if="replication.status === 'active'"
                     @click="handlePromote(replication.replication_id)"
                     class="text-green-600 hover:text-green-800"
-                    title="Promote to primary"
+                    :title="$t('replicationView.promoteToPrimary2')"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
@@ -433,7 +433,7 @@ function getNodeHostname(nodeId: string): string {
                     v-if="['active', 'syncing'].includes(replication.status)"
                     @click="handleStop(replication.replication_id)"
                     class="text-red-600 hover:text-red-800"
-                    title="Stop replication"
+                    :title="$t('replicationView.stopReplication')"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -576,7 +576,7 @@ function getNodeHostname(nodeId: string): string {
                   {{ selectedReplication.status }}
                 </span>
               </div>
-              <button @click="closeDetails" class="text-gray-400 hover:text-gray-600" aria-label="Close">
+              <button @click="closeDetails" class="text-gray-400 hover:text-gray-600" :aria-label="$t('replicationView.close')">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>

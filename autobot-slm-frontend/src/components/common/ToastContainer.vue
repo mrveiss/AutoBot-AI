@@ -3,7 +3,7 @@
     <div
       class="toast-container"
       role="region"
-      aria-label="Notifications"
+      :aria-label="$t('common.toastContainer.notifications')"
       aria-live="polite"
     >
       <TransitionGroup name="toast">
@@ -25,7 +25,7 @@
           <button
             class="toast-close"
             @click="removeToast(toast.id)"
-            aria-label="Dismiss notification"
+            :aria-label="$t('common.toastContainer.dismissNotification')"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

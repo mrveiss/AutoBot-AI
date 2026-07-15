@@ -169,7 +169,7 @@ onMounted(() => {
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
-      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700" aria-label="Dismiss error">
+      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700" :aria-label="$t('settings.admin.promptsSettings.dismissError')">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -213,7 +213,7 @@ onMounted(() => {
             <input
               v-model="searchQuery"
               type="text"
-              placeholder="Search prompts..."
+              :placeholder="$t('settings.admin.promptsSettings.searchPrompts')"
               class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             />
           </div>
@@ -342,7 +342,7 @@ onMounted(() => {
               v-model="editedContent"
               rows="12"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm resize-y"
-              placeholder="Enter prompt content..."
+              :placeholder="$t('settings.admin.promptsSettings.enterPromptContent')"
             ></textarea>
           </div>
 

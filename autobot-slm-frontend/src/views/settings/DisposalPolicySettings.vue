@@ -72,26 +72,20 @@ onMounted(load)
 <template>
   <div class="p-6">
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-2">Project Disposal Policy</h2>
-      <p class="text-sm text-gray-500 mb-6">
-        Controls how Company OS projects are disposed after archiving. Default: immediate, no approval.
-      </p>
+      <h2 class="text-lg font-semibold text-gray-900 mb-2">{{ $t('settings.disposalPolicySettings.projectDisposalPolicy') }}</h2>
+      <p class="text-sm text-gray-500 mb-6">{{ $t('settings.disposalPolicySettings.controlsHowCompanyOSProjectsAre') }}</p>
 
       <div v-if="error" class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
         {{ error }}
       </div>
-      <div v-if="saved" class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-        Policy saved successfully.
-      </div>
+      <div v-if="saved" class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{{ $t('settings.disposalPolicySettings.policySavedSuccessfully') }}</div>
 
       <div class="space-y-6">
         <!-- Retention period -->
         <div class="flex items-center justify-between pb-4 border-b border-gray-100">
           <div>
-            <label class="block text-sm font-medium text-gray-900">Retention period (days)</label>
-            <p class="text-xs text-gray-500 mt-1">
-              How many days an archived project waits before disposal. Set 0 for immediate.
-            </p>
+            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.disposalPolicySettings.retentionPeriodDays') }}</label>
+            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.disposalPolicySettings.howManyDaysAnArchivedProject') }}</p>
           </div>
           <input
             v-model.number="policy.retention_days"
@@ -104,10 +98,8 @@ onMounted(load)
         <!-- Require approval -->
         <div class="flex items-center justify-between">
           <div>
-            <label class="block text-sm font-medium text-gray-900">Require second-pair-of-eyes approval</label>
-            <p class="text-xs text-gray-500 mt-1">
-              When enabled, disposal creates an approval request before the project is deleted.
-            </p>
+            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.disposalPolicySettings.requireSecondPairOfEyesApproval') }}</label>
+            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.disposalPolicySettings.whenEnabledDisposalCreatesAnApproval') }}</p>
           </div>
           <label class="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" v-model="policy.require_approval" class="sr-only peer" />

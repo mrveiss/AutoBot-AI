@@ -199,7 +199,7 @@ const isFormValid = computed(() => {
             <button
               @click="handleClose"
               class="text-gray-400 hover:text-gray-600 transition-colors"
-              aria-label="Close schedule dialog"
+              :aria-label="$t('scheduleModal.closeScheduleDialog')"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -218,7 +218,7 @@ const isFormValid = computed(() => {
                 id="schedule-name"
                 v-model="name"
                 type="text"
-                placeholder="e.g., Nightly Updates"
+                :placeholder="$t('scheduleModal.eGNightlyUpdates')"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
@@ -238,7 +238,7 @@ const isFormValid = computed(() => {
               <p class="mt-1 text-sm text-gray-500" aria-live="polite">{{ cronDescription }}</p>
 
               <!-- Presets -->
-              <div class="mt-2 flex flex-wrap gap-2" role="group" aria-label="Cron schedule presets">
+              <div class="mt-2 flex flex-wrap gap-2" role="group" :aria-label="$t('scheduleModal.cronSchedulePresets')">
                 <button
                   v-for="preset in cronPresets"
                   :key="preset.value"
@@ -277,7 +277,7 @@ const isFormValid = computed(() => {
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 {{ $t('scheduleModal.selectNodes') }}
               </label>
-              <div class="border border-gray-200 rounded-md max-h-40 overflow-y-auto" role="group" aria-label="Node selection">
+              <div class="border border-gray-200 rounded-md max-h-40 overflow-y-auto" role="group" :aria-label="$t('scheduleModal.nodeSelection')">
                 <div
                   v-for="node in nodes"
                   :key="node.node_id"
@@ -308,7 +308,7 @@ const isFormValid = computed(() => {
               <label class="block text-sm font-medium text-gray-700 mb-2">
                 {{ $t('scheduleModal.targetRoles') }}
               </label>
-              <div v-if="availableRoles.length > 0" class="border border-gray-200 rounded-md max-h-40 overflow-y-auto" role="group" aria-label="Role selection">
+              <div v-if="availableRoles.length > 0" class="border border-gray-200 rounded-md max-h-40 overflow-y-auto" role="group" :aria-label="$t('scheduleModal.roleSelection')">
                 <div
                   v-for="role in availableRoles"
                   :key="role.name"

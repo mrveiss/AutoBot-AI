@@ -254,7 +254,7 @@ onUnmounted(() => {
         <button
           @click="emit('close')"
           class="text-gray-400 hover:text-white transition-colors"
-          aria-label="Close deployment log"
+          :aria-label="$t('deploymentLogViewer.closeDeploymentLog')"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path
@@ -292,7 +292,7 @@ onUnmounted(() => {
         ref="logContainer"
         class="flex-1 overflow-y-auto p-4 font-mono text-sm bg-gray-950"
         role="log"
-        aria-label="Deployment log output"
+        :aria-label="$t('deploymentLogViewer.deploymentLogOutput')"
         aria-live="polite"
       >
         <div

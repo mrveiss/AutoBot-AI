@@ -102,7 +102,7 @@ function getStatusColor(status: string): string {
       <div
         class="flex gap-1 mt-4 -mb-4 overflow-x-auto"
         role="tablist"
-        aria-label="Monitoring sections"
+        :aria-label="$t('monitoringView.monitoringSections')"
       >
         <button
           v-for="tab in tabs"

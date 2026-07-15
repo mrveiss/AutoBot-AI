@@ -577,21 +577,21 @@ function getNodeName(nodeId: string | null): string {
                   <span
                     v-if="window.suppress_alerts"
                     class="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-sm"
-                    title="Alerts suppressed"
+                    :title="$t('maintenanceView.alertsSuppressed')"
                   >
                     {{ $t('maintenanceView.alerts') }}
                   </span>
                   <span
                     v-if="window.suppress_remediation"
                     class="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded-sm"
-                    title="Auto-remediation suppressed"
+                    :title="$t('maintenanceView.autoRemediationSuppressed')"
                   >
                     {{ $t('maintenanceView.remediation') }}
                   </span>
                   <span
                     v-if="window.auto_drain"
                     class="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded-sm"
-                    title="Auto-drain enabled"
+                    :title="$t('maintenanceView.autoDrainEnabled')"
                   >
                     {{ $t('maintenanceView.drain') }}
                   </span>
@@ -604,7 +604,7 @@ function getNodeName(nodeId: string | null): string {
                     v-if="window.status === 'scheduled'"
                     @click="activateWindow(window.window_id)"
                     class="text-yellow-600 hover:text-yellow-800"
-                    title="Activate now"
+                    :title="$t('maintenanceView.activateNow')"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -617,7 +617,7 @@ function getNodeName(nodeId: string | null): string {
                     v-if="window.status === 'active'"
                     @click="completeWindow(window.window_id)"
                     class="text-green-600 hover:text-green-800"
-                    title="Complete maintenance"
+                    :title="$t('maintenanceView.completeMaintenance')"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -629,7 +629,7 @@ function getNodeName(nodeId: string | null): string {
                     v-if="window.status === 'scheduled'"
                     @click="openScheduleDialog(window)"
                     class="text-gray-600 hover:text-gray-800"
-                    title="Edit window"
+                    :title="$t('maintenanceView.editWindow')"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -641,7 +641,7 @@ function getNodeName(nodeId: string | null): string {
                     v-if="window.status !== 'active'"
                     @click="deleteWindow(window.window_id)"
                     class="text-red-600 hover:text-red-800"
-                    title="Delete window"
+                    :title="$t('maintenanceView.deleteWindow')"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -678,7 +678,7 @@ function getNodeName(nodeId: string | null): string {
               <button
                 @click="closeScheduleDialog"
                 class="text-gray-400 hover:text-gray-600"
-                aria-label="Close"
+                :aria-label="$t('maintenanceView.close')"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -747,7 +747,7 @@ function getNodeName(nodeId: string | null): string {
                   v-model="formData.reason"
                   rows="2"
                   class="input"
-                  placeholder="Optional: Describe the maintenance activity..."
+                  :placeholder="$t('maintenanceView.optionalDescribeTheMaintenanceActivity')"
                 ></textarea>
               </div>
 

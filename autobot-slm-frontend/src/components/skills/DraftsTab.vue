@@ -14,9 +14,7 @@
       <div class="flex items-start justify-between mb-2">
         <span class="font-semibold text-white">{{ draft.name }}</span>
         <span class="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30
-                     px-2 py-0.5 rounded">
-          draft
-        </span>
+                     px-2 py-0.5 rounded">{{ $t('skills.draftsTab.draft') }}</span>
       </div>
       <p v-if="draft.gap_reason" class="text-sm text-gray-400 mb-3">{{ draft.gap_reason }}</p>
       <pre

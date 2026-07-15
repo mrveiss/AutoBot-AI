@@ -82,12 +82,12 @@ onMounted(() => fetchDynamicEndpoints())
             :disabled="isConnected || loadingEndpoints"
             class="text-sm px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
           >
-            <optgroup v-if="staticHosts.length > 0" label="Static Hosts">
+            <optgroup v-if="staticHosts.length > 0" :label="$t('tools.admin.noVNCTool.staticHosts')">
               <option v-for="host in staticHosts" :key="host.id" :value="host.id">
                 {{ host.name }} ({{ host.host }}:{{ host.port }})
               </option>
             </optgroup>
-            <optgroup v-if="dynamicHosts.length > 0" label="SLM-Managed">
+            <optgroup v-if="dynamicHosts.length > 0" :label="$t('tools.admin.noVNCTool.sLMManaged')">
               <option v-for="host in dynamicHosts" :key="host.id" :value="host.id">
                 {{ host.name }} ({{ host.host }}:{{ host.port }})
               </option>
@@ -98,7 +98,7 @@ onMounted(() => fetchDynamicEndpoints())
             @click="fetchDynamicEndpoints"
             :disabled="loadingEndpoints || isConnected"
             class="p-1.5 text-gray-500 hover:bg-gray-200 rounded-sm transition-colors disabled:opacity-50"
-            title="Refresh VNC endpoints"
+            :title="$t('tools.admin.noVNCTool.refreshVNCEndpoints')"
           >
             <svg class="w-4 h-4" :class="{ 'animate-spin': loadingEndpoints }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
