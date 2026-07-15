@@ -11,7 +11,22 @@ visibility-scope enum consolidation, so the refactor onto the canonical
 
 import pytest
 
-from knowledge.ownership import KnowledgeOwnership
+from knowledge.ownership import KnowledgeOwnership, VisibilityLevel
+
+
+def test_visibility_level_is_canonical_alias():
+    """#11290: VisibilityLevel is a thin alias of the canonical ScopeLevel."""
+    from autobot_shared.scoping import ScopeLevel
+
+    assert VisibilityLevel is ScopeLevel
+    # Persisted knowledge metadata strings must survive the consolidation.
+    assert VisibilityLevel.PRIVATE.value == "private"
+    assert VisibilityLevel.SHARED.value == "shared"
+    assert VisibilityLevel.GROUP.value == "group"
+    assert VisibilityLevel.ORGANIZATION.value == "organization"
+    assert VisibilityLevel.SYSTEM.value == "system"
+    assert VisibilityLevel.PUBLIC.value == "public"
+
 
 OWNER = "owner-1"
 STRANGER = "stranger-9"
@@ -137,7 +152,5 @@ async def test_unshare_fact_reverts_to_private():
             return 1
 
     mgr.redis_client = _FakeRedis()
-    meta = await mgr.unshare_fact(
-        "f", user_ids=["u2"], fact_metadata={"visibility": "shared", "shared_with": ["u2"]}
-    )
+    meta = await mgr.unshare_fact("f", user_ids=["u2"], fact_metadata={"visibility": "shared", "shared_with": ["u2"]})
     assert meta["visibility"] == "private"

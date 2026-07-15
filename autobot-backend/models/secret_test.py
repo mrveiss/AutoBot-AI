@@ -297,6 +297,24 @@ _ACCESS_MATRIX = [
 ]
 
 
+class TestSecretScopeCanonicalAlias:
+    """#11290: SecretScope is a thin alias of the canonical ScopeLevel."""
+
+    def test_alias_identity(self):
+        from autobot_shared.scoping import ScopeLevel
+
+        assert SecretScope is ScopeLevel
+
+    def test_persisted_values_unchanged(self):
+        """secrets.scope stored strings must survive the consolidation."""
+        assert SecretScope.USER.value == "user"
+        assert SecretScope.SESSION.value == "session"
+        assert SecretScope.SHARED.value == "shared"
+        assert SecretScope.GROUP.value == "group"
+        assert SecretScope.ORGANIZATION.value == "organization"
+        assert SecretScope.WORKFLOW.value == "workflow"
+
+
 class TestSecretAccessMatrix:
     """Full is_accessible_by decision table (#11290 parity guard)."""
 
