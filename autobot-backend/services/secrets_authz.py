@@ -86,7 +86,14 @@ class PrincipalFacts:
         exactly as ``authorize``/``accessible_vaults`` do.
         """
         cid = company_id if company_id is not None and company_id in self.company_roles else None
-        return Principal(user_id=self.user_id, company_id=cid, group_ids=self.team_ids)
+        return Principal(
+            user_id=self.user_id,
+            company_id=cid,
+            group_ids=self.team_ids,
+            # PrincipalFacts only exist for authenticated principals; a
+            # deactivated principal stops counting as authenticated (#11290).
+            is_authenticated=self.active,
+        )
 
 
 def authorize(facts: PrincipalFacts, action: str, vault: VaultRef) -> bool:

@@ -58,8 +58,9 @@ def _meta(
 
 # (label, metadata, user_id, user_org_id, user_group_ids, is_authenticated, expected)
 DECISION_TABLE = [
-    # --- owner always wins, any visibility ---
+    # --- owner always wins, any visibility, even unauthenticated ---
     ("owner_private", _meta("private"), OWNER, None, None, True, True),
+    ("owner_anon", _meta("private"), OWNER, None, None, False, True),
     ("owner_shared", _meta("shared"), OWNER, None, None, True, True),
     ("owner_group", _meta("group"), OWNER, None, None, True, True),
     ("owner_org", _meta("organization"), OWNER, None, None, True, True),
@@ -68,6 +69,8 @@ DECISION_TABLE = [
     # --- shared: only listed users ---
     ("shared_listed", _meta("shared", shared_with=[STRANGER]), STRANGER, None, None, True, True),
     ("shared_unlisted", _meta("shared", shared_with=["other"]), STRANGER, None, None, True, False),
+    # shared_with list is only honored under SHARED visibility
+    ("private_shared_listed", _meta("private", shared_with=[STRANGER]), STRANGER, None, None, True, False),
     # --- group: membership intersection ---
     ("group_member", _meta("group", group_ids=[GROUP]), STRANGER, None, [GROUP], True, True),
     ("group_non_member", _meta("group", group_ids=[GROUP]), STRANGER, None, ["other-grp"], True, False),
@@ -84,6 +87,8 @@ DECISION_TABLE = [
     # --- unknown visibility value: fail closed for non-owner ---
     ("unknown_visibility", _meta("bogus"), STRANGER, None, None, True, False),
     ("unknown_visibility_owner", _meta("bogus"), OWNER, None, None, True, True),
+    # secrets-style scope values fall through to owner-only here
+    ("user_visibility_stranger", _meta("user"), STRANGER, None, None, True, False),
     # --- access_level general: public, no auth required ---
     ("general_anon", _meta("private", access_level="general"), STRANGER, None, None, False, True),
     ("general_authed", _meta("private", access_level="general"), STRANGER, None, None, True, True),

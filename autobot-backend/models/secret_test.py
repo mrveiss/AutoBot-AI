@@ -254,6 +254,10 @@ _ACCESS_MATRIX = [
     ("session_match", _secret("session", session_id="s1"), dict(user_id=_STRANGER, session_id="s1"), True),
     ("session_mismatch", _secret("session", session_id="s1"), dict(user_id=_STRANGER, session_id="s2"), False),
     ("session_none", _secret("session", session_id="s1"), dict(user_id=_STRANGER), False),
+    # session secret with NULL session_id and no caller session currently
+    # GRANTS (None == None) — pinned as-is (#11290); flagged for deliberate
+    # review together with the session-match rule above.
+    ("session_null_both", _secret("session"), dict(user_id=_STRANGER), True),
     (
         "shared_listed",
         _secret("shared", shared_with=[str(_STRANGER)]),
@@ -262,6 +266,8 @@ _ACCESS_MATRIX = [
     ),
     ("shared_unlisted", _secret("shared", shared_with=["someone-else"]), dict(user_id=_STRANGER), False),
     ("shared_empty", _secret("shared", shared_with=[]), dict(user_id=_STRANGER), False),
+    # non-list JSONB payloads fall back to deny for non-owners
+    ("shared_nonlist_guard", _secret("shared", shared_with={"a": 1}), dict(user_id=_STRANGER), False),
     (
         "group_team_member",
         _secret("group", team_ids=[str(_TEAM)]),
@@ -275,6 +281,13 @@ _ACCESS_MATRIX = [
         False,
     ),
     ("group_no_teams", _secret("group", team_ids=[str(_TEAM)]), dict(user_id=_STRANGER), False),
+    # non-list JSONB payloads fall back to deny for non-owners
+    (
+        "group_nonlist_guard",
+        _secret("group", team_ids={"a": 1}),
+        dict(user_id=_STRANGER, user_team_ids=[_TEAM]),
+        False,
+    ),
     (
         "org_member",
         _secret("organization", org_id=_ORG),
