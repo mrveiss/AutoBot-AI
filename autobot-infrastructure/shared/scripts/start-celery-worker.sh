@@ -89,7 +89,7 @@ echo "[4/4] Starting Celery worker..."
 echo ""
 echo "Worker Configuration:"
 echo "  - Concurrency: 4 workers"
-echo "  - Queues: deployments"
+echo "  - Queues: celery,deployments,memory,analytics"
 echo "  - Max tasks per child: 50"
 echo "  - Time limit: 600s (10 minutes)"
 echo "  - Soft time limit: 540s (9 minutes)"
@@ -100,11 +100,16 @@ echo ""
 
 # Start Celery worker with appropriate configuration
 # provisioning/services queues removed — no tasks route to them since
-# deployment tasks moved to the SLM server (#729, cleanup #11608)
+# deployment tasks moved to the SLM server (#729, cleanup #11608).
+# #11631: this is the only worker in this flavor — it must consume every
+# queue task_routes targets (default celery + deployments/memory/analytics)
+# or routed tasks sit in Redis unconsumed. Must stay a superset of the SSOT
+# task_queues in autobot-backend/celery_app.py (guarded by
+# autobot-backend/celery_queue_coverage_test.py).
 exec celery -A backend.celery_app worker \
     --loglevel=info \
     --concurrency=4 \
-    --queues=deployments \
+    --queues=celery,deployments,memory,analytics \
     --max-tasks-per-child=50 \
     --time-limit=600 \
     --soft-time-limit=540 \
