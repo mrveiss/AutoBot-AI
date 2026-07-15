@@ -8,8 +8,9 @@ Capability Registry for messaging and voice integrations (#11524).
 Maps capability names to registered implementations. Consumers resolve by
 capability, never by concrete class — eliminating vendor-branching.
 
-Mirrors the credential-gated self-registration style of
-``agent_loop.search.registry.SearchProviderRegistry``:
+Built on ``autobot_shared.credential_gated_registry.CredentialGatedRegistry``
+(#11664), shared with ``agent_loop.search.registry.SearchProviderRegistry`` and
+``llm_shared.provider_registry.ProviderRegistry``:
 
 - Providers declare which capabilities they satisfy at registration time.
 - Absent-capability queries return an empty list (never raise).
@@ -29,26 +30,42 @@ Usage::
 from __future__ import annotations
 
 import logging
-import threading
+from enum import Enum
 from typing import Any
+
+from autobot_shared.credential_gated_registry import (
+    CredentialGatedRegistry,
+    gated_registry_singleton,
+)
 
 logger = logging.getLogger(__name__)
 
-# Well-known capability names — use these constants instead of bare strings.
-MESSAGING = "messaging"
-TTS = "tts"
-STT = "stt"
+
+class Capability(str, Enum):
+    """Well-known capability names (#11664).
+
+    ``str`` mixin keeps members interchangeable with the plain strings they
+    replace (equality, hashing, dict keys).
+    """
+
+    MESSAGING = "messaging"
+    TTS = "tts"
+    STT = "stt"
+
+    __str__ = str.__str__  # render as the bare value in logs / f-strings
 
 
-class CapabilityRegistry:
+# Backward-compatible module constants — use these instead of bare strings.
+MESSAGING = Capability.MESSAGING
+TTS = Capability.TTS
+STT = Capability.STT
+
+
+class CapabilityRegistry(CredentialGatedRegistry[list[Any]]):
     """Registry mapping capability names → ordered list of implementations.
 
     Registration order is preserved; first-registered is first-resolved.
     """
-
-    def __init__(self) -> None:
-        """Create an empty registry."""
-        self._store: dict[str, list[Any]] = {}
 
     def register(self, capability: str, impl: Any) -> None:
         """Register *impl* under *capability*.
@@ -57,14 +74,13 @@ class CapabilityRegistry:
             capability: Capability name constant (e.g. ``MESSAGING``).
             impl:       Any object satisfying the corresponding Protocol.
         """
-        if capability not in self._store:
-            self._store[capability] = []
-        self._store[capability].append(impl)
+        bucket = self._providers.setdefault(capability, [])
+        bucket.append(impl)
         logger.debug(
             "Registered %s as capability=%s (total=%d)",
             type(impl).__name__,
             capability,
-            len(self._store[capability]),
+            len(bucket),
         )
 
     def resolve(self, capability: str) -> list[Any]:
@@ -75,15 +91,11 @@ class CapabilityRegistry:
         Args:
             capability: Capability name to look up.
         """
-        return list(self._store.get(capability, []))
+        return list(self._get_entry(capability) or [])
 
     def capabilities(self) -> list[str]:
         """Return registered capability names in insertion order."""
-        return list(self._store.keys())
-
-
-_registry: CapabilityRegistry | None = None
-_registry_lock = threading.Lock()
+        return self._entry_names()
 
 
 def _register_messaging_if_token(
@@ -186,16 +198,10 @@ def _register_stt_language(registry: CapabilityRegistry, speech_registry, lang: 
         logger.warning("Failed to register STT capability for language '%s': %s", lang, exc)
 
 
-def get_capability_registry() -> CapabilityRegistry:
-    """Return the process-wide registry, populating it lazily on first use."""
-    global _registry
-    if _registry is None:
-        with _registry_lock:
-            if _registry is None:
-                registry = CapabilityRegistry()
-                try:
-                    _populate_default_providers(registry)
-                except Exception as exc:
-                    logger.warning("Capability registry auto-registration failed: %s", exc)
-                _registry = registry
-    return _registry
+# Process-wide registry accessor: populates lazily on first use; population
+# failures are logged, never raised (see gated_registry_singleton, #11664).
+get_capability_registry = gated_registry_singleton(
+    CapabilityRegistry,
+    _populate_default_providers,
+    log=logger,
+)
