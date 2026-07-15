@@ -38,6 +38,19 @@ export interface SecretResponse {
   updated_at: string
 }
 
+export interface DependentRolesMapping {
+  mapping: Record<string, string[]>
+}
+
+export interface ApplySecretsResult {
+  success: boolean
+  key: string
+  dependent_roles: string[]
+  target_node_ids: string[]
+  output: string
+  returncode: number
+}
+
 export function useSecretsApi() {
   const authStore = useAuthStore()
 
@@ -90,10 +103,22 @@ export function useSecretsApi() {
     await client.delete(`/secrets/${encodeURIComponent(key)}`)
   }
 
+  async function getDependentRolesMapping(): Promise<DependentRolesMapping> {
+    const response = await client.get<DependentRolesMapping>('/secrets/dependent-roles')
+    return response.data
+  }
+
+  async function applySecret(key: string): Promise<ApplySecretsResult> {
+    const response = await client.post<ApplySecretsResult>('/secrets/apply', { key })
+    return response.data
+  }
+
   return {
     listSecrets,
     createSecret,
     updateSecret,
     deleteSecret,
+    getDependentRolesMapping,
+    applySecret,
   }
 }

@@ -385,6 +385,23 @@ class SecretResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ApplySecretsRequest(BaseModel):
+    """Request to propagate a stored secret to its dependent services (#11719)."""
+
+    key: str = Field(..., min_length=1, max_length=128)
+
+
+class ApplySecretsResponse(BaseModel):
+    """Result of propagating a secret to its dependent services (#11719)."""
+
+    success: bool
+    key: str
+    dependent_roles: List[str]
+    target_node_ids: List[str]
+    output: str
+    returncode: int
+
+
 # =============================================================================
 # Role Schemas
 # =============================================================================

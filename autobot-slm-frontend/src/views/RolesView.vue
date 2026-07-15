@@ -12,12 +12,14 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { createLogger } from '@/utils/debugUtils'
 import { getSlmApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('RolesView')
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 // Types
 interface RoleDefinition {
@@ -65,6 +67,7 @@ interface NodeSummary {
   hostname: string
   ip_address: string
   status: string
+  roles?: string[]
 }
 
 // State
@@ -79,13 +82,15 @@ const successMessage = ref<string | null>(null)
 const fleetHealth = ref<FleetHealth | null>(null)
 const isLoadingHealth = ref(false)
 
-// Migration dialog
+// Migration / redeploy dialog (#11719: same dialog, "Redeploy" preselects the
+// node already running the role instead of asking the operator to pick one)
 const showMigrateDialog = ref(false)
 const migratingRole = ref<RoleDefinition | null>(null)
 const targetNodeId = ref('')
 const migrateLoading = ref(false)
 const migrateOutput = ref<string | null>(null)
 const nodes = ref<NodeSummary[]>([])
+const isRedeploy = ref(false)
 
 const formData = ref<RoleFormData>({
   name: '', display_name: '', sync_type: 'component',
@@ -255,8 +260,22 @@ function openMigrateDialog(role: RoleDefinition): void {
   migratingRole.value = role
   targetNodeId.value = ''
   migrateOutput.value = null
+  isRedeploy.value = false
   showMigrateDialog.value = true
   fetchNodes()
+}
+
+async function openRedeployDialog(role: RoleDefinition): Promise<void> {
+  migratingRole.value = role
+  migrateOutput.value = null
+  isRedeploy.value = true
+  showMigrateDialog.value = true
+  await fetchNodes()
+  // Preselect the node currently running this role, when determinable
+  // (#11719) — same-node migrate IS a redeploy, so this saves the operator
+  // from having to look it up on the fleet-health/nodes view first.
+  const currentOwner = nodes.value.find((n) => n.roles?.includes(role.name))
+  targetNodeId.value = currentOwner?.node_id || ''
 }
 
 async function executeMigrate(): Promise<void> {
@@ -274,9 +293,13 @@ async function executeMigrate(): Promise<void> {
   if (result) {
     migrateOutput.value = result.output
     if (result.success) {
-      successMessage.value = `Role "${migratingRole.value.name}" migrated to ${targetNodeId.value}`
+      successMessage.value = isRedeploy.value
+        ? t('rolesView.redeploySucceeded', { role: migratingRole.value.name, node: targetNodeId.value })
+        : t('rolesView.migrateSucceeded', { role: migratingRole.value.name, node: targetNodeId.value })
     } else {
-      errorMessage.value = `Migration failed — see output below`
+      errorMessage.value = isRedeploy.value
+        ? t('rolesView.redeployFailed')
+        : t('rolesView.migrateFailed')
     }
   }
 }
@@ -476,6 +499,8 @@ onMounted(() => {
                 class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-sm hover:bg-gray-200">{{ $t('rolesView.edit') }}</button>
               <button v-if="role.ansible_playbook" @click="openMigrateDialog(role)"
                 class="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded-sm hover:bg-purple-200">{{ $t('rolesView.migrate') }}</button>
+              <button v-if="role.ansible_playbook" @click="openRedeployDialog(role)"
+                class="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded-sm hover:bg-indigo-200">{{ $t('rolesView.redeploy') }}</button>
               <button @click="deleteRole(role.name)"
                 class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-sm hover:bg-red-200">{{ $t('rolesView.delete') }}</button>
             </td>
@@ -494,12 +519,16 @@ onMounted(() => {
       <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
         <div class="px-6 py-4 border-b flex items-center justify-between">
           <h2 class="text-lg font-semibold text-gray-900">
-            Migrate Role: {{ migratingRole?.display_name || migratingRole?.name }}
+            {{ isRedeploy ? $t('rolesView.redeployRoleTitle') : $t('rolesView.migrateRoleTitle') }}:
+            {{ migratingRole?.display_name || migratingRole?.name }}
           </h2>
           <button @click="showMigrateDialog = false; migrateOutput = null"
             class="text-gray-400 hover:text-gray-600 text-xl">{{ $t('rolesView.times') }}</button>
         </div>
         <div class="p-6 space-y-4">
+          <div v-if="isRedeploy" class="text-xs text-indigo-700 bg-indigo-50 p-2 rounded-sm">
+            {{ $t('rolesView.redeployHint') }}
+          </div>
           <div v-if="migratingRole?.ansible_playbook" class="text-sm text-gray-600">
             {{ $t('rolesView.playbook') }} <code class="bg-gray-100 px-1 rounded-sm">{{ migratingRole.ansible_playbook }}</code>
           </div>
@@ -525,8 +554,11 @@ onMounted(() => {
           <button @click="showMigrateDialog = false; migrateOutput = null"
             class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">{{ $t('rolesView.cancel') }}</button>
           <button @click="executeMigrate" :disabled="!targetNodeId || migrateLoading"
-            class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm">
-            {{ migrateLoading ? 'Running…' : 'Run Migration' }}
+            :class="isRedeploy ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-purple-600 hover:bg-purple-700'"
+            class="px-4 py-2 text-white rounded-lg disabled:opacity-50 text-sm">
+            {{ migrateLoading
+              ? $t('rolesView.running')
+              : (isRedeploy ? $t('rolesView.runRedeploy') : $t('rolesView.runMigration')) }}
           </button>
         </div>
       </div>

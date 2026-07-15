@@ -12,6 +12,7 @@
  */
 
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   useSecretsApi,
   type SecretResponse,
@@ -19,11 +20,18 @@ import {
 } from '@/composables/useSecretsApi'
 
 const api = useSecretsApi()
+const { t } = useI18n()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
 const success = ref<string | null>(null)
 const secrets = ref<SecretResponse[]>([])
+
+// Apply-secrets propagation (#11719): which keys have a dependent-role
+// mapping, and the outcome of the last "Apply to services" run.
+const dependentRolesMapping = ref<Record<string, string[]>>({})
+const applyingKey = ref<string | null>(null)
+const applyResult = ref<{ key: string; success: boolean; output: string } | null>(null)
 
 const showAddForm = ref(false)
 const saving = ref(false)
@@ -54,6 +62,40 @@ async function fetchSecrets(): Promise<void> {
       err.response?.data?.detail || 'Failed to load secrets'
   } finally {
     loading.value = false
+  }
+}
+
+async function fetchDependentRolesMapping(): Promise<void> {
+  try {
+    const result = await api.getDependentRolesMapping()
+    dependentRolesMapping.value = result.mapping
+  } catch {
+    // Non-fatal: the "Apply to services" affordance just won't show (#11719).
+    dependentRolesMapping.value = {}
+  }
+}
+
+function hasDependentRoles(key: string): boolean {
+  return (dependentRolesMapping.value[key]?.length ?? 0) > 0
+}
+
+async function applyToServices(key: string): Promise<void> {
+  applyingKey.value = key
+  applyResult.value = null
+  error.value = null
+  try {
+    const result = await api.applySecret(key)
+    applyResult.value = { key, success: result.success, output: result.output }
+    if (result.success) {
+      success.value = t('settings.admin.secretsSettings.appliedSuccessfully', { key })
+      setTimeout(() => { success.value = null }, 3000)
+    }
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    error.value =
+      err.response?.data?.detail || t('settings.admin.secretsSettings.applyFailed')
+  } finally {
+    applyingKey.value = null
   }
 }
 
@@ -130,7 +172,10 @@ function categoryLabel(value: string): string {
   return categories.find((c) => c.value === value)?.label || value
 }
 
-onMounted(fetchSecrets)
+onMounted(() => {
+  fetchSecrets()
+  fetchDependentRolesMapping()
+})
 </script>
 
 <template>
@@ -291,65 +336,90 @@ onMounted(fetchSecrets)
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200">
-          <tr v-for="secret in secrets" :key="secret.id">
-            <td class="px-6 py-4 whitespace-nowrap">
-              <span class="text-sm font-mono font-medium text-gray-900">{{ secret.key }}</span>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-              <span
-                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                :class="{
-                  'bg-blue-100 text-blue-800': secret.category === 'system',
-                  'bg-purple-100 text-purple-800': secret.category === 'api_token',
-                  'bg-green-100 text-green-800': secret.category === 'service',
-                }"
-              >
-                {{ categoryLabel(secret.category) }}
-              </span>
-            </td>
-            <td class="px-6 py-4 text-sm text-gray-500">
-              {{ secret.description || '-' }}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {{ formatDate(secret.updated_at) }}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
-              <template v-if="editingKey === secret.key">
-                <div class="flex items-center gap-2 justify-end">
-                  <input
-                    v-model="editValue"
-                    type="password"
-                    placeholder="New value"
-                    class="w-48 px-2 py-1 border border-gray-300 rounded-sm text-sm font-mono"
-                  />
+          <template v-for="secret in secrets" :key="secret.id">
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span class="text-sm font-mono font-medium text-gray-900">{{ secret.key }}</span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                  :class="{
+                    'bg-blue-100 text-blue-800': secret.category === 'system',
+                    'bg-purple-100 text-purple-800': secret.category === 'api_token',
+                    'bg-green-100 text-green-800': secret.category === 'service',
+                  }"
+                >
+                  {{ categoryLabel(secret.category) }}
+                </span>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500">
+                {{ secret.description || '-' }}
+                <p v-if="hasDependentRoles(secret.key)" class="mt-1 text-xs text-amber-600">
+                  {{ $t('settings.admin.secretsSettings.staleValueHint') }}
+                </p>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {{ formatDate(secret.updated_at) }}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
+                <template v-if="editingKey === secret.key">
+                  <div class="flex items-center gap-2 justify-end">
+                    <input
+                      v-model="editValue"
+                      type="password"
+                      placeholder="New value"
+                      class="w-48 px-2 py-1 border border-gray-300 rounded-sm text-sm font-mono"
+                    />
+                    <button
+                      :disabled="!editValue || saving"
+                      class="text-green-600 hover:text-green-800 disabled:opacity-50"
+                      @click="updateSecretValue(secret.key)"
+                    >
+                      {{ $t('settings.admin.secretsSettings.save') }}
+                    </button>
+                    <button class="text-gray-500 hover:text-gray-700" @click="cancelEdit">
+                      {{ $t('settings.admin.secretsSettings.cancel') }}
+                    </button>
+                  </div>
+                </template>
+                <template v-else>
                   <button
-                    :disabled="!editValue || saving"
-                    class="text-green-600 hover:text-green-800 disabled:opacity-50"
-                    @click="updateSecretValue(secret.key)"
+                    v-if="hasDependentRoles(secret.key)"
+                    :disabled="applyingKey === secret.key"
+                    class="text-amber-600 hover:text-amber-800 mr-3 disabled:opacity-50"
+                    @click="applyToServices(secret.key)"
                   >
-                    {{ $t('settings.admin.secretsSettings.save') }}
+                    {{ applyingKey === secret.key
+                      ? $t('settings.admin.secretsSettings.applying')
+                      : $t('settings.admin.secretsSettings.applyToServices') }}
                   </button>
-                  <button class="text-gray-500 hover:text-gray-700" @click="cancelEdit">
-                    {{ $t('settings.admin.secretsSettings.cancel') }}
+                  <button
+                    class="text-blue-600 hover:text-blue-800 mr-3"
+                    @click="startEdit(secret.key)"
+                  >
+                    Update
                   </button>
-                </div>
-              </template>
-              <template v-else>
-                <button
-                  class="text-blue-600 hover:text-blue-800 mr-3"
-                  @click="startEdit(secret.key)"
-                >
-                  Update
-                </button>
-                <button
-                  class="text-red-600 hover:text-red-800"
-                  @click="removeSecret(secret.key)"
-                >
-                  Delete
-                </button>
-              </template>
-            </td>
-          </tr>
+                  <button
+                    class="text-red-600 hover:text-red-800"
+                    @click="removeSecret(secret.key)"
+                  >
+                    Delete
+                  </button>
+                </template>
+              </td>
+            </tr>
+            <tr v-if="applyResult && applyResult.key === secret.key">
+              <td colspan="5" class="px-6 py-3 bg-gray-50">
+                <p class="text-xs font-medium mb-1" :class="applyResult.success ? 'text-green-700' : 'text-red-700'">
+                  {{ applyResult.success
+                    ? $t('settings.admin.secretsSettings.applySuccess')
+                    : $t('settings.admin.secretsSettings.applyFailed') }}
+                </p>
+                <pre class="bg-gray-900 text-green-300 text-xs p-3 rounded-sm overflow-auto max-h-48">{{ applyResult.output }}</pre>
+              </td>
+            </tr>
+          </template>
         </tbody>
       </table>
     </div>
