@@ -1220,52 +1220,90 @@ async def analyze_development_task(
         await handle_ai_stack_error(e, "Development analysis")
 
 
+async def _ai_stack_available_agents() -> List[dict]:
+    """Return AI Stack agents as capability-info dicts; empty list when unreachable.
+
+    #6828: AI Stack unavailability degrades to the local registry instead of a
+    503 (same precedent as the #10511 PG fallback in api/agent_org.py).
+    """
+    try:
+        ai_client = await get_ai_stack_client()
+        agents_info = await ai_client.list_available_agents()
+    except AIStackError as e:
+        logger.warning("AI Stack unavailable for /agents/available — serving local registry only: %s", e)
+        return []
+
+    agents_with_caps = []
+    for agent in agents_info.get("agents", []):
+        # Issue #281: capabilities from module constant, with fallback for unknown agents
+        agent_info = AGENT_CAPABILITIES.get(
+            agent,
+            {
+                "description": f"AI agent: {agent}",
+                "capabilities": ["general_processing"],
+            },
+        ).copy()  # Copy to avoid modifying the constant
+        agent_info["name"] = agent
+        agent_info["status"] = "available"
+        agents_with_caps.append(agent_info)
+    return agents_with_caps
+
+
+def _local_registry_agents() -> List[dict]:
+    """Agents from the canonical in-process AgentCapabilityRegistry (#6828).
+
+    Exposes the orchestration profiles (capabilities + specializations) through
+    the same response shape as AI Stack agents so /agents/available is the one
+    unified "find an agent that can do X" entry point.
+    """
+    from orchestration.agent_registry import get_default_capability_registry
+
+    agents = []
+    for profile in get_default_capability_registry().get_all().values():
+        capabilities = sorted({c.value for c in profile.capabilities} | set(profile.specializations))
+        agents.append(
+            {
+                "name": profile.agent_id,
+                "description": f"Local orchestration agent ({profile.agent_type})",
+                "capabilities": capabilities,
+                "status": profile.availability_status,
+            }
+        )
+    return agents
+
+
 @router.get("/agents/available", response_model=DataResponse[AgentAvailableData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_available_agents",
     error_code_prefix="AGENT",
 )
-async def list_available_agents():
+async def list_available_agents(capability: str | None = None):
     """
-    List all available AI Stack agents with their capabilities.
+    List all available agents (AI Stack + local orchestration registry).
 
     Issue #281: Refactored to use module-level AGENT_CAPABILITIES constant.
     Issue #987: Removed auth requirement — read-only status, accessible to SLM admin.
+    Issue #6828: unified entry point — merges AI Stack agents with the canonical
+    AgentCapabilityRegistry profiles; optional ``capability`` query filters to
+    agents that can do X (case-insensitive substring on capability names).
     """
-    try:
-        ai_client = await get_ai_stack_client()
-        agents_info = await ai_client.list_available_agents()
+    agents_with_caps = await _ai_stack_available_agents()
+    known = {a["name"] for a in agents_with_caps}
+    agents_with_caps.extend(a for a in _local_registry_agents() if a["name"] not in known)
 
-        # Issue #281: Use module-level constant for agent capabilities
-        # Combine available agents with capability info
-        available_list = agents_info.get("agents", [])
-        agents_with_caps = []
+    if capability:
+        needle = capability.lower()
+        agents_with_caps = [a for a in agents_with_caps if any(needle in c.lower() for c in a["capabilities"])]
 
-        for agent in available_list:
-            # Get capabilities from module constant, with fallback for unknown agents
-            agent_info = AGENT_CAPABILITIES.get(
-                agent,
-                {
-                    "description": f"AI agent: {agent}",
-                    "capabilities": ["general_processing"],
-                },
-            ).copy()  # Copy to avoid modifying the constant
-            agent_info["name"] = agent
-            agent_info["status"] = "available"
-            agents_with_caps.append(agent_info)
-
-        return create_success_response(
-            {
-                "total_agents": len(agents_with_caps),
-                "agents": agents_with_caps,
-                "coordination_modes": ["parallel", "sequential", "intelligent"],
-                "multi_agent_support": True,
-            }
-        )
-
-    except AIStackError as e:
-        await handle_ai_stack_error(e, "List available agents")
+    return create_success_response(
+        {
+            "total_agents": len(agents_with_caps),
+            "agents": agents_with_caps,
+            "coordination_modes": ["parallel", "sequential", "intelligent"],
+            "multi_agent_support": True,
+        }
+    )
 
 
 @router.get("/agents/status", response_model=DataResponse[AgentStatusData])

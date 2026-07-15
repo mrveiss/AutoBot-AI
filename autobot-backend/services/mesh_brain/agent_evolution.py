@@ -37,9 +37,14 @@ class AgentSpecializationDB(Protocol):
     async def get_all_agent_ids(self) -> list[str]: ...
 
 
-# Issue #6828: AgentRegistry Protocol promoted to autobot_shared/agent_registry_protocol.py.
-# Re-exported here for backwards compatibility with any importer of this module.
-AgentRegistry = AgentRegistryProtocol
+# Issue #6828: the registry Protocol lives in autobot_shared/agent_registry_protocol.py
+# (AgentRegistryProtocol); its canonical concrete implementer is
+# orchestration.agent_registry.AgentCapabilityRegistry.update_specializations.
+# The legacy `AgentRegistry = AgentRegistryProtocol` compat alias was retired after
+# a repo-wide importer audit found zero consumers — the bare name was the last
+# remnant of the 4-way AgentRegistry naming collision this issue resolved.
+# NOTE (wire-in): AgentEvolutionTracker itself has no production scheduler/caller
+# yet — parked pending a wire-in issue (see #6828 closure report).
 
 
 class AgentEvolutionTracker:

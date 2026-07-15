@@ -40,3 +40,11 @@ def test_user_scope_hidden_from_non_owner_without_grant():
 
 def test_explicit_grant_overrides_scope():
     assert is_visible(_p(user="stranger", company="c2"), _r(owner="owner", scope=ScopeLevel.USER, company="c1"), True)
+
+
+def test_domain_specific_members_fail_closed_without_grant():
+    """#11290: superset members from other subsystems deny by default here."""
+    for scope in (ScopeLevel.WORKFLOW, ScopeLevel.PRIVATE, ScopeLevel.SYSTEM, ScopeLevel.PUBLIC):
+        assert not is_visible(_p(user="stranger"), _r(owner="owner", scope=scope), False)
+        assert is_visible(_p(user="owner"), _r(owner="owner", scope=scope), False)  # owner still wins
+        assert is_visible(_p(user="stranger"), _r(owner="owner", scope=scope), True)  # grant still wins

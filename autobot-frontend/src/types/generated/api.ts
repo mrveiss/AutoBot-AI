@@ -15766,10 +15766,13 @@ export interface paths {
         };
         /**
          * List Available Agents
-         * @description List all available AI Stack agents with their capabilities.
+         * @description List all available agents (AI Stack + local orchestration registry).
          *
          *     Issue #281: Refactored to use module-level AGENT_CAPABILITIES constant.
          *     Issue #987: Removed auth requirement — read-only status, accessible to SLM admin.
+         *     Issue #6828: unified entry point — merges AI Stack agents with the canonical
+         *     AgentCapabilityRegistry profiles; optional ``capability`` query filters to
+         *     agents that can do X (case-insensitive substring on capability names).
          */
         get: operations["list_available_agents_api_agent_agents_available_get"];
         put?: never;
@@ -121028,7 +121031,9 @@ export interface operations {
     };
     list_available_agents_api_agent_agents_available_get: {
         parameters: {
-            query?: never;
+            query?: {
+                capability?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -121042,6 +121047,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_AgentAvailableData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

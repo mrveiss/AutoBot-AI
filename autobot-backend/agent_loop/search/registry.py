@@ -4,10 +4,11 @@
 # Author: mrveiss
 """Web-search provider registry with selection + graceful fallback.
 
-Mirrors ``llm_shared.provider_registry``: providers self-register, the registry
-applies credential-gating (only registers configured providers) and a fallback
-chain so an unreachable/erroring provider degrades to the next one. Both #9022
-and #9023 require graceful fallback to the default provider.
+Built on ``autobot_shared.credential_gated_registry.CredentialGatedRegistry``
+(#11664), shared with ``llm_shared.provider_registry``: providers self-register,
+the registry applies credential-gating (only registers configured providers)
+and a fallback chain so an unreachable/erroring provider degrades to the next
+one. Both #9022 and #9023 require graceful fallback to the default provider.
 
 Auto-population reads credentials/instance URLs from ``autobot_shared.ssot_config``
 (empty/unset = provider disabled).
@@ -16,34 +17,34 @@ Auto-population reads credentials/instance URLs from ``autobot_shared.ssot_confi
 from __future__ import annotations
 
 import logging
-import threading
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from agent_loop.search.base import DEFAULT_RESULT_COUNT, SearchResult, WebSearchProvider
+from autobot_shared.credential_gated_registry import (
+    CredentialGatedRegistry,
+    gated_registry_singleton,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class SearchProviderRegistry:
+class SearchProviderRegistry(CredentialGatedRegistry[WebSearchProvider]):
     """Registry of web-search providers with an ordered fallback chain."""
 
     def __init__(self) -> None:
         """Create an empty registry."""
-        self._providers: Dict[str, WebSearchProvider] = {}
+        super().__init__()
         self._fallback_chain: List[str] = []
 
     def register(self, provider: WebSearchProvider) -> None:
         """Register a provider and append it to the fallback chain."""
         name = provider.provider_name
-        if name in self._providers:
-            logger.warning("Replacing existing search provider: %s", name)
-        else:
+        if self._store_entry(name, provider, kind="search provider"):
             self._fallback_chain.append(name)
-        self._providers[name] = provider
 
     def get_provider(self, name: str) -> Optional[WebSearchProvider]:
         """Return a registered provider by name (or None)."""
-        return self._providers.get(name)
+        return self._get_entry(name)
 
     def list_providers(self) -> List[str]:
         """Return registered provider names in fallback order."""
@@ -93,10 +94,6 @@ class SearchProviderRegistry:
         if last_error:
             logger.error("All web-search providers failed; last error: %s", last_error)
         return []
-
-
-_registry: Optional[SearchProviderRegistry] = None
-_registry_lock = threading.Lock()
 
 
 def _populate_default_providers(registry: SearchProviderRegistry) -> None:
@@ -150,20 +147,14 @@ def _warn_if_topic_search_degraded(registry: SearchProviderRegistry) -> None:
         )
 
 
-def get_search_registry() -> SearchProviderRegistry:
-    """Return the process-wide registry, populating it on first use."""
-    global _registry
-    if _registry is None:
-        with _registry_lock:
-            if _registry is None:
-                registry = SearchProviderRegistry()
-                try:
-                    _populate_default_providers(registry)
-                except Exception as exc:  # never let config issues break callers
-                    logger.warning("Search provider auto-registration failed: %s", exc)
-                _warn_if_topic_search_degraded(registry)
-                _registry = registry
-    return _registry
+# Process-wide registry accessor: populates lazily on first use; population
+# failures are logged, never raised (see gated_registry_singleton, #11664).
+get_search_registry = gated_registry_singleton(
+    SearchProviderRegistry,
+    _populate_default_providers,
+    log=logger,
+    post_populate=_warn_if_topic_search_degraded,
+)
 
 
 async def search(

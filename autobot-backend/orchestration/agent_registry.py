@@ -214,7 +214,10 @@ class AgentCapabilityRegistry:
     Scope (#6828): holds in-memory AgentProfile + AgentCapability catalogue
     populated at orchestrator startup from DEFAULT_AGENT_CONFIGS.  This is
     the **what-can-each-agent-do** registry — it does not track live health or
-    database persistence.  See also:
+    database persistence.  It is the canonical implementer of the shared
+    ``AgentCapabilityLookup`` ("find an agent that can do X") and
+    ``AgentRegistryProtocol`` (specialization updates) protocols in
+    ``autobot_shared.agent_registry_protocol``.  See also:
     - agents.agent_client.AgentHealthRegistry — health-tracking runtime registry
     - services.agent_registry_service.AgentRegistryService — DB-backed CRUD
     - agents.agent_orchestration.distributed_management.DistributedAgentManager — dynamic/distributed
@@ -393,6 +396,29 @@ class AgentCapabilityRegistry:
             agent.current_workload -= 1
         return True
 
+    async def update_specializations(
+        self,
+        agent_id: str,
+        top_types: List[str],
+        rates: Dict[str, float],
+    ) -> None:
+        """Persist discovered specializations onto an agent's profile (#6828).
+
+        Concrete implementation of the shared ``AgentRegistryProtocol`` — the
+        callback surface ``AgentEvolutionTracker`` uses to report emergent
+        specializations.  Discovered types are promoted to the front of the
+        profile's ``specializations`` (existing ones retained, deduplicated);
+        per-type success rates are recorded in ``performance_metrics`` under
+        ``specialization:<task_type>`` keys.
+        """
+        agent = self._agents.get(agent_id)
+        if agent is None:
+            logger.warning("update_specializations: unknown agent %s — ignored", agent_id)
+            return
+        agent.specializations = list(top_types) + [s for s in agent.specializations if s not in top_types]
+        agent.performance_metrics.update({f"specialization:{task_type}": rate for task_type, rate in rates.items()})
+        logger.info("Agent %s specializations updated: %s", agent_id, top_types)
+
     def update_performance(
         self,
         agent_id: str,
@@ -439,6 +465,20 @@ class AgentCapabilityRegistry:
 _default_registry: "AgentCapabilityRegistry | None" = None
 
 
+def get_default_capability_registry() -> AgentCapabilityRegistry:
+    """Return the process-wide default AgentCapabilityRegistry (#6828).
+
+    The canonical read entry point for "find an agent that can do X" against
+    the default profiles — API fallbacks (api/agent_org, api/agent) and the
+    tool-dispatch boundary (``resolve_forbidden_tools``) share this instance
+    instead of constructing ad-hoc registries per call.
+    """
+    global _default_registry  # noqa: PLW0603
+    if _default_registry is None:
+        _default_registry = AgentCapabilityRegistry(initialize_defaults=True)
+    return _default_registry
+
+
 def resolve_forbidden_tools(agent_id: "str | None") -> "frozenset[str]":
     """Resolve *agent_id*'s ``forbidden_work`` manifest from the default profiles.
 
@@ -448,7 +488,4 @@ def resolve_forbidden_tools(agent_id: "str | None") -> "frozenset[str]":
     """
     if not agent_id:
         return frozenset()
-    global _default_registry  # noqa: PLW0603
-    if _default_registry is None:
-        _default_registry = AgentCapabilityRegistry(initialize_defaults=True)
-    return _default_registry.forbidden_tools(agent_id)
+    return get_default_capability_registry().forbidden_tools(agent_id)

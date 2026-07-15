@@ -17,6 +17,7 @@ from enum import Enum
 from typing import Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.scoping import ScopeLevel
 
 logger = get_logger(__name__)
 
@@ -33,18 +34,12 @@ class AccessLevel(str, Enum):
     USER = "user"  # User-created content (scoped by visibility, default)
 
 
-class VisibilityLevel(str, Enum):
-    """Visibility levels for knowledge facts.
-
-    Issue #679: Extended with hierarchical scopes.
-    """
-
-    PRIVATE = "private"  # Only owner can access
-    SHARED = "shared"  # Owner + explicitly shared users/groups
-    GROUP = "group"  # Accessible to specific group/team members
-    ORGANIZATION = "organization"  # Accessible to all org members
-    SYSTEM = "system"  # Platform-wide, accessible to all users
-    PUBLIC = "public"  # Alias for SYSTEM (backward compatibility)
+# Deprecated alias (#11290): VisibilityLevel is now the canonical
+# autobot_shared.scoping.ScopeLevel. Kept so existing imports keep working;
+# new code should import ScopeLevel directly. Stored knowledge visibility
+# metadata values (private/shared/group/organization/system/public) are
+# unchanged — the canonical enum carries the same .value strings.
+VisibilityLevel = ScopeLevel
 
 
 class SourceType(str, Enum):
