@@ -31,12 +31,12 @@ class TestTerminalBufferRace:
     async def test_concurrent_buffer_access(self):
         """Test that concurrent output writes don't corrupt buffer"""
         # Mock terminal with buffer and lock
-        from api.terminal import ConsolidatedTerminalWebSocket
+        from api.terminal import TerminalWebSocket
 
         mock_websocket = AsyncMock()
         mock_redis = Mock()
 
-        terminal = ConsolidatedTerminalWebSocket(
+        terminal = TerminalWebSocket(
             websocket=mock_websocket,
             session_id="test_session",
             conversation_id="test_conv",
@@ -57,12 +57,12 @@ class TestTerminalBufferRace:
     @pytest.mark.asyncio
     async def test_buffer_lock_prevents_interleaving(self):
         """Test that lock prevents output interleaving"""
-        from api.terminal import ConsolidatedTerminalWebSocket
+        from api.terminal import TerminalWebSocket
 
         mock_websocket = AsyncMock()
         mock_redis = Mock()
 
-        terminal = ConsolidatedTerminalWebSocket(
+        terminal = TerminalWebSocket(
             websocket=mock_websocket,
             session_id="test_session",
             conversation_id="test_conv",
@@ -335,10 +335,10 @@ class TestPerformance:
     @pytest.mark.asyncio
     async def test_terminal_lock_overhead(self):
         """Measure asyncio.Lock overhead in terminal buffer"""
-        from api.terminal import ConsolidatedTerminalWebSocket
+        from api.terminal import TerminalWebSocket
 
         mock_websocket = AsyncMock()
-        terminal = ConsolidatedTerminalWebSocket(
+        terminal = TerminalWebSocket(
             websocket=mock_websocket,
             session_id="perf_test",
         )

@@ -11,14 +11,14 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import psutil
 import pytest
-from enhanced_memory_manager import EnhancedMemoryManager
 
 from config.manager import ConfigManager as ConfigManager
+from memory import MemoryManager
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
+    MultiModalProcessor,
     ProcessingIntent,
-    UnifiedMultiModalProcessor,
 )
 from services.config_service import ConfigService
 
@@ -105,7 +105,7 @@ class TestSystemPerformanceBenchmarks:
     @pytest.mark.asyncio
     async def test_multimodal_processor_performance(self):
         """Test multi-modal processor performance"""
-        processor = UnifiedMultiModalProcessor()
+        processor = MultiModalProcessor()
 
         # Test single processing performance
         test_input = MultiModalInput(
@@ -135,7 +135,7 @@ class TestSystemPerformanceBenchmarks:
     @pytest.mark.asyncio
     async def test_concurrent_processing_performance(self):
         """Test concurrent processing performance"""
-        processor = UnifiedMultiModalProcessor()
+        processor = MultiModalProcessor()
 
         # Create multiple test inputs
         inputs = [
@@ -175,7 +175,7 @@ class TestSystemPerformanceBenchmarks:
 
     def test_memory_manager_performance(self):
         """Test memory manager performance"""
-        memory_manager = EnhancedMemoryManager()
+        memory_manager = MemoryManager()
 
         # Test memory usage during task storage
         def store_multiple_tasks():
@@ -253,14 +253,14 @@ class TestSystemPerformanceBenchmarks:
 
         # Test multimodal processor startup
         start_time = time.time()
-        UnifiedMultiModalProcessor()
+        MultiModalProcessor()
         processor_startup_time = (time.time() - start_time) * 1000
 
         assert processor_startup_time < 500.0, f"Multimodal processor startup too slow: {processor_startup_time}ms"
 
         # Test memory manager startup
         start_time = time.time()
-        EnhancedMemoryManager()
+        MemoryManager()
         memory_startup_time = (time.time() - start_time) * 1000
 
         assert memory_startup_time < 200.0, f"Memory manager startup too slow: {memory_startup_time}ms"
@@ -297,7 +297,7 @@ class TestSystemPerformanceBenchmarks:
 
     def test_statistics_tracking_performance(self):
         """Test performance statistics tracking overhead"""
-        processor = UnifiedMultiModalProcessor()
+        processor = MultiModalProcessor()
 
         # Create mock results for statistics
         mock_results = [
@@ -381,7 +381,7 @@ class TestScalabilityBenchmarks:
     @pytest.mark.asyncio
     async def test_multimodal_processor_scalability(self):
         """Test multi-modal processor scalability with many concurrent requests"""
-        processor = UnifiedMultiModalProcessor()
+        processor = MultiModalProcessor()
 
         # Create many test inputs
         num_inputs = 50

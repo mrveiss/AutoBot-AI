@@ -14,8 +14,8 @@ import uuid
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from services.unified_credential_read import read_imported_credential_in_session
-from services.unified_credential_write import delete_in_session, mirror_in_session
+from services.credential_read import read_imported_credential_in_session
+from services.credential_write import delete_in_session, mirror_in_session
 from tests.migrations.conftest import requires_postgres, run_alembic
 
 pytestmark = [pytest.mark.migration_gate, requires_postgres]

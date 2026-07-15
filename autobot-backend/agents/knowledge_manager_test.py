@@ -6,7 +6,7 @@ Comprehensive Test Suite for Knowledge Manager.
 
 Tests features including:
 - temporal_knowledge_manager.py (time-based knowledge expiry)
-- UnifiedKnowledgeManager (template management, machine adaptation)
+- KnowledgeManager (template management, machine adaptation)
 """
 
 import asyncio
@@ -27,8 +27,8 @@ from agents.knowledge_manager import (
     IMachineAwareManager,
     ISystemKnowledgeManager,
     ITemporalManager,
-    UnifiedKnowledgeManager,
-    get_unified_knowledge_manager,
+    KnowledgeManager,
+    get_knowledge_manager,
 )
 from temporal_knowledge_manager import (
     FreshnessStatus,
@@ -170,7 +170,7 @@ def test_1_import_verification():
     print("\n[TEST 1] Import verification...")  # noqa: print
 
     # Verify main class
-    assert UnifiedKnowledgeManager is not None
+    assert KnowledgeManager is not None
 
     # Verify protocols
     assert ITemporalManager is not None
@@ -186,7 +186,7 @@ def test_1_import_verification():
     assert InvalidationJob is not None
 
     # Verify global instance function
-    assert get_unified_knowledge_manager is not None
+    assert get_knowledge_manager is not None
 
     print("✅ PASSED: All components imported successfully")  # noqa: print
 
@@ -196,7 +196,7 @@ async def test_2_temporal_manager_features():
     print("\n[TEST 2] Temporal manager features...")  # noqa: print
 
     kb = MockKnowledgeBase()
-    manager = UnifiedKnowledgeManager(knowledge_base=kb, enable_temporal=True, enable_machine_aware=False)
+    manager = KnowledgeManager(knowledge_base=kb, enable_temporal=True, enable_machine_aware=False)
 
     # Register content with temporal tracking
     content_hash = hashlib.md5(b"test content", usedforsecurity=False).hexdigest()
@@ -227,7 +227,7 @@ async def test_3_system_knowledge_features():
     kb = MockKnowledgeBase()
     mock_system = MockSystemKnowledgeManager(kb)
 
-    manager = UnifiedKnowledgeManager(
+    manager = KnowledgeManager(
         knowledge_base=kb,
         enable_temporal=False,
         enable_machine_aware=False,
@@ -257,7 +257,7 @@ async def test_4_machine_aware_features():
     kb = MockKnowledgeBase()
     mock_machine = MockMachineAwareSystemKnowledgeManager(kb)
 
-    manager = UnifiedKnowledgeManager(
+    manager = KnowledgeManager(
         knowledge_base=kb,
         enable_temporal=False,
         enable_machine_aware=True,
@@ -294,7 +294,7 @@ async def test_5_unified_operations():
     kb = MockKnowledgeBase()
     mock_system = MockSystemKnowledgeManager(kb)
 
-    manager = UnifiedKnowledgeManager(
+    manager = KnowledgeManager(
         knowledge_base=kb,
         enable_temporal=True,
         enable_machine_aware=False,
@@ -339,7 +339,7 @@ async def test_6_optional_components():
     kb = MockKnowledgeBase()
 
     # Test with temporal disabled
-    manager_no_temporal = UnifiedKnowledgeManager(knowledge_base=kb, enable_temporal=False, enable_machine_aware=False)
+    manager_no_temporal = KnowledgeManager(knowledge_base=kb, enable_temporal=False, enable_machine_aware=False)
 
     metadata = manager_no_temporal.register_content("test", {"cat": "test"}, "a" * 32)
     assert metadata is None, "Should return None when temporal disabled"
@@ -386,28 +386,28 @@ async def test_7_backward_compatibility():
 
 
 async def test_8_singleton_pattern():
-    """Test 8: Singleton pattern (get_unified_knowledge_manager)"""
+    """Test 8: Singleton pattern (get_knowledge_manager)"""
     print("\n[TEST 8] Singleton pattern...")  # noqa: print
 
     # Reset global instance (for testing only)
-    import unified_knowledge_manager as ukm_module
+    import agents.knowledge_manager as km_module
 
-    ukm_module._unified_knowledge_manager_instance = None
+    km_module._knowledge_manager_instance = None
 
     kb = MockKnowledgeBase()
 
     # First call - should create instance
-    manager1 = get_unified_knowledge_manager(knowledge_base=kb, enable_temporal=True, enable_machine_aware=False)
+    manager1 = get_knowledge_manager(knowledge_base=kb, enable_temporal=True, enable_machine_aware=False)
     assert manager1 is not None
 
     # Second call - should return same instance
-    manager2 = get_unified_knowledge_manager()
+    manager2 = get_knowledge_manager()
     assert manager1 is manager2, "Should return same singleton instance"
 
     # Test error on first call without knowledge_base
-    ukm_module._unified_knowledge_manager_instance = None
+    km_module._knowledge_manager_instance = None
     try:
-        get_unified_knowledge_manager()
+        get_knowledge_manager()
         assert False, "Should raise ValueError"
     except ValueError as e:
         assert "knowledge_base required" in str(e)
@@ -422,7 +422,7 @@ async def test_9_input_validation():
     kb = MockKnowledgeBase()
     mock_system = MockSystemKnowledgeManager(kb)
 
-    manager = UnifiedKnowledgeManager(
+    manager = KnowledgeManager(
         knowledge_base=kb,
         enable_temporal=True,
         enable_machine_aware=False,
@@ -431,7 +431,7 @@ async def test_9_input_validation():
 
     # Test invalid knowledge_base in constructor
     try:
-        UnifiedKnowledgeManager(knowledge_base=None)
+        KnowledgeManager(knowledge_base=None)
         assert False, "Should raise ValueError for None knowledge_base"
     except ValueError as e:
         assert "cannot be None" in str(e)
@@ -473,7 +473,7 @@ async def test_10_thread_safety():
 
     kb = MockKnowledgeBase()
     mock_system = MockSystemKnowledgeManager(kb)
-    manager = UnifiedKnowledgeManager(
+    manager = KnowledgeManager(
         knowledge_base=kb,
         enable_temporal=False,
         enable_machine_aware=False,
@@ -502,7 +502,7 @@ async def test_11_integration():
     kb = MockKnowledgeBase()
     mock_machine = MockMachineAwareSystemKnowledgeManager(kb)
 
-    manager = UnifiedKnowledgeManager(
+    manager = KnowledgeManager(
         knowledge_base=kb,
         enable_temporal=True,
         enable_machine_aware=True,
@@ -535,7 +535,7 @@ async def test_12_analytics():
     kb = MockKnowledgeBase()
     mock_system = MockSystemKnowledgeManager(kb)
 
-    manager = UnifiedKnowledgeManager(
+    manager = KnowledgeManager(
         knowledge_base=kb,
         enable_temporal=True,
         enable_machine_aware=False,
@@ -570,7 +570,7 @@ async def test_13_background_processing():
     kb = MockKnowledgeBase()
     mock_system = MockSystemKnowledgeManager(kb)
 
-    manager = UnifiedKnowledgeManager(
+    manager = KnowledgeManager(
         knowledge_base=kb,
         enable_temporal=True,
         enable_machine_aware=False,
@@ -578,7 +578,7 @@ async def test_13_background_processing():
     )
 
     # Test start with temporal disabled should fail
-    manager_no_temporal = UnifiedKnowledgeManager(knowledge_base=kb, enable_temporal=False, enable_machine_aware=False)
+    manager_no_temporal = KnowledgeManager(knowledge_base=kb, enable_temporal=False, enable_machine_aware=False)
 
     try:
         await manager_no_temporal.start_temporal_background_processing()
@@ -606,7 +606,7 @@ async def test_14_error_handling():
     kb = MockKnowledgeBase()
     mock_system = MockSystemKnowledgeManager(kb)
 
-    manager = UnifiedKnowledgeManager(
+    manager = KnowledgeManager(
         knowledge_base=kb,
         enable_temporal=True,
         enable_machine_aware=False,
@@ -651,7 +651,7 @@ async def test_15_feature_completeness():
     kb = MockKnowledgeBase()
     mock_machine = MockMachineAwareSystemKnowledgeManager(kb)
 
-    manager = UnifiedKnowledgeManager(
+    manager = KnowledgeManager(
         knowledge_base=kb,
         enable_temporal=True,
         enable_machine_aware=True,

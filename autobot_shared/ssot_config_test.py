@@ -373,3 +373,91 @@ class TestProjectRoot:
 
         assert PROJECT_ROOT.exists()
         assert PROJECT_ROOT.is_dir()
+
+
+class TestChatCitationInstructionAliasChoices:
+    """#10736: Both env vars set chat_citation_instruction_enabled correctly."""
+
+    def test_canonical_env_var_sets_flag_false(self, monkeypatch) -> None:
+        """AUTOBOT_CHAT_CITATION_INSTRUCTION=false → chat_citation_instruction_enabled=False."""
+        from pydantic import AliasChoices, Field
+        from pydantic_settings import BaseSettings, SettingsConfigDict
+
+        class _IsolatedLLMConfig(BaseSettings):
+            model_config = SettingsConfigDict(extra="ignore")
+            chat_citation_instruction_enabled: bool = Field(
+                default=True,
+                validation_alias=AliasChoices(
+                    "AUTOBOT_CHAT_CITATION_INSTRUCTION",
+                    "AUTOBOT_CHAT_GROUNDING",
+                ),
+            )
+
+        monkeypatch.setenv("AUTOBOT_CHAT_CITATION_INSTRUCTION", "false")
+        monkeypatch.delenv("AUTOBOT_CHAT_GROUNDING", raising=False)
+        cfg = _IsolatedLLMConfig()
+        assert cfg.chat_citation_instruction_enabled is False
+
+    def test_legacy_env_var_sets_flag_false(self, monkeypatch) -> None:
+        """AUTOBOT_CHAT_GROUNDING=false → chat_citation_instruction_enabled=False (back-compat)."""
+        from pydantic import AliasChoices, Field
+        from pydantic_settings import BaseSettings, SettingsConfigDict
+
+        class _IsolatedLLMConfig(BaseSettings):
+            model_config = SettingsConfigDict(extra="ignore")
+            chat_citation_instruction_enabled: bool = Field(
+                default=True,
+                validation_alias=AliasChoices(
+                    "AUTOBOT_CHAT_CITATION_INSTRUCTION",
+                    "AUTOBOT_CHAT_GROUNDING",
+                ),
+            )
+
+        monkeypatch.delenv("AUTOBOT_CHAT_CITATION_INSTRUCTION", raising=False)
+        monkeypatch.setenv("AUTOBOT_CHAT_GROUNDING", "false")
+        cfg = _IsolatedLLMConfig()
+        assert cfg.chat_citation_instruction_enabled is False
+
+    def test_default_when_neither_env_var_set(self, monkeypatch) -> None:
+        """Default=True when neither env var is set."""
+        from pydantic import AliasChoices, Field
+        from pydantic_settings import BaseSettings, SettingsConfigDict
+
+        class _IsolatedLLMConfig(BaseSettings):
+            model_config = SettingsConfigDict(extra="ignore")
+            chat_citation_instruction_enabled: bool = Field(
+                default=True,
+                validation_alias=AliasChoices(
+                    "AUTOBOT_CHAT_CITATION_INSTRUCTION",
+                    "AUTOBOT_CHAT_GROUNDING",
+                ),
+            )
+
+        monkeypatch.delenv("AUTOBOT_CHAT_CITATION_INSTRUCTION", raising=False)
+        monkeypatch.delenv("AUTOBOT_CHAT_GROUNDING", raising=False)
+        cfg = _IsolatedLLMConfig()
+        assert cfg.chat_citation_instruction_enabled is True
+
+
+class TestEnvIntSafeParse:
+    """#11022: PLAN_BEST_OF_N_COUNT must never crash the module at import on bad
+    env input — it uses the shared env_int_clamped helper (#11022 audit follow-up)."""
+
+    def test_invalid_env_falls_back_to_default_no_import_crash(self):
+        import importlib
+
+        with patch.dict(os.environ, {"AUTOBOT_PLAN_BEST_OF_N_COUNT": "not-a-number"}):
+            import autobot_shared.ssot_config as c
+
+            importlib.reload(c)  # must not raise
+            assert c.PLAN_BEST_OF_N_COUNT == 3
+
+    def test_clamps_to_bounds(self):
+        import importlib
+
+        import autobot_shared.ssot_config as c
+
+        for raw, expected in (("99", 5), ("1", 2), ("4", 4)):
+            with patch.dict(os.environ, {"AUTOBOT_PLAN_BEST_OF_N_COUNT": raw}):
+                importlib.reload(c)
+                assert c.PLAN_BEST_OF_N_COUNT == expected

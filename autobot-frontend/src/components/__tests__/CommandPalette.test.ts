@@ -61,7 +61,7 @@ describe('CommandPalette.vue', () => {
       attachTo: document.body
     })
 
-    const palette = wrapper.vm as any
+    const palette = wrapper.vm as unknown as { open: () => void; closeModal: () => void }
     palette.open()
     await flushPromises()
     await wrapper.vm.$nextTick()
@@ -80,7 +80,7 @@ describe('CommandPalette.vue', () => {
       attachTo: document.body
     })
 
-    const palette = wrapper.vm as any
+    const palette = wrapper.vm as unknown as { open: () => void; closeModal: () => void }
     palette.open()
     await wrapper.vm.$nextTick()
 
@@ -100,7 +100,7 @@ describe('CommandPalette.vue', () => {
 
     const filtered = wrapper.vm.filteredCommands
     expect(filtered.length).toBeGreaterThan(0)
-    expect(filtered.every((cmd: any) =>
+    expect(filtered.every((cmd: { label: string; description: string }) =>
       cmd.label.toLowerCase().includes('task') ||
       cmd.description.toLowerCase().includes('task')
     )).toBe(true)

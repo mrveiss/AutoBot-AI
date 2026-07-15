@@ -41,7 +41,7 @@ TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 @pytest.fixture
 async def test_db_engine():
     """Create an in-memory test database engine."""
-    engine = create_async_engine(
+    engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
         TEST_DB_URL,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
@@ -59,7 +59,7 @@ async def test_db_engine():
 @pytest.fixture
 async def test_db_session(test_db_engine) -> AsyncGenerator[AsyncSession, None]:
     """Create a test database session."""
-    async_session = async_sessionmaker(
+    async_session = async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
         test_db_engine,
         class_=AsyncSession,
         expire_on_commit=False,

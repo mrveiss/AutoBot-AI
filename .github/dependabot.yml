@@ -9,7 +9,7 @@
 # grouping; `all-dependencies` catches everything else. Dangerous majors are
 # still blocked via the per-ecosystem `ignore:` lists below — including
 # python/ubuntu Docker semver-MINOR (3.12→3.14, 22.04→22.10 are minor in
-# tag-semver but breaking for us: py3.14 is gated on #9825, 22.04 is the LTS).
+# tag-semver but breaking for us: py3.14 is the project-wide version (#9825); 22.04 is the LTS).
 version: 2
 updates:
   - package-ecosystem: "pip"
@@ -41,13 +41,16 @@ updates:
       - dependency-name: "torch"
         update-types: ["version-update:semver-major"]
       - dependency-name: "protobuf"
-        # #10474: cap <7.0 — opentelemetry-proto (otel 1.42) requires protobuf<7.0.
-        # Dependabot's 7.x bump is unsatisfiable; unblock when otel supports it.
-        update-types: ["version-update:semver-major"]
+        # #10474/#10615/#10616: cap <7.0 — opentelemetry-proto (otel 1.42) requires
+        # protobuf<7.0. semver-major ignore alone did NOT stop the grouped
+        # all-dependencies bump from re-proposing 7.x (unsatisfiable → ResolutionImpossible
+        # on every PR). Hard-exclude >=7.0.0 so it stops. Unblock when otel supports 7.x.
+        versions: [">=7.0.0"]
       - dependency-name: "websockets"
-        # #10474: cap <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16.
-        # The 16.x bump is unsatisfiable; unblock when langgraph-sdk supports it.
-        update-types: ["version-update:semver-major"]
+        # #10474/#10386: cap <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16.
+        # semver-major ignore alone did not stop the grouped bump from re-proposing 16.x.
+        # Hard-exclude >=16.0.0. Unblock when langgraph-sdk supports 16.x.
+        versions: [">=16.0.0"]
 
   - package-ecosystem: "pip"
     directory: "/autobot_shared"
@@ -131,6 +134,12 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "vega-lite"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "@pinia/testing"
+        # #11753: @pinia/testing 2.x requires peer pinia>=4 while the group
+        # keeps pinia 3 — grouped bump re-proposes an unsatisfiable member
+        # (ERESOLVE on every PR, see #11746). Same pattern as the protobuf/
+        # websockets caps above. Unblock when the pinia 4 major is taken.
+        versions: [">=2.0.0"]
 
   - package-ecosystem: "npm"
     directory: "/autobot-slm-frontend"
@@ -165,8 +174,8 @@ updates:
   # Docker base images (Issue #7157 — supply-chain hardening, sister of #7091/#7120)
   # Dependabot auto-PRs digest updates when new versions publish.
   #
-  # Major version bumps are explicitly ignored — `python:3.12` should NOT auto-PR
-  # to `python:3.13` until autobot_shared/pyproject.toml's `requires-python` is
+  # Major version bumps are explicitly ignored — `python:3.14` should NOT auto-PR
+  # past 3.14 until autobot_shared/pyproject.toml's `requires-python` is
   # bumped first. Same logic for node-major and ubuntu-major.
   - package-ecosystem: "docker"
     directory: "/docker/backend"
@@ -185,7 +194,7 @@ updates:
           - "*"
     ignore:
       - dependency-name: "python"
-        # #9825: stay on 3.12 until the vLLM py3.14 blocker clears. Block minor
+        # Pinned at 3.14 (single project-wide version, #9825 done). Block minor/major
         # too — 3.12→3.14 is tag-semver-MINOR but a breaking runtime jump.
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
@@ -206,7 +215,7 @@ updates:
           - "*"
     ignore:
       - dependency-name: "python"
-        # #9825: stay on 3.12 until the vLLM py3.14 blocker clears. Block minor
+        # Pinned at 3.14 (single project-wide version, #9825 done). Block minor/major
         # too — 3.12→3.14 is tag-semver-MINOR but a breaking runtime jump.
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
@@ -251,7 +260,7 @@ updates:
           - "*"
     ignore:
       - dependency-name: "python"
-        # #9825: stay on 3.12 until the vLLM py3.14 blocker clears. Block minor
+        # Pinned at 3.14 (single project-wide version, #9825 done). Block minor/major
         # too — 3.12→3.14 is tag-semver-MINOR but a breaking runtime jump.
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
 

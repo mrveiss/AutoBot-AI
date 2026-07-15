@@ -33,7 +33,9 @@ from prometheus_client import (
 # Phase 4 (#7590): Added ChatMetricsRecorder for SSOT observability
 # Issue #7421: Added VoiceRealtimeMetricsRecorder for Realtime WebRTC session metrics
 # GH#4463: Added MobileDeviceMetricsRecorder for device pairing observability
+# Issue #10778: Added ApiRequestsMetricsRecorder for HTTP request counting
 from .metrics import (
+    ApiRequestsMetricsRecorder,
     ChatMetricsRecorder,
     ClaudeAPIMetricsRecorder,
     FrontendMetricsRecorder,
@@ -127,6 +129,8 @@ class PrometheusMetricsManager:
         self._voice_realtime = VoiceRealtimeMetricsRecorder(self.registry)
         # GH#4463: Initialize mobile device pairing metrics recorder
         self._mobile_device = MobileDeviceMetricsRecorder(self.registry)
+        # Issue #10778: Initialize HTTP API request counter recorder
+        self._api_requests = ApiRequestsMetricsRecorder(self.registry)
 
     # =========================================================================
     # Core Infrastructure Metrics Initialization

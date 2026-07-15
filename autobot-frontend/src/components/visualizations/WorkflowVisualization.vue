@@ -265,12 +265,9 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n()
-
-const logger = createLogger('WorkflowVisualization')
 
 // Types
 interface WorkflowNode {

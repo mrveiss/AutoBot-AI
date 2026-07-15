@@ -48,8 +48,8 @@ describe('resolveEntityRoute', () => {
       params: { sessionId: 's1' },
     })
     expect(resolveEntityRoute({ kind: 'document', id: 'd1' })).toEqual({
-      name: 'document-detail',
-      params: { docId: 'd1' },
+      name: 'knowledge-browser',
+      query: { doc: 'd1' },
     })
   })
 
@@ -115,7 +115,7 @@ describe('createEntityAnchorClickHandler', () => {
     handler(ev)
 
     expect(ev.preventDefault).toHaveBeenCalled()
-    expect(push).toHaveBeenCalledWith({ name: 'document-detail', params: { docId: '42' } })
+    expect(push).toHaveBeenCalledWith({ name: 'knowledge-browser', query: { doc: '42' } })
   })
 
   it('does not interfere with external links', () => {

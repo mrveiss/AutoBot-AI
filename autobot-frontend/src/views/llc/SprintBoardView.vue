@@ -8,24 +8,36 @@
       <div class="sprint-info">
         <h2 class="sprint-title">{{ sprint.name }}</h2>
         <span class="sprint-dates">{{ formatDate(sprint.start_date) }} – {{ formatDate(sprint.end_date) }}</span>
-        <span class="sprint-status-badge" :class="`status-${sprint.status}`">{{ sprint.status }}</span>
+        <span class="sprint-status-badge" :class="`status-${sprint.status}`">{{ sprintStatusLabel(sprint.status) }}</span>
+        <button
+          class="view-toggle-btn"
+          :title="$t('llc.sprint.switchToTimeline')"
+          @click="switchToTimeline"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="2" y="4" width="6" height="2" fill="currentColor" />
+            <rect x="2" y="8" width="10" height="2" fill="currentColor" />
+            <rect x="2" y="12" width="4" height="2" fill="currentColor" />
+          </svg>
+          {{ $t('llc.sprint.timelineView') }}
+        </button>
       </div>
       <div class="sprint-stats">
         <div class="stat">
-          <span class="stat-label">Goal</span>
-          <span class="stat-value sprint-goal">{{ sprint.goal ?? 'No goal set' }}</span>
+          <span class="stat-label">{{ $t('llc.sprint.goal') }}</span>
+          <span class="stat-value sprint-goal">{{ sprint.goal ?? $t('llc.sprint.noGoal') }}</span>
         </div>
         <div class="stat">
-          <span class="stat-label">Committed</span>
-          <span class="stat-value">{{ sprint.committed_points ?? 0 }} pts</span>
+          <span class="stat-label">{{ $t('llc.sprint.committed') }}</span>
+          <span class="stat-value">{{ $t('llc.sprint.points', { count: sprint.committed_points ?? 0 }) }}</span>
         </div>
         <div class="stat">
-          <span class="stat-label">Completed</span>
-          <span class="stat-value">{{ sprint.completed_points ?? 0 }} pts</span>
+          <span class="stat-label">{{ $t('llc.sprint.completed') }}</span>
+          <span class="stat-value">{{ $t('llc.sprint.points', { count: sprint.completed_points ?? 0 }) }}</span>
         </div>
       </div>
     </div>
-    <div v-else-if="isLoading" class="sprint-header-skeleton">Loading sprint...</div>
+    <div v-else-if="isLoading" class="sprint-header-skeleton">{{ $t('llc.sprint.loadingSprint') }}</div>
 
     <div class="board-layout">
       <!-- Columns -->
@@ -52,11 +64,11 @@
             >
               <div class="card-header">
                 <span class="card-identifier">{{ item.identifier }}</span>
-                <span class="card-type-badge" :class="`type-${item.type}`">{{ item.type }}</span>
+                <WorkItemBadge kind="type" :value="item.type" size="sm" />
               </div>
               <p class="card-title">{{ item.title }}</p>
               <div class="card-footer">
-                <span class="priority-dot" :class="`priority-${item.priority}`" :title="item.priority" />
+                <WorkItemBadge kind="priority" :value="item.priority" variant="dot" />
                 <span v-if="item.story_points" class="card-points">{{ item.story_points }}</span>
                 <span v-if="item.assignee_name" class="card-assignee" :title="item.assignee_name">
                   {{ initials(item.assignee_name) }}
@@ -64,7 +76,7 @@
               </div>
             </div>
             <div v-if="itemsByColumn(col.id).length === 0" class="column-empty">
-              Drop items here
+              {{ $t('llc.sprint.dropHere') }}
             </div>
           </div>
         </div>
@@ -72,30 +84,31 @@
 
       <!-- Burndown sidebar -->
       <div class="burndown-sidebar">
-        <h4 class="sidebar-title">Burndown</h4>
+        <h4 class="sidebar-title">{{ $t('llc.sprint.burndown') }}</h4>
         <div v-if="burndown.length > 0" class="burndown-chart">
           <svg :viewBox="`0 0 ${CHART_W} ${CHART_H}`" class="burndown-svg">
             <!-- Ideal line -->
             <line
+              class="burndown-ideal-line"
               :x1="0" :y1="0"
               :x2="CHART_W" :y2="CHART_H"
-              stroke="#d1d5db" stroke-width="1" stroke-dasharray="4 4"
+              stroke-width="1" stroke-dasharray="4 4"
             />
             <!-- Actual line -->
             <polyline
+              class="burndown-actual-line"
               :points="burndownPoints"
               fill="none"
-              stroke="#3b82f6"
               stroke-width="2"
               stroke-linejoin="round"
             />
           </svg>
           <div class="burndown-legend">
-            <span class="legend-ideal">Ideal</span>
-            <span class="legend-actual">Actual</span>
+            <span class="legend-ideal">{{ $t('llc.sprint.ideal') }}</span>
+            <span class="legend-actual">{{ $t('llc.sprint.actual') }}</span>
           </div>
         </div>
-        <div v-else class="chart-empty">No burndown data</div>
+        <div v-else class="chart-empty">{{ $t('llc.sprint.noBurndown') }}</div>
       </div>
     </div>
 
@@ -110,15 +123,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
 import WorkItemDetail from './WorkItemDetail.vue'
+import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
+import { useLiveEvents } from '@/composables/useLiveEvents'
+import { formatDate as fmtDate } from '@/utils/formatHelpers'
 
 const logger = createLogger('SprintBoardView')
 const api = useApiClient()
 const route = useRoute()
+const router = useRouter()
+const live = useLiveEvents()
+const { sprintStatusLabel } = useWorkItemLabels()
 
 const companyId = computed(() => route.params.companyId as string)
 const boardId = computed(() => route.params.boardId as string)
@@ -157,7 +177,6 @@ const burndown = ref<BurndownPoint[]>([])
 const isLoading = ref(false)
 const detailItem = ref<WorkItem | null>(null)
 const draggedItem = ref<WorkItem | null>(null)
-let ws: WebSocket | null = null
 
 const burndownPoints = computed(() => {
   if (!burndown.value.length) return ''
@@ -177,7 +196,14 @@ function initials(name: string) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return fmtDate(iso, { month: 'short', day: 'numeric' })
+}
+
+function switchToTimeline() {
+  router.push({
+    name: 'llc-timeline',
+    params: { companyId: companyId.value },
+  })
 }
 
 function openDetail(item: WorkItem) {
@@ -210,26 +236,16 @@ async function onDrop(colId: string) {
   }
 }
 
-function connectWS() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  const host = location.hostname
-  const port = import.meta.env.VITE_BACKEND_PORT ?? '8001'
-  ws = new WebSocket(`${proto}://${host}:${port}/ws/llc/board/${boardId.value}`)
-
-  ws.onmessage = (evt) => {
-    try {
-      const msg = JSON.parse(evt.data)
-      if (msg.type === 'card_moved') {
-        const item = items.value.find(i => i.id === msg.work_item_id)
-        if (item) item.column_id = msg.column_id
-      }
-    } catch {
-      // ignore malformed frames
-    }
-  }
-
-  ws.onerror = () => logger.error('Board WS error')
-  ws.onclose = () => logger.info('Board WS closed')
+// Live board updates via the canonical /ws/live event bus (channel board:{id}).
+// Backend publishes board moves through LiveEventManager (llc/services/board.py).
+function subscribeBoard() {
+  live.subscribe(`board:${boardId.value}`, (ev) => {
+    const wid = ev.payload?.work_item_id as string | undefined
+    const col = ev.payload?.column_id as string | undefined
+    if (!wid || !col) return
+    const item = items.value.find(i => i.id === wid)
+    if (item) item.column_id = col
+  })
 }
 
 async function fetchBoard() {
@@ -252,12 +268,9 @@ async function fetchBoard() {
 
 onMounted(async () => {
   await fetchBoard()
-  connectWS()
+  subscribeBoard()
 })
-
-onUnmounted(() => {
-  ws?.close()
-})
+// useLiveEvents auto-unsubscribes on unmount — no manual teardown needed.
 </script>
 
 <style scoped>
@@ -267,8 +280,8 @@ onUnmounted(() => {
   height: 100%;
   padding: 1.5rem;
   gap: 1rem;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .sprint-header {
@@ -277,7 +290,7 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .sprint-info {
@@ -295,7 +308,7 @@ onUnmounted(() => {
 
 .sprint-dates {
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .sprint-status-badge {
@@ -306,10 +319,37 @@ onUnmounted(() => {
   text-transform: capitalize;
 }
 
-.status-planning { background: #fef9c3; color: #713f12; }
-.status-active { background: #d1fae5; color: #065f46; }
-.status-review { background: #ddd6fe; color: #5b21b6; }
-.status-closed { background: #f3f4f6; color: #374151; }
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.view-toggle-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--bg-elevated);
+}
+
+.view-toggle-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* sprint status palette — theme-adaptive (GH#10868) */
+.status-planning { background: var(--badge-sprint-planning-bg); color: var(--badge-sprint-planning-fg); }
+.status-active { background: var(--badge-sprint-active-bg); color: var(--badge-sprint-active-fg); }
+.status-review { background: var(--badge-sprint-review-bg); color: var(--badge-sprint-review-fg); }
+.status-closed { background: var(--badge-sprint-closed-bg); color: var(--badge-sprint-closed-fg); }
 
 .sprint-stats {
   display: flex;
@@ -325,7 +365,7 @@ onUnmounted(() => {
 
 .stat-label {
   font-size: 0.7rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -345,7 +385,7 @@ onUnmounted(() => {
 }
 
 .sprint-header-skeleton {
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
@@ -360,18 +400,21 @@ onUnmounted(() => {
   display: flex;
   gap: 0.75rem;
   flex: 1;
+  min-height: 0;
   overflow-x: auto;
   align-items: flex-start;
 }
 
 .board-column {
   flex: 0 0 260px;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated);
   border-radius: 0.5rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 220px);
+  /* #10750 C2: bounded by .board-columns height, not the viewport (unify w/ Kanban) */
+  min-height: 0;
+  max-height: 100%;
 }
 
 .column-header {
@@ -381,12 +424,12 @@ onUnmounted(() => {
   padding: 0.75rem 1rem;
   font-weight: 600;
   font-size: 0.875rem;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .column-count {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 9999px;
   padding: 0 0.5rem;
   font-size: 0.75rem;
@@ -395,6 +438,7 @@ onUnmounted(() => {
 
 .column-cards {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 0.5rem;
   display: flex;
@@ -403,8 +447,8 @@ onUnmounted(() => {
 }
 
 .work-card {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   padding: 0.625rem 0.75rem;
   cursor: grab;
@@ -431,31 +475,14 @@ onUnmounted(() => {
 .card-identifier {
   font-family: monospace;
   font-size: 0.7rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
-
-.card-type-badge {
-  font-size: 0.65rem;
-  padding: 0.1rem 0.4rem;
-  border-radius: 9999px;
-  font-weight: 500;
-  text-transform: capitalize;
-}
-
-.type-epic { background: #ddd6fe; color: #5b21b6; }
-.type-feature { background: #bfdbfe; color: #1d4ed8; }
-.type-pbi { background: #d1fae5; color: #065f46; }
-.type-task { background: #e0f2fe; color: #0369a1; }
-.type-bug { background: #fee2e2; color: #991b1b; }
-.type-spike { background: #fef3c7; color: #92400e; }
-.type-subtask { background: #f3f4f6; color: #374151; }
-.type-risk { background: #fce7f3; color: #9d174d; }
 
 .card-title {
   margin: 0;
   font-size: 0.8rem;
   line-height: 1.4;
-  color: var(--color-text);
+  color: var(--text-primary);
 }
 
 .card-footer {
@@ -465,22 +492,10 @@ onUnmounted(() => {
   margin-top: 0.125rem;
 }
 
-.priority-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.priority-critical { background: #ef4444; }
-.priority-high { background: #f97316; }
-.priority-medium { background: #eab308; }
-.priority-low { background: #22c55e; }
-
 .card-points {
   font-size: 0.7rem;
   font-weight: 600;
-  background: var(--color-surface-elevated, #f3f4f6);
+  background: var(--bg-elevated);
   padding: 0.1rem 0.4rem;
   border-radius: 0.25rem;
 }
@@ -493,7 +508,7 @@ onUnmounted(() => {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 50%;
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
   font-size: 0.6rem;
   font-weight: 600;
@@ -503,16 +518,16 @@ onUnmounted(() => {
   text-align: center;
   padding: 1.5rem 0.5rem;
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #9ca3af);
-  border: 2px dashed var(--color-border, #e5e7eb);
+  color: var(--text-secondary);
+  border: 2px dashed var(--border-default);
   border-radius: 0.375rem;
 }
 
 .burndown-sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: var(--color-surface-elevated, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   padding: 1rem;
   display: flex;
@@ -531,6 +546,15 @@ onUnmounted(() => {
   height: auto;
 }
 
+/* stroke via CSS (not SVG presentation attr) so var() resolves cross-browser incl. Safari */
+.burndown-ideal-line {
+  stroke: var(--text-secondary);
+}
+
+.burndown-actual-line {
+  stroke: var(--color-primary);
+}
+
 .burndown-legend {
   display: flex;
   gap: 1rem;
@@ -539,17 +563,17 @@ onUnmounted(() => {
 
 .legend-ideal::before {
   content: '- ';
-  color: #d1d5db;
+  color: var(--text-secondary);
 }
 
 .legend-actual::before {
   content: '— ';
-  color: #3b82f6;
+  color: var(--color-primary);
 }
 
 .chart-empty {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary);
   text-align: center;
   padding: 1rem 0;
 }

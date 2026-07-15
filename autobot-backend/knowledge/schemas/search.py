@@ -15,7 +15,7 @@ class KnowledgeSearchResponse(BaseModel):
     """Shape returned by POST /search (all three code paths).
 
     The basic and enhanced paths use _build_search_response (keys: results,
-    total_results, query, mode, kb_implementation, rag_enhanced, reranking_applied).
+    total_results, query, mode, kb_implementation, rag_applied, reranking_applied).
     The RAG path additionally includes status, synthesized_response, original_query,
     reformulated_queries, confidence_score, etc.  extra="allow" admits all extra
     fields so both code paths validate without wrapping returns.
@@ -28,7 +28,7 @@ class KnowledgeSearchResponse(BaseModel):
     query: str | None = None
     mode: str | None = None
     kb_implementation: str | None = None
-    rag_enhanced: bool = False
+    rag_applied: bool = False
     reranking_applied: bool = False
     status: str | None = None
     synthesized_response: str | None = None
@@ -37,12 +37,12 @@ class KnowledgeSearchResponse(BaseModel):
     message: str | None = None
 
 
-class EnhancedSearchResponse(BaseModel):
-    """Shape returned by deprecated POST /enhanced_search.
+class KBSearchResponse(BaseModel):
+    """Shape returned by deprecated POST /enhanced_search and advanced KB search endpoints (#10666 B1).
 
-    Mirrors the kb.enhanced_search() contract: success, results, total_count,
-    query_processed, mode, tags_applied, min_score_applied, reranking_applied.
-    extra="allow" handles KB-specific additions.
+    Consolidates the former enhanced_search (full shape) and advanced search
+    (V2 was a strict subset: only success/results/total_count/message) response shapes.
+    extra="allow" handles KB-specific additions on either code path.
     """
 
     model_config = ConfigDict(extra="allow")
@@ -72,7 +72,7 @@ class RagSearchResponse(BaseModel):
     total_results: int = 0
     original_query: str | None = None
     reformulated_queries: List[str] = Field(default_factory=list)
-    rag_enhanced: bool = True
+    rag_applied: bool = True
     message: str | None = None
 
 
@@ -86,22 +86,11 @@ class SimilaritySearchResponse(BaseModel):
     query: str = ""
     threshold: float = 0.7
     kb_implementation: str = ""
-    rag_enhanced: bool = False
+    rag_applied: bool = False
     rag_analysis: Dict[str, Any] | None = None
 
 
-class EnhancedSearchV2Response(BaseModel):
-    """Shape returned by deprecated POST /enhanced_search_v2.
-
-    Delegates to kb.enhanced_search_v2(); mirrors the enhanced_search shape.
-    """
-
-    model_config = ConfigDict(extra="allow")
-
-    success: bool = True
-    results: List[Dict[str, Any]] = Field(default_factory=list)
-    total_count: int = 0
-    message: str | None = None
+# advanced search v2 response shape folded into KBSearchResponse above (#10666 B1)
 
 
 class SearchAnalyticsResponse(BaseModel):

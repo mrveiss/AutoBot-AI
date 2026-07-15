@@ -10,30 +10,30 @@
 <template>
   <div class="gantt-view">
     <header class="gantt-toolbar">
-      <h2 class="gantt-title">Timeline</h2>
+      <h2 class="gantt-title">{{ $t('llc.gantt.title') }}</h2>
       <div class="gantt-controls">
         <label class="gantt-field">
-          <span class="gantt-field-label">Project</span>
+          <span class="gantt-field-label">{{ $t('llc.gantt.project') }}</span>
           <select v-model="selectedProjectId" class="gantt-select" @change="loadTimeline">
             <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </label>
         <label class="gantt-field">
-          <span class="gantt-field-label">Zoom</span>
+          <span class="gantt-field-label">{{ $t('llc.gantt.zoom') }}</span>
           <select v-model="zoom" class="gantt-select">
-            <option value="day">Day</option>
-            <option value="week">Week</option>
-            <option value="month">Month</option>
-            <option value="quarter">Quarter</option>
+            <option value="day">{{ $t('llc.gantt.zoomDay') }}</option>
+            <option value="week">{{ $t('llc.gantt.zoomWeek') }}</option>
+            <option value="month">{{ $t('llc.gantt.zoomMonth') }}</option>
+            <option value="quarter">{{ $t('llc.gantt.zoomQuarter') }}</option>
           </select>
         </label>
-        <button class="gantt-btn" :disabled="!items.length" @click="exportPng">Export PNG</button>
+        <button class="gantt-btn" :disabled="!items.length" @click="exportPng">{{ $t('llc.gantt.exportPng') }}</button>
       </div>
     </header>
 
-    <div v-if="loading" class="gantt-state">Loading timeline…</div>
-    <div v-else-if="!projects.length" class="gantt-state">No projects in this company yet.</div>
-    <div v-else-if="!items.length" class="gantt-state">This project has no work items to schedule.</div>
+    <div v-if="loading" class="gantt-state">{{ $t('llc.gantt.loading') }}</div>
+    <div v-else-if="!projects.length" class="gantt-state">{{ $t('llc.gantt.noProjects') }}</div>
+    <div v-else-if="!items.length" class="gantt-state">{{ $t('llc.gantt.noItems') }}</div>
 
     <div v-else class="gantt-scroll">
       <svg
@@ -42,7 +42,7 @@
         :width="chartWidth + LABEL_W"
         :height="chartHeight + HEADER_H"
         role="img"
-        aria-label="Project timeline Gantt chart"
+        :aria-label="$t('llc.gantt.ariaChart')"
       >
         <defs>
           <marker
@@ -124,7 +124,7 @@
             :y="rowY(idx) + BAR_H / 2 + 4"
             class="gantt-unscheduled"
           >
-            unscheduled
+            {{ $t('llc.gantt.unscheduled') }}
           </text>
         </g>
       </svg>
@@ -137,10 +137,14 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useI18n } from 'vue-i18n'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 
 const logger = createLogger('GanttTimelineView')
 const api = useApiClient()
 const route = useRoute()
+const { t } = useI18n()
+const { showToast } = useNotificationBus()
 
 const LABEL_W = 120
 const HEADER_H = 32
@@ -340,6 +344,7 @@ async function onDragEnd() {
     })
   } catch (err) {
     logger.error('Failed to persist reschedule', err)
+    showToast(t('llcBrowser.timeline.rescheduleError'), 'error')
     await loadTimeline()
   }
 }
@@ -455,22 +460,22 @@ onBeforeUnmount(() => {
   font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .gantt-select {
   padding: 0.3rem 0.5rem;
   border-radius: 6px;
-  border: 1px solid var(--color-border, #d1d5db);
-  background: var(--color-surface, #fff);
-  color: var(--color-text, #111827);
+  border: 1px solid var(--border-default, #d1d5db);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary, #111827);
 }
 
 .gantt-btn {
   padding: 0.4rem 0.8rem;
   border-radius: 6px;
-  border: 1px solid var(--color-border, #d1d5db);
-  background: var(--color-surface, #fff);
+  border: 1px solid var(--border-default, #d1d5db);
+  background: var(--bg-surface, #fff);
   cursor: pointer;
   font-size: 0.8rem;
 }
@@ -483,30 +488,33 @@ onBeforeUnmount(() => {
 .gantt-state {
   padding: 2rem;
   text-align: center;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .gantt-scroll {
+  /* #10750 C2: fill remaining height of the flex-column view and scroll internally */
+  flex: 1;
+  min-height: 0;
   overflow: auto;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 8px;
-  background: var(--color-surface, #fff);
+  background: var(--bg-surface, #fff);
 }
 
 .gantt-gridline {
-  stroke: var(--color-border, #e5e7eb);
+  stroke: var(--border-default, #e5e7eb);
   stroke-width: 1;
 }
 
 .gantt-axis-label {
   font-size: 10px;
-  fill: var(--color-text-secondary, #9ca3af);
+  fill: var(--text-secondary, #9ca3af);
 }
 
 .gantt-row-label {
   font-size: 10px;
   font-family: monospace;
-  fill: var(--color-text-secondary, #6b7280);
+  fill: var(--text-secondary, #6b7280);
 }
 
 .gantt-bar {
@@ -515,7 +523,7 @@ onBeforeUnmount(() => {
 }
 
 .gantt-bar--critical {
-  fill: var(--color-danger, #ef4444);
+  fill: var(--color-error, #ef4444);
 }
 
 .gantt-handle {
@@ -531,7 +539,7 @@ onBeforeUnmount(() => {
 
 .gantt-unscheduled {
   font-size: 10px;
-  fill: var(--color-text-secondary, #9ca3af);
+  fill: var(--text-secondary, #9ca3af);
   font-style: italic;
 }
 </style>

@@ -16,7 +16,7 @@ OpenVINO (Open Visual Inference and Neural Network Optimization) provides CPU an
 
 | Component | Status | Location |
 |-----------|--------|----------|
-| OpenVINO Runtime | ✅ Installed | `venv/lib/python3.12/site-packages/openvino/` |
+| OpenVINO Runtime | ✅ Installed | `venv/lib/python3.14/site-packages/openvino/` |
 | CPU Plugin | ✅ Available | `libopenvino_intel_cpu_plugin.so` |
 | GPU Plugin | ✅ Installed | `libopenvino_intel_gpu_plugin.so` |
 | NPU Plugin | ✅ Installed | `libopenvino_intel_npu_plugin.so` |
@@ -200,7 +200,7 @@ OPENVINO_CACHE_DIR=/tmp/openvino_cache
 
 ```dockerfile
 # Dockerfile additions for OpenVINO
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Install OpenVINO dependencies
 RUN apt-get update && apt-get install -y \

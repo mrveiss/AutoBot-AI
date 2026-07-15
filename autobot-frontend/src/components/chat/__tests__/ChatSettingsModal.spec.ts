@@ -21,6 +21,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 import { mount, type VueWrapper } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
 
 // ── Module-level mocks (hoisted) ─────────────────────────────────────────────
 
@@ -39,7 +40,18 @@ import ChatSettingsModal from '../ChatSettingsModal.vue'
 
 // ── Mock state ───────────────────────────────────────────────────────────────
 
-const stubT = (key: string) => key
+// vue-i18n 11 requires app.use(); ChatSettingsModal uses useI18n() in
+// <script setup>, so a bare $t mock is insufficient. Install a real i18n
+// instance with empty messages + warnings off so t('key') returns the key
+// verbatim (matching the assertions on translation keys below).
+const i18n = createI18n({
+  legacy: false,
+  locale: 'en',
+  fallbackLocale: 'en',
+  messages: { en: {} },
+  missingWarn: false,
+  fallbackWarn: false,
+})
 
 // Shared reactive prefs state, mimicking the singleton composable.
 const reasoningEffort = ref<'auto' | 'low' | 'medium' | 'high'>('auto')
@@ -55,7 +67,7 @@ function mountModal(show = true): VueWrapper {
   return mount(ChatSettingsModal, {
     props: { show },
     global: {
-      mocks: { $t: stubT },
+      plugins: [i18n],
     },
   })
 }

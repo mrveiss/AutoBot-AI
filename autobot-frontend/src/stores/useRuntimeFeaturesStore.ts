@@ -27,7 +27,7 @@ interface FrontendConfigResponse {
 
 export const useRuntimeFeaturesStore = defineStore('runtimeFeatures', () => {
   // Default fail-closed for deployment-gated modules: hidden until the backend
-  // confirms availability, so single_user deployments never surface a 503 view.
+  // confirms availability, so deployments without company mode never surface a 503 view.
   const features = ref<RuntimeFeatures>({ company_os_enabled: false })
   const isLoaded = ref(false)
   const isLoading = ref(false)

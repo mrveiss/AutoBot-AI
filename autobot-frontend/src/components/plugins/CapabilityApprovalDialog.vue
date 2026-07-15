@@ -117,10 +117,8 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { usePlugins, type CapabilityInfo } from '@/composables/usePlugins'
 
-const { t } = useI18n()
 
 const props = defineProps<{
   pluginName: string
@@ -257,7 +255,7 @@ watch(() => props.open, (isOpen) => {
 }
 
 .capability-approval-dialog {
-  background: var(--color-background);
+  background: var(--bg-primary);
   border-radius: 8px;
   max-width: 600px;
   width: 90%;
@@ -272,14 +270,14 @@ watch(() => props.open, (isOpen) => {
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .dialog-header h2 {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .close-btn {
@@ -287,7 +285,7 @@ watch(() => props.open, (isOpen) => {
   border: none;
   padding: 0.5rem;
   cursor: pointer;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   border-radius: 4px;
   transition: background-color 0.2s;
 }
@@ -308,7 +306,7 @@ watch(() => props.open, (isOpen) => {
   justify-content: center;
   gap: 0.75rem;
   padding: 2rem;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .dialog-error {
@@ -343,7 +341,7 @@ watch(() => props.open, (isOpen) => {
   margin: 0;
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .trust-tier-badge {
@@ -376,7 +374,7 @@ watch(() => props.open, (isOpen) => {
 
 .approval-description {
   margin-bottom: 1.5rem;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
@@ -387,7 +385,7 @@ watch(() => props.open, (isOpen) => {
 }
 
 .capability-item {
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   padding: 0.75rem;
   transition: background-color 0.2s;
@@ -413,21 +411,21 @@ watch(() => props.open, (isOpen) => {
 
 .capability-name {
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--text-primary);
   font-family: monospace;
 }
 
 .capability-description {
   display: block;
   margin-left: 1.65rem;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
 .no-pending {
   text-align: center;
   padding: 2rem;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .dialog-actions {
@@ -435,7 +433,7 @@ watch(() => props.open, (isOpen) => {
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1.5rem;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--border-default);
 }
 
 .btn {
@@ -455,7 +453,7 @@ watch(() => props.open, (isOpen) => {
 
 .btn-secondary {
   background-color: var(--color-background-secondary);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .btn-secondary:hover:not(:disabled) {

@@ -17,8 +17,8 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from autobot_shared.secrets_vault import VaultKind, VaultRef
+from services.envelope_secrets_service import EnvelopeSecretsService
 from services.secrets_access_audit import describe_secret_access
-from services.unified_secrets_service import UnifiedSecretsService
 from tests.migrations.conftest import requires_postgres, run_alembic
 
 pytestmark = [pytest.mark.migration_gate, requires_postgres]
@@ -57,7 +57,7 @@ async def _seed_memberships(session) -> None:
 
 async def test_describe_resolves_grantee_members(session):
     await _seed_memberships(session)
-    svc = UnifiedSecretsService(root_key=_ROOT)
+    svc = EnvelopeSecretsService(root_key=_ROOT)
     owner = VaultRef(VaultKind.USER, str(_OWNER))
     secret = await svc.create(
         session, owner_vault=owner, name="db-pw", secret_type="password", plaintext=b"v", created_by=_OWNER
@@ -105,7 +105,7 @@ async def test_audit_excludes_inactive_members(session):
     await session.flush()
     session.add(UserRole(user_id=dead, role_id=role_id))
 
-    svc = UnifiedSecretsService(root_key=_ROOT)
+    svc = EnvelopeSecretsService(root_key=_ROOT)
     owner = VaultRef(VaultKind.USER, str(_OWNER))
     secret = await svc.create(
         session, owner_vault=owner, name="x", secret_type="password", plaintext=b"v", created_by=_OWNER
@@ -123,7 +123,7 @@ async def test_audit_excludes_inactive_members(session):
 
 
 async def test_describe_unshared_secret_lists_only_owner(session):
-    svc = UnifiedSecretsService(root_key=_ROOT)
+    svc = EnvelopeSecretsService(root_key=_ROOT)
     owner = VaultRef(VaultKind.USER, str(_OWNER))
     secret = await svc.create(
         session, owner_vault=owner, name="solo", secret_type="password", plaintext=b"v", created_by=_OWNER
@@ -135,10 +135,10 @@ async def test_describe_unshared_secret_lists_only_owner(session):
 
 
 async def test_coordinator_authorizes_owner_denies_stranger(session):
+    from services.envelope_secrets_service import SecretAccessError, SecretNotFoundError
     from services.secrets_coordinator import SecretsCoordinator
-    from services.unified_secrets_service import SecretAccessError, SecretNotFoundError
 
-    coord = SecretsCoordinator(service=UnifiedSecretsService(root_key=_ROOT))
+    coord = SecretsCoordinator(service=EnvelopeSecretsService(root_key=_ROOT))
     owner = VaultRef(VaultKind.USER, str(_OWNER))
     secret = await coord.create(
         session, user_id=_OWNER, permissions=set(), owner_vault=owner, name="x", secret_type="password", plaintext=b"v"
@@ -164,11 +164,11 @@ async def test_coordinator_authorizes_owner_denies_stranger(session):
 async def test_company_member_cannot_audit(session):
     # H1: a company MEMBER can read/write company secrets but lacks 'share' authority, so it must
     # NOT be able to enumerate who-has-access. Only OWNER/ADMIN/LEAD (manage authority) or admins may.
+    from services.envelope_secrets_service import SecretAccessError
     from services.secrets_coordinator import SecretsCoordinator
-    from services.unified_secrets_service import SecretAccessError
 
     await _seed_memberships(session)  # _BOB is a "member" of _COMPANY
-    coord = SecretsCoordinator(service=UnifiedSecretsService(root_key=_ROOT))
+    coord = SecretsCoordinator(service=EnvelopeSecretsService(root_key=_ROOT))
     company = VaultRef(VaultKind.COMPANY, str(_COMPANY))
     secret = await coord.create(
         session, user_id=_BOB, permissions=set(), owner_vault=company, name="cs", secret_type="password", plaintext=b"v"

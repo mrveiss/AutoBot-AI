@@ -71,9 +71,7 @@ const emit = defineEmits<{
           <span class="font-semibold text-gray-900">{{ hostname }}</span>
           <span v-if="ipAddress" class="text-sm text-gray-500">({{ ipAddress }})</span>
         </div>
-        <div class="text-sm text-gray-500">
-          {{ totalServices }} service{{ totalServices !== 1 ? 's' : '' }}
-        </div>
+        <div class="text-sm text-gray-500">{{ $t('orchestration.nodeHealthCard.value0ServicePlural', { value0: totalServices, plural: totalServices !== 1 ? 's' : '' }) }}</div>
       </div>
     </div>
 
@@ -103,7 +101,7 @@ const emit = defineEmits<{
         @click.stop="emit('restartAll', nodeId, hostname)"
         :disabled="isRestartingAll"
         class="px-2.5 py-1 text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 rounded-sm hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-        title="Restart all services on this node"
+        :title="$t('orchestration.nodeHealthCard.restartAllServicesOnThisNode')"
       >
         <svg
           v-if="isRestartingAll"

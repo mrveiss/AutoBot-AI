@@ -123,11 +123,11 @@
                 step="10"
                 :placeholder="$t('llc.wizard.step2.monthlyBudgetPlaceholder')"
               />
-              <span class="budget-unit">/month</span>
+              <span class="budget-unit">{{ $t('llc.wizard.perMonth') }}</span>
             </div>
             <span v-if="selectedTemplate?.estimated_monthly_cost_cents" class="form-hint">
               {{ $t('llc.wizard.step2.estimatedCost') }}:
-              ${{ (selectedTemplate.estimated_monthly_cost_cents / 100).toFixed(0) }}/mo
+              ${{ (selectedTemplate.estimated_monthly_cost_cents / 100).toFixed(0) }}{{ $t('llc.wizard.perMonthShort') }}
             </span>
           </div>
 
@@ -202,7 +202,7 @@
               </div>
               <div class="summary-item">
                 <dt>{{ $t('llc.wizard.step2.monthlyBudget') }}</dt>
-                <dd>${{ budgetDollars }}/month</dd>
+                <dd>${{ budgetDollars }}{{ $t('llc.wizard.perMonth') }}</dd>
               </div>
               <div class="summary-item">
                 <dt>{{ $t('llc.wizard.step2.brandColor') }}</dt>
@@ -241,19 +241,19 @@
               <dl class="summary-list">
                 <div v-if="selectedTemplate.agents?.length" class="summary-item">
                   <dt>{{ $t('llc.wizard.step3.agents') }}</dt>
-                  <dd>{{ selectedTemplate.agents.length }} agents</dd>
+                  <dd>{{ $t('llc.wizard.agentsUnit', { count: selectedTemplate.agents.length }) }}</dd>
                 </div>
                 <div v-if="selectedTemplate.goals?.length" class="summary-item">
                   <dt>{{ $t('llc.wizard.step3.goals') }}</dt>
-                  <dd>{{ selectedTemplate.goals.length }} goals</dd>
+                  <dd>{{ $t('llc.wizard.goalsUnit', { count: selectedTemplate.goals.length }) }}</dd>
                 </div>
                 <div v-if="selectedTemplate.work_items?.length" class="summary-item">
                   <dt>{{ $t('llc.wizard.step3.workItems') }}</dt>
-                  <dd>{{ selectedTemplate.work_items.length }} work items</dd>
+                  <dd>{{ $t('llc.wizard.workItemsUnit', { count: selectedTemplate.work_items.length }) }}</dd>
                 </div>
                 <div v-if="selectedTemplate.kb_collections?.length" class="summary-item">
                   <dt>{{ $t('llc.wizard.step3.kbCollections') }}</dt>
-                  <dd>{{ selectedTemplate.kb_collections.length }} KB collections</dd>
+                  <dd>{{ $t('llc.wizard.kbCollectionsUnit', { count: selectedTemplate.kb_collections.length }) }}</dd>
                 </div>
               </dl>
             </div>
@@ -307,6 +307,7 @@
 
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useCompanyTemplates, type CompanyTemplate, type TemplateCategory } from '@/composables/llc/useCompanyTemplates'
@@ -316,13 +317,14 @@ import Icon from '@/components/ui/Icon.vue'
 const logger = createLogger('CompanyCreationWizard')
 const router = useRouter()
 const api = useApiClient()
+const { t } = useI18n()
 const { importTemplate } = useCompanyTemplates()
 
-const STEPS = [
-  { n: 1, label: 'Choose Template' },
-  { n: 2, label: 'Configure' },
-  { n: 3, label: 'Review' },
-]
+const STEPS = computed(() => [
+  { n: 1, label: t('llc.wizard.steps.chooseTemplate') },
+  { n: 2, label: t('llc.wizard.steps.configure') },
+  { n: 3, label: t('llc.wizard.steps.review') },
+])
 
 const step = ref(1)
 const useTemplate = ref(false)
@@ -397,19 +399,38 @@ function getDefaultIcon(cat: TemplateCategory): string {
   return icons[cat] || 'building'
 }
 
+/**
+ * Derive a backend-valid company slug from the company name.
+ * Backend requires slug matching ^[a-z0-9-]+$ (CompanyBase). We lowercase,
+ * collapse runs of non-alphanumeric chars to a single dash, and strip
+ * leading/trailing dashes. Falls back to a timestamp-based slug if empty.
+ */
+function slugify(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return slug || `company-${Date.now()}`
+}
+
 async function createCompany() {
   loading.value = true
   error.value = null
 
   try {
-    // Step 1: Create the company
+    // Step 1: Create the company.
+    // Field names must match the backend CompanyCreate/CompanyBase schema
+    // (autobot-backend/llc/models/company.py): slug is required, the budget key
+    // is budget_monthly_cents, the mission maps to description, and llc_status
+    // is left to the backend default (ONBOARDING) — do not send a bogus status.
     const companyPayload = {
       name: companyConfig.value.name,
+      slug: slugify(companyConfig.value.name),
       issue_prefix: companyConfig.value.issue_prefix,
-      mission: companyConfig.value.mission || undefined,
-      monthly_budget_cents: companyConfig.value.monthly_budget_cents,
+      description: companyConfig.value.mission || undefined,
+      budget_monthly_cents: companyConfig.value.monthly_budget_cents,
       brand_color: companyConfig.value.brand_color,
-      status: 'active',
     }
 
     logger.info('Creating company', companyPayload)
@@ -433,11 +454,14 @@ async function createCompany() {
 
     logger.info('Company created successfully', { companyId: createdCompany.id })
 
-    // Redirect to company dashboard
-    await router.push('/llc/dashboard')
-  } catch (err: any) {
+    // Redirect into the new company's PM workspace (LlcCompanyLayout → backlog,
+    // boards, sprints, etc. with the sidebar) rather than the sidebar-less
+    // standalone /llc/dashboard, which left all PM features unreachable.
+    await router.push(`/llc/companies/${createdCompany.id}`)
+  } catch (err) {
     logger.error('Failed to create company', err)
-    error.value = err?.response?.data?.detail || err?.message || 'Failed to create company'
+    const e = err as { response?: { data?: { detail?: string } }; message?: string }
+    error.value = e?.response?.data?.detail || e?.message || t('llc.wizard.createFailed')
   } finally {
     loading.value = false
   }
@@ -446,13 +470,19 @@ async function createCompany() {
 
 <style scoped>
 .company-creation-wizard {
+  /* Fill the available space provided by the app layout's <main> element
+     (App.vue: main.flex-1.min-h-0 + router-view.h-full). Using 100vh here
+     overflowed past the viewport by the header height and pushed the footer
+     action buttons (Back/Next/Create) out of view. */
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
   background: var(--bg-primary);
 }
 
 .wizard-header {
+  flex-shrink: 0;
   padding: var(--spacing-6) var(--spacing-4);
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-elevated);
@@ -523,6 +553,7 @@ async function createCompany() {
 
 .wizard-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: var(--spacing-6) var(--spacing-4);
 }
@@ -795,6 +826,7 @@ async function createCompany() {
 }
 
 .wizard-actions {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   gap: var(--spacing-3);

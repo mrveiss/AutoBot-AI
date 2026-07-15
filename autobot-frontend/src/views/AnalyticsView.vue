@@ -11,7 +11,7 @@
 
       <!-- Sub-navigation Tabs - Issue #901 / TASK 14: overflow-aware tab bar -->
       <div class="analytics-nav">
-        <nav ref="tabsContainer" class="nav-tabs" role="tablist" :aria-label="$t('analytics.views.ariaLabel')">
+        <nav ref="tabsContainer" class="nav-tabs" :aria-label="$t('analytics.views.ariaLabel')">
           <router-link
             v-for="tab in visibleTabs"
             :key="tab.to"
@@ -19,8 +19,7 @@
             data-nav-item
             class="nav-tab"
             :class="{ 'nav-tab-active': isActive(tab) }"
-            role="tab"
-            :aria-selected="isActive(tab)"
+            :aria-current="isActive(tab) ? 'page' : undefined"
             :aria-label="$t(tab.aria)"
           >
             <Icon :name="tab.icon" class="tab-icon" aria-hidden="true" />

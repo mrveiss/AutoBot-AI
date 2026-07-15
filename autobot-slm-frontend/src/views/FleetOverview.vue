@@ -11,6 +11,7 @@
  */
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmApi } from '@/composables/useSlmApi'
@@ -32,6 +33,7 @@ import DecommissionModal from '@/components/fleet/DecommissionModal.vue'
 import InfrastructureView from '@/views/InfrastructureView.vue'
 
 const logger = createLogger('FleetOverview')
+const { t } = useI18n()
 const fleetStore = useFleetStore()
 const slmApi = useSlmApi()
 const route = useRoute()
@@ -330,7 +332,7 @@ const isRestarting = ref(false)
 async function handleRestart(nodeId: string): Promise<void> {
   const node = fleetStore.getNode(nodeId)
   const hostname = node?.hostname || nodeId
-  if (!confirm(`Reboot node "${hostname}"? The node will go offline temporarily.`)) {
+  if (!confirm(t('fleetOverview.confirmReboot', { hostname }))) {
     return
   }
 
@@ -341,7 +343,7 @@ async function handleRestart(nodeId: string): Promise<void> {
     fleetStore.updateNodeStatus(nodeId, 'rebooting')
   } catch (err) {
     logger.error('Failed to reboot node:', err)
-    alert(`Failed to reboot node: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    alert(t('fleetOverview.failedToReboot', { message: err instanceof Error ? err.message : t('fleetOverview.unknownError') }))
   } finally {
     isRestarting.value = false
   }
@@ -350,7 +352,7 @@ async function handleRestart(nodeId: string): Promise<void> {
 async function handleReenroll(nodeId: string): Promise<void> {
   const node = fleetStore.getNode(nodeId)
   const hostname = node?.hostname || nodeId
-  if (!confirm(`Re-enroll node "${hostname}"? This will reset it to pending status for fresh enrollment.`)) {
+  if (!confirm(t('fleetOverview.confirmReenroll', { hostname }))) {
     return
   }
 
@@ -360,11 +362,11 @@ async function handleReenroll(nodeId: string): Promise<void> {
       logger.info('Node reset for re-enrollment:', nodeId)
       await refreshFleet()
     } else {
-      alert(`Re-enrollment failed: ${result.message}`)
+      alert(t('fleetOverview.reenrollmentFailed', { message: result.message }))
     }
   } catch (err) {
     logger.error('Failed to re-enroll node:', err)
-    alert(`Failed to re-enroll: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    alert(t('fleetOverview.failedToReenroll', { message: err instanceof Error ? err.message : t('fleetOverview.unknownError') }))
   }
 }
 
@@ -398,7 +400,7 @@ const formatLastSeen = formatRelativeTime
           <!-- WebSocket Connection Indicator (Issue #754: aria) -->
           <span
             role="status"
-            :aria-label="`WebSocket: ${ws.connected.value ? 'Connected' : ws.reconnecting.value ? 'Reconnecting' : 'Disconnected'}`"
+            :aria-label="$t('fleetOverview.webSocketStatusAria', { status: ws.connected.value ? $t('fleetOverview.webSocketConnected') : ws.reconnecting.value ? $t('fleetOverview.webSocketReconnecting') : $t('fleetOverview.webSocketDisconnected') })"
             class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
             :class="ws.connected.value
               ? 'bg-green-100 text-green-800'
@@ -415,7 +417,7 @@ const formatLastSeen = formatRelativeTime
                   ? 'bg-yellow-500 animate-pulse'
                   : 'bg-red-500'"
             ></span>
-            {{ ws.connected.value ? 'Live' : ws.reconnecting.value ? 'Reconnecting' : 'Disconnected' }}
+            {{ ws.connected.value ? $t('fleetOverview.live') : ws.reconnecting.value ? $t('fleetOverview.webSocketReconnecting') : $t('fleetOverview.webSocketDisconnected') }}
           </span>
         </p>
       </div>
@@ -423,7 +425,7 @@ const formatLastSeen = formatRelativeTime
         <button
           @click="refreshFleet"
           :disabled="isLoading"
-          aria-label="Refresh fleet data"
+          :aria-label="$t('fleetOverview.refreshFleetDataAria')"
           class="btn btn-secondary flex items-center gap-2"
         >
           <svg :class="['w-4 h-4', isLoading ? 'animate-spin' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -434,7 +436,7 @@ const formatLastSeen = formatRelativeTime
         <button
           v-if="activeTab === 'nodes'"
           @click="openAddNodeModal"
-          aria-label="Add new node to fleet"
+          :aria-label="$t('fleetOverview.addNewNodeAria')"
           class="btn btn-primary flex items-center gap-2"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -447,7 +449,7 @@ const formatLastSeen = formatRelativeTime
 
     <!-- Tabs (Issue #754: ARIA tablist) -->
     <div class="border-b border-gray-200 mb-6">
-      <nav class="-mb-px flex space-x-8" role="tablist" aria-label="Fleet view tabs">
+      <nav class="-mb-px flex space-x-8" role="tablist" :aria-label="$t('fleetOverview.fleetViewTabsAria')">
         <button
           @click="navigateToTab('nodes')"
           role="tab"
@@ -509,11 +511,11 @@ const formatLastSeen = formatRelativeTime
     </div>
 
     <!-- Nodes Tab Content -->
-    <div v-show="activeTab === 'nodes'" id="tabpanel-nodes" role="tabpanel" aria-label="Nodes overview">
+    <div v-show="activeTab === 'nodes'" id="tabpanel-nodes" role="tabpanel" :aria-label="$t('fleetOverview.nodesOverviewAria')">
       <FleetSummary class="mb-6" />
 
       <!-- Node Grid -->
-      <div v-if="nodes.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" role="list" aria-label="Fleet nodes">
+      <div v-if="nodes.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" role="list" :aria-label="$t('fleetOverview.fleetNodesAria')">
         <NodeCard
           v-for="node in nodes"
           :key="node.node_id"
@@ -533,19 +535,19 @@ const formatLastSeen = formatRelativeTime
       </div>
 
       <!-- Loading State -->
-      <div v-if="isLoading && nodes.length === 0" class="flex items-center justify-center py-12" role="status" aria-label="Loading fleet data">
+      <div v-if="isLoading && nodes.length === 0" class="flex items-center justify-center py-12" role="status" :aria-label="$t('fleetOverview.loadingFleetDataAria')">
         <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
         <span class="sr-only">{{ $t('fleetOverview.loadingFleetData') }}</span>
       </div>
     </div>
 
     <!-- NPU Workers Tab Content -->
-    <div v-show="activeTab === 'npu'" id="tabpanel-npu" role="tabpanel" aria-label="NPU workers">
+    <div v-show="activeTab === 'npu'" id="tabpanel-npu" role="tabpanel" :aria-label="$t('fleetOverview.nPUWorkersAria')">
       <NPUWorkersTab />
     </div>
 
     <!-- Infrastructure Tab Content -->
-    <div v-show="activeTab === 'infrastructure'" id="tabpanel-infrastructure" role="tabpanel" aria-label="Infrastructure setup">
+    <div v-show="activeTab === 'infrastructure'" id="tabpanel-infrastructure" role="tabpanel" :aria-label="$t('fleetOverview.infrastructureSetupAria')">
       <InfrastructureView />
     </div>
 
@@ -597,7 +599,7 @@ const formatLastSeen = formatRelativeTime
             <div class="flex justify-end gap-3">
               <button @click="closeDeleteConfirm" :disabled="isDeleting" class="btn btn-secondary">{{ $t('fleetOverview.cancel') }}</button>
               <button @click="confirmDelete" :disabled="isDeleting" class="btn bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
-                {{ isDeleting ? 'Deleting...' : 'Delete Node' }}
+                {{ isDeleting ? $t('fleetOverview.deleting') : $t('fleetOverview.deleteNode') }}
               </button>
             </div>
           </div>
@@ -637,7 +639,7 @@ const formatLastSeen = formatRelativeTime
           class="fixed inset-0 z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
-          aria-label="Connection test result"
+          :aria-label="$t('fleetOverview.connectionTestResultAria')"
           @keydown.escape="closeConnectionTestResult"
         >
           <div class="fixed inset-0 bg-gray-500/75" @click="closeConnectionTestResult"></div>
@@ -657,7 +659,7 @@ const formatLastSeen = formatRelativeTime
               </div>
               <div>
                 <h3 class="text-lg font-semibold text-gray-900">
-                  {{ connectionTestResult?.success ? 'Connection Successful' : 'Connection Failed' }}
+                  {{ connectionTestResult?.success ? $t('fleetOverview.connectionSuccessful') : $t('fleetOverview.connectionFailed') }}
                 </h3>
                 <p class="text-sm text-gray-500">{{ selectedNode?.hostname }}</p>
               </div>
@@ -673,7 +675,7 @@ const formatLastSeen = formatRelativeTime
             </div>
             <div v-else class="mb-6">
               <p class="text-sm text-red-600" role="alert">
-                {{ connectionTestResult?.error || 'Failed to connect to node' }}
+                {{ connectionTestResult?.error || $t('fleetOverview.failedToConnectToNode') }}
               </p>
             </div>
             <div class="flex justify-end">
@@ -699,7 +701,7 @@ const formatLastSeen = formatRelativeTime
           class="fixed inset-0 z-50 overflow-hidden"
           role="dialog"
           aria-modal="true"
-          aria-label="Node details panel"
+          :aria-label="$t('fleetOverview.nodeDetailsPanelAria')"
           @keydown.escape="closeLifecyclePanel"
         >
           <div class="fixed inset-0 bg-gray-500/75" @click="closeLifecyclePanel"></div>
@@ -719,7 +721,7 @@ const formatLastSeen = formatRelativeTime
                       <h2 class="text-lg font-semibold text-gray-900">{{ $t('fleetOverview.nodeDetails') }}</h2>
                       <p class="text-sm text-gray-500">{{ selectedNode?.hostname }}</p>
                     </div>
-                    <button @click="closeLifecyclePanel" aria-label="Close node details panel" class="rounded-md text-gray-400 hover:text-gray-600">
+                    <button @click="closeLifecyclePanel" :aria-label="$t('fleetOverview.closeNodeDetailsPanelAria')" class="rounded-md text-gray-400 hover:text-gray-600">
                       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                       </svg>
@@ -748,7 +750,7 @@ const formatLastSeen = formatRelativeTime
                       </div>
                       <div v-if="selectedNode.health" class="grid grid-cols-3 gap-3 mb-3">
                         <div class="rounded-md border border-gray-200 px-3 py-2 text-center">
-                          <p class="text-xs text-gray-500">CPU</p>
+                          <p class="text-xs text-gray-500">{{ $t('fleetOverview.cpu') }}</p>
                           <p class="text-sm font-semibold text-gray-900">{{ selectedNode.health.cpu_percent.toFixed(1) }}%</p>
                         </div>
                         <div class="rounded-md border border-gray-200 px-3 py-2 text-center">
@@ -795,7 +797,7 @@ const formatLastSeen = formatRelativeTime
           class="fixed inset-0 z-50 overflow-hidden"
           role="dialog"
           aria-modal="true"
-          aria-label="Node services panel"
+          :aria-label="$t('fleetOverview.nodeServicesPanelAria')"
           @keydown.escape="closeServicesPanel"
         >
           <div class="fixed inset-0 bg-gray-500/75" @click="closeServicesPanel"></div>
@@ -815,7 +817,7 @@ const formatLastSeen = formatRelativeTime
                       <h2 class="text-lg font-semibold text-gray-900">{{ $t('fleetOverview.services') }}</h2>
                       <p class="text-sm text-gray-500">{{ selectedNode?.hostname }}</p>
                     </div>
-                    <button @click="closeServicesPanel" aria-label="Close services panel" class="rounded-md text-gray-400 hover:text-gray-600">
+                    <button @click="closeServicesPanel" :aria-label="$t('fleetOverview.closeServicesPanelAria')" class="rounded-md text-gray-400 hover:text-gray-600">
                       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                       </svg>

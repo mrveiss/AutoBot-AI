@@ -1,11 +1,11 @@
 <template>
-  <div class="terminal-settings p-4 bg-gray-800 rounded-lg">
+  <div class="terminal-settings p-4 bg-autobot-bg-secondary rounded-lg">
     <h3 class="text-white text-lg mb-4">{{ $t('terminal.settings') }}</h3>
 
     <div class="space-y-4">
       <!-- Font Size -->
       <div class="flex items-center justify-between">
-        <label class="text-gray-300">{{ $t('terminal.fontSize') }}</label>
+        <label class="text-autobot-text-muted">{{ $t('terminal.fontSize') }}</label>
         <div class="flex items-center gap-2">
           <input
             type="range"
@@ -15,16 +15,16 @@
             class="w-24 accent-blue-500"
             data-testid="font-size-slider"
           />
-          <span class="text-gray-400 w-8 text-right">{{ settings.fontSize }}</span>
+          <span class="text-autobot-text-muted w-8 text-right">{{ settings.fontSize }}</span>
         </div>
       </div>
 
       <!-- Theme -->
       <div class="flex items-center justify-between">
-        <label class="text-gray-300">{{ $t('terminal.theme') }}</label>
+        <label class="text-autobot-text-muted">{{ $t('terminal.theme') }}</label>
         <select
           v-model="settings.theme"
-          class="bg-gray-700 text-white rounded px-2 py-1 border border-gray-600 focus:border-blue-500 focus:outline-none"
+          class="bg-autobot-bg-secondary text-white rounded px-2 py-1 border border-autobot-border-strong focus:border-blue-500 focus:outline-none"
           data-testid="theme-select"
         >
           <option value="dark">{{ $t('terminal.dark') }}</option>
@@ -34,10 +34,10 @@
 
       <!-- Cursor Style -->
       <div class="flex items-center justify-between">
-        <label class="text-gray-300">{{ $t('terminal.cursorStyle') }}</label>
+        <label class="text-autobot-text-muted">{{ $t('terminal.cursorStyle') }}</label>
         <select
           v-model="settings.cursorStyle"
-          class="bg-gray-700 text-white rounded px-2 py-1 border border-gray-600 focus:border-blue-500 focus:outline-none"
+          class="bg-autobot-bg-secondary text-white rounded px-2 py-1 border border-autobot-border-strong focus:border-blue-500 focus:outline-none"
           data-testid="cursor-style-select"
         >
           <option value="block">{{ $t('terminal.block') }}</option>
@@ -48,7 +48,7 @@
 
       <!-- Cursor Blink -->
       <div class="flex items-center justify-between">
-        <label class="text-gray-300">{{ $t('terminal.cursorBlink') }}</label>
+        <label class="text-autobot-text-muted">{{ $t('terminal.cursorBlink') }}</label>
         <input
           type="checkbox"
           v-model="settings.cursorBlink"

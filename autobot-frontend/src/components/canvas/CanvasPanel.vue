@@ -84,7 +84,7 @@ import CanvasConflictBanner from './CanvasConflictBanner.vue'
 import CanvasEdgeStates from './CanvasEdgeStates.vue'
 import CanvasExportSheet from './CanvasExportSheet.vue'
 
-const props = defineProps<{
+defineProps<{
   canvasId: string
   autoSave: ReturnType<typeof useCanvasAutoSave>
   loadError?: boolean

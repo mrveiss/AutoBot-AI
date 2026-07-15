@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 declare module '*.vue' {
   import { DefineComponent } from 'vue';
-  const component: DefineComponent<{}, {}, any>;
+  const component: DefineComponent<Record<string, never>, Record<string, never>, unknown>;
   export default component;
 }
 

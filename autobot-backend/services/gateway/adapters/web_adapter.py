@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
-from .base_adapter import BaseAdapter, NormalizedResponse, UnifiedMessage
+from .base_adapter import BaseAdapter, GatewayMessage, NormalizedResponse
 
 logger = get_logger(__name__)
 
@@ -19,13 +19,13 @@ class WebAdapter(BaseAdapter):
     def __init__(self) -> None:
         super().__init__("web")
 
-    async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:
+    async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
         """Convert web message to unified schema."""
         metadata = await self.extract_metadata(raw_message)
         metadata["session_id"] = raw_message.get("session_id")
         metadata["user_agent"] = raw_message.get("user_agent")
 
-        return UnifiedMessage(
+        return GatewayMessage(
             user_id=raw_message["user_id"],
             platform="web",
             channel_id=raw_message.get("channel_id", "default"),

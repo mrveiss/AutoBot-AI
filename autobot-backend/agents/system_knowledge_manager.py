@@ -18,7 +18,7 @@ from typing import Any, Dict, List
 import aiofiles
 import yaml
 
-from agents.kb_librarian import EnhancedKBLibrarian
+from agents.kb_librarian import KBLibrarian
 from autobot_shared.logging_manager import get_logger
 from knowledge_base import KnowledgeBase
 
@@ -31,7 +31,7 @@ class SystemKnowledgeManager:
     def __init__(self, knowledge_base: KnowledgeBase):
         """Initialize manager with knowledge base and directory paths."""
         self.knowledge_base = knowledge_base
-        self.librarian = EnhancedKBLibrarian(knowledge_base)
+        self.librarian = KBLibrarian(knowledge_base)
 
         # Paths - use absolute paths to avoid working directory issues
         project_root = Path(

@@ -25,8 +25,8 @@ const meta = {
 } as Meta<typeof LanguageSwitcher>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 export const Desktop: Story = {
   args: {
@@ -40,7 +40,7 @@ export const Desktop: Story = {
       },
     },
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { LanguageSwitcher },
     setup() {
       return { args };
@@ -65,7 +65,7 @@ export const Mobile: Story = {
       },
     },
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { LanguageSwitcher },
     setup() {
       return { args };

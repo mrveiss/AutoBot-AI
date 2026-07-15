@@ -11,7 +11,6 @@ Handles application startup and shutdown with 2-phase initialization:
 """
 
 import asyncio
-import functools
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -77,36 +76,6 @@ async def update_app_state_multi(**kwargs) -> None:
         app_state.update(kwargs)
 
 
-def _llc_postgres_available() -> bool:
-    """LLC persistence requires Postgres (single_company+). In single_user mode
-    it is intentionally unavailable, so callers skip rather than error (#9713)."""
-    try:
-        from user_management.config import get_deployment_config
-
-        return get_deployment_config().postgres_enabled
-    except Exception:
-        return False
-
-
-def requires_postgres(feature: str):
-    """Decorator: skip the wrapped async function with one INFO line when Postgres
-    is disabled (single_user mode).  Apply to startup helpers that have no
-    app.state side-effect on skip; for functions that must also set
-    app.state.X = None on skip keep an explicit guard instead (#9913 #9765)."""
-
-    def deco(fn):
-        @functools.wraps(fn)
-        async def wrapper(*args, **kwargs):
-            if not _llc_postgres_available():
-                logger.info("%s: skipped (Postgres disabled — single_user mode)", feature)
-                return None
-            return await fn(*args, **kwargs)
-
-        return wrapper
-
-    return deco
-
-
 def configure_logging():
     """Configure logging level from environment variable"""
     from autobot_shared.ssot_config import config as _ssot_cfg
@@ -122,27 +91,6 @@ def configure_logging():
     logger.info("📊 Logging level set to: %s (%s)", LOG_LEVEL, LOG_LEVEL_VALUE)
 
 
-def warn_if_dev_auth_bypass_enabled() -> None:
-    """Loud boot-time warning when AUTOBOT_DEV_AUTH_BYPASS=true (Issue #6838).
-
-    The single_user synthetic-admin login shortcut is opt-in. When the flag is
-    set, /api/auth/login mints an admin JWT for any credential pair — which is
-    intended for local development only. Surfaced loudly so operators notice
-    if it leaks into a production deployment.
-    """
-    from api.auth import _dev_auth_bypass_enabled
-
-    if not _dev_auth_bypass_enabled():
-        return
-    banner = "=" * 72
-    logger.warning(banner)
-    logger.warning("⚠️  AUTOBOT_DEV_AUTH_BYPASS=true — /api/auth/login will mint an admin")
-    logger.warning("    JWT for ANY credentials in single_user mode. DO NOT use in")
-    logger.warning("    production. Unset the flag or switch AUTOBOT_USER_MODE away from")
-    logger.warning("    single_user to disable. See issue #6838.")
-    logger.warning(banner)
-
-
 async def _init_cache_coordinator() -> None:
     """Register caches with CacheCoordinator for memory optimization.
 
@@ -154,7 +102,7 @@ async def _init_cache_coordinator() -> None:
 
         cache_count = await register_all_caches()
         logger.info(
-            "✅ [ 55%] Cache: %d caches registered for coordinated management",
+            "✅ [ 55%%] Cache: %d caches registered for coordinated management",
             cache_count,
         )
     except Exception as cache_error:
@@ -648,14 +596,14 @@ async def _warmup_npu_connection(app: FastAPI) -> None:
         if result["status"] == "success":
             npu_ready = True
             logger.info(
-                "✅ [ 82%] NPU Warmup: Connection ready (%.1fms, %d dimensions)",
+                "✅ [ 82%%] NPU Warmup: Connection ready (%.1fms, %d dimensions)",
                 result.get("warmup_time_ms", 0),
                 result.get("embedding_dimensions", 0),
             )
         elif result["status"] == "npu_unavailable":
             logger.info("🔄 [ 82%] NPU Warmup: NPU unavailable, using fallback embeddings")
         else:
-            logger.warning("⚠️ [ 82%] NPU Warmup: %s", result.get("message", "Unknown status"))
+            logger.warning("⚠️ [ 82%%] NPU Warmup: %s", result.get("message", "Unknown status"))
 
     except Exception as warmup_error:
         logger.warning("NPU warmup failed: %s", warmup_error)
@@ -779,7 +727,7 @@ async def _auto_index_documentation():
         if not indexer.needs_indexing():
             stats = await indexer.get_stats()
             logger.info(
-                "✅ [ 85%] Doc Index: Collection has %d vectors, skipping",
+                "✅ [ 85%%] Doc Index: Collection has %d vectors, skipping",
                 stats.get("count", 0),
             )
             return
@@ -810,7 +758,7 @@ async def _init_log_forwarding():
             success = forwarder.start()
             if success:
                 logger.info(
-                    "✅ [ 86%] Log Forwarding: Started with %d destination(s)",
+                    "✅ [ 86%%] Log Forwarding: Started with %d destination(s)",
                     len(forwarder.destinations),
                 )
             else:
@@ -841,7 +789,6 @@ async def _init_llc_outbound_sync(app: FastAPI) -> None:
         app.state.llc_outbound_sync = None
 
 
-@requires_postgres("LLC Routine Scheduler")
 async def _init_llc_routine_scheduler(app: FastAPI) -> None:
     """Start the LLC RoutineScheduler that fires cron-based routines (GH#8229)."""
     logger.info("LLC Routine Scheduler: Starting...")
@@ -865,12 +812,6 @@ async def _init_heartbeat_scheduler(app: FastAPI) -> None:
     GH#8225: Prefers the LLC HeartbeatScheduler; falls back to legacy when
     the LLC package is unavailable, preventing duplicate sorted-set writes.
     """
-    # Both the LLC and legacy paths need the Postgres-backed agent DB; in
-    # single_user mode get_async_session_factory() hard-raises (#9783).
-    if not _llc_postgres_available():
-        logger.info("Heartbeat scheduler: skipped (Postgres disabled — single_user mode)")
-        app.state.heartbeat_scheduler = None
-        return
     # GH#8225: Try LLC scheduler first; it owns llc:heartbeat:schedule.
     # Use get_heartbeat_scheduler() — same lazy_singleton instance used by API routes —
     # so cleanup_services.stop() drains tasks from both startup-fired and API-triggered runs.
@@ -1002,70 +943,66 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
             # Build mesh brain components and register them so every RAGService.initialize()
             # can construct its OWN NeuralMeshRetriever with closures bound to its own
             # optimizer — eliminating the shared-singleton coupling (#4765).
-            # NeuralMesh requires the Postgres-backed engine; skip cleanly in single_user (#9765).
-            if not _llc_postgres_available():
-                logger.info("Neural Mesh RAG: skipped (Postgres disabled — single_user mode)")
-            else:
-                try:
-                    from autobot_shared.redis_client import get_async_redis_client
-                    from knowledge.search_components.query_classifier import QueryClassifier
-                    from knowledge.search_components.reranking import ResultReranker
-                    from services.mesh_brain.edge_learner import EdgeLearner
-                    from services.mesh_brain.mesh_db_adapter import create_mesh_db_adapter
-                    from services.mesh_brain.ppr import PersonalizedPageRank
-                    from user_management.database import get_async_engine
+            try:
+                from autobot_shared.redis_client import get_async_redis_client
+                from knowledge.search_components.query_classifier import QueryClassifier
+                from knowledge.search_components.reranking import ResultReranker
+                from services.mesh_brain.edge_learner import EdgeLearner
+                from services.mesh_brain.mesh_db_adapter import create_mesh_db_adapter
+                from services.mesh_brain.ppr import PersonalizedPageRank
+                from user_management.database import get_async_engine
 
-                    _mesh_db = create_mesh_db_adapter(get_async_engine())
-                    _redis = get_async_redis_client()
-                    _ppr = PersonalizedPageRank(db=_mesh_db)
-                    _edge_learner = EdgeLearner(db=_mesh_db, redis=_redis)
+                _mesh_db = create_mesh_db_adapter(get_async_engine())
+                _redis = get_async_redis_client()
+                _ppr = PersonalizedPageRank(db=_mesh_db)
+                _edge_learner = EdgeLearner(db=_mesh_db, redis=_redis)
 
-                    _mesh_components = {
-                        "mesh_db": _mesh_db,
-                        "ppr": _ppr,
-                        "edge_learner": _edge_learner,
-                        "reranker": ResultReranker(),
-                        "classifier": QueryClassifier(),
-                        "llm": None,
-                    }
+                _mesh_components = {
+                    "mesh_db": _mesh_db,
+                    "ppr": _ppr,
+                    "edge_learner": _edge_learner,
+                    "reranker": ResultReranker(),
+                    "classifier": QueryClassifier(),
+                    "llm": None,
+                }
 
-                    # Store on app.state for introspection / health checks.
-                    app.state.mesh_components = _mesh_components
+                # Store on app.state for introspection / health checks.
+                app.state.mesh_components = _mesh_components
 
-                    # Expose mesh_db on app.state so _start_community_clustering_loop can use it (#4834).
-                    app.state.mesh_db = _mesh_db
+                # Expose mesh_db on app.state so _start_community_clustering_loop can use it (#4834).
+                app.state.mesh_db = _mesh_db
 
-                    # Register components; each future RAGService.initialize() builds its own
-                    # retriever from these, binding closures to its own optimizer (#4765).
-                    register_shared_mesh_components(_mesh_components)
+                # Register components; each future RAGService.initialize() builds its own
+                # retriever from these, binding closures to its own optimizer (#4765).
+                register_shared_mesh_components(_mesh_components)
 
-                    # Trigger re-initialization for already-created RAGService instances so they
-                    # also build per-instance retrievers (covers chat_workflow_manager and the
-                    # get_rag_service() singleton that were created before this point).
-                    import services.rag_service as _rag_mod
+                # Trigger re-initialization for already-created RAGService instances so they
+                # also build per-instance retrievers (covers chat_workflow_manager and the
+                # get_rag_service() singleton that were created before this point).
+                import services.rag_service as _rag_mod
 
-                    for _existing in [
-                        _rag_mod._rag_service_instance,
+                for _existing in [
+                    _rag_mod._rag_service_instance,
+                    getattr(
                         getattr(
-                            getattr(
-                                getattr(app.state, "chat_workflow_manager", None),
-                                "knowledge_service",
-                                None,
-                            ),
-                            "rag_service",
+                            getattr(app.state, "chat_workflow_manager", None),
+                            "knowledge_service",
                             None,
                         ),
-                    ]:
-                        if _existing is not None and _existing._mesh_retriever is None:
-                            _existing._initialized = False  # force re-init on next call
-                            logger.info("Queued per-instance NeuralMeshRetriever build for existing RAGService (#4765)")
+                        "rag_service",
+                        None,
+                    ),
+                ]:
+                    if _existing is not None and _existing._mesh_retriever is None:
+                        _existing._initialized = False  # force re-init on next call
+                        logger.info("Queued per-instance NeuralMeshRetriever build for existing RAGService (#4765)")
 
-                    logger.info(
-                        "✅ [ 87%] Neural Mesh RAG: mesh components registered; "
-                        "per-instance NeuralMeshRetriever will build on next initialize() (#4765)"
-                    )
-                except Exception as _mesh_wire_err:
-                    logger.warning("Neural Mesh RAG wiring skipped (non-fatal): %s", _mesh_wire_err)
+                logger.info(
+                    "✅ [ 87%] Neural Mesh RAG: mesh components registered; "
+                    "per-instance NeuralMeshRetriever will build on next initialize() (#4765)"
+                )
+            except Exception as _mesh_wire_err:
+                logger.warning("Neural Mesh RAG wiring skipped (non-fatal): %s", _mesh_wire_err)
 
             graph_rag_service = GraphRAGService(
                 rag_service=rag_service,
@@ -1167,7 +1104,7 @@ async def _init_slm_client():
             )
 
         await init_slm_client(slm_url, slm_token)
-        logger.info("✅ [ 89%] SLM Client: Connected to SLM server at %s", slm_url)
+        logger.info("✅ [ 89%%] SLM Client: Connected to SLM server at %s", slm_url)
         from services.slm.deployment_bridge import init_orchestrator
         from services.slm_client import get_slm_client as _get_slm_client
 
@@ -1177,12 +1114,13 @@ async def _init_slm_client():
         logger.warning("SLM client initialization failed (continuing without): %s", slm_error)
 
 
-async def _init_metrics_collection():
+async def _init_metrics_collection(app: FastAPI):
     """
     Initialize system metrics collection (NON-CRITICAL).
 
     Issue #876: Start metrics collection AFTER backend initialization completes.
     Previously started at module load time causing self-health-check deadlock.
+    Issue #11638: task stored on app.state so cleanup_services can cancel it.
     """
     logger.info("✅ [ 91%] Metrics Collection: Starting system metrics collection...")
     try:
@@ -1200,7 +1138,10 @@ async def _init_metrics_collection():
         if hasattr(collector, "_is_collecting") and not collector._is_collecting:
             import asyncio
 
-            asyncio.create_task(collector.start_collection())
+            app.state.metrics_collection_task = asyncio.create_task(
+                collector.start_collection(),
+                name="metrics_collection",
+            )
             logger.info("✅ [ 91%] Metrics Collection: Started successfully")
         else:
             logger.info("✅ [ 91%] Metrics Collection: Already running")
@@ -1240,7 +1181,7 @@ async def _init_background_llm_sync(app: FastAPI):
                     if agents_info.get("agents"):
                         app.state.ai_stack_agents = agents_info
                         logger.info(
-                            "✅ [ 90%] AI Stack: %d agents registered from %s",
+                            "✅ [ 90%%] AI Stack: %d agents registered from %s",
                             len(agents_info["agents"]),
                             agents_info.get("source", "ai_stack"),
                         )
@@ -1312,7 +1253,6 @@ async def _init_llm_adapters() -> None:
         logger.warning("LLM adapter initialization failed (non-critical): %s", exc)
 
 
-@requires_postgres("Agent Registry")
 async def _seed_agent_registry() -> None:
     """Populate agents table from DEFAULT_AGENT_CONFIGS (#1754)."""
     logger.info("[ 97%%] Agent Registry: Seeding agents table...")
@@ -1327,7 +1267,6 @@ async def _seed_agent_registry() -> None:
         logger.warning("Agent registry seeding failed: %s", e)
 
 
-@requires_postgres("Default Admin Seed")
 async def _seed_default_admin() -> None:
     """Seed the default platform-admin into autobot_users (#10199).
 
@@ -1342,6 +1281,10 @@ async def _seed_default_admin() -> None:
 
         async with get_async_session_factory()() as session:
             await seed_default_admin(session)
+            # seed_default_admin (via UserService) only flushes; without an
+            # explicit commit the created admin is rolled back on session
+            # exit and never persists (#10636).
+            await session.commit()
     except Exception as e:
         logger.warning("Default admin seeding failed (non-critical): %s", e)
 
@@ -1366,10 +1309,6 @@ async def _init_process_adapter(app: FastAPI) -> None:
 
     NON-CRITICAL: process management endpoints return 503 until this completes.
     """
-    if not _llc_postgres_available():
-        logger.info("[ 96%%] Process Adapter: skipped (Postgres disabled — single_user mode)")
-        app.state.process_adapter_service = None
-        return
     logger.info("[ 96%%] Process Adapter: Initializing...")
     try:
         from api.process_management import set_process_adapter_service
@@ -1548,6 +1487,30 @@ async def _init_backup_scheduler(app: FastAPI) -> None:
         app.state.backup_scheduler = None
 
 
+async def _init_claude_api_integration(app: FastAPI) -> None:
+    """Initialize the canonical Claude API optimization adapter (#10796).
+
+    Starts ClaudeAPIBatchManager (rate limiting, payload optimization, intelligent
+    batching, graceful degradation, TodoWrite optimization, tool pattern analysis)
+    and stores the singleton on app.state so routes and services can import it via
+    ``get_autobot_claude_adapter()``.  NON-CRITICAL: failures are logged and never
+    block startup.
+    """
+    logger.info("[100%%] Claude API Integration: Initializing...")
+    try:
+        from utils.claude_api_integration import get_autobot_claude_adapter
+
+        adapter = await get_autobot_claude_adapter()
+        app.state.claude_api_adapter = adapter
+        logger.info(
+            "[100%%] Claude API Integration: Ready (mode=%s)",
+            adapter.manager.current_mode.value if adapter.manager else "unknown",
+        )
+    except Exception as exc:
+        logger.warning("Claude API integration initialization failed (non-critical): %s", exc)
+        app.state.claude_api_adapter = None
+
+
 async def _start_autonomous_loop(app: FastAPI) -> None:
     """Start the autonomous RAG/synthesis improvement loop background task (Issue #4680).
 
@@ -1583,7 +1546,7 @@ async def _wire_scheduler_executor() -> None:
         orchestrator = get_orchestrator_sync()
 
         async def _orchestration_executor(workflow: ScheduledWorkflow):
-            """Adapter: ScheduledWorkflow → Orchestrator.execute_enhanced_workflow.
+            """Adapter: ScheduledWorkflow → Orchestrator.run_workflow (#10746).
 
             Routes template-based workflows to the template executor and
             non-template workflows through the full orchestration pipeline.
@@ -1602,7 +1565,7 @@ async def _wire_scheduler_executor() -> None:
                 "auto_approve": workflow.auto_approve,
                 "scheduled": True,
             }
-            result = await orchestrator.execute_enhanced_workflow(
+            result = await orchestrator.run_workflow(
                 user_request=workflow.user_message,
                 context=context,
                 auto_document=True,
@@ -1654,10 +1617,6 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
 
 async def _init_liveness_monitor(app: FastAPI) -> None:
     """Start LLC LivenessMonitor to recover stuck heartbeat runs (GH#9028)."""
-    if not _llc_postgres_available():
-        logger.info("LLC LivenessMonitor: skipped (Postgres disabled — single_user mode)")
-        app.state.llc_liveness_monitor = None
-        return
     logger.info("LLC LivenessMonitor: Starting...")
     try:
         from llc.scheduler.liveness_monitor import LivenessMonitor
@@ -1673,10 +1632,6 @@ async def _init_liveness_monitor(app: FastAPI) -> None:
 
 async def _init_budget_watchdog(app: FastAPI) -> None:
     """Start LLC BudgetWatchdog for per-agent budget enforcement (GH#9029)."""
-    if not _llc_postgres_available():
-        logger.info("LLC BudgetWatchdog: skipped (Postgres disabled — single_user mode)")
-        app.state.llc_budget_watchdog = None
-        return
     logger.info("LLC BudgetWatchdog: Starting...")
     try:
         from llc.scheduler.budget_watchdog import BudgetWatchdog
@@ -1690,7 +1645,6 @@ async def _init_budget_watchdog(app: FastAPI) -> None:
         app.state.llc_budget_watchdog = None
 
 
-@requires_postgres("LLC SessionCheckpointer")
 async def _recover_agent_sessions(app: FastAPI) -> None:
     """Re-queue runs that were interrupted by a previous server crash (GH#9026)."""
     logger.info("LLC SessionCheckpointer: recovering incomplete runs...")
@@ -1705,10 +1659,6 @@ async def _recover_agent_sessions(app: FastAPI) -> None:
 
 async def _init_session_checkpointer(app: FastAPI) -> None:
     """Start LLC SessionCheckpointer for periodic session state persistence (GH#9026)."""
-    if not _llc_postgres_available():
-        logger.info("LLC SessionCheckpointer: skipped (Postgres disabled — single_user mode)")
-        app.state.llc_session_checkpointer = None
-        return
     logger.info("LLC SessionCheckpointer: Starting...")
     try:
         from llc.scheduler.session_checkpointer import SessionCheckpointer
@@ -1798,6 +1748,21 @@ async def _init_plugin_manager(app: FastAPI) -> None:
         logger.warning("Plugin manager startup failed (non-critical): %s", pm_err, exc_info=True)
 
 
+async def _init_content_reach_registry(app: FastAPI) -> None:
+    """Register default Content Reach sources and expose via app.state (#10932). NON-CRITICAL."""
+    try:
+        from content_reach.bootstrap import register_default_sources
+        from content_reach.registry import get_content_source_registry
+
+        registry = get_content_source_registry()
+        register_default_sources(registry)  # SYNC — do NOT await
+        app.state.content_reach_registry = registry
+        logger.info("Content Reach: registered %d default sources", len(registry.list_sources()))
+    except Exception as exc:
+        logger.warning("Content Reach registry init failed (non-critical): %s", exc)
+        app.state.content_reach_registry = None
+
+
 async def initialize_background_services(app: FastAPI):
     """
     Phase 2: Initialize background services (NON-BLOCKING).
@@ -1840,7 +1805,7 @@ async def initialize_background_services(app: FastAPI):
         await _start_connector_scheduler()
         await _init_trigger_service(app)
         await _init_slm_reconciler(app)
-        await _init_metrics_collection()
+        await _init_metrics_collection(app)
         await _recover_index_queue()
         await _ensure_agent_memory_index()
         await _init_process_adapter(app)
@@ -1856,9 +1821,11 @@ async def initialize_background_services(app: FastAPI):
         await _init_plugin_manager(app)
         await _init_backup_scheduler(app)
         await _init_llm_key_rotation_scheduler(app)
+        await _init_claude_api_integration(app)
         await _start_autonomous_loop(app)
         await _start_community_clustering_loop(app)
         await _start_llc_notification_router(app)
+        await _init_content_reach_registry(app)
 
         await update_app_state_multi(
             initialization_status="ready",
@@ -2038,6 +2005,99 @@ async def cleanup_services(app: FastAPI):
             await app.state.process_adapter_service.stop()
             logger.info("✅ Process adapter stopped")
 
+        # Issue #11638: Stop autonomous improvement loop background task
+        try:
+            from workflow_scheduler import stop_autonomous_loop
+
+            await stop_autonomous_loop()
+        except Exception as _al_err:
+            logger.warning("Autonomous loop shutdown failed: %s", _al_err)
+
+        # Issue #11638: Stop metrics collection loop and cancel its task
+        try:
+            from api.analytics import analytics_controller
+
+            await analytics_controller.metrics_collector.stop_collection()
+            logger.info("✅ Metrics collection stopped")
+        except Exception as _mc_err:
+            logger.warning("Metrics collection stop failed: %s", _mc_err)
+        try:
+            metrics_task = getattr(app.state, "metrics_collection_task", None)
+            if metrics_task is not None and not metrics_task.done():
+                metrics_task.cancel()
+                await asyncio.gather(metrics_task, return_exceptions=True)
+        except Exception as _mt_err:
+            logger.warning("Metrics task cancel failed: %s", _mt_err)
+
+        # Issue #11638: Shutdown orchestrator singleton (agent pools, memory)
+        try:
+            from orchestrator import shutdown_orchestrator
+
+            await shutdown_orchestrator()
+            logger.info("✅ Orchestrator shutdown")
+        except Exception as _orch_err:
+            logger.warning("Orchestrator shutdown failed: %s", _orch_err)
+
+        # Issue #11638: Close WebResearcher browser resources
+        try:
+            web_researcher = getattr(app.state, "web_researcher", None)
+            if web_researcher is not None:
+                await web_researcher.close()
+                logger.info("✅ WebResearcher closed")
+        except Exception as _wr_err:
+            logger.warning("WebResearcher shutdown failed: %s", _wr_err)
+
+        # Issue #11638: Cancel AI Stack client retry loop (its HTTP session
+        # is the shared HTTPClientManager and is intentionally not closed)
+        try:
+            from services.ai_stack_client import close_ai_stack_client
+
+            await close_ai_stack_client()
+            logger.info("✅ AI Stack client closed")
+        except Exception as _as_err:
+            logger.warning("AI Stack client shutdown failed: %s", _as_err)
+
+        # Issue #11638: Dispose skills DB engine
+        try:
+            from skills.db import close_skills_engine
+
+            await close_skills_engine()
+            logger.info("✅ Skills DB engine closed")
+        except Exception as _sk_err:
+            logger.warning("Skills engine shutdown failed: %s", _sk_err)
+
+        # Issue #11638: Stop log forwarder threads if one was created
+        # (off-loop: LogForwarder.stop() drains its queue synchronously)
+        try:
+            from api.log_forwarding import stop_forwarder_if_running
+
+            if await stop_forwarder_if_running():
+                logger.info("✅ Log forwarder stopped")
+        except Exception as _lf_err:
+            logger.warning("Log forwarder shutdown failed: %s", _lf_err)
+
+        # Issue #11638: Stop NPU worker manager health/failover/pulse tasks
+        # (started by get_worker_manager() during _wire_npu_task_queue; these
+        # loops touch Redis, so stop them BEFORE closing Redis pools)
+        try:
+            import services.npu_worker_manager as _npu_wm
+
+            if _npu_wm._worker_manager is not None:
+                await _npu_wm._worker_manager.stop_health_monitoring()
+                logger.info("✅ NPU worker manager monitoring stopped")
+        except Exception as _npu_err:
+            logger.warning("NPU worker manager shutdown failed: %s", _npu_err)
+
+        # Issue #11639: Stop desktop streaming pub/sub relay (Redis
+        # subscription — stop BEFORE closing Redis pools). No-op if no
+        # streaming session ever started the relay.
+        try:
+            from desktop_streaming_manager import stop_desktop_relay
+
+            await stop_desktop_relay()
+        except Exception as _dsm_err:
+            logger.warning("Desktop streaming relay shutdown failed: %s", _dsm_err)
+
         # Issue #1233: Shutdown dedicated I/O thread pools
         shutdown_io_executors()
 
@@ -2061,6 +2121,15 @@ async def cleanup_services(app: FastAPI):
         except Exception as mcp_err:
             logger.warning("Isolated MCP bridge shutdown failed: %s", mcp_err)
 
+        # #10796: Shutdown Claude API integration adapter
+        try:
+            claude_adapter = getattr(app.state, "claude_api_adapter", None)
+            if claude_adapter is not None:
+                await claude_adapter.shutdown()
+                logger.info("Claude API integration adapter shutdown")
+        except Exception as _ca_err:
+            logger.warning("Claude API adapter shutdown failed: %s", _ca_err)
+
         # GH#9012: Flush LangFuse / LangSmith observer buffers before exit
         try:
             from llm_shared.observability.registry import _registry
@@ -2072,7 +2141,32 @@ async def cleanup_services(app: FastAPI):
         except Exception as obs_err:
             logger.warning("LLM observer flush failed: %s", obs_err)
 
-        # Redis connections automatically managed by get_redis_client()
+        # Issue #11638: Dispose PostgreSQL async engine (was never disposed)
+        try:
+            from user_management.database import close_database
+
+            await close_database()
+        except Exception as _db_err:
+            logger.warning("Database engine dispose failed: %s", _db_err)
+
+        # Issue #11638: Close all Redis pools LAST — earlier shutdown steps
+        # above may still publish events or flush state through Redis.
+        try:
+            from autobot_shared.redis_client import close_all_redis_connections
+
+            await close_all_redis_connections()
+            logger.info("✅ Redis connections closed")
+        except Exception as _redis_err:
+            logger.warning("Redis close failed: %s", _redis_err)
+
+        # Issue #11638: Intentional no-ops (documented triage):
+        # - ChatHistoryManager / ConversationFileManager / ChatWorkflowManager
+        #   hold no owned connections — they operate through the shared Redis
+        #   pools closed above and per-call file handles.
+        # - GraphRAGService / EntityExtractor / mesh components hold in-memory
+        #   model state only; reclaimed at process exit.
+        # - DocIndexerService / OperationIntegrationManager /
+        #   ContentReachRegistry own no background tasks requiring cancellation.
         logger.info("✅ Cleanup completed successfully")
     except Exception as e:
         logger.error("Error during shutdown: %s", e)
@@ -2099,7 +2193,14 @@ def create_lifespan_manager():
         # Configure logging
         configure_logging()
         logger.info("🚀 AutoBot Backend starting up...")
-        warn_if_dev_auth_bypass_enabled()
+
+        # #11279: run the non-fatal startup file-integrity check (mirrors the
+        # autobot-slm-backend lifespan wiring). No-op unless
+        # AUTOBOT_INTEGRITY_CHECK_ENABLED=1; logs a WARNING on any manifest
+        # mismatch and never raises, so it can't block startup.
+        from autobot_shared.integrity_manifest import verify_integrity_at_startup
+
+        verify_integrity_at_startup()
 
         # Create bounded thread pool executor to prevent thread explosion
         # This replaces the default unbounded asyncio executor

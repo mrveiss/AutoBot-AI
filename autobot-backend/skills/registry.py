@@ -10,17 +10,54 @@ Handles skill lifecycle (load, enable, disable) and dependency validation.
 """
 
 import importlib
+import importlib.util
+import os
 import pkgutil
 import threading
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Set, Type
+
+import yaml
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from prepared_facts import SkillRoutingIndex
-from skills.base_skill import BaseSkill, SkillHealth, SkillManifest, SkillStatus
+from skills.base_skill import BaseSkill, DeclarativeSkill, SkillHealth, SkillManifest, SkillStatus
 from skills.dependency_resolver import check_missing_dependencies, resolve_dependencies
 
 logger = get_logger(__name__)
+
+# #11141: skills arrive from independent sources (builtin modules, SKILL.md
+# declaratives, the community hub, external git/http imports, sync backends).
+# On a name collision we must resolve DETERMINISTICALLY by source trust — never
+# by discovery order — so a SANDBOXED external import can never silently mask a
+# trusted builtin (nor vice-versa). Higher number = higher trust = wins.
+_SOURCE_PRIORITY: Dict[str, int] = {
+    "builtin": 100,
+    "custom": 50,
+    "hub": 30,
+    "external": 20,
+    "mcp": 20,
+    "sync": 20,
+}
+_DEFAULT_SOURCE_PRIORITY = 10
+
+
+def _source_priority(source: str) -> int:
+    """Trust rank for a skill source; unknown sources rank below all known ones."""
+    return _SOURCE_PRIORITY.get(source, _DEFAULT_SOURCE_PRIORITY)
+
+
+@dataclass
+class SkillConflict:
+    """A recorded cross-source skill name collision (#11141)."""
+
+    name: str
+    incumbent_source: str
+    incumbent_version: str
+    incoming_source: str
+    incoming_version: str
+    resolution: str  # "kept_incumbent" | "replaced_with_incoming"
 
 
 class SkillRegistry:
@@ -34,29 +71,105 @@ class SkillRegistry:
         self._skill_classes: Dict[str, Type[BaseSkill]] = {}
         self._lock = threading.Lock()
         self._routing_index: SkillRoutingIndex | None = None
+        # #11141: source of each registered skill + recorded cross-source conflicts.
+        self._sources: Dict[str, str] = {}
+        self._conflicts: List[SkillConflict] = []
 
-    def register(self, skill_class: Type[BaseSkill]) -> None:
+    def _resolve_name_conflict(self, name: str, incoming_source: str, incoming_version: str) -> bool:
+        """Record a name collision and decide the winner by source trust (#11141).
+
+        MUST be called while holding ``self._lock``. Returns True when the
+        incoming skill should REPLACE the incumbent (strictly higher-trust
+        source), False when the incumbent is kept. Either way the conflict is
+        recorded (visible via :meth:`get_conflicts`) instead of being silently
+        dropped. Ties keep the incumbent — a same-trust source never displaces
+        an already-registered skill.
+        """
+        incumbent_source = self._sources.get(name, "builtin")
+        try:
+            incumbent_version = self._skills[name].get_manifest().version
+        except Exception:
+            incumbent_version = "unknown"
+        # A same-source, same-version re-registration is an idempotent reload,
+        # not a cross-source conflict — keep the incumbent without recording.
+        if incoming_source == incumbent_source and incoming_version == incumbent_version:
+            return False
+        incoming_wins = _source_priority(incoming_source) > _source_priority(incumbent_source)
+        resolution = "replaced_with_incoming" if incoming_wins else "kept_incumbent"
+        self._conflicts.append(
+            SkillConflict(
+                name=name,
+                incumbent_source=incumbent_source,
+                incumbent_version=incumbent_version,
+                incoming_source=incoming_source,
+                incoming_version=incoming_version,
+                resolution=resolution,
+            )
+        )
+        logger.warning(
+            "Skill name conflict on '%s': incumbent %s v%s (%s) vs incoming %s v%s (%s) -> %s",
+            name,
+            incumbent_source,
+            incumbent_version,
+            incumbent_source,
+            incoming_source,
+            incoming_version,
+            incoming_source,
+            resolution,
+        )
+        return incoming_wins
+
+    def get_conflicts(self) -> List[Dict[str, Any]]:
+        """Structured cross-source skill name conflicts recorded so far (#11141)."""
+        with self._lock:
+            return [asdict(c) for c in self._conflicts]
+
+    def register(self, skill_class: Type[BaseSkill], source: str = "builtin") -> None:
         """Register a skill class and create its instance.
 
         Args:
             skill_class: A class extending BaseSkill.
+            source: Origin of the skill (``builtin``/``custom``/``hub``/``external``/
+                ``mcp``/``sync``). On a name collision the higher-trust source wins
+                deterministically and the conflict is recorded (#11141).
         """
         manifest = skill_class.get_manifest()
         name = manifest.name
         with self._lock:
-            if name in self._skills:
-                logger.warning("Skill '%s' already registered, skipping", name)
+            if name in self._skills and not self._resolve_name_conflict(name, source, manifest.version):
                 return
             instance = skill_class()
             self._skills[name] = instance
             self._skill_classes[name] = skill_class
-            logger.info("Registered skill: %s v%s", name, manifest.version)
+            self._sources[name] = source
+            logger.info("Registered skill: %s v%s (source=%s)", name, manifest.version, source)
         # #7431 ADR-006: publish skill_promoted so blocked plans waiting on
         # a matching capability can be re-routed and resumed via the
         # BlockedPlanResumer subscriber. Fire-and-forget; never raises if
         # Redis is unavailable (logged at debug).
         self._publish_skill_promoted(name, manifest.tools)
         self._rebuild_routing_index()
+
+    def register_declarative(self, manifest: "SkillManifest", source: str = "builtin") -> bool:
+        """Register a SKILL.md-style manifest as a DeclarativeSkill.
+
+        Returns True if newly registered or if it replaced a lower-trust
+        incumbent, False if an equal/higher-trust skill of that name was kept.
+        On a name collision the winner is chosen by source trust and the
+        conflict is recorded (#11141). Used by builtin Pass-2 discovery and by
+        boot-time custom/hub-skill reload.
+        """
+        with self._lock:
+            if manifest.name in self._skills and not self._resolve_name_conflict(
+                manifest.name, source, manifest.version
+            ):
+                return False
+            self._skills[manifest.name] = DeclarativeSkill(manifest)
+            self._sources[manifest.name] = source
+        self._rebuild_routing_index()
+        self._publish_skill_promoted(manifest.name, manifest.tools)
+        logger.info("Registered declarative skill: %s v%s (source=%s)", manifest.name, manifest.version, source)
+        return True
 
     def _rebuild_routing_index(self) -> None:
         """Rebuild the pre-tokenized skill routing index from current registry state.
@@ -253,6 +366,18 @@ class SkillRegistry:
     def discover_builtin_skills(self) -> int:
         """Auto-discover and register all skills in skills.builtin package.
 
+        Handles two kinds of builtin skills:
+
+        1. Python modules — files ending in ``.py`` (or packages with
+           ``__init__.py``) that contain a ``BaseSkill`` subclass.  Discovered
+           via ``pkgutil.iter_modules`` as before.
+
+        2. Declarative SKILL.md-only subdirectories — subdirectories that
+           contain a ``SKILL.md`` but no Python entry-point.  The YAML
+           front-matter is parsed into a ``SkillManifest`` and the subdir is
+           registered as a ``DeclarativeSkill`` so it appears in the registry,
+           the routing index, and can be enabled/disabled by bundles.
+
         Returns the number of newly registered skills.
         """
         count = 0
@@ -262,6 +387,7 @@ class SkillRegistry:
             logger.warning("skills.builtin package not found")
             return 0
 
+        # --- pass 1: Python BaseSkill subclasses ---
         for importer, modname, _ispkg in pkgutil.iter_modules(builtin_pkg.__path__):
             try:
                 module = importlib.import_module(f"skills.builtin.{modname}")
@@ -272,6 +398,29 @@ class SkillRegistry:
                         count += 1
             except Exception:
                 logger.exception("Failed to load skill module: %s", modname)
+
+        # --- pass 2: SKILL.md-only declarative subdirectories ---
+        for pkg_path in builtin_pkg.__path__:
+            for entry in os.scandir(pkg_path):
+                if not entry.is_dir():
+                    continue
+                skill_md = os.path.join(entry.path, "SKILL.md")
+                py_init = os.path.join(entry.path, "__init__.py")
+                # Only handle dirs that have SKILL.md but no Python package
+                # entry-point (those are already covered by pass 1 above).
+                if not os.path.isfile(skill_md) or os.path.isfile(py_init):
+                    continue
+                # Also skip if any .py file exists — pass 1 handles those.
+                has_py = any(f.endswith(".py") for f in os.listdir(entry.path))
+                if has_py:
+                    continue
+                manifest = _parse_skill_md(skill_md)
+                if manifest is None:
+                    continue
+                if self.register_declarative(manifest):
+                    count += 1
+
+        self._rebuild_routing_index()
         logger.info("Discovered %d builtin skills", count)
         return count
 
@@ -314,6 +463,66 @@ def _find_enabled_dependents(skills: Dict[str, BaseSkill], name: str) -> List[st
         if skill.enabled and name in skill.get_manifest().dependencies:
             dependents.append(skill_name)
     return dependents
+
+
+def _parse_skill_md(skill_md_path: str) -> SkillManifest | None:
+    """Parse the YAML front-matter of a SKILL.md file into a SkillManifest.
+
+    Returns None and logs a warning on any parse/validation error so that a
+    single malformed SKILL.md cannot abort the entire discovery pass.
+    """
+    try:
+        with open(skill_md_path, encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError as exc:
+        logger.warning("Cannot read %s: %s", skill_md_path, exc)
+        return None
+
+    # Extract the YAML front-matter block delimited by --- lines.
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        logger.warning("SKILL.md has no front-matter block: %s", skill_md_path)
+        return None
+    end = None
+    for i, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            end = i
+            break
+    if end is None:
+        logger.warning("SKILL.md front-matter not closed: %s", skill_md_path)
+        return None
+
+    raw_yaml = "\n".join(lines[1:end])
+    try:
+        data = yaml.safe_load(raw_yaml)
+    except yaml.YAMLError as exc:
+        logger.warning("Invalid YAML in %s: %s", skill_md_path, exc)
+        return None
+
+    if not isinstance(data, dict):
+        logger.warning("SKILL.md front-matter is not a mapping: %s", skill_md_path)
+        return None
+
+    name = data.get("name")
+    if not name:
+        logger.warning("SKILL.md missing 'name' field: %s", skill_md_path)
+        return None
+
+    try:
+        return SkillManifest(
+            name=str(name),
+            version=str(data.get("version", "1.0.0")),
+            description=str(data.get("description", "")),
+            author=str(data.get("author", "mrveiss")),
+            category=str(data.get("category", "general")),
+            dependencies=[str(d) for d in (data.get("dependencies") or [])],
+            tools=[str(t) for t in (data.get("tools") or [])],
+            triggers=[str(tr) for tr in (data.get("triggers") or [])],
+            tags=[str(tg) for tg in (data.get("tags") or [])],
+        )
+    except Exception as exc:
+        logger.warning("Cannot build SkillManifest from %s: %s", skill_md_path, exc)
+        return None
 
 
 get_skill_registry = lazy_singleton(SkillRegistry)

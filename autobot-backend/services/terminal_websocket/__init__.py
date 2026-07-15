@@ -9,9 +9,9 @@ Extracted components from terminal_handlers.py for better modularity.
 This module provides security, audit, and chat integration components
 that support the main terminal WebSocket handler.
 
-Note: The main ConsolidatedTerminalWebSocket and ConsolidatedTerminalManager
-classes remain in backend/api/terminal_handlers.py as they are tightly
-coupled to the WebSocket lifecycle and PTY management.
+Note: The main TerminalWebSocket and TerminalManager classes remain in
+backend/api/terminal_handlers.py as they are tightly coupled to the
+WebSocket lifecycle and PTY management.
 """
 
 from .audit import TerminalAuditLogger

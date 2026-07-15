@@ -12,19 +12,32 @@ distinguishing causality from correlation. Uses LLM guidance for high-confidence
 extraction with condition detection and evidence tracking.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, get_args
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
-from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
-from knowledge.pipeline.models.causal_edge import CausalEdge
+from knowledge.pipeline.cognifiers.llm_utils import (
+    batched_chunk_extract,
+    literal_prompt_list,
+    parse_llm_json_response,
+    render_prompt_sentinels,
+)
+from knowledge.pipeline.models.causal_edge import CausalEdge, EffectType
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.registry import TaskRegistry
+from llm_shared.types import LLMType
 from services.llm_service import get_llm_service
 
 logger = get_logger(__name__)
 
-CAUSAL_EXTRACTION_PROMPT = """Extract CAUSAL relationships from the following text.
+# Allowed effect-type values derived from the EffectType Literal (#11017) so the
+# prompt fragment and the validation set can never drift from the type.
+_EFFECT_TYPES = tuple(get_args(EffectType))
+_EFFECT_TYPES_STR = literal_prompt_list(EffectType)
+
+CAUSAL_EXTRACTION_PROMPT = render_prompt_sentinels(
+    """Extract CAUSAL relationships from the following text.
 
 CRITICAL: Distinguish explicit causality from correlation:
 - ACCEPT: "X causes Y", "X leads to Y", "X results in Y", "if X then Y", "because X, Y happens"
@@ -33,7 +46,7 @@ CRITICAL: Distinguish explicit causality from correlation:
 For each causal relationship, provide:
 - source_name: The cause entity (e.g., "cache_ttl", "request_rate")
 - target_name: The effect entity (e.g., "query_latency", "memory_usage")
-- effect_type: One of CAUSES, ENABLES, PREVENTS, AMPLIFIES, REDUCES, INHIBITS, ACCELERATES, DECELERATES
+- effect_type: One of %%EFFECT_TYPES%%
 - condition: When does this causality hold? (e.g., "when cache is full", "under high load",
   or empty string for unconditional)
 - evidence_text: The exact sentence supporting this causality
@@ -53,7 +66,39 @@ Return empty array [] if no clear causal relationships found.
 
 Text:
 {text}
-"""
+""",
+    {"EFFECT_TYPES": _EFFECT_TYPES_STR},
+)
+
+CAUSAL_EXTRACTION_BATCH_PROMPT = render_prompt_sentinels(
+    """Extract CAUSAL relationships from each of the following text chunks.
+
+CRITICAL: Distinguish explicit causality from correlation:
+- ACCEPT: "X causes Y", "X leads to Y", "X results in Y", "if X then Y", "because X, Y happens"
+- REJECT: "X and Y both increase", "X is correlated with Y", "X and Y tend to occur together"
+
+Each chunk is labeled "Chunk N:". For each causal relationship provide:
+- source_name, target_name
+- effect_type: One of %%EFFECT_TYPES%%
+- condition (empty string if unconditional)
+- evidence_text: The exact sentence supporting this causality
+- confidence: 0.9-1.0 explicit, 0.7-0.85 strong inference, reject (<0.7)
+
+Return a JSON object mapping each chunk index (as a string) to its array of
+causal relationships (same fields as above); use an empty array for chunks with
+no clear causality. Example for two chunks:
+{{
+  "0": [{{"source_name": "cache_ttl", "target_name": "query_latency", "effect_type": "REDUCES",
+         "condition": "", "evidence_text": "...", "confidence": 0.95}}],
+  "1": []
+}}
+
+Chunks:
+{chunks}
+""",
+    {"EFFECT_TYPES": _EFFECT_TYPES_STR},
+)
+
 
 # NLP patterns for lightweight causal detection (fallback mode)
 CAUSAL_KEYWORDS = {
@@ -279,21 +324,21 @@ class CausalRelationshipExtractor(BaseCognifier):
         return all_edges
 
     async def _process_batch(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[CausalEdge]:
-        """
-        Process a batch of chunks.
+        """Extract causal edges for a batch in ONE LLM call when batching is on (#10598).
 
-        Args:
-            chunks: Batch of chunks
-            context: Pipeline context
-
-        Returns:
-            List of causal edges from batch
+        Routes through ``batched_chunk_extract`` (index-keyed prompt, per-chunk
+        fallback) so K chunks cost one round-trip instead of K. The helper runs
+        the legacy per-chunk loop itself when the config flag is disabled (#11090).
         """
-        edges = []
-        for chunk in chunks:
-            chunk_edges = await self._extract_from_chunk(chunk, context)
-            edges.extend(chunk_edges)
-        return edges
+        return await batched_chunk_extract(
+            chunks,
+            llm=self.llm,
+            batch_prompt_template=CAUSAL_EXTRACTION_BATCH_PROMPT,
+            llm_type=LLMType.EXTRACTION,
+            max_chunk_chars=config.cognifier_batch_max_chunk_chars,
+            convert=lambda raw, chunk: self._convert_to_causal_edges(raw, chunk, context.document_id),
+            extract_one=lambda chunk: self._extract_from_chunk(chunk, context),
+        )
 
     async def _extract_from_chunk(self, chunk: ProcessedChunk, context: PipelineContext) -> List[CausalEdge]:
         """
@@ -306,15 +351,20 @@ class CausalRelationshipExtractor(BaseCognifier):
         Returns:
             List of causal edges from chunk
         """
+        prompt = CAUSAL_EXTRACTION_PROMPT.format(text=chunk.content)
         try:
-            prompt = CAUSAL_EXTRACTION_PROMPT.format(text=chunk.content)
-            response = await self.llm.chat([{"role": "user", "content": prompt}])
-            parsed = parse_llm_json_response(response.content)
-            raw_edges = parsed if isinstance(parsed, list) else []
-            return self._convert_to_causal_edges(raw_edges, chunk, context.document_id)
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}], llm_type=LLMType.EXTRACTION, structured_output=True
+            )
+            # #10645: parse strictly so malformed JSON surfaces as an error
+            # rather than being silently coerced; a bad response for one chunk
+            # must not crash the whole document pipeline, so log + skip it.
+            parsed = parse_llm_json_response(response.content, strict=True)
         except Exception as e:
-            logger.error("Causal extraction failed for chunk: %s", e)
+            logger.error("Causal extraction failed for chunk (skipping): %s", e)
             return []
+        raw_edges = parsed if isinstance(parsed, list) else []
+        return self._convert_to_causal_edges(raw_edges, chunk, context.document_id)
 
     def _convert_to_causal_edges(
         self, raw_edges: List[Dict[str, Any]], chunk: ProcessedChunk, document_id
@@ -345,16 +395,7 @@ class CausalRelationshipExtractor(BaseCognifier):
                     continue
 
                 effect_type = raw.get("effect_type", "CAUSES")
-                if effect_type not in (
-                    "CAUSES",
-                    "ENABLES",
-                    "PREVENTS",
-                    "AMPLIFIES",
-                    "REDUCES",
-                    "INHIBITS",
-                    "ACCELERATES",
-                    "DECELERATES",
-                ):
+                if effect_type not in _EFFECT_TYPES:
                     effect_type = "CAUSES"
 
                 edge = CausalEdge(

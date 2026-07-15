@@ -154,7 +154,7 @@ class ServicePerformanceMetrics:
     health_score: float  # 0-100
 
 
-class Phase9PerformanceMonitor:
+class HardwarePerformanceMonitor:
     """
     Comprehensive Phase 9 performance monitoring system for AutoBot.
     Focuses on GPU/NPU acceleration, multi-modal AI performance, and
@@ -1382,38 +1382,38 @@ class Phase9PerformanceMonitor:
 
 
 # Global Phase 9 performance monitor instance
-phase9_monitor = Phase9PerformanceMonitor()
+hardware_monitor = HardwarePerformanceMonitor()
 
 
 # Convenience functions for easy integration
-async def start_phase9_monitoring():
+async def start_hardware_monitoring():
     """Start Phase 9 comprehensive performance monitoring"""
-    return await phase9_monitor.start_monitoring()
+    return await hardware_monitor.start_monitoring()
 
 
-async def stop_phase9_monitoring():
+async def stop_hardware_monitoring():
     """Stop Phase 9 performance monitoring"""
-    await phase9_monitor.stop_monitoring()
+    await hardware_monitor.stop_monitoring()
 
 
 def get_phase9_performance_dashboard() -> Dict[str, Any]:
     """Get Phase 9 performance dashboard"""
-    return phase9_monitor.get_current_performance_dashboard()
+    return hardware_monitor.get_current_performance_dashboard()
 
 
 def get_phase9_optimization_recommendations() -> List[Dict[str, Any]]:
     """Get Phase 9 performance optimization recommendations"""
-    return phase9_monitor.get_performance_optimization_recommendations()
+    return hardware_monitor.get_performance_optimization_recommendations()
 
 
 async def collect_phase9_metrics() -> Dict[str, Any]:
     """Collect all Phase 9 performance metrics once"""
-    return await phase9_monitor.collect_all_metrics()
+    return await hardware_monitor.collect_all_metrics()
 
 
 def add_phase9_alert_callback(callback):
     """Add callback for Phase 9 performance alerts"""
-    phase9_monitor.add_alert_callback(callback)
+    hardware_monitor.add_alert_callback(callback)
 
 
 def _log_performance_metric(
@@ -1446,12 +1446,12 @@ def _store_performance_in_redis(
 
     Issue #620.
     """
-    if not phase9_monitor.redis_client:
+    if not hardware_monitor.redis_client:
         return
 
     try:
         key = f"function_performance:{category}:{func_name}"
-        phase9_monitor.redis_client.zadd(
+        hardware_monitor.redis_client.zadd(
             key,
             {
                 json.dumps(
@@ -1464,7 +1464,7 @@ def _store_performance_in_redis(
                 ): time.time()
             },
         )
-        phase9_monitor.redis_client.expire(key, TTL_1_HOUR)  # 1 hour retention
+        hardware_monitor.redis_client.expire(key, TTL_1_HOUR)  # 1 hour retention
     except Exception:
         logger.debug("Suppressed exception in try block", exc_info=True)
 
@@ -1511,21 +1511,21 @@ def monitor_performance(category: str = "general"):
 
 if __name__ == "__main__":
 
-    async def test_phase9_monitoring():
+    async def test_hardware_monitoring():
         """Test Phase 9 performance monitoring"""
         logger.info("Testing Phase 9 Performance Monitoring System...")
 
         # Collect metrics
-        metrics = await phase9_monitor.collect_all_metrics()
+        metrics = await hardware_monitor.collect_all_metrics()
         logger.info("Collected metrics: %s", json.dumps(metrics, indent=2, default=str))
 
         # Get dashboard
-        dashboard = phase9_monitor.get_current_performance_dashboard()
+        dashboard = hardware_monitor.get_current_performance_dashboard()
         logger.info("Performance dashboard: %s", json.dumps(dashboard, indent=2, default=str))
 
         # Get recommendations
-        recommendations = phase9_monitor.get_performance_optimization_recommendations()
+        recommendations = hardware_monitor.get_performance_optimization_recommendations()
         logger.info("Optimization recommendations: %s", json.dumps(recommendations, indent=2))
 
     # Run test
-    run_or_schedule(test_phase9_monitoring())
+    run_or_schedule(test_hardware_monitoring())

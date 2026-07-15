@@ -9,11 +9,12 @@ storage is the ``organizations`` table; the LLC layer adds company-lifecycle
 semantics on top (sub-company hierarchy, budget, issue prefix, status).
 """
 
+import re
 import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from llc.models.enums import LLCCompanyStatus
 
@@ -40,9 +41,28 @@ class CompanyBase(BaseModel):
 
 
 class CompanyCreate(CompanyBase):
-    """Request body for POST /companies."""
+    """Request body for POST /companies.
 
+    ``slug`` is optional here (unlike CompanyBase): clients such as the creation
+    wizard only collect a display name, so we derive a URL-safe slug from the
+    name when one isn't supplied (GH#10715).
+    """
+
+    # Override the required base field: optional on create, derived if omitted.
+    slug: Optional[str] = Field(None, max_length=100)
     llc_status: LLCCompanyStatus = LLCCompanyStatus.ONBOARDING
+
+    @model_validator(mode="after")
+    def _derive_slug(self) -> "CompanyCreate":
+        # Normalise a provided slug, or derive one from the name, to guarantee
+        # the CompanyBase contract (^[a-z0-9-]+$). Lowercase, collapse any run of
+        # non-alphanumeric chars to a single hyphen, strip leading/trailing hyphens.
+        source = (self.slug or "").strip() or self.name
+        slug = re.sub(r"[^a-z0-9]+", "-", source.lower()).strip("-")[:100].strip("-")
+        if not slug:
+            raise ValueError("Unable to derive a slug from the company name; provide a slug explicitly")
+        self.slug = slug
+        return self
 
     @field_validator("issue_prefix", mode="before")
     @classmethod

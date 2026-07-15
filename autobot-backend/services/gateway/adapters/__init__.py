@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Platform adapters for unified message gateway."""
 
-from .base_adapter import BaseAdapter, NormalizedResponse, UnifiedMessage
+from .base_adapter import BaseAdapter, GatewayMessage, NormalizedResponse
 from .discord_adapter import DiscordAdapter
 from .imessage_adapter import IMessageAdapter
 from .matrix_adapter import MatrixAdapter
@@ -17,7 +17,7 @@ from .whatsapp_adapter import WhatsAppAdapter
 
 __all__ = [
     "BaseAdapter",
-    "UnifiedMessage",
+    "GatewayMessage",
     "NormalizedResponse",
     "SlackAdapter",
     "DiscordAdapter",

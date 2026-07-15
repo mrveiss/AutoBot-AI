@@ -20,6 +20,7 @@ from . import (  # noqa: E402,F401  # intentional re-export
     hf_quantizer,
     meta_eviction,
     model_inspector,
+    ssm_kernels,
     token_optimizer,
 )
 from .attention_backend import AttentionBackend as ModelAttentionBackend
@@ -91,6 +92,16 @@ from .router import (
     OptimizationConfig,
     OptimizationRouter,
     get_optimization_router,
+)
+from .ssm_kernels import (
+    HybridLayerPlan,
+    HybridRouter,
+    LayerKind,
+    LinearAttentionConfig,
+    LinearAttentionKernel,
+    SSMConfig,
+    SSMScanKernel,
+    elu_feature_map,
 )
 from .token_optimizer import (
     TokenOptimizer,
@@ -182,4 +193,13 @@ __all__ = [
     "ModelInfo",
     "inspect_model",
     "clear_cache",
+    # SSM / Linear / Hybrid kernels (Issue #10724)
+    "SSMScanKernel",
+    "SSMConfig",
+    "LinearAttentionKernel",
+    "LinearAttentionConfig",
+    "HybridRouter",
+    "HybridLayerPlan",
+    "LayerKind",
+    "elu_feature_map",
 ]

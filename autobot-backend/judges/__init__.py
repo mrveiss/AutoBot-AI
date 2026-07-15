@@ -16,13 +16,14 @@ Key Principles:
 - Feedback loops for continuous improvement
 """
 
-import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from llm_shared.json_utils import extract_json_object as _extract_json_object  # Issue #11520
+from llm_shared.types import LLMType
 
 logger = get_logger(__name__)
 
@@ -127,7 +128,9 @@ class BaseLLMJudge:
 
         except Exception as e:
             logger.error("Error in %s judgment: %s", self.judge_type, e)
-            return await self._create_error_judgment(subject, "Judgment evaluation failed")
+            # Surface the underlying error so operators can diagnose the failure
+            # rather than swallowing it behind a generic message (#1464, #10681).
+            return await self._create_error_judgment(subject, f"Judgment evaluation failed: {e}")
 
     async def _finalize_judgment_result(self, judgment_result: JudgmentResult, start_time: datetime) -> JudgmentResult:
         """Add metadata, store in history, and log the judgment result. Issue #620."""
@@ -164,7 +167,9 @@ class BaseLLMJudge:
                     {"role": "system", "content": self._get_system_prompt()},
                     {"role": "user", "content": prompt},
                 ],
+                llm_type=LLMType.ANALYSIS,
                 temperature=0.1,  # Low temperature for consistent judgments
+                structured_output=True,  # #10672: force valid JSON so judgments aren't dropped
             )
 
             return response
@@ -214,7 +219,7 @@ Be precise, objective, and helpful in your judgments."""
                 raw_text = llm_response
             else:
                 raw_text = llm_response.get("content", "")
-            evaluation = json.loads(raw_text)
+            evaluation = _extract_json_object(raw_text)
 
             # Parse criterion scores
             criterion_scores = []

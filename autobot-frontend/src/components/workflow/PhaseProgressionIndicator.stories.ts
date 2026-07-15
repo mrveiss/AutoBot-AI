@@ -11,8 +11,8 @@ const meta = {
 } as Meta<typeof PhaseProgressionIndicator>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 // PhaseProgressionIndicator fetches its own data on demand via the
 // /api/validation-dashboard/report endpoint. Stories render the idle

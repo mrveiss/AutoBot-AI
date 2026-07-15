@@ -18,22 +18,16 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
+from autobot_shared.scoping import Principal, ResourceDescriptor, ScopeLevel, is_visible
 from autobot_shared.time_utils import now_utc
 from user_management.models.base import Base
 
-
-class SecretScope(str, Enum):
-    """Secret visibility scope.
-
-    Issue #685: Aligned with knowledge VisibilityLevel for consistency.
-    """
-
-    USER = "user"  # Only accessible by owner (private)
-    SESSION = "session"  # Only accessible in specific session
-    SHARED = "shared"  # Explicitly shared with specific users
-    GROUP = "group"  # Accessible to team members
-    ORGANIZATION = "organization"  # Accessible to all org members
-    WORKFLOW = "workflow"  # Scoped to a specific workflow (Issue #2153)
+# Deprecated alias (#11290): SecretScope is now the canonical
+# autobot_shared.scoping.ScopeLevel. Kept so existing imports keep working;
+# new code should import ScopeLevel directly. Stored `secrets.scope` values
+# (user/session/shared/group/organization/workflow) are unchanged — the
+# canonical enum carries the same .value strings.
+SecretScope = ScopeLevel
 
 
 class SecretType(str, Enum):
@@ -218,6 +212,20 @@ class Secret(Base):
             return False
         return now_utc() > self.expires_at
 
+    def _grant_lookup(self, user_id: uuid.UUID, session_id: str | None) -> bool:
+        """Secrets grant facts for ``is_visible`` (#11290).
+
+        Models the two subsystem-specific grant tables: session binding
+        (session-scoped secrets are bound to the session, not the user) and
+        the explicit ``shared_with`` list.
+        """
+        if self.scope == SecretScope.SESSION.value:
+            return self.session_id == session_id
+        if self.scope == SecretScope.SHARED.value:
+            shared_list = self.shared_with if isinstance(self.shared_with, list) else []
+            return str(user_id) in shared_list
+        return False
+
     def is_accessible_by(
         self,
         user_id: uuid.UUID,
@@ -229,6 +237,11 @@ class Secret(Base):
         Check if user can access this secret.
 
         Issue #685: Added org and team-based access control.
+        Issue #11290: thin adapter over the canonical
+        ``autobot_shared.scoping.is_visible`` primitive — owner, org, and
+        team rules delegate to the shared rule; session-match and
+        ``shared_with`` semantics are modeled as this subsystem's grant
+        lookup (``_grant_lookup``).
 
         Args:
             user_id: User requesting access
@@ -239,32 +252,25 @@ class Secret(Base):
         Returns:
             True if user has access, False otherwise
         """
-        user_team_ids = user_team_ids or []
-
-        # Owner always has access
-        if self.owner_id == user_id:
-            return True
-
-        # Session-scoped requires matching session
-        if self.scope == SecretScope.SESSION.value:
-            return self.session_id == session_id
-
-        # Organization-scoped: accessible to all org members
-        if self.scope == SecretScope.ORGANIZATION.value:
-            return user_org_id and self.org_id == user_org_id
-
-        # Group-scoped: accessible to team members
-        if self.scope == SecretScope.GROUP.value:
-            secret_teams = self.team_ids if isinstance(self.team_ids, list) else []
-            return any(str(team_id) in secret_teams for team_id in user_team_ids)
-
-        # Shared secrets check shared_with list
-        if self.scope == SecretScope.SHARED.value:
-            shared_list = self.shared_with if isinstance(self.shared_with, list) else []
-            return str(user_id) in shared_list
-
-        # User-scoped is only accessible by owner
-        return False
+        principal = Principal(
+            user_id=str(user_id),
+            company_id=str(user_org_id) if user_org_id else None,
+            group_ids=frozenset(str(team_id) for team_id in (user_team_ids or [])),
+        )
+        try:
+            scope = ScopeLevel(self.scope)
+        except ValueError:
+            scope = ScopeLevel.USER  # unknown stored scope: fail closed (owner-only)
+        secret_teams = self.team_ids if isinstance(self.team_ids, list) else []
+        resource = ResourceDescriptor(
+            owner_id=str(self.owner_id),
+            company_id=str(self.org_id) if self.org_id else None,
+            scope=scope,
+            # keep the stored-value comparison semantics: only string entries
+            # can ever match ``str(team_id)`` membership checks
+            group_ids=frozenset(t for t in secret_teams if isinstance(t, str)),
+        )
+        return is_visible(principal, resource, lambda: self._grant_lookup(user_id, session_id))
 
     def share_with(self, user_id: uuid.UUID) -> None:
         """

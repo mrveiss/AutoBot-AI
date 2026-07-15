@@ -92,9 +92,28 @@
     - "{{ npu_log_dir }}"
     - "{{ npu_models_dir }}"
 
+# #11374: Install python3.11 (OpenVINO's supported interpreter) BEFORE any
+# venv work. `ensure_venv_version` removes a wrong-version venv and the
+# `python3.11 -m venv` step recreates it — both fail if python3.11 is absent.
+# The SAME python314 role installs it via the parametrized version var,
+# reusing the deadsnakes apt logic (no duplication). Idempotent + fail-loud.
+- name: NPU worker | Install target Python interpreter (python3.11)
+  ansible.builtin.include_role:
+    name: python314
+  vars:
+    python_interpreter_version: "3.11"
+
+- name: NPU worker | Enforce venv target Python version (env-drift fix)
+  ansible.builtin.include_role:
+    name: python314
+    tasks_from: ensure_venv_version
+  vars:
+    venv_path: "{{ npu_install_dir }}/venv"
+    venv_python: python3.11
+
 - name: Create Python virtual environment
   ansible.builtin.command:
-    cmd: python3 -m venv {{ npu_install_dir }}/venv
+    cmd: python3.11 -m venv {{ npu_install_dir }}/venv
     creates: "{{ npu_install_dir }}/venv/bin/python"
 
 - name: Fix venv ownership

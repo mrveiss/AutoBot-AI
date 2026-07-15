@@ -26,7 +26,7 @@ class TestSecurityAPI:
 
         # Mock enhanced security layer
         self.mock_security_layer = MagicMock()
-        self.app.state.enhanced_security_layer = self.mock_security_layer
+        self.app.state.security_layer = self.mock_security_layer
 
         self.client = TestClient(self.app)
 
@@ -70,7 +70,7 @@ class TestSecurityAPI:
     def test_get_security_status_fallback_to_basic_security(self):
         """Test security status fallback when enhanced security not available"""
         # Remove enhanced security layer, add basic security layer
-        delattr(self.app.state, "enhanced_security_layer")
+        delattr(self.app.state, "security_layer")
 
         basic_security = MagicMock()
         basic_security.enable_auth = True
@@ -88,9 +88,9 @@ class TestSecurityAPI:
     def test_get_security_status_on_demand_initialization(self):
         """Test security status with on-demand initialization"""
         # Remove both security layers
-        delattr(self.app.state, "enhanced_security_layer")
+        delattr(self.app.state, "security_layer")
 
-        with patch("api.security.EnhancedSecurityLayer") as MockSecurityLayer:
+        with patch("api.security.SecurityLayer") as MockSecurityLayer:
             mock_instance = MagicMock()
             mock_instance.get_pending_approvals.return_value = []
             mock_instance.enable_auth = False
@@ -105,7 +105,7 @@ class TestSecurityAPI:
             assert data["command_security_enabled"] is True
 
             # Check that security layer was initialized and stored
-            assert hasattr(self.app.state, "enhanced_security_layer")
+            assert hasattr(self.app.state, "security_layer")
             MockSecurityLayer.assert_called_once()
 
     def test_get_security_status_error(self):
@@ -390,7 +390,7 @@ class TestSecurityAPIIntegration:
         self.app.include_router(router, prefix="/api/security")
 
         # Use real enhanced security layer (mocked where needed)
-        with patch("api.security.EnhancedSecurityLayer") as MockSecurityLayer:
+        with patch("api.security.SecurityLayer") as MockSecurityLayer:
             mock_instance = MagicMock()
             mock_instance.enable_auth = False
             mock_instance.enable_command_security = True
@@ -421,11 +421,11 @@ class TestSecurityAPIIntegration:
     def test_api_error_consistency(self):
         """Test that all endpoints handle errors consistently"""
         # Remove enhanced security layer to trigger error
-        if hasattr(self.app.state, "enhanced_security_layer"):
-            delattr(self.app.state, "enhanced_security_layer")
+        if hasattr(self.app.state, "security_layer"):
+            delattr(self.app.state, "security_layer")
 
         with patch(
-            "api.security.EnhancedSecurityLayer",
+            "api.security.SecurityLayer",
             side_effect=Exception("Init error"),
         ):
             response = self.client.get("/api/security/status")

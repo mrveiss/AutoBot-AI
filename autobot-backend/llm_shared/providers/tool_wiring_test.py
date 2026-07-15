@@ -245,7 +245,9 @@ class TestGroqToolWiring:
 
 class TestCustomOpenAIToolWiring:
     def _make_provider(self):
-        p = CustomOpenAIProvider(settings={"base_url": "http://localhost:8080", "api_key": "none"})
+        p = CustomOpenAIProvider(
+            settings={"base_url": "http://localhost:8080", "api_key": "none"}
+        )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         return p
 
     @pytest.mark.asyncio

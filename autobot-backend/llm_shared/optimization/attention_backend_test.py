@@ -52,15 +52,26 @@ class TestAttentionBackendEnum:
             assert isinstance(backend.value, str)
 
     def test_expected_members(self):
-        """Enum must expose the three transformer tiers plus NOT_APPLICABLE."""
+        """Enum must expose transformer tiers, the three kernel backends, and the fallback."""
         names = {b.name for b in AttentionBackend}
-        assert names == {"BETTER_TRANSFORMER", "SDPA", "VANILLA", "NOT_APPLICABLE"}
+        assert names == {
+            "BETTER_TRANSFORMER",
+            "SDPA",
+            "VANILLA",
+            "SSM_SCAN",
+            "LINEAR_ATTN",
+            "HYBRID",
+            "NOT_APPLICABLE",
+        }
 
     def test_string_coercion(self):
         """AttentionBackend should be usable as a str subclass."""
         assert AttentionBackend.BETTER_TRANSFORMER == "better_transformer"
         assert AttentionBackend.SDPA == "sdpa"
         assert AttentionBackend.VANILLA == "vanilla"
+        assert AttentionBackend.SSM_SCAN == "ssm_scan"
+        assert AttentionBackend.LINEAR_ATTN == "linear_attn"
+        assert AttentionBackend.HYBRID == "hybrid"
         assert AttentionBackend.NOT_APPLICABLE == "not_applicable"
 
 
@@ -498,33 +509,34 @@ class TestArchitectureFamilyDispatch:
             result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.TRANSFORMER))
         assert result == AttentionBackend.VANILLA
 
-    def test_state_space_returns_not_applicable(self):
-        """STATE_SPACE architecture must return NOT_APPLICABLE immediately."""
+    def test_state_space_returns_ssm_scan(self):
+        """STATE_SPACE architecture must route to the SSM selective-scan kernel."""
         sel = _make_selector()
         result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.STATE_SPACE))
-        assert result == AttentionBackend.NOT_APPLICABLE
+        assert result == AttentionBackend.SSM_SCAN
 
-    def test_linear_attention_returns_not_applicable(self):
-        """LINEAR_ATTENTION architecture must return NOT_APPLICABLE."""
+    def test_linear_attention_returns_linear_attn(self):
+        """LINEAR_ATTENTION architecture must route to the linear-attention kernel."""
         sel = _make_selector()
         result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.LINEAR_ATTENTION))
-        assert result == AttentionBackend.NOT_APPLICABLE
+        assert result == AttentionBackend.LINEAR_ATTN
 
-    def test_hybrid_returns_not_applicable(self):
-        """HYBRID architecture must return NOT_APPLICABLE."""
+    def test_hybrid_returns_hybrid_backend(self):
+        """HYBRID architecture must route to the per-layer hybrid dispatcher."""
         sel = _make_selector()
         result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.HYBRID))
-        assert result == AttentionBackend.NOT_APPLICABLE
+        assert result == AttentionBackend.HYBRID
 
-    def test_state_space_large_context_not_capped(self):
-        """State-space with 131072 context must not be routed through BT/SDPA."""
+    def test_state_space_large_context_routed_to_ssm(self):
+        """State-space with 131072 context must route to SSM_SCAN, never BT/SDPA."""
         sel = _make_selector()
         cfg = ModelConfig(
             model_name="state-spaces/mamba-3b-131k",
             architecture_family=ArchitectureFamily.STATE_SPACE,
         )
         result = sel.select_backend(cfg)
-        assert result == AttentionBackend.NOT_APPLICABLE
+        assert result == AttentionBackend.SSM_SCAN
+        assert result not in (AttentionBackend.BETTER_TRANSFORMER, AttentionBackend.SDPA)
 
     def test_apply_backend_not_applicable_is_noop(self):
         """apply_backend with NOT_APPLICABLE must return model unchanged without warning."""
@@ -533,7 +545,7 @@ class TestArchitectureFamilyDispatch:
         result = sel.apply_backend(model, AttentionBackend.NOT_APPLICABLE)
         assert result is model
 
-    def test_not_applicable_blocklist_not_consulted(self):
+    def test_non_attention_family_blocklist_not_consulted(self):
         """Non-transformer families must bypass the blocklist entirely."""
         sel = _make_selector()
         # Mamba model whose name might accidentally match "mamba" blocklist entries
@@ -542,7 +554,7 @@ class TestArchitectureFamilyDispatch:
             architecture_family=ArchitectureFamily.STATE_SPACE,
         )
         result = sel.select_backend(cfg)
-        assert result == AttentionBackend.NOT_APPLICABLE
+        assert result == AttentionBackend.SSM_SCAN
 
 
 # ---------------------------------------------------------------------------
@@ -587,7 +599,7 @@ class TestArchDispatchEvent:
         event_lines = [r for r in caplog.records if "arch_dispatch_event" in r.message]
         assert len(event_lines) == 1
         assert "state_space" in event_lines[0].message
-        assert "not_applicable" in event_lines[0].message
+        assert "ssm_scan" in event_lines[0].message
 
     def test_event_contains_model_name(self, caplog):
         """arch_dispatch_event log must include the model name."""
@@ -619,7 +631,7 @@ class TestSSMNoFlashAttention:
         ) as mock_bt:
             result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.STATE_SPACE))
 
-        assert result == AttentionBackend.NOT_APPLICABLE
+        assert result == AttentionBackend.SSM_SCAN
         mock_bt.assert_not_called()
 
     def test_ssm_does_not_call_sdpa_check(self):
@@ -628,7 +640,7 @@ class TestSSMNoFlashAttention:
         with patch.object(AttentionBackendSelector, "_can_use_sdpa") as mock_sdpa:
             result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.STATE_SPACE))
 
-        assert result == AttentionBackend.NOT_APPLICABLE
+        assert result == AttentionBackend.SSM_SCAN
         mock_sdpa.assert_not_called()
 
     def test_linear_attention_does_not_call_better_transformer(self):
@@ -639,7 +651,7 @@ class TestSSMNoFlashAttention:
         ) as mock_bt:
             result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.LINEAR_ATTENTION))
 
-        assert result == AttentionBackend.NOT_APPLICABLE
+        assert result == AttentionBackend.LINEAR_ATTN
         mock_bt.assert_not_called()
 
 
@@ -675,8 +687,8 @@ class TestDispatchTableExtensibility:
         sel._arch_dispatch[ArchitectureFamily.HYBRID] = "_handle_ssm"
 
         result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.HYBRID))
-        # Should route through _handle_ssm which returns NOT_APPLICABLE
-        assert result == AttentionBackend.NOT_APPLICABLE
+        # Should route through _handle_ssm which now returns SSM_SCAN
+        assert result == AttentionBackend.SSM_SCAN
 
     def test_unknown_family_falls_back_to_transformer(self):
         """An unregistered family string falls back to transformer path with WARNING."""
@@ -711,3 +723,80 @@ class TestDispatchTableExtensibility:
                 ModelConfig(model_type="llama", architecture_family=ArchitectureFamily.TRANSFORMER)
             )
         assert result == AttentionBackend.VANILLA
+
+
+# ---------------------------------------------------------------------------
+# Non-attention kernel backends — Issue #10724
+# ---------------------------------------------------------------------------
+
+
+class _UnknownFamily(str):
+    """A family value with no ARCH_DISPATCH_TABLE / handler entry."""
+
+
+class TestKernelBackendSelection:
+    """Selector returns real kernel backends; NOT_APPLICABLE only for unknown arch."""
+
+    def test_ssm_selects_ssm_scan(self):
+        """STATE_SPACE selects the SSM_SCAN kernel backend."""
+        sel = _make_selector()
+        result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.STATE_SPACE))
+        assert result == AttentionBackend.SSM_SCAN
+
+    def test_linear_selects_linear_attn(self):
+        """LINEAR_ATTENTION selects the LINEAR_ATTN kernel backend."""
+        sel = _make_selector()
+        result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.LINEAR_ATTENTION))
+        assert result == AttentionBackend.LINEAR_ATTN
+
+    def test_hybrid_selects_hybrid(self):
+        """HYBRID selects the HYBRID per-layer routing backend."""
+        sel = _make_selector()
+        result = sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.HYBRID))
+        assert result == AttentionBackend.HYBRID
+
+    def test_unknown_arch_with_no_handler_falls_back(self):
+        """An unregistered family with no handler falls back to transformer path.
+
+        This is the *only* remaining NOT_APPLICABLE-adjacent path: an unknown
+        architecture is routed to the transformer selector (VANILLA here), never
+        left as a silent kernel stub.
+        """
+        sel = _make_selector()
+        sel._arch_dispatch = {}  # simulate a completely empty dispatch table
+        with (
+            patch(
+                "llm_shared.optimization.attention_backend._import_better_transformer",
+                return_value=None,
+            ),
+            patch.object(AttentionBackendSelector, "_can_use_sdpa", return_value=False),
+        ):
+            result = sel.select_backend(ModelConfig(architecture_family=_UnknownFamily("mystery")))
+        assert result == AttentionBackend.VANILLA
+
+    def test_apply_backend_ssm_is_noop(self):
+        """apply_backend must leave the model untouched for SSM_SCAN."""
+        sel = _make_selector()
+        model = _make_model()
+        assert sel.apply_backend(model, AttentionBackend.SSM_SCAN) is model
+
+    def test_apply_backend_linear_is_noop(self):
+        """apply_backend must leave the model untouched for LINEAR_ATTN."""
+        sel = _make_selector()
+        model = _make_model()
+        assert sel.apply_backend(model, AttentionBackend.LINEAR_ATTN) is model
+
+    def test_apply_backend_hybrid_is_noop(self):
+        """apply_backend must leave the model untouched for HYBRID."""
+        sel = _make_selector()
+        model = _make_model()
+        assert sel.apply_backend(model, AttentionBackend.HYBRID) is model
+
+    def test_ssm_does_not_consult_better_transformer(self):
+        """SSM selection must never import BetterTransformer."""
+        sel = _make_selector()
+        with patch(
+            "llm_shared.optimization.attention_backend._import_better_transformer",
+        ) as mock_bt:
+            sel.select_backend(ModelConfig(architecture_family=ArchitectureFamily.STATE_SPACE))
+        mock_bt.assert_not_called()

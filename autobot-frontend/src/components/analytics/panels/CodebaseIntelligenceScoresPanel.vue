@@ -729,15 +729,6 @@ function getScoreClass(score: number): string {
   return 'score-low'
 }
 
-function getGradeClass(grade: string): string {
-  const g = grade?.toUpperCase() || ''
-  if (g === 'A' || g === 'A+') return 'grade-a'
-  if (g === 'B' || g === 'B+') return 'grade-b'
-  if (g === 'C' || g === 'C+') return 'grade-c'
-  if (g === 'D' || g === 'D+') return 'grade-d'
-  return 'grade-f'
-}
-
 function getSeverityClass(severity: string): string {
   switch (severity?.toLowerCase()) {
     case 'critical': return 'severity-critical'

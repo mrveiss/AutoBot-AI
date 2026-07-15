@@ -61,7 +61,7 @@ describe('useLocalStorage Composable', () => {
 
     // Create a proxy to make localStorage behave like the real thing
     // This ensures Object.keys() and for...in loops work correctly
-    const storageProxy: any = new Proxy(
+    const storageProxy: Storage = new Proxy(
       {
         getItem: getItemSpy,
         setItem: setItemSpy,
@@ -88,7 +88,7 @@ describe('useLocalStorage Composable', () => {
         },
         set(target, prop, value) {
           if (typeof prop === 'string' && !(prop in target)) {
-            localStorageMock[prop] = value
+            localStorageMock[prop] = value as string
             return true
           }
           return false
@@ -121,7 +121,7 @@ describe('useLocalStorage Composable', () => {
           return undefined
         }
       }
-    )
+    ) as unknown as Storage
 
     // Mock localStorage
     Object.defineProperty(global, 'localStorage', {
@@ -134,7 +134,7 @@ describe('useLocalStorage Composable', () => {
     global.window = {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn()
-    } as any
+    } as unknown as Window & typeof globalThis
   })
 
   afterEach(() => {
@@ -155,7 +155,7 @@ describe('useLocalStorage Composable', () => {
       data.value = { name: 'Jane', age: 25 }
       await nextTick()
 
-      const calls = setItemSpy.mock.calls.filter((call: any) => call[0] === 'test-key')
+      const calls = setItemSpy.mock.calls.filter((call: unknown[]) => call[0] === 'test-key')
       expect(calls.length).toBeGreaterThan(0)
       expect(calls[calls.length - 1][1]).toBe(JSON.stringify({ name: 'Jane', age: 25 }))
     })
@@ -169,7 +169,7 @@ describe('useLocalStorage Composable', () => {
       data.value = 'new-value'
       await nextTick()
 
-      const calls = setItemSpy.mock.calls.filter((call: any) => call[0] === 'test-key')
+      const calls = setItemSpy.mock.calls.filter((call: unknown[]) => call[0] === 'test-key')
       expect(calls.length).toBeGreaterThan(0)
       expect(calls[calls.length - 1][1]).toBe('new-value')
     })
@@ -183,7 +183,7 @@ describe('useLocalStorage Composable', () => {
       data.value = 99
       await nextTick()
 
-      const calls = setItemSpy.mock.calls.filter((call: any) => call[0] === 'test-number')
+      const calls = setItemSpy.mock.calls.filter((call: unknown[]) => call[0] === 'test-number')
       expect(calls.length).toBeGreaterThan(0)
       expect(calls[calls.length - 1][1]).toBe(JSON.stringify(99))
     })
@@ -203,7 +203,7 @@ describe('useLocalStorage Composable', () => {
       data.value = [4, 5, 6]
       await nextTick()
 
-      const calls = setItemSpy.mock.calls.filter((call: any) => call[0] === 'test-array')
+      const calls = setItemSpy.mock.calls.filter((call: unknown[]) => call[0] === 'test-array')
       expect(calls.length).toBeGreaterThan(0)
       expect(calls[calls.length - 1][1]).toBe(JSON.stringify([4, 5, 6]))
     })
@@ -217,7 +217,7 @@ describe('useLocalStorage Composable', () => {
       data.value = { count: 1 }
       await nextTick()
 
-      const calls = setItemSpy.mock.calls.filter((call: any) => call[0] === 'test-key')
+      const calls = setItemSpy.mock.calls.filter((call: unknown[]) => call[0] === 'test-key')
       expect(calls.length).toBeGreaterThan(0)
       expect(calls[0][1]).toBe(JSON.stringify({ count: 1 }))
     })
@@ -286,7 +286,7 @@ describe('useLocalStorage Composable', () => {
       data.value = { ...complexObject, number: 100 }
       await nextTick()
 
-      const calls = setItemSpy.mock.calls.filter((call: any) => call[0] === 'complex-key')
+      const calls = setItemSpy.mock.calls.filter((call: unknown[]) => call[0] === 'complex-key')
       expect(calls.length).toBeGreaterThan(0)
     })
 
@@ -307,7 +307,7 @@ describe('useLocalStorage Composable', () => {
 
       expect(customSerializer).toHaveBeenCalledWith(newDate)
 
-      const calls = setItemSpy.mock.calls.filter((call: any) => call[0] === 'date-key')
+      const calls = setItemSpy.mock.calls.filter((call: unknown[]) => call[0] === 'date-key')
       expect(calls.length).toBeGreaterThan(0)
     })
 
@@ -340,7 +340,7 @@ describe('useLocalStorage Composable', () => {
       data.value = 'updated-value'
       await nextTick()
 
-      const calls = setItemSpy.mock.calls.filter((call: any) => call[0] === 'raw-key')
+      const calls = setItemSpy.mock.calls.filter((call: unknown[]) => call[0] === 'raw-key')
       expect(calls.length).toBeGreaterThan(0)
       expect(calls[calls.length - 1][1]).toBe('updated-value')
     })
@@ -361,7 +361,7 @@ describe('useLocalStorage Composable', () => {
       data.value = 'updated'
       await nextTick()
 
-      const calls = setItemSpy.mock.calls.filter((call: any) => call[0] === 'raw-key')
+      const calls = setItemSpy.mock.calls.filter((call: unknown[]) => call[0] === 'raw-key')
       expect(calls.length).toBeGreaterThan(0)
       expect(calls[0][1]).toBe('updated')
     })
@@ -404,7 +404,7 @@ describe('useLocalStorage Composable', () => {
     })
 
     it('should handle serialization errors', async () => {
-      const circularRef: any = { self: null }
+      const circularRef: { self: unknown } = { self: null }
       circularRef.self = circularRef
 
       const customSerializer = vi.fn(() => {
@@ -417,7 +417,7 @@ describe('useLocalStorage Composable', () => {
         onError
       })
 
-      data.value = circularRef
+      data.value = circularRef as unknown as { test: boolean }
       await nextTick()
 
       expect(onError).toHaveBeenCalled()
@@ -481,8 +481,8 @@ describe('useLocalStorage Composable', () => {
       const data = useLocalStorage('sync-key', 'initial')
 
       // Get the storage event handler
-      const storageHandler = (window.addEventListener as any).mock.calls.find(
-        (call: any) => call[0] === 'storage'
+      const storageHandler = vi.mocked(window.addEventListener).mock.calls.find(
+        (call: unknown[]) => call[0] === 'storage'
       )?.[1]
 
       expect(storageHandler).toBeDefined()
@@ -503,8 +503,8 @@ describe('useLocalStorage Composable', () => {
     it('should set value to null when storage event indicates removal', async () => {
       const data = useLocalStorage('remove-key', 'initial')
 
-      const storageHandler = (window.addEventListener as any).mock.calls.find(
-        (call: any) => call[0] === 'storage'
+      const storageHandler = vi.mocked(window.addEventListener).mock.calls.find(
+        (call: unknown[]) => call[0] === 'storage'
       )?.[1]
 
       // Simulate removal in another tab
@@ -524,8 +524,8 @@ describe('useLocalStorage Composable', () => {
       const data = useLocalStorage('my-key', 'initial')
       const initialValue = data.value
 
-      const storageHandler = (window.addEventListener as any).mock.calls.find(
-        (call: any) => call[0] === 'storage'
+      const storageHandler = vi.mocked(window.addEventListener).mock.calls.find(
+        (call: unknown[]) => call[0] === 'storage'
       )?.[1]
 
       // Simulate storage event for different key
@@ -544,8 +544,8 @@ describe('useLocalStorage Composable', () => {
     it('should handle storage events with raw mode', async () => {
       const data = useLocalStorage('raw-sync', 'initial', { raw: true })
 
-      const storageHandler = (window.addEventListener as any).mock.calls.find(
-        (call: any) => call[0] === 'storage'
+      const storageHandler = vi.mocked(window.addEventListener).mock.calls.find(
+        (call: unknown[]) => call[0] === 'storage'
       )?.[1]
 
       const storageEvent = {
@@ -565,8 +565,8 @@ describe('useLocalStorage Composable', () => {
         mergeStrategy: 'ignore'
       })
 
-      const storageHandler = (window.addEventListener as any).mock.calls.find(
-        (call: any) => call[0] === 'storage'
+      const storageHandler = vi.mocked(window.addEventListener).mock.calls.find(
+        (call: unknown[]) => call[0] === 'storage'
       )?.[1]
 
       const storageEvent = {
@@ -587,8 +587,8 @@ describe('useLocalStorage Composable', () => {
         mergeStrategy: 'overwrite'
       })
 
-      const storageHandler = (window.addEventListener as any).mock.calls.find(
-        (call: any) => call[0] === 'storage'
+      const storageHandler = vi.mocked(window.addEventListener).mock.calls.find(
+        (call: unknown[]) => call[0] === 'storage'
       )?.[1]
 
       const storageEvent = {
@@ -608,8 +608,8 @@ describe('useLocalStorage Composable', () => {
       const onError = vi.fn()
       const _data = useLocalStorage('parse-error-key', 'initial', { onError })
 
-      const storageHandler = (window.addEventListener as any).mock.calls.find(
-        (call: any) => call[0] === 'storage'
+      const storageHandler = vi.mocked(window.addEventListener).mock.calls.find(
+        (call: unknown[]) => call[0] === 'storage'
       )?.[1]
 
       const storageEvent = {
@@ -638,13 +638,13 @@ describe('useLocalStorage Composable', () => {
 
       // Mutate nested object
       if (data.value && typeof data.value === 'object' && 'nested' in data.value) {
-        const nested = (data.value as any).nested
+        const nested = (data.value as { nested: { value: string } }).nested
         nested.value = 'mutated'
       }
 
       // Re-read should not be mutated
       const data2 = useLocalStorage('deep-key', {}, { deep: true })
-      expect((data2.value as any).nested.value).toBe('test')
+      expect((data2.value as { nested: { value: string } }).nested.value).toBe('test')
     })
 
     it('should watch with deep option when enabled', async () => {
@@ -654,13 +654,13 @@ describe('useLocalStorage Composable', () => {
 
       // Mutate nested property
       if (data.value && typeof data.value === 'object' && 'nested' in data.value) {
-        (data.value as any).nested.count = 1
+        (data.value as { nested: { count: number } }).nested.count = 1
       }
 
       await nextTick()
 
       // Should have triggered write
-      const calls = setItemSpy.mock.calls.filter((call: any) => call[0] === 'deep-watch')
+      const calls = setItemSpy.mock.calls.filter((call: unknown[]) => call[0] === 'deep-watch')
       expect(calls.length).toBeGreaterThan(0)
     })
   })
@@ -672,7 +672,7 @@ describe('useLocalStorage Composable', () => {
   describe('SSR Safety', () => {
     it('should handle missing window object', () => {
       const originalWindow = global.window
-      delete (global as any).window
+      delete (global as unknown as Record<string, unknown>).window
 
       const data = useLocalStorage('ssr-key', 'default')
 
@@ -683,7 +683,7 @@ describe('useLocalStorage Composable', () => {
 
     it('should handle missing localStorage', () => {
       const originalLocalStorage = global.localStorage
-      delete (global as any).localStorage
+      delete (global as unknown as Record<string, unknown>).localStorage
 
       const data = useLocalStorage('ssr-key', 'default')
 
@@ -722,13 +722,13 @@ describe('useLocalStorage Composable', () => {
 
     it('should throw error for invalid key (non-string)', () => {
       expect(() => {
-        useLocalStorage(null as any, 'value')
+        useLocalStorage(null as unknown as string, 'value')
       }).toThrow('[useLocalStorage] Invalid key')
     })
 
     it('should throw error for invalid key (undefined)', () => {
       expect(() => {
-        useLocalStorage(undefined as any, 'value')
+        useLocalStorage(undefined as unknown as string, 'value')
       }).toThrow('[useLocalStorage] Invalid key')
     })
   })
@@ -771,7 +771,7 @@ describe('useLocalStorage Composable', () => {
 
     it('should handle SSR safely', () => {
       const originalLocalStorage = global.localStorage
-      delete (global as any).localStorage
+      delete (global as unknown as Record<string, unknown>).localStorage
 
       expect(() => {
         clearLocalStorage()
@@ -829,7 +829,7 @@ describe('useLocalStorage Composable', () => {
 
     it('should handle SSR safely', () => {
       const originalLocalStorage = global.localStorage
-      delete (global as any).localStorage
+      delete (global as unknown as Record<string, unknown>).localStorage
 
       const keys = getLocalStorageKeys()
 
@@ -892,7 +892,7 @@ describe('useLocalStorage Composable', () => {
 
     it('should handle SSR safely', () => {
       const originalLocalStorage = global.localStorage
-      delete (global as any).localStorage
+      delete (global as unknown as Record<string, unknown>).localStorage
 
       const size = getLocalStorageSize()
 
@@ -935,7 +935,7 @@ describe('useLocalStorage Composable', () => {
     it('should handle undefined values by converting to null', async () => {
       const data = useLocalStorage('undefined-key', { value: 'test' })
 
-      data.value = undefined as any
+      data.value = undefined as unknown as { value: string }
       await nextTick()
 
       // undefined should not remove, but setting to null removes
@@ -950,7 +950,7 @@ describe('useLocalStorage Composable', () => {
       data.value = ''
       await nextTick()
 
-      const calls = setItemSpy.mock.calls.filter((call: any) => call[0] === 'empty-key')
+      const calls = setItemSpy.mock.calls.filter((call: unknown[]) => call[0] === 'empty-key')
       expect(calls.length).toBeGreaterThan(0)
       expect(calls[0][1]).toBe('')
       expect(data.value).toBe('')

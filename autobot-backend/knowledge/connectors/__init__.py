@@ -59,10 +59,11 @@ from knowledge.connectors.models import (
     SourceInfo,
     SyncResult,
 )
-from knowledge.connectors.registry import ConnectorRegistry
+from knowledge.connectors.registry import CATEGORY_MAP, ConnectorRegistry
 
 __all__ = [
     "AbstractConnector",
+    "CATEGORY_MAP",
     "ChangeInfo",
     "ConnectorConfig",
     "ConnectorRegistry",

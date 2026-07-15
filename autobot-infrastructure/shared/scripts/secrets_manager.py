@@ -38,6 +38,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
 logger = logging.getLogger(__name__)
 
 # Add project root to path
@@ -57,8 +61,12 @@ class SecretType:
     CUSTOM = "custom"
 
 
-class SecretScope:
-    """Secret access scopes."""
+# Standalone copy of the chat-secrets scope values (#11759).
+# Canonical enum: autobot-backend/api/schemas_system.py::ChatSecretScope
+# (distinct from the authorization ScopeLevel in autobot_shared/scoping).
+# Kept as a plain class so this script never imports backend modules.
+class ChatSecretScope:
+    """Secret access scopes (chat-secrets store)."""
 
     GENERAL = "general"  # Available across all chats
     CHAT = "chat"  # Available only within specific chat
@@ -92,13 +100,26 @@ class SecretsManager:
         logger.info("   Secrets Directory: [configured]")
         logger.info("   Indexed Secrets: %s", len(self.secrets_index))
 
-    def print_header(self, title: str):
+    # Standalone copies of ScriptFormatter.print_header/print_step
+    # (autobot-backend/utils/script_utils.py) — this script must not
+    # import backend modules (#11759).
+    def print_header(self, title: str, width: int = 60):
         """Print formatted header."""
-        ScriptFormatter.print_header(title)
+        print(f"\n{'=' * width}")  # noqa: print  # canonical: ignore py-print-smoke
+        print(f"  {title}")  # noqa: print  # canonical: ignore py-print-smoke
+        print("=" * width)  # noqa: print  # canonical: ignore py-print-smoke
 
     def print_step(self, step: str, status: str = "info"):
         """Print step with status."""
-        ScriptFormatter.print_step(step, status)
+        status_symbols = {
+            "info": "📋",
+            "success": "✅",
+            "warning": "⚠️",
+            "error": "❌",
+            "running": "🔄",
+        }
+        symbol = status_symbols.get(status, "📋")
+        print(f"{symbol} {step}")  # noqa: print  # canonical: ignore py-print-smoke
 
     def _initialize_encryption(self) -> Fernet:
         """Initialize encryption system."""
@@ -206,7 +227,7 @@ class SecretsManager:
         name: str,
         value: str,
         secret_type: str = SecretType.CUSTOM,
-        scope: str = SecretScope.GENERAL,
+        scope: str = ChatSecretScope.GENERAL,
         chat_id: str = None,
         description: str = "",
         tags: List[str] = None,
@@ -215,7 +236,7 @@ class SecretsManager:
         secret_id = self.generate_secret_id()
 
         # Validate scope and chat_id
-        if scope == SecretScope.CHAT and not chat_id:
+        if scope == ChatSecretScope.CHAT and not chat_id:
             raise ValueError("chat_id required for chat-scoped secrets")
 
         if tags is None:
@@ -250,7 +271,7 @@ class SecretsManager:
             self.secrets_index["secrets"][secret_id] = secret_metadata
 
             # Update chat index if chat-scoped
-            if scope == SecretScope.CHAT and chat_id:
+            if scope == ChatSecretScope.CHAT and chat_id:
                 if chat_id not in self.secrets_index["chats"]:
                     self.secrets_index["chats"][chat_id] = []
                 self.secrets_index["chats"][chat_id].append(secret_id)
@@ -281,7 +302,7 @@ class SecretsManager:
             secret_name = secret_metadata["name"]
 
         # Check access permissions (outside lock)
-        if secret_scope == SecretScope.CHAT:
+        if secret_scope == ChatSecretScope.CHAT:
             if not chat_id or secret_chat_id != chat_id:
                 self.print_step("Access denied to chat-scoped secret", "error")
                 return None
@@ -337,10 +358,10 @@ class SecretsManager:
                 continue
 
             # Chat scope filtering
-            if scope == SecretScope.CHAT:
+            if scope == ChatSecretScope.CHAT:
                 if not chat_id or metadata["chat_id"] != chat_id:
                     continue
-            elif metadata["scope"] == SecretScope.CHAT and chat_id != metadata["chat_id"]:
+            elif metadata["scope"] == ChatSecretScope.CHAT and chat_id != metadata["chat_id"]:
                 # Skip chat secrets from other chats
                 continue
 
@@ -367,7 +388,7 @@ class SecretsManager:
         secret_metadata = self.secrets_index["secrets"][secret_id]
 
         # Check permissions
-        if secret_metadata["scope"] == SecretScope.CHAT:
+        if secret_metadata["scope"] == ChatSecretScope.CHAT:
             if not chat_id or secret_metadata["chat_id"] != chat_id:
                 self.print_step("Access denied to chat-scoped secret", "error")
                 return False
@@ -420,7 +441,7 @@ class SecretsManager:
             secret_name = secret_metadata["name"]
 
         # Check permissions (outside lock)
-        if secret_scope == SecretScope.CHAT:
+        if secret_scope == ChatSecretScope.CHAT:
             if not chat_id or secret_chat_id != chat_id:
                 self.print_step("Access denied to chat-scoped secret", "error")
                 return False
@@ -434,7 +455,7 @@ class SecretsManager:
             # Thread-safe removal from index
             with self._index_lock:
                 # Remove from chat index if applicable
-                if secret_scope == SecretScope.CHAT and secret_chat_id:
+                if secret_scope == ChatSecretScope.CHAT and secret_chat_id:
                     chat_secrets = self.secrets_index["chats"].get(secret_chat_id, [])
                     if secret_id in chat_secrets:
                         chat_secrets.remove(secret_id)
@@ -474,7 +495,7 @@ class SecretsManager:
             secret_chat_id = secret_metadata.get("chat_id")
 
             # Verify it's a chat-scoped secret from the correct chat
-            if secret_scope != SecretScope.CHAT or secret_chat_id != chat_id:
+            if secret_scope != ChatSecretScope.CHAT or secret_chat_id != chat_id:
                 self.print_step(
                     "Cannot transfer: not a chat-scoped secret from this chat",
                     "error",
@@ -492,7 +513,7 @@ class SecretsManager:
                 secret_name = secret_metadata["name"]
 
                 # Update scope
-                secret_metadata["scope"] = SecretScope.GENERAL
+                secret_metadata["scope"] = ChatSecretScope.GENERAL
                 secret_metadata["chat_id"] = None
                 secret_metadata["updated_at"] = datetime.now().isoformat()
 
@@ -507,7 +528,7 @@ class SecretsManager:
             self._log_audit_event(
                 "transfer_secret",
                 secret_id,
-                SecretScope.GENERAL,
+                ChatSecretScope.GENERAL,
                 chat_id,
                 f"Transferred secret to general scope: {secret_name}",
             )
@@ -559,7 +580,7 @@ class SecretsManager:
         self._log_audit_event(
             "cleanup_chat",
             "",
-            SecretScope.CHAT,
+            ChatSecretScope.CHAT,
             chat_id,
             f"Cleanup completed: {transferred_count} transferred, {deleted_count} deleted",
         )
@@ -644,7 +665,7 @@ class SecretsManager:
             active_chats_count = len(self.secrets_index["chats"])
 
         total_secrets = len(secrets_copy)
-        chat_secrets = sum(1 for s in secrets_copy.values() if s["scope"] == SecretScope.CHAT)
+        chat_secrets = sum(1 for s in secrets_copy.values() if s["scope"] == ChatSecretScope.CHAT)
         general_secrets = total_secrets - chat_secrets
 
         # Secret types distribution
@@ -823,8 +844,8 @@ def _add_parameter_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--scope",
-        choices=[SecretScope.GENERAL, SecretScope.CHAT],
-        default=SecretScope.GENERAL,
+        choices=[ChatSecretScope.GENERAL, ChatSecretScope.CHAT],
+        default=ChatSecretScope.GENERAL,
         help="Secret scope",
     )
     parser.add_argument("--chat-id", help="Chat ID for chat-scoped secrets")

@@ -14,6 +14,9 @@ const logger = createLogger('SiteMapTab')
 const { t } = useI18n()
 const { findPages } = useWebResearch()
 
+// #11665: parent blocks submits when the researcher is unavailable/disabled.
+const props = defineProps<{ disabled?: boolean }>()
+
 // ── State ──────────────────────────────────────────────────────────────────
 
 const domain = ref('')
@@ -34,7 +37,7 @@ function filteredUrls(urls: SiteMapUrlEntry[]): SiteMapUrlEntry[] {
 }
 
 async function submit() {
-  if (!domain.value.trim()) return
+  if (props.disabled || !domain.value.trim()) return
   isLoading.value = true
   errorMsg.value = null
   result.value = null
@@ -102,7 +105,7 @@ function reset() {
       </div>
 
       <div class="wr-form-actions">
-        <button type="submit" class="wr-btn wr-btn--primary" :disabled="isLoading || !domain.trim()">
+        <button type="submit" class="wr-btn wr-btn--primary" :disabled="isLoading || disabled || !domain.trim()">
           <span v-if="isLoading" class="wr-spinner" aria-hidden="true" />
           {{ isLoading ? t('knowledge.webResearch.discovering') : t('knowledge.webResearch.siteMap.submitLabel') }}
         </button>

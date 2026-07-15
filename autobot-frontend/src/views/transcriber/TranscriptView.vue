@@ -134,7 +134,7 @@ onMounted(load)
   align-items: center;
   gap: 0.75rem;
   padding: 2rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   text-align: center;
 }
 

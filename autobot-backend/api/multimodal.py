@@ -40,7 +40,7 @@ from multimodal_processor import (
     ModalityType,
     MultiModalInput,
     ProcessingIntent,
-    unified_processor,
+    processor,
 )
 
 # Import AutoBot multi-modal components
@@ -128,7 +128,7 @@ async def process_image(
         modal_input = _build_image_modal_input(image_data, file, intent, question)
 
         # Process with unified processor
-        result = await unified_processor.process(modal_input)
+        result = await processor.process(modal_input)
 
         processing_time = time.time() - start_time
 
@@ -200,7 +200,7 @@ async def process_audio(
         )
 
         # Process with unified processor
-        result = await unified_processor.process(modal_input)
+        result = await processor.process(modal_input)
 
         processing_time = time.time() - start_time
 
@@ -261,7 +261,7 @@ async def process_text(
         )
 
         # Process with unified processor
-        result = await unified_processor.process(modal_input)
+        result = await processor.process(modal_input)
 
         processing_time = time.time() - start_time
 
@@ -435,7 +435,7 @@ async def get_multimodal_stats(
     """
     try:
         # Get unified processor stats
-        processor_stats = unified_processor.get_stats()
+        processor_stats = processor.get_stats()
 
         gpu_available, gpu_stats = _get_gpu_stats()
 
@@ -610,11 +610,11 @@ async def combine_multimodal_inputs(
             raise HTTPException(status_code=400, detail="At least one input modality required")
 
         # Process all inputs
-        results = [await unified_processor.process(modal_input) for modal_input in inputs]
+        results = [await processor.process(modal_input) for modal_input in inputs]
 
         # Create combined input and process fusion
         combined_input = _create_combined_input(text, image_file, audio_file, intent)
-        fusion_result = await unified_processor._process_combined(combined_input)
+        fusion_result = await processor._process_combined(combined_input)
 
         processing_time = time.time() - start_time
 
@@ -663,10 +663,10 @@ async def get_performance_stats(
     """
     try:
         # Get performance metrics from monitor
-        performance_metrics = await unified_processor.performance_monitor.monitor_processing_performance()
+        performance_metrics = await processor.performance_monitor.monitor_processing_performance()
 
         # Get processor-specific stats
-        processor_stats = unified_processor.get_stats()
+        processor_stats = processor.get_stats()
 
         # Combine all performance data
         return {
@@ -676,9 +676,9 @@ async def get_performance_stats(
             "processor_stats": processor_stats,
             "optimization_status": {
                 "auto_optimization_enabled": True,
-                "mixed_precision_enabled": unified_processor.use_amp,
-                "device": str(unified_processor.device),
-                "batch_sizes": unified_processor.performance_monitor.batch_sizes,
+                "mixed_precision_enabled": processor.use_amp,
+                "device": str(processor.device),
+                "batch_sizes": processor.performance_monitor.batch_sizes,
             },
         }
 
@@ -706,7 +706,7 @@ async def optimize_performance(
     Issue #744: Requires authenticated user.
     """
     try:
-        optimization_result = await unified_processor.performance_monitor.optimize_gpu_memory()
+        optimization_result = await processor.performance_monitor.optimize_gpu_memory()
 
         return {
             "success": True,
@@ -739,7 +739,7 @@ async def get_performance_summary(
     Issue #744: Requires authenticated user.
     """
     try:
-        summary = unified_processor.performance_monitor.get_performance_summary()
+        summary = processor.performance_monitor.get_performance_summary()
 
         return {"success": True, "timestamp": time.time(), "summary": summary}
 
@@ -769,18 +769,18 @@ async def update_batch_size(
     Issue #744: Requires authenticated user.
     """
     try:
-        if modality not in unified_processor.performance_monitor.batch_sizes:
+        if modality not in processor.performance_monitor.batch_sizes:
             return {
                 "success": False,
                 "error": f"Unknown modality: {modality}",
-                "available_modalities": list(unified_processor.performance_monitor.batch_sizes.keys()),
+                "available_modalities": list(processor.performance_monitor.batch_sizes.keys()),
             }
 
         if batch_size < 1 or batch_size > 128:
             return {"success": False, "error": "Batch size must be between 1 and 128"}
 
-        old_size = unified_processor.performance_monitor.batch_sizes[modality]
-        unified_processor.performance_monitor.batch_sizes[modality] = batch_size
+        old_size = processor.performance_monitor.batch_sizes[modality]
+        processor.performance_monitor.batch_sizes[modality] = batch_size
 
         return {
             "success": True,
@@ -806,11 +806,11 @@ async def probe_multimodal(
 ) -> ComponentHealth:
     """Issue #3333: probe registration for multimodal module.
 
-    Lightweight check: confirm the module-imported ``unified_processor`` is
+    Lightweight check: confirm the module-imported ``processor`` is
     bound. Skips the lazy torch import the handler performs.
     """
     try:
-        if unified_processor is None:
+        if processor is None:
             return ComponentHealth(name="multimodal", status="down", detail="processor unavailable")
         return ComponentHealth(name="multimodal", status="ok")
     except Exception as exc:

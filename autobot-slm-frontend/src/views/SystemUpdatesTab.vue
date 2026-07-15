@@ -301,8 +301,8 @@ onUnmounted(() => {
           </svg>
           {{
             systemUpdates.isDiscovering.value
-              ? 'Discovering...'
-              : 'Check for Updates'
+              ? $t('systemUpdatesTab.discovering')
+              : $t('systemUpdatesTab.checkForUpdates')
           }}
         </button>
       </div>
@@ -339,10 +339,7 @@ onUnmounted(() => {
         <span class="text-sm font-medium text-gray-700">
           {{ $t('systemUpdatesTab.discoveringPackages') }}
         </span>
-        <span class="text-sm text-gray-500">
-          {{ systemUpdates.discoverStatus.value.nodes_checked }} /
-          {{ systemUpdates.discoverStatus.value.total_nodes }} nodes
-        </span>
+        <span class="text-sm text-gray-500">{{ $t('systemUpdatesTab.value0Value1Nodes', { value0: systemUpdates.discoverStatus.value.nodes_checked, value1: systemUpdates.discoverStatus.value.total_nodes }) }}</span>
       </div>
       <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
         <div
@@ -395,9 +392,7 @@ onUnmounted(() => {
         class="px-4 py-3 bg-gray-50 border-b
                flex items-center justify-between"
       >
-        <h2 class="font-medium text-gray-900">
-          Available Packages ({{ filteredPackages.length }})
-        </h2>
+        <h2 class="font-medium text-gray-900">{{ $t('systemUpdatesTab.availablePackagesCount', { count: filteredPackages.length }) }}</h2>
         <div class="flex items-center gap-2">
           <button
             v-if="someSelected"
@@ -405,9 +400,7 @@ onUnmounted(() => {
             :disabled="systemUpdates.loading.value"
             class="px-3 py-1.5 text-sm bg-blue-600 text-white
                    rounded-lg hover:bg-blue-700 disabled:opacity-50"
-          >
-            Upgrade Selected ({{ selectedPackages.size }})
-          </button>
+          >{{ $t('systemUpdatesTab.upgradeSelectedValue0', { value0: selectedPackages.size }) }}</button>
         </div>
       </div>
 
@@ -424,9 +417,7 @@ onUnmounted(() => {
         >
           <span class="text-sm font-medium text-gray-700">
             {{ group.node_id }}
-            <span class="text-gray-400 font-normal">
-              ({{ group.packages.length }} packages)
-            </span>
+            <span class="text-gray-400 font-normal">{{ $t('systemUpdatesTab.countPackages', { count: group.packages.length }) }}</span>
           </span>
           <button
             @click="handleUpgradeAllForNode(group.node_id)"
@@ -516,9 +507,7 @@ onUnmounted(() => {
           @change="toggleSelectAll"
           class="rounded border-gray-300 text-blue-600
                  focus:ring-blue-500"
-        />
-        Select all {{ filteredPackages.length }} packages
-      </label>
+        />{{ $t('systemUpdatesTab.selectAllCountPackages', { count: filteredPackages.length }) }}</label>
     </div>
 
     <!-- Update Jobs -->
@@ -630,8 +619,8 @@ onUnmounted(() => {
               >
                 {{
                   cancellingJobId === job.job_id
-                    ? 'Cancelling...'
-                    : 'Cancel'
+                    ? $t('systemUpdatesTab.cancelling')
+                    : $t('systemUpdatesTab.cancel')
                 }}
               </button>
             </td>

@@ -336,18 +336,18 @@ def test_workflow_task_retry_methods() -> None:
     assert not t.can_retry()  # 2 == 2
 
 
-def test_workflow_task_get_enhanced_inputs_merges_context() -> None:
-    """get_enhanced_inputs() returns inputs + context + task_id + workflow_metadata."""
+def test_workflow_task_get_inputs_merges_context() -> None:
+    """get_inputs() returns inputs + context + task_id + workflow_metadata."""
     t = WorkflowTask(
         task_id="t1",
         inputs={"x": 1},
         metadata={"workflow_id": "wf1"},
     )
-    enhanced = t.get_enhanced_inputs({"runtime_key": "v"})
-    assert enhanced["x"] == 1
-    assert enhanced["context"] == {"runtime_key": "v"}
-    assert enhanced["task_id"] == "t1"
-    assert enhanced["workflow_metadata"] == {"workflow_id": "wf1"}
+    merged = t.get_inputs({"runtime_key": "v"})
+    assert merged["x"] == 1
+    assert merged["context"] == {"runtime_key": "v"}
+    assert merged["task_id"] == "t1"
+    assert merged["workflow_metadata"] == {"workflow_id": "wf1"}
 
 
 def test_workflow_task_to_completed_result_shape() -> None:

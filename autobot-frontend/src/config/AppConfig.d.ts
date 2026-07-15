@@ -117,7 +117,7 @@ export interface FetchOptions extends RequestInit {
 }
 
 export declare class AppConfigService {
-  serviceDiscovery: any;
+  serviceDiscovery: unknown;
   config: AppConfig;
   configLoaded: boolean;
   debugMode: boolean;
@@ -146,7 +146,7 @@ export declare class AppConfigService {
 
   mergeConfig(remoteConfig: Partial<AppConfig>): void;
 
-  get(path: string, defaultValue?: any): any;
+  get(path: string, defaultValue?: unknown): unknown;
 
   isFeatureEnabled(featureName: string): boolean;
 
@@ -160,7 +160,7 @@ export declare class AppConfigService {
 
   invalidateCache(): void;
 
-  log(...args: any[]): void;
+  log(...args: unknown[]): void;
 
   getAllServiceUrls(): Promise<{ [key: string]: string }>;
 

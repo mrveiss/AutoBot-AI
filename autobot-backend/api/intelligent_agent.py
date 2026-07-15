@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
 from api.system_health import ComponentHealth, KnownProbes, register_health_probe
+from api.ws_security import enforce_ws_origin
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
 
@@ -263,6 +264,8 @@ async def websocket_stream(websocket: WebSocket):
     Clients can send natural language goals and receive real-time updates
     as the agent processes and executes commands.
     """
+    if not await enforce_ws_origin(websocket):
+        return
     await websocket.accept()
     logger.info("WebSocket connection established")
     try:

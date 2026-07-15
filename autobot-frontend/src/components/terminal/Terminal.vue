@@ -117,6 +117,17 @@ const props = withDefaults(defineProps<Props>(), {
   chatSessionId: null
 })
 
+// Incoming terminal WebSocket message shape (backend sends heterogeneous
+// payloads keyed by `type`; fields are optional per message type).
+interface TerminalWsMessage {
+  type: string
+  data?: string
+  message?: string
+  completions?: string[]
+  prefix?: string
+  error?: string
+}
+
 // State
 // CRITICAL: Session ID will be retrieved from backend (for chat) or generated (for system terminal)
 const sessionId = ref<string | null>(null)
@@ -158,8 +169,8 @@ const { isConnected, isConnecting, send: wsSend, connect: wsConnect, disconnect:
     },
     onMessage: (data) => {
       try {
-        handleTerminalMessage(data)
-      } catch (error) {
+        handleTerminalMessage(data as TerminalWsMessage)
+      } catch {
         // Handle plain text messages
         addTerminalLine('', String(data), 'output')
       }
@@ -354,23 +365,25 @@ const sendCommand = (command: string) => {
   }
 }
 
-const handleTerminalMessage = (data: any) => {
+const handleTerminalMessage = (data: TerminalWsMessage) => {
   switch (data.type) {
     case 'output':
-      addTerminalLine('', data.data, 'output')
+      addTerminalLine('', data.data as string, 'output')
       break
     case 'error':
-      addTerminalLine('', data.data, 'error')
+      addTerminalLine('', data.data as string, 'error')
       break
     case 'prompt':
       currentPrompt.value = data.data || '$ '
       break
     case 'status':
-      statusMessage.value = data.message
+      statusMessage.value = data.message as string
       break
     // Issue #756: Handle tab completion response
     case 'tab_completion':
-      handleTabCompletionResponse(data)
+      handleTabCompletionResponse(
+        data as { completions: string[]; prefix: string; error?: string },
+      )
       break
     default:
       addTerminalLine('', JSON.stringify(data), 'info')
@@ -458,7 +471,7 @@ const copyTerminalOutput = async () => {
 
     await navigator.clipboard.writeText(output)
     addTerminalLine('system', t('terminal.terminal.outputCopied'), 'info')
-  } catch (error) {
+  } catch {
     addTerminalLine('system', t('terminal.terminal.copyFailed'), 'error')
   }
 }
@@ -616,15 +629,15 @@ onUnmounted(() => {
 
 /* Terminal body with dark theme */
 .terminal-body {
-  @apply flex-1 flex flex-col bg-gray-900 overflow-hidden;
+  @apply flex-1 flex flex-col bg-autobot-bg-primary overflow-hidden;
 }
 
 .terminal-status {
-  @apply px-4 py-2 bg-gray-800 text-gray-300 text-sm flex items-center gap-2 border-b border-gray-700;
+  @apply px-4 py-2 bg-autobot-bg-secondary text-autobot-text-muted text-sm flex items-center gap-2 border-b border-autobot-border-strong;
 }
 
 .terminal-output {
-  @apply flex-1 p-4 bg-gray-900 text-green-400 overflow-y-auto text-sm leading-relaxed min-h-0;
+  @apply flex-1 p-4 bg-autobot-bg-primary text-green-400 overflow-y-auto text-sm leading-relaxed min-h-0;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 }
 
@@ -637,15 +650,15 @@ onUnmounted(() => {
 }
 
 .terminal-output::-webkit-scrollbar-track {
-  @apply bg-gray-800;
+  @apply bg-autobot-bg-secondary;
 }
 
 .terminal-output::-webkit-scrollbar-thumb {
-  @apply bg-gray-600 rounded;
+  @apply bg-autobot-bg-tertiary rounded;
 }
 
 .terminal-output::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-500;
+  @apply bg-autobot-bg-tertiary;
 }
 
 .terminal-line {
@@ -720,7 +733,7 @@ onUnmounted(() => {
 }
 
 .line-prefix {
-  @apply text-gray-500 select-none mr-2;
+  @apply text-autobot-text-muted select-none mr-2;
 }
 
 .command {
@@ -745,7 +758,7 @@ onUnmounted(() => {
 }
 
 .terminal-prompt {
-  @apply flex items-center mt-2 pt-2 border-t border-gray-700;
+  @apply flex items-center mt-2 pt-2 border-t border-autobot-border-strong;
 }
 
 .prompt {
@@ -759,7 +772,7 @@ onUnmounted(() => {
 }
 
 .command-input::placeholder {
-  @apply text-gray-500;
+  @apply text-autobot-text-muted;
 }
 
 .command-input:disabled {
@@ -795,8 +808,8 @@ onUnmounted(() => {
 /* ADDED: Ensure terminal works well in flex layouts */
 @media (min-width: 769px) {
   .working-terminal {
-    /* Ensure terminal adapts to container height on larger screens */
-    max-height: 100vh; /* Don't exceed viewport */
+    /* #10750 C2: adapt to the flex parent height, not the raw viewport */
+    max-height: 100%;
   }
 }
 </style>

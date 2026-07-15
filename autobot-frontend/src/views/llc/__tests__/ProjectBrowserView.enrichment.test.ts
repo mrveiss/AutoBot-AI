@@ -5,8 +5,16 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
+import en from '@/i18n/locales/en.json'
 
 const get = vi.fn()
+
+// vue-i18n 11 requires the plugin be installed via app.use(); load the real
+// en.json messages so the card text assertions ("7 open", "No active sprint")
+// resolve against the actual translations.
+const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+const mountOpts = { global: { plugins: [i18n], stubs: { LlcBreadcrumb: true } } }
 
 vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ get }) }))
 vi.mock('@/utils/debugUtils', () => ({
@@ -49,7 +57,7 @@ describe('ProjectBrowserView enrichment (GH#10232)', () => {
       return Promise.resolve([])
     })
 
-    const wrapper = mount(ProjectBrowserView, { global: { stubs: { LlcBreadcrumb: true } } })
+    const wrapper = mount(ProjectBrowserView, mountOpts)
     await flushPromises()
 
     expect(wrapper.text()).toContain('7 open')
@@ -66,7 +74,7 @@ describe('ProjectBrowserView enrichment (GH#10232)', () => {
       return Promise.resolve([])
     })
 
-    const wrapper = mount(ProjectBrowserView, { global: { stubs: { LlcBreadcrumb: true } } })
+    const wrapper = mount(ProjectBrowserView, mountOpts)
     await flushPromises()
 
     expect(wrapper.text()).toContain('No active sprint')

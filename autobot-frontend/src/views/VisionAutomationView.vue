@@ -1,7 +1,7 @@
 <!-- Copyright 2025-2026 mrveiss -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- AutoBot - AI-Powered Automation Platform -->
-<!-- Issue #9890: Wire vision automation panel to /api/vision endpoints -->
+<!-- Vision automation panel — backed by /api/vision/* endpoints. -->
 <script setup lang="ts">
 /**
  * VisionAutomationView — Screen analysis, element detection, OCR, and
@@ -13,6 +13,7 @@ import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { useVisionAutomation } from '@/composables/useVisionAutomation'
 import Icon from '@/components/ui/Icon.vue'
+import { useTabs } from '@/composables/useTabs'
 
 const { t } = useI18n()
 const logger = createLogger('VisionAutomationView')
@@ -32,8 +33,10 @@ const {
   fetchOpportunities,
 } = useVisionAutomation()
 
-type Tab = 'analysis' | 'elements' | 'ocr' | 'opportunities'
-const activeTab = ref<Tab>('analysis')
+const VISION_TAB_IDS = ['analysis', 'elements', 'ocr', 'opportunities'] as const
+const { activeTab, tabAttrs, panelAttrs, handleKeydown: handleTabKeydown, tablistRef: visionTablistRef } =
+  useTabs(VISION_TAB_IDS)
+
 const sessionId = ref('')
 const elementTypeFilter = ref('')
 const minConfidence = ref(0.5)
@@ -66,6 +69,33 @@ async function handleExtractOCR(): Promise<void> {
 async function handleFetchOpportunities(): Promise<void> {
   logger.debug('Fetching automation opportunities')
   await fetchOpportunities(sessionId.value || undefined)
+}
+
+// --- Structured field accessors -------------------------------------------
+// OCR text regions and automation opportunities are loosely-typed dicts
+// (backend returns bare JSON). These helpers safely pull the fields we render
+// instead of dumping raw JSON at the user (#10750 C3).
+function fieldString(obj: Record<string, unknown>, key: string): string {
+  const v = obj[key]
+  return typeof v === 'string' ? v : ''
+}
+
+function fieldNumber(obj: Record<string, unknown>, key: string): number | null {
+  const v = obj[key]
+  return typeof v === 'number' ? v : null
+}
+
+function formatBbox(obj: Record<string, unknown>): string {
+  const bbox = obj.bbox
+  if (!bbox || typeof bbox !== 'object') return ''
+  const b = bbox as Record<string, unknown>
+  const num = (k: string): number => (typeof b[k] === 'number' ? (b[k] as number) : 0)
+  return `${Math.round(num('x'))}, ${Math.round(num('y'))} · ${Math.round(num('width'))}×${Math.round(num('height'))}`
+}
+
+function asPercent(value: number): number {
+  // Confidence is a 0..1 fraction; render as a whole-number percentage.
+  return Math.round(value * 100)
 }
 
 onMounted(async () => {
@@ -114,39 +144,44 @@ onMounted(async () => {
     </div>
 
     <!-- Tabs -->
-    <nav class="tab-nav" role="tablist" :aria-label="t('vision.visionAutomation.tabsAriaLabel')">
+    <nav
+      ref="visionTablistRef"
+      class="tab-nav"
+      role="tablist"
+      :aria-label="t('vision.visionAutomation.tabsAriaLabel')"
+    >
       <button
-        role="tab"
-        :aria-selected="activeTab === 'analysis'"
+        v-bind="tabAttrs('analysis')"
         :class="['tab-btn', { active: activeTab === 'analysis' }]"
         @click="activeTab = 'analysis'"
+        @keydown="handleTabKeydown"
       >
         <Icon name="camera" aria-hidden="true" />
         {{ t('vision.visionAutomation.tabs.analysis') }}
       </button>
       <button
-        role="tab"
-        :aria-selected="activeTab === 'elements'"
+        v-bind="tabAttrs('elements')"
         :class="['tab-btn', { active: activeTab === 'elements' }]"
         @click="activeTab = 'elements'"
+        @keydown="handleTabKeydown"
       >
         <Icon name="th" aria-hidden="true" />
         {{ t('vision.visionAutomation.tabs.elements') }}
       </button>
       <button
-        role="tab"
-        :aria-selected="activeTab === 'ocr'"
+        v-bind="tabAttrs('ocr')"
         :class="['tab-btn', { active: activeTab === 'ocr' }]"
         @click="activeTab = 'ocr'"
+        @keydown="handleTabKeydown"
       >
         <Icon name="font" aria-hidden="true" />
         {{ t('vision.visionAutomation.tabs.ocr') }}
       </button>
       <button
-        role="tab"
-        :aria-selected="activeTab === 'opportunities'"
+        v-bind="tabAttrs('opportunities')"
         :class="['tab-btn', { active: activeTab === 'opportunities' }]"
         @click="activeTab = 'opportunities'"
+        @keydown="handleTabKeydown"
       >
         <Icon name="bolt" aria-hidden="true" />
         {{ t('vision.visionAutomation.tabs.opportunities') }}
@@ -156,7 +191,7 @@ onMounted(async () => {
     <!-- Tab panels -->
     <div class="tab-content">
       <!-- Screen Analysis -->
-      <div v-show="activeTab === 'analysis'" class="tab-panel">
+      <div v-show="activeTab === 'analysis'" v-bind="panelAttrs('analysis')" class="tab-panel">
         <div class="card">
           <div class="card-header">
             <span class="card-title">{{ t('vision.visionAutomation.analysis.cardTitle') }}</span>
@@ -230,7 +265,7 @@ onMounted(async () => {
       </div>
 
       <!-- Element Detection -->
-      <div v-show="activeTab === 'elements'" class="tab-panel">
+      <div v-show="activeTab === 'elements'" v-bind="panelAttrs('elements')" class="tab-panel">
         <div class="card">
           <div class="card-header">
             <span class="card-title">{{ t('vision.visionAutomation.elements.cardTitle') }}</span>
@@ -308,7 +343,7 @@ onMounted(async () => {
       </div>
 
       <!-- OCR -->
-      <div v-show="activeTab === 'ocr'" class="tab-panel">
+      <div v-show="activeTab === 'ocr'" v-bind="panelAttrs('ocr')" class="tab-panel">
         <div class="card">
           <div class="card-header">
             <span class="card-title">{{ t('vision.visionAutomation.ocr.cardTitle') }}</span>
@@ -330,7 +365,18 @@ onMounted(async () => {
                 :key="idx"
                 class="ocr-region-item"
               >
-                <pre class="region-pre">{{ JSON.stringify(region, null, 2) }}</pre>
+                <p v-if="fieldString(region, 'text')" class="region-text">
+                  {{ fieldString(region, 'text') }}
+                </p>
+                <div class="region-meta">
+                  <span v-if="fieldNumber(region, 'confidence') !== null" class="region-chip">
+                    {{ t('vision.visionAutomation.ocr.fieldConfidence') }}:
+                    {{ asPercent(fieldNumber(region, 'confidence') as number) }}%
+                  </span>
+                  <span v-if="formatBbox(region)" class="region-chip">
+                    {{ t('vision.visionAutomation.ocr.fieldBbox') }}: {{ formatBbox(region) }}
+                  </span>
+                </div>
               </div>
             </div>
             <div v-else class="empty-state">
@@ -345,7 +391,7 @@ onMounted(async () => {
       </div>
 
       <!-- Automation Opportunities -->
-      <div v-show="activeTab === 'opportunities'" class="tab-panel">
+      <div v-show="activeTab === 'opportunities'" v-bind="panelAttrs('opportunities')" class="tab-panel">
         <div class="card">
           <div class="card-header">
             <span class="card-title">{{ t('vision.visionAutomation.opportunities.cardTitle') }}</span>
@@ -375,7 +421,17 @@ onMounted(async () => {
                 :key="idx"
                 class="opportunity-item card"
               >
-                <pre class="region-pre">{{ JSON.stringify(opp, null, 2) }}</pre>
+                <div class="opportunity-head">
+                  <span class="opportunity-type">
+                    {{ fieldString(opp, 'type') || t('vision.visionAutomation.opportunities.fieldUntyped') }}
+                  </span>
+                  <span v-if="fieldNumber(opp, 'confidence') !== null" class="opportunity-confidence">
+                    {{ asPercent(fieldNumber(opp, 'confidence') as number) }}%
+                  </span>
+                </div>
+                <p v-if="fieldString(opp, 'description')" class="opportunity-desc">
+                  {{ fieldString(opp, 'description') }}
+                </p>
               </div>
             </div>
             <div v-else class="empty-state">
@@ -413,13 +469,13 @@ onMounted(async () => {
 .page-title {
   font-size: 1.375rem;
   font-weight: 700;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
   margin: 0;
 }
 
 .page-subtitle {
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   margin: 0.25rem 0 0;
 }
 
@@ -431,7 +487,7 @@ onMounted(async () => {
 }
 
 .status-label {
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .session-card {
@@ -441,7 +497,7 @@ onMounted(async () => {
 .tab-nav {
   display: flex;
   gap: 0.25rem;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
   padding-bottom: 0;
   flex-wrap: wrap;
 }
@@ -453,7 +509,7 @@ onMounted(async () => {
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -462,7 +518,7 @@ onMounted(async () => {
 }
 
 .tab-btn:hover {
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
 }
 
 .tab-btn.active {
@@ -481,8 +537,8 @@ onMounted(async () => {
 }
 
 .card {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
   overflow: hidden;
 }
@@ -492,14 +548,14 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
   background: var(--color-surface-secondary, #f9fafb);
 }
 
 .card-title {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
 }
 
 .card-body {
@@ -518,10 +574,10 @@ onMounted(async () => {
   min-width: 0;
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text-primary, #111827);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary, #111827);
 }
 
 .field-input--narrow {
@@ -533,7 +589,7 @@ onMounted(async () => {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   white-space: nowrap;
 }
 
@@ -544,7 +600,7 @@ onMounted(async () => {
 
 .range-value {
   font-weight: 600;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
   min-width: 3rem;
 }
 
@@ -583,7 +639,7 @@ onMounted(async () => {
   align-items: center;
   padding: 0.5rem 1rem;
   background: var(--color-surface-secondary, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
   min-width: 5rem;
 }
@@ -596,14 +652,14 @@ onMounted(async () => {
 
 .stat-label {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   text-align: center;
 }
 
 .section-subheading {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
   margin: 0 0 0.75rem;
 }
 
@@ -625,12 +681,12 @@ onMounted(async () => {
 .data-table td {
   padding: 0.5rem 0.75rem;
   text-align: left;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
 }
 
 .data-table th {
   font-weight: 600;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   background: var(--color-surface-secondary, #f9fafb);
   font-size: 0.75rem;
   text-transform: uppercase;
@@ -640,7 +696,7 @@ onMounted(async () => {
 .cell-mono {
   font-family: monospace;
   font-size: 0.8125rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .cell-text {
@@ -682,7 +738,7 @@ onMounted(async () => {
 
 .badge-neutral {
   background: var(--color-surface-secondary, #f3f4f6);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .chip {
@@ -692,12 +748,12 @@ onMounted(async () => {
   background: var(--color-surface-secondary, #e5e7eb);
   border-radius: 0.25rem;
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #374151);
+  color: var(--text-secondary, #374151);
 }
 
 .result-summary {
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   margin: 0 0 0.75rem;
 }
 
@@ -711,18 +767,59 @@ onMounted(async () => {
 
 .ocr-region-item {
   background: var(--color-surface-secondary, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   padding: 0.5rem;
 }
 
-.region-pre {
-  font-family: monospace;
-  font-size: 0.8125rem;
-  white-space: pre-wrap;
+.region-text {
+  margin: 0 0 0.375rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
   word-break: break-word;
-  margin: 0;
-  color: var(--color-text-primary, #111827);
+}
+
+.region-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.region-chip {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+}
+
+.opportunity-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.opportunity-type {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.opportunity-confidence {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+}
+
+.opportunity-desc {
+  margin: 0.375rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
 }
 
 .opportunities-list {
@@ -744,7 +841,7 @@ onMounted(async () => {
   align-items: center;
   gap: 0.5rem;
   padding: 2rem 1rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   font-size: 0.875rem;
   text-align: center;
 }

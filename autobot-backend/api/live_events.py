@@ -26,9 +26,11 @@ import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from api.ws_security import enforce_ws_origin
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from events.bus import get_event_bus
+from services.workflow_permission_service import WorkflowPermissionService
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -54,6 +56,90 @@ async def _send_error(ws: WebSocket, message: str) -> None:
         pass
 
 
+async def _authorize_llc_channel(channel: str, user_payload: dict) -> bool:
+    """Authorize subscription to tenant-scoped LLC channels (``company:``/``board:``).
+
+    These channels carry per-company data (activity audit rows, board moves), so a
+    client may only subscribe to a company it belongs to. Admins bypass. Fails
+    closed on any error (#11386 security review).
+    """
+    if "admin" in user_payload.get("roles", []):
+        return True
+    user_id = str(user_payload.get("user_id") or user_payload.get("username") or "")
+    if not user_id:
+        return False
+    prefix, _, ident = channel.partition(":")
+    if not ident:
+        return False
+    try:
+        from llc.services.membership_service import MembershipService
+        from user_management.database import get_async_session_factory
+
+        async with get_async_session_factory()() as session:
+            company_id = ident
+            if prefix == "board":
+                from llc.services.board import BoardService
+
+                board = await BoardService().get_board(session, ident)
+                if board is None:
+                    return False
+                company_id = str(board.company_id)
+            return await MembershipService().is_member(session, company_id, user_id)
+    except Exception:
+        logger.exception("LLC channel authorization failed for %s", channel)
+        return False
+
+
+async def _authorize_resource_channel(channel: str, user_payload: dict) -> bool:
+    """Authorize ``workflow:``/``heartbeat:``/``task:`` subscriptions (#11396).
+
+    These prefixes previously had NO tenant check — any authenticated user could
+    subscribe to any id (cross-tenant leak, latent today since nothing publishes
+    to them yet). Per-resource owner resolution, admins bypass, fails closed:
+
+    - ``workflow:{id}`` — the caller must hold ``view`` permission on that
+      workflow (``WorkflowPermissionService.check_permission``, viewer+).
+    - ``heartbeat:{id}`` — resolve ``LLCHeartbeatRun.company_id`` and require
+      company membership (mirrors the ``board:`` resolver).
+    - ``task:{id}`` — no ownership store exists for task ids (and no publisher
+      or frontend consumer today), so non-admins are DENIED until one does.
+    """
+    if "admin" in user_payload.get("roles", []):
+        return True
+    user_id = str(user_payload.get("user_id") or user_payload.get("username") or "")
+    if not user_id:
+        return False
+    prefix, _, ident = channel.partition(":")
+    if not ident:
+        return False
+    if prefix == "task":
+        logger.warning("task-channel subscribe denied for %s: no task ownership store (#11396)", user_id)
+        return False
+    try:
+        from user_management.database import get_async_session_factory
+
+        async with get_async_session_factory()() as session:
+            if prefix == "workflow":
+                svc = WorkflowPermissionService(session)
+                return await svc.check_permission(user_id, ident, "view")
+            if prefix == "heartbeat":
+                from sqlalchemy import select
+
+                from llc.models.heartbeat_run import LLCHeartbeatRun
+                from llc.services.membership_service import MembershipService
+
+                run = (
+                    await session.execute(select(LLCHeartbeatRun).where(LLCHeartbeatRun.id == ident))
+                ).scalar_one_or_none()
+                if run is None:
+                    return False
+                return await MembershipService().is_member(session, str(run.company_id), user_id)
+    except Exception:
+        logger.exception("Resource channel authorization failed for %s", channel)
+        return False
+    return False
+
+
 async def _handle_subscribe(ws: WebSocket, channel: str, user_payload: dict | None) -> None:
     """Process a subscribe action from the client."""
     if user_payload and channel.startswith("agent:"):
@@ -62,6 +148,18 @@ async def _handle_subscribe(ws: WebSocket, channel: str, user_payload: dict | No
         username = user_payload.get("username", "")
         is_admin = "admin" in user_payload.get("roles", [])
         if not is_admin and claimed_id not in (user_id, username):
+            await _send_error(ws, f"Not authorized to subscribe to {channel}")
+            return
+    elif user_payload and (channel.startswith("company:") or channel.startswith("board:")):
+        # Tenant-scoped LLC channels: enforce company membership (#11386).
+        if not await _authorize_llc_channel(channel, user_payload):
+            await _send_error(ws, f"Not authorized to subscribe to {channel}")
+            return
+    elif user_payload and (
+        channel.startswith("workflow:") or channel.startswith("heartbeat:") or channel.startswith("task:")
+    ):
+        # Per-resource owner resolution for the remaining scoped prefixes (#11396).
+        if not await _authorize_resource_channel(channel, user_payload):
             await _send_error(ws, f"Not authorized to subscribe to {channel}")
             return
     ok = await get_event_bus().subscribe_ws(ws, channel)
@@ -116,8 +214,10 @@ async def _keepalive_loop(ws: WebSocket, stop_event: asyncio.Event) -> None:
 )
 async def live_events_endpoint(websocket: WebSocket):
     """WebSocket endpoint for scoped real-time event streaming (#1408)."""
-    # #9963: use the canonical WS auth (JWT + single-user-mode bypass), same
-    # as /api/ws — the local raw-JWT check rejected single_user deployments.
+    if not await enforce_ws_origin(websocket):
+        return
+    # #9963: use the canonical WS auth (JWT), same as /api/ws — the local
+    # raw-JWT check was too strict and rejected valid deployments.
     from auth_middleware import authenticate_websocket
 
     user_payload: dict | None = await authenticate_websocket(websocket)

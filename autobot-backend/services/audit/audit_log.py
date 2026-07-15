@@ -20,14 +20,14 @@ Key design choices
   given the expected event volume and the 90-day retention window.
 
 .. deprecated::
-    Use ``services.audit.unified_audit`` directly (GH#8290 Phase 2).
+    Use ``services.audit.audit`` directly (GH#8290 Phase 2).
     This module will be removed in Phase 3 once all callers are migrated.
 """
 
 import warnings
 
 warnings.warn(
-    "services.audit.audit_log is deprecated (GH#8290). " "Import from services.audit.unified_audit instead.",
+    "services.audit.audit_log is deprecated (GH#8290). " "Import from services.audit.audit instead.",
     DeprecationWarning,
     stacklevel=2,
 )

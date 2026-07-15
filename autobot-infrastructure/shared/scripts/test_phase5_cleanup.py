@@ -14,6 +14,7 @@ Validates that:
 5. Grafana integration is functional
 """
 
+import asyncio
 import sys
 import warnings
 from pathlib import Path
@@ -164,7 +165,7 @@ def test_claude_api_monitor_deprecation():
         warnings.simplefilter("always")
         from monitoring.claude_api_monitor import record_api_call
 
-        record_api_call(payload_size=100)
+        asyncio.run(record_api_call(payload_size=100))
         deprecation_warnings = [warning for warning in w if issubclass(warning.category, DeprecationWarning)]
         if deprecation_warnings:
             print("  ✅ record_api_call() emits DeprecationWarning")

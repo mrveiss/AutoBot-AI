@@ -15,16 +15,16 @@ from fastapi import APIRouter, Depends
 
 from api.schemas_agent import (
     ComprehensiveResearchData,
-    EnhancedKnowledgeSearchData,
+    KnowledgeSearchData,
     MultiAgentQueryData,
 )
 from api.schemas_ai_stack import (
     AIStackAgentsData,
+    ChatResult,
     ClassificationResult,
     CodeSearchResult,
     DevelopmentSpeedupResult,
     DocumentAnalysisResult,
-    EnhancedChatResult,
     KnowledgeExtractionResult,
     QueryReformulationResult,
     RAGQueryResult,
@@ -33,9 +33,9 @@ from api.schemas_ai_stack import (
 )
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
+    ChatRequest,
     ContentClassificationRequest,
     DevelopmentAnalysisRequest,
-    EnhancedChatRequest,
     KbCodeSearchRequest,
     KnowledgeExtractionRequest,
     RAGQueryRequest,
@@ -184,23 +184,23 @@ async def analyze_documents(documents: List[Metadata], admin_check: bool = Depen
 
 
 # ====================================================================
-# Enhanced Chat Endpoints
+# Chat Endpoints
 # ====================================================================
 
 
-@router.post("/chat/enhanced", response_model=DataResponse[EnhancedChatResult])
+@router.post("/chat", response_model=DataResponse[ChatResult])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_chat",
+    operation="chat",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-async def enhanced_chat(
-    request: EnhancedChatRequest,
+async def chat(
+    request: ChatRequest,
     admin_check: bool = Depends(check_admin_permission),
     knowledge_base=Depends(get_knowledge_base),
 ):
     """
-    Enhanced chat with AI Stack integration and knowledge base support.
+    Chat with AI Stack integration and knowledge base support.
 
     This endpoint provides intelligent conversation with access to
     knowledge base and advanced AI reasoning capabilities.
@@ -228,7 +228,7 @@ async def enhanced_chat(
         chat_history=request.chat_history,
     )
 
-    return create_success_response(chat_result, "Enhanced chat completed successfully")
+    return create_success_response(chat_result, "AI Stack chat completed successfully")
 
 
 # ====================================================================
@@ -261,13 +261,13 @@ async def extract_knowledge(
     return create_success_response(result, "Knowledge extraction completed successfully")
 
 
-@router.post("/knowledge/enhanced-search", response_model=DataResponse[EnhancedKnowledgeSearchData])
+@router.post("/knowledge/search", response_model=DataResponse[KnowledgeSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_knowledge_search",
+    operation="knowledge_search",
     error_code_prefix="AI_STACK_INTEGRATION",
 )
-async def enhanced_knowledge_search(
+async def knowledge_search(
     query: str,
     search_type: str = "comprehensive",
     max_results: int = 10,
@@ -275,7 +275,7 @@ async def enhanced_knowledge_search(
     knowledge_base=Depends(get_knowledge_base),
 ):
     """
-    Enhanced knowledge search combining local KB and AI Stack capabilities.
+    Knowledge search combining local KB and AI Stack capabilities.
 
     Issue #744: Requires admin authentication.
     """
@@ -293,17 +293,17 @@ async def enhanced_knowledge_search(
             logger.warning("Local KB search failed: %s", e)
             results["local_kb"] = []
 
-    # AI Stack enhanced search
+    # AI Stack search
     try:
-        enhanced_results = await ai_client.search_knowledge_enhanced(
+        aistack_results = await ai_client.search_knowledge(
             query=query, search_type=search_type, max_results=max_results
         )
-        results["enhanced"] = enhanced_results
+        results["aistack"] = aistack_results
     except AIStackError as e:
-        logger.warning("AI Stack enhanced search failed: %s", e)
-        results["enhanced"] = {}
+        logger.warning("AI Stack search failed: %s", e)
+        results["aistack"] = {}
 
-    return create_success_response(results, "Enhanced knowledge search completed")
+    return create_success_response(results, "AI Stack knowledge search completed")
 
 
 @router.get("/knowledge/system", response_model=DataResponse[SystemKnowledgeResult])
@@ -628,23 +628,3 @@ async def legacy_rag_search(
     """
     request = RAGQueryRequest(query=query, max_results=max_results)
     return await rag_query(request)
-
-
-@router.post("/legacy/enhanced-chat", response_model=DataResponse[EnhancedChatResult])
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="legacy_enhanced_chat",
-    error_code_prefix="AI_STACK_INTEGRATION",
-)
-async def legacy_enhanced_chat(
-    message: str,
-    context: str | None = None,
-    admin_check: bool = Depends(check_admin_permission),
-):
-    """
-    Legacy enhanced chat endpoint for backward compatibility.
-
-    Issue #744: Requires admin authentication.
-    """
-    request = EnhancedChatRequest(message=message, context=context)
-    return await enhanced_chat(request)

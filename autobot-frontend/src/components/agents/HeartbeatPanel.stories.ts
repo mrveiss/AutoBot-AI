@@ -22,7 +22,7 @@ const meta = {
 } as Meta<typeof HeartbeatPanel>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
  
 type Story = { render?: () => unknown; decorators?: unknown[]; parameters?: unknown };
 

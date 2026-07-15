@@ -68,6 +68,7 @@ class LLMProvider(str, Enum):
     OLLAMA = "ollama"
     GOOGLE = "google"
     OPENROUTER = "openrouter"
+    MISTRAL = "mistral"
     LOCAL = "local"
 
 

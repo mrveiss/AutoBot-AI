@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tests for ManifestContract Protocol and UnifiedRegistry (GH#7369)."""
+"""Tests for ManifestContract Protocol and Registry (GH#7369)."""
 
 import warnings
 from dataclasses import dataclass
@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import pytest
 
 from plugin_sdk.manifest_contract import ManifestContract
-from plugin_sdk.unified_registry import get_unified_registry
+from plugin_sdk.registry import get_registry
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -20,7 +20,7 @@ from plugin_sdk.unified_registry import get_unified_registry
 @pytest.fixture(autouse=True)
 def _clear_registry():
     """Isolate each test by clearing the singleton registry."""
-    registry = get_unified_registry()
+    registry = get_registry()
     registry.clear()
     yield
     registry.clear()
@@ -81,35 +81,35 @@ class TestManifestContractProtocol:
 
 
 # ---------------------------------------------------------------------------
-# UnifiedRegistry
+# Registry
 # ---------------------------------------------------------------------------
 
 
-class TestUnifiedRegistry:
+class TestRegistry:
     def test_singleton(self) -> None:
-        a = get_unified_registry()
-        b = get_unified_registry()
+        a = get_registry()
+        b = get_registry()
         assert a is b
 
     def test_register_and_get(self) -> None:
-        reg = get_unified_registry()
+        reg = get_registry()
         m = _FakeManifest(name="alpha", version="1.0.0", description="d", kind="skill")
         reg.register(m)
         assert reg.get("alpha") is m
 
     def test_get_missing_returns_none(self) -> None:
-        reg = get_unified_registry()
+        reg = get_registry()
         assert reg.get("nonexistent") is None
 
     def test_list_all_sorted(self) -> None:
-        reg = get_unified_registry()
+        reg = get_registry()
         for n in ("zebra", "apple", "mango"):
             reg.register(_FakeManifest(name=n, version="1.0.0", description="", kind="plugin"))
         names = [m.name for m in reg.list_all()]
         assert names == ["apple", "mango", "zebra"]
 
     def test_register_replaces_existing(self) -> None:
-        reg = get_unified_registry()
+        reg = get_registry()
         old = _FakeManifest(name="foo", version="1.0.0", description="old", kind="skill")
         new = _FakeManifest(name="foo", version="2.0.0", description="new", kind="skill")
         reg.register(old)
@@ -118,7 +118,7 @@ class TestUnifiedRegistry:
         assert len(reg.list_all()) == 1
 
     def test_register_rejects_non_contract(self) -> None:
-        reg = get_unified_registry()
+        reg = get_registry()
 
         class Bad:
             pass
@@ -127,7 +127,7 @@ class TestUnifiedRegistry:
             reg.register(Bad())  # type: ignore
 
     def test_accepts_plugin_manifest(self) -> None:
-        reg = get_unified_registry()
+        reg = get_registry()
         m = _plugin_manifest()
         reg.register(m)
         assert reg.get("my_plugin") is m
@@ -135,13 +135,13 @@ class TestUnifiedRegistry:
     def test_accepts_extension_manifest(self) -> None:
         from plugin_sdk.extension_manifest import ExtensionManifest
 
-        reg = get_unified_registry()
+        reg = get_registry()
         m = ExtensionManifest(name="my_ext", version="0.1.0", description="ext")
         reg.register(m)
         assert reg.get("my_ext") is m
 
     def test_unregister_removes_entry(self) -> None:
-        reg = get_unified_registry()
+        reg = get_registry()
         m = _FakeManifest(name="to_remove", version="1.0.0", description="d", kind="plugin")
         reg.register(m)
         assert reg.get("to_remove") is m
@@ -151,7 +151,7 @@ class TestUnifiedRegistry:
         assert len(reg.list_all()) == 0
 
     def test_unregister_missing_returns_false(self) -> None:
-        reg = get_unified_registry()
+        reg = get_registry()
         assert reg.unregister("nonexistent") is False
 
 

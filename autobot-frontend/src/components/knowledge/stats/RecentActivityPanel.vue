@@ -1,8 +1,21 @@
 <template>
   <BasePanel variant="bordered" size="md">
-    <h4>{{ $t('knowledge.stats.recentActivity.title') }}</h4>
+    <div class="activity-header">
+      <h4>{{ $t('knowledge.stats.recentActivity') }}</h4>
+      <div class="feed-filter-chips" role="group" :aria-label="$t('knowledge.stats.recentActivity')">
+        <button
+          v-for="chip in feedChips"
+          :key="chip.value"
+          class="feed-chip"
+          :class="{ active: activeFeedFilter === chip.value }"
+          @click="activeFeedFilter = chip.value"
+        >
+          {{ $t(chip.labelKey) }}
+        </button>
+      </div>
+    </div>
     <div class="activity-timeline">
-      <div v-for="activity in activities" :key="activity.id" class="activity-item">
+      <div v-for="activity in filteredActivities" :key="activity.id" class="activity-item">
         <div class="activity-icon" :class="activity.type">
           <Icon :name="getActivityIcon(activity.type)" />
         </div>
@@ -12,9 +25,9 @@
         </div>
       </div>
       <EmptyState
-        v-if="activities.length === 0"
+        v-if="filteredActivities.length === 0"
         icon="clock"
-        :message="$t('knowledge.stats.recentActivity.noActivity')"
+        :message="$t('knowledge.stats.noRecentActivity')"
       />
     </div>
   </BasePanel>
@@ -27,21 +40,22 @@
 /**
  * Recent Activity Panel Component
  *
- * Displays a timeline of recent knowledge base activities.
- * Extracted from KnowledgeStats.vue for better maintainability.
+ * Displays a timeline of recent knowledge base activities with All/Created/Updated
+ * filter chips. Wired into KnowledgeHealthAnalytics.vue (#11562).
  *
  * Issue #184: Split oversized Vue components
+ * Issue #11562: Wire in orphaned stats subpanels
  */
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-
 import BasePanel from '@/components/base/BasePanel.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import { ref, computed } from 'vue'
 import { formatTimeAgo } from '@/utils/formatHelpers'
 
 interface Activity {
   id: string | number
-  type: 'created' | 'updated' | 'deleted' | 'imported'
+  type: 'created' | 'updated'
   description: string
   timestamp: Date | string
 }
@@ -50,14 +64,26 @@ interface Props {
   activities: Activity[]
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
+
+type FeedFilter = 'all' | 'created' | 'updated'
+const activeFeedFilter = ref<FeedFilter>('all')
+
+const feedChips: { value: FeedFilter; labelKey: string }[] = [
+  { value: 'all', labelKey: 'knowledge.health.feedAll' },
+  { value: 'created', labelKey: 'knowledge.health.feedCreated' },
+  { value: 'updated', labelKey: 'knowledge.health.feedUpdated' }
+]
+
+const filteredActivities = computed(() => {
+  if (activeFeedFilter.value === 'all') return props.activities
+  return props.activities.filter(a => a.type === activeFeedFilter.value)
+})
 
 const getActivityIcon = (type: string): IconName => {
   const icons: Record<string, IconName> = {
     created: 'plus-circle',
-    updated: 'edit',
-    deleted: 'trash',
-    imported: 'download'
+    updated: 'edit'
   }
   return icons[type] || 'circle'
 }
@@ -65,10 +91,48 @@ const getActivityIcon = (type: string): IconName => {
 
 <style scoped>
 /* Issue #704: Migrated to CSS design tokens */
-h4 {
+.activity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-4);
+  flex-wrap: wrap;
+  gap: var(--spacing-3);
+}
+
+.activity-header h4 {
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin-bottom: var(--spacing-4);
+  margin: 0;
+}
+
+.feed-filter-chips {
+  display: flex;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
+}
+
+.feed-chip {
+  padding: var(--spacing-1) var(--spacing-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-default);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: var(--transition-all);
+}
+
+.feed-chip:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.feed-chip.active {
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+  border-color: var(--color-primary);
 }
 
 .activity-timeline {
@@ -90,7 +154,7 @@ h4 {
 .activity-icon {
   width: 2rem;
   height: 2rem;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -99,9 +163,7 @@ h4 {
 }
 
 .activity-icon.created { background: var(--color-success); }
-.activity-icon.updated { background: var(--color-primary); }
-.activity-icon.deleted { background: var(--color-error); }
-.activity-icon.imported { background: var(--chart-purple); }
+.activity-icon.updated { background: var(--color-info); }
 
 .activity-content { flex: 1; }
 
@@ -114,5 +176,12 @@ h4 {
 .activity-time {
   font-size: var(--text-xs);
   color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .activity-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 </style>

@@ -31,7 +31,7 @@ from utils.hardware_metrics import (
     add_phase9_alert_callback,
     collect_phase9_metrics,
     get_phase9_performance_dashboard,
-    phase9_monitor,
+    hardware_monitor,
     start_phase9_monitoring,
     stop_phase9_monitoring,
 )
@@ -42,13 +42,13 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("/tmp/phase9_monitoring.log"),
+        logging.FileHandler("/tmp/hardware_monitoring.log"),
     ],
 )
 logger = logging.getLogger(__name__)
 
 
-class Phase9MonitoringManager:
+class HardwareMonitoringManager:
     """
     Manager for Phase 9 comprehensive performance monitoring system.
     Coordinates GPU optimization, NPU acceleration, and system monitoring.
@@ -85,7 +85,7 @@ class Phase9MonitoringManager:
             # Check hardware availability
             gpu_capabilities = get_gpu_capabilities()
             logger.info(f"GPU Available: {gpu_capabilities['gpu_available']}")
-            logger.info(f"NPU Available: {phase9_monitor.npu_available}")
+            logger.info(f"NPU Available: {hardware_monitor.npu_available}")
 
             # Setup alert callbacks
             if self.alerts_enabled:
@@ -193,9 +193,8 @@ class Phase9MonitoringManager:
                 if overall_efficiency < 80:  # Trigger optimization if efficiency is low
                     optimization_result = await optimize_gpu_for_multimodal()
                     if optimization_result.success:
-                        logger.info(
-                            f"Periodic optimization completed: {optimization_result.performance_improvement:.1f}% improvement"
-                        )
+                        pct = optimization_result.performance_improvement
+                        logger.info("Periodic optimization completed: %.1f%% improvement", pct)
                         self.optimizations_applied += len(optimization_result.applied_optimizations)
                     else:
                         logger.warning("Periodic optimization failed")
@@ -337,7 +336,7 @@ class Phase9MonitoringManager:
                 results["optimization_results"] = await optimize_gpu_for_multimodal()
 
             # Save results
-            benchmark_file = f"/tmp/phase9_benchmark_{int(time.time())}.json"
+            benchmark_file = f"/tmp/hardware_benchmark_{int(time.time())}.json"
             with open(benchmark_file, "w") as f:
                 json.dump(results, f, indent=2, default=str)
 
@@ -362,7 +361,7 @@ class Phase9MonitoringManager:
             "configuration": self.config,
             "hardware_status": {
                 "gpu_available": gpu_optimizer.gpu_available,
-                "npu_available": phase9_monitor.npu_available,
+                "npu_available": hardware_monitor.npu_available,
             },
         }
 
@@ -440,7 +439,7 @@ async def main():
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    manager = Phase9MonitoringManager()
+    manager = HardwareMonitoringManager()
 
     if args.config and os.path.exists(args.config):
         try:

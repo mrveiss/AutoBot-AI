@@ -6,21 +6,35 @@
 Shared LLM utilities for ECL pipeline cognifiers.
 
 Issue #1074: Extract duplicated parse/build helpers from cognifiers (ARCH-3/4).
+Issue #10598: Shared multi-chunk batching helper — pack K chunks into one LLM
+call keyed by chunk index, with per-chunk fallback (generalizes #10647).
 """
 
 import json
-from typing import Any, Dict, List
+import os
+from typing import Any, Awaitable, Callable, Dict, List, TypeVar, get_args
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from knowledge.pipeline.models.entity import Entity
 
 logger = get_logger(__name__)
+
+_R = TypeVar("_R")
+
+# Batched extraction packs K chunks into one call, so the response is ~K× larger
+# than a single-chunk reply. Scale ``max_tokens`` with the batch size (capped) so
+# the batched output isn't truncated mid-response — truncation drops trailing
+# chunk indices, which per-chunk fallback then has to recover (#11012).
+_BATCH_MAX_TOKENS_PER_CHUNK = int(os.environ.get("AUTOBOT_COGNIFIER_BATCH_MAX_TOKENS_PER_CHUNK", "1024"))
+_BATCH_MAX_TOKENS_CAP = int(os.environ.get("AUTOBOT_COGNIFIER_BATCH_MAX_TOKENS_CAP", "8192"))
 
 
 def parse_llm_json_response(
     content: str,
     *,
     fallback_dict: bool = False,
+    strict: bool = False,
 ) -> List[Dict[str, Any]] | Dict[str, Any]:
     """Parse LLM response as JSON, handling markdown code fences.
 
@@ -28,6 +42,10 @@ def parse_llm_json_response(
         content: Raw LLM response text.
         fallback_dict: If True, return a dict fallback on parse failure
                        (used by summarizer). Otherwise return empty list.
+        strict: If True, re-raise ``json.JSONDecodeError`` instead of
+                returning an empty fallback — callers that must not swallow
+                parse failures (e.g. cognifier extractors) use this so
+                malformed LLM responses surface as errors (#10645).
 
     Returns:
         Parsed JSON (list or dict depending on LLM output).
@@ -41,10 +59,54 @@ def parse_llm_json_response(
         if "```" in content:
             json_str = content.split("```")[1].split("```")[0].strip()
             return json.loads(json_str)
+        if strict:
+            raise
         logger.warning("Could not parse LLM response as JSON")
         if fallback_dict:
             return {"summary": content, "key_topics": [], "key_entities": []}
         return []
+
+
+def literal_prompt_list(literal_type: Any, *, quote: bool = False) -> str:
+    """Render a ``Literal[...]``'s allowed values as a ``', '``-joined prompt fragment.
+
+    Derived from the type via ``get_args`` so the prompt's allowed-value list and
+    the model can never drift (#11017). ``quote=True`` wraps each value in single
+    quotes (fact-type style); the default emits bare values (event/causal style) —
+    the flag makes the fact-vs-event/causal quoting difference explicit instead of
+    an accidental divergence between per-extractor join expressions (#11045).
+
+    Args:
+        literal_type: A ``typing.Literal[...]`` alias whose args are the values.
+        quote: Wrap each value in single quotes.
+
+    Returns:
+        ``"'a', 'b'"`` when quoted, else ``"a, b"``.
+    """
+    values = get_args(literal_type)
+    if quote:
+        return ", ".join(f"'{v}'" for v in values)
+    return ", ".join(str(v) for v in values)
+
+
+def render_prompt_sentinels(template: str, replacements: Dict[str, str]) -> str:
+    """Substitute ``%%NAME%%`` sentinels in a ``str.format``-bearing prompt (#11045).
+
+    Extractor prompts embed literal ``{{`` / ``}}`` JSON braces for a later
+    ``.format(...)`` call, so the allowed-value list can't be injected with
+    ``.format`` without escaping every brace. Sentinels sidestep that: author the
+    type list as ``%%NAME%%`` and replace it here at module load.
+
+    Args:
+        template: Prompt text containing ``%%NAME%%`` sentinels.
+        replacements: Mapping of sentinel name (without the ``%%``) to its value.
+
+    Returns:
+        ``template`` with every ``%%NAME%%`` replaced.
+    """
+    for name, value in replacements.items():
+        template = template.replace(f"%%{name}%%", value)
+    return template
 
 
 def build_entity_map(
@@ -68,3 +130,142 @@ def build_entity_map(
         if include_canonical:
             entity_map[entity.canonical_name] = entity
     return entity_map
+
+
+def build_indexed_chunk_blocks(contents: List[str], max_chars: int, aux: List[str] | None = None) -> str:
+    """Render chunk texts as ``Chunk N:`` blocks for an index-keyed batch prompt.
+
+    Args:
+        contents: Per-chunk text, in order.
+        max_chars: Truncate each chunk to this many characters (0 = no limit).
+        aux: Optional per-chunk auxiliary text (parallel to ``contents``) folded
+            into each block before the text — e.g. a chunk-relevant entity list
+            for entity-conditioned extraction (#11044).
+
+    Returns:
+        Newline-separated ``Chunk i:\\n[<aux>\\n]<text>`` blocks.
+    """
+    parts = []
+    for i, text in enumerate(contents):
+        body = text[:max_chars] if max_chars and max_chars > 0 else text
+        if aux is not None and aux[i]:
+            parts.append(f"Chunk {i}:\n{aux[i]}\n{body}")
+        else:
+            parts.append(f"Chunk {i}:\n{body}")
+    return "\n\n".join(parts)
+
+
+def parse_indexed_batch_response(content: str, n_chunks: int) -> Dict[int, List[Any]]:
+    """Parse an index-keyed batch response into ``{chunk_index: [raw items]}``.
+
+    Raises ``ValueError`` on a non-object response or one whose keys are disjoint
+    from the chunk indices, so the caller can fall back to per-chunk extraction
+    (mirrors ``FactExtractor._extract_batched`` #10647). A single-object value is
+    coerced to a one-element list.
+
+    Indices whose key is **absent** from the response are OMITTED from the result
+    (distinct from a present-but-empty ``[]``), so the caller can recover only the
+    dropped chunks via per-chunk fallback — a partial/truncated batch response no
+    longer silently yields zero items for the missing chunks (#11012).
+    """
+    parsed = parse_llm_json_response(content)
+    if not isinstance(parsed, dict):
+        raise ValueError("batched response was not a JSON object")
+    if {str(i) for i in range(n_chunks)}.isdisjoint(parsed.keys()):
+        raise ValueError("batched response keys do not match chunk indices")
+    result: Dict[int, List[Any]] = {}
+    for i in range(n_chunks):
+        key = str(i)
+        if key not in parsed:
+            continue  # missing — omit so the caller falls back for this chunk only
+        raw = parsed[key]
+        if isinstance(raw, dict):
+            result[i] = [raw]
+        elif isinstance(raw, list):
+            result[i] = raw
+        else:
+            result[i] = []  # present but null/scalar → explicitly empty, no fallback
+    return result
+
+
+async def batched_chunk_extract(
+    chunks: List[Any],
+    *,
+    llm: Any,
+    batch_prompt_template: str,
+    llm_type: str,
+    max_chunk_chars: int,
+    convert: Callable[[List[Any], Any], List[_R]],
+    extract_one: Callable[[Any], Awaitable[List[_R]]],
+    content_of: Callable[[Any], str] = lambda c: c.content,
+    aux_of: Callable[[Any], str] | None = None,
+    batching_enabled: bool | None = None,
+) -> List[_R]:
+    """Extract items from many chunks in ONE structured LLM call (#10598).
+
+    Sends all ``chunks`` in a single index-keyed prompt, parses results back per
+    chunk, and calls ``convert(raw_items, chunk)`` to build domain objects while
+    preserving per-chunk mapping and order. On any structural failure (non-object
+    response, disjoint keys, or exception) it falls back to ``extract_one(chunk)``
+    per chunk so correctness never regresses. A single-chunk batch skips batching.
+
+    When ``cognifier_multichunk_batching`` is disabled (or ``batching_enabled`` is
+    passed ``False``) it runs ``extract_one`` per chunk — the legacy path every
+    extractor used to guard inline before delegating here (#11090). The flag is
+    read at call time, not import, so tests can monkeypatch it.
+
+    Args:
+        chunks: The chunk objects to process.
+        llm: LLM service exposing ``async chat(messages, *, llm_type, structured_output)``.
+        batch_prompt_template: Prompt with a ``{chunks}`` placeholder.
+        llm_type: Cheap task tier passed through to the LLM (e.g. ``"extraction"``).
+        max_chunk_chars: Per-chunk truncation for the batched prompt (0 = no limit).
+        convert: ``(raw_items, chunk) -> [domain objects]``.
+        extract_one: Per-chunk async fallback returning domain objects.
+        content_of: Extract the text of a chunk (default ``chunk.content``).
+        aux_of: Optional per-chunk auxiliary text folded into each indexed block —
+            e.g. a chunk-relevant entity list for entity-conditioned extraction (#11044).
+        batching_enabled: Override the ``cognifier_multichunk_batching`` config flag;
+            ``None`` (default) reads the flag at call time.
+
+    Returns:
+        Flattened list of extracted items across all chunks, in chunk order.
+    """
+    if not chunks:
+        return []
+    if batching_enabled is None:
+        batching_enabled = config.cognifier_multichunk_batching
+    # Batching off, or a single chunk (nothing to batch) → extract per chunk. This
+    # is the legacy fallback loop the extractors used to repeat inline (#11090).
+    if not batching_enabled or len(chunks) == 1:
+        results: List[_R] = []
+        for chunk in chunks:
+            results.extend(await extract_one(chunk))
+        return results
+    try:
+        aux = [aux_of(c) for c in chunks] if aux_of is not None else None
+        blocks = build_indexed_chunk_blocks([content_of(c) for c in chunks], max_chunk_chars, aux=aux)
+        prompt = batch_prompt_template.format(chunks=blocks)
+        batch_max_tokens = min(_BATCH_MAX_TOKENS_PER_CHUNK * len(chunks), _BATCH_MAX_TOKENS_CAP)
+        response = await llm.chat(
+            [{"role": "user", "content": prompt}],
+            llm_type=llm_type,
+            structured_output=True,
+            max_tokens=batch_max_tokens,
+        )
+        by_index = parse_indexed_batch_response(response.content, len(chunks))
+    except Exception as exc:
+        logger.warning("Batched extraction failed (%s); falling back to per-chunk", exc)
+        results: List[_R] = []
+        for chunk in chunks:
+            results.extend(await extract_one(chunk))
+        return results
+    items: List[_R] = []
+    for i, chunk in enumerate(chunks):
+        if i in by_index:
+            items.extend(convert(by_index[i], chunk))
+        else:
+            # Missing from a partial/truncated batch response — recover this chunk
+            # via per-chunk extraction so no chunk is silently dropped (#11012).
+            items.extend(await extract_one(chunk))
+    return items

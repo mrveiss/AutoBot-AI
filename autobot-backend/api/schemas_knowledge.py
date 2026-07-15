@@ -11,7 +11,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from knowledge.ownership import AccessLevel, VisibilityLevel
@@ -353,8 +353,8 @@ class KnowledgeCategorySearchResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class KnowledgeUnifiedSearchResponse(BaseModel):
-    """Response for POST /unified/search."""
+class KnowledgeMultiSourceSearchResponse(BaseModel):
+    """Response for POST /multi-source/search."""
 
     success: bool
     query: str
@@ -365,8 +365,8 @@ class KnowledgeUnifiedSearchResponse(BaseModel):
     total_results: int
 
 
-class KnowledgeUnifiedStatsResponse(BaseModel):
-    """Response for GET /unified/stats.
+class KnowledgeMultiSourceStatsResponse(BaseModel):
+    """Response for GET /multi-source/stats.
 
     Sections are populated dynamically — extra fields allowed.
     """
@@ -379,8 +379,8 @@ class KnowledgeUnifiedStatsResponse(BaseModel):
     documentation: Dict[str, Any]
 
 
-class KnowledgeUnifiedContextResponse(BaseModel):
-    """Response for POST /unified/context."""
+class KnowledgeMultiSourceContextResponse(BaseModel):
+    """Response for POST /multi-source/context."""
 
     success: bool
     context: str
@@ -390,7 +390,7 @@ class KnowledgeUnifiedContextResponse(BaseModel):
 
 
 class KnowledgeDocumentationSearchResponse(BaseModel):
-    """Response for GET /unified/documentation/search."""
+    """Response for GET /multi-source/documentation/search."""
 
     success: bool
     query: str | None = None
@@ -400,7 +400,7 @@ class KnowledgeDocumentationSearchResponse(BaseModel):
 
 
 class KnowledgeDocumentationStatsResponse(BaseModel):
-    """Response for GET /unified/documentation/stats."""
+    """Response for GET /multi-source/documentation/stats."""
 
     success: bool
     indexed: bool | None = None
@@ -410,8 +410,8 @@ class KnowledgeDocumentationStatsResponse(BaseModel):
     document_count: int | None = None
 
 
-class KnowledgeUnifiedGraphResponse(BaseModel):
-    """Response for POST /unified/graph and GET /unified/graph."""
+class KnowledgeMultiSourceGraphResponse(BaseModel):
+    """Response for POST /multi-source/graph and GET /multi-source/graph."""
 
     success: bool
     data: Dict[str, Any]
@@ -1022,30 +1022,23 @@ class FactIdValidator(BaseModel):
 
 
 class SearchRequest(BaseModel):
-    """Request model for search endpoints"""
+    """Canonical request model for knowledge-base vector/document search (#78, #685, #555, #10654, #10666).
 
-    query: str = Field(..., min_length=1, max_length=1000)
-    limit: int = Field(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=100)
-    category: str | None = Field(default=None, max_length=100)
+    Consolidates the former SearchRequest, SearchRequest, SearchRequest,
+    and SearchRequest into one model.  All added fields carry defaults so existing
+    callers that only set query/limit/category remain fully backward-compatible.
 
-    @field_validator("category")
-    @classmethod
-    def validate_category(cls, v):
-        """Validate category format"""
-        if v and not _ALNUM_ID_RE.match(v):
-            raise ValueError("Invalid category format")
-        return v
-
-
-class EnhancedSearchRequest(BaseModel):
-    """Enhanced search request with tag filtering and hybrid mode (Issue #78, #685)"""
+    ``limit`` accepts the legacy ``top_k`` wire name via ``validation_alias`` so JSON
+    payloads that send ``{"top_k": 10}`` continue to parse without change.
+    """
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
     limit: int = Field(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
         ge=1,
         le=100,
-        description="Max results to return",
+        validation_alias=AliasChoices("limit", "top_k"),
+        description="Max results to return (also accepts legacy 'top_k' wire name)",
     )
     offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
     category: str | None = Field(default=None, max_length=100)
@@ -1060,7 +1053,10 @@ class EnhancedSearchRequest(BaseModel):
     )
     mode: str = Field(
         default=CategoryDefaults.SEARCH_MODE_HYBRID,
-        description="Search mode: 'semantic' (vector only), 'keyword' (text only), " "'hybrid' (both)",
+        description=(
+            "Search mode: 'semantic' (vector only), 'keyword' (text only), "
+            "'hybrid' (both, default), 'auto' (intelligent selection)"
+        ),
     )
     enable_reranking: bool = Field(
         default=False,
@@ -1081,122 +1077,12 @@ class EnhancedSearchRequest(BaseModel):
     board_id: str | None = Field(
         default=None,
         max_length=100,
-        description=("Project-scoped board ID for namespaced search. " "None / '__global__' searches all boards."),
+        description="Project-scoped board ID for namespaced search. None / '__global__' searches all boards.",
     )
-
-    @field_validator("category")
-    @classmethod
-    def validate_category(cls, v):
-        """Validate category format"""
-        if v and not _ALNUM_ID_RE.match(v):
-            raise ValueError("Invalid category format")
-        return v
-
-    @field_validator("tags", mode="before")
-    @classmethod
-    def validate_tag_item(cls, v):
-        """Validate each tag"""
-        if v is None:
-            return v
-        result = []
-        for item in v:
-            if item:
-                item = item.lower().strip()
-                if not _LOWERCASE_TAG_RE.match(item):
-                    raise ValueError(f"Invalid tag format: {item}")
-            result.append(item)
-        return result
-
-    @field_validator("mode")
-    @classmethod
-    def validate_mode(cls, v):
-        """Validate search mode"""
-        if v not in _VALID_SEARCH_MODES:  # Issue #380: use module constant
-            raise ValueError(f"Invalid mode: {v}. Must be one of {_VALID_SEARCH_MODES}")
-        return v
-
-    # === Issue #372: Feature Envy Reduction Methods ===
-
-    def to_search_params(self) -> dict:
-        """Convert to parameters dict for knowledge base search (Issue #372)."""
-        return {
-            "query": self.query,
-            "limit": self.limit,
-            "offset": self.offset,
-            "category": self.category,
-            "tags": self.tags,
-            "tags_match_any": self.tags_match_any,
-            "mode": self.mode,
-            "enable_reranking": self.enable_reranking,
-            "min_score": self.min_score,
-            "board_id": self.board_id,
-        }
-
-    def get_log_summary(self) -> str:
-        """Get formatted log summary string (Issue #372 - reduces feature envy)."""
-        return (
-            f"'{self.query}' (limit={self.limit}, offset={self.offset}, "
-            f"mode={self.mode}, tags={self.tags}, min_score={self.min_score})"
-        )
-
-    def get_fallback_response(self, results: list) -> dict:
-        """Build fallback response when enhanced search is unavailable (Issue #372)."""
-        return {
-            "success": True,
-            "results": results,
-            "total_count": len(results),
-            "query_processed": self.query,
-            "mode": self.mode,
-            "tags_applied": [],
-            "min_score_applied": 0.0,
-            "reranking_applied": False,
-            "message": "Using fallback search - enhanced features not available",
-        }
-
-    def get_safe_mode(self, valid_modes: set) -> str:
-        """Get mode with fallback if not in valid modes (Issue #372)."""
-        return self.mode if self.mode in valid_modes else "auto"
-
-
-class ConsolidatedSearchRequest(BaseModel):
-    """
-    Consolidated search request model combining all search features (Issue #555).
-
-    This is the primary search endpoint that supports all search capabilities:
-    - Basic search (query, limit)
-    - Enhanced search (tags, hybrid mode, reranking)
-    - RAG search (query reformulation, synthesis)
-    - Advanced filtering (date filters, term filters)
-    - Analytics tracking
-
-    Deprecates: /enhanced_search, /rag_search, /similarity_search, /enhanced_search_v2
-    """
-
-    # Core search parameters
-    query: str = Field(..., min_length=1, max_length=1000, description="Search query")
-    top_k: int = Field(
-        default=QueryDefaults.DEFAULT_TOP_K,
-        ge=1,
-        le=100,
-        description="Maximum results to return",
-    )
-    category: str | None = Field(default=None, max_length=100, description="Filter by category")
-
-    # Search mode
-    mode: str = Field(
-        default=CategoryDefaults.SEARCH_MODE_HYBRID,
-        description="Search mode: 'semantic' (vector only), 'keyword' (text only), "
-        "'hybrid' (both, default), 'auto' (intelligent selection)",
-    )
-
-    # RAG enhancement options
+    # RAG enhancement options (from former SearchRequest)
     enable_rag: bool = Field(
         default=False,
         description="Enable RAG enhancement for synthesized responses",
-    )
-    enable_reranking: bool = Field(
-        default=False,
-        description="Enable cross-encoder reranking for improved relevance",
     )
     reformulate_query: bool = Field(
         default=False,
@@ -1206,28 +1092,7 @@ class ConsolidatedSearchRequest(BaseModel):
         default=False,
         description="Return optimized context for RAG (useful for chat integration)",
     )
-
-    # Filtering options
-    tags: List[str] | None = Field(
-        default=None,
-        max_items=10,
-        description="Filter results by tags",
-    )
-    tags_match_any: bool = Field(
-        default=False,
-        description="If True, match facts with ANY tag. If False (default), match ALL tags.",
-    )
-    min_score: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=1.0,
-        description="Minimum similarity score threshold (0.0-1.0)",
-    )
-
-    # Pagination
-    offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
-
-    # Advanced filtering (Issue #78 v2 features)
+    # Advanced date/term filters (from former SearchRequest)
     created_after: str | None = Field(
         default=None,
         description="Filter facts created after this date (ISO format: YYYY-MM-DD)",
@@ -1246,8 +1111,7 @@ class ConsolidatedSearchRequest(BaseModel):
         max_items=20,
         description="Only include results containing ALL of these terms",
     )
-
-    # Advanced features
+    # Documentation / relation expansion (from former SearchRequest / SearchRequest)
     include_documentation: bool = Field(
         default=False,
         description="Also search project documentation",
@@ -1256,15 +1120,22 @@ class ConsolidatedSearchRequest(BaseModel):
         default=False,
         description="Include related facts in results",
     )
-
-    # Board scoping (Issue #3242)
-    board_id: str | None = Field(
-        default=None,
-        max_length=100,
-        description=("Project-scoped board ID for namespaced search. " "None / '__global__' searches all boards."),
+    # Multi-source search (from former SearchRequest)
+    doc_results: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        description="Max documentation results (multi-source search)",
     )
-
-    # Analytics
+    expand_relations: bool = Field(
+        default=True,
+        description="Include related facts via graph (multi-source search)",
+    )
+    include_sources: List[str] = Field(
+        default=["facts", "relations", "documentation"],
+        description="Which sources to search: facts, relations, documentation",
+    )
+    # Analytics (from former SearchRequest)
     track_analytics: bool = Field(
         default=True,
         description="Track this search for analytics (default: true)",
@@ -1274,6 +1145,30 @@ class ConsolidatedSearchRequest(BaseModel):
         max_length=100,
         description="Session ID for analytics correlation",
     )
+    # Advanced search options (folded from former advanced endpoint — #10666)
+    enable_query_expansion: bool = Field(
+        default=False,
+        description="Expand query with synonyms/related terms before searching",
+    )
+    enable_relevance_scoring: bool = Field(
+        default=False,
+        description="Apply additional relevance scoring on top of vector similarity",
+    )
+    enable_clustering: bool = Field(
+        default=False,
+        description="Cluster results by topic before returning",
+    )
+    exclude_sources: List[str] | None = Field(
+        default=None,
+        max_items=20,
+        description="Exclude results from these source identifiers",
+    )
+    verified_only: bool = Field(
+        default=False,
+        description="Return only facts that have been verified/approved",
+    )
+
+    model_config = {"populate_by_name": True}
 
     @field_validator("category")
     @classmethod
@@ -1302,7 +1197,7 @@ class ConsolidatedSearchRequest(BaseModel):
     @classmethod
     def validate_mode(cls, v):
         """Validate search mode."""
-        if v not in _VALID_SEARCH_MODES:
+        if v not in _VALID_SEARCH_MODES:  # Issue #380: use module constant
             raise ValueError(f"Invalid mode: {v}. Must be one of {_VALID_SEARCH_MODES}")
         return v
 
@@ -1317,11 +1212,13 @@ class ConsolidatedSearchRequest(BaseModel):
                 raise ValueError(f"Invalid date format: {v}. Use YYYY-MM-DD")
         return v
 
-    def to_legacy_params(self) -> dict:
-        """Convert to parameters compatible with existing KB search methods."""
+    # === Issue #372: Feature Envy Reduction Methods ===
+
+    def to_search_params(self) -> dict:
+        """Convert to parameters dict for knowledge base enhanced_search (Issue #372)."""
         return {
             "query": self.query,
-            "limit": self.top_k,
+            "limit": self.limit,
             "offset": self.offset,
             "category": self.category,
             "tags": self.tags,
@@ -1332,8 +1229,63 @@ class ConsolidatedSearchRequest(BaseModel):
             "board_id": self.board_id,
         }
 
+    def to_legacy_params(self) -> dict:
+        """Convert to parameters compatible with existing KB search methods."""
+        return {
+            "query": self.query,
+            "limit": self.limit,
+            "offset": self.offset,
+            "category": self.category,
+            "tags": self.tags,
+            "tags_match_any": self.tags_match_any,
+            "mode": self.mode,
+            "enable_reranking": self.enable_reranking,
+            "min_score": self.min_score,
+            "board_id": self.board_id,
+        }
+
+    def to_advanced_params(self) -> dict:
+        """Convert to parameters dict for knowledge base advanced search (#10666)."""
+        return {
+            "query": self.query,
+            "limit": self.limit,
+            "offset": self.offset,
+            "category": self.category,
+            "tags": self.tags,
+            "tags_match_any": self.tags_match_any,
+            "mode": self.mode,
+            "enable_reranking": self.enable_reranking,
+            "min_score": self.min_score,
+            "enable_query_expansion": self.enable_query_expansion,
+            "enable_relevance_scoring": self.enable_relevance_scoring,
+            "enable_clustering": self.enable_clustering,
+            "track_analytics": self.track_analytics,
+            "created_after": self.created_after,
+            "created_before": self.created_before,
+            "exclude_terms": self.exclude_terms,
+            "require_terms": self.require_terms,
+            "exclude_sources": self.exclude_sources,
+            "verified_only": self.verified_only,
+            "session_id": self.session_id,
+        }
+
+    def uses_advanced_features(self) -> bool:
+        """Return True when any advanced-only field is set (#10666)."""
+        return bool(
+            self.enable_query_expansion
+            or self.enable_relevance_scoring
+            or self.enable_clustering
+            or self.exclude_sources
+            or self.verified_only
+            or self.created_after
+            or self.created_before
+            or self.exclude_terms
+            or self.require_terms
+            or self.session_id
+        )
+
     def get_log_summary(self) -> str:
-        """Get formatted log summary string."""
+        """Get formatted log summary string (Issue #372 - reduces feature envy)."""
         features = []
         if self.enable_rag:
             features.append("RAG")
@@ -1343,9 +1295,29 @@ class ConsolidatedSearchRequest(BaseModel):
             features.append("reformulate")
         if self.tags:
             features.append(f"tags={len(self.tags)}")
-
         feature_str = f" [{', '.join(features)}]" if features else ""
-        return f"'{self.query}' (top_k={self.top_k}, mode={self.mode}" f"{feature_str})"
+        return (
+            f"'{self.query}' (limit={self.limit}, offset={self.offset}, "
+            f"mode={self.mode}, tags={self.tags}, min_score={self.min_score}{feature_str})"
+        )
+
+    def get_fallback_response(self, results: list) -> dict:
+        """Build fallback response when enhanced search is unavailable (Issue #372)."""
+        return {
+            "success": True,
+            "results": results,
+            "total_count": len(results),
+            "query_processed": self.query,
+            "mode": self.mode,
+            "tags_applied": [],
+            "min_score_applied": 0.0,
+            "reranking_applied": False,
+            "message": "Using fallback search - enhanced features not available",
+        }
+
+    def get_safe_mode(self, valid_modes: set) -> str:
+        """Get mode with fallback if not in valid modes (Issue #372)."""
+        return self.mode if self.mode in valid_modes else "auto"
 
 
 class PaginationRequest(BaseModel):
@@ -2029,8 +2001,8 @@ class ChatKnowledgeSearchResultData(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class AIStackEnhancedSearchData(BaseModel):
-    """data payload for POST /search/enhanced."""
+class AIStackSearchData(BaseModel):
+    """data payload for POST /search."""
 
     model_config = {"extra": "allow"}
 
@@ -2065,14 +2037,14 @@ class AIStackSystemInsightsData(BaseModel):
     model_config = {"extra": "allow"}
 
 
-class AIStackEnhancedStatsData(BaseModel):
-    """data payload for GET /stats/enhanced."""
+class AIStackStatsData(BaseModel):
+    """data payload for GET /stats."""
 
     model_config = {"extra": "allow"}
 
 
-class AIStackEnhancedHealthData(BaseModel):
-    """data payload for GET /health/enhanced."""
+class AIStackHealthStatusData(BaseModel):
+    """data payload for GET /health/status."""
 
     model_config = {"extra": "allow"}
 
@@ -3315,7 +3287,7 @@ class AIDocumentListResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class EnhancedSearchHardwareStatusResponse(BaseModel):
+class SearchHardwareStatusResponse(BaseModel):
     """Response for GET /hardware/status.
 
     hardware_status, cache_stats, and configuration are service-delegated dicts.
@@ -3330,7 +3302,7 @@ class EnhancedSearchHardwareStatusResponse(BaseModel):
     timestamp: float
 
 
-class EnhancedSearchBenchmarkResponse(BaseModel):
+class SearchBenchmarkResponse(BaseModel):
     """Response for POST /benchmark.
 
     benchmark_results shape is service-delegated.
@@ -3343,7 +3315,7 @@ class EnhancedSearchBenchmarkResponse(BaseModel):
     recommendations: List[str]
 
 
-class EnhancedSearchOptimizeResponse(BaseModel):
+class SearchOptimizeResponse(BaseModel):
     """Response for POST /optimize."""
 
     model_config = {"extra": "allow"}
@@ -3353,7 +3325,7 @@ class EnhancedSearchOptimizeResponse(BaseModel):
     timestamp: float
 
 
-class EnhancedSearchPerformanceAnalyticsResponse(BaseModel):
+class SearchPerformanceAnalyticsResponse(BaseModel):
     """Response for GET /performance/analytics.
 
     search_statistics, hardware_status, and performance_analysis are
@@ -3369,7 +3341,7 @@ class EnhancedSearchPerformanceAnalyticsResponse(BaseModel):
     timestamp: float
 
 
-class EnhancedSearchConnectivityResponse(BaseModel):
+class SearchConnectivityResponse(BaseModel):
     """Response for GET /test/connectivity."""
 
     connectivity: str
@@ -3382,7 +3354,7 @@ class EnhancedSearchConnectivityResponse(BaseModel):
     fallback_available: bool | None = None
 
 
-class EnhancedSearchHealthResponse(BaseModel):
+class SearchHealthResponse(BaseModel):
     """Response for GET /health (enhanced search service)."""
 
     status: str
@@ -3947,7 +3919,7 @@ class RAGQueryRequest(BaseModel):
     max_results: int = Field(10, ge=1, le=50)
 
 
-class EnhancedChatRequest(BaseModel):
+class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=50000)
     context: str | None = None
     chat_history: List[Metadata] | None = None
@@ -4561,20 +4533,6 @@ class EventSearchRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class UnifiedSearchRequest(BaseModel):
-    """Request model for unified knowledge search."""
-
-    query: str = Field(..., description="Search query text")
-    top_k: int = Field(10, ge=1, le=50, description="Max results from fact search")
-    doc_results: int = Field(3, ge=0, le=10, description="Max documentation results")
-    expand_relations: bool = Field(True, description="Include related facts via graph")
-    score_threshold: float = Field(0.3, ge=0.0, le=1.0, description="Minimum relevance score")
-    include_sources: List[str] = Field(
-        default=["facts", "relations", "documentation"],
-        description="Which sources to search: facts, relations, documentation",
-    )
-
-
 class ContextRequest(BaseModel):
     """Request model for getting LLM context."""
 
@@ -4585,7 +4543,7 @@ class ContextRequest(BaseModel):
 
 
 class GraphRequest(BaseModel):
-    """Request model for unified knowledge graph."""
+    """Request model for multi-source knowledge graph."""
 
     max_facts: int = Field(50, ge=1, le=200, description="Maximum facts to include")
     max_depth: int = Field(2, ge=1, le=3, description="Maximum relation depth")
@@ -4743,7 +4701,7 @@ class EmbeddingUpdate(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# enhanced_memory.py schemas
+# task_memory.py schemas
 # ---------------------------------------------------------------------------
 
 
@@ -4775,7 +4733,7 @@ class MarkdownReferenceRequest(BaseModel):
 
 
 class NPUSearchRequest(BaseModel):
-    """Enhanced search request model."""
+    """AI Stack search request model."""
 
     query: str = Field(..., description="Search query")
     similarity_top_k: int = Field(10, description="Number of results to return", ge=1, le=100)
@@ -4785,7 +4743,7 @@ class NPUSearchRequest(BaseModel):
 
 
 class NPUSearchResponse(BaseModel):
-    """Enhanced search response model."""
+    """AI Stack search response model."""
 
     query: str
     results: List[Metadata]
@@ -4817,8 +4775,8 @@ class NPUOptimizationRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class AIStackEnhancedSearchRequest(BaseModel):
-    """Enhanced search request with AI Stack integration."""
+class AIStackSearchRequest(BaseModel):
+    """Search request with AI Stack integration."""
 
     query: str = Field(..., min_length=1, max_length=5000, description="Search query")
     search_type: str = Field("comprehensive", description="Search type (precise, comprehensive, broad)")
@@ -4977,7 +4935,7 @@ class KBQueryResponse(BaseModel):
 
 from datetime import datetime as _datetime
 
-from services.audit.unified_audit import AuditEventType as _AuditEventType  # GH#8290 Phase 2
+from services.audit.audit import AuditEventType as _AuditEventType  # GH#8290 Phase 2
 
 
 class AuditEvent(BaseModel):

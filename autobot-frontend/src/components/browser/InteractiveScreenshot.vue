@@ -286,7 +286,7 @@ function submitType() {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-muted, #9ca3af);
+  color: var(--text-muted, #9ca3af);
   font-size: var(--text-sm);
 }
 
@@ -294,8 +294,8 @@ function submitType() {
   display: flex;
   gap: var(--spacing-1);
   padding: var(--spacing-1) var(--spacing-2);
-  background: var(--color-surface, #1e1e2e);
-  border-top: 1px solid var(--color-border, #333);
+  background: var(--bg-surface, #1e1e2e);
+  border-top: 1px solid var(--border-default, #333);
 }
 
 .toolbar-btn {
@@ -307,7 +307,7 @@ function submitType() {
   border: none;
   border-radius: var(--radius-default);
   background: transparent;
-  color: var(--color-text-secondary, #a1a1aa);
+  color: var(--text-secondary, #a1a1aa);
   cursor: pointer;
   font-size: var(--text-xs);
   transition: background var(--duration-150), color var(--duration-150);
@@ -315,7 +315,7 @@ function submitType() {
 
 .toolbar-btn:hover:not(:disabled) {
   background: var(--color-hover, rgba(255, 255, 255, 0.1));
-  color: var(--color-text, #e4e4e7);
+  color: var(--text-primary, #e4e4e7);
 }
 
 .toolbar-btn:disabled {
@@ -327,17 +327,17 @@ function submitType() {
   display: flex;
   gap: var(--spacing-1);
   padding: var(--spacing-1) var(--spacing-2);
-  background: var(--color-surface, #1e1e2e);
-  border-top: 1px solid var(--color-border, #333);
+  background: var(--bg-surface, #1e1e2e);
+  border-top: 1px solid var(--border-default, #333);
 }
 
 .type-input {
   flex: 1;
   padding: var(--spacing-1) var(--spacing-2);
-  border: 1px solid var(--color-border, #333);
+  border: 1px solid var(--border-default, #333);
   border-radius: var(--radius-default);
   background: var(--color-bg, #121212);
-  color: var(--color-text, #e4e4e7);
+  color: var(--text-primary, #e4e4e7);
   font-size: 0.8rem;
   outline: none;
 }

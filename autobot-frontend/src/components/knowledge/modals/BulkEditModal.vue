@@ -17,7 +17,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import KnowledgeScopeSelector from '@/components/knowledge/KnowledgeScopeSelector.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
@@ -230,6 +230,7 @@ watch(() => props.modelValue, (newValue) => {
 
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     v-model="isOpen"
     :title="modalTitle"
     size="md"

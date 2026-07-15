@@ -44,6 +44,7 @@ Groups parameterised at runtime (``target``, ``autobot-backend``,
 they are resolved via --limit or passed as extra-vars.
 """
 
+import json
 import logging
 import os
 import re
@@ -280,9 +281,20 @@ def build_registry_inventory(nodes: list[Any], local_ip_check: Any) -> dict:
         # Every node joins autobot + autobot_cluster (centralized logging, etc.)
         node_groups |= _UNIVERSAL_ALL
 
-        # Non-SLM nodes also join infrastructure + production_vms
+        # Non-SLM nodes join infrastructure + production_vms. #11436: an SLM
+        # node that ALSO carries app roles (single-node installs co-locate
+        # backend/frontend/workers on the SLM box) must join them too —
+        # otherwise the update playbook's Play 2 never matches that host and
+        # the co-located components silently stop receiving updates.
+        # Co-location is classified at the ROLE-TOKEN level, not the group
+        # level: SLM-internal tokens (slm-database, slm-monitoring) map to
+        # non-SLM groups (redis/monitoring_vm), so group-based detection would
+        # wrongly promote a pure SLM manager into infrastructure (#11453).
         is_slm = bool(node_groups & {"slm", "slm_server", "slm_nodes"})
-        if not is_slm:
+        has_app_roles = any(
+            (t := tok.strip().lower()) and not t.startswith("slm-") and t != "slm_agent" for tok in role_tokens
+        )
+        if not is_slm or has_app_roles:
             node_groups |= _UNIVERSAL_NON_SLM
 
         for g in node_groups:
@@ -366,6 +378,38 @@ def write_temp_inventory(inv: dict, uid_tmp_dir: str | None = None) -> Path:
     tmp_path = Path(tmp_path_str)
     _write_inventory_file(inv, tmp_path)
     return tmp_path
+
+
+def write_temp_extra_vars(extra_vars: dict, uid_tmp_dir: str | None = None) -> Path:
+    """Write *extra_vars* to a unique 0600 JSON temp file and return its Path.
+
+    Passed to ansible-playbook as ``-e @<file>`` so secret extra_vars (the
+    stored SLM secrets auto-merged by PlaybookExecutor, #3519) never appear
+    in the process argv, which any local user can read via
+    ``/proc/<pid>/cmdline`` for the whole playbook run (#11735).  The caller
+    deletes the file after the run, same contract as write_temp_inventory.
+
+    Args:
+        extra_vars: Mapping passed to the playbook as extra vars.
+        uid_tmp_dir: Directory for the temp file.  If None, uses
+            ``/tmp/ansible_local_tmp_<uid>`` (nosec B108 — uid-scoped).
+
+    Returns:
+        Path to the written 0600 JSON file.
+    """
+    if uid_tmp_dir is None:
+        uid_tmp_dir = f"/tmp/ansible_local_tmp_{os.getuid()}"  # nosec B108
+    tmp_dir = Path(uid_tmp_dir)
+    tmp_dir.mkdir(mode=0o700, exist_ok=True)
+
+    fd, tmp_path_str = tempfile.mkstemp(
+        prefix="autobot_evars_",
+        suffix=".json",
+        dir=str(tmp_dir),
+    )
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        json.dump(extra_vars, fh)
+    return Path(tmp_path_str)
 
 
 def scan_playbook_dir_for_groups(playbook_dir: Path) -> frozenset:

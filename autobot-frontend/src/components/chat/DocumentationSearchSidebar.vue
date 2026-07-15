@@ -171,7 +171,6 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import DocumentationResultCard from './DocumentationResultCard.vue'
 import DocumentationSuggestionChip from './DocumentationSuggestionChip.vue'
 import DocumentationCategoryFilter from './DocumentationCategoryFilter.vue'
@@ -179,7 +178,6 @@ import { useDocumentationSearch } from '@/composables/chat/useDocumentationSearc
 import type { DocResult, DocCategory } from '@/composables/chat/useDocumentationSearch'
 import { createLogger } from '@/utils/debugUtils'
 
-const { t } = useI18n()
 const logger = createLogger('DocumentationSearchSidebar')
 
 type Category = DocCategory
@@ -312,7 +310,7 @@ const handleSortChange = () => {
     relevance: (a, b) => (b.score || 0) - (a.score || 0),
     title: (a, b) => a.title.localeCompare(b.title),
     category: (a, b) => a.category.localeCompare(b.category),
-    date: (a, b) => 0 // Would need indexed_at field
+    date: (_a, _b) => 0 // Would need indexed_at field
   }
   results.value.sort(sortFns[sortBy.value] || sortFns.relevance)
 }
@@ -373,7 +371,7 @@ const addToRecent = (doc: DocResult) => {
   // Persist to localStorage
   try {
     localStorage.setItem('autobot_recent_docs', JSON.stringify(recentDocs.value))
-  } catch (e) {
+  } catch {
     // Ignore storage errors
   }
 }
@@ -405,7 +403,7 @@ const loadRecentDocs = () => {
     if (stored) {
       recentDocs.value = JSON.parse(stored)
     }
-  } catch (e) {
+  } catch {
     // Ignore parse errors
   }
 }

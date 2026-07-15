@@ -212,7 +212,7 @@ button:focus-visible {
 /* Highlight.js theme: dark mode */
 .hljs-dark {
   background-color: var(--color-bg-card);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .hljs-dark :deep(.hljs-attr),
@@ -251,7 +251,7 @@ button:focus-visible {
 /* Highlight.js theme: light mode */
 .hljs-light {
   background-color: var(--color-bg-card);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .hljs-light :deep(.hljs-attr),

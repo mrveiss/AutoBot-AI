@@ -17,7 +17,7 @@ import Icon from '@/components/ui/Icon.vue'
 import type { IconName } from '@/components/ui/Icon.vue'
 import { asIconName } from '@/utils/iconMappings'
 import { ref, computed, watch } from 'vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
@@ -258,6 +258,7 @@ function selectIcon(icon: string): void {
 
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     v-model="isOpen"
     :title="t('knowledge.modals.categoryEdit.editTitle', { name: categoryTitle })"
     size="md"

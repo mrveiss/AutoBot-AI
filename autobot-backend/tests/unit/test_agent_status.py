@@ -22,17 +22,18 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from tests.fixtures.mocks import ModuleStubRegistry  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Stub helpers (mirrors test_heartbeat_coalescing.py pattern)
 # ---------------------------------------------------------------------------
 
 
+_stubs = ModuleStubRegistry()
+
+
 def _make_stub(name: str, **attrs: Any) -> types.ModuleType:
-    mod = types.ModuleType(name)
-    for k, v in attrs.items():
-        setattr(mod, k, v)
-    sys.modules[name] = mod
-    return mod
+    return _stubs.stub(name, **attrs)
 
 
 def _load_models_and_scheduler():
@@ -61,8 +62,9 @@ def _load_models_and_scheduler():
     hb_spec = importlib.util.spec_from_file_location("models.heartbeat", backend_root / "models" / "heartbeat.py")
     assert hb_spec and hb_spec.loader
     hb_mod = importlib.util.module_from_spec(hb_spec)
-    sys.modules.setdefault("models", types.ModuleType("models"))
-    sys.modules["models.heartbeat"] = hb_mod
+    if "models" not in sys.modules:
+        _stubs.register("models", types.ModuleType("models"))
+    _stubs.register("models.heartbeat", hb_mod)
     hb_spec.loader.exec_module(hb_mod)  # type: ignore[union-attr]
 
     _make_stub("models.agent", Agent=MagicMock())
@@ -81,13 +83,16 @@ def _load_models_and_scheduler():
     )
     assert sched_spec and sched_spec.loader
     sched_mod = importlib.util.module_from_spec(sched_spec)
-    sys.modules["services.heartbeat_scheduler"] = sched_mod
+    _stubs.register("services.heartbeat_scheduler", sched_mod)
     sched_spec.loader.exec_module(sched_mod)  # type: ignore[union-attr]
 
     return hb_mod, sched_mod
 
 
 _hb_mod, _sched_mod = _load_models_and_scheduler()
+# Undo the sys.modules stubs so later test modules import the real code
+# (GH#11604 — the stubs shadowed services.task_claim for the whole session).
+_stubs.restore()
 AgentStatus = _hb_mod.AgentStatus
 AgentRuntimeState = _hb_mod.AgentRuntimeState
 HeartbeatScheduler = _sched_mod.HeartbeatScheduler

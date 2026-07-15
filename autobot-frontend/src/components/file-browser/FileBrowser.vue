@@ -87,12 +87,19 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useUserStore } from '@/stores/useUserStore'
 import { useFileBrowser } from '@/composables/file-browser/useFileBrowser'
+import type { FileBrowserItem, FileBrowserTreeNode, FilePreviewData } from '@/composables/file-browser/useFileBrowser'
+
+// The FilePreview @download payload carries an optional `fileType`, so we only
+// rely on the fields actually read here (name/url) via Pick to stay compatible.
+type PreviewDownloadFile = Pick<FilePreviewData, 'name' | 'url'>
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
 
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 // Issue #608: Activity logger for session tracking
 const { logFileActivity } = useSessionActivityLogger()
@@ -138,7 +145,7 @@ const sortField = ref('name')
 const sortOrder = ref<'asc' | 'desc'>('asc')
 const showPreview = ref(false)
 
-const userStore = useUserStore()
+const _userStore = useUserStore()
 
 // Computed properties
 const sortedFiles = computed(() => {
@@ -172,7 +179,7 @@ const sortedFiles = computed(() => {
 })
 
 // Methods
-const { execute: refreshFiles, loading: isRefreshingFiles } = useAsyncHandler(
+const { execute: refreshFiles, loading: _isRefreshingFiles } = useAsyncHandler(
   async () => {
     await fetchFiles(currentPath.value)
 
@@ -186,7 +193,7 @@ const { execute: refreshFiles, loading: isRefreshingFiles } = useAsyncHandler(
   }
 )
 
-const { execute: loadDirectoryTree, loading: isLoadingTree } = useAsyncHandler(
+const { execute: loadDirectoryTree, loading: _isLoadingTree } = useAsyncHandler(
   async () => {
     await fetchTree()
   },
@@ -231,7 +238,7 @@ const triggerFileUpload = () => {
   fileUploadRef.value?.triggerFileSelect()
 }
 
-const { execute: uploadFiles, loading: isUploadingFiles } = useAsyncHandler(
+const { execute: uploadFiles, loading: _isUploadingFiles } = useAsyncHandler(
   async (fileList: FileList) => {
     await composableUploadFiles(fileList, currentPath.value)
     await refreshFiles()
@@ -260,8 +267,8 @@ const handleFileSelected = async (fileList: FileList) => {
   await uploadFiles(fileList)
 }
 
-const { execute: viewFile, loading: isViewingFile } = useAsyncHandler(
-  async (file: any) => {
+const { execute: viewFile, loading: _isViewingFile } = useAsyncHandler(
+  async (file: FileBrowserItem) => {
     await fetchPreview(file, getFileType)
     showPreview.value = true
 
@@ -280,8 +287,8 @@ const { execute: viewFile, loading: isViewingFile } = useAsyncHandler(
   }
 )
 
-const { execute: performDelete, loading: isDeletingFile } = useAsyncHandler(
-  async (file: any) => {
+const { execute: performDelete, loading: _isDeletingFile } = useAsyncHandler(
+  async (file: FileBrowserItem) => {
     const itemType = file.is_dir ? 'folder' : 'file'
     await deleteFileOrFolder(file.path)
     await refreshFiles()
@@ -305,16 +312,16 @@ const { execute: performDelete, loading: isDeletingFile } = useAsyncHandler(
   }
 )
 
-const deleteFile = async (file: any) => {
+const deleteFile = async (file: FileBrowserItem) => {
   const message = t('fileBrowser.browser.deleteConfirm', { name: file.name })
 
-  if (confirm(message)) {
+  if (await confirm({ title: t('common.confirm'), message: message })) {
     await performDelete(file)
   }
 }
 
-const { execute: performRename, loading: isRenamingFile } = useAsyncHandler(
-  async (file: any, newName: string) => {
+const { execute: performRename, loading: _isRenamingFile } = useAsyncHandler(
+  async (file: FileBrowserItem, newName: string) => {
     await renameFileOrFolder(file.path, newName)
     await refreshFiles()
 
@@ -336,7 +343,7 @@ const { execute: performRename, loading: isRenamingFile } = useAsyncHandler(
   }
 )
 
-const renameFile = async (file: any) => {
+const renameFile = async (file: FileBrowserItem) => {
   const newName = prompt(t('fileBrowser.browser.renamePrompt'), file.name)
 
   if (newName && newName !== file.name) {
@@ -344,7 +351,7 @@ const renameFile = async (file: any) => {
   }
 }
 
-const { execute: performCreateFolder, loading: isCreatingFolder } = useAsyncHandler(
+const { execute: performCreateFolder, loading: _isCreatingFolder } = useAsyncHandler(
   async (folderName: string) => {
     await createDirectory(currentPath.value, folderName)
     await refreshFiles()
@@ -379,7 +386,7 @@ const closePreview = () => {
   previewFile.value = null
 }
 
-const downloadPreviewFile = (file: any) => {
+const downloadPreviewFile = (file: PreviewDownloadFile) => {
   if (file.url) {
     const a = document.createElement('a')
     a.href = file.url
@@ -388,7 +395,7 @@ const downloadPreviewFile = (file: any) => {
   }
 }
 
-const toggleNode = (item: any) => {
+const toggleNode = (item: FileBrowserTreeNode) => {
   if (item.is_dir) {
     item.expanded = !item.expanded
     selectedPath.value = item.path
@@ -397,7 +404,7 @@ const toggleNode = (item: any) => {
 }
 
 const expandAll = () => {
-  const expandNodeRecursively = (nodes: any[]) => {
+  const expandNodeRecursively = (nodes: FileBrowserTreeNode[]) => {
     nodes.forEach(node => {
       if (node.is_dir) {
         node.expanded = true
@@ -411,7 +418,7 @@ const expandAll = () => {
 }
 
 const collapseAll = () => {
-  const collapseNodeRecursively = (nodes: any[]) => {
+  const collapseNodeRecursively = (nodes: FileBrowserTreeNode[]) => {
     nodes.forEach(node => {
       if (node.is_dir) {
         node.expanded = false

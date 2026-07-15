@@ -15,15 +15,15 @@ A sidebar on the left lists all available sections.
 
 | Section | Path | Purpose |
 |---------|------|---------|
-| Search | `/knowledge/search` | Find information across all documents |
+| Search | `/knowledge/browser` | Find information across all documents |
 | Research | `/knowledge/research` | Live research panel with browser collaboration |
-| Categories | `/knowledge/categories` | Browse documents organized by topic |
+| Categories | `/knowledge/browser` | Browse documents organized by topic |
 | Knowledge Graph | `/knowledge/graph` | Visual map of topics and relationships |
 | Manage | `/knowledge/manage` | Add, edit, and delete knowledge entries |
-| Verification | `/knowledge/verification` | Review and approve imported content |
+| Verification | `/knowledge/health?tab=verification` | Review and approve imported content |
 | Connectors | `/knowledge/connectors` | Import data from external sources |
-| Statistics | `/knowledge/stats` | View usage metrics and storage details |
-| Maintenance | `/knowledge/maintenance` | Clean up, re-index, and maintain data |
+| Statistics | `/knowledge/health` | View usage metrics and storage details (Analytics tab) |
+| Maintenance | `/knowledge/health?tab=tools` | Clean up, re-index, and maintain data |
 
 ## Uploading Documents
 
@@ -41,7 +41,7 @@ A sidebar on the left lists all available sections.
 
 ## Searching Knowledge
 
-1. Go to **Search** (`/knowledge/search`).
+1. Go to the **Browser** (`/knowledge/browser`).
 2. Type a keyword, phrase, or full question in the search bar.
 3. Press **Enter**.
 4. Results appear ranked by relevance, showing matching passages and the
@@ -52,7 +52,7 @@ automatically search the knowledge base if relevant documents exist.
 
 ## Browsing Categories
 
-1. Go to **Categories** (`/knowledge/categories`).
+1. Go to the **Browser** (`/knowledge/browser`).
 2. Categories are displayed as folders or cards.
 3. Click a category to see all documents within it.
 4. Click a document to read its content or edit its metadata.
@@ -80,7 +80,7 @@ Sub-sections within the Knowledge Graph:
 
 ## Source Verification
 
-The Verification Queue (`/knowledge/verification`) lets you review content
+The Verification Queue (`/knowledge/health?tab=verification`) lets you review content
 before it is used in AI responses:
 
 1. Open the queue to see pending items.
@@ -102,10 +102,11 @@ automatically. To set up a connector:
 
 ## Statistics and Maintenance
 
-- **Statistics** (`/knowledge/stats`) shows how many documents you have, storage
-  used, and search activity.
-- **Maintenance** (`/knowledge/maintenance`) provides tools to re-index
-  documents, clean up orphaned entries, and optimize storage.
+- **Statistics** — the Analytics tab of the Health view (`/knowledge/health`)
+  shows how many documents you have, storage used, and search activity.
+- **Maintenance** — the Tools tab of the Health view
+  (`/knowledge/health?tab=tools`) provides tools to re-index documents, clean
+  up orphaned entries, and optimize storage.
 
 ## Tips
 

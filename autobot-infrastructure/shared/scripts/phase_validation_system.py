@@ -132,7 +132,6 @@ class PhaseValidationCriteria:
             ],
             "files": [
                 "autobot-backend/security_layer.py",
-                "autobot-backend/enhanced_security_layer.py",
                 ".github/workflows/security.yml",
                 ".bandit",
             ],
@@ -165,7 +164,7 @@ class PhaseValidationCriteria:
                 "autobot-backend/orchestrator.py",
                 "autobot-backend/api/orchestration.py",
             ],
-            "directories": ["autobot-backend/enhanced_orchestration/"],
+            "directories": ["autobot-backend/orchestration/"],
             "endpoints": ["/api/orchestration/status"],
             "orchestration_features": [
                 "task_planning",

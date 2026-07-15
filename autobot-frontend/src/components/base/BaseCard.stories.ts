@@ -25,15 +25,15 @@ const meta = {
 } as Meta<typeof BaseCard>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 export const Default: Story = {
   args: {
     variant: 'default',
     padding: 'md',
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { BaseCard },
     setup() {
       return { args };
@@ -52,7 +52,7 @@ export const Elevated: Story = {
     variant: 'elevated',
     padding: 'md',
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { BaseCard },
     setup() {
       return { args };
@@ -71,7 +71,7 @@ export const Outline: Story = {
     variant: 'outline',
     padding: 'md',
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { BaseCard },
     setup() {
       return { args };
@@ -91,7 +91,7 @@ export const Hoverable: Story = {
     padding: 'md',
     hoverable: true,
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { BaseCard },
     setup() {
       return { args };
@@ -110,7 +110,7 @@ export const NoPadding: Story = {
     variant: 'default',
     padding: 'none',
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { BaseCard },
     setup() {
       return { args };

@@ -38,7 +38,7 @@ export interface StorageValidationResult {
   isValid: boolean
   key: string
   error?: string
-  value?: any
+  value?: unknown
 }
 
 /**
@@ -257,7 +257,7 @@ export function clearStorage(type: StorageType = 'localStorage'): boolean {
  * const config = safeJsonParse(response.data, null)
  * ```
  */
-export function safeJsonParse<T = any>(
+export function safeJsonParse<T = unknown>(
   jsonString: string | null,
   fallback: T
 ): T {
@@ -286,7 +286,7 @@ export function safeJsonParse<T = any>(
  * localStorage.setItem('data', safeJsonStringify(data, '{}'))
  * ```
  */
-export function safeJsonStringify(obj: any, fallback: string = '{}'): string {
+export function safeJsonStringify(obj: unknown, fallback: string = '{}'): string {
   try {
     return JSON.stringify(obj)
   } catch (e) {
@@ -309,7 +309,7 @@ export function safeJsonStringify(obj: any, fallback: string = '{}'): string {
  * const session = getStorageJson('session', null, 'sessionStorage')
  * ```
  */
-export function getStorageJson<T = any>(
+export function getStorageJson<T = unknown>(
   key: string,
   fallback: T,
   type: StorageType = 'localStorage'
@@ -334,7 +334,7 @@ export function getStorageJson<T = any>(
  */
 export function setStorageJson(
   key: string,
-  value: any,
+  value: unknown,
   type: StorageType = 'localStorage'
 ): boolean {
   const json = safeJsonStringify(value)
@@ -407,7 +407,7 @@ export function validateStorageJson(
  * ```
  */
 export function checkVueFramework(): VueFrameworkCheck {
-  const w = window as any
+  const w = window as unknown as Record<string, unknown>
 
   return {
     vue_available: typeof w.Vue !== 'undefined',
@@ -458,7 +458,7 @@ export function getPerformanceMetrics(): PerformanceMetrics {
   }
 
   // Memory metrics (if available)
-  const perf = performance as any
+  const perf = performance as Performance & { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }
   if (perf.memory) {
     metrics.memory = {
       usedJSHeapSize: perf.memory.usedJSHeapSize,

@@ -135,30 +135,35 @@ async def get_fallback_status(
     active_fallbacks: List[Dict[str, Any]] = []
     try:
         redis_client = get_redis_client(database="main")
-        # Scan for all active fallback keys
-        cursor = 0
+        # Collect all matching keys across all scan pages (#10808: avoid N+1)
+        all_keys: List = []
+        scan_cursor = 0
         while True:
-            cursor, keys = redis_client.scan(
-                cursor,
+            scan_cursor, keys = redis_client.scan(
+                scan_cursor,
                 match="llm:fallback:active:*",
                 count=100,
             )
+            all_keys.extend(keys)
+            if scan_cursor == 0:
+                break
 
-            for key in keys:
+        # Batch-fetch all values in one pipeline (eliminates per-key round-trip)
+        if all_keys:
+            pipe = redis_client.pipeline()
+            for key in all_keys:
+                pipe.get(key)
+            raw_values = pipe.execute()
+            for key, data in zip(all_keys, raw_values):
                 try:
-                    data = redis_client.get(key)
                     if data:
-                        event = json.loads(data)
-                        active_fallbacks.append(event)
+                        active_fallbacks.append(json.loads(data))
                 except Exception as exc:
                     logger.warning(
                         "Failed to parse fallback event from key %s: %s",
                         key,
                         exc,
                     )
-
-            if cursor == 0:
-                break
 
     except Exception as exc:
         logger.warning(

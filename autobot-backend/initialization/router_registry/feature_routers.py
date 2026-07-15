@@ -134,6 +134,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # ("api.execution_snapshots", "", ["execution", "snapshots"], "execution_snapshots"),
     # Core workflow and batch processing
     # Issue #6229: api.websockets and api.live_events promoted to core_routers
+    # #10551: Provider OAuth/device-code/session auth connect endpoints
+    ("api.provider_auth", "", ["llm-auth"], "provider_auth"),
     ("api.workflow", "/workflow", ["workflow"], "workflow"),
     # Issue #1287: batch.py consolidated into batch_jobs.py
     (
@@ -171,8 +173,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "log_forwarding",
     ),
     ("api.secrets", "/secrets", ["secrets"], "secrets"),
-    # Unified envelope secrets store (#10088) — new prefix; legacy /secrets untouched.
-    ("api.unified_secrets", "/v2/secrets", ["secrets", "v2"], "unified_secrets"),
+    # Envelope secrets store (#10088) — new prefix; legacy /secrets untouched.
+    ("api.envelope_secrets", "/v2/secrets", ["secrets", "v2"], "envelope_secrets"),
     # Issue #2153: workflow-scoped encrypted credential storage
     (
         "api.workflow_secrets",
@@ -228,9 +230,12 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["video-generation", "media"],
         "video_generation",
     ),
+    # #11665: empty prefix — the router self-prefixes /web-research, so the
+    # canonical live path is /api/web-research/* (was the stacked
+    # /api/web-research-settings/web-research/*).
     (
         "api.web_research_settings",
-        "/web-research-settings",
+        "",
         ["web-research-settings"],
         "web_research_settings",
     ),
@@ -342,18 +347,20 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["cache"],
         "cache_management",
     ),
-    # Enhanced features
+    # NPU-accelerated search (#10666 B7: renamed from enhanced_search)
+    # Issue #10820: renamed /enhanced-search → /npu-search (era-marker removal)
     (
-        "api.enhanced_search",
-        "/enhanced-search",
-        ["enhanced-search"],
-        "enhanced_search",
+        "api.search",
+        "/npu-search",
+        ["npu-search"],
+        "search",
     ),
+    # Issue #10820: renamed /enhanced-memory → /task-memory (era-marker removal)
     (
-        "api.enhanced_memory",
-        "/enhanced-memory",
-        ["enhanced-memory"],
-        "enhanced_memory",
+        "api.task_memory",
+        "/task-memory",
+        ["task-memory"],
+        "task_memory",
     ),
     (
         "api.development_speedup",
@@ -389,6 +396,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "",
         ["task-workspace"],
         "task_workspace",
+    ),
+    # #10544: persistent branchable per-task workspace — stateful sandbox + WS shell
+    (
+        "api.task_workspace_ws",
+        "",
+        ["task-workspace", "websockets"],
+        "task_workspace_ws",
     ),
     # Long-running and validation
     # Moved back from core_routers — has _OPERATIONS_AVAILABLE graceful degradation (Issue #6306)
@@ -688,6 +702,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # as a system router. Duplicate registration caused routes to appear twice.
     # GH#4459: Web push notification endpoints (subscribe/unsubscribe/vapid-key)
     ("api.push", "/push", ["push", "notifications"], "push"),
+    # GH#10554: Per-user memory transparency + forget/export (GDPR right-to-erasure)
+    ("api.memory_privacy", "", ["memory-privacy"], "memory_privacy"),
     # GH#9044: Transcriber routes are mounted by core_routers via
     # api.transcriber.router (prefix "/transcriber" → /api/transcriber/*).
     # The transcriber_extension combined router carries a full "/api/transcriber"

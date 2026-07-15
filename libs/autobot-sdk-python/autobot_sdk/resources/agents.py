@@ -17,7 +17,7 @@ class AgentsResource:
         self._c = client
 
     async def health(self) -> AgentHealth:
-        raw = await self._c.get("/health/enhanced")
+        raw = await self._c.get("/health/detailed")
         return AgentHealth.model_validate(raw)
 
     async def get_config(self) -> DataResponse[AgentConfig]:

@@ -490,6 +490,12 @@ class DiscordIntegration(BaseIntegration):
                 method="GET",
                 parameters={"guild_id": "str"},
             ),
+            IntegrationAction(
+                name="get_channel_history",
+                description="Fetch recent messages from a Discord channel",
+                method="GET",
+                parameters={"channel_id": "str", "limit": "int"},
+            ),
         ]
 
     async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -498,6 +504,7 @@ class DiscordIntegration(BaseIntegration):
             "send_message": self._send_message,
             "list_guilds": self._list_guilds,
             "list_channels": self._list_channels,
+            "get_channel_history": self._get_channel_history,
         }
         handler = action_map.get(action)
         if not handler:
@@ -524,18 +531,48 @@ class DiscordIntegration(BaseIntegration):
         headers = {"Authorization": f"Bot {self.config.token}"}
         return await self._make_discord_request("GET", url, headers)
 
+    async def _get_channel_history(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Fetch recent messages from a Discord channel (#11560).
+
+        Calls ``GET /channels/{channel_id}/messages?limit={limit}`` with Bot
+        authentication.  Returns ``{"messages": [...], "channel_id": ...}`` so
+        callers can normalise the payload the same way as Slack history.
+        """
+        channel_id = params["channel_id"]
+        limit = int(params.get("limit", 100))
+        url = f"{self.base_url}/channels/{channel_id}/messages"
+        headers = {"Authorization": f"Bot {self.config.token}"}
+        result = await self._make_discord_request("GET", url, headers, query_params={"limit": limit})
+        if result.get("status_code") == 200:
+            return {"messages": result.get("body", []), "channel_id": channel_id}
+        self.logger.warning(
+            "Discord get_channel_history failed: status=%s channel=%s",
+            result.get("status_code"),
+            channel_id,
+        )
+        return {"messages": [], "channel_id": channel_id, "error": result.get("error", "request_failed")}
+
     async def _make_discord_request(
         self,
         method: str,
         url: str,
         headers: Dict[str, str] | None = None,
         data: Dict[str, Any] | None = None,
+        query_params: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
-        """Make HTTP request to Discord API."""
+        """Make HTTP request to Discord API.
+
+        Args:
+            method:       HTTP verb (GET, POST, …).
+            url:          Full endpoint URL.
+            headers:      Optional HTTP headers.
+            data:         Optional JSON body (for POST requests).
+            query_params: Optional URL query parameters (for GET requests).
+        """
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(method, url, headers=headers, json=data) as resp:
+                async with session.request(method, url, headers=headers, json=data, params=query_params) as resp:
                     body = await resp.json()
                     return {"status_code": resp.status, "body": body}
         except aiohttp.ClientError as exc:

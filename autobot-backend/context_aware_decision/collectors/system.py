@@ -36,10 +36,10 @@ class SystemContextCollector:
             system_elements = []
 
             # Takeover system status
-            system_elements.append(self._create_takeover_status_context())
+            system_elements.append(await self._create_takeover_status_context())
 
-            # Active takeovers
-            active_takeovers = get_takeover_manager().get_active_sessions()
+            # Active takeovers (async since #11639 — Redis-backed registry)
+            active_takeovers = await get_takeover_manager().get_active_sessions()
             if active_takeovers:
                 system_elements.append(self._create_active_takeovers_context(active_takeovers))
 
@@ -54,11 +54,11 @@ class SystemContextCollector:
             logger.debug("System context collection failed: %s", e)
             return []
 
-    def _create_takeover_status_context(self) -> ContextElement:
+    async def _create_takeover_status_context(self) -> ContextElement:
         """Create context element for takeover system status."""
         from takeover_manager import get_takeover_manager
 
-        takeover_status = get_takeover_manager().get_system_status()
+        takeover_status = await get_takeover_manager().get_system_status()
         return ContextElement(
             context_id=f"takeover_status_{self.time_provider.current_timestamp_millis()}",
             context_type=ContextType.SYSTEM_STATE,

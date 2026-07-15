@@ -58,9 +58,9 @@ describe('KnowledgeRepository connector endpoints (#5200)', () => {
     putSpy = vi.fn()
     // @ts-expect-error - override inherited methods for unit test isolation
     repo.get = getSpy
-    // @ts-expect-error
+    // @ts-expect-error - override inherited methods for unit test isolation
     repo.post = postSpy
-    // @ts-expect-error
+    // @ts-expect-error - override inherited methods for unit test isolation
     repo.put = putSpy
   })
 

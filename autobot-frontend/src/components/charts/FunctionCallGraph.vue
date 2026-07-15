@@ -350,7 +350,6 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
-import { useI18n } from 'vue-i18n'
 // Type imports only — runtime load handled by the shared composable (#5206).
 // The default namespace import below gives type-only access to helpers
 // like `cytoscape.StylesheetStyle` / `cytoscape.LayoutOptions` used in
@@ -362,8 +361,6 @@ import { useCytoscapeLibrary } from '@/composables/charts/useCytoscapeLibrary'
 import { useVirtualScrollSimple } from '@/composables/useVirtualScroll'
 import { getCssVar } from '@/composables/useCssVars'
 import { useDebounce } from '@/composables/useTimeout'
-
-const { t } = useI18n()
 
 // Flexible interface to support multiple data formats
 interface GraphNode {
@@ -1265,12 +1262,6 @@ function truncateFile(filePath: string): string {
   const parts = filePath.split('/')
   if (parts.length <= 2) return filePath
   return '...' + parts.slice(-2).join('/')
-}
-
-function truncateFunc(funcId: string): string {
-  const parts = funcId.split('.')
-  if (parts.length <= 2) return funcId
-  return parts.slice(-2).join('.')
 }
 
 

@@ -131,8 +131,6 @@ async function loadComponent(attempt = 1): Promise<void> {
         emit('loaded', asyncComponent.value)
       }
 
-      const loadTime = Date.now() - loadingStartTime
-
       // Reset error state on success
       asyncError.value = null
       showAsyncError.value = false

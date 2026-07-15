@@ -1,18 +1,15 @@
 <template>
   <BasePanel variant="bordered" size="md">
-    <h4>{{ $t('knowledge.stats.tagCloud.title') }}</h4>
-    <div class="tag-cloud" role="list" :aria-label="$t('knowledge.stats.tagCloud.ariaLabel')">
+    <h4>{{ $t('knowledge.stats.popularTags') }}</h4>
+    <div class="tag-cloud" role="list" :aria-label="$t('knowledge.stats.popularTagsAriaLabel')">
       <span
         v-for="tag in tags"
         :key="tag.name"
         class="tag-cloud-item"
         :style="{ fontSize: `${tag.size}rem` }"
-        :title="$t('knowledge.stats.tagCloud.documentsCount', { count: tag.count })"
-        :aria-label="$t('knowledge.stats.tagCloud.tagAriaLabel', { name: tag.name, count: tag.count })"
+        :title="$t('knowledge.health.tagDocCount', { count: tag.count })"
+        :aria-label="`${tag.name}: ${$t('knowledge.health.tagDocCount', { count: tag.count })}`"
         role="listitem"
-        tabindex="0"
-        @click="$emit('tag-click', tag.name)"
-        @keypress.enter="$emit('tag-click', tag.name)"
       >
         {{ tag.name }}
       </span>
@@ -28,9 +25,10 @@
  * Tag Cloud Panel Component
  *
  * Displays a cloud of popular tags with varying sizes.
- * Extracted from KnowledgeStats.vue for better maintainability.
+ * Wired into KnowledgeHealthAnalytics.vue (#11562).
  *
  * Issue #184: Split oversized Vue components
+ * Issue #11562: Wire in orphaned stats subpanels
  */
 
 import BasePanel from '@/components/base/BasePanel.vue'
@@ -45,12 +43,7 @@ interface Props {
   tags: Tag[]
 }
 
-interface Emits {
-  (e: 'tag-click', tagName: string): void
-}
-
 defineProps<Props>()
-defineEmits<Emits>()
 </script>
 
 <style scoped>
@@ -69,26 +62,14 @@ h4 {
 }
 
 .tag-cloud-item {
-  color: var(--color-primary);
-  cursor: pointer;
-  transition: all var(--duration-200) var(--ease-in-out);
+  color: var(--color-info);
+  transition: var(--transition-all);
   padding: var(--spacing-1) var(--spacing-2);
-  border-radius: var(--radius-sm);
-  outline: none;
+  border-radius: var(--radius-default);
 }
 
-.tag-cloud-item:hover,
-.tag-cloud-item:focus {
-  color: var(--color-primary-hover);
+.tag-cloud-item:hover {
+  color: var(--color-info-hover);
   transform: scale(1.1);
-}
-
-.tag-cloud-item:focus {
-  box-shadow: var(--ring-primary);
-  background: var(--color-primary-bg);
-}
-.tag-cloud-item:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
 }
 </style>

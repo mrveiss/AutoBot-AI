@@ -41,6 +41,29 @@ def _get_incremental_trainer():
     return IncrementalTrainer()
 
 
+async def _record_preference_signal(request: "FeedbackRequest") -> None:
+    """Fold a feedback event into the tenant preference aggregator (#10545).
+
+    No-op when no ``behavior`` tag is provided (legacy code-completion feedback
+    has no biasable behavior). Best-effort: swallows errors so feedback capture
+    is never blocked by the learning surface.
+    """
+    if not request.behavior:
+        return
+    try:
+        from services.feedback_aggregator import get_feedback_aggregator
+
+        await get_feedback_aggregator().record_signal(
+            request.action,
+            request.behavior,
+            task_class=request.task_class or "general",
+            user_id=request.user_id,
+            org_id=request.org_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("preference signal record failed: %s", exc)
+
+
 # =============================================================================
 # Request/Response Models
 # =============================================================================
@@ -58,6 +81,9 @@ class FeedbackRequest(BaseModel):
     pattern_id: int | None = Field(None, description="Pattern ID if applicable")
     confidence_score: float | None = Field(None, description="Model confidence (0-1)")
     completion_rank: int | None = Field(None, description="Position in top-k suggestions")
+    org_id: str | None = Field(None, description="Tenant/org identifier (#10545 preference scope)")
+    task_class: str | None = Field(None, description="Task class for preference scope, e.g. 'code-fix' (#10545)")
+    behavior: str | None = Field(None, description="Behavior judged: agent/skill/strategy tag (#10545)")
 
 
 class FeedbackResponse(BaseModel):
@@ -136,6 +162,11 @@ async def record_feedback(request: FeedbackRequest):
             confidence_score=request.confidence_score,
             completion_rank=request.completion_rank,
         )
+
+        # #10545: fold this human signal into the durable preference aggregator
+        # so routing/skill/prompt hooks can consume it. Best-effort and only when
+        # a behavior tag is supplied; failures never block feedback capture.
+        await _record_preference_signal(request)
 
         return FeedbackResponse(
             status="success",

@@ -77,10 +77,10 @@
           <!-- Data Rows -->
           <tr
             v-for="(row, index) in data"
-            :key="row[rowKey] || index"
+            :key="(row[rowKey] as RowKeyValue) || index"
             class="table-row"
             :class="{
-              'row-selected': selectedRows.has(row[rowKey]),
+              'row-selected': selectedRows.has(row[rowKey] as RowKeyValue),
               'row-zebra': zebra && index % 2 === 1,
               'row-clickable': rowClickable
             }"
@@ -90,8 +90,8 @@
             <td v-if="selectable" class="select-cell">
               <input
                 type="checkbox"
-                :checked="selectedRows.has(row[rowKey])"
-                @change="toggleRowSelection(row[rowKey])"
+                :checked="selectedRows.has(row[rowKey] as RowKeyValue)"
+                @change="toggleRowSelection(row[rowKey] as RowKeyValue)"
                 @click.stop
                 class="checkbox-input"
                 :aria-label="t('base.table.selectRow', { row: index + 1 })"
@@ -143,6 +143,12 @@ const TABLE_VARIANTS = ['default', 'bordered', 'striped'] as const
 
 const logger = createLogger('BaseTable')
 
+// A table row is an object keyed by column keys; cell values are opaque and
+// narrowed by the consumer's `formatter`/cell slot at use-site.
+type RowData = Record<string, unknown>
+// Row-key values are whatever `row[rowKey]` yields — typically string/number.
+type RowKeyValue = string | number
+
 interface TableColumn {
   key: string
   label: string
@@ -151,12 +157,12 @@ interface TableColumn {
   align?: 'left' | 'center' | 'right'
   numeric?: boolean
   monospace?: boolean
-  formatter?: (value: any) => string
+  formatter?: (value: unknown) => string
 }
 
 interface Props {
   columns: TableColumn[]
-  data: any[]
+  data: RowData[]
   rowKey?: string
   size?: 'compact' | 'comfortable' | 'spacious'
   variant?: 'default' | 'bordered' | 'striped'
@@ -181,8 +187,8 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  'row-click': [row: any]
-  'selection-change': [selectedKeys: any[]]
+  'row-click': [row: RowData]
+  'selection-change': [selectedKeys: RowKeyValue[]]
   sort: [key: string, order: 'asc' | 'desc']
 }>()
 
@@ -192,9 +198,9 @@ const sortOrder = ref<'asc' | 'desc'>('asc')
 
 // Row selection backed by useBatchSelection. Items source is props.data;
 // the Key is whatever `row[props.rowKey]` yields (typically string/number).
-const rowSelection = useBatchSelection<any, any>(
+const rowSelection = useBatchSelection<RowData, RowKeyValue>(
   () => props.data ?? [],
-  (row) => row[props.rowKey]
+  (row) => row[props.rowKey] as RowKeyValue
 )
 const selectedRows = rowSelection.selected
 const allSelected = rowSelection.allSelected
@@ -234,17 +240,17 @@ const toggleSelectAll = () => {
   }
 }
 
-const toggleRowSelection = (key: any) => {
+const toggleRowSelection = (key: RowKeyValue) => {
   rowSelection.toggleByKey(key)
 }
 
-const handleRowClick = (row: any) => {
+const handleRowClick = (row: RowData) => {
   if (props.rowClickable) {
     emit('row-click', row)
   }
 }
 
-const formatCellValue = (value: any, column: TableColumn) => {
+const formatCellValue = (value: unknown, column: TableColumn) => {
   if (column.formatter) {
     return column.formatter(value)
   }

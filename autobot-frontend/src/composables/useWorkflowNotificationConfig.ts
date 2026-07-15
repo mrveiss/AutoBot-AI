@@ -110,7 +110,7 @@ export function useWorkflowNotificationConfig() {
     saving.value = true;
     configError.value = null;
     try {
-      await apiClient.put<any>(
+      await apiClient.put<unknown>(
         `${getApiBase()}/workflow-automation/notification_config/${workflowId}`,
         payload,
         { timeout: 30_000 },

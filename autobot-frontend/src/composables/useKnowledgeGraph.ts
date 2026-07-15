@@ -187,11 +187,11 @@ export function useKnowledgeGraph() {
     clearError()
     return wrap(async () => {
       try {
-        const data = await apiClient.post<any>(
+        const data = await apiClient.post<Record<string, unknown>>(
           `${API_BASE}/pipeline/run`, config
         )
         logger.info('Pipeline completed:', data?.pipeline_id)
-        return data as PipelineResult
+        return data as unknown as PipelineResult
       } catch (err) {
         setError(err)
         return null
@@ -214,7 +214,7 @@ export function useKnowledgeGraph() {
           entity_types: params.entity_types,
           limit: params.limit ?? 50,
         })
-        const data = await apiClient.get<any>(`${API_BASE}/entities${qs}`)
+        const data = await apiClient.get<Record<string, unknown>>(`${API_BASE}/entities${qs}`)
         entities.value = (
           data?.entities ?? data ?? []
         ) as Entity[]
@@ -230,7 +230,7 @@ export function useKnowledgeGraph() {
     clearError()
     await wrap(async () => {
       try {
-        const data = await apiClient.get<any>(
+        const data = await apiClient.get<Record<string, unknown>>(
           `${API_BASE}/entities/` +
           `${encodeURIComponent(entityId)}/relationships`
         )
@@ -260,7 +260,7 @@ export function useKnowledgeGraph() {
           event_types: params.event_types,
           entity_name: params.entity_name,
         })
-        const data = await apiClient.get<any>(`${API_BASE}/events${qs}`)
+        const data = await apiClient.get<Record<string, unknown>>(`${API_BASE}/events${qs}`)
         events.value = (
           data?.events ?? data ?? []
         ) as TemporalEvent[]
@@ -278,7 +278,7 @@ export function useKnowledgeGraph() {
     clearError()
     return wrap(async () => {
       try {
-        const data = await apiClient.get<any>(
+        const data = await apiClient.get<Record<string, unknown>>(
           `${API_BASE}/events/` +
           `${encodeURIComponent(entityName)}/timeline`
         )
@@ -308,7 +308,7 @@ export function useKnowledgeGraph() {
           level: params.level,
           top_k: params.top_k ?? 10,
         })
-        const data = await apiClient.get<any>(
+        const data = await apiClient.get<Record<string, unknown>>(
           `${API_BASE}/summaries/search${qs}`
         )
         summaries.value = (
@@ -328,11 +328,11 @@ export function useKnowledgeGraph() {
     clearError()
     return wrap(async () => {
       try {
-        const data = await apiClient.get<any>(
+        const data = await apiClient.get<Record<string, unknown>>(
           `${API_BASE}/documents/` +
           `${encodeURIComponent(documentId)}/overview`
         )
-        return data as DocumentOverview
+        return data as unknown as DocumentOverview
       } catch (err) {
         setError(err)
         return null
@@ -346,11 +346,11 @@ export function useKnowledgeGraph() {
     clearError()
     return wrap(async () => {
       try {
-        const data = await apiClient.get<any>(
+        const data = await apiClient.get<Record<string, unknown>>(
           `${API_BASE}/summaries/` +
           `${encodeURIComponent(summaryId)}/drill-down`
         )
-        return data as DrillDownResult
+        return data as unknown as DrillDownResult
       } catch (err) {
         setError(err)
         return null

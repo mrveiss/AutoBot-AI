@@ -310,7 +310,7 @@ onUnmounted(() => {
               <input
                 v-model="searchQuery"
                 type="text"
-                placeholder="Search errors..."
+                :placeholder="$t('monitoring.errorMonitor.searchErrors')"
                 class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
@@ -355,7 +355,7 @@ onUnmounted(() => {
                         getStatusClass(error.resolved),
                       ]"
                     >
-                      {{ error.resolved ? 'resolved' : 'active' }}
+                      {{ error.resolved ? $t('monitoring.errorMonitor.resolved2') : $t('monitoring.errorMonitor.active') }}
                     </span>
                     <span
                       :class="[
@@ -406,9 +406,7 @@ onUnmounted(() => {
             v-if="totalErrors > perPage"
             class="px-4 py-3 border-t border-gray-200 flex items-center justify-between"
           >
-            <span class="text-sm text-gray-500">
-              Page {{ currentPage }} of {{ Math.ceil(totalErrors / perPage) }}
-            </span>
+            <span class="text-sm text-gray-500">{{ $t('monitoring.errorMonitor.pageValue0OfValue1', { value0: currentPage, value1: Math.ceil(totalErrors / perPage) }) }}</span>
             <div class="flex gap-2">
               <button
                 @click="prevPage"
@@ -527,7 +525,7 @@ onUnmounted(() => {
           class="p-4 border-b border-gray-200 flex items-center justify-between"
         >
           <h3 class="text-lg font-semibold text-gray-900">{{ $t('monitoring.errorMonitor.errorDetails') }}</h3>
-          <button @click="closeDetail" class="text-gray-400 hover:text-gray-600" aria-label="Close">
+          <button @click="closeDetail" class="text-gray-400 hover:text-gray-600" :aria-label="$t('monitoring.errorMonitor.close')">
             <svg
               class="w-5 h-5"
               fill="none"
@@ -552,7 +550,7 @@ onUnmounted(() => {
                   getStatusClass(selectedError.resolved),
                 ]"
               >
-                {{ selectedError.resolved ? 'resolved' : 'active' }}
+                {{ selectedError.resolved ? $t('monitoring.errorMonitor.resolved2') : $t('monitoring.errorMonitor.active') }}
               </span>
               <span
                 :class="[

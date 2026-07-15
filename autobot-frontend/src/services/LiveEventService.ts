@@ -12,7 +12,7 @@
 
 import { ref, watch, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import config from '@/config/ssot-config'
+import config, { getApiBase } from '@/config/ssot-config'
 import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
 import { useUserStore } from '@/stores/useUserStore'
 import { whenPiniaReady } from '@/utils/whenPiniaReady'
@@ -40,6 +40,12 @@ export interface ApprovalDecision {
   approved: boolean
   comment?: string
   task_id?: string
+}
+
+/** Steering message sent to a running agent task (#10543) */
+export interface SteeringMessage {
+  task_id: string
+  guidance: string
 }
 
 type ServerMessage =
@@ -294,6 +300,36 @@ class LiveEventService {
       logger.error('Failed to send approval decision — WebSocket not open')
     }
     return sent
+  }
+
+  /**
+   * Send a steering message to a running agent task (#10543).
+   *
+   * Posts to POST /api/agent-terminal/tasks/{task_id}/steer via fetch so the
+   * backend queues it in the loop's steering inbox.  The guidance is absorbed
+   * at the next ANALYZE_EVENTS phase without restarting the loop.
+   *
+   * Returns the parsed response on success or throws on HTTP error.
+   */
+  async sendSteeringMessage(msg: SteeringMessage): Promise<Record<string, unknown>> {
+    const url = `${getApiBase()}/agent-terminal/tasks/${encodeURIComponent(msg.task_id)}/steer`
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guidance: msg.guidance, task_id: msg.task_id }),
+      credentials: 'include',
+    })
+    if (!resp.ok) {
+      const text = await resp.text()
+      logger.error('sendSteeringMessage failed:', resp.status, text)
+      throw new Error(`Steering request failed (${resp.status}): ${text}`)
+    }
+    const data = (await resp.json()) as Record<string, unknown>
+    logger.debug('Steering message sent', {
+      task_id: msg.task_id,
+      steering_id: data['steering_id'],
+    })
+    return data
   }
 
   disconnect(): void {

@@ -356,7 +356,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useEvolution } from '@/composables/useEvolution'
+import { useEvolution, type EvolutionAnalysisRequest } from '@/composables/useEvolution'
 import EvolutionTimelineChart from '@/components/charts/EvolutionTimelineChart.vue'
 import PatternEvolutionChart from '@/components/charts/PatternEvolutionChart.vue'
 import CodeEvolutionTimeline from '@/components/analytics/CodeEvolutionTimeline.vue'
@@ -415,7 +415,7 @@ async function applyFilters() {
 }
 
 async function runAnalysis() {
-  const request: any = {
+  const request: EvolutionAnalysisRequest = {
     repo_path: analysisForm.value.repo_path,
     commit_limit: analysisForm.value.commit_limit,
   }
@@ -758,7 +758,10 @@ onMounted(async () => {
   width: 90%;
   max-width: 600px;
   max-height: 90vh;
-  overflow: auto;
+  /* #10750 C2: keep header/footer fixed; scroll only .modal-body */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   box-shadow: var(--shadow-2xl);
 }
 
@@ -791,6 +794,9 @@ onMounted(async () => {
 
 .modal-body {
   padding: var(--spacing-5);
+  /* #10750 C2: single scroll region */
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .modal-footer {

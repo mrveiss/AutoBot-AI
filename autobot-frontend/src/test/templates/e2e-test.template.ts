@@ -95,7 +95,7 @@ test.describe('Feature Name E2E Tests', () => {
     await page.click('[data-testid="feature-nav-button"]')
 
     // Monitor WebSocket connections
-    const wsMessages: any[] = []
+    const wsMessages: unknown[] = []
     page.on('websocket', ws => {
       ws.on('framereceived', event => {
         try {

@@ -10,13 +10,10 @@
  */
 
 import { ref, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { useDevSpeedup } from '@/composables/useDevSpeedup'
-import type { CodeSnippet, CodeTemplate } from '@/composables/useDevSpeedup'
 import { createLogger } from '@/utils/debugUtils'
 import Icon from '@/components/ui/Icon.vue'
 
-const { t } = useI18n()
 const logger = createLogger('DevSpeedupView')
 
 const {
@@ -32,7 +29,6 @@ const {
   generateSnippet,
   fetchTemplates,
   suggestRefactor,
-  generateBoilerplate,
   generateTests,
   optimizeCode,
   formatCode,

@@ -20,8 +20,6 @@ import aiohttp
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_ollama_url
-from circuit_breaker import circuit_breaker_async
-from config.manager import get_config_manager
 from constants.api_constants import PATH_OLLAMA_CHAT
 
 from ..models import LLMRequest, LLMResponse, LLMSettings, ToolCall
@@ -29,7 +27,6 @@ from ..observability import registry as obs_registry
 from ..streaming import StreamingManager
 
 logger = get_logger(__name__)
-config = get_config_manager()
 
 _OLLAMA_TOOL_CAPABLE_MODELS: frozenset[str] = frozenset(
     {
@@ -481,12 +478,9 @@ class OllamaProvider:
 
         return url, headers, model, use_streaming, data, span_attrs
 
-    @circuit_breaker_async(
-        "ollama_service",
-        failure_threshold=config.get("circuit_breaker.ollama.failure_threshold", 3),
-        recovery_timeout=config.get_timeout("circuit_breaker", "recovery"),
-        timeout=config.get_timeout("llm", "default"),
-    )
+    # GH#11488: the "ollama_service" breaker decorator moved to the
+    # BaseProvider._guarded_completion seam (sole production caller is
+    # ollama_provider.py) — decorating here too double-counted every failure.
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
         """
         Enhanced Ollama chat completion with improved streaming.

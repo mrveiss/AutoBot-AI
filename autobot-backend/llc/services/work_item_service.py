@@ -12,10 +12,10 @@ Status transitions:
   transition raises ``InvalidTransition``.
 
 Identifier generation:
-  PostgreSQL advisory lock on the company's numeric hash, then RETURNING on an
-  UPDATE to ``llc_companies.issue_counter`` — producing ``<prefix>-<counter>``.
-  Falls back to a UUID-based placeholder when the companies table is absent
-  (unit-test environments without full schema).
+  UPDATE … RETURNING on ``organizations.issue_counter`` (the row lock enforces
+  uniqueness) — producing ``<prefix>-<counter>``. Falls back to a UUID-based
+  placeholder when the organizations table is absent (unit-test environments
+  without full schema).
 
 Co-working (GH#8230):
   enable_coworking / disable_coworking manage the secondary co-worker slot.
@@ -50,6 +50,26 @@ logger = logging.getLogger(__name__)
 _bg_tasks: set = set()
 
 _CHECKOUT_TTL = 1800  # seconds
+
+
+def _validated_approval_categories(values: Optional[List[str]], existing: Optional[List[str]] = None) -> List[str]:
+    """Validate ``requires_approval_before`` entries against the controlled vocabulary (GH#11206).
+
+    A typo'd category matches no tools at the seam and silently disables the gate,
+    so reject unknown *newly-added* values (fail-fast) rather than let governance
+    no-op. Values already present in *existing* are exempt, so re-sending a
+    pre-controlled-vocabulary (legacy free-text) value while editing an item does
+    not block the edit.
+    """
+    from autobot_shared.tool_catalogue import valid_approval_categories
+
+    vals = list(values or [])
+    allowed = valid_approval_categories() | set(existing or [])
+    unknown = [v for v in vals if v not in allowed]
+    if unknown:
+        raise ValueError(f"unknown approval categories: {unknown} (valid: {sorted(valid_approval_categories())})")
+    return vals
+
 
 # Allowed status transitions: from → {to, ...}
 _ALLOWED_TRANSITIONS: Dict[WorkItemStatus, set] = {
@@ -247,6 +267,7 @@ class WorkItemService(LLCServiceBase):
         created_by_agent_id: Optional[str] = None,
         created_by_user_id: Optional[str] = None,
         labels: Optional[List[str]] = None,
+        requires_approval_before: Optional[List[str]] = None,
     ) -> LLCWorkItem:
         # GH#6469: inherit goal_id from parent when not explicitly provided
         resolved_goal_id: Optional[uuid.UUID] = uuid.UUID(goal_id) if goal_id else None
@@ -275,6 +296,7 @@ class WorkItemService(LLCServiceBase):
             created_by_agent_id=uuid.UUID(created_by_agent_id) if created_by_agent_id else None,
             created_by_user_id=uuid.UUID(created_by_user_id) if created_by_user_id else None,
             labels=labels or [],
+            requires_approval_before=_validated_approval_categories(requires_approval_before),
         )
         session.add(item)
         await session.flush()
@@ -297,9 +319,11 @@ class WorkItemService(LLCServiceBase):
             "title",
             "description",
             "acceptance_criteria",
+            "acceptance_criteria_done",  # GH#10852
             "priority",
             "story_points",
             "labels",
+            "requires_approval_before",
             "parent_id",
             "sprint_id",
             "goal_id",
@@ -317,6 +341,10 @@ class WorkItemService(LLCServiceBase):
         elif fields.get("assignee_agent_id"):
             item.assignee_user_id = None
             fields.setdefault("assignee_type", "agent")
+        if "requires_approval_before" in fields:
+            fields["requires_approval_before"] = _validated_approval_categories(
+                fields["requires_approval_before"], existing=item.requires_approval_before or []
+            )
         for key, val in fields.items():
             if key not in allowed:
                 raise ValueError(f"Field '{key}' is not updatable via WorkItemService.update()")
@@ -948,26 +976,35 @@ class WorkItemService(LLCServiceBase):
     async def _next_identifier(self, session: AsyncSession, company_id: str) -> str:
         """Generate the next ``<prefix>-<counter>`` identifier for this company.
 
-        Uses PostgreSQL advisory lock + UPDATE RETURNING on ``llc_companies`` to
-        ensure uniqueness under concurrent inserts. Falls back to a random
-        identifier in test environments that lack the ``llc_companies`` table.
+        Bumps ``organizations.issue_counter`` with UPDATE … RETURNING (the row
+        lock guarantees uniqueness under concurrent inserts). Companies are
+        ``Organization`` rows — the counter lives on ``organizations``, NOT the
+        legacy ``llc_companies`` name (#11675: that phantom table never existed;
+        the failed UPDATE aborted the whole create transaction, so every work-item
+        INSERT died with InFailedSQLTransactionError).
+
+        Runs inside a SAVEPOINT (``begin_nested``) so that if the counter bump
+        fails — e.g. a test DB without the ``organizations`` table — only the
+        nested transaction rolls back and the UUID fallback stays usable; the
+        outer create transaction is never poisoned.
         """
         try:
-            row = await session.execute(
-                text("""
-                    UPDATE llc_companies
-                       SET issue_counter = issue_counter + 1
-                     WHERE id = :company_id
-                    RETURNING issue_prefix, issue_counter
-                    """),
-                {"company_id": company_id},
-            )
-            rec = row.fetchone()
-            if rec:
+            async with session.begin_nested():
+                row = await session.execute(
+                    text("""
+                        UPDATE organizations
+                           SET issue_counter = issue_counter + 1
+                         WHERE id = :company_id
+                        RETURNING issue_prefix, issue_counter
+                        """),
+                    {"company_id": company_id},
+                )
+                rec = row.fetchone()
+            if rec and rec.issue_prefix:
                 return f"{rec.issue_prefix}-{rec.issue_counter}"
         except Exception as exc:
             if isinstance(exc, (ProgrammingError, OperationalError)):
-                logger.debug("llc_companies table not available — using UUID identifier fallback")
+                logger.debug("organizations table not available — using UUID identifier fallback")
             else:
                 logger.warning(
                     "Unexpected error generating identifier for company %s — using UUID fallback",

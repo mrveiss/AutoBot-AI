@@ -42,10 +42,10 @@
       when: "'redis' in role_list"
 
     # AI/ML Roles
-    # python312 must be present before ai-stack or backend creates its venv (#3538, #3584)
-    - name: Install Python 3.12 prerequisite for ai-stack and backend
+    # python314 must be present before ai-stack or backend creates its venv (#3538, #3584)
+    - name: Install Python 3.14 prerequisite for ai-stack and backend
       ansible.builtin.include_role:
-        name: python312
+        name: python314
       when: "'ai-stack' in role_list or 'backend' in role_list"
 
     - name: Deploy backend role

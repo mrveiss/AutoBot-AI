@@ -196,15 +196,14 @@
     </div>
 
     <!-- Intent Detail Modal -->
-    <div v-if="selectedIntent" class="modal-overlay" @click="selectedIntent = null">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ selectedIntent.intent_name }}</h3>
-          <button @click="selectedIntent = null" class="close-btn">
-            <Icon name="times" />
-          </button>
-        </div>
-        <div class="modal-body">
+    <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
+      :model-value="!!selectedIntent"
+      :title="selectedIntent?.intent_name ?? ''"
+      size="sm"
+      @close="selectedIntent = null"
+    >
+      <template v-if="selectedIntent">
           <div class="detail-grid">
             <div class="detail-item">
               <span class="label">{{ $t('analytics.conversationFlow.intentId') }}</span>
@@ -233,9 +232,8 @@
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+      </template>
+    </BaseModal>
 
     <!-- Loading State -->
     <div v-if="isLoading && !analysisResult" class="loading-state">
@@ -262,14 +260,14 @@
  * Issue #704: Migrated to design tokens for centralized theming
  */
 import Icon from '@/components/ui/Icon.vue'
+import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import { ref, onMounted, computed } from 'vue'
-import { createLogger } from '@/utils/debugUtils'
 import {
   useConversationFlowData,
   type IntentPattern,
 } from '@/composables/analytics/useConversationFlowData'
-
-const logger = createLogger('ConversationFlowDashboard')
+const { t } = useI18n()
 
 // State
 const timeRange = ref(24)
@@ -328,7 +326,11 @@ onMounted(() => {
 .conversation-flow-dashboard {
   padding: var(--spacing-6);
   background: var(--bg-primary);
-  min-height: 100vh;
+  /* #10750: min-h-full flex column — parent .analytics-router-view is the
+     scroll container; the data grid grows to absorb vertical slack. */
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
   color: var(--text-primary);
 }
 
@@ -472,7 +474,11 @@ onMounted(() => {
 .content-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
   gap: var(--spacing-6);
+  /* #10750: grow to fill the vertical slack; panels scroll internally. */
+  flex: 1;
+  min-height: 0;
 }
 
 .panel {
@@ -480,6 +486,9 @@ onMounted(() => {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .panel-header {
@@ -511,7 +520,9 @@ onMounted(() => {
 
 .panel-content {
   padding: var(--spacing-4);
-  max-height: 400px;
+  /* #10750: fill the panel and scroll internally rather than a fixed cap. */
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -802,56 +813,6 @@ onMounted(() => {
 .empty-state-full h3 {
   margin: 0 0 var(--spacing-2);
   color: var(--text-secondary);
-}
-
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay-backdrop);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-content {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  width: 90%;
-  max-width: 500px;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-4) var(--spacing-5);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.modal-header h3 {
-  margin: var(--spacing-0);
-  color: var(--text-primary);
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: var(--text-xl);
-  cursor: pointer;
-}
-
-.close-btn:hover {
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: var(--spacing-5);
 }
 
 .detail-grid {

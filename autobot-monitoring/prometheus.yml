@@ -32,9 +32,19 @@ scrape_configs:
     metrics_path: /api/metrics/prometheus
     scheme: http
 
-  # AutoBot SLM backend metrics (docker-compose service name)
+  # AutoBot SLM backend DB-derived metrics (docker-compose service name)
   - job_name: "autobot-slm"
     static_configs:
       - targets: ["autobot-slm:8000"]
     metrics_path: /api/performance/metrics/prometheus
+    scheme: http
+
+  # AutoBot SLM shared-registry app metrics (#10851 top-level /metrics; #10858)
+  # Powers the BI dashboard real-source queries (#10720/#10778) via
+  # autobot_llm_requests_total / autobot_knowledge_search_requests_total /
+  # autobot_api_requests_total. Unauthenticated, plain http on the backend port.
+  - job_name: "slm-backend"
+    static_configs:
+      - targets: ["autobot-slm:8000"]
+    metrics_path: /metrics
     scheme: http

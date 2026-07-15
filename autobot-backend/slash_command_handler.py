@@ -1127,9 +1127,9 @@ class SecretsAddSubcommand(Command):
 
         Issue #620: Extracted from execute to reduce function length.
         """
-        from api.secrets import SecretScope
+        from api.secrets import ChatSecretScope
 
-        scope_text = "chat-scoped 💬" if scope == SecretScope.CHAT else "general 🌐"
+        scope_text = "chat-scoped 💬" if scope == ChatSecretScope.CHAT else "general 🌐"
         return SlashCommandResult(
             success=True,
             command_type=CommandType.SECRETS,
@@ -1154,9 +1154,9 @@ Your secret has been securely encrypted and stored.
             return validation_error
 
         try:
-            from api.secrets import SecretCreateRequest, SecretScope, SecretType
+            from api.secrets import ChatSecretScope, SecretCreateRequest, SecretType
 
-            scope = SecretScope.CHAT if self.chat_id else SecretScope.GENERAL
+            scope = ChatSecretScope.CHAT if self.chat_id else ChatSecretScope.GENERAL
             request = SecretCreateRequest(
                 name=self._parsed_name,
                 type=SecretType(self._parsed_type),
@@ -1373,19 +1373,19 @@ class SecretsTransferSubcommand(Command):
         Returns:
             Tuple of (SecretTransferRequest, scope_display_text)
         """
-        from api.secrets import SecretScope, SecretTransferRequest
+        from api.secrets import ChatSecretScope, SecretTransferRequest
 
         if target_scope_str == "to-general":
-            new_scope = SecretScope.GENERAL
+            new_scope = ChatSecretScope.GENERAL
             scope_text = "General 🌐"
         else:
-            new_scope = SecretScope.CHAT
+            new_scope = ChatSecretScope.CHAT
             scope_text = "Chat 💬"
 
         request = SecretTransferRequest(
             secret_ids=[target_secret["id"]],
             target_scope=new_scope,
-            target_chat_id=self.chat_id if new_scope == SecretScope.CHAT else None,
+            target_chat_id=self.chat_id if new_scope == ChatSecretScope.CHAT else None,
         )
         return request, scope_text
 

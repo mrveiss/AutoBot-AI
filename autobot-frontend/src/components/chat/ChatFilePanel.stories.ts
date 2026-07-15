@@ -16,15 +16,15 @@ const meta = {
 } as Meta<typeof ChatFilePanel>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
 import type { StoryObj } from '@storybook/vue3';
-type Story = StoryObj<any>;
+type Story = StoryObj<Record<string, unknown>>;
 
 export const Default: Story = {
   args: {
     sessionId: 'session-file-001',
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { ChatFilePanel },
     setup() { return { args }; },
     template: `<div style="height:600px; width:320px;"><ChatFilePanel v-bind="args" /></div>`,
@@ -35,7 +35,7 @@ export const DifferentSession: Story = {
   args: {
     sessionId: 'session-file-002',
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { ChatFilePanel },
     setup() { return { args }; },
     template: `<div style="height:600px; width:320px;"><ChatFilePanel v-bind="args" /></div>`,

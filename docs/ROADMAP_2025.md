@@ -183,7 +183,7 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 | Task | Planned | Actual | Status |
 |------|---------|--------|--------|
 | WSL2/Linux detection | ✓ | Implemented in `setup.sh` | ✅ |
-| Python 3.10+ with pyenv | ✓ | Python 3.12 (conda, backend), 3.10 (dev) | ✅ |
+| Python 3.10+ with pyenv | ✓ | Python 3.14 (conda, backend), 3.10 (dev) | ✅ |
 | Virtual environment | ✓ | venv configured | ✅ |
 | Core dependencies | ✓ | 90+ packages | ✅ |
 | Project directories | ✓ | All created | ✅ |
@@ -837,7 +837,7 @@ These features were not in the original 20-phase roadmap but were implemented ba
 
 ### Backend
 
-- **Language**: Python 3.12 (conda, backend), 3.10 (dev)
+- **Language**: Python 3.14 (conda, backend), 3.10 (dev)
 - **Framework**: FastAPI (async)
 - **LLM Interface**: Custom (8 providers + adapter registry)
 - **Vector Store**: ChromaDB

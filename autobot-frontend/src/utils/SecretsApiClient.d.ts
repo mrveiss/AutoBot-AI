@@ -11,7 +11,7 @@ export interface SecretData {
   expires_at?: string | null;
 }
 
-export interface SecretUpdateData extends Partial<SecretData> {}
+export type SecretUpdateData = Partial<SecretData>
 
 export interface TransferData {
   secret_ids: string[];

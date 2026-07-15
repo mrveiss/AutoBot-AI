@@ -134,7 +134,7 @@ Implemented comprehensive CI/CD pipeline (`.github/workflows/ci.yml`):
 - Deployment artifact generation
 
 #### Multi-Environment Testing
-- Python 3.12 support
+- Python 3.14 support
 - Ubuntu latest environment
 - Redis service integration
 - Node.js 18 for frontend

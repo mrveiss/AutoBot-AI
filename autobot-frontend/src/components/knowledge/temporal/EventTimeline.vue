@@ -126,7 +126,6 @@
 // Author: mrveiss
 
 import Icon from '@/components/ui/Icon.vue'
-import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { TemporalEvent } from '@/composables/useKnowledgeGraph'
 import { useExpansion } from '@/composables/useExpansion'

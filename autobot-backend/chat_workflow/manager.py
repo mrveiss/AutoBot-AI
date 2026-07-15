@@ -16,6 +16,7 @@ import asyncio
 import json
 import re
 import uuid
+from contextvars import ContextVar
 from typing import Any, Dict, FrozenSet, List
 
 from async_chat_workflow import WorkflowMessage
@@ -30,11 +31,23 @@ from slash_command_handler import get_slash_command_handler
 
 from .conversation import ConversationHandlerMixin
 from .llm_handler import LLMHandlerMixin, _emit_after_continuation, _emit_before_continuation
-from .models import LLMIterationContext, StreamingMessage, WorkflowSession
+from .models import (
+    LLMIterationContext,
+    StreamingMessage,
+    WorkflowSession,
+    build_governed_identity,
+)
 from .session_handler import SessionHandlerMixin
 from .tool_handler import ToolHandlerMixin
 
 logger = get_logger(__name__)
+
+# #11216 (MVA-1993): lightweight-mode cost indicator for the stream-metadata badge.
+# Held in a task-local ContextVar rather than shared instance state, so two
+# concurrent drivers of _execute_llm_continuation_loop (e.g. a real lightweight
+# chat and the internal delegation subagent) cannot clobber each other's flag.
+# Token-based set/reset also restores the caller's value for nested/inline drives.
+_current_lightweight_mode: ContextVar[bool] = ContextVar("current_lightweight_mode", default=False)
 
 # Issue #380: Module-level frozenset for terminal message types
 _TERMINAL_MESSAGE_TYPES: FrozenSet[str] = frozenset({"terminal_command", "terminal_output", "error"})
@@ -47,8 +60,21 @@ _TOOL_CALL_OPEN_RE = re.compile(r"<TOOL_\s+CALL")
 _TOOL_CALL_CLOSE_RE = re.compile(r"</TOOL_\s+CALL>")
 
 # Issue #727: Pattern to detect completed tool call tags (for hallucination prevention)
-# Matches </tool_call>, </TOOL_CALL>, and </TOOL_ CALL> (underscore variant) with optional whitespace
-_TOOL_CALL_COMPLETE_RE = re.compile(r"</\s*tool_?\s*call\s*>", re.IGNORECASE)
+# Matches </tool_call>, </TOOL_CALL>, and </TOOL_ CALL> (underscore variant).
+# #11545: the trailing `>` is optional — some models omit it (`</TOOL_CALL` +
+# newline); `\b` keeps `</tool_callable` from matching.
+_TOOL_CALL_COMPLETE_RE = re.compile(r"</\s*tool_?\s*call\b\s*>?", re.IGNORECASE)
+
+# #11552: chat models frequently TRUNCATE the close to a bare `</TOOL` (dropping
+# `_CALL`) and then hallucinate a success line. Detecting that stops the stream so
+# the fabricated prose is never shown — but a bare `</tool…` also appears in
+# legitimate prose (HTML/XML/JSX talk), and this detector scans the WHOLE response
+# with no structural anchor. So the bare close only counts as a completed tool
+# call when a well-formed opening `<TOOL_CALL …>` is already in the buffer (the
+# only way a real truncated call can occur). `\b` after `tool` keeps `</tool_call`
+# (handled above) and `</toolbox` from matching here.
+_TOOL_CALL_BARE_CLOSE_RE = re.compile(r"</\s*tool\b", re.IGNORECASE)
+_TOOL_CALL_OPENING_RE = re.compile(r"<\s*tool_?\s*call\b[^>]*>", re.IGNORECASE)
 
 # Issue #716: Patterns for internal prompts that should not be shown to users
 # These are continuation instructions that LLM sometimes echoes back
@@ -570,8 +596,9 @@ class ChatWorkflowManager(
             "used_knowledge": used_knowledge,
             "citations": self._build_source_list(used_knowledge, rag_citations, selected_model),
         }
-        # MVA-1993: Add lightweight mode indicator from instance variable or parameter
-        lw_mode = lightweight_mode_used or getattr(self, "_current_lightweight_mode", False)
+        # MVA-1993 / #11216: lightweight indicator from the explicit parameter or the
+        # task-local ContextVar (no longer shared instance state).
+        lw_mode = lightweight_mode_used or _current_lightweight_mode.get()
         if lw_mode:
             metadata["lightweight_mode_used"] = True
         streaming_msg.merge_metadata(metadata)
@@ -658,7 +685,15 @@ class ChatWorkflowManager(
         Returns:
             True if tool call is now complete, False otherwise. Issue #620.
         """
-        if not tool_call_completed and _TOOL_CALL_COMPLETE_RE.search(llm_response):
+        if tool_call_completed:
+            return tool_call_completed
+        # A well-formed close, OR (#11552) a truncated bare `</tool` close but only
+        # once a real opening tag is present — so legit prose mentioning `</tool>`
+        # never truncates a general-chat response.
+        completed = bool(_TOOL_CALL_COMPLETE_RE.search(llm_response)) or bool(
+            _TOOL_CALL_OPENING_RE.search(llm_response) and _TOOL_CALL_BARE_CLOSE_RE.search(llm_response)
+        )
+        if completed:
             logger.info(
                 "[Issue #727] Tool call completion detected - stopping frontend streaming "
                 "to prevent hallucination display. Response length: %d",
@@ -2637,8 +2672,9 @@ before summarizing.
 
         from autobot_shared.http_client import get_http_client
 
-        # MVA-1993: Store lightweight_mode_used from context for response metadata
-        self._current_lightweight_mode = ctx.context.get("lightweight_mode_used", False)
+        # MVA-1993 / #11216: store lightweight_mode_used in a task-local ContextVar
+        # (not on the shared singleton) for the response-metadata badge.
+        _lw_token = _current_lightweight_mode.set(ctx.context.get("lightweight_mode_used", False))
 
         try:
             http_client = get_http_client()
@@ -2656,8 +2692,8 @@ before summarizing.
             yield ([], [], error_msg)
 
         finally:
-            # MVA-1993: Clean up temporary flag
-            self._current_lightweight_mode = False
+            # MVA-1993 / #11216: restore the caller's task-local value (token reset).
+            _current_lightweight_mode.reset(_lw_token)
 
     async def _persist_workflow_messages(
         self,
@@ -2841,6 +2877,19 @@ before summarizing.
         if language:
             session.metadata["language"] = language
 
+        # #11261: stash caller identity so the prompt-build path can scope
+        # trajectory retrieval to this user/tenant (strict isolation, #11089).
+        if context:
+            session.metadata["user_id"] = context.get("user_id") or ""
+            session.metadata["tenant_id"] = context.get("tenant_id") or context.get("org_id") or ""
+            # #11501 T2: CEO-chat path carries company_id — used to append the
+            # board-tool teaching to the system prompt for this turn only.
+            session.metadata["company_id"] = context.get("company_id") or ""
+            # #11585: per-request model override — persisted on the session so
+            # later messages in this conversation inherit the choice.
+            if context.get("model"):
+                session.metadata["model_override"] = str(context["model"])
+
         # Issue MVA-1992: Determine if query qualifies for lightweight mode.
         # Trivial tier (GH#9050, score < trivial_threshold) is the primary
         # signal; simple tier (score < complexity_threshold) is used as a
@@ -2919,6 +2968,11 @@ before summarizing.
         if "lightweight_mode_used" in llm_params:
             merged_context["lightweight_mode_used"] = llm_params["lightweight_mode_used"]
 
+        # GH#11159/#11160: lift governed identity (agent role + work item + declared
+        # approval gates) from the request context so the tool-dispatch seam can
+        # enforce forbidden_work and approval categories.
+        agent_context, work_item_id, approval_cats = build_governed_identity(merged_context, session_id)
+
         return LLMIterationContext(
             ollama_endpoint=llm_params["endpoint"],
             selected_model=llm_params["model"],
@@ -2931,6 +2985,9 @@ before summarizing.
             initial_prompt=llm_params["prompt"],
             message=message,
             context=merged_context,
+            agent_context=agent_context,
+            work_item_id=work_item_id,
+            requires_approval_before=approval_cats,
         )
 
     async def _execute_llm_workflow(
@@ -2979,8 +3036,9 @@ before summarizing.
         # Replaces the direct verbatim-store asyncio.create_task from #5070 with
         # a Celery-backed stop hook so writes are durable and off the hot path.
         user_id = context.get("user_id") if context else None
+        tenant_id = (context.get("tenant_id") or context.get("org_id")) if context else None
         turn = len([m for m in workflow_messages if m.type == "response"])
-        asyncio.create_task(self._fire_stop_hook(session_id, message, combined_response, user_id, turn))
+        asyncio.create_task(self._fire_stop_hook(session_id, message, combined_response, user_id, turn, tenant_id))
 
     async def _fire_stop_hook(
         self,
@@ -2989,11 +3047,13 @@ before summarizing.
         assistant_response: str,
         user_id: str | None,
         turn_number: int,
+        tenant_id: str | None = None,
     ) -> None:
         """Invoke stop hook to enqueue memory tasks after turn completion.
 
         Issue #5073: Delegates to chat_workflow.stop_hook.on_turn_complete
         which enqueues write_verbatim + extract_facts Celery tasks.
+        #11261: also passes tenant_id so trajectory capture stays scoped.
         Called via asyncio.create_task — never blocks the response stream.
         """
         from chat_workflow.stop_hook import on_turn_complete
@@ -3004,6 +3064,7 @@ before summarizing.
             assistant_response=assistant_response,
             user_id=user_id,
             turn_number=turn_number,
+            tenant_id=tenant_id,
         )
 
     async def _fire_pre_compact_hook(
@@ -3104,6 +3165,27 @@ before summarizing.
         workflow_messages.append(error_msg)
         return error_msg
 
+    async def _apply_session_role(self, session_id: str, context: Dict[str, Any] | None) -> Dict[str, Any] | None:
+        """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202).
+
+        A server-set session role overrides any client-supplied ``agent_id`` so the
+        pinned agent's ``forbidden_work`` is enforced at the tool seam and cannot be
+        lifted by the caller. GH#11202: when the approval gate flag is on and the
+        session declares approval categories, they are overlaid as
+        ``requires_approval_before`` so the existing ``_enforce_work_item_approval``
+        seam gate holds matching tools BEFORE they execute — the correct
+        pre-execution stage. Backend decides; the frontend only calls the endpoints.
+        """
+        from chat_workflow.session_role import CHAT_APPROVAL_GATE_ENABLED, SessionRoleService, apply_role
+
+        svc = SessionRoleService()
+        context = apply_role(context, await svc.get_role(session_id))
+        if CHAT_APPROVAL_GATE_ENABLED:
+            categories = await svc.get_approval_categories(session_id)
+            if categories:
+                context = {**(context or {}), "requires_approval_before": categories}
+        return context
+
     async def process_message_stream(self, session_id: str, message: str, context: Dict[str, Any] | None = None):
         """Process a message via LangGraph StateGraph.
 
@@ -3113,6 +3195,9 @@ before summarizing.
 
         Falls back to legacy flow if LangGraph is unavailable.
         """
+        # GH#11186: apply the trusted per-session role once here, so both the graph
+        # and legacy paths carry the governed identity into the tool seam.
+        context = await self._apply_session_role(session_id, context)
         try:
             async for msg in self._process_via_graph(session_id, message, context):
                 yield msg

@@ -581,7 +581,7 @@ class NPUPerformanceMeasurement:
                 if config["force_device"]:
                     force_device = HardwareDevice(config["force_device"])
 
-                results, metrics = await search_engine.enhanced_search(
+                results, metrics = await search_engine.search(
                     query=query,
                     similarity_top_k=5,
                     enable_npu_acceleration=config["enable_npu"],

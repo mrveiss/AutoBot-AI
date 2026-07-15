@@ -204,7 +204,7 @@ onMounted(fetchConfig)
           d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
-      <button class="ml-auto text-red-500 hover:text-red-700" @click="error = null" aria-label="Dismiss error">
+      <button class="ml-auto text-red-500 hover:text-red-700" @click="error = null" :aria-label="$t('settings.admin.lLMSettings.dismissError')">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -235,7 +235,7 @@ onMounted(fetchConfig)
       <span v-if="testResult.latency_ms" class="text-sm opacity-75">
         ({{ testResult.latency_ms }}ms)
       </span>
-      <button class="ml-auto opacity-60 hover:opacity-100" @click="testResult = null" aria-label="Dismiss">
+      <button class="ml-auto opacity-60 hover:opacity-100" @click="testResult = null" :aria-label="$t('settings.admin.lLMSettings.dismiss')">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -257,14 +257,14 @@ onMounted(fetchConfig)
           class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
           @click="saveConfig"
         >
-          {{ saving ? 'Saving...' : 'Save' }}
+          {{ saving ? $t('settings.admin.lLMSettings.saving') : $t('settings.admin.lLMSettings.save') }}
         </button>
         <button
           :disabled="hasUnsavedChanges || applying"
           class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
           @click="applyToFleet"
         >
-          {{ applying ? 'Applying...' : 'Apply to Fleet' }}
+          {{ applying ? $t('settings.admin.lLMSettings.applying') : $t('settings.admin.lLMSettings.applyToFleet') }}
         </button>
         <button
           :disabled="loading"
@@ -321,7 +321,7 @@ onMounted(fetchConfig)
           class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
           @click="showAddProvider = !showAddProvider"
         >
-          {{ showAddProvider ? 'Cancel' : 'Add Provider' }}
+          {{ showAddProvider ? $t('settings.admin.lLMSettings.cancel') : $t('settings.admin.lLMSettings.addProvider') }}
         </button>
       </div>
 
@@ -330,22 +330,22 @@ onMounted(fetchConfig)
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.name') }}</label>
-            <input v-model="newProvider.name" type="text" placeholder="e.g. ollama, openai, anthropic"
+            <input v-model="newProvider.name" type="text" :placeholder="$t('settings.admin.lLMSettings.eGOllamaOpenaiAnthropic')"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.model') }}</label>
-            <input v-model="newProvider.model" type="text" placeholder="e.g. mistral:7b-instruct"
+            <input v-model="newProvider.model" type="text" :placeholder="$t('settings.admin.lLMSettings.eGMistral7bInstruct')"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.endpoint') }}</label>
-            <input v-model="newProvider.endpoint" type="url" placeholder="https://api.example.com/v1"
+            <input v-model="newProvider.endpoint" type="url" :placeholder="$t('settings.admin.lLMSettings.httpsApiExampleComV1')"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.aPIKey') }}</label>
-            <input v-model="newProvider.api_key" type="password" placeholder="API key (encrypted at rest)"
+            <input v-model="newProvider.api_key" type="password" :placeholder="$t('settings.admin.lLMSettings.aPIKeyEncryptedAtRest')"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono" />
           </div>
         </div>
@@ -378,7 +378,7 @@ onMounted(fetchConfig)
                 class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{{ $t('settings.admin.lLMSettings.active') }}</span>
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
                 :class="provider.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'">
-                {{ provider.enabled ? 'Enabled' : 'Disabled' }}
+                {{ provider.enabled ? $t('settings.admin.lLMSettings.enabled') : $t('settings.admin.lLMSettings.disabled') }}
               </span>
             </div>
             <button class="text-red-500 hover:text-red-700 text-sm" @click="removeProvider(idx)">{{ $t('settings.admin.lLMSettings.remove') }}</button>
@@ -391,7 +391,7 @@ onMounted(fetchConfig)
           <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
             <button class="text-sm text-blue-600 hover:text-blue-800" @click="setActiveProvider(provider.name)">{{ $t('settings.admin.lLMSettings.setActive') }}</button>
             <button class="text-sm text-gray-600 hover:text-gray-800" @click="toggleProvider(idx)">
-              {{ provider.enabled ? 'Disable' : 'Enable' }}
+              {{ provider.enabled ? $t('settings.admin.lLMSettings.disable') : $t('settings.admin.lLMSettings.enable') }}
             </button>
             <button class="text-sm text-green-600 hover:text-green-800" @click="testProvider(provider)">{{ $t('settings.admin.lLMSettings.test') }}</button>
           </div>
@@ -438,7 +438,7 @@ onMounted(fetchConfig)
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.lLMSettings.keepAlive') }}</label>
-            <input v-model="config.keep_alive" type="text" placeholder="10m"
+            <input v-model="config.keep_alive" type="text" :placeholder="$t('settings.admin.lLMSettings.egTenMinutes')"
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
               @input="markDirty" />
             <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.lLMSettings.idleTimeoutBeforeUnloading') }}</p>
@@ -484,7 +484,7 @@ onMounted(fetchConfig)
           <p class="text-xs text-gray-500">{{ $t('settings.admin.lLMSettings.requireGPUForReasonable') }}</p>
         </div>
         <div class="flex gap-2 mb-3">
-          <input v-model="newGpuModel" type="text" placeholder="e.g. mistral:7b-instruct"
+          <input v-model="newGpuModel" type="text" :placeholder="$t('settings.admin.lLMSettings.eGMistral7bInstruct')"
             class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
             @keyup.enter="addModel('gpu')" />
           <button :disabled="!newGpuModel"
@@ -511,7 +511,7 @@ onMounted(fetchConfig)
           <p class="text-xs text-gray-500">{{ $t('settings.admin.lLMSettings.lightweightModelsThatRun') }}</p>
         </div>
         <div class="flex gap-2 mb-3">
-          <input v-model="newCpuModel" type="text" placeholder="e.g. nomic-embed-text"
+          <input v-model="newCpuModel" type="text" :placeholder="$t('settings.admin.lLMSettings.eGNomicEmbedText')"
             class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
             @keyup.enter="addModel('cpu')" />
           <button :disabled="!newCpuModel"

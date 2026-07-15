@@ -6,7 +6,7 @@
 
 **Architecture:** Phase 1 tokenizes the task and scores each registered skill by token overlap across `name`, `tags`, `tools`, and `description` (weighted). Phase 2 sends the top-K candidates to AutoBot's `LLMInterface.chat_completion()` for re-ranking. The winner is enabled via `get_skill_registry().enable_skill()`.
 
-**Tech Stack:** Python 3.12, `skills.base_skill.BaseSkill`, `skills.registry.get_skill_registry`, `llm_interface_pkg.LLMInterface`, `pytest`, `unittest.mock`
+**Tech Stack:** Python 3.14, `skills.base_skill.BaseSkill`, `skills.registry.get_skill_registry`, `llm_interface_pkg.LLMInterface`, `pytest`, `unittest.mock`
 
 ---
 

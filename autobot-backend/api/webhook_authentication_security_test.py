@@ -138,7 +138,7 @@ class TestTelegramWebhookAuthentication:
         ):
             mock_gateway.normalize_message = AsyncMock(
                 return_value=type(
-                    "UnifiedMessage",
+                    "GatewayMessage",
                     (),
                     {
                         "user_id": "123",
@@ -180,14 +180,14 @@ class TestAlertManagerWebhookAuthentication:
             "groupLabels": {"alertname": "TestAlert"},
             "commonLabels": {"alertname": "TestAlert", "severity": "critical"},
             "commonAnnotations": {"summary": "Test alert"},
-            "externalURL": "http://localhost:9093",
+            "externalURL": "http://localhost:9093",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
             "alerts": [
                 {
                     "status": "firing",
                     "labels": {"alertname": "TestAlert", "severity": "critical"},
                     "annotations": {"summary": "Test alert"},
                     "startsAt": "2026-01-01T12:00:00.000Z",
-                    "generatorURL": "http://localhost:9090",
+                    "generatorURL": "http://localhost:9090",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                     "fingerprint": "test123",
                 }
             ],

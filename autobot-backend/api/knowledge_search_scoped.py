@@ -183,7 +183,7 @@ async def _synthesize_rag_response(
         scoped_results: Raw scoped_search response dict used as fallback
 
     Returns:
-        RAG-synthesized response dict, or scoped_results with rag_enhanced=False
+        RAG-synthesized response dict, or scoped_results with rag_applied=False
     """
     try:
         from agents.rag_agent import get_rag_agent
@@ -199,13 +199,13 @@ async def _synthesize_rag_response(
             "total_facts_used": len(accessible_facts[:5]),
             "user_id": user_id,
             "filtered_by_permissions": True,
-            "rag_enhanced": True,
+            "rag_applied": True,
         }
     except ImportError:
         logger.warning("RAG agent not available, returning scoped results only")
         return {
             **scoped_results,
-            "rag_enhanced": False,
+            "rag_applied": False,
             "message": "RAG agent not available",
         }
 

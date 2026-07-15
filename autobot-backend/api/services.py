@@ -326,8 +326,12 @@ async def get_vms_status(admin_check: bool = Depends(check_admin_permission)):
     operation="get_version",
     error_code_prefix="SERVICES",
 )
-async def get_version(admin_check: bool = Depends(check_admin_permission)):
+async def get_version():
     """Get application version and system information
+
+    Public: returns only version/build/environment/services_count/name (no
+    sensitive data). Called at app load before auth, so requiring admin caused
+    spurious 401s (#10750 A13).
 
     Issue #744: Requires admin authentication.
     """

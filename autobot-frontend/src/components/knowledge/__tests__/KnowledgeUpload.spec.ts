@@ -25,7 +25,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, type VueWrapper } from '@vue/test-utils'
 import { createTestingPinia } from '@pinia/testing'
 import { nextTick } from 'vue'
 
@@ -112,10 +112,10 @@ function applyMocks(
   controllerMock: ReturnType<typeof makeControllerMock>,
   progressMock: ReturnType<typeof makeUploadProgressMock>
 ) {
-  vi.mocked(useI18n).mockReturnValue({ t: stubT } as any)
-  vi.mocked(useKnowledgeController).mockReturnValue(controllerMock as any)
-  vi.mocked(useUploadProgress).mockReturnValue(progressMock as any)
-  vi.mocked(useKnowledgeIcons).mockReturnValue(makeKnowledgeBaseMock() as any)
+  vi.mocked(useI18n).mockReturnValue({ t: stubT } as unknown as ReturnType<typeof useI18n>)
+  vi.mocked(useKnowledgeController).mockReturnValue(controllerMock as unknown as ReturnType<typeof useKnowledgeController>)
+  vi.mocked(useUploadProgress).mockReturnValue(progressMock as unknown as ReturnType<typeof useUploadProgress>)
+  vi.mocked(useKnowledgeIcons).mockReturnValue(makeKnowledgeBaseMock() as unknown as ReturnType<typeof useKnowledgeIcons>)
 }
 
 // ── Mount helper ─────────────────────────────────────────────────────────────
@@ -170,7 +170,7 @@ function makeFile(name: string, sizeBytes: number, mimeType = 'text/plain'): Fil
  * element in subsequent calls within the same test (e.g. duplicate-detection
  * test calls selectFiles twice on the same wrapper).
  */
-async function selectFiles(wrapper: any, files: File[]) {
+async function selectFiles(wrapper: VueWrapper, files: File[]) {
   const fileInput = wrapper.find('input[type="file"][accept]')
   Object.defineProperty(fileInput.element, 'files', {
     value: files,

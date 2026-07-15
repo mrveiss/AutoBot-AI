@@ -195,7 +195,7 @@ describe('useTranscriberApi', () => {
   })
 
   describe('AI', () => {
-    let mockEventSource: any
+    let mockEventSource: Record<string, unknown>
 
     beforeEach(() => {
       mockEventSource = {

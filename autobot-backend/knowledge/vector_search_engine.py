@@ -119,7 +119,7 @@ class _NPUBackend:
         filters: Dict[str, Any] | None,
     ) -> List[SearchResult]:
         engine = await self._get_engine()
-        npu_results, _ = await engine.enhanced_search(
+        npu_results, _ = await engine.search(
             query=query,
             similarity_top_k=top_k,
             filters=filters,

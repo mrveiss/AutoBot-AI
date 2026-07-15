@@ -41,7 +41,7 @@ class SearchAnalytics:
         """
         Track search analytics.
 
-        Issue #281: Extracted from enhanced_search_v2 for clarity.
+        Issue #281: Extracted from advanced search for clarity.
         Issue #375: Delegates to track_analytics_ctx using
         SearchAnalyticsContext for backward compatibility.
 

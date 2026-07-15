@@ -13,7 +13,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
-from .types import MessageType, RoutingDecision, UnifiedMessage
+from .types import ChannelMessage, MessageType, RoutingDecision
 
 logger = get_logger(__name__)
 
@@ -45,7 +45,7 @@ class MessageRouter:
         """
         self._agent_router = agent_router
 
-    async def _route_non_text_message(self, message: UnifiedMessage) -> RoutingDecision | None:
+    async def _route_non_text_message(self, message: ChannelMessage) -> RoutingDecision | None:
         """Helper for route_message. Ref: #1088."""
         if self._is_system_message(message):
             return RoutingDecision(
@@ -68,7 +68,7 @@ class MessageRouter:
         return None
 
     async def _delegate_to_agent_router(
-        self, message: UnifiedMessage, context: Dict[str, Any] | None
+        self, message: ChannelMessage, context: Dict[str, Any] | None
     ) -> RoutingDecision:
         """Helper for route_message. Ref: #1088."""
         try:
@@ -92,7 +92,7 @@ class MessageRouter:
 
     async def route_message(
         self,
-        message: UnifiedMessage,
+        message: ChannelMessage,
         context: Dict[str, Any] | None = None,
     ) -> RoutingDecision:
         """
@@ -120,7 +120,7 @@ class MessageRouter:
             reasoning="Default chat agent",
         )
 
-    def _is_system_message(self, message: UnifiedMessage) -> bool:
+    def _is_system_message(self, message: ChannelMessage) -> bool:
         """Check if message is a system control message."""
         return message.message_type in {
             MessageType.SYSTEM_STATUS,

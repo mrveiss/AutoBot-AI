@@ -23,10 +23,10 @@ import pytest
 from services.gateway import (
     DiscordAdapter,
     GatewayManager,
+    GatewayMessage,
     NormalizedResponse,
     SlackAdapter,
     TeamsAdapter,
-    UnifiedMessage,
     WebAdapter,
     WhatsAppAdapter,
 )
@@ -52,7 +52,7 @@ class TestSlackAdapter:
 
         unified = await adapter.normalize_message(raw)
 
-        assert isinstance(unified, UnifiedMessage)
+        assert isinstance(unified, GatewayMessage)
         assert unified.user_id == "U123"
         assert unified.platform == "slack"
         assert unified.channel_id == "C456"
@@ -416,7 +416,7 @@ class TestGatewayManager:
     @pytest.mark.asyncio
     async def test_route_message(self, gateway):
         """Test routing message through agent."""
-        unified = UnifiedMessage(
+        unified = GatewayMessage(
             user_id="U123",
             platform="slack",
             channel_id="C456",

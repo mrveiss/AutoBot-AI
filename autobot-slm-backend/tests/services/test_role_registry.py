@@ -33,19 +33,26 @@ from unittest.mock import MagicMock as _MagicMock
 
 _SERVICES_DIR = str(_Path(__file__).parent.parent.parent / "services")
 
+_TOUCHED_KEYS = (
+    "services",
+    "services.role_registry",
+    "models",
+    "models.database",
+    "sqlalchemy",
+    "sqlalchemy.ext",
+    "sqlalchemy.ext.asyncio",
+    "sqlalchemy.orm",
+)
+
+# #11478: snapshot every key this bootstrap touches so the pre-import state
+# can be restored after the import below.  Leaking the thin models.database
+# shim broke later modules in the same directory sweep (git_tracker's
+# CodeSource import in version_checker_test).
+_SAVED_MODULES = {_key: sys.modules[_key] for _key in _TOUCHED_KEYS if _key in sys.modules}
+
 # Drop MagicMock stubs for everything role_registry transitively imports.
-for _key in list(sys.modules):
-    if _key in (
-        "services",
-        "services.role_registry",
-        "models",
-        "models.database",
-        "sqlalchemy",
-        "sqlalchemy.ext",
-        "sqlalchemy.ext.asyncio",
-        "sqlalchemy.orm",
-    ):
-        del sys.modules[_key]
+for _key in _TOUCHED_KEYS:
+    sys.modules.pop(_key, None)
 
 # Hollow real-path package for services/ so submodule imports work.
 _svc_pkg = _types.ModuleType("services")
@@ -77,6 +84,15 @@ sys.modules["models.database"] = _models_db
 setattr(_models_pkg, "database", _models_db)
 
 _rr = importlib.import_module("services.role_registry")
+
+# #11478: restore the pre-bootstrap sys.modules state.  The tests below only
+# use the _rr reference, so the shims are not needed at runtime — leaving them
+# in sys.modules poisons every module collected after this one.
+for _key in _TOUCHED_KEYS:
+    if _key in _SAVED_MODULES:
+        sys.modules[_key] = _SAVED_MODULES[_key]
+    else:
+        sys.modules.pop(_key, None)
 
 DEFAULT_ROLES = _rr.DEFAULT_ROLES
 ROLE_ANSIBLE_GROUPS = _rr.ROLE_ANSIBLE_GROUPS
@@ -159,7 +175,7 @@ def test_scheduler_in_backend_ansible_group():
 
 
 def test_scheduler_dependencies():
-    assert ROLE_DEPENDENCIES["scheduler"] == ["python312"]
+    assert ROLE_DEPENDENCIES["scheduler"] == ["python314"]
 
 
 # ---------------------------------------------------------------------------
@@ -219,6 +235,8 @@ def test_vnc_in_get_role_definitions():
         if hasattr(_rr.get_role_definitions, "__wrapped__")
         else None
     )
+    if defs_by_name is not None:
+        assert "vnc" in defs_by_name, "vnc must be returned by get_role_definitions"
     # Fallback: inspect DEFAULT_ROLES directly (get_role_definitions is async)
     detectable = {r["name"] for r in DEFAULT_ROLES if r.get("target_path") or r.get("systemd_service")}
     assert "vnc" in detectable, "vnc must be in the detectable role set (has target_path or systemd_service)"
@@ -240,3 +258,74 @@ def test_optional_roles_are_not_required():
     for name in optional_names:
         role = _role(name)
         assert role["required"] is False, f"{name} should be optional (required=False)"
+
+
+# ---------------------------------------------------------------------------
+# seed_default_roles upsert logic (#11132)
+#
+# The SLM conftest stubs sqlalchemy, so a real-DB test isn't feasible here; this
+# drives seed_default_roles against a mock async session to prove it refreshes a
+# stale registry-owned field on an already-seeded row (the insert-only bug).
+# ---------------------------------------------------------------------------
+import asyncio as _asyncio
+from unittest.mock import AsyncMock as _AsyncMock
+
+
+class _Result:
+    def __init__(self, obj):
+        self._obj = obj
+
+    def scalar_one_or_none(self):
+        return self._obj
+
+
+def test_seed_default_roles_upserts_stale_field_on_existing_row():
+    target_idx, target = next((i, r) for i, r in enumerate(DEFAULT_ROLES) if r.get("post_sync_cmd"))
+    existing = _types.SimpleNamespace(**dict(target))
+    existing.post_sync_cmd = "STALE_BROKEN_CMD"
+    existing.source_paths = ["WRONG/"]
+
+    # execute() is called once per role in order → existing row only at the target index.
+    results = [_Result(existing if i == target_idx else None) for i in range(len(DEFAULT_ROLES))]
+    db = _AsyncMock()
+    db.execute = _AsyncMock(side_effect=results)
+    db.commit = _AsyncMock()
+    db.add = _MagicMock()
+
+    created = _asyncio.run(_rr.seed_default_roles(db))
+
+    # Stale registry-owned fields refreshed from DEFAULT_ROLES; created counts new rows only.
+    assert existing.post_sync_cmd == target["post_sync_cmd"]
+    assert existing.source_paths == target["source_paths"]
+    assert created == len(DEFAULT_ROLES) - 1
+    db.commit.assert_awaited()
+
+
+def test_seed_default_roles_no_write_when_existing_rows_match_registry():
+    # Every role already exists with registry-identical values → no commit, created == 0.
+    existing_rows = [_types.SimpleNamespace(**dict(r)) for r in DEFAULT_ROLES]
+    db = _AsyncMock()
+    db.execute = _AsyncMock(side_effect=[_Result(row) for row in existing_rows])
+    db.commit = _AsyncMock()
+    db.add = _MagicMock()
+
+    created = _asyncio.run(_rr.seed_default_roles(db))
+
+    assert created == 0
+    db.commit.assert_not_awaited()
+    db.add.assert_not_called()
+
+
+def test_backend_post_sync_rewrites_root_requirements_not_strips_it():
+    """The backend post_sync_cmd must REWRITE `-r ../requirements.txt` to the
+    code_source path (so the root runtime deps install on deploy), not strip it
+    like the old `grep -Ev '...|^-r'` did — #11135."""
+    backend = next(r for r in DEFAULT_ROLES if r["name"] == "backend")
+    cmd = backend["post_sync_cmd"]
+    # rewrite present (sed maps the sibling include to code_source)
+    assert "s|^-r \\.\\./requirements.txt|-r " in cmd
+    assert "/code_source/requirements.txt|" in cmd
+    # and the grep no longer drops -r lines
+    assert "^-r" not in cmd.split("| sed")[0]
+    # the -c constraints rewrite (#11117) is preserved
+    assert "s|^-c \\.\\./constraints/|-c " in cmd

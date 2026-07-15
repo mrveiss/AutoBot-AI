@@ -85,7 +85,7 @@ import { useVncConnection } from '@/composables/useVncConnection'
 import { usePollingJob } from '@/composables/usePollingJob'
 
 const { t } = useI18n()
-const { loading, error, settings, metrics, loadSettings, updateSettings, loadMetrics, setQualityPreset } = useVncConnection()
+const { error, settings, metrics, loadSettings, updateSettings, loadMetrics, setQualityPreset } = useVncConnection()
 
 const { start: startMetricsPolling } = usePollingJob<void>(
   async () => { await loadMetrics() },

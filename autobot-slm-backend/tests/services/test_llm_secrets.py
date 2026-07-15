@@ -5,7 +5,7 @@
 """Unit tests for LLM provider api_key vault integration (#10503).
 
 Loads ``llm_secrets.py`` directly via importlib, stubs out the
-``unified_vault_client`` module, and drives the public functions in isolation
+``vault_client`` module, and drives the public functions in isolation
 so no live autobot-backend or DB is required.
 
 Stub strategy: the lazy imports inside llm_secrets.py resolve from
@@ -27,7 +27,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 _BACKEND = Path(__file__).parent.parent.parent
-_UVC_KEY = "user_management.services.unified_vault_client"
+_UVC_KEY = "user_management.services.vault_client"
 
 # ---------------------------------------------------------------------------
 # One-time sys.modules stubs (idempotent — safe to run alongside other test
@@ -55,8 +55,8 @@ for _attr, _default in [
     ("vault_read", AsyncMock()),
     ("vault_delete", AsyncMock()),
     ("vault_list", AsyncMock()),
-    ("UnifiedVaultClientError", Exception),
-    ("UnifiedVaultSecretNotFound", Exception),
+    ("VaultClientError", Exception),
+    ("VaultSecretNotFound", Exception),
     ("is_configured", lambda: False),
 ]:
     if not hasattr(_live, _attr):
@@ -99,7 +99,7 @@ _llm_sec = _load_llm_secrets()
 
 @pytest.fixture()
 def uvc():
-    """Return the live unified_vault_client stub from sys.modules."""
+    """Return the live vault_client stub from sys.modules."""
     return sys.modules[_UVC_KEY]
 
 
@@ -161,8 +161,8 @@ class TestStoreProviderApiKey:
     @pytest.mark.asyncio
     async def test_vault_error_propagates(self, uvc, monkeypatch):
         monkeypatch.setattr(uvc, "is_configured", lambda: True)
-        monkeypatch.setattr(uvc, "vault_create", AsyncMock(side_effect=uvc.UnifiedVaultClientError("boom")))
-        with pytest.raises(uvc.UnifiedVaultClientError):
+        monkeypatch.setattr(uvc, "vault_create", AsyncMock(side_effect=uvc.VaultClientError("boom")))
+        with pytest.raises(uvc.VaultClientError):
             await _llm_sec.store_provider_api_key("openai", _provider("openai", api_key="sk-x"))
 
 
@@ -199,7 +199,7 @@ class TestRetrieveProviderApiKey:
     async def test_vault_not_found_falls_back_to_legacy(self, uvc, monkeypatch):
         vid = uuid.uuid4()
         monkeypatch.setattr(uvc, "is_configured", lambda: True)
-        monkeypatch.setattr(uvc, "vault_read", AsyncMock(side_effect=uvc.UnifiedVaultSecretNotFound("gone")))
+        monkeypatch.setattr(uvc, "vault_read", AsyncMock(side_effect=uvc.VaultSecretNotFound("gone")))
         monkeypatch.setattr(uvc, "vault_list", AsyncMock(return_value=[]))
         d = {"name": "openai", "api_key_vault_id": str(vid), "api_key": "ENC[fallback]"}
         result = await _llm_sec.retrieve_provider_api_key("openai", d)

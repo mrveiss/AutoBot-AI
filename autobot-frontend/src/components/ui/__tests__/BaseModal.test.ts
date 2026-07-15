@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import BaseModal from '../BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 
 const i18n = createI18n({
   legacy: false,
@@ -66,7 +66,7 @@ describe('BaseModal focus trap (#5016)', () => {
     await flushPromises()
     const dialog = wrapper.find('[role="dialog"]')
     expect(dialog.exists()).toBe(true)
-    expect(dialog.find('.close-btn').exists()).toBe(true)
+    expect(dialog.find('.aui-dialog-close').exists()).toBe(true)
     expect(dialog.find('.body-btn').exists()).toBe(true)
     wrapper.unmount()
   })

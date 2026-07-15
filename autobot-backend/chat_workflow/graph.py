@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Tuple
 from langchain_core.runnables import RunnableConfig
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
+from autobot_shared.ssot_config import config as _ssot_config
 
 try:
     from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -118,6 +118,10 @@ class ChatState(TypedDict, total=False):
     reflection_count: int
     reflection_history: List[Dict[str, Any]]
     rlm_refinement_hint: str
+
+    # Inline AgentResponseJudge (#10599, §3.3) — how many times the judge
+    # has already triggered a regeneration for this turn (capped at 1).
+    judge_count: int
 
     # Tool-call loop detection (#3254)
     # Each entry is a frozenset fingerprint of (tool_name, args_hash) for one iteration.
@@ -380,7 +384,7 @@ def _build_llm_iteration_context(state: ChatState):
     ``initial_prompt`` via ``_inject_mid_conversation_warning``, never via a
     ``SystemMessage``.  See that helper's docstring for the full rationale.
     """
-    from .models import LLMIterationContext
+    from .models import LLMIterationContext, build_governed_identity
 
     initial_prompt = state["llm_params"].get("initial_prompt") or ""
 
@@ -397,6 +401,11 @@ def _build_llm_iteration_context(state: ChatState):
     if loop_warning:
         initial_prompt = _inject_mid_conversation_warning(loop_warning, initial_prompt)
 
+    # GH#11159/#11160: carry governed identity from the request context bag.
+    agent_context, work_item_id, approval_cats = build_governed_identity(
+        state.get("context", {}) or {}, state["session_id"]
+    )
+
     return LLMIterationContext(
         ollama_endpoint=state["llm_params"]["ollama_endpoint"],
         selected_model=state["llm_params"]["selected_model"],
@@ -409,6 +418,15 @@ def _build_llm_iteration_context(state: ChatState):
         system_prompt=state["llm_params"].get("system_prompt"),
         initial_prompt=initial_prompt,
         message=state["user_message"],
+        # #11552: thread the request context (company_id, user_id, …) into the
+        # iteration context so the tool-dispatch seam is company-scoped in the
+        # GRAPH path too. The legacy _create_llm_iteration_context already passes
+        # context=; without it here, ctx.context was {} and company-scoped tools
+        # (e.g. LLC create_task, #11501) could never resolve company_id.
+        context=dict(state.get("context", {}) or {}),
+        agent_context=agent_context,
+        work_item_id=work_item_id,
+        requires_approval_before=approval_cats,
     )
 
 
@@ -608,6 +626,91 @@ async def reflect_on_response(state: ChatState, config: RunnableConfig) -> dict:
         "reflection_history": history,
         "rlm_refinement_hint": result.refinement_hint,
     }
+
+
+async def inline_judge_response(state: ChatState, config: RunnableConfig) -> dict:
+    """Optional AgentResponseJudge gate on chat replies (#10599, §3.3).
+
+    Controlled by ``AUTOBOT_CHAT_INLINE_JUDGE`` (default OFF).  When enabled
+    the judge scores the latest LLM response.  If the overall_score is below
+    ``AUTOBOT_CHAT_INLINE_JUDGE_THRESHOLD`` and the judge hasn't already
+    triggered a regeneration for this turn (``judge_count == 0``), it injects
+    a refinement hint into state so ``generate_response`` can retry once.
+    The node is a no-op when the flag is off, ensuring zero added latency in
+    the default configuration.
+    """
+    if not _ssot_config.chat_inline_judge_enabled:
+        return {}
+
+    llm_response = state.get("llm_response", "")
+    if not llm_response:
+        return {}
+
+    judge_count = state.get("judge_count", 0)
+    if judge_count > 0:
+        # Already triggered one regeneration this turn — advance the count and
+        # clear the refinement hint so route_after_judge routes to persist.
+        # Leaving the hint set with judge_count stuck at 1 made route_after_judge
+        # loop back to generate_response forever (GraphRecursionError) when RLM
+        # reflection was off and never cleared it (#11013).
+        return {"judge_count": judge_count + 1, "rlm_refinement_hint": ""}
+
+    try:
+        from judges.agent_response_judge import AgentResponseJudge
+
+        judge = AgentResponseJudge()
+        request_ctx = {"message": state.get("user_message", "")}
+        response_ctx = {"content": llm_response}
+        is_good, score, summary = await judge.assess_response_quality(
+            request=request_ctx,
+            response=response_ctx,
+            agent_type="chat",
+            context={"knowledge_used": state.get("used_knowledge", False)},
+        )
+
+        logger.info(
+            "[inline_judge] score=%.2f is_good=%s judge_count=%d summary=%s",
+            score,
+            is_good,
+            judge_count,
+            summary,
+        )
+
+        if is_good:
+            return {"judge_count": judge_count + 1}
+
+        threshold = _ssot_config.chat_inline_judge_threshold
+        if score < threshold:
+            hint = (
+                f"[Judge feedback] Your previous response scored {score:.2f} "
+                f"(threshold {threshold:.2f}).  Please revise for accuracy and "
+                "relevance, grounding your answer in the provided sources."
+            )
+            return {
+                "judge_count": judge_count + 1,
+                "rlm_refinement_hint": hint,
+            }
+
+        return {"judge_count": judge_count + 1}
+
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[inline_judge] judge call failed (non-fatal): %s", exc)
+        return {}
+
+
+def route_after_judge(state: ChatState) -> str:
+    """Route after inline judge (#10599).
+
+    If the judge set a refinement hint and hasn't exhausted its one-shot
+    budget, loop back to generate_response.  Otherwise proceed to persist.
+    """
+    hint = state.get("rlm_refinement_hint", "")
+    judge_count = state.get("judge_count", 0)
+    if hint and judge_count == 1:
+        # judge_count==1 means the hint was just set on this pass; route back
+        # to generate_response for exactly one regeneration.
+        return "generate_response"
+    return "persist_conversation"
 
 
 async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
@@ -1087,13 +1190,14 @@ def route_after_reflection(state: ChatState) -> str:
     """Route after RLM self-reflection (#1373).
 
     If the evaluator returned REFINE and the reflection budget isn't
-    exhausted, loop back to generate_response.  Otherwise persist.
+    exhausted, loop back to generate_response.  Otherwise run the optional
+    inline judge (#10599) before persisting.
     """
     from rlm.types import RLMConfig
 
     history = state.get("reflection_history", [])
     if not history:
-        return "persist_conversation"
+        return "inline_judge_response"
 
     latest = history[-1]
     verdict = latest.get("verdict", "ACCEPT")
@@ -1104,7 +1208,7 @@ def route_after_reflection(state: ChatState) -> str:
 
     if verdict == "REFINE" and reflection_count < max_reflections:
         return "generate_response"
-    return "persist_conversation"
+    return "inline_judge_response"
 
 
 def route_after_execution(state: ChatState) -> str:
@@ -1139,8 +1243,8 @@ def route_after_execution(state: ChatState) -> str:
 def build_chat_graph() -> StateGraph:
     """Build the chat workflow StateGraph.
 
-    Graph topology (#1718 — agentic search node; #1373 — RLM reflection loop;
-    #3254 — content-aware tool-call loop detection):
+    Graph topology (#1718 — agentic search; #1373 — RLM reflection;
+    #3254 — loop detection; #10599 — inline judge):
         START -> initialize_session -> detect_intent
             -> [END if special intent]
             -> prepare_llm -> perform_knowledge_search -> generate_response
@@ -1149,7 +1253,10 @@ def build_chat_graph() -> StateGraph:
                 -> [reflect_on_response if no tools]
             reflect_on_response
                 -> [generate_response if REFINE and budget remains]
-                -> [persist_conversation if ACCEPT or budget exhausted]
+                -> [inline_judge_response otherwise]
+            inline_judge_response  (#10599 — no-op when AUTOBOT_CHAT_INLINE_JUDGE=false)
+                -> [generate_response if score below threshold and first attempt]
+                -> [persist_conversation otherwise]
             execute_tools
                 -> [generate_response if should_continue AND loop_count < threshold]
                 -> [persist_conversation if done or loop aborted (#3254)]
@@ -1164,6 +1271,7 @@ def build_chat_graph() -> StateGraph:
     builder.add_node("perform_knowledge_search", perform_knowledge_search)  # Issue #1718
     builder.add_node("generate_response", generate_response)
     builder.add_node("reflect_on_response", reflect_on_response)
+    builder.add_node("inline_judge_response", inline_judge_response)  # Issue #10599
     builder.add_node("request_approval", request_approval)
     builder.add_node("execute_tools", execute_tools)
     builder.add_node("persist_conversation", persist_conversation)
@@ -1176,6 +1284,7 @@ def build_chat_graph() -> StateGraph:
     builder.add_edge("perform_knowledge_search", "generate_response")  # Issue #1718
     builder.add_conditional_edges("generate_response", route_after_generation)
     builder.add_conditional_edges("reflect_on_response", route_after_reflection)
+    builder.add_conditional_edges("inline_judge_response", route_after_judge)  # Issue #10599
     builder.add_edge("request_approval", "execute_tools")
     builder.add_conditional_edges("execute_tools", route_after_execution)
     builder.add_edge("persist_conversation", END)
@@ -1208,8 +1317,8 @@ async def get_redis_checkpointer() -> "AsyncRedisSaver":  # type: ignore[return]
         _REDIS_URI = f"redis://{redis_host}:{redis_port}"
         ttl_minutes = ssot.redis.checkpoint_ttl_minutes
     except Exception:
-        redis_host = config.redis_host
-        redis_port = config.redis_port
+        redis_host = _ssot_config.redis_host
+        redis_port = _ssot_config.redis_port
         _REDIS_URI = f"redis://{redis_host}:{redis_port}"
         logger.warning(
             "SSOT config unavailable, using fallback Redis URI: %s",

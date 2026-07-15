@@ -19,6 +19,7 @@ import aiofiles
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import optional_import
 from constants.network_constants import NetworkConstants
+from llm_shared.types import LLMType
 from services.llm_service import get_llm_service
 from type_defs.common import Metadata
 
@@ -1346,7 +1347,7 @@ async def detect_hardcodes_and_debt_with_llm(
             language=language, file_path=file_path, code_snippet=code_snippet[:800]
         )
         messages = [{"role": "user", "content": prompt}]
-        response = await llm.chat(messages, llm_type="task")
+        response = await llm.chat(messages, llm_type=LLMType.TASK)
         result = _parse_llm_json_response(response.content.strip())
         return result if result else empty_result
     except Exception as e:

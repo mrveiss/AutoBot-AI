@@ -56,7 +56,9 @@ class IncrementalTrainer:
         # Derive a sync sessionmaker from the canonical async engine's sync_engine
         # so we share the same connection pool instead of creating a second engine (#10570).
         # IncrementalTrainer.update_from_feedback is called from sync background tasks.
-        self.SessionLocal = sessionmaker(bind=get_async_engine().sync_engine)
+        self.SessionLocal = sessionmaker(  # canonical: ignore py-adhoc-db-engine
+            bind=get_async_engine().sync_engine  # sync wrapper over canonical engine (sync bg-task context)
+        )
 
         # Incremental learning parameters
         self.learning_rate = 1e-5  # Lower LR for fine-tuning

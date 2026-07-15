@@ -46,18 +46,23 @@ async def test_generate_ai_response_returns_model_content_on_success(make_llm_re
     llm_service = AsyncMock()
     llm_service.chat = AsyncMock(return_value=make_llm_response(content="Hello, world!", error=None))
 
-    result = await _generate_ai_response(
+    ai_response, llm_response = await _generate_ai_response(
         llm_service=llm_service,
         llm_context=[{"role": "user", "content": "hi"}],
         session_id="s-123",
         request_id="r-abc",
     )
 
-    assert result == {"content": "Hello, world!", "role": "assistant"}
+    # #9043: helper returns (dict, LLMResponse) for token tracking.
+    assert ai_response == {"content": "Hello, world!", "role": "assistant"}
+    assert llm_response is not None
     # Pin the call shape — confirms migrated args reach LLMService.chat correctly.
+    # #11585: model_name/provider_name default to None (no per-request override).
     llm_service.chat.assert_awaited_once_with(
         messages=[{"role": "user", "content": "hi"}],
         conversation_id="s-123",
+        provider_name=None,
+        model_name=None,
         request_id="r-abc",
     )
 
@@ -70,17 +75,18 @@ async def test_generate_ai_response_falls_back_when_llm_returns_error(make_llm_r
     llm_service = AsyncMock()
     llm_service.chat = AsyncMock(return_value=make_llm_response(content="", error="rate limit exceeded"))
 
-    result = await _generate_ai_response(
+    ai_response, llm_response = await _generate_ai_response(
         llm_service=llm_service,
         llm_context=[{"role": "user", "content": "hi"}],
         session_id="s-1",
         request_id="r-1",
     )
 
-    assert result["role"] == "assistant"
+    assert ai_response["role"] == "assistant"
+    assert llm_response is None
     # Must NOT leak the underlying error message to the user — fallback string only.
-    assert "I encountered an error" in result["content"]
-    assert "rate limit" not in result["content"]
+    assert "I encountered an error" in ai_response["content"]
+    assert "rate limit" not in ai_response["content"]
 
 
 @pytest.mark.asyncio
@@ -91,17 +97,18 @@ async def test_generate_ai_response_falls_back_when_chat_raises(make_llm_respons
     llm_service = AsyncMock()
     llm_service.chat = AsyncMock(side_effect=RuntimeError("boom"))
 
-    result = await _generate_ai_response(
+    ai_response, llm_response = await _generate_ai_response(
         llm_service=llm_service,
         llm_context=[{"role": "user", "content": "hi"}],
         session_id="s-1",
         request_id="r-1",
     )
 
-    assert result["role"] == "assistant"
-    assert "I encountered an error" in result["content"]
+    assert ai_response["role"] == "assistant"
+    assert llm_response is None
+    assert "I encountered an error" in ai_response["content"]
     # Underlying exception detail must not surface in user-facing string.
-    assert "boom" not in result["content"]
+    assert "boom" not in ai_response["content"]
 
 
 @pytest.mark.asyncio
@@ -117,14 +124,14 @@ async def test_generate_ai_response_does_not_call_legacy_generate_response(make_
     # If a future caller hits this attribute, the test fails — locks the migration.
     llm_service.generate_response = AsyncMock(side_effect=AssertionError("legacy method"))
 
-    result = await _generate_ai_response(
+    ai_response, _llm_response = await _generate_ai_response(
         llm_service=llm_service,
         llm_context=[{"role": "user", "content": "hi"}],
         session_id="s-1",
         request_id="r-1",
     )
 
-    assert result["content"] == "ok"
+    assert ai_response["content"] == "ok"
     llm_service.generate_response.assert_not_awaited()
     llm_service.chat.assert_awaited_once()
 

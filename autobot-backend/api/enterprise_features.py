@@ -66,7 +66,7 @@ def _build_enterprise_feature_details(status: dict) -> dict:
         "web_research_orchestration": {
             "enabled": status["capabilities"]["research_orchestration"],
             "description": "Advanced web research with librarian agents",
-            "impact": "Enhanced knowledge discovery and research capabilities",
+            "impact": "Knowledge discovery and research capabilities",
         },
         "cross_vm_load_balancing": {
             "enabled": status["capabilities"]["load_balancing"],

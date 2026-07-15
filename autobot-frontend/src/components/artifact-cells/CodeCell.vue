@@ -54,6 +54,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
+import type { HLJSApi } from 'highlight.js'
 
 const { t } = useI18n()
 
@@ -84,7 +85,7 @@ const cellId = ref<string>(`code-${crypto.randomUUID()}`)
 const highlightedCode = ref<string>('')
 const copyStatus = ref<string>('')
 const copyTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
-let hljs: any = null
+let hljs: HLJSApi | null = null
 
 // Computed
 const rawCode = computed(() => {
@@ -136,7 +137,7 @@ const language = computed(() => {
 // Methods
 const loadHighlightJs = async () => {
   if (!hljs) {
-    hljs = await import('highlight.js')
+    hljs = (await import('highlight.js')).default
   }
   return hljs
 }
@@ -169,7 +170,7 @@ const highlightCode = async () => {
       ALLOWED_TAGS: ['span', 'br'],
       ALLOWED_ATTR: ['class']
     })
-  } catch (error) {
+  } catch {
     // Fallback to plain text if highlighting fails
     highlightedCode.value = DOMPurify.sanitize(rawCode.value, {
       ALLOWED_TAGS: [],
@@ -203,7 +204,7 @@ const copyCode = async () => {
     copyTimeout.value = setTimeout(() => {
       copyStatus.value = ''
     }, 2000)
-  } catch (error) {
+  } catch {
     copyStatus.value = t('code.copyFailed', 'Failed to copy')
     copyTimeout.value = setTimeout(() => {
       copyStatus.value = ''

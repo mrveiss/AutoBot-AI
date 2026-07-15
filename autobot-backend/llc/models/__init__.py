@@ -25,6 +25,7 @@ from .enums import (
     BoardType,
     ContextMode,
     CoWorkerType,
+    FindingProposalStatus,
     HeartbeatInvocationSource,
     LLCAgentStatus,
     LLCCompanyStatus,
@@ -39,6 +40,7 @@ from .enums import (
     WorkItemType,
     WorkProductType,
 )
+from .finding_proposal import LLCFindingProposal
 from .goal import GoalLevel, GoalStatus, LLCGoal
 from .heartbeat_run import LLCHeartbeatRun
 from .membership import LLCCompanyMembership
@@ -60,6 +62,8 @@ __all__ = [
     "ContextMode",
     "CoWorkerType",
     "CompanyAncestor",
+    "FindingProposalStatus",
+    "LLCFindingProposal",
     "CompanyCreate",
     "CompanyRead",
     "CompanyTreeNode",

@@ -125,6 +125,7 @@ const emit = defineEmits<{
   (e: 'saved', doc: AIDocument): void
   (e: 'refined', doc: AIDocument): void
   (e: 'error', message: string): void
+  (e: 'load-error', message: string): void
 }>()
 
 // ---------------------------------------------------------------------------
@@ -162,7 +163,9 @@ watch(
       isDirty.value = false
     } catch (err) {
       logger.error('Failed to load document', err)
-      emit('error', composable.error.value ?? 'Failed to load document')
+      const msg = composable.error.value ?? 'Failed to load document'
+      emit('error', msg)
+      emit('load-error', msg)
     }
   },
   { immediate: true }
@@ -214,7 +217,7 @@ async function saveChanges() {
     localDoc.value = updated
     isDirty.value = false
     emit('saved', updated)
-  } catch (err) {
+  } catch {
     emit('error', composable.error.value ?? 'Save failed')
   }
 }
@@ -236,7 +239,7 @@ async function submitRefine() {
     refineInstruction.value = ''
     showRefinePanel.value = false
     emit('refined', refined)
-  } catch (err) {
+  } catch {
     emit('error', composable.error.value ?? 'Refinement failed')
   }
 }
@@ -260,8 +263,8 @@ const formattedUpdatedAt = computed(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--color-background, #1e1e1e);
-  color: var(--color-text, #e0e0e0);
+  background: var(--bg-primary, #1e1e1e);
+  color: var(--text-primary, #e0e0e0);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
@@ -271,7 +274,7 @@ const formattedUpdatedAt = computed(() => {
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-3) var(--spacing-4);
-  border-bottom: 1px solid var(--color-border, #333);
+  border-bottom: 1px solid var(--border-default, #333);
   gap: var(--spacing-3);
 }
 
@@ -334,7 +337,7 @@ const formattedUpdatedAt = computed(() => {
 
 .refine-panel {
   padding: var(--spacing-3) var(--spacing-4);
-  border-bottom: 1px solid var(--color-border, #333);
+  border-bottom: 1px solid var(--border-default, #333);
   background: var(--color-background-secondary, #252525);
   display: flex;
   flex-direction: column;
@@ -346,7 +349,7 @@ const formattedUpdatedAt = computed(() => {
   resize: vertical;
   background: var(--color-background-input, #2a2a2a);
   color: inherit;
-  border: 1px solid var(--color-border, #444);
+  border: 1px solid var(--border-default, #444);
   border-radius: var(--radius-default);
   padding: var(--spacing-2);
   font-size: 0.9rem;
@@ -399,8 +402,8 @@ const formattedUpdatedAt = computed(() => {
   gap: var(--spacing-4);
   padding: var(--spacing-1-5) var(--spacing-4);
   font-size: var(--text-xs);
-  color: var(--color-text-muted, #888);
-  border-top: 1px solid var(--color-border, #333);
+  color: var(--text-muted, #888);
+  border-top: 1px solid var(--border-default, #333);
 }
 
 .source-facts-count {

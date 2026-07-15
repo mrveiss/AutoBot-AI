@@ -125,7 +125,7 @@ async def migrate_pg_legacy_secrets(
 
     report = MigrationReport()
     # Filter "not yet envelope-backed" in Python (``sealed_value is None``) to match
-    # exactly how UnifiedSecretsService detects legacy rows. A SQL ``sealed_value IS
+    # exactly how EnvelopeSecretsService detects legacy rows. A SQL ``sealed_value IS
     # NULL`` would miss rows whose JSONB holds JSON ``null`` (not SQL NULL) — SQLAlchemy's
     # JSONB defaults to none_as_null=False, so an explicit None persists as JSON null.
     rows = (await session.execute(select(Secret).where(Secret.encrypted_value.isnot(None)))).scalars().all()

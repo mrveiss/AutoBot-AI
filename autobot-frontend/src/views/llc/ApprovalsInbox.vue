@@ -5,7 +5,7 @@
   <div class="approvals-inbox">
     <div class="inbox-header">
       <div class="header-left">
-        <h2 class="view-title">Approvals Inbox</h2>
+        <h2 class="view-title">{{ $t('llc.approvals.title') }}</h2>
         <span v-if="pendingCount > 0" class="pending-badge">{{ pendingCount }}</span>
       </div>
       <div class="header-tabs">
@@ -14,40 +14,40 @@
           :class="{ active: activeTab === 'pending' }"
           @click="activeTab = 'pending'"
         >
-          Pending
+          {{ $t('llc.approvals.tabPending') }}
         </button>
         <button
           class="tab-btn"
           :class="{ active: activeTab === 'history' }"
           @click="activeTab = 'history'"
         >
-          History
+          {{ $t('llc.approvals.tabHistory') }}
         </button>
       </div>
     </div>
 
-    <div v-if="!companyId" class="state-msg">Select a company to view approvals.</div>
+    <div v-if="!companyId" class="state-msg">{{ $t('llc.approvals.selectCompany') }}</div>
 
     <template v-else>
       <!-- Filters -->
       <div class="inbox-filters">
         <select v-model="filters.type" class="filter-select">
-          <option value="">All Types</option>
+          <option value="">{{ $t('llc.approvals.allTypes') }}</option>
           <option v-for="t in APPROVAL_TYPES" :key="t" :value="t">{{ formatType(t) }}</option>
         </select>
         <select v-if="activeTab === 'history'" v-model="filters.status" class="filter-select">
-          <option value="">All Statuses</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-          <option value="changes_requested">Changes Requested</option>
+          <option value="">{{ $t('llc.approvals.allStatuses') }}</option>
+          <option value="approved">{{ $t('llc.approvals.statusApproved') }}</option>
+          <option value="rejected">{{ $t('llc.approvals.statusRejected') }}</option>
+          <option value="changes_requested">{{ $t('llc.approvals.statusChangesRequested') }}</option>
         </select>
-        <input v-model="filters.search" class="filter-search" placeholder="Search..." type="text" />
+        <input v-model="filters.search" class="filter-search" :placeholder="$t('llc.approvals.searchPlaceholder')" type="text" />
       </div>
 
       <!-- Pending Tab -->
       <div v-if="activeTab === 'pending'" class="approval-list">
-        <div v-if="isLoading" class="state-msg">Loading...</div>
-        <div v-else-if="filteredPending.length === 0" class="state-msg">No pending approvals.</div>
+        <div v-if="isLoading" class="state-msg">{{ $t('llc.approvals.loading') }}</div>
+        <div v-else-if="filteredPending.length === 0" class="state-msg">{{ $t('llc.approvals.noPending') }}</div>
         <div
           v-for="item in filteredPending"
           :key="item.id"
@@ -55,13 +55,13 @@
         >
           <div class="card-header">
             <span class="type-badge" :class="`type-${item.type}`">{{ formatType(item.type) }}</span>
-            <span class="card-meta">Requested by: {{ item.requested_by_agent_id }}</span>
+            <span class="card-meta">{{ $t('llc.approvals.requestedBy', { id: item.requested_by_agent_id }) }}</span>
             <span class="card-meta">{{ formatDate(item.created_at) }}</span>
           </div>
 
           <div class="payload-section">
             <button class="toggle-payload" @click="togglePayload(item.id)">
-              {{ expandedPayloads.has(item.id) ? 'Hide' : 'Show' }} Payload
+              {{ expandedPayloads.has(item.id) ? $t('llc.approvals.hidePayload') : $t('llc.approvals.showPayload') }}
             </button>
             <pre v-if="expandedPayloads.has(item.id)" class="payload-json">{{ formatJson(item.payload) }}</pre>
           </div>
@@ -72,21 +72,21 @@
               :disabled="processing.has(item.id)"
               @click="decide(item.id, 'approved')"
             >
-              Approve
+              {{ $t('llc.approvals.approve') }}
             </button>
             <button
               class="btn-reject"
               :disabled="processing.has(item.id)"
               @click="openDecisionNote(item.id, 'rejected')"
             >
-              Reject
+              {{ $t('llc.approvals.reject') }}
             </button>
             <button
               class="btn-changes"
               :disabled="processing.has(item.id)"
               @click="openDecisionNote(item.id, 'changes_requested')"
             >
-              Request Changes
+              {{ $t('llc.approvals.requestChanges') }}
             </button>
           </div>
 
@@ -94,17 +94,17 @@
             <textarea
               v-model="decisionNote"
               class="note-textarea"
-              placeholder="Decision note (required)..."
+              :placeholder="$t('llc.approvals.notePlaceholder')"
               rows="3"
             />
             <div class="note-actions">
-              <button class="btn-secondary" @click="noteTarget = null">Cancel</button>
+              <button class="btn-secondary" @click="noteTarget = null">{{ $t('llc.approvals.cancel') }}</button>
               <button
                 class="btn-primary"
                 :disabled="!decisionNote.trim() || processing.has(item.id)"
                 @click="submitWithNote(item.id)"
               >
-                Confirm
+                {{ $t('llc.approvals.confirm') }}
               </button>
             </div>
           </div>
@@ -113,8 +113,8 @@
 
       <!-- History Tab -->
       <div v-if="activeTab === 'history'" class="approval-list">
-        <div v-if="isLoading" class="state-msg">Loading...</div>
-        <div v-else-if="filteredHistory.length === 0" class="state-msg">No history found.</div>
+        <div v-if="isLoading" class="state-msg">{{ $t('llc.approvals.loading') }}</div>
+        <div v-else-if="filteredHistory.length === 0" class="state-msg">{{ $t('llc.approvals.noHistory') }}</div>
         <div
           v-for="item in filteredHistory"
           :key="item.id"
@@ -123,12 +123,12 @@
           <div class="card-header">
             <span class="type-badge" :class="`type-${item.type}`">{{ formatType(item.type) }}</span>
             <span class="status-badge" :class="`status-${item.status}`">{{ formatType(item.status) }}</span>
-            <span class="card-meta">Decided by: {{ item.decided_by_agent_id ?? '—' }}</span>
+            <span class="card-meta">{{ $t('llc.approvals.decidedBy', { id: item.decided_by_agent_id ?? '—' }) }}</span>
             <span class="card-meta">{{ formatDate(item.decided_at ?? item.updated_at) }}</span>
           </div>
           <div class="payload-section">
             <button class="toggle-payload" @click="togglePayload(item.id)">
-              {{ expandedPayloads.has(item.id) ? 'Hide' : 'Show' }} Payload
+              {{ expandedPayloads.has(item.id) ? $t('llc.approvals.hidePayload') : $t('llc.approvals.showPayload') }}
             </button>
             <pre v-if="expandedPayloads.has(item.id)" class="payload-json">{{ formatJson(item.payload) }}</pre>
           </div>
@@ -143,12 +143,18 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { formatDateTime } from '@/utils/formatHelpers'
 import { useUserStore } from '@/stores/useUserStore'
+import { useI18n } from 'vue-i18n'
+import { useNotificationBus } from '@/composables/useNotificationBus'
+import type { components } from '@/types/generated/api'
 
 const logger = createLogger('ApprovalsInbox')
 const api = useApiClient()
 const route = useRoute()
 const userStore = useUserStore()
+const { t } = useI18n()
+const { showToast } = useNotificationBus()
 
 const props = defineProps<{ companyId?: string }>()
 const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
@@ -158,18 +164,8 @@ const APPROVAL_TYPES = [
   'data_access', 'policy_change', 'contract_sign', 'hiring',
 ]
 
-interface Approval {
-  id: string
-  company_id: string
-  type: string
-  status: string
-  requested_by_agent_id: string
-  payload: Record<string, unknown>
-  decided_by_agent_id: string | null
-  decided_at: string | null
-  created_at: string
-  updated_at: string
-}
+// #11367: derive from the generated OpenAPI schema.
+type Approval = components['schemas']['ApprovalResponse']
 
 const approvals = ref<Approval[]>([])
 const isLoading = ref(false)
@@ -212,8 +208,7 @@ function formatType(val: string) {
 }
 
 function formatDate(iso: string | null) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString()
+  return formatDateTime(iso) || '—'
 }
 
 function formatJson(payload: Record<string, unknown>) {
@@ -249,6 +244,7 @@ async function decide(id: string, decision: string, note?: string) {
     await fetchApprovals()
   } catch (err) {
     logger.error('Decision failed', err)
+    showToast(t('llcBrowser.approvals.decideError'), 'error')
   } finally {
     const s = new Set(processing.value)
     s.delete(id)
@@ -299,8 +295,8 @@ onUnmounted(() => {
   height: 100%;
   padding: 1.5rem;
   gap: 1rem;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .inbox-header {
@@ -328,7 +324,7 @@ onUnmounted(() => {
   min-width: 1.5rem;
   height: 1.5rem;
   padding: 0 0.4rem;
-  background: #ef4444;
+  background: var(--color-error);
   color: white;
   font-size: 0.75rem;
   font-weight: 700;
@@ -338,7 +334,7 @@ onUnmounted(() => {
 .header-tabs {
   display: flex;
   gap: 0.25rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   overflow: hidden;
 }
@@ -348,7 +344,7 @@ onUnmounted(() => {
   font-size: 0.875rem;
   border: none;
   background: transparent;
-  color: var(--color-text);
+  color: var(--text-primary);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -367,10 +363,10 @@ onUnmounted(() => {
 .filter-select,
 .filter-search {
   padding: 0.4rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
@@ -390,14 +386,14 @@ onUnmounted(() => {
 .state-msg {
   text-align: center;
   padding: 3rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .approval-card {
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
   padding: 1rem;
-  background: var(--color-surface, #fff);
+  background: var(--bg-surface, #fff);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -416,7 +412,7 @@ onUnmounted(() => {
 
 .card-meta {
   font-size: 0.8rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .type-badge,
@@ -428,31 +424,32 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
-.type-budget_increase { background: #fef3c7; color: #92400e; }
-.type-agent_spawn { background: #ddd6fe; color: #5b21b6; }
-.type-external_api { background: #bfdbfe; color: #1d4ed8; }
-.type-code_deploy { background: #fee2e2; color: #991b1b; }
-.type-data_access { background: #d1fae5; color: #065f46; }
-.type-policy_change { background: #fce7f3; color: #9d174d; }
-.type-contract_sign { background: #ffedd5; color: #9a3412; }
-.type-hiring { background: #e0f2fe; color: #0369a1; }
+/* approval type + decision palette — theme-adaptive (GH#10868) */
+.type-budget_increase { background: var(--badge-approval-budget_increase-bg); color: var(--badge-approval-budget_increase-fg); }
+.type-agent_spawn { background: var(--badge-approval-agent_spawn-bg); color: var(--badge-approval-agent_spawn-fg); }
+.type-external_api { background: var(--badge-approval-external_api-bg); color: var(--badge-approval-external_api-fg); }
+.type-code_deploy { background: var(--badge-approval-code_deploy-bg); color: var(--badge-approval-code_deploy-fg); }
+.type-data_access { background: var(--badge-approval-data_access-bg); color: var(--badge-approval-data_access-fg); }
+.type-policy_change { background: var(--badge-approval-policy_change-bg); color: var(--badge-approval-policy_change-fg); }
+.type-contract_sign { background: var(--badge-approval-contract_sign-bg); color: var(--badge-approval-contract_sign-fg); }
+.type-hiring { background: var(--badge-approval-hiring-bg); color: var(--badge-approval-hiring-fg); }
 
-.status-approved { background: #d1fae5; color: #065f46; }
-.status-rejected { background: #fee2e2; color: #991b1b; }
-.status-changes_requested { background: #fef3c7; color: #92400e; }
+.status-approved { background: var(--badge-approval-approved-bg); color: var(--badge-approval-approved-fg); }
+.status-rejected { background: var(--badge-approval-rejected-bg); color: var(--badge-approval-rejected-fg); }
+.status-changes_requested { background: var(--badge-approval-changes_requested-bg); color: var(--badge-approval-changes_requested-fg); }
 
 .toggle-payload {
   font-size: 0.8rem;
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.25rem;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
   cursor: pointer;
 }
 
 .payload-json {
-  background: var(--color-surface-elevated, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated, #f9fafb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   padding: 0.75rem;
   font-size: 0.8rem;
@@ -479,9 +476,9 @@ onUnmounted(() => {
   transition: opacity 0.15s;
 }
 
-.btn-approve { background: #10b981; color: white; }
-.btn-reject { background: #ef4444; color: white; }
-.btn-changes { background: #f59e0b; color: white; }
+.btn-approve { background: var(--color-success); color: white; }
+.btn-reject { background: var(--color-error); color: white; }
+.btn-changes { background: var(--color-warning); color: white; }
 
 .btn-approve:disabled,
 .btn-reject:disabled,
@@ -494,16 +491,16 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  border-top: 1px solid var(--color-border, #e5e7eb);
+  border-top: 1px solid var(--border-default, #e5e7eb);
   padding-top: 0.75rem;
 }
 
 .note-textarea {
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
   font-size: 0.875rem;
   resize: vertical;
 }
@@ -532,9 +529,9 @@ onUnmounted(() => {
 
 .btn-secondary {
   padding: 0.4rem 1rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
-  border: 1px solid var(--color-border, #d1d5db);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   font-weight: 500;

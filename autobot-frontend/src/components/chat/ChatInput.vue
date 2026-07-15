@@ -111,6 +111,22 @@
 
           <!-- Input Actions -->
           <div class="input-actions">
+            <!-- #11585: Per-conversation model/provider picker -->
+            <label class="model-picker" :title="$t('chat.modelPicker.title')">
+              <span class="sr-only">{{ $t('chat.modelPicker.label') }}</span>
+              <select
+                v-model="selectedModel"
+                class="model-picker-select"
+                :disabled="isDisabled"
+                :aria-label="$t('chat.modelPicker.label')"
+              >
+                <option value="">{{ $t('chat.modelPicker.auto') }}</option>
+                <option v-for="m in pickerModels" :key="m.name" :value="m.name">
+                  {{ m.provider ? `${m.name} · ${m.provider}` : m.name }}
+                </option>
+              </select>
+            </label>
+
             <!-- Issue #249: Knowledge Base Toggle -->
             <label class="knowledge-toggle" :class="{ 'active': useKnowledge }" :title="$t('chat.input.useKnowledge')">
               <input
@@ -465,6 +481,31 @@ import type { SlashCommandPreset } from '@/types/api'
 import { useImageGeneration } from '@/composables/useImageGeneration'
 import { useThinkingMode, BUDGET_STEPS, BUDGET_STEP_LABELS } from '@/composables/useThinkingMode'
 import { usePreferences } from '@/composables/usePreferences'
+import { useChatModelSelection } from '@/composables/chat/useChatModelSelection'
+
+// Minimal Web Speech API event shapes (not in TS lib.dom): only the fields this
+// component reads. SpeechRecognitionResult / *Alternative come from lib.dom.
+interface SpeechRecognitionResultEvent {
+  results: SpeechRecognitionResultList
+}
+interface SpeechRecognitionErrorEventLike {
+  error: string
+}
+
+// Upload tracking item shared by handleFileSelect / retryUpload / uploadFile.
+interface UploadItem {
+  id: string
+  filename: string
+  progress: number
+  status: string
+  current: number
+  total: number
+  eta?: number
+  error?: string
+  file?: File
+  fileId?: string
+  uploadId?: string
+}
 
 const { t } = useI18n()
 const logger = createLogger('ChatInput')
@@ -549,6 +590,8 @@ const { generating: imageGenerating, generateImage } = useImageGeneration()
 const { enabled: thinkingEnabled, budgetTokens: thinkingBudget, load: loadThinkingPrefs, toggle: toggleThinking, setBudget: setThinkingBudget } = useThinkingMode(() => store.currentSessionId)
 // #9460/#9471: per-user reasoning-effort default, passed per-conversation
 const { reasoningEffort } = usePreferences()
+// #11585: per-conversation model/provider override picker
+const { selectedModel, pickerModels, overrideFields, fetchModels: fetchAvailableModels } = useChatModelSelection()
 const showImageGenModal = ref(false)
 const imagePrompt = ref('')
 const imageProvider = ref<'dalle' | 'flux' | 'stable_diffusion'>('dalle')
@@ -735,7 +778,9 @@ const sendMessage = async () => {
         logger.warn('[ChatInput] Overseer submission failed, falling back to normal flow')
         // Fallback: send as normal message
         await controller.sendMessage(message, {
-          use_knowledge: useKnowledge.value
+          use_knowledge: useKnowledge.value,
+          // #11585: per-request model/provider override (empty when "auto")
+          ...overrideFields.value,
         })
       }
     } else {
@@ -753,6 +798,8 @@ const sendMessage = async () => {
         ...(thinkingEnabled.value ? { thinking_enabled: true, thinking_budget_tokens: thinkingBudget.value } : {}),
         // #9460/#9471: per-conversation reasoning effort (omit 'auto' so request stays inert)
         ...(reasoningEffort.value !== 'auto' ? { reasoning_effort: reasoningEffort.value } : {}),
+        // #11585: per-request model/provider override (empty when "auto")
+        ...overrideFields.value,
       })
     }
 
@@ -882,9 +929,9 @@ const startVoiceRecording = async () => {
     logger.debug('Voice recognition started')
   }
 
-  _recognition.onresult = (event: any) => {
-    const transcript = Array.from(event.results as any[])
-      .map((r: any) => r[0].transcript as string)
+  _recognition.onresult = (event: SpeechRecognitionResultEvent) => {
+    const transcript = Array.from(event.results as unknown as SpeechRecognitionResult[])
+      .map((r: SpeechRecognitionResult) => r[0].transcript as string)
       .join('')
     messageText.value = transcript
   }
@@ -895,7 +942,7 @@ const startVoiceRecording = async () => {
     logger.debug('Voice recognition ended')
   }
 
-  _recognition.onerror = (event: any) => {
+  _recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
     logger.error('Voice recognition error:', event.error)
     isVoiceRecording.value = false
     _recognition = null
@@ -1028,7 +1075,7 @@ const generateId = (): string => {
 }
 
 // Real file upload implementation
-const uploadFile = async (upload: any, file: File): Promise<void> => {
+const uploadFile = async (upload: UploadItem, file: File): Promise<void> => {
   const formData = new FormData()
   formData.append('file', file)
 
@@ -1076,7 +1123,7 @@ const uploadFile = async (upload: any, file: File): Promise<void> => {
             }, 2000)
 
             resolve(response.file_info?.file_id || '')
-          } catch (e) {
+          } catch {
             reject(new Error('Invalid response from server'))
           }
         } else {
@@ -1166,6 +1213,9 @@ onMounted(() => {
 
   // GH#8993: load thinking preferences for current session
   loadThinkingPrefs()
+
+  // #11585: load live model list for the model/provider picker
+  fetchAvailableModels()
 })
 
 onUnmounted(() => {
@@ -1271,6 +1321,30 @@ onUnmounted(() => {
 .action-divider {
   @apply w-px h-6 bg-autobot-border mx-2;
   flex-shrink: 0;
+}
+
+/* #11585: Model/provider picker */
+.model-picker {
+  @apply flex items-center;
+  flex-shrink: 0;
+  max-width: 12rem;
+}
+
+.model-picker-select {
+  @apply w-full text-xs font-medium rounded px-2 py-1 cursor-pointer transition-all duration-200;
+  @apply bg-autobot-bg-tertiary text-autobot-text-muted border border-autobot-border;
+}
+
+.model-picker-select:hover {
+  @apply text-autobot-text-secondary;
+}
+
+.model-picker-select:focus {
+  @apply outline-hidden text-autobot-primary border-autobot-primary;
+}
+
+.model-picker-select:disabled {
+  @apply opacity-50 cursor-not-allowed;
 }
 
 /* Issue #249: Knowledge Base Toggle Styles */
@@ -1539,7 +1613,7 @@ onUnmounted(() => {
 }
 
 .image-gen-dialog {
-  background: var(--color-surface, #fff);
+  background: var(--bg-surface);
   border-radius: 0.75rem;
   padding: 1.5rem;
   width: 100%;
@@ -1556,30 +1630,30 @@ onUnmounted(() => {
   gap: 0.5rem;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--color-text, #111827);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .image-gen-label {
   font-size: 0.8125rem;
   font-weight: 500;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .image-gen-prompt {
   width: 100%;
   padding: 0.625rem 0.75rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   font-size: 0.875rem;
   resize: none;
   font-family: inherit;
-  color: var(--color-text, #111827);
-  background: var(--color-surface, #fff);
+  color: var(--text-primary);
+  background: var(--bg-surface);
 }
 
 .image-gen-prompt:focus {
-  outline: 2px solid var(--color-primary, #3b82f6);
+  outline: 2px solid var(--color-primary);
   outline-offset: 1px;
 }
 
@@ -1596,7 +1670,7 @@ onUnmounted(() => {
   gap: 0.375rem;
   font-size: 0.8125rem;
   cursor: pointer;
-  color: var(--color-text, #111827);
+  color: var(--text-primary);
 }
 
 .image-gen-actions {
@@ -1608,12 +1682,12 @@ onUnmounted(() => {
 
 .image-gen-cancel {
   padding: 0.5rem 1rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   background: transparent;
   font-size: 0.875rem;
   cursor: pointer;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .image-gen-submit {
@@ -1621,7 +1695,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.375rem;
   padding: 0.5rem 1.25rem;
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
   border: none;
   border-radius: 0.5rem;
@@ -1632,7 +1706,7 @@ onUnmounted(() => {
 }
 
 .image-gen-submit:hover:not(:disabled) {
-  background: var(--color-primary-dark, #2563eb);
+  background: var(--color-primary-dark);
 }
 
 .image-gen-submit:disabled {

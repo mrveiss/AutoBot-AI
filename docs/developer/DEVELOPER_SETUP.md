@@ -134,7 +134,7 @@ AutoBot supports three deployment methods:
 
 ```bash
 sudo ./install.sh
-# - Installs system packages and Python 3.12 venv
+# - Installs system packages and Python 3.14 venv
 # - Configures systemd services (autobot-backend, autobot-celery, etc.)
 # - Sets up networking for the <network-subnet> fleet
 # - Generates SSH keys for inter-VM communication
@@ -186,7 +186,7 @@ Phase 1 — Environment Validation (~2 min)
   - Verify internet connectivity and available disk space
 
 Phase 2 — Dependency Installation (~5 min)
-  - Python 3.12 (deadsnakes PPA) with virtual environment
+  - Python 3.14 (deadsnakes PPA) with virtual environment
   - Node.js LTS with npm
   - Docker with Docker Compose V2
   - Redis tools and client libraries

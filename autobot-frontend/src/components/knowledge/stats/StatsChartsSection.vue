@@ -2,7 +2,7 @@
   <div class="charts-section">
     <!-- Documents by Category -->
     <BasePanel variant="bordered" size="md">
-      <h4>{{ $t('knowledge.stats.charts.documentsByCategory') }}</h4>
+      <h4>{{ $t('knowledge.stats.docsByCategory') }}</h4>
       <div class="bar-chart">
         <div
           v-for="category in topCategories"
@@ -15,7 +15,7 @@
               class="bar-fill"
               :style="{
                 width: `${(category.documentCount / maxCategoryCount) * 100}%`,
-                backgroundColor: category.color || '#3b82f6'
+                backgroundColor: category.color || 'var(--color-info)'
               }"
             ></div>
             <span class="bar-value">{{ category.documentCount }}</span>
@@ -26,7 +26,7 @@
 
     <!-- Documents by Type -->
     <BasePanel variant="bordered" size="md">
-      <h4>{{ $t('knowledge.stats.charts.documentsByType') }}</h4>
+      <h4>{{ $t('knowledge.stats.docsByType') }}</h4>
       <div class="pie-chart">
         <div class="type-stats">
           <div v-for="(count, type) in documentsByType" :key="type" class="type-item">
@@ -49,9 +49,10 @@
  * Stats Charts Section Component
  *
  * Displays chart visualizations for documents by category and type.
- * Extracted from KnowledgeStats.vue for better maintainability.
+ * Wired into KnowledgeHealthAnalytics.vue (#11562).
  *
  * Issue #184: Split oversized Vue components
+ * Issue #11562: Wire in orphaned stats subpanels
  */
 
 import BasePanel from '@/components/base/BasePanel.vue'
@@ -73,12 +74,12 @@ const props = defineProps<Props>()
 
 const getTypeColor = (type: string): string => {
   const colors: Record<string, string> = {
-    document: '#3b82f6',
-    webpage: '#10b981',
-    api: '#f59e0b',
-    upload: '#8b5cf6'
+    document: 'var(--color-info)',
+    webpage: 'var(--color-success)',
+    api: 'var(--color-warning)',
+    upload: 'var(--chart-purple)'
   }
-  return colors[type] || '#6b7280'
+  return colors[type] || 'var(--text-tertiary)'
 }
 
 const getTypePercentage = (count: number): number => {
@@ -97,7 +98,6 @@ const capitalize = (str: string): string => {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
   gap: var(--spacing-6);
-  margin-bottom: var(--spacing-8);
 }
 
 .charts-section h4 {
@@ -122,7 +122,7 @@ const capitalize = (str: string): string => {
 .bar-label {
   width: 120px;
   font-size: var(--text-sm);
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 .bar-wrapper {
@@ -136,7 +136,7 @@ const capitalize = (str: string): string => {
 
 .bar-fill {
   height: 100%;
-  transition: width var(--duration-500) var(--ease-in-out);
+  transition: width var(--duration-500) var(--ease-out);
 }
 
 .bar-value {
@@ -146,7 +146,7 @@ const capitalize = (str: string): string => {
   transform: translateY(-50%);
   font-size: var(--text-xs);
   font-weight: var(--font-medium);
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 /* Type Stats */
@@ -161,20 +161,20 @@ const capitalize = (str: string): string => {
   align-items: center;
   gap: var(--spacing-3);
   padding: var(--spacing-2);
-  background: var(--bg-tertiary);
+  background: var(--bg-secondary);
   border-radius: var(--radius-md);
 }
 
 .type-color {
   width: 1rem;
   height: 1rem;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-default);
 }
 
 .type-name {
   flex: 1;
   font-weight: var(--font-medium);
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 .type-count {
@@ -184,7 +184,7 @@ const capitalize = (str: string): string => {
 
 .type-percentage {
   font-size: var(--text-sm);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 
 @media (max-width: 768px) {

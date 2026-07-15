@@ -166,7 +166,7 @@ import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useMultiModelCompare } from '@/composables/useMultiModelCompare'
-import { useAvailableModels } from '@/composables/useAvailableModels'
+import { useModelPicker } from '@/composables/useModelPicker'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import {
   type BenchmarkResultRow,
@@ -181,10 +181,9 @@ import {
 const { t } = useI18n()
 const logger = createLogger('BenchmarkView')
 
-const DEFAULT_MODELS = ['ollama/llama3', 'ollama/mistral', 'openai/gpt-4o-mini']
-
 const { responses, selectedModels, isComparing, compare } = useMultiModelCompare()
-const { availableModelNames, fetchModels } = useAvailableModels()
+// #10755/#10718: shared live-model picker wiring (fetch-on-mount + seeding).
+const { availableModels } = useModelPicker(selectedModels)
 
 const promptText = ref('')
 const selectedPromptSetId = ref('')
@@ -198,13 +197,6 @@ const filterPromptType = ref('')
 const filterSince = ref('')
 
 const promptTypes = ['rag', 'code', 'summarization', 'reasoning', 'custom']
-
-if (selectedModels.value.length === 0) selectedModels.value = [...DEFAULT_MODELS]
-
-const availableModels = computed<string[]>(() => {
-  const union = new Set<string>([...DEFAULT_MODELS, ...availableModelNames.value, ...selectedModels.value])
-  return Array.from(union)
-})
 
 const currentPromptType = computed(
   () => promptSets.value.find((s) => s.id === selectedPromptSetId.value)?.promptType ?? 'custom',
@@ -340,7 +332,6 @@ function formatDate(iso: string): string {
 }
 
 onMounted(() => {
-  fetchModels().catch(() => {})
   loadPromptSets()
   loadHistory()
 })

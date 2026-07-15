@@ -17,6 +17,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import LLMDefaults
+from llm_shared.types import LLMType
 
 from .topology import AgentTopology, InMemoryTopologyDB
 from .topology_routing import TopologyAwareRouter
@@ -58,7 +59,7 @@ class AgentRouter:
         self.llm_interface = llm_interface
         # Issue #2209: in-memory TTL cache for learned strategies.
         # Avoids Redis GET + TaskPatternLearner instantiation per routing call.
-        self._strategy_cache: Dict[str, tuple] = {}  # task_type -> (strategy, expires)
+        self._strategy_cache: Dict[tuple, tuple] = {}  # (tenant_id, task_type) -> (strategy, expires)  # GH#11071
         self._strategy_cache_ttl = 60  # seconds
         # Issue #2092: Q-learning RL router (lazy-initialised on first use).
         self._rl_router = None
@@ -81,6 +82,10 @@ class AgentRouter:
         task type derived from context or quick-route analysis.
         """
         task_type = (context or {}).get("task_type")
+        # GH#11071: scope the learned-strategy read AND its in-memory cache to the
+        # caller's tenant, so one org's strategy can't be served to another via
+        # Redis or the process-local cache.
+        tenant_id = str((context or {}).get("tenant_id") or "")
         if not task_type:
             quick = self.quick_route_analysis(request)
             agent = quick.get("primary_agent")
@@ -94,10 +99,11 @@ class AgentRouter:
 
             learner = TaskPatternLearner()
             task_type = learner.normalize_task_type(task_type)
+            cache_key = (tenant_id, task_type)
 
             # Issue #2209: check in-memory cache before hitting Redis.
             now = time.monotonic()
-            cached = self._strategy_cache.get(task_type)
+            cached = self._strategy_cache.get(cache_key)
             if cached is not None:
                 strategy, expires = cached
                 if now < expires:
@@ -105,8 +111,8 @@ class AgentRouter:
                         return self._build_learned_result(strategy, task_type)
                     return None
 
-            strategy = await learner.get_learned_strategy(task_type)
-            self._strategy_cache[task_type] = (strategy, now + self._strategy_cache_ttl)
+            strategy = await learner.get_learned_strategy(task_type, tenant_id=tenant_id)
+            self._strategy_cache[cache_key] = (strategy, now + self._strategy_cache_ttl)
 
             if strategy and strategy.confidence > LEARNED_STRATEGY_CONFIDENCE:
                 return self._build_learned_result(strategy, task_type)
@@ -115,19 +121,23 @@ class AgentRouter:
         return None
 
     def _build_learned_result(self, strategy, task_type: str) -> Dict[str, Any]:
-        """Build routing result dict from a LearnedStrategy (#2209)."""
+        """Build routing result dict from a LearnedStrategy (#2209, #10580)."""
         logger.info(
             "Using learned strategy for %s (confidence=%.2f)",
             task_type,
             strategy.confidence,
         )
-        return {
+        result: Dict[str, Any] = {
             "strategy": "single_agent",
             "primary_agent": self._resolve_agent_type(strategy.best_approach),
             "confidence": strategy.confidence,
             "reasoning": (f"Learned strategy: {strategy.best_approach} " f"(samples={strategy.sample_size})"),
             "source": "learned",
         }
+        # #10580: thread best_prompt_template through so prompt assembly can use it.
+        if strategy.best_prompt_template:
+            result["learned_prompt_template"] = strategy.best_prompt_template
+        return result
 
     def _get_rl_router(self):
         """Lazily initialise and return the RLRouter singleton (Issue #2092)."""
@@ -255,16 +265,30 @@ class AgentRouter:
         request: str,
         context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
-        """
-        Determine the optimal routing strategy for the request.
+        """Determine the optimal routing strategy for the request.
+
+        Issue #10545: after the base decision is computed, apply a bounded,
+        explainable preference bias from captured human feedback so the agent
+        shifts away from behaviors this tenant keeps rejecting. The base
+        decision is unchanged when no qualifying signal exists.
 
         Args:
             request: User's request
-            context: Optional context
+            context: Optional context (may carry ``user_id`` / ``org_id`` /
+                ``task_class`` for tenant-scoped preference lookup).
 
         Returns:
-            Dict containing routing decision
+            Dict containing routing decision.
         """
+        decision = await self._determine_routing_base(request, context)
+        return await self._apply_preference_bias(decision, context)
+
+    async def _determine_routing_base(
+        self,
+        request: str,
+        context: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
+        """Compute the base routing decision (pre preference bias, #10545)."""
         try:
             # Quick pattern matching for common cases
             quick_routing = self.quick_route_analysis(request)
@@ -293,7 +317,7 @@ class AgentRouter:
 
             response = await self.llm_interface.chat_completion(
                 messages=messages,
-                llm_type="orchestrator",
+                llm_type=LLMType.ORCHESTRATOR,
                 temperature=0.3,  # Lower temperature for consistent routing
                 max_tokens=LLMDefaults.CHAT_MAX_TOKENS,
                 top_p=0.8,
@@ -311,6 +335,53 @@ class AgentRouter:
             logger.error("Error in routing decision: %s", e)
             # Fallback to simple routing
             return self.quick_route_analysis(request)
+
+    async def _apply_preference_bias(
+        self,
+        decision: Dict[str, Any],
+        context: Dict[str, Any] | None,
+    ) -> Dict[str, Any]:
+        """Nudge routing away from behaviors this tenant keeps rejecting (#10545).
+
+        Reads the tenant-scoped preference aggregator for the chosen agent. When
+        humans in this org/user/task-class have repeatedly rejected or edited
+        that agent's output, its confidence is reduced by the bounded bias and
+        the adjustment is recorded (explainably) in the decision's ``reasoning``
+        and ``preference_bias`` fields. Best-effort: any failure returns the
+        base decision untouched.
+        """
+        primary = decision.get("primary_agent")
+        if primary is None:
+            return decision
+        behavior = primary.value if hasattr(primary, "value") else str(primary)
+        ctx = context or {}
+        try:
+            from services.feedback_aggregator import get_feedback_aggregator
+
+            bias = await get_feedback_aggregator().get_bias(
+                behavior,
+                task_class=ctx.get("task_class", "general"),
+                user_id=ctx.get("user_id"),
+                org_id=ctx.get("org_id"),
+            )
+        except Exception as exc:  # noqa: BLE001 — never break routing on bias lookup
+            logger.debug("preference bias lookup failed: %s", exc)
+            return decision
+
+        if bias is None:
+            return decision
+
+        base_conf = float(decision.get("confidence", 0.5))
+        decision["confidence"] = max(0.0, base_conf + bias.bias)
+        decision["preference_bias"] = bias.to_trajectory_entry()
+        decision["reasoning"] = f"{decision.get('reasoning', '')} | {bias.explanation}".strip(" |")
+        logger.info(
+            "routing preference bias applied: agent=%s bias=%.3f (%s)",
+            behavior,
+            bias.bias,
+            bias.explanation,
+        )
+        return decision
 
     def _check_chat_patterns(self, request_lower: str) -> Dict[str, Any] | None:
         """Check for greeting/chat patterns in request. Issue #620.

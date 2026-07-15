@@ -25,7 +25,7 @@ const _UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
  * resetFormFields(formData, { category: 'General' })
  * // Result: { name: '', category: 'General', tags: '' }
  */
-export function resetFormFields<T extends Record<string, any>>(
+export function resetFormFields<T extends Record<string, unknown>>(
   form: T,
   defaults: Partial<T> = {}
 ): void {
@@ -68,7 +68,7 @@ export function resetFormFields<T extends Record<string, any>>(
  * hasRequiredFields(formData, ['name', 'email'])
  * // Returns: false (email is empty)
  */
-export function hasRequiredFields<T extends Record<string, any>>(
+export function hasRequiredFields<T extends Record<string, unknown>>(
   form: T,
   requiredFields: (keyof T)[]
 ): boolean {
@@ -103,7 +103,7 @@ export function hasRequiredFields<T extends Record<string, any>>(
  * getEmptyFields(formData, ['name', 'email', 'age'])
  * // Returns: ['email', 'age']
  */
-export function getEmptyFields<T extends Record<string, any>>(
+export function getEmptyFields<T extends Record<string, unknown>>(
   form: T,
   requiredFields: (keyof T)[]
 ): (keyof T)[] {
@@ -142,7 +142,7 @@ export function getEmptyFields<T extends Record<string, any>>(
  * copy.tags.push('js')
  * // original.tags remains ['vue', 'ts']
  */
-export function cloneFormData<T extends Record<string, any>>(form: T): T {
+export function cloneFormData<T extends Record<string, unknown>>(form: T): T {
   return JSON.parse(JSON.stringify(form))
 }
 
@@ -159,7 +159,7 @@ export function cloneFormData<T extends Record<string, any>>(form: T): T {
  * isFormModified(current, initial)
  * // Returns: true
  */
-export function isFormModified<T extends Record<string, any>>(
+export function isFormModified<T extends Record<string, unknown>>(
   currentForm: T,
   initialForm: T
 ): boolean {
@@ -176,7 +176,7 @@ export function isFormModified<T extends Record<string, any>>(
  * trimFormFields(formData)
  * // Result: { name: 'John', email: 'john@example.com' }
  */
-export function trimFormFields<T extends Record<string, any>>(form: T): void {
+export function trimFormFields<T extends Record<string, unknown>>(form: T): void {
   ;(Object.keys(form) as Array<keyof T>).forEach((key) => {
     if (_UNSAFE_KEYS.has(key as string)) return
     if (typeof form[key] === 'string') {

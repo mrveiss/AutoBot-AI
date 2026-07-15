@@ -14,7 +14,7 @@ from typing import Any, Dict, List
 
 import numpy as np
 
-from enhanced_memory_manager_async import TaskPriority
+from memory import TaskPriority  # canonical enum (#10626)
 from voice_processing.types import SpeechQuality, VoiceCommand
 
 

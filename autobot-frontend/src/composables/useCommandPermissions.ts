@@ -51,10 +51,10 @@ export function useCommandPermissions() {
   ): Promise<ApproveResult> => {
     errorApprove.value = null
     return wrapApprove(async () => {
-      const result = await apiClient.post<any>(
+      const result = await apiClient.post<ApproveResult>(
         `${getApiBase()}/agent-terminal/sessions/${terminalSessionId}/approve`,
         { approved, user_id: userId }
-      ) as ApproveResult
+      )
       logger.debug('approveOrDeny response:', { approved, status: result.status })
       return result
     })
@@ -69,7 +69,7 @@ export function useCommandPermissions() {
   ): Promise<unknown> => {
     errorComment.value = null
     return wrapComment(async () => {
-      const response = await apiClient.post<any>(`${getApiBase()}/chat/direct`, {
+      const response = await apiClient.post<unknown>(`${getApiBase()}/chat/direct`, {
         message,
         chat_id: chatId ?? null
       })

@@ -137,8 +137,8 @@ class DocumentAnalysisResult(AIStackAgentPayload):
     synthesis: str | None = None
 
 
-class EnhancedChatResult(AIStackAgentPayload):
-    """Data payload for POST /ai-stack/chat/enhanced and /ai-stack/legacy/enhanced-chat."""
+class ChatResult(AIStackAgentPayload):
+    """Data payload for POST /ai-stack/chat."""
 
     message: str | None = None
     context_used: List[Any] | None = None

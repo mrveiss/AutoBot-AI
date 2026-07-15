@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from enhanced_orchestration.subagent_dispatcher import (
+from orchestration.subagent_dispatcher import (
     SubagentDispatcher,
     SubagentTask,
     get_subagent_dispatcher,
@@ -113,7 +113,7 @@ class TestReflectionHighScore:
         mock_llm = MagicMock()
         mock_llm.chat = AsyncMock(return_value=_score_response(0.9, []))
 
-        with patch("enhanced_orchestration.subagent_dispatcher._get_llm_service", return_value=mock_llm):
+        with patch("orchestration.subagent_dispatcher._get_llm_service", return_value=mock_llm):
             result = await orch._execute_task(task)
 
         assert result == "original result"
@@ -149,7 +149,7 @@ class TestReflectionLowScore:
         mock_llm.chat = AsyncMock(side_effect=[score_resp, revision_resp])
 
         with patch(
-            "enhanced_orchestration.subagent_dispatcher._get_llm_service",
+            "orchestration.subagent_dispatcher._get_llm_service",
             return_value=mock_llm,
         ):
             result = await orch._execute_task(task)
@@ -177,7 +177,7 @@ class TestReflectionLowScore:
         mock_llm.chat = AsyncMock(return_value=_score_response(0.7, ["minor gap"]))
 
         with patch(
-            "enhanced_orchestration.subagent_dispatcher._get_llm_service",
+            "orchestration.subagent_dispatcher._get_llm_service",
             return_value=mock_llm,
         ):
             result = await orch._execute_task(task)
@@ -208,7 +208,7 @@ class TestReflectionLLMUnavailable:
         )
 
         with patch(
-            "enhanced_orchestration.subagent_dispatcher._get_llm_service",
+            "orchestration.subagent_dispatcher._get_llm_service",
             side_effect=ImportError("no llm"),
         ):
             result = await orch._execute_task(task)
@@ -234,7 +234,7 @@ class TestReflectionLLMUnavailable:
         mock_llm.chat = AsyncMock(side_effect=RuntimeError("llm error"))
 
         with patch(
-            "enhanced_orchestration.subagent_dispatcher._get_llm_service",
+            "orchestration.subagent_dispatcher._get_llm_service",
             return_value=mock_llm,
         ):
             result = await orch._execute_task(task)
@@ -328,7 +328,7 @@ class TestParallelDispatchNoRegression:
 
 class TestGetSubagentDispatcher:
     def test_returns_singleton(self):
-        import enhanced_orchestration.subagent_dispatcher as mod
+        import orchestration.subagent_dispatcher as mod
 
         mod._orchestrator_instance = None  # reset
         a = get_subagent_dispatcher()
@@ -336,7 +336,7 @@ class TestGetSubagentDispatcher:
         assert a is b
 
     def test_custom_max_parallel(self):
-        import enhanced_orchestration.subagent_dispatcher as mod
+        import orchestration.subagent_dispatcher as mod
 
         mod._orchestrator_instance = None
         orch = get_subagent_dispatcher(max_parallel=5)

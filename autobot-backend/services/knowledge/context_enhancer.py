@@ -14,7 +14,7 @@ from typing import Dict, List
 
 from autobot_shared.singleton_factory import lazy_singleton
 
-from .types import FOLLOWUP_KEYWORDS, EnhancedQuery
+from .types import FOLLOWUP_KEYWORDS, Query
 
 
 class ConversationContextEnhancer:
@@ -76,16 +76,16 @@ class ConversationContextEnhancer:
         # O(1) regex compilation, O(n) matching instead of O(n*p)
         self._combined_entity_re = re.compile("|".join(f"({p})" for p in self.ENTITY_PATTERNS), re.IGNORECASE)
 
-    def _build_no_enhancement_result(self, query: str) -> EnhancedQuery:
+    def _build_no_enhancement_result(self, query: str) -> Query:
         """Build result when no context enhancement is needed.
 
         Args:
             query: Original user query
 
         Returns:
-            EnhancedQuery with no modifications applied. Issue #620.
+            Query with no modifications applied. Issue #620.
         """
-        return EnhancedQuery(
+        return Query(
             original_query=query,
             enhanced_query=query,
             context_entities=[],
@@ -94,15 +94,15 @@ class ConversationContextEnhancer:
             reasoning="No context enhancement needed",
         )
 
-    def _build_enhanced_result(
+    def _build_result(
         self,
         query: str,
         enhanced_query: str,
         context_entities: List[str],
         context_topics: List[str],
         word_count: int,
-    ) -> EnhancedQuery:
-        """Build result with context enhancement applied.
+    ) -> Query:
+        """Build result with context enrichment applied.
 
         Args:
             query: Original user query
@@ -112,9 +112,9 @@ class ConversationContextEnhancer:
             word_count: Pre-computed word count
 
         Returns:
-            EnhancedQuery with enhancement details. Issue #620.
+            Query with enrichment details. Issue #620.
         """
-        return EnhancedQuery(
+        return Query(
             original_query=query,
             enhanced_query=enhanced_query,
             context_entities=context_entities,
@@ -128,7 +128,7 @@ class ConversationContextEnhancer:
         query: str,
         conversation_history: List[Dict[str, str]],
         max_history_items: int = 3,
-    ) -> EnhancedQuery:
+    ) -> Query:
         """
         Enhance a query with conversation context.
 
@@ -139,7 +139,7 @@ class ConversationContextEnhancer:
             max_history_items: Maximum number of history items to consider
 
         Returns:
-            EnhancedQuery with original and enhanced query
+            Query with original and enhanced query
         """
         # #624: Compute word_count once, pass to all methods
         word_count = len(query.split())
@@ -151,9 +151,9 @@ class ConversationContextEnhancer:
         recent_history = conversation_history[-max_history_items:]
         context_entities = self._extract_entities(recent_history)
         context_topics = self._extract_topics(recent_history)
-        enhanced_query = self._build_enhanced_query(query, recent_history, context_entities, context_topics, word_count)
+        enhanced_query = self._build_query(query, recent_history, context_entities, context_topics, word_count)
 
-        return self._build_enhanced_result(query, enhanced_query, context_entities, context_topics, word_count)
+        return self._build_result(query, enhanced_query, context_entities, context_topics, word_count)
 
     def _needs_context_enhancement(self, query: str, word_count: int | None = None) -> bool:
         """Check if a query would benefit from context enhancement."""
@@ -214,7 +214,7 @@ class ConversationContextEnhancer:
 
         return topics[-3:]  # Last 3 topics
 
-    def _build_enhanced_query(
+    def _build_query(
         self,
         query: str,
         history: List[Dict[str, str]],
@@ -222,7 +222,7 @@ class ConversationContextEnhancer:
         topics: List[str],
         word_count: int | None = None,
     ) -> str:
-        """Build an enhanced query with context."""
+        """Build a context-enriched query string."""
         enhanced_parts = [query]
 
         # If query has pronouns and we have entities, add context

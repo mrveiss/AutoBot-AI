@@ -9,18 +9,36 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 Issue #2025: Dual-mode entity extraction — LLM + NLP (Neural Mesh RAG Phase 2).
 """
 
+import importlib.util
+from functools import lru_cache
 from typing import Any, Dict, List
 from uuid import UUID
 
 from autobot_shared.logging_manager import get_logger
-from knowledge.pipeline.base import BaseCognifier, PipelineContext
-from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
+from autobot_shared.ssot_config import config
+from knowledge.pipeline.base import BaseCognifier, CognifyError, PipelineContext
+from knowledge.pipeline.cognifiers.llm_utils import (
+    batched_chunk_extract,
+    parse_llm_json_response,
+)
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity, EntityType
 from knowledge.pipeline.registry import TaskRegistry
+from llm_shared.types import LLMType
 from services.llm_service import get_llm_service
 
 logger = get_logger(__name__)
+
+
+@lru_cache(maxsize=1)
+def _spacy_available() -> bool:
+    """True if spaCy is importable (optional NLP extra — see requirements-nlp.txt).
+
+    spaCy is not in the default image (its build deps lack py3.14 wheels, #9825);
+    when absent, entity extraction falls back to the LLM path automatically.
+    """
+    return importlib.util.find_spec("spacy") is not None
+
 
 # spaCy NER label → EntityType mapping (Issue #2025)
 _SPACY_LABEL_MAP: Dict[str, str] = {
@@ -44,10 +62,30 @@ For each entity, provide:
 - confidence: Score 0.0-1.0
 
 Return JSON array of entities:
-[{"name": "...", "type": "...", "description": "...", "confidence": 0.9}, ...]
+[{{"name": "...", "type": "...", "description": "...", "confidence": 0.9}}, ...]
 
 Text:
 {text}
+"""
+
+ENTITY_EXTRACTION_BATCH_PROMPT = """Extract named entities from each of the following text chunks.
+
+Each chunk is labeled "Chunk N:". For each entity provide:
+- name: The entity name as mentioned in text
+- type: One of PERSON, ORGANIZATION, CONCEPT, TECHNOLOGY, LOCATION, EVENT, DOCUMENT
+- description: Brief description
+- confidence: Score 0.0-1.0
+
+Return a JSON object mapping each chunk index (as a string) to its array of
+entities (same fields as above); use an empty array for chunks with no entities.
+Example for two chunks:
+{{
+  "0": [{{"name": "AutoBot", "type": "TECHNOLOGY", "description": "...", "confidence": 0.9}}],
+  "1": []
+}}
+
+Chunks:
+{chunks}
 """
 
 
@@ -210,6 +248,12 @@ class EntityExtractor(BaseCognifier):
         """
         chunks: List[ProcessedChunk] = context.chunks
         selected = self._select_mode(chunks)
+        if selected == "nlp" and not _spacy_available():
+            logger.warning(
+                "spaCy not installed (optional NLP extra) — using LLM entity extraction. "
+                "Install autobot-backend/requirements-nlp.txt to enable the spaCy fast-path."
+            )
+            selected = "llm"
         logger.info("Entity extraction mode: %s (%d chunks)", selected, len(chunks))
 
         if selected == "nlp":
@@ -223,33 +267,61 @@ class EntityExtractor(BaseCognifier):
         return context
 
     async def _llm_process(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[Entity]:
-        """Run LLM-based extraction over all chunks in batches."""
+        """Run LLM-based extraction over all chunks in batches.
+
+        Raises CognifyError if all chunks yield zero entities, which signals a
+        systematically broken prompt or LLM config rather than isolated transients
+        (#10645 — total-extraction failure must not be a silent empty graph).
+        """
         all_entities: List[Entity] = []
         for i in range(0, len(chunks), self.batch_size):
             batch = chunks[i : i + self.batch_size]
             batch_entities = await self._process_batch(batch, context)
             all_entities.extend(batch_entities)
-        return self._merge_entities(all_entities)
+        merged = self._merge_entities(all_entities)
+        if chunks and not merged:
+            raise CognifyError(
+                f"Entity extraction yielded 0 entities across all {len(chunks)} chunk(s) — "
+                "check prompt template and LLM connectivity (#10645)"
+            )
+        return merged
 
     async def _process_batch(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[Entity]:
-        """Process a batch of chunks."""
-        entities = []
-        for chunk in chunks:
-            chunk_entities = await self._extract_from_chunk(chunk, context)
-            entities.extend(chunk_entities)
-        return entities
+        """Extract entities for a batch in ONE LLM call when batching is on (#10598).
+
+        Routes through ``batched_chunk_extract`` (index-keyed prompt, per-chunk
+        fallback) so K chunks cost one round-trip instead of K. The helper runs
+        the legacy per-chunk loop itself when the config flag is disabled (#11090).
+        """
+        return await batched_chunk_extract(
+            chunks,
+            llm=self.llm,
+            batch_prompt_template=ENTITY_EXTRACTION_BATCH_PROMPT,
+            llm_type=LLMType.EXTRACTION,
+            max_chunk_chars=config.cognifier_batch_max_chunk_chars,
+            convert=lambda raw, chunk: self._convert_to_entities(raw, chunk, context.document_id),
+            extract_one=lambda chunk: self._extract_from_chunk(chunk, context),
+        )
 
     async def _extract_from_chunk(self, chunk: ProcessedChunk, context: PipelineContext) -> List[Entity]:
-        """Extract entities from a single chunk."""
+        """Extract entities from a single chunk.
+
+        Transient LLM errors (network, timeout) are caught and return an empty
+        list so the pipeline can continue.  Format errors (bad prompt template →
+        KeyError) and parse errors (malformed JSON → JSONDecodeError) are
+        re-raised so they surface as bugs rather than silent empties (#10645).
+        """
+        prompt = ENTITY_EXTRACTION_PROMPT.format(text=chunk.content)
         try:
-            prompt = ENTITY_EXTRACTION_PROMPT.format(text=chunk.content)
-            response = await self.llm.chat([{"role": "user", "content": prompt}])
-            parsed = parse_llm_json_response(response.content)
-            raw_entities = parsed if isinstance(parsed, list) else []
-            return self._convert_to_entities(raw_entities, chunk, context.document_id)
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}], llm_type=LLMType.EXTRACTION, structured_output=True
+            )
         except Exception as e:
-            logger.error("Entity extraction failed: %s", e)
+            logger.error("Entity extraction LLM call failed (transient): %s", e)
             return []
+        parsed = parse_llm_json_response(response.content, strict=True)
+        raw_entities = parsed if isinstance(parsed, list) else []
+        return self._convert_to_entities(raw_entities, chunk, context.document_id)
 
     def _convert_to_entities(
         self,

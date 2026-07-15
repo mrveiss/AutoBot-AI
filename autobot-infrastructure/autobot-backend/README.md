@@ -92,7 +92,7 @@ ssh autobot@172.16.168.20 'journalctl -u autobot-celery -f'
 - **WSL2 loopback**: Cannot health-check 172.16.168.20 from the backend node itself. Use .19 as a relay.
 - **6-minute startup**: The backend loads large ML models at init. nginx returns 504 during this window.
 - **Restart cost**: Each restart causes a 6-minute outage. Avoid unless essential.
-- **Python env**: Uses deadsnakes PPA venv at `/opt/autobot/autobot-backend/venv` (Python 3.12).
+- **Python env**: Uses deadsnakes PPA venv at `/opt/autobot/autobot-backend/venv` (Python 3.14).
 - **Log location**: `StandardOutput=append:/var/log/autobot/backend.log` — not journald.
 
 ---

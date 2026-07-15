@@ -44,10 +44,10 @@ export const createTestRouter = (routes = testRoutes, initialEntries = ['/']) =>
 
 // Enhanced render function with common setup
 // Issue #156 Fix: RenderOptions<C> requires 1 type argument
-export interface CustomRenderOptions extends Omit<RenderOptions<any>, 'global'> {
+export interface CustomRenderOptions extends Omit<RenderOptions<Component>, 'global'> {
   router?: boolean
   pinia?: boolean
-  global?: RenderOptions<any>['global']
+  global?: RenderOptions<Component>['global']
 }
 
 export const renderComponent = (
@@ -57,7 +57,7 @@ export const renderComponent = (
   const { router = false, pinia = false, global = {}, ...renderOptions } = options
 
   // Issue #156 Fix: RenderOptions<C> requires 1 type argument
-  const globalConfig: RenderOptions<any>['global'] = {
+  const globalConfig: RenderOptions<Component>['global'] = {
     ...global,
     plugins: [
       ...(global.plugins || []),
@@ -87,7 +87,7 @@ export const createMockApiResponse = <T>(data: T, success = true) => ({
 })
 
 // Mock factory for WebSocket events
-export const createMockWebSocketEvent = (type: string, data: any) => ({
+export const createMockWebSocketEvent = (type: string, data: unknown) => ({
   type,
   data: JSON.stringify(data),
   timestamp: Date.now(),
@@ -156,7 +156,7 @@ export const createMockSettings = (overrides = {}) => ({
 
 // Helper to create mock functions with return values
 // Issue #156 Fix: Vitest Mock<T> requires 0-1 type arguments, not 2
-export const createMockFn = <T extends (...args: any[]) => any>(
+export const createMockFn = <T extends (...args: never[]) => unknown>(
   returnValue?: ReturnType<T>
 ): Mock<T> => {
   const mockFn = vi.fn() as Mock<T>
@@ -168,7 +168,7 @@ export const createMockFn = <T extends (...args: any[]) => any>(
 
 // Helper to create mock functions that resolve with values
 // Issue #156 Fix: Vitest Mock<T> requires 0-1 type arguments, not 2
-export const createMockAsyncFn = <T extends (...args: any[]) => Promise<any>>(
+export const createMockAsyncFn = <T extends (...args: never[]) => Promise<unknown>>(
   resolveValue?: Awaited<ReturnType<T>>
 ): Mock<T> => {
   const mockFn = vi.fn() as Mock<T>

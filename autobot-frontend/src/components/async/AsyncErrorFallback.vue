@@ -66,7 +66,9 @@ import { ref, computed, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { isChunkLoadError, isCssChunkLoadError } from '@/utils/chunkLoadError'
 import Icon from '@/components/ui/Icon.vue'
+import type rumAgent from '@/utils/RumAgent'
 
 const logger = createLogger('AsyncErrorFallback')
 
@@ -93,7 +95,7 @@ const showDetails = ref(false)
 const retrying = ref(false)
 
 // Inject RUM agent if available
-const rum = inject('rum', null) as any
+const rum = inject('rum', null) as typeof rumAgent | null
 
 // Compute user-friendly error message based on error type
 const errorMessage = computed(() => {
@@ -101,12 +103,14 @@ const errorMessage = computed(() => {
 
   if (!error) return 'An unknown error occurred while loading the component.'
 
-  if (error.message?.includes('Loading chunk') || error.message?.includes('ChunkLoadError')) {
-    return 'This page failed to load due to a network issue or application update. Please try refreshing the page.'
+  // CSS chunk is a more specific case, so it must be checked before the
+  // general chunk predicate (which also matches CSS chunk failures).
+  if (isCssChunkLoadError(error)) {
+    return 'The page styles failed to load. Your browser may be using an outdated version.'
   }
 
-  if (error.message?.includes('Loading CSS chunk')) {
-    return 'The page styles failed to load. Your browser may be using an outdated version.'
+  if (isChunkLoadError(error)) {
+    return 'This page failed to load due to a network issue or application update. Please try refreshing the page.'
   }
 
   if (error.message?.includes('Failed to fetch')) {

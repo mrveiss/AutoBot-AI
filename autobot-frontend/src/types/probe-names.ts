@@ -20,6 +20,7 @@ export const PROBE_NAMES = {
   KNOWLEDGE: 'knowledge',
   ERROR_RESILIENCE: 'error_resilience',
   INTELLIGENT_AGENT: 'intelligent_agent',
+  CONTENT_REACH: 'content_reach',
 } as const
 
 export type ProbeName = (typeof PROBE_NAMES)[keyof typeof PROBE_NAMES]

@@ -56,7 +56,7 @@ canonical-check: canonical-check-py canonical-check-fe canonical-check-infra
 	@echo "canonical-check: all layers passed"
 
 canonical-check-py:
-	@python tools/lint/canonical_check.py --all --format pretty || \
+	@python3 tools/lint/canonical_check.py --all --format pretty || \
 		(echo "canonical-check-py: violations found"; exit 1)
 
 canonical-check-fe:
@@ -65,12 +65,12 @@ canonical-check-fe:
 
 canonical-check-infra:
 	@find scripts -type f \( -name '*.sh' -o -name '*.yml' -o -name '*.yaml' \) \
-		-print0 2>/dev/null | xargs -0 --no-run-if-empty python tools/lint/canonical_check_infra.py --files
+		-print0 2>/dev/null | xargs -0 --no-run-if-empty python3 tools/lint/canonical_check_infra.py --files
 
 canonical-audit:
 	@mkdir -p .canonical-audit
-	@python tools/lint/canonical_check.py --all --format markdown \
+	@python3 tools/lint/canonical_check.py --all --format markdown \
 		--output .canonical-audit/canonical-audit-py-$$(date -u +%Y-%m-%d).md
-	@python tools/lint/canonical_check_infra.py --all --format markdown \
+	@python3 tools/lint/canonical_check_infra.py --all --format markdown \
 		--output .canonical-audit/canonical-audit-infra-$$(date -u +%Y-%m-%d).md
 	@echo "canonical-audit: report written to .canonical-audit/"

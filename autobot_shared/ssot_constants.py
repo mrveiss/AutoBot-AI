@@ -127,6 +127,14 @@ GROQ_LLAMA33_70B = "llama-3.3-70b-versatile"
 GROQ_MIXTRAL_8X7B = "mixtral-8x7b-32768"
 GROQ_GEMMA2_9B = "gemma2-9b-it"
 
+# Mistral cloud API models (#10549) — https://api.mistral.ai/v1
+MISTRAL_LARGE_LATEST = "mistral-large-latest"
+MISTRAL_SMALL_LATEST = "mistral-small-latest"
+MISTRAL_MEDIUM_LATEST = "mistral-medium-latest"
+MISTRAL_CODESTRAL_LATEST = "codestral-latest"
+MISTRAL_DEVSTRAL_LATEST = "devstral-medium-latest"
+MISTRAL_NEMO = "open-mistral-nemo"
+
 DEEPSEEK_V3 = "deepseek-v3"
 DEEPSEEK_R1_API = "deepseek-r1-api"
 
@@ -210,6 +218,14 @@ class ModelConfig:
 
     # MMR diversity scoring (0.0 = pure relevance, 1.0 = pure diversity)
     RAG_MMR_LAMBDA: float = 0.0
+
+    # Issue #10600: hybrid keyword half uses BM25 Okapi instead of substring TF.
+    # Default False preserves the legacy substring scan (no behaviour change).
+    RAG_BM25_HYBRID_ENABLED: bool = False
+
+    # Issue #10600: relevance floor for the optimizer hybrid path (0.0 = no floor).
+    # Drops results scoring below this before returning; default 0.0 = no-op.
+    RAG_MIN_SCORE: float = 0.0
 
 
 class ModelConstants:

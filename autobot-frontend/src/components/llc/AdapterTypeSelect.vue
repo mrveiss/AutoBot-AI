@@ -67,6 +67,6 @@ onMounted(loadAdapters)
   border-radius: 6px;
   border: 1px solid var(--border-default, #d1d5db);
   background: var(--bg-surface, #fff);
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
 }
 </style>

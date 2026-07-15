@@ -33,9 +33,10 @@ ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ),
     # Issue #708: renamed from analytics_unified
     # Issue #3355: moved prefix from APIRouter() into registry (was "")
+    # Issue #10820: renamed /unified → /reporting (era-marker removal)
     (
         "api.analytics_reporting",
-        "/unified",
+        "/reporting",
         ["analytics-reporting", "analytics"],
         "analytics_reporting",
     ),

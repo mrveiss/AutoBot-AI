@@ -19,6 +19,8 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import TimingConstants
 from dependency_container import inject_services
+from knowledge.search import map_kb_result_to_dict
+from knowledge_base_factory import get_knowledge_base
 from llm_shared.models import ChatMessage, LLMResponse  # Phase 2D #3185
 from retry_mechanism import RetryConfig, RetryStrategy, with_retry
 
@@ -148,10 +150,10 @@ class AsyncChatWorkflow:
             message_type = await self._workflow_classify(user_message, workflow_steps)
 
             # Stage 2: Knowledge search
-            knowledge_status, kb_results = await self._workflow_knowledge_search()
+            knowledge_status, kb_results = await self._workflow_knowledge_search(user_message)
 
-            # Stage 3: LLM response generation
-            llm_response = await self._workflow_llm_generate(user_message, llm, workflow_steps)
+            # Stage 3: LLM response generation (grounded with KB results, #10732)
+            llm_response = await self._workflow_llm_generate(user_message, llm, workflow_steps, kb_results)
 
             # Stage 4: Build and return result
             return self._build_success_result(
@@ -199,11 +201,11 @@ class AsyncChatWorkflow:
 
     async def _workflow_knowledge_search(
         self,
+        query: str,
     ) -> tuple[KnowledgeStatus, List[Dict[str, Any]]]:
-        """Search knowledge base. Issue #281: Extracted helper."""
+        """Search knowledge base using the canonical KB facade. Issue #10715."""
         await self.add_workflow_message("debug", "🔍 WORKFLOW: Searching knowledge base...", step="knowledge_search")
-        knowledge_status = KnowledgeStatus.BYPASSED  # Simplified for now
-        kb_results: List[Dict[str, Any]] = []
+        knowledge_status, kb_results = await self._execute_kb_search(query)
         await self.add_workflow_message(
             "utility",
             "📚 Knowledge base search completed",
@@ -212,11 +214,36 @@ class AsyncChatWorkflow:
         )
         return knowledge_status, kb_results
 
-    async def _workflow_llm_generate(self, user_message: str, llm, workflow_steps: List[Dict[str, Any]]) -> LLMResponse:
+    async def _execute_kb_search(
+        self,
+        query: str,
+    ) -> tuple[KnowledgeStatus, List[Dict[str, Any]]]:
+        """Call the KB facade and map results; returns (status, results). Issue #10715."""
+        try:
+            kb = await get_knowledge_base()
+            if kb is None:
+                logger.warning("Knowledge base unavailable; skipping search for query: %.80s", query)
+                return KnowledgeStatus.MISSING, []
+            raw: List[Dict[str, Any]] = await kb.search(query=query, top_k=5)
+            if not raw:
+                return KnowledgeStatus.MISSING, []
+            results = [map_kb_result_to_dict(r) for r in raw]  # Issue #10740
+            return KnowledgeStatus.FOUND, results
+        except Exception as exc:
+            logger.error("Knowledge base search failed: %s", exc)
+            return KnowledgeStatus.MISSING, []
+
+    async def _workflow_llm_generate(
+        self,
+        user_message: str,
+        llm,
+        workflow_steps: List[Dict[str, Any]],
+        kb_results: List[Dict[str, Any]] | None = None,
+    ) -> LLMResponse:
         """Generate LLM response and log workflow step. Issue #281: Extracted helper."""
         await self.add_workflow_message("thought", "🧠 Generating response using LLM...", step="llm_generation")
         await self.add_workflow_message("debug", "🔗 WORKFLOW: Connecting to Ollama...", step="llm_connection")
-        llm_response = await self._generate_llm_response(user_message, llm)
+        llm_response = await self._generate_llm_response(user_message, llm, kb_results or [])
         await self.add_workflow_message(
             "utility",
             "✅ LLM response received",
@@ -299,18 +326,38 @@ class AsyncChatWorkflow:
         else:
             return MessageType.GENERAL_QUERY
 
+    @staticmethod
+    async def _budget_kb_context(kb_results: List[Dict[str, Any]]) -> str:
+        """Budget KB context via ContextWindowManager (#10735/#10837).
+
+        Delegates to the shared budget_grounded_context helper
+        (services/knowledge/service.py) with model_name=None so the YAML default
+        model budget applies.  Returns empty string when kb_results is empty.
+        """
+        from services.knowledge.service import budget_grounded_context
+
+        # budget_grounded_context returns (context_str, effective_kb_results).
+        # _budget_kb_context only needs the string; discard the list (#10837).
+        context, _ = await budget_grounded_context(kb_results, model_name=None)
+        return context
+
     @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=10.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
-    async def _generate_llm_response(self, user_message: str, llm) -> LLMResponse:
-        """Generate LLM response with retry logic"""
+    async def _generate_llm_response(
+        self, user_message: str, llm, kb_results: List[Dict[str, Any]] | None = None
+    ) -> LLMResponse:
+        """Generate LLM response with retry logic. #10732: grounded when kb_results provided."""
+        base_system = (
+            "You are AutoBot, an advanced autonomous AI assistant. Provide helpful, accurate, and concise responses."
+        )
+        # #10735: budget KB context via ContextWindowManager (mirrors llm_handler.py ~L793-823)
+        kb_context = await self._budget_kb_context(kb_results or [])
+        system_prompt = f"{kb_context}\n\n{base_system}" if kb_context else base_system
 
         # Prepare chat messages
-        messages = [ChatMessage(role="user", content=user_message)]
-
-        # Add system prompt for AutoBot context
-        system_prompt = (
-            "You are AutoBot, an advanced autonomous AI assistant. " "Provide helpful, accurate, and concise responses."
-        )
-        messages.insert(0, ChatMessage(role="system", content=system_prompt))
+        messages = [
+            ChatMessage(role="system", content=system_prompt),
+            ChatMessage(role="user", content=user_message),
+        ]
 
         # Generate response with timeout
         response = await asyncio.wait_for(

@@ -1,0 +1,34 @@
+#!/bin/bash
+# AutoBot PostgreSQL Scheduled Backup - Ansible Managed (#11383)
+# Do not edit manually — rendered from
+# roles/postgresql/templates/autobot-pg-backup.sh.j2
+#
+# Full-cluster dump via `su - postgres -c pg_dumpall` (run as root by the
+# oneshot service unit) so no password is embedded — matches the established
+# pre-migration backup pattern. Prunes dumps older than the retention window.
+set -euo pipefail
+
+BACKUP_DIR="{{ postgresql_backup_dir }}"
+PREFIX="{{ postgresql_backup_prefix }}"
+RETENTION_DAYS="{{ postgresql_backup_retention_days }}"
+OWNER="{{ autobot_user }}"
+GROUP="{{ autobot_group }}"
+
+timestamp="$(date +%Y%m%d-%H%M%S)"
+target="${BACKUP_DIR}/${PREFIX}-${timestamp}.sql.gz"
+tmp="${target}.partial"
+
+mkdir -p "${BACKUP_DIR}"
+
+# Dump to a .partial file first, then atomically rename, so an interrupted run
+# never leaves a half-written dump that prune/restore could pick up.
+su - postgres -c "pg_dumpall --clean --if-exists" | gzip > "${tmp}"
+mv "${tmp}" "${target}"
+chown "${OWNER}:${GROUP}" "${target}"
+chmod 0640 "${target}"
+
+echo "PostgreSQL cluster dump written: ${target}"
+
+# Prune dumps older than the retention window (mtime-based).
+find "${BACKUP_DIR}" -maxdepth 1 -type f -name "${PREFIX}-*.sql.gz" \
+  -mtime "+${RETENTION_DAYS}" -print -delete

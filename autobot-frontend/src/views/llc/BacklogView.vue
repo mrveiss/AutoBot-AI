@@ -5,22 +5,22 @@
   <div class="llc-backlog-view">
     <div class="backlog-header">
       <div class="header-left">
-        <h2 class="view-title">Backlog</h2>
-        <span class="item-count">{{ filteredItems.length }} items</span>
+        <h2 class="view-title">{{ t('llc.backlog.title') }}</h2>
+        <span class="item-count">{{ t('llc.backlog.itemCount', { count: filteredItems.length }) }}</span>
       </div>
       <div class="header-actions">
         <button class="btn-primary" @click="showCreateForm = true">
           <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
-          Create Work Item
+          {{ t('llc.backlog.createWorkItem') }}
         </button>
         <button
           v-if="selectedIds.size > 0"
           class="btn-secondary"
-          @click="showBulkAssign = true"
+          @click="openBulkAssign"
         >
-          Assign Sprint ({{ selectedIds.size }})
+          {{ t('llc.backlog.assignSprint', { count: selectedIds.size }) }}
         </button>
       </div>
     </div>
@@ -28,22 +28,22 @@
     <!-- Filters -->
     <div class="backlog-filters">
       <select v-model="filters.type" class="filter-select">
-        <option value="">All Types</option>
-        <option v-for="t in WORK_ITEM_TYPES" :key="t.value" :value="t.value">{{ t.label }}</option>
+        <option value="">{{ t('llc.backlog.allTypes') }}</option>
+        <option v-for="wt in WORK_ITEM_TYPES" :key="wt.value" :value="wt.value">{{ wt.label }}</option>
       </select>
       <select v-model="filters.status" class="filter-select">
-        <option value="">All Statuses</option>
-        <option value="backlog">Backlog</option>
-        <option value="ready">Ready</option>
+        <option value="">{{ t('llc.backlog.allStatuses') }}</option>
+        <option value="backlog">{{ t('llc.backlog.statusBacklog') }}</option>
+        <option value="ready">{{ t('llc.backlog.statusReady') }}</option>
       </select>
       <select v-model="filters.priority" class="filter-select">
-        <option value="">All Priorities</option>
+        <option value="">{{ t('llc.backlog.allPriorities') }}</option>
         <option v-for="p in PRIORITIES" :key="p.value" :value="p.value">{{ p.label }}</option>
       </select>
       <input
         v-model="filters.search"
         class="filter-search"
-        placeholder="Search work items..."
+        :placeholder="t('llc.backlog.searchPlaceholder')"
         type="text"
       />
     </div>
@@ -61,13 +61,13 @@
                 @change="toggleSelectAll"
               />
             </th>
-            <th class="col-id">ID</th>
-            <th class="col-type">Type</th>
-            <th class="col-title">Title</th>
-            <th class="col-priority">Priority</th>
-            <th class="col-points">Points</th>
-            <th class="col-assignee">Assignee</th>
-            <th class="col-sprint">Sprint</th>
+            <th class="col-id">{{ t('llc.backlog.colId') }}</th>
+            <th class="col-type">{{ t('llc.backlog.colType') }}</th>
+            <th class="col-title">{{ t('llc.backlog.colTitle') }}</th>
+            <th class="col-priority">{{ t('llc.backlog.colPriority') }}</th>
+            <th class="col-points">{{ t('llc.backlog.colPoints') }}</th>
+            <th class="col-assignee">{{ t('llc.backlog.colAssignee') }}</th>
+            <th class="col-sprint">{{ t('llc.backlog.colSprint') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -93,13 +93,11 @@
               <span class="item-identifier">{{ item.identifier }}</span>
             </td>
             <td class="col-type">
-              <span class="type-badge" :class="`type-${item.type}`">{{ item.type }}</span>
+              <WorkItemBadge kind="type" :value="item.type" />
             </td>
             <td class="col-title">{{ item.title }}</td>
             <td class="col-priority">
-              <span class="priority-badge" :class="`priority-${item.priority}`">
-                {{ item.priority }}
-              </span>
+              <WorkItemBadge kind="priority" :value="item.priority" />
             </td>
             <td class="col-points">{{ item.story_points ?? '—' }}</td>
             <td class="col-assignee">
@@ -109,15 +107,15 @@
               <span v-else class="assignee-empty">—</span>
             </td>
             <td class="col-sprint">
-              <span v-if="item.sprint_id" class="sprint-tag">Sprint {{ item.sprint_id.slice(0, 8) }}</span>
+              <span v-if="item.sprint_id" class="sprint-tag">{{ t('llc.backlog.sprintTag', { id: item.sprint_id.slice(0, 8) }) }}</span>
               <span v-else class="sprint-empty">—</span>
             </td>
           </tr>
           <tr v-if="filteredItems.length === 0 && !isLoading">
-            <td colspan="8" class="empty-state">No items match the current filters.</td>
+            <td colspan="8" class="empty-state">{{ t('llc.backlog.noMatch') }}</td>
           </tr>
           <tr v-if="isLoading">
-            <td colspan="8" class="loading-state">Loading...</td>
+            <td colspan="8" class="loading-state">{{ t('llc.backlog.loading') }}</td>
           </tr>
         </tbody>
       </table>
@@ -126,45 +124,45 @@
     <!-- AC Suggester create form -->
     <div v-if="showCreateForm" class="modal-overlay" @click.self="showCreateForm = false">
       <div class="modal-panel">
-        <h3>Create Work Item</h3>
+        <h3>{{ t('llc.backlog.createTitle') }}</h3>
         <div class="form-field">
-          <label>Title</label>
-          <input v-model="newItem.title" type="text" class="form-input" placeholder="Work item title" />
+          <label>{{ t('llc.backlog.fieldTitle') }}</label>
+          <input v-model="newItem.title" type="text" class="form-input" :placeholder="t('llc.backlog.titlePlaceholder')" />
         </div>
         <div class="form-row">
           <div class="form-field">
-            <label>Type</label>
+            <label>{{ t('llc.backlog.fieldType') }}</label>
             <select v-model="newItem.type" class="form-select">
-              <option v-for="t in WORK_ITEM_TYPES" :key="t.value" :value="t.value">{{ t.label }}</option>
+              <option v-for="wt in WORK_ITEM_TYPES" :key="wt.value" :value="wt.value">{{ wt.label }}</option>
             </select>
           </div>
           <div class="form-field">
-            <label>Priority</label>
+            <label>{{ t('llc.backlog.fieldPriority') }}</label>
             <select v-model="newItem.priority" class="form-select">
               <option v-for="p in PRIORITIES" :key="p.value" :value="p.value">{{ p.label }}</option>
             </select>
           </div>
           <div class="form-field">
-            <label>Story Points</label>
+            <label>{{ t('llc.backlog.fieldStoryPoints') }}</label>
             <input v-model.number="newItem.story_points" type="number" class="form-input" min="0" />
           </div>
         </div>
         <div class="form-field">
-          <label>Description</label>
+          <label>{{ t('llc.backlog.fieldDescription') }}</label>
           <textarea v-model="newItem.description" class="form-textarea" rows="4" />
         </div>
 
         <!-- AC Suggester -->
         <div class="ac-suggester">
           <div class="ac-header">
-            <label>Acceptance Criteria</label>
+            <label>{{ t('llc.backlog.acceptanceCriteria') }}</label>
             <button
               class="btn-suggest"
               :disabled="!newItem.title || isSuggestingAC"
               @click="suggestAC"
             >
-              <span v-if="isSuggestingAC">Suggesting...</span>
-              <span v-else>✨ Suggest ACs</span>
+              <span v-if="isSuggestingAC">{{ t('llc.backlog.suggesting') }}</span>
+              <span v-else>✨ {{ t('llc.backlog.suggestAcs') }}</span>
             </button>
           </div>
           <div v-if="suggestedACs.length > 0" class="suggested-acs">
@@ -179,10 +177,12 @@
           </div>
         </div>
 
+        <p v-if="createError" class="create-error" role="alert">{{ createError }}</p>
+
         <div class="modal-actions">
-          <button class="btn-secondary" @click="showCreateForm = false">Cancel</button>
+          <button class="btn-secondary" @click="showCreateForm = false">{{ t('common.cancel') }}</button>
           <button class="btn-primary" :disabled="!newItem.title || isCreating" @click="createItem">
-            {{ isCreating ? 'Creating...' : 'Create' }}
+            {{ isCreating ? t('llc.backlog.creating') : t('common.create') }}
           </button>
         </div>
       </div>
@@ -191,16 +191,30 @@
     <!-- Bulk sprint assign drawer -->
     <div v-if="showBulkAssign" class="modal-overlay" @click.self="showBulkAssign = false">
       <div class="modal-panel">
-        <h3>Assign to Sprint</h3>
-        <p>{{ selectedIds.size }} items selected</p>
+        <h3>{{ t('llc.backlog.assignToSprint') }}</h3>
+        <p>{{ t('llc.backlog.itemsSelected', { count: selectedIds.size }) }}</p>
         <div class="form-field">
-          <label>Sprint ID</label>
-          <input v-model="bulkSprintId" type="text" class="form-input" placeholder="Sprint UUID" />
+          <label>{{ t('llc.backlog.project') }}</label>
+          <select class="form-input" :value="selectedProjectId" :disabled="isLoadingProjects"
+                  @change="onProjectSelect(($event.target as HTMLSelectElement).value)">
+            <option value="">{{ isLoadingProjects ? t('llc.backlog.loadingProjects') : t('llc.backlog.selectProject') }}</option>
+            <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>{{ t('llc.backlog.sprint') }}</label>
+          <select v-model="bulkSprintId" class="form-input" :disabled="!selectedProjectId || isLoadingSprints">
+            <option value="">{{ isLoadingSprints ? t('llc.backlog.loadingSprints') : t('llc.backlog.selectSprint') }}</option>
+            <option v-for="s in sprints" :key="s.id" :value="s.id">{{ s.name }}</option>
+          </select>
+          <p v-if="selectedProjectId && !isLoadingSprints && sprints.length === 0" class="form-hint">
+            {{ t('llc.backlog.noSprints') }}
+          </p>
         </div>
         <div class="modal-actions">
-          <button class="btn-secondary" @click="showBulkAssign = false">Cancel</button>
+          <button class="btn-secondary" @click="showBulkAssign = false">{{ t('common.cancel') }}</button>
           <button class="btn-primary" :disabled="!bulkSprintId || isBulkAssigning" @click="bulkAssign">
-            {{ isBulkAssigning ? 'Assigning...' : 'Assign' }}
+            {{ isBulkAssigning ? t('llc.backlog.assigning') : t('llc.backlog.assign') }}
           </button>
         </div>
       </div>
@@ -219,13 +233,16 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
+import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 
 const logger = createLogger('BacklogView')
 const api = useApiClient()
 const route = useRoute()
+const { t } = useI18n()
 
 const companyId = computed(() => route.params.companyId as string)
 
@@ -259,6 +276,7 @@ const filters = ref({ type: '', status: '', priority: '', search: '' })
 
 const showCreateForm = ref(false)
 const isCreating = ref(false)
+const createError = ref('')
 const newItem = ref({ title: '', type: 'pbi', priority: 'medium', story_points: null as number | null, description: '' })
 const isSuggestingAC = ref(false)
 const suggestedACs = ref<{ text: string; selected: boolean }[]>([])
@@ -266,6 +284,15 @@ const suggestedACs = ref<{ text: string; selected: boolean }[]>([])
 const showBulkAssign = ref(false)
 const isBulkAssigning = ref(false)
 const bulkSprintId = ref('')
+
+interface ProjectOpt { id: string; name: string; lifecycle_state: string }
+interface SprintOpt { id: string; name: string; status: string }
+
+const projects = ref<ProjectOpt[]>([])
+const sprints = ref<SprintOpt[]>([])
+const selectedProjectId = ref('')
+const isLoadingProjects = ref(false)
+const isLoadingSprints = ref(false)
 
 const filteredItems = computed(() => {
   return items.value.filter(item => {
@@ -372,6 +399,7 @@ async function suggestAC() {
 async function createItem() {
   if (!newItem.value.title) return
   isCreating.value = true
+  createError.value = ''
   try {
     const ac = suggestedACs.value.filter(a => a.selected).map(a => a.text)
     const created = await api.post<WorkItem>(`/api/llc/work-items`, {
@@ -384,10 +412,58 @@ async function createItem() {
     newItem.value = { title: '', type: 'pbi', priority: 'medium', story_points: null, description: '' }
     suggestedACs.value = []
   } catch (err) {
+    // Surface the backend reason instead of a silent console-only log (#11411).
     logger.error('Create work item failed', err)
+    const detail = err instanceof Error ? err.message : ''
+    createError.value = detail
+      ? t('llc.backlog.createErrorDetail', { detail })
+      : t('llc.backlog.createError')
   } finally {
     isCreating.value = false
   }
+}
+
+// Cascade picker for bulk sprint assignment: pick a Project, then a Sprint from
+// that project. Only assignable (non-archived) projects and (open) sprints are
+// offered so a user never needs to paste a raw Sprint UUID (#10853).
+async function loadProjects() {
+  isLoadingProjects.value = true
+  try {
+    const result = await api.get<ProjectOpt[]>(`/api/llc/companies/${companyId.value}/projects`)
+    projects.value = (result ?? []).filter(
+      p => p.lifecycle_state !== 'archived' && p.lifecycle_state !== 'disposed',
+    )
+  } catch (err) {
+    logger.error('Failed to load projects', err)
+  } finally {
+    isLoadingProjects.value = false
+  }
+}
+
+async function onProjectSelect(projectId: string) {
+  selectedProjectId.value = projectId
+  bulkSprintId.value = ''
+  sprints.value = []
+  if (!projectId) return
+  isLoadingSprints.value = true
+  try {
+    const result = await api.get<SprintOpt[]>(`/api/llc/projects/${projectId}/sprints`)
+    sprints.value = (result ?? []).filter(
+      sp => sp.status !== 'closed' && sp.status !== 'archived',
+    )
+  } catch (err) {
+    logger.error('Failed to load sprints', err)
+  } finally {
+    isLoadingSprints.value = false
+  }
+}
+
+function openBulkAssign() {
+  showBulkAssign.value = true
+  selectedProjectId.value = ''
+  sprints.value = []
+  bulkSprintId.value = ''
+  if (projects.value.length === 0) loadProjects()
 }
 
 async function bulkAssign() {
@@ -431,8 +507,8 @@ onMounted(fetchBacklog)
   height: 100%;
   padding: 1.5rem;
   gap: 1rem;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .backlog-header {
@@ -455,7 +531,7 @@ onMounted(fetchBacklog)
 
 .item-count {
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .header-actions {
@@ -472,10 +548,10 @@ onMounted(fetchBacklog)
 .filter-select,
 .filter-search {
   padding: 0.4rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
@@ -487,7 +563,7 @@ onMounted(fetchBacklog)
 .backlog-table-wrapper {
   flex: 1;
   overflow: auto;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
 }
 
@@ -501,19 +577,19 @@ onMounted(fetchBacklog)
   padding: 0.625rem 0.75rem;
   text-align: left;
   font-weight: 600;
-  background: var(--color-surface-elevated, #f9fafb);
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated, #f9fafb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
   white-space: nowrap;
 }
 
 .backlog-row {
-  border-bottom: 1px solid var(--color-border, #f3f4f6);
+  border-bottom: 1px solid var(--border-default, #f3f4f6);
   cursor: pointer;
   transition: background 0.1s;
 }
 
 .backlog-row:hover {
-  background: var(--color-surface-hover, #f9fafb);
+  background: var(--bg-hover, #f9fafb);
 }
 
 .backlog-row.selected {
@@ -535,32 +611,8 @@ onMounted(fetchBacklog)
 .item-identifier {
   font-family: monospace;
   font-size: 0.8rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
-
-.type-badge,
-.priority-badge {
-  display: inline-block;
-  padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-transform: capitalize;
-}
-
-.type-epic { background: #ddd6fe; color: #5b21b6; }
-.type-feature { background: #bfdbfe; color: #1d4ed8; }
-.type-pbi { background: #d1fae5; color: #065f46; }
-.type-task { background: #e0f2fe; color: #0369a1; }
-.type-bug { background: #fee2e2; color: #991b1b; }
-.type-spike { background: #fef3c7; color: #92400e; }
-.type-subtask { background: #f3f4f6; color: #374151; }
-.type-risk { background: #fce7f3; color: #9d174d; }
-
-.priority-critical { background: #fee2e2; color: #991b1b; }
-.priority-high { background: #ffedd5; color: #9a3412; }
-.priority-medium { background: #fef9c3; color: #713f12; }
-.priority-low { background: #f0fdf4; color: #14532d; }
 
 .assignee-avatar {
   display: inline-flex;
@@ -588,7 +640,7 @@ onMounted(fetchBacklog)
 .loading-state {
   text-align: center;
   padding: 2rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .modal-overlay {
@@ -602,7 +654,7 @@ onMounted(fetchBacklog)
 }
 
 .modal-panel {
-  background: var(--color-surface, #fff);
+  background: var(--bg-surface, #fff);
   border-radius: 0.75rem;
   padding: 1.5rem;
   width: 100%;
@@ -629,7 +681,7 @@ onMounted(fetchBacklog)
 .form-field label {
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .form-row {
@@ -645,10 +697,10 @@ onMounted(fetchBacklog)
 .form-select,
 .form-textarea {
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
   font-size: 0.875rem;
   width: 100%;
 }
@@ -672,15 +724,15 @@ onMounted(fetchBacklog)
 .ac-header label {
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .btn-suggest {
   font-size: 0.8rem;
   padding: 0.25rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
   cursor: pointer;
 }
 
@@ -694,9 +746,9 @@ onMounted(fetchBacklog)
   flex-direction: column;
   gap: 0.375rem;
   padding: 0.5rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
 }
 
 .ac-item {
@@ -711,6 +763,18 @@ onMounted(fetchBacklog)
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.create-error {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--color-danger, #b91c1c);
+}
+
+.form-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #6b7280);
 }
 
 .btn-primary {
@@ -742,9 +806,9 @@ onMounted(fetchBacklog)
   align-items: center;
   gap: 0.375rem;
   padding: 0.5rem 1rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
-  border: 1px solid var(--color-border, #d1d5db);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   font-weight: 500;
@@ -753,7 +817,7 @@ onMounted(fetchBacklog)
 }
 
 .btn-secondary:hover {
-  background: var(--color-surface-hover, #f9fafb);
+  background: var(--bg-hover, #f9fafb);
 }
 
 .btn-icon {

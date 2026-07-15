@@ -309,6 +309,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useConversationFiles, type SortField } from '@/composables/useConversationFiles'
 import { formatTimeAgo } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -323,6 +324,7 @@ defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 // File management composable
 const {
@@ -405,7 +407,7 @@ const handleDrop = async (event: DragEvent) => {
 const handlePreview = async (fileId: string) => { await previewFile(fileId) }
 const handleDownload = async (fileId: string, filename: string) => { await downloadFile(fileId, filename) }
 const handleDelete = async (fileId: string, filename: string) => {
-  if (confirm(t('chat.filePanel.confirmDelete', { name: filename }))) {
+  if (await confirm({ title: t('common.confirm'), message: t('chat.filePanel.confirmDelete', { name: filename }) })) {
     await deleteFile(fileId)
   }
 }
@@ -456,7 +458,7 @@ const handleCopy = async (fileId: string) => {
 }
 
 const handleBulkDelete = async () => {
-  if (confirm(t('chat.filePanel.confirmBulkDelete', { count: selectedCount.value }))) {
+  if (await confirm({ title: t('common.confirm'), message: t('chat.filePanel.confirmBulkDelete', { count: selectedCount.value }) })) {
     await deleteSelectedFiles()
   }
 }

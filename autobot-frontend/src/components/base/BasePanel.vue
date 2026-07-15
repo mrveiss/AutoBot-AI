@@ -1,9 +1,21 @@
 <template>
   <div class="base-panel" :class="panelClasses">
-    <div class="panel-header" v-if="$slots.header || title">
-      <slot name="header">
-        <h3 class="panel-title">{{ title }}</h3>
-      </slot>
+    <div class="panel-header" v-if="$slots.header || title || collapsible">
+      <div class="panel-header-lead">
+        <button
+          v-if="collapsible"
+          type="button"
+          class="panel-collapse-toggle"
+          :aria-expanded="!collapsed"
+          :aria-label="collapsed ? t('base.panel.expand') : t('base.panel.collapse')"
+          @click="toggleCollapse"
+        >
+          <span class="panel-collapse-icon" :class="{ 'is-collapsed': collapsed }" aria-hidden="true">▾</span>
+        </button>
+        <slot name="header">
+          <h3 class="panel-title">{{ title }}</h3>
+        </slot>
+      </div>
       <div class="panel-actions" v-if="$slots.actions">
         <slot name="actions"></slot>
       </div>
@@ -21,7 +33,10 @@
 
 <script setup lang="ts">
 import { computed, watchEffect } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
+
+const { t } = useI18n()
 
 const PANEL_SIZES = ['sm', 'md', 'lg'] as const
 const PANEL_VARIANTS = ['default', 'bordered', 'elevated', 'flat', 'dark'] as const
@@ -151,6 +166,40 @@ if (import.meta.env.DEV) {
   justify-content: space-between;
   padding: var(--spacing-4);
   border-bottom: 1px solid var(--border-default);
+}
+
+.panel-header-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  min-width: 0;
+}
+
+.panel-collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-1);
+  background-color: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.panel-collapse-toggle:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
+}
+
+.panel-collapse-icon {
+  display: inline-block;
+  line-height: 1;
+  transition: transform var(--duration-200) var(--ease-out);
+}
+
+.panel-collapse-icon.is-collapsed {
+  transform: rotate(-90deg);
 }
 
 .panel-title {

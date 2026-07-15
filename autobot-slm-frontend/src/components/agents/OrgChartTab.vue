@@ -202,7 +202,7 @@ onMounted(fetchTree)
         </div>
 
         <div v-if="directReports.length" class="direct-reports">
-          <h4>Direct Reports ({{ directReports.length }})</h4>
+          <h4>{{ $t('agents.orgChartTab.directReportsCount', { count: directReports.length }) }}</h4>
           <ul>
             <li v-for="r in directReports" :key="r.agent_id">
               <span :class="['role-badge', 'small', roleBadgeClass(r.org_role)]">{{
@@ -242,7 +242,7 @@ onMounted(fetchTree)
               <textarea
                 v-model="delegateForm.task_description"
                 rows="3"
-                placeholder="Describe the task..."
+                :placeholder="$t('agents.orgChartTab.describeTheTask')"
               />
             </div>
             <div class="form-actions">

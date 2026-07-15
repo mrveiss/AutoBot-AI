@@ -12,7 +12,7 @@
  * Issue #156: Eliminates need for 'as any' type casts in store definitions
  */
 
-import 'pinia'
+import type { StateTree, PiniaPluginContext } from 'pinia'
 
 declare module 'pinia' {
   /**
@@ -71,23 +71,23 @@ declare module 'pinia' {
       /**
        * Serialize state before storing
        */
-      serialize: (value: any) => string
+      serialize: (value: StateTree) => string
 
       /**
        * Deserialize state when loading
        */
-      deserialize: (value: string) => any
+      deserialize: (value: string) => StateTree
     }
 
     /**
      * Hook called before state is persisted
      */
-    beforeRestore?: (context: any) => void
+    beforeRestore?: (context: PiniaPluginContext) => void
 
     /**
      * Hook called after state is restored
      */
-    afterRestore?: (context: any) => void
+    afterRestore?: (context: PiniaPluginContext) => void
 
     /**
      * Enable debug mode for persistence operations

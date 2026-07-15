@@ -28,6 +28,7 @@ from api.schemas_agent import (
     LoginRequest,
     LoginResponse,
     LogoutRequest,
+    PasswordWarning,
     SignupRequest,
     SignupResponse,
 )
@@ -38,10 +39,10 @@ from autobot_shared.auth.jwt_core import JWTDecodeError, _peek_alg, decode_jwt_n
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.security.password_weakness import check_password_weakness
 from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
-from services.audit.unified_audit import EventType  # GH#8290 Phase 2
-from services.audit.unified_audit import emit as _emit_event  # GH#8290 Phase 2
+from services.audit.audit import EventType  # GH#8290 Phase 2
+from services.audit.audit import emit as _emit_event  # GH#8290 Phase 2
 from user_management.database import db_session_context
 from user_management.services.user_service import UserService
 
@@ -52,20 +53,6 @@ logger = get_logger(__name__)
 # Rate limiting for password change endpoint (stricter limits for security)
 PASSWORD_CHANGE_RATE_WINDOW = 300  # 5 minutes
 PASSWORD_CHANGE_MAX_ATTEMPTS = 5  # max attempts per window
-
-# Issue #6838: explicit opt-in for the single_user synthetic-admin login shortcut.
-# When unset, /login in single_user mode rejects all credentials (matches prod modes).
-_DEV_AUTH_BYPASS_TRUTHY = frozenset({"1", "true", "yes", "on"})
-
-
-def _dev_auth_bypass_enabled() -> bool:
-    """Return True only when AUTOBOT_DEV_AUTH_BYPASS is explicitly truthy.
-
-    Gates the single_user synthetic-admin login shortcut so the unsafe behavior
-    is opt-in. Without the flag, /login behaves like production modes and
-    refuses to mint tokens without a real user store backing the request.
-    """
-    return ssot_config.dev_auth_bypass.strip().lower() in _DEV_AUTH_BYPASS_TRUTHY
 
 
 async def _enrich_user_with_org_context(user_data: Dict) -> Dict:
@@ -170,52 +157,6 @@ async def login(request: Request, login_data: LoginRequest):
     try:
         ip_address = request.client.host if request.client else "unknown"
 
-        # Issue #2953: In single_user mode, skip PostgreSQL and return synthetic admin.
-        # The /me and /check endpoints already do this; login must be consistent.
-        # Issue #6838: the bypass is now gated behind AUTOBOT_DEV_AUTH_BYPASS=true so
-        # the default deployment cannot mint admin JWTs without credentials.
-        from user_management.config import DeploymentMode, get_deployment_config
-
-        deploy_cfg = get_deployment_config()
-        if deploy_cfg.mode == DeploymentMode.SINGLE_USER:
-            if not _dev_auth_bypass_enabled():
-                logger.warning(
-                    "Rejected login for %s from %s: AUTOBOT_USER_MODE=single_user "
-                    "without AUTOBOT_DEV_AUTH_BYPASS=true. Set the flag for local "
-                    "dev only, or switch to a real user mode (#6838).",
-                    login_data.username,
-                    ip_address,
-                )
-                raise HTTPException(status_code=401, detail=ERR_INVALID_CREDENTIALS)
-            admin_data = {
-                "username": "admin",
-                "user_id": "admin",
-                "role": "admin",
-                "email": f"admin@{ssot_config.auth.domain}",
-                "last_login": None,
-            }
-            jwt_token = get_auth_middleware().create_jwt_token(
-                {
-                    # Include user_id + sub so user endpoints (e.g. /users/me/preferences)
-                    # can resolve the identity; without them they 401'd and the frontend
-                    # logged out → login redirect loop in single_user bypass mode.
-                    "sub": "admin",
-                    "user_id": "admin",
-                    "username": "admin",
-                    "role": "admin",
-                    "email": f"admin@{ssot_config.auth.domain}",
-                }
-            )
-            session_id = get_auth_middleware().create_session({"username": "admin", "role": "admin"}, request)
-            _emit_event(EventType.USER_LOGIN, user_id="admin", ip_address=ip_address)
-            return LoginResponse(
-                success=True,
-                message="Login successful",
-                user=admin_data,
-                token=jwt_token,
-                session_id=session_id,
-            )
-
         # Authenticate against PostgreSQL and build user data (Issue #888, #898)
         user_data = await _authenticate_and_build_user_data(login_data.username, login_data.password, ip_address)
 
@@ -230,6 +171,19 @@ async def login(request: Request, login_data: LoginRequest):
             "last_login": user_data.get("last_login"),
         }
 
+        # Soft password-weakness check (#10199). Advisory only — never blocks login.
+        # Evaluated on the submitted plaintext (available here, discarded after).
+        # The plaintext is NOT logged.
+        weakness_reason = check_password_weakness(login_data.password)
+        password_warning: PasswordWarning | None = None
+        if weakness_reason:
+            password_warning = PasswordWarning(reason=weakness_reason)
+            logger.info(
+                "Login soft-warning for user '%s': weak password detected (%s)",
+                login_data.username,
+                weakness_reason,
+            )
+
         _emit_event(
             EventType.USER_LOGIN,
             user_id=safe_user_data["user_id"],
@@ -241,6 +195,7 @@ async def login(request: Request, login_data: LoginRequest):
             user=safe_user_data,
             token=jwt_token,
             session_id=session_id,
+            password_warning=password_warning,
         )
 
     except HTTPException:
@@ -357,24 +312,11 @@ async def revoke_rs256_token(
 async def get_current_user_info(request: Request):
     """
     Get current authenticated user information.
-
-    In single_user deployment mode, returns default admin user without requiring auth.
     """
     try:
-        # Check deployment mode - in single_user mode, return synthetic admin
-        from user_management.config import DeploymentMode, get_deployment_config
+        from user_management.config import get_deployment_config
 
         config = get_deployment_config()
-        if config.mode == DeploymentMode.SINGLE_USER:
-            return {
-                "username": "admin",
-                "role": "admin",
-                "email": f"admin@{ssot_config.auth.domain}",
-                "auth_method": "single_user",
-                "authenticated": True,
-                "deployment_mode": "single_user",
-            }
-
         user_data = get_auth_middleware().get_user_from_request(request)
 
         if not user_data:
@@ -406,22 +348,11 @@ async def get_current_user_info(request: Request):
 async def check_authentication(request: Request):
     """
     Quick authentication check endpoint.
-
-    In single_user mode, always returns authenticated=True.
     """
     try:
-        # Check deployment mode
-        from user_management.config import DeploymentMode, get_deployment_config
+        from user_management.config import get_deployment_config
 
         config = get_deployment_config()
-        if config.mode == DeploymentMode.SINGLE_USER:
-            return {
-                "authenticated": True,
-                "role": "admin",
-                "auth_enabled": False,
-                "deployment_mode": "single_user",
-            }
-
         user_data = get_auth_middleware().get_user_from_request(request)
 
         return {
@@ -540,15 +471,6 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
     Rate limited to 5 attempts per 5 minutes.
     """
     try:
-        from user_management.config import DeploymentMode, get_deployment_config
-
-        config = get_deployment_config()
-        if config.mode == DeploymentMode.SINGLE_USER:
-            raise HTTPException(
-                status_code=400,
-                detail="Password change is not available in single-user mode",
-            )
-
         user_data = get_auth_middleware().get_user_from_request(request)
         if not user_data or user_data.get("auth_method") == "guest":
             raise HTTPException(status_code=401, detail="Authentication required")
@@ -593,17 +515,7 @@ async def signup(request: Request, signup_data: SignupRequest):
     Self-registration endpoint for new users (#1801).
 
     Creates a new user account with the default 'user' role.
-    Disabled in single_user deployment mode.
     """
-    from user_management.config import DeploymentMode, get_deployment_config
-
-    deploy_cfg = get_deployment_config()
-    if deploy_cfg.mode == DeploymentMode.SINGLE_USER:
-        raise HTTPException(
-            status_code=400,
-            detail="Self-registration is not available in single-user mode",
-        )
-
     try:
         async with db_session_context() as session:
             user_service = UserService(session)
@@ -679,16 +591,6 @@ async def refresh_token(request: Request):
     Accepts a valid (or recently expired within 1h) JWT and returns
     a fresh token with a new expiry window.
     """
-    from user_management.config import DeploymentMode, get_deployment_config
-
-    config = get_deployment_config()
-    if config.mode == DeploymentMode.SINGLE_USER:
-        return {
-            "success": True,
-            "token": "single_user_mode",  # nosec B105 - sentinel token value for single-user mode, not a real
-            "expiresIn": 86400,
-        }
-
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="No token provided")

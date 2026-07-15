@@ -35,6 +35,21 @@ _SECRET_TO_ANSIBLE_VAR: dict[str, str] = {
     "autobot_internal_api_key": "autobot_internal_api_key",
 }
 
+# Maps a managed secret key to the role name(s) that can receive it via the
+# lightweight "apply secrets" propagation path (#11719) — re-render just the
+# role's env-file template + restart its systemd service, instead of a full
+# role redeploy (venv rebuild, package installs, model predownload).
+#
+# Only secrets with a SINGLE clean env-template + service-restart consumer
+# are listed here. "autobot_internal_api_key" is intentionally NOT included:
+# it fans out across backend.env.j2 (autobot-backend), the slm_manager nginx
+# conf template (autobot-slm.conf.j2), and slm_agent's systemd env file — no
+# single clean env-template+restart target, so rotating it still requires the
+# full role redeploy ("Migrate"/"Redeploy") path for now.
+_SECRET_TO_DEPENDENT_ROLES: dict[str, list[str]] = {
+    "hf_token": ["tts-worker"],
+}
+
 
 async def fetch_deploy_secrets() -> dict[str, str]:
     """Read stored SLM secrets and return them as Ansible extra_vars (#3519, #3778).

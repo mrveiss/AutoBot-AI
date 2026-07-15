@@ -164,10 +164,10 @@ def test_format_knowledge_context(mock_rag_service, sample_search_results) -> No
     # Format first 2 results
     context = service.format_knowledge_context(sample_search_results[:2])
 
-    # Verify structure
+    # Verify structure — facts carry citable [Source N] labels (#10652)
     assert "KNOWLEDGE CONTEXT:" in context
-    assert "1. [score: 0.92]" in context
-    assert "2. [score: 0.82]" in context
+    assert "[Source 1]" in context
+    assert "[Source 2]" in context
     assert "Redis is configured" in context
     assert "redis-cli" in context
 
@@ -177,6 +177,45 @@ def test_format_knowledge_context_empty(mock_rag_service) -> None:
     service = ChatKnowledgeService(mock_rag_service)
     context = service.format_knowledge_context([])
     assert context == ""
+
+
+def test_format_knowledge_context_includes_grounding_instruction(
+    mock_rag_service, sample_search_results, monkeypatch
+) -> None:
+    """#10652: citation instruction is prepended when the flag is on."""
+    from autobot_shared.ssot_config import config
+
+    monkeypatch.setattr(config, "chat_citation_instruction_enabled", True, raising=False)
+    service = ChatKnowledgeService(mock_rag_service)
+    context = service.format_knowledge_context(sample_search_results[:1])
+    assert "[Source N]" in context  # instruction tells the model how to cite
+    assert "say you don't know" in context
+
+
+def test_format_knowledge_context_grounding_can_be_disabled(
+    mock_rag_service, sample_search_results, monkeypatch
+) -> None:
+    """#10652: instruction omitted when flag off; source labels stay."""
+    from autobot_shared.ssot_config import config
+
+    monkeypatch.setattr(config, "chat_citation_instruction_enabled", False, raising=False)
+    service = ChatKnowledgeService(mock_rag_service)
+    context = service.format_knowledge_context(sample_search_results[:1])
+    assert "say you don't know" not in context
+    assert "[Source 1]" in context  # source labels are unconditional
+
+
+def test_build_grounded_context_shared_builder(monkeypatch) -> None:
+    """#10652: the shared builder (reused by the compression path) labels + cites."""
+    from autobot_shared.ssot_config import config
+    from services.knowledge.service import build_grounded_context
+
+    monkeypatch.setattr(config, "chat_citation_instruction_enabled", True, raising=False)
+    ctx = build_grounded_context(["fact one", "fact two"])
+    assert "[Source 1] fact one" in ctx
+    assert "[Source 2] fact two" in ctx
+    assert "say you don't know" in ctx  # grounding instruction applied here too
+    assert build_grounded_context([]) == ""  # empty → no instruction, no header
 
 
 def test_format_citations(mock_rag_service, sample_search_results) -> None:
@@ -424,7 +463,7 @@ async def test_smart_retrieve_knowledge_retrieves_for_questions(mock_rag_service
     )
 
     assert "KNOWLEDGE CONTEXT:" in context
-    assert len(citations) == 2  # Only 2 above default threshold
+    assert len(citations) == 3  # All 3 above default threshold (0.3): rerank 0.92, 0.82, 0.58
     assert intent.intent == QueryKnowledgeIntent.KNOWLEDGE_QUERY
     assert intent.should_use_knowledge is True
 
@@ -690,3 +729,123 @@ async def test_conversation_aware_retrieve_without_enhancement(mock_rag_service,
     assert enhanced is not None
     assert enhanced.enhancement_applied is False  # No enhancement needed
     assert enhanced.original_query == enhanced.enhanced_query
+
+
+# ---------------------------------------------------------------------------
+# budget_grounded_context shared helper (#10837)
+# ---------------------------------------------------------------------------
+
+
+def _kb(content: str) -> dict:
+    return {"content": content, "source": "s", "score": 0.9, "metadata": {}}
+
+
+@pytest.mark.asyncio
+async def test_budget_grounded_context_empty_returns_empty():
+    """Empty kb_results → empty string; ContextWindowManager never instantiated."""
+    from unittest.mock import patch
+
+    from services.knowledge.service import budget_grounded_context
+
+    with patch("context_window_manager.ContextWindowManager", side_effect=AssertionError("must not init")):
+        result, _trimmed = await budget_grounded_context([])
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_budget_grounded_context_small_unchanged(monkeypatch):
+    """kb_results below token threshold → context returned unchanged (no compression)."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from services.knowledge.service import budget_grounded_context
+
+    mock_cwm = MagicMock()
+    mock_cwm.estimate_tokens.return_value = 10
+    mock_cwm.get_max_history_tokens.return_value = 4096
+    mock_cwm.async_should_compress = AsyncMock(return_value=False)
+    mock_cwm.config = {"models": {}}
+
+    with patch("context_window_manager.ContextWindowManager", return_value=mock_cwm):
+        result, _trimmed = await budget_grounded_context([_kb("short fact")], model_name=None)
+
+    assert "short fact" in result
+    assert "[Source 1]" in result
+    mock_cwm.async_should_compress.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_budget_grounded_context_oversized_compressed(monkeypatch):
+    """Oversized kb_results → compress_kb_results invoked; result rebuilt from trimmed set."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from services.knowledge.service import budget_grounded_context
+
+    kb_results = [_kb("fact A" * 500), _kb("fact B" * 500), _kb("fact C" * 500)]
+    trimmed = [kb_results[0]]
+
+    mock_cwm = MagicMock()
+    mock_cwm.estimate_tokens.side_effect = lambda text: len(text) // 4
+    mock_cwm.get_max_history_tokens.return_value = 512
+    mock_cwm.async_should_compress = AsyncMock(return_value=True)
+    mock_cwm.config = {"models": {"default": {"compression_threshold": 512}}}
+
+    mock_svc = MagicMock()
+    mock_svc.compress_kb_results = AsyncMock(return_value=trimmed)
+
+    with (
+        patch("context_window_manager.ContextWindowManager", return_value=mock_cwm),
+        patch("services.memory.compression.ContextCompressionService", return_value=mock_svc),
+    ):
+        result, _trimmed = await budget_grounded_context(kb_results, model_name="llama3")
+
+    mock_svc.compress_kb_results.assert_called_once()
+    assert "fact A" in result
+    assert "[Source 1]" in result
+
+
+@pytest.mark.asyncio
+async def test_budget_grounded_context_all_trimmed_returns_empty():
+    """compress_kb_results returns [] → budget_grounded_context returns empty string."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from services.knowledge.service import budget_grounded_context
+
+    mock_cwm = MagicMock()
+    mock_cwm.estimate_tokens.return_value = 99999
+    mock_cwm.get_max_history_tokens.return_value = 512
+    mock_cwm.async_should_compress = AsyncMock(return_value=True)
+    mock_cwm.config = {"models": {"default": {"compression_threshold": 512}}}
+
+    mock_svc = MagicMock()
+    mock_svc.compress_kb_results = AsyncMock(return_value=[])
+
+    with (
+        patch("context_window_manager.ContextWindowManager", return_value=mock_cwm),
+        patch("services.memory.compression.ContextCompressionService", return_value=mock_svc),
+    ):
+        result, _trimmed = await budget_grounded_context([_kb("huge fact" * 1000)])
+
+    assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_budget_grounded_context_grounding_disabled_omits_instruction(monkeypatch):
+    """chat_citation_instruction_enabled=False → citation instruction absent; [Source N] still present."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from autobot_shared.ssot_config import config
+    from services.knowledge.service import budget_grounded_context
+
+    monkeypatch.setattr(config, "chat_citation_instruction_enabled", False, raising=False)
+
+    mock_cwm = MagicMock()
+    mock_cwm.estimate_tokens.return_value = 5
+    mock_cwm.get_max_history_tokens.return_value = 4096
+    mock_cwm.async_should_compress = AsyncMock(return_value=False)
+    mock_cwm.config = {"models": {}}
+
+    with patch("context_window_manager.ContextWindowManager", return_value=mock_cwm):
+        ctx, _kb_list = await budget_grounded_context([_kb("some fact")])
+
+    assert "some fact" in ctx
+    assert "Answer the user" not in ctx

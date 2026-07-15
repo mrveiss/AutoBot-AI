@@ -518,6 +518,7 @@
 
   <!-- Edit Message Modal -->
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     v-model="showEditModal"
     :title="$t('chat.messages.editMessage')"
     size="md"
@@ -559,19 +560,21 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import { usePermissionStore } from '@/stores/usePermissionStore'
 import { useVirtualChatScroll } from '@/composables/useVirtualChatScroll'
 import type { ChatMessage } from '@/stores/useChatStore'
+import type { FileAttachment } from '@/types/api'
 import MessageStatus from '@/components/ui/MessageStatus.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
 import StableLoadingState from '@/components/ui/StableLoadingState.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'
@@ -595,12 +598,13 @@ const emit = defineEmits<{
     command: string
     host: string
     purpose: string
-    params: Record<string, any>
+    params: Record<string, unknown>
     terminal_session_id: string | null
   }]
 }>()
 
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 const store = useChatStore()
 const controller = useChatController()
 const { displaySettings } = useDisplaySettings()
@@ -667,7 +671,7 @@ const estimatedResponseTime = ref<number | null>(null)
 
 // Issue #249: Citation display state
 const citationExpansion = useExpansion<string>()
-const expandedCitations = citationExpansion.expanded
+const _expandedCitations = citationExpansion.expanded
 
 // CRITICAL FIX: Prevent EmptyState from flashing during polling/reactivity updates
 // Once messages have been loaded, never show EmptyState again (prevents flicker)
@@ -730,7 +734,7 @@ const {
   totalSize,
   measureElement,
   scrollToBottom,
-  isStuckToBottom,
+  isStuckToBottom: _isStuckToBottom,
 } = useVirtualChatScroll({
   messagesContainerRef: messagesContainer,
   filteredMessages,
@@ -773,7 +777,7 @@ const getMessageWrapperClass = (message: ChatMessage): string => {
 
   // Add message type class for type-specific styling
   // Issue #680: Exclude streaming types from type-class assignment to prevent wrong badges
-  const messageType = message.type || (message.metadata as any)?.display_type
+  const messageType = message.type || (message.metadata?.display_type as string | undefined)
   const noTypeClassTypes = ['response', 'message', 'default', 'llm_response', 'llm_response_chunk']
   if (messageType && !noTypeClassTypes.includes(String(messageType))) {
     classes.push(`type-${messageType}`)
@@ -838,7 +842,7 @@ const getSenderName = (sender: string): string => {
 
 /** Issue #1310: Visible badge for typed messages so they're clearly distinguishable. */
 const getMessageTypeBadge = (message: ChatMessage): { label: string; icon: string; type: string } | null => {
-  const msgType = message.type || (message.metadata as any)?.display_type
+  const msgType = message.type || (message.metadata?.display_type as string | undefined)
   if (!msgType) return null
 
   const badges: Record<string, { label: string; icon: string; type: string }> = {
@@ -926,7 +930,7 @@ const formatMessageContent = (content: string, messageId?: string): string => {
   return result
 }
 
-const getStatusText = (status: string): string => {
+const _getStatusText = (status: string): string => {
   const statusMap: Record<string, string> = {
     sending: t('chat.messages.statusSending'),
     sent: t('chat.messages.statusSent'),
@@ -991,24 +995,24 @@ const hasCodeBlocks = (content: string): boolean => {
 }
 
 // Issue #249: Citation helper functions
-const toggleCitations = (messageId: string) => {
+const _toggleCitations = (messageId: string) => {
   citationExpansion.toggle(messageId)
 }
 
-const truncateCitation = (content: string, maxLength: number = 200): string => {
+const _truncateCitation = (content: string, maxLength: number = 200): string => {
   if (!content) return ''
   if (content.length <= maxLength) return content
   return content.substring(0, maxLength).trim() + '...'
 }
 
-const getScoreClass = (score: number): string => {
+const _getScoreClass = (score: number): string => {
   if (score >= 0.9) return 'score-excellent'
   if (score >= 0.8) return 'score-good'
   if (score >= 0.7) return 'score-acceptable'
   return 'score-low'
 }
 
-const formatSourcePath = (sourcePath: string): string => {
+const _formatSourcePath = (sourcePath: string): string => {
   if (!sourcePath) return 'Unknown'
   // Extract filename from path
   const parts = sourcePath.split('/')
@@ -1041,7 +1045,7 @@ const copyMessage = async (message: ChatMessage) => {
   try {
     await navigator.clipboard.writeText(message.content)
     // Could show a toast notification here
-  } catch (error) {
+  } catch {
     // Fallback for older browsers
     const textArea = document.createElement('textarea')
     textArea.value = message.content
@@ -1052,8 +1056,8 @@ const copyMessage = async (message: ChatMessage) => {
   }
 }
 
-const deleteMessage = (message: ChatMessage) => {
-  if (confirm(t('chat.messages.confirmDelete'))) {
+const deleteMessage = async (message: ChatMessage) => {
+  if (await confirm({ title: t('common.confirm'), message: t('chat.messages.confirmDelete') })) {
     controller.deleteMessage(message.id)
   }
 }
@@ -1070,7 +1074,7 @@ const getAttachmentIcon = (type: string): IconName => {
 
 // NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
 
-const viewAttachment = (attachment: any) => {
+const viewAttachment = (attachment: FileAttachment) => {
   // Handle attachment viewing
   if (attachment.url) {
     window.open(attachment.url, '_blank')
@@ -1094,7 +1098,7 @@ const retryMessage = async (messageId: string) => {
 }
 
 // TOOL_CALL Detection
-const detectToolCalls = (message: ChatMessage) => {
+const _detectToolCalls = (message: ChatMessage) => {
   const toolCallRegex = /<TOOL_CALL\s+name="execute_command"\s+params='({.*?})'>(.*?)<\/TOOL_CALL>/gs
   const matches = [...message.content.matchAll(toolCallRegex)]
 
@@ -1107,7 +1111,7 @@ const detectToolCalls = (message: ChatMessage) => {
 
       // Search for terminal_session_id in recent assistant messages
       // The terminal_session_id might be in metadata of streaming chunks, not necessarily the message with TOOL_CALL
-      let terminal_session_id: string | null = ((message.metadata as any)?.terminal_session_id as string) || null
+      let terminal_session_id: string | null = (message.metadata?.terminal_session_id as string) || null
 
       if (!terminal_session_id) {
         // Search backwards through recent assistant messages for terminal_session_id
@@ -1117,7 +1121,7 @@ const detectToolCalls = (message: ChatMessage) => {
           .slice(0, 10) // Check last 10 assistant messages
 
         for (const msg of recentAssistantMessages) {
-          const metadataSessionId = (msg.metadata as any)?.terminal_session_id as string | null
+          const metadataSessionId = msg.metadata?.terminal_session_id as string | null
           if (metadataSessionId) {
             terminal_session_id = metadataSessionId
             logger.debug('Found terminal_session_id in message metadata:', terminal_session_id)
@@ -1284,7 +1288,7 @@ onMounted(async () => {
 }
 
 .summary-content {
-  @apply mt-2 pt-2 border-t border-blue-200 text-sm text-gray-700;
+  @apply mt-2 pt-2 border-t border-blue-200 text-sm text-autobot-text-secondary;
 }
 
 /* ============================================
@@ -1444,7 +1448,7 @@ onMounted(async () => {
 
 /* TERMINAL OUTPUT MESSAGES - Always-dark (intentional terminal aesthetic) */
 .message-wrapper.type-terminal_output {
-  @apply bg-gray-900 text-gray-100;
+  @apply bg-autobot-bg-primary text-autobot-text-primary;
   border-color: rgba(16, 185, 129, 0.5);
 }
 
@@ -1457,7 +1461,7 @@ onMounted(async () => {
 }
 
 .message-wrapper.type-terminal_output .message-time {
-  @apply text-gray-400;
+  @apply text-autobot-text-muted;
 }
 
 .message-wrapper.type-terminal_output .message-text {
@@ -1466,7 +1470,7 @@ onMounted(async () => {
 }
 
 .message-wrapper.type-terminal_output .message-content {
-  @apply text-gray-100;
+  @apply text-autobot-text-primary;
 }
 
 /* COMMAND APPROVAL REQUEST - Warning theme-aware */

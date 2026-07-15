@@ -69,8 +69,8 @@ async def store_provider_api_key(provider_name: str, provider_dict: dict[str, An
 
     Falls back to legacy inline encryption when the vault is not configured.
     """
-    from user_management.services.unified_vault_client import (
-        UnifiedVaultClientError,
+    from user_management.services.vault_client import (
+        VaultClientError,
         is_configured,
         vault_create,
         vault_rotate,
@@ -100,7 +100,7 @@ async def store_provider_api_key(provider_name: str, provider_dict: dict[str, An
             meta = await vault_create(name, _SECRET_TYPE, api_key)
             existing_vault_id = str(meta["id"])
             logger.info("unified-vault: stored LLM api_key for provider=%s", provider_name)
-    except UnifiedVaultClientError as exc:
+    except VaultClientError as exc:
         logger.error("unified-vault: failed to store LLM api_key provider=%s: %s", provider_name, type(exc).__name__)
         raise
 
@@ -117,9 +117,9 @@ async def retrieve_provider_api_key(provider_name: str, provider_dict: dict[str,
     Fallback: legacy inline-encrypted value during migration window.
     Returns ``""`` when no key is stored.
     """
-    from user_management.services.unified_vault_client import (
-        UnifiedVaultClientError,
-        UnifiedVaultSecretNotFound,
+    from user_management.services.vault_client import (
+        VaultClientError,
+        VaultSecretNotFound,
         is_configured,
         vault_list,
         vault_read,
@@ -135,9 +135,9 @@ async def retrieve_provider_api_key(provider_name: str, provider_dict: dict[str,
 
         try:
             return await vault_read(uuid.UUID(vault_id_str))
-        except UnifiedVaultSecretNotFound:
+        except VaultSecretNotFound:
             logger.warning("unified-vault: LLM api_key not found provider=%s, falling back", provider_name)
-        except UnifiedVaultClientError as exc:
+        except VaultClientError as exc:
             logger.error("unified-vault: read failed provider=%s: %s; falling back", provider_name, type(exc).__name__)
     else:
         # Scan vault by name (slow path for entries that predate vault_id caching).
@@ -149,7 +149,7 @@ async def retrieve_provider_api_key(provider_name: str, provider_dict: dict[str,
                     import uuid
 
                     return await vault_read(uuid.UUID(entry["id"]))
-        except UnifiedVaultClientError:
+        except VaultClientError:
             pass
 
     # Legacy inline fallback.
@@ -159,9 +159,9 @@ async def retrieve_provider_api_key(provider_name: str, provider_dict: dict[str,
 
 async def delete_provider_api_key(provider_name: str, provider_dict: dict[str, Any]) -> None:
     """Delete the vault secret for a provider's api_key (best-effort, no-op if absent)."""
-    from user_management.services.unified_vault_client import (
-        UnifiedVaultClientError,
-        UnifiedVaultSecretNotFound,
+    from user_management.services.vault_client import (
+        VaultClientError,
+        VaultSecretNotFound,
         is_configured,
         vault_delete,
     )
@@ -177,7 +177,7 @@ async def delete_provider_api_key(provider_name: str, provider_dict: dict[str, A
     try:
         await vault_delete(uuid.UUID(vault_id_str))
         logger.info("unified-vault: deleted LLM api_key for provider=%s", provider_name)
-    except UnifiedVaultSecretNotFound:
+    except VaultSecretNotFound:
         pass
-    except UnifiedVaultClientError as exc:
+    except VaultClientError as exc:
         logger.warning("unified-vault: delete failed provider=%s: %s", provider_name, type(exc).__name__)

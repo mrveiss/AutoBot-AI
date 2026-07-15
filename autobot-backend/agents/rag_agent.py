@@ -20,6 +20,7 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from constants.threshold_constants import LLMDefaults
+from llm_shared.types import LLMType
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
@@ -186,7 +187,7 @@ class RAGAgent(StandardizedAgent):
 
             response = await self.llm_interface.chat(
                 messages=messages,
-                llm_type="rag",
+                llm_type=LLMType.RAG,
                 temperature=0.5,
                 max_tokens=LLMDefaults.SYNTHESIS_MAX_TOKENS,
                 top_p=LLMDefaults.DEFAULT_TOP_P,
@@ -230,7 +231,7 @@ class RAGAgent(StandardizedAgent):
 
             response = await self.llm_interface.chat(
                 messages=messages,
-                llm_type="rag",
+                llm_type=LLMType.RAG,
                 temperature=0.6,
                 max_tokens=LLMDefaults.CHAT_MAX_TOKENS,
                 top_p=0.85,
@@ -539,7 +540,7 @@ Focus on creating 2-4 reformulated queries that would retrieve different but rel
 
             llm_response = await self.llm_interface.chat(
                 messages=messages,
-                llm_type="rag",
+                llm_type=LLMType.RAG,
                 temperature=kwargs.get("temperature", 0.5),
                 max_tokens=kwargs.get("max_tokens", LLMDefaults.SYNTHESIS_MAX_TOKENS),
                 top_p=kwargs.get("top_p", LLMDefaults.DEFAULT_TOP_P),

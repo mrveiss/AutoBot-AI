@@ -14,19 +14,21 @@ Components:
 - context_enhancer: Conversation-aware query enhancement
 - doc_searcher: Documentation search integration
 - service: Main ChatKnowledgeService coordinator
+- stats_service: Canonical KB stats fetcher shared by all stat endpoints (#11554)
 """
 
 from .context_enhancer import ConversationContextEnhancer, get_context_enhancer
 from .doc_searcher import DocumentationSearcher, get_documentation_searcher
 from .intent_detector import QueryKnowledgeIntentDetector, get_query_intent_detector
 from .service import KNOWLEDGE_CATEGORIES, ChatKnowledgeService
-from .types import EnhancedQuery, QueryIntentResult, QueryKnowledgeIntent
+from .stats_service import fetch_kb_core_stats
+from .types import Query, QueryIntentResult, QueryKnowledgeIntent
 
 __all__ = [
     # Types and dataclasses
     "QueryKnowledgeIntent",
     "QueryIntentResult",
-    "EnhancedQuery",
+    "Query",
     # Constants
     "KNOWLEDGE_CATEGORIES",
     # Classes
@@ -38,4 +40,6 @@ __all__ = [
     "get_query_intent_detector",
     "get_context_enhancer",
     "get_documentation_searcher",
+    # Stats
+    "fetch_kb_core_stats",
 ]

@@ -96,11 +96,12 @@
         :key="metric.category"
         class="metric-card"
         :class="{ 'low-score': metric.value < 60 }"
+        :title="getMetricDescription(metric.category)"
         @click="drillDown(metric.category)"
       >
         <div class="metric-header">
           <span class="metric-icon">{{ getMetricIcon(metric.category) }}</span>
-          <span class="metric-name">{{ metric.name }}</span>
+          <span class="metric-name">{{ getMetricLabel(metric.category, metric.name) }}</span>
         </div>
         <div class="metric-body">
           <div class="metric-score">
@@ -392,13 +393,14 @@
     </template>
 
     <!-- Drill-Down Modal -->
-    <div v-if="drillDownCategory" class="modal-overlay" @click.self="drillDownCategory = null">
-      <div class="modal-content drill-down-modal">
-        <div class="modal-header">
-          <h3>{{ formatCategoryName(drillDownCategory) }} - {{ $t('analytics.codeQuality.detailedView') }}</h3>
-          <button class="btn-close" @click="drillDownCategory = null">×</button>
-        </div>
-        <div class="modal-body">
+    <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
+      :model-value="!!drillDownCategory"
+      :title="drillDownCategory ? `${formatCategoryName(drillDownCategory)} - ${$t('analytics.codeQuality.detailedView')}` : ''"
+      size="md"
+      @close="drillDownCategory = null"
+    >
+      <template v-if="drillDownCategory">
           <div class="drill-down-summary">
             <div class="summary-card">
               <span class="card-value">{{ drillDownData.total_files }}</span>
@@ -437,27 +439,31 @@
               </tbody>
             </table>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="drillDownCategory = null">{{ $t('analytics.codeQuality.close') }}</button>
-        </div>
-      </div>
-    </div>
+      </template>
+      <template #actions>
+        <button class="btn-secondary" @click="drillDownCategory = null">{{ $t('analytics.codeQuality.close') }}</button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
+import type { DirectiveBinding } from 'vue';
+import { BaseModal } from '@autobot/ui'
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { getCssVar } from '@/composables/useCssVars';
 import { useWebSocket } from '@/composables/useWebSocket';
 import { useCodeQualityData } from '@/composables/analytics/useCodeQualityData';
+import type { QualityDrillDown } from '@/composables/analytics/useCodeQualityData';
 import { useUnwiredTrackers } from '@/composables/analytics/useUnwiredTrackers';
 import UnwiredTrackerTile from '@/components/analytics/UnwiredTrackerTile.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 
 const logger = createLogger('CodeQualityDashboard');
+const { t, te } = useI18n();
 
 // Issue #3436: read sourceId from route param set by codebase/:sourceId parent
 const route = useRoute();
@@ -548,6 +554,17 @@ interface TrendPoint {
   date: string;
 }
 
+// WebSocket message envelope emitted by /api/quality/ws.
+interface QualityWsMessage {
+  type: string;
+  data: Record<string, unknown>;
+}
+
+// HTMLElement augmented with the click-outside listener stored by v-click-outside.
+interface ClickOutsideElement extends HTMLElement {
+  _clickOutside?: (event: Event) => void;
+}
+
 // State
 const loading = ref(false);
 const wsConnected = ref(false);
@@ -575,7 +592,7 @@ const complexity = ref<Complexity>({
 });
 const trendData = ref<Array<{ date: string; score: number }>>([]);
 const codebaseStats = ref({ files: 0, lines: 0, issues: 0 });
-const drillDownData = ref({ total_files: 0, total_issues: 0, average_score: 0, files: [] as any[] });
+const drillDownData = ref<QualityDrillDown>({ total_files: 0, total_issues: 0, average_score: 0, files: [] });
 
 // WebSocket managed via useWebSocket composable
 const _qualityWsUrl = (() => {
@@ -584,7 +601,6 @@ const _qualityWsUrl = (() => {
 })();
 const {
   connect: wsConnect,
-  disconnect: wsDisconnect,
 } = useWebSocket(_qualityWsUrl, {
   autoConnect: false,
   autoReconnect: true,
@@ -845,19 +861,19 @@ function connectWebSocket(): void {
   wsConnect();
 }
 
-function handleWebSocketMessage(message: any): void {
+function handleWebSocketMessage(message: QualityWsMessage): void {
   switch (message.type) {
     case 'snapshot':
       // Update all data from snapshot
       if (message.data.health_score) {
-        healthScore.value = message.data.health_score;
+        healthScore.value = message.data.health_score as HealthScore;
       }
       break;
     case 'metric_update':
       // Update specific metric
       const metricIndex = metrics.value.findIndex(m => m.category === message.data.category);
       if (metricIndex >= 0) {
-        metrics.value[metricIndex] = { ...metrics.value[metricIndex], ...message.data };
+        metrics.value[metricIndex] = { ...metrics.value[metricIndex], ...message.data } as Metric;
       }
       break;
     case 'pattern_update':
@@ -887,6 +903,7 @@ const METRIC_ICONS: Record<string, string> = {
   performance: '⚡',
   testability: '🧪',
   documentation: '📝',
+  runtime_risk: '⚠️',
 };
 
 // Pattern severity icons - static, created once
@@ -927,6 +944,19 @@ function getMetricIcon(category: string): string {
   return METRIC_ICONS[category] || '📊';
 }
 
+// Localised label for a quality dimension. Falls back to the backend-provided
+// display name when no i18n label is defined for the category.
+function getMetricLabel(category: string, fallback: string): string {
+  const key = `analytics.codeQuality.dimensions.${category}.label`;
+  return te(key) ? t(key) : fallback;
+}
+
+// Localised description for a quality dimension, or empty string when absent.
+function getMetricDescription(category: string): string {
+  const key = `analytics.codeQuality.dimensions.${category}.description`;
+  return te(key) ? t(key) : '';
+}
+
 function getPatternIcon(severity: string): string {
   return PATTERN_ICONS[severity] || '⚪';
 }
@@ -960,16 +990,16 @@ function formatShortDate(dateStr: string): string {
 
 // Directive for click outside
 const vClickOutside = {
-  mounted(el: HTMLElement, binding: any) {
-    (el as any)._clickOutside = (event: Event) => {
+  mounted(el: HTMLElement, binding: DirectiveBinding<() => void>) {
+    (el as ClickOutsideElement)._clickOutside = (event: Event) => {
       if (!(el === event.target || el.contains(event.target as Node))) {
         binding.value();
       }
     };
-    document.addEventListener('click', (el as any)._clickOutside);
+    document.addEventListener('click', (el as ClickOutsideElement)._clickOutside as EventListener);
   },
   unmounted(el: HTMLElement) {
-    document.removeEventListener('click', (el as any)._clickOutside);
+    document.removeEventListener('click', (el as ClickOutsideElement)._clickOutside as EventListener);
   },
 };
 
@@ -1005,7 +1035,11 @@ watch(selectedPeriod, () => {
 .code-quality-dashboard {
   padding: var(--spacing-6);
   background: var(--bg-primary);
-  min-height: 100vh;
+  /* #10750 C2: fill the scrolling .analytics-router-view, not the viewport.
+     #10750: flex column so the data grid grows to absorb vertical slack. */
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
   color: var(--text-primary);
 }
 
@@ -1340,8 +1374,25 @@ watch(selectedPeriod, () => {
 .content-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
   gap: var(--spacing-6);
   margin-bottom: var(--spacing-6);
+  /* #10750: primary data region — grow to fill remaining height. */
+  flex: 1;
+  min-height: 0;
+}
+
+/* #10750: the pattern/complexity panels grow; their content scrolls internally. */
+.content-grid .panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.content-grid .panel-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 @media (max-width: 1200px) {
@@ -1741,65 +1792,6 @@ watch(selectedPeriod, () => {
   color: var(--text-muted);
 }
 
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--overlay-backdrop);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-content {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  width: 90%;
-  max-width: 700px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-4) var(--spacing-6);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.modal-header h3 {
-  margin: var(--spacing-0);
-  font-size: var(--text-lg);
-  color: var(--text-primary);
-}
-
-.btn-close {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-size: var(--text-2xl);
-  cursor: pointer;
-}
-
-.btn-close:hover {
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: var(--spacing-6);
-}
-
 .drill-down-summary {
   display: flex;
   gap: var(--spacing-4);
@@ -1885,13 +1877,6 @@ watch(selectedPeriod, () => {
 .top-issue {
   color: var(--text-muted);
   font-size: var(--text-xs);
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding: var(--spacing-4) var(--spacing-6);
-  border-top: 1px solid var(--border-subtle);
 }
 
 .btn-secondary {

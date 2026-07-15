@@ -45,7 +45,6 @@ const categories = ref<DocCategory[]>([])
 const selectedCategory = ref<DocCategory | null>(null)
 const selectedDoc = ref<SystemDoc | null>(null)
 const categoryExpansion = useExpansion<string>()
-const expandedCategories = categoryExpansion.expanded
 
 // Export state
 const isExporting = ref(false)

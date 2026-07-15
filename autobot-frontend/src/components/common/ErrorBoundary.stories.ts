@@ -23,15 +23,15 @@ const meta = {
 } as Meta<typeof ErrorBoundary>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 export const Default: Story = {
   args: {
     title: 'Something went wrong',
     message: 'An unexpected error occurred. Please try again.',
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { ErrorBoundary },
     setup() {
       return { args };
@@ -52,7 +52,7 @@ export const Retryable: Story = {
     message: 'The data could not be loaded. Click retry to try again.',
     retryable: true,
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { ErrorBoundary },
     setup() {
       return { args };

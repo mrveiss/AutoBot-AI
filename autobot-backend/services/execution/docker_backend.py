@@ -42,6 +42,7 @@ from services.execution.base_backend import (
     ExecutionTask,
 )
 from services.execution.container_pool import ContainerPoolRegistry
+from services.execution.env_sanitizer import safe_task_env
 from services.execution.snapshot_index import (
     SnapshotIndex,
     SnapshotRecord,
@@ -208,7 +209,10 @@ class DockerBackend(ExecutionBackend):
             self._container_map[task.task_id] = container.id
 
             cmd = self._prepare_command(task)
-            env = {k: str(v) for k, v in (task.env_vars or {}).items()}
+            # Security: only allowlisted AUTOBOT_* task vars reach the
+            # container; hijack/credential vars are dropped. Container env is
+            # image-provided (empty base) so the task contributes nothing else.
+            env = {k: str(v) for k, v in safe_task_env({}, task.env_vars).items()}
 
             exec_result = await asyncio.to_thread(
                 container.exec_run,
@@ -271,7 +275,7 @@ class DockerBackend(ExecutionBackend):
                     detach=True,
                     mem_limit=f"{task.resource_limits.memory_mb}m",
                     cpus=task.resource_limits.cpu_cores,
-                    environment=task.env_vars,
+                    environment=safe_task_env({}, task.env_vars),
                     stdout=True,
                     stderr=True,
                     remove=False,

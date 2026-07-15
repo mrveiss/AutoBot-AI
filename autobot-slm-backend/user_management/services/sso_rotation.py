@@ -108,7 +108,7 @@ async def _write_audit(
     """Append an audit row for this rotation event (best-effort).
 
     Reuses the canonical ``create_audit_log`` helper so the row matches the
-    ``audit_logs`` schema (``log_id``/``user_id``/``extra_data`` — there is no
+    ``slm_node_audit_logs`` schema (``log_id``/``user_id``/``extra_data`` — there is no
     ``actor_id``/``details`` column). A failure here never aborts the rotation.
     """
     try:
@@ -181,7 +181,7 @@ async def rotate_kek(
     Returns metadata from the vault response.
     """
     from user_management.models.sso import SSOProvider
-    from user_management.services.unified_vault_client import UnifiedVaultClientError, vault_rewrap_kek
+    from user_management.services.vault_client import VaultClientError, vault_rewrap_kek
 
     row = await session.execute(select(SSOProvider).where(SSOProvider.id == provider_id))
     provider = row.scalar_one_or_none()
@@ -197,7 +197,7 @@ async def rotate_kek(
 
     try:
         meta = await vault_rewrap_kek(vault_id, new_root_key_b64)
-    except UnifiedVaultClientError as exc:
+    except VaultClientError as exc:
         raise SSORotationError(f"KEK rotation failed for provider {provider_id} field {field}: {exc}") from exc
 
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -227,7 +227,7 @@ async def rotate_value(
     Returns metadata from the vault response.
     """
     from user_management.models.sso import SSOProvider
-    from user_management.services.unified_vault_client import UnifiedVaultClientError, vault_rotate
+    from user_management.services.vault_client import VaultClientError, vault_rotate
 
     row = await session.execute(select(SSOProvider).where(SSOProvider.id == provider_id))
     provider = row.scalar_one_or_none()
@@ -243,7 +243,7 @@ async def rotate_value(
 
     try:
         meta = await vault_rotate(vault_id, new_value)
-    except UnifiedVaultClientError as exc:
+    except VaultClientError as exc:
         raise SSORotationError(f"value rotation failed for provider {provider_id} field {field}: {exc}") from exc
 
     now_iso = datetime.now(timezone.utc).isoformat()

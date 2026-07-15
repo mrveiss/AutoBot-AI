@@ -17,8 +17,8 @@ const meta = {
 } as Meta<typeof KnowledgeMainCategories>
 
 export default meta
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>
 
 const sampleCategories = [
   { id: 'system', name: 'System Knowledge', description: 'System commands and configurations', icon: 'fas fa-cogs', color: '#3b82f6', count: 150 },

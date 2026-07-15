@@ -70,7 +70,7 @@ developer:
   enabled: false            # Enable developer mode
   debug_logging: false      # Enable debug logging
   endpoint_suggestions: true  # Show API endpoint suggestions
-  enhanced_errors: true     # Show detailed error messages
+  detailed_errors: true     # Show detailed error messages
 
 # ============================================================================
 # Knowledge Base Settings

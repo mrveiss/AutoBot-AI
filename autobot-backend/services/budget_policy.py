@@ -297,8 +297,8 @@ async def apply_action(result: PolicyEvalResult, agent_id: str) -> None:
 
 async def _emit_breach_audit(result: PolicyEvalResult, agent_id: str) -> None:
     try:
-        from services.audit.unified_audit import AuditCategory, AuditEvent
-        from services.audit.unified_audit import record as record_unified_event
+        from services.audit.audit import AuditCategory, AuditEvent
+        from services.audit.audit import record as record_unified_event
 
         event = AuditEvent(
             category=AuditCategory.GOVERNANCE,
@@ -372,8 +372,8 @@ async def pause_agent(agent_id: str, reason: str, paused_by: str = "budget_polic
         logger.warning("Agent %s PAUSED — %s", agent_id, reason)
 
         try:
-            from services.audit.unified_audit import AuditCategory, AuditEvent
-            from services.audit.unified_audit import record as record_unified_event
+            from services.audit.audit import AuditCategory, AuditEvent
+            from services.audit.audit import record as record_unified_event
 
             await record_unified_event(
                 AuditEvent(
@@ -421,8 +421,8 @@ async def resume_agent(agent_id: str, approved_by: str) -> bool:
         logger.info("Agent %s RESUMED by %s", agent_id, approved_by)
 
         try:
-            from services.audit.unified_audit import AuditCategory, AuditEvent
-            from services.audit.unified_audit import record as record_unified_event
+            from services.audit.audit import AuditCategory, AuditEvent
+            from services.audit.audit import record as record_unified_event
 
             await record_unified_event(
                 AuditEvent(

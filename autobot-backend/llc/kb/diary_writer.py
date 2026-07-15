@@ -113,7 +113,7 @@ class AgentDiaryKbWriter:
                 exc_info=True,
             )
         try:
-            await self._write_patterns(run_id, agent_id, status, context_snapshot)
+            await self._write_patterns(run_id, agent_id, status, context_snapshot, company_id)
         except Exception:
             logger.warning(
                 "AgentDiaryKbWriter.write_from_run: pattern write failed for run_id=%s",
@@ -232,12 +232,18 @@ class AgentDiaryKbWriter:
         agent_id: str,
         status: str,
         context_snapshot: Optional[Dict[str, Any]],
+        company_id: Optional[str] = None,
     ) -> None:
         """Run TaskPatternLearner on available outcomes and index results."""
         try:
             snap = context_snapshot or {}
             task_type = snap.get("task_type", "llc_heartbeat")
             outcomes = snap.get("outcomes", [])
+            # GH#11071: scope learning to the owning company/tenant. Prefer the
+            # authoritative company_id passed by the caller; fall back to the
+            # snapshot. Absent → the learner fails closed (skips) rather than
+            # writing a shared strategy.
+            tenant_id = str(company_id or snap.get("tenant_id") or snap.get("company_id") or "")
 
             if not outcomes:
                 return
@@ -245,7 +251,7 @@ class AgentDiaryKbWriter:
             from agents.task_pattern_learner import TaskPatternLearner
 
             learner = TaskPatternLearner()
-            strategy = await learner.learn_from_outcomes(task_type, outcomes)
+            strategy = await learner.learn_from_outcomes(task_type, outcomes, tenant_id=tenant_id)
             if strategy is None:
                 return
 

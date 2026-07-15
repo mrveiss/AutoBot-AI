@@ -4,23 +4,23 @@
 <template>
   <div class="heartbeat-monitor">
     <div class="monitor-header">
-      <h2 class="view-title">Heartbeat Monitor</h2>
-      <span class="refresh-note">Auto-refreshes every 15s</span>
+      <h2 class="view-title">{{ $t('llc.heartbeat.title') }}</h2>
+      <span class="refresh-note">{{ $t('llc.heartbeat.autoRefresh') }}</span>
     </div>
 
-    <div v-if="isLoading && agents.length === 0" class="state-msg">Loading agents...</div>
-    <div v-else-if="heartbeatAgents.length === 0" class="state-msg">No heartbeat-enabled agents found.</div>
+    <div v-if="isLoading && agents.length === 0" class="state-msg">{{ $t('llc.heartbeat.loadingAgents') }}</div>
+    <div v-else-if="heartbeatAgents.length === 0" class="state-msg">{{ $t('llc.heartbeat.noAgents') }}</div>
 
     <div v-else class="agent-grid-wrapper">
       <table class="agent-grid">
         <thead>
           <tr>
-            <th>Agent</th>
-            <th>Adapter</th>
-            <th>Last Heartbeat</th>
-            <th>Status</th>
-            <th>Run Duration</th>
-            <th>Action</th>
+            <th>{{ $t('llc.heartbeat.colAgent') }}</th>
+            <th>{{ $t('llc.heartbeat.colAdapter') }}</th>
+            <th>{{ $t('llc.heartbeat.colLastHeartbeat') }}</th>
+            <th>{{ $t('llc.heartbeat.colStatus') }}</th>
+            <th>{{ $t('llc.heartbeat.colRunDuration') }}</th>
+            <th>{{ $t('llc.heartbeat.colAction') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -36,7 +36,7 @@
             <td>
               <span class="status-dot" :class="`status-${agent.last_run_status ?? 'unknown'}`" />
               <span class="status-label" :class="`status-${agent.last_run_status ?? 'unknown'}`">
-                {{ agent.last_run_status ?? 'unknown' }}
+                {{ agent.last_run_status ?? $t('llc.heartbeat.statusUnknown') }}
               </span>
             </td>
             <td class="agent-duration">{{ formatDuration(agent.current_run_started_at) }}</td>
@@ -46,7 +46,7 @@
                 :disabled="triggering.has(agent.id)"
                 @click="triggerHeartbeat(agent)"
               >
-                {{ triggering.has(agent.id) ? 'Triggering...' : 'Trigger Now' }}
+                {{ triggering.has(agent.id) ? $t('llc.heartbeat.triggering') : $t('llc.heartbeat.triggerNow') }}
               </button>
             </td>
           </tr>
@@ -58,11 +58,11 @@
     <div v-if="selectedAgent" class="drawer-overlay" @click.self="selectedAgent = null">
       <div class="history-drawer">
         <div class="drawer-header">
-          <h3>Run History – {{ selectedAgent.name }}</h3>
+          <h3>{{ $t('llc.heartbeat.runHistoryTitle', { name: selectedAgent.name }) }}</h3>
           <button class="btn-close" @click="selectedAgent = null">✕</button>
         </div>
-        <div v-if="historyLoading" class="state-msg">Loading runs...</div>
-        <div v-else-if="runHistory.length === 0" class="state-msg">No runs found.</div>
+        <div v-if="historyLoading" class="state-msg">{{ $t('llc.heartbeat.loadingRuns') }}</div>
+        <div v-else-if="runHistory.length === 0" class="state-msg">{{ $t('llc.heartbeat.noRuns') }}</div>
         <div v-else class="run-list">
           <div v-for="run in runHistory" :key="run.id" class="run-item">
             <div class="run-meta">
@@ -75,24 +75,24 @@
             </div>
             <div class="run-actions">
               <button class="toggle-payload" @click="toggleRun(run.id)">
-                {{ expandedRuns.has(run.id) ? 'Hide' : 'Show' }} Context
+                {{ expandedRuns.has(run.id) ? $t('llc.heartbeat.hideContext') : $t('llc.heartbeat.showContext') }}
               </button>
               <button
                 class="btn-replay"
                 :disabled="replayingRuns.has(run.id)"
                 @click="triggerReplay(run)"
               >
-                {{ replayingRuns.has(run.id) ? 'Replaying...' : 'Replay' }}
+                {{ replayingRuns.has(run.id) ? $t('llc.heartbeat.replaying') : $t('llc.heartbeat.replay') }}
               </button>
               <button class="btn-replay-log" @click="openReplayPanel(run)">
-                Step-Browse
+                {{ $t('llc.heartbeat.stepBrowse') }}
               </button>
               <button
                 v-if="selectedAgent"
                 class="btn-fixture"
                 :disabled="downloadingFixture.has(run.id)"
                 @click="downloadFixture(run)"
-              >{{ downloadingFixture.has(run.id) ? 'Exporting...' : 'Export Fixture' }}</button>
+              >{{ downloadingFixture.has(run.id) ? $t('llc.heartbeat.exporting') : $t('llc.heartbeat.exportFixture') }}</button>
             </div>
             <pre v-if="expandedRuns.has(run.id)" class="run-context">{{ formatJson(run.context_snapshot) }}</pre>
           </div>
@@ -104,45 +104,45 @@
     <div v-if="replayPanelRun && selectedAgent" class="drawer-overlay" @click.self="replayPanelRun = null">
       <div class="history-drawer replay-panel">
         <div class="drawer-header">
-          <h3>Replay Log – {{ replayPanelRun.id.slice(0, 8) }}</h3>
+          <h3>{{ $t('llc.heartbeat.replayLogTitle', { id: replayPanelRun.id.slice(0, 8) }) }}</h3>
           <div class="header-actions">
             <label class="redact-label">
               <input v-model="redactPii" type="checkbox" />
-              Redact PII
+              {{ $t('llc.heartbeat.redactPii') }}
             </label>
             <button class="btn-close" @click="replayPanelRun = null">✕</button>
           </div>
         </div>
-        <div v-if="replayLogLoading" class="state-msg">Loading replay log...</div>
-        <div v-else-if="!replayLog" class="state-msg">No replay log recorded for this run yet.</div>
+        <div v-if="replayLogLoading" class="state-msg">{{ $t('llc.heartbeat.loadingReplayLog') }}</div>
+        <div v-else-if="!replayLog" class="state-msg">{{ $t('llc.heartbeat.noReplayLog') }}</div>
         <div v-else class="replay-body">
           <div class="replay-meta">
-            <span class="meta-item">Status: <strong>{{ replayLog.final_status ?? '—' }}</strong></span>
-            <span class="meta-item">Events: <strong>{{ (replayLog.recorded_events ?? []).length }}</strong></span>
+            <span class="meta-item">{{ $t('llc.heartbeat.metaStatusLabel') }} <strong>{{ replayLog.final_status ?? '—' }}</strong></span>
+            <span class="meta-item">{{ $t('llc.heartbeat.metaEventsLabel') }} <strong>{{ (replayLog.recorded_events ?? []).length }}</strong></span>
             <span v-if="replayLog.replay_of_run_id" class="meta-item">
-              Replay of: <code>{{ replayLog.replay_of_run_id.slice(0, 8) }}</code>
+              {{ $t('llc.heartbeat.metaReplayOfLabel') }} <code>{{ replayLog.replay_of_run_id.slice(0, 8) }}</code>
             </span>
           </div>
 
           <!-- Event timeline step-browser -->
           <div v-if="(replayLog.recorded_events ?? []).length > 0" class="event-browser">
             <div class="event-nav">
-              <button :disabled="eventIdx === 0" @click="eventIdx = Math.max(0, eventIdx - 1)">Prev</button>
+              <button :disabled="eventIdx === 0" @click="eventIdx = Math.max(0, eventIdx - 1)">{{ $t('llc.heartbeat.prev') }}</button>
               <span>{{ eventIdx + 1 }} / {{ replayLog.recorded_events!.length }}</span>
-              <button :disabled="eventIdx >= (replayLog.recorded_events!.length - 1)" @click="eventIdx = Math.min(replayLog.recorded_events!.length - 1, eventIdx + 1)">Next</button>
+              <button :disabled="eventIdx >= (replayLog.recorded_events!.length - 1)" @click="eventIdx = Math.min(replayLog.recorded_events!.length - 1, eventIdx + 1)">{{ $t('llc.heartbeat.next') }}</button>
             </div>
             <pre class="event-detail">{{ formatJson(replayLog.recorded_events![eventIdx]) }}</pre>
           </div>
 
           <!-- Output diff section (shown when a replay run exists) -->
           <div v-if="replayDiff" class="diff-section">
-            <h4 class="diff-title">Output Diff (original vs replay)</h4>
-            <pre class="diff-content" :class="{ 'diff-identical': replayDiff.identical }">{{ replayDiff.identical ? '(outputs are identical)' : replayDiff.diff }}</pre>
+            <h4 class="diff-title">{{ $t('llc.heartbeat.outputDiffTitle') }}</h4>
+            <pre class="diff-content" :class="{ 'diff-identical': replayDiff.identical }">{{ replayDiff.identical ? $t('llc.heartbeat.outputsIdentical') : replayDiff.diff }}</pre>
           </div>
 
           <!-- Output text -->
           <div v-if="replayLog.output_text" class="output-section">
-            <h4 class="output-title">Captured Output</h4>
+            <h4 class="output-title">{{ $t('llc.heartbeat.capturedOutput') }}</h4>
             <pre class="run-context">{{ replayLog.output_text }}</pre>
           </div>
         </div>
@@ -157,12 +157,15 @@ import { useApiClient } from '@/plugins/api'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { formatDateTime, formatDuration as fmtDuration } from '@/utils/formatHelpers'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{ companyId?: string }>()
 const companyId = computed(() => props.companyId ?? '')
 
 const logger = createLogger('HeartbeatMonitor')
 const api = useApiClient()
+const { t } = useI18n()
 
 interface Agent {
   id: string
@@ -224,28 +227,19 @@ const downloadingFixture = ref<Set<string>>(new Set())
 const heartbeatAgents = computed(() => agents.value.filter(a => a.heartbeat_enabled))
 
 function formatDate(iso?: string) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString()
+  return formatDateTime(iso) || '—'
 }
 
 function formatDuration(startedAt?: string) {
-  if (!startedAt) return '—'
-  const ms = Date.now() - new Date(startedAt).getTime()
-  if (ms < 0) return '—'
-  const s = Math.floor(ms / 1000)
-  if (s < 60) return `${s}s`
-  return `${Math.floor(s / 60)}m ${s % 60}s`
+  return startedAt ? fmtDuration(startedAt, null) : '—'
 }
 
 function computeDuration(start: string, end: string) {
-  const ms = new Date(end).getTime() - new Date(start).getTime()
-  const s = Math.floor(ms / 1000)
-  if (s < 60) return `${s}s`
-  return `${Math.floor(s / 60)}m ${s % 60}s`
+  return fmtDuration(start, end)
 }
 
 function formatJson(data?: Record<string, unknown>) {
-  if (!data) return '(empty)'
+  if (!data) return t('llc.heartbeat.emptyContext')
   try {
     return JSON.stringify(data, null, 2)
   } catch {
@@ -422,8 +416,8 @@ onUnmounted(() => {
   height: 100%;
   padding: 1.5rem;
   gap: 1rem;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .monitor-header {
@@ -440,18 +434,18 @@ onUnmounted(() => {
 
 .refresh-note {
   font-size: 0.8rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .state-msg {
   text-align: center;
   padding: 3rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .agent-grid-wrapper {
   overflow: auto;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
   flex: 1;
 }
@@ -466,19 +460,19 @@ onUnmounted(() => {
   padding: 0.625rem 0.75rem;
   text-align: left;
   font-weight: 600;
-  background: var(--color-surface-elevated, #f9fafb);
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated, #f9fafb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
   white-space: nowrap;
 }
 
 .agent-row {
-  border-bottom: 1px solid var(--color-border, #f3f4f6);
+  border-bottom: 1px solid var(--border-default, #f3f4f6);
   cursor: pointer;
   transition: background 0.1s;
 }
 
 .agent-row:hover {
-  background: var(--color-surface-hover, #f9fafb);
+  background: var(--bg-hover, #f9fafb);
 }
 
 .agent-grid td {
@@ -504,18 +498,22 @@ onUnmounted(() => {
   text-transform: capitalize;
 }
 
-.status-succeeded { color: #10b981; }
-.status-succeeded.status-dot { background: #10b981; }
-.status-running { color: #3b82f6; }
-.status-running.status-dot { background: #3b82f6; }
-.status-queued { color: #f59e0b; }
-.status-queued.status-dot { background: #f59e0b; }
-.status-failed { color: #ef4444; }
-.status-failed.status-dot { background: #ef4444; }
-.status-timed_out { color: #ef4444; }
-.status-timed_out.status-dot { background: #ef4444; }
-.status-unknown { color: var(--color-text-secondary, #9ca3af); }
-.status-unknown.status-dot { background: var(--color-border, #d1d5db); }
+/* #11457: functional-status colors map to the semantic tokens so they adapt to
+   dark/ember instead of being hardcoded light hexes. The fallbacks equal the base
+   (light) token values, so light/dark render identically and ember picks up its
+   own palette (success/info are themed; error resolves via the ember alias). */
+.status-succeeded { color: var(--color-success, #10b981); }
+.status-succeeded.status-dot { background: var(--color-success, #10b981); }
+.status-running { color: var(--color-info, #3b82f6); }
+.status-running.status-dot { background: var(--color-info, #3b82f6); }
+.status-queued { color: var(--color-warning, #f59e0b); }
+.status-queued.status-dot { background: var(--color-warning, #f59e0b); }
+.status-failed { color: var(--color-error, #ef4444); }
+.status-failed.status-dot { background: var(--color-error, #ef4444); }
+.status-timed_out { color: var(--color-error, #ef4444); }
+.status-timed_out.status-dot { background: var(--color-error, #ef4444); }
+.status-unknown { color: var(--text-secondary, #9ca3af); }
+.status-unknown.status-dot { background: var(--border-default, #d1d5db); }
 
 .btn-trigger {
   padding: 0.3rem 0.75rem;
@@ -546,7 +544,7 @@ onUnmounted(() => {
   width: 480px;
   max-width: 100%;
   height: 100%;
-  background: var(--color-surface, #fff);
+  background: var(--bg-surface, #fff);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -557,7 +555,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
 }
 
 .drawer-header h3 {
@@ -571,7 +569,7 @@ onUnmounted(() => {
   border: none;
   font-size: 1.125rem;
   cursor: pointer;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .run-list {
@@ -584,7 +582,7 @@ onUnmounted(() => {
 }
 
 .run-item {
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   padding: 0.75rem;
   display: flex;
@@ -602,22 +600,22 @@ onUnmounted(() => {
 .run-date,
 .run-duration {
   font-size: 0.8rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .toggle-payload {
   font-size: 0.8rem;
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.25rem;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
   cursor: pointer;
   align-self: flex-start;
 }
 
 .run-context {
-  background: var(--color-surface-elevated, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated, #f9fafb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   padding: 0.75rem;
   font-size: 0.8rem;
@@ -637,16 +635,16 @@ onUnmounted(() => {
 .btn-replay,
 .btn-replay-log {
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.25rem;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
   cursor: pointer;
   font-size: 0.8rem;
 }
 
 .btn-replay:hover,
 .btn-replay-log:hover {
-  background: var(--color-surface-hover, #f3f4f6);
+  background: var(--bg-hover, #f3f4f6);
 }
 
 .btn-replay:disabled {
@@ -656,12 +654,12 @@ onUnmounted(() => {
 
 .btn-fixture {
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.25rem;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
   font-size: 0.8rem;
   text-decoration: none;
-  color: var(--color-text, #374151);
+  color: var(--text-primary, #374151);
 }
 
 .replay-panel {
@@ -699,7 +697,7 @@ onUnmounted(() => {
 }
 
 .meta-item {
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .event-browser {
@@ -717,9 +715,9 @@ onUnmounted(() => {
 
 .event-nav button {
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.25rem;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
   cursor: pointer;
   font-size: 0.8rem;
 }
@@ -730,8 +728,8 @@ onUnmounted(() => {
 }
 
 .event-detail {
-  background: var(--color-surface-elevated, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated, #f9fafb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   padding: 0.75rem;
   font-size: 0.8rem;
@@ -758,8 +756,8 @@ onUnmounted(() => {
 }
 
 .diff-content {
-  background: var(--color-surface-elevated, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated, #f9fafb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   padding: 0.75rem;
   font-size: 0.75rem;
@@ -771,6 +769,6 @@ onUnmounted(() => {
 }
 
 .diff-identical {
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 </style>

@@ -34,8 +34,45 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import os
 import socket
+from collections.abc import Collection
 from urllib.parse import urlparse
+
+# ---------------------------------------------------------------------------
+# OAuth provider allowlist — single source of truth for SSRF-safe OAuth hosts.
+# Shared by api/provider_auth.py and llm_shared/provider_auth.py so neither
+# duplicates the list.  Override at runtime via AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS.
+# ---------------------------------------------------------------------------
+
+_DEFAULT_OAUTH_ALLOWED_HOSTS: frozenset[str] = frozenset(
+    {
+        "accounts.google.com",
+        "oauth2.googleapis.com",
+        "github.com",
+        "api.github.com",
+        "huggingface.co",
+        "login.microsoftonline.com",
+        "api.openai.com",
+        "auth.openai.com",
+        "api.anthropic.com",
+        "api.mistral.ai",
+    }
+)
+
+
+def get_oauth_allowed_hosts() -> frozenset[str]:
+    """Return the OAuth provider SSRF allowlist.
+
+    Uses AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS (comma-separated hostnames) when
+    set and non-empty; falls back to ``_DEFAULT_OAUTH_ALLOWED_HOSTS`` otherwise.
+    Evaluated at call time so runtime env-var changes are reflected without restart.
+    """
+    raw = os.environ.get("AUTOBOT_PROVIDER_OAUTH_ALLOWED_HOSTS", "")
+    if raw.strip():
+        return frozenset(h.strip().lower() for h in raw.split(",") if h.strip())
+    return _DEFAULT_OAUTH_ALLOWED_HOSTS
+
 
 # TLDs that are never public — rejected before DNS resolution.
 _PRIVATE_TLDS = (".onion", ".internal", ".local", ".localhost", ".lan", ".home", ".corp")
@@ -153,4 +190,82 @@ async def resolve_safe_ip_async(host: str, *, timeout: float = _DNS_TIMEOUT_SECO
     return safe_ip
 
 
-__all__ = ["is_public_url", "is_public_url_async", "resolve_safe_ip_async"]
+def require_allowlisted_https(url: str, allowed_hosts: Collection[str]) -> None:
+    """Validate *url* as a safe outbound endpoint or raise ``ValueError`` (#11091).
+
+    A superset SSRF guard for *server-configured* outbound endpoints (e.g. provider
+    OAuth / token URLs). Unlike :func:`is_public_url` — which DNS-resolves an
+    arbitrary user-supplied URL — this pins the request to an explicit host
+    allowlist and the standard https port, so an allowlisted name can't be pivoted
+    to reach another service or port. Consolidated here (per #11091 item 3) so the
+    https / IP-literal / allowlist / port-pinning rules live in one SSRF module
+    instead of being reimplemented at each caller.
+
+    Raises ``ValueError`` with a human-readable reason (stdlib only, no transport
+    dependency); callers translate it to their own error type (e.g. HTTP 400).
+
+    Rules — any violation raises:
+    - scheme must be ``https``
+    - host must be present and not an IP literal (blocks 127.0.0.1, 10.x,
+      169.254.169.254, ``::1``, …)
+    - host (lowercased) must be in *allowed_hosts*
+    - port must be the standard https port (``None`` or 443); a malformed port raises
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        raise ValueError("Invalid URL")
+
+    if parsed.scheme != "https":
+        raise ValueError("Only https URLs are permitted")
+
+    host = parsed.hostname or ""
+    if not host:
+        raise ValueError("URL has no host")
+
+    # ip_address() raises ValueError when host is NOT an IP; use a flag so the
+    # "is a literal" rejection isn't swallowed by the same except clause.
+    try:
+        ipaddress.ip_address(host)
+        is_ip_literal = True
+    except ValueError:
+        is_ip_literal = False
+    if is_ip_literal:
+        raise ValueError("IP-literal hosts are not permitted")
+
+    if host.lower() not in allowed_hosts:
+        raise ValueError(f"Host '{host}' is not in the allowlist")
+
+    # urlparse defers port parsing to attribute access, so a malformed port
+    # (e.g. ``:99999``) raises ValueError here — surface it as a clear reason
+    # rather than letting it escape unhandled (#11066).
+    try:
+        port = parsed.port
+    except ValueError:
+        raise ValueError("URL has an invalid port")
+    if port not in (None, 443):
+        raise ValueError("Only the standard https port (443) is permitted")
+
+
+def host_matches(host: str, domain: str) -> bool:
+    """Return True iff *host* is exactly *domain* or a subdomain of it (#11226).
+
+    Domain-boundary-aware trust check. Unlike a substring test (``domain in host``)
+    or an unanchored ``host.endswith(domain)``, this cannot be fooled by an
+    attacker-controlled name that merely *contains* or *ends with* a trusted label:
+    ``evilgithub.com`` does NOT match ``github.com``, while ``github.com`` and
+    ``sub.github.com`` do. Case-insensitive and tolerant of a trailing FQDN dot.
+    """
+    host = host.lower().rstrip(".")
+    domain = domain.lower().rstrip(".")
+    return host == domain or host.endswith("." + domain)
+
+
+__all__ = [
+    "is_public_url",
+    "is_public_url_async",
+    "resolve_safe_ip_async",
+    "require_allowlisted_https",
+    "get_oauth_allowed_hosts",
+    "host_matches",
+]

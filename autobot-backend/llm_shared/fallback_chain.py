@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
 
@@ -216,6 +217,17 @@ class FallbackChainManager:
             if chain:
                 return chain.get_next_fallback(qualified_name)
 
+        # Mid-chain hop (#11687): chains are keyed by PRIMARY model only, so a
+        # fallback model that itself rate-limits resolves no chain and
+        # multi-hop fallback dies after the first hop. Find the chain that
+        # lists current_model as a fallback and continue from there —
+        # FallbackChain.get_next_fallback already handles mid-chain positions.
+        needle = current_model.lower()
+        for chain in self._chains.values():
+            for fb_model in chain.fallback_models:
+                if fb_model.lower() == needle:
+                    return chain.get_next_fallback(fb_model)
+
         return None
 
     def list_chains(self) -> Dict[str, List[str]]:
@@ -224,15 +236,7 @@ class FallbackChainManager:
 
 
 # Global singleton instance
-_fallback_manager: Optional[FallbackChainManager] = None
-
-
-def get_fallback_chain_manager() -> FallbackChainManager:
-    """Get the global fallback chain manager (lazy singleton)."""
-    global _fallback_manager
-    if _fallback_manager is None:
-        _fallback_manager = FallbackChainManager()
-    return _fallback_manager
+get_fallback_chain_manager = lazy_singleton(FallbackChainManager)
 
 
 __all__ = ["FallbackChain", "FallbackChainManager", "get_fallback_chain_manager"]

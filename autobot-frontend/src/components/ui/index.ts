@@ -12,7 +12,7 @@
  */
 
 export { default as BaseAlert } from './BaseAlert.vue'
-export { default as BaseModal } from './BaseModal.vue'
+export { BaseModal } from '@autobot/ui'
 export { default as CommandPermissionDialog } from './CommandPermissionDialog.vue'
 export { default as DarkModeToggle } from './DarkModeToggle.vue'
 export { default as DataTable } from './DataTable.vue'

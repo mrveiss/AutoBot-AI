@@ -303,13 +303,13 @@
     </div>
 
     <!-- Patterns Modal -->
-    <div v-if="showPatterns" class="modal-overlay" @click.self="showPatterns = false">
-      <div class="modal patterns-modal">
-        <div class="modal-header">
-          <h3>{{ $t('analytics.codeReview.reviewPatterns') }}</h3>
-          <button class="close-btn" @click="showPatterns = false">×</button>
-        </div>
-        <div class="modal-content">
+    <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
+      :model-value="showPatterns"
+      :title="$t('analytics.codeReview.reviewPatterns')"
+      size="md"
+      @close="showPatterns = false"
+    >
           <div
             v-for="(patterns, category) in patternsByCategory"
             :key="category"
@@ -340,14 +340,13 @@
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+    </BaseModal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { BaseModal } from '@autobot/ui'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useNotificationBus } from '@/composables/useNotificationBus'
@@ -370,14 +369,21 @@ function withSourceIdParams(params: Record<string, unknown> = {}): Record<string
   return { ...params, source_id: id }
 }
 
+// Issue #638: /patterns/preferences returns a map keyed by pattern id,
+// distinct from the Pattern[] list returned by /patterns.
+interface PatternPreferencesResponse {
+  data?: PatternPreferencesResponse
+  patterns?: Record<string, { enabled: boolean }>
+}
+
 // Issue #701: Type for API response with data property
 interface ApiDataResponse {
-  data?: any
+  data?: ApiDataResponse
   issues?: ReviewIssue[]
   reviews?: ReviewHistory[]
   patterns?: Pattern[]
   path?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 // Types
@@ -699,8 +705,8 @@ function savePatternPrefs(): void {
 async function applyPatternPrefs(): Promise<void> {
   // Issue #638: Load preferences from backend first, fallback to localStorage
   try {
-    const response = await api.get<ApiDataResponse>(`${getApiBase()}/code-review/patterns/preferences`);
-    const prefs = (response as ApiDataResponse).patterns || (response as ApiDataResponse).data?.patterns;
+    const response = await api.get<PatternPreferencesResponse>(`${getApiBase()}/code-review/patterns/preferences`);
+    const prefs = (response as PatternPreferencesResponse).patterns || (response as PatternPreferencesResponse).data?.patterns;
 
     if (prefs) {
       // Apply backend preferences
@@ -735,7 +741,7 @@ async function togglePattern(pattern: Pattern): Promise<void> {
   const newState = !pattern.enabled;
 
   try {
-    await api.post<any>(`${getApiBase()}/code-review/patterns/toggle`, {
+    await api.post<unknown>(`${getApiBase()}/code-review/patterns/toggle`, {
       pattern_id: pattern.id,
       enabled: newState
     });
@@ -753,7 +759,7 @@ async function togglePattern(pattern: Pattern): Promise<void> {
 
 async function markResolved(issue: ReviewIssue) {
   try {
-    await api.post<any>(`${getApiBase()}/code-review/feedback`, {
+    await api.post<unknown>(`${getApiBase()}/code-review/feedback`, {
       issue_id: issue.id,
       feedback: 'resolved'
     })
@@ -768,7 +774,7 @@ async function markResolved(issue: ReviewIssue) {
 
 async function markFalsePositive(issue: ReviewIssue) {
   try {
-    await api.post<any>(`${getApiBase()}/code-review/feedback`, {
+    await api.post<unknown>(`${getApiBase()}/code-review/feedback`, {
       issue_id: issue.id,
       feedback: 'false_positive'
     })
@@ -796,6 +802,9 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-6);
+  /* #10750: fill the scrolling .analytics-router-view; the issues grid grows
+     to absorb vertical slack instead of leaving dead space below. */
+  min-height: 100%;
 }
 
 /* Path Selection */
@@ -862,7 +871,25 @@ onMounted(() => {
 .content-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
   gap: var(--spacing-6);
+  /* #10750: primary data region — grow to fill remaining height. */
+  flex: 1;
+  min-height: 0;
+}
+
+/* #10750: issues panel is the grower; its list scrolls internally instead of
+   the shared fixed 400px cap. */
+.content-grid .panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.content-grid .panel-content {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
 }
 
 /* Filter Tabs */
@@ -1129,11 +1156,6 @@ onMounted(() => {
 .stat.total {
   background: var(--bg-quaternary);
   color: var(--text-secondary);
-}
-
-.modal-header h3 {
-  margin: var(--spacing-0);
-  color: var(--text-primary);
 }
 
 .pattern-item {

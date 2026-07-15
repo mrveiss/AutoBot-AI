@@ -22,6 +22,7 @@ from .analytics_tasks import (
 )
 from .audit_log_retention import cleanup_expired_audit_logs
 from .chat_retention import cleanup_expired_chats
+from .credential_reconcile import reconcile_credentials
 from .file_retention import cleanup_expired_files
 from .knowledge_retention import cleanup_expired_kb_entries
 from .knowledge_tasks import (
@@ -39,7 +40,10 @@ from .memory_tasks import (
     update_graph_task,
     write_verbatim_task,
 )
+from .mobile_device_tasks import cleanup_stale_mobile_devices
+from .snapshot_cleanup import cleanup_expired_snapshots
 from .system_tasks import check_available_updates, initialize_rbac, run_system_update
+from .transcriber_tasks import transcribe_recording
 from .workspace_cleanup import cleanup_stale_workspaces
 
 __all__ = [
@@ -75,4 +79,11 @@ __all__ = [
     "cleanup_expired_files",
     "cleanup_expired_audit_logs",
     "cleanup_expired_kb_entries",
+    # Previously unregistered: worker never imported these modules, so their
+    # @celery_app.task decorators never ran and beat-scheduled runs raised
+    # "Received unregistered task of type ...".
+    "reconcile_credentials",
+    "cleanup_expired_snapshots",
+    "cleanup_stale_mobile_devices",
+    "transcribe_recording",
 ]

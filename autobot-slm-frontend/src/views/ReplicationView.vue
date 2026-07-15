@@ -257,10 +257,7 @@ function getNodeHostname(nodeId: string): string {
         <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
-        <p class="text-sm text-yellow-700">
-          At least 2 nodes with the Redis role are required to set up replication.
-          Currently {{ redisNodes.length }} Redis node(s) available.
-        </p>
+        <p class="text-sm text-yellow-700">{{ $t('replicationView.atLeast2NodesWithThe', { count: redisNodes.length }) }}</p>
       </div>
     </div>
 
@@ -364,13 +361,13 @@ function getNodeHostname(nodeId: string): string {
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="flex items-center gap-2">
-                  <div class="w-3 h-3 rounded-full bg-purple-500" title="Primary"></div>
+                  <div class="w-3 h-3 rounded-full bg-purple-500" :title="$t('replicationView.primary')"></div>
                   <span class="text-sm font-medium text-gray-900">{{ getNodeHostname(replication.source_node_id) }}</span>
                 </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="flex items-center gap-2">
-                  <div class="w-3 h-3 rounded-full bg-cyan-500" title="Replica"></div>
+                  <div class="w-3 h-3 rounded-full bg-cyan-500" :title="$t('replicationView.replica')"></div>
                   <span class="text-sm font-medium text-gray-900">{{ getNodeHostname(replication.target_node_id) }}</span>
                 </div>
               </td>
@@ -397,7 +394,7 @@ function getNodeHostname(nodeId: string): string {
                   <button
                     @click="handleVerifySync(replication)"
                     class="text-blue-600 hover:text-blue-800"
-                    title="Verify sync status"
+                    :title="$t('replicationView.verifySyncStatus')"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -408,7 +405,7 @@ function getNodeHostname(nodeId: string): string {
                   <button
                     @click="showDetails(replication)"
                     class="text-gray-600 hover:text-gray-800"
-                    title="View details"
+                    :title="$t('replicationView.viewDetails')"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -421,7 +418,7 @@ function getNodeHostname(nodeId: string): string {
                     v-if="replication.status === 'active'"
                     @click="handlePromote(replication.replication_id)"
                     class="text-green-600 hover:text-green-800"
-                    title="Promote to primary"
+                    :title="$t('replicationView.promoteToPrimary2')"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
@@ -433,7 +430,7 @@ function getNodeHostname(nodeId: string): string {
                     v-if="['active', 'syncing'].includes(replication.status)"
                     @click="handleStop(replication.replication_id)"
                     class="text-red-600 hover:text-red-800"
-                    title="Stop replication"
+                    :title="$t('replicationView.stopReplication')"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -576,7 +573,7 @@ function getNodeHostname(nodeId: string): string {
                   {{ selectedReplication.status }}
                 </span>
               </div>
-              <button @click="closeDetails" class="text-gray-400 hover:text-gray-600" aria-label="Close">
+              <button @click="closeDetails" class="text-gray-400 hover:text-gray-600" :aria-label="$t('replicationView.close')">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -610,9 +607,7 @@ function getNodeHostname(nodeId: string): string {
                     {{ formatLag(selectedReplication.lag_bytes) }}
                   </span>
                 </div>
-                <div v-if="selectedReplication.sync_position" class="text-xs text-gray-500">
-                  Sync position: {{ selectedReplication.sync_position }}
-                </div>
+                <div v-if="selectedReplication.sync_position" class="text-xs text-gray-500">{{ $t('replicationView.syncPositionValue0', { value0: selectedReplication.sync_position }) }}</div>
               </div>
 
               <!-- Sync Verification Results -->
@@ -639,7 +634,7 @@ function getNodeHostname(nodeId: string): string {
                     />
                   </svg>
                   <p :class="['font-medium', syncVerifyResult.is_healthy ? 'text-green-700' : 'text-red-700']">
-                    {{ syncVerifyResult.is_healthy ? 'Replication is healthy and in sync' : 'Replication issues detected' }}
+                    {{ syncVerifyResult.is_healthy ? $t('replicationView.replicationIsHealthyAndInSync') : $t('replicationView.replicationIssuesDetected') }}
                   </p>
                 </div>
 

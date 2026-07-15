@@ -12,10 +12,17 @@ Contains agent registration, lookup, and management functionality.
 from typing import Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.tool_catalogue import INFRA_AND_SHELL_TOOLS, match_tool_name
 
 from .types import AgentCapability, AgentProfile
 
 logger = get_logger(__name__)
+
+
+# GH#11139: infra/shell tools that non-executor agents may not invoke. The system
+# agent is the designated executor and is intentionally excluded from this boundary.
+# GH#11206: composed from the canonical tool catalogue (SSOT).
+_INFRA_AND_SHELL_TOOLS: List[str] = list(INFRA_AND_SHELL_TOOLS)
 
 
 def _create_research_agent() -> AgentProfile:
@@ -27,6 +34,8 @@ def _create_research_agent() -> AgentProfile:
         specializations=["web_search", "data_analysis", "information_synthesis"],
         max_concurrent_tasks=5,
         preferred_task_types=["research", "information_gathering", "analysis"],
+        allowed_work=["web_search", "http_get", "read_file"],
+        forbidden_work=list(_INFRA_AND_SHELL_TOOLS),
     )
 
 
@@ -46,11 +55,17 @@ def _create_documentation_agent() -> AgentProfile:
         ],
         max_concurrent_tasks=3,
         preferred_task_types=["documentation", "knowledge_management"],
+        allowed_work=["write_file", "edit_file", "read_file"],
+        forbidden_work=list(_INFRA_AND_SHELL_TOOLS),
     )
 
 
 def _create_system_agent() -> AgentProfile:
-    """Create the system agent profile. Issue #620."""
+    """Create the system agent profile. Issue #620.
+
+    The designated executor — no ``forbidden_work`` boundary; shell/infra tools
+    remain gated by the loop's global SENSITIVE_TOOLS approval flow (GH#11139).
+    """
     return AgentProfile(
         agent_id="system_agent",
         agent_type="system_commands",
@@ -61,11 +76,15 @@ def _create_system_agent() -> AgentProfile:
         specializations=["command_execution", "system_administration", "automation"],
         max_concurrent_tasks=2,
         preferred_task_types=["system_operations", "command_execution"],
+        allowed_work=list(_INFRA_AND_SHELL_TOOLS),
     )
 
 
 def _create_coordination_agent() -> AgentProfile:
-    """Create the coordination agent profile. Issue #620."""
+    """Create the coordination agent profile. Issue #620.
+
+    Plans and routes; it must not execute infra/shell tools itself (GH#11139).
+    """
     return AgentProfile(
         agent_id="coordination_agent",
         agent_type="orchestrator",
@@ -80,7 +99,85 @@ def _create_coordination_agent() -> AgentProfile:
         ],
         max_concurrent_tasks=10,
         preferred_task_types=["coordination", "planning", "optimization"],
+        forbidden_work=list(_INFRA_AND_SHELL_TOOLS),
     )
+
+
+# #11251 Part 1: the orchestrator's capability-routing map keys on these ids.
+# Giving each a first-class AgentProfile lets orchestrator.agent_capabilities be a
+# pure projection of this registry (no parallel hardcoded capability dict). The
+# capabilities below MUST match the historical routing map exactly (no routing
+# regression); a test asserts the projection equals the previous literal.
+# Boundaries (decision: proper hardening): read/analysis/synthesis routing agents
+# forbid infra+shell; ``system_commands`` is the routing executor, allowed
+# infra/shell like ``system_agent``.
+_ROUTING_PROFILE_SPECS = [
+    (
+        "classification_agent",
+        "classifier",
+        {AgentCapability.ANALYSIS, AgentCapability.VALIDATION},
+        ["intent_classification", "input_validation"],
+    ),
+    (
+        "kb_librarian",
+        "librarian",
+        {AgentCapability.RESEARCH, AgentCapability.SYNTHESIS},
+        ["knowledge_retrieval", "context_synthesis"],
+    ),
+    (
+        "security_scanner",
+        "security",
+        {AgentCapability.SECURITY, AgentCapability.VALIDATION},
+        ["vulnerability_scan", "policy_validation"],
+    ),
+    (
+        "npu_code_search",
+        "search",
+        {AgentCapability.ANALYSIS, AgentCapability.OPTIMIZATION},
+        ["code_search", "npu_acceleration"],
+    ),
+    (
+        "development_speedup",
+        "optimizer",
+        {AgentCapability.ANALYSIS, AgentCapability.OPTIMIZATION},
+        ["dev_optimization"],
+    ),
+    (
+        "json_formatter",
+        "formatter",
+        {AgentCapability.VALIDATION, AgentCapability.SYNTHESIS},
+        ["json_formatting", "schema_validation"],
+    ),
+    ("llm_failsafe", "failsafe", {AgentCapability.SYNTHESIS}, ["fallback_synthesis"]),
+]
+
+# The full routing-agent id set (the 7 above + the executor + research_agent).
+ROUTING_AGENT_IDS = frozenset([spec[0] for spec in _ROUTING_PROFILE_SPECS] + ["system_commands", "research_agent"])
+
+
+def _create_routing_profiles() -> List[AgentProfile]:
+    """Build first-class profiles for the orchestrator routing ids (#11251 P1)."""
+    profiles = [
+        AgentProfile(
+            agent_id=agent_id,
+            agent_type=agent_type,
+            capabilities=set(caps),
+            specializations=list(specs),
+            forbidden_work=list(_INFRA_AND_SHELL_TOOLS),
+        )
+        for agent_id, agent_type, caps, specs in _ROUTING_PROFILE_SPECS
+    ]
+    # system_commands is the routing executor — allowed infra/shell (mirrors system_agent).
+    profiles.append(
+        AgentProfile(
+            agent_id="system_commands",
+            agent_type="executor",
+            capabilities={AgentCapability.EXECUTION, AgentCapability.MONITORING},
+            specializations=["command_execution", "system_monitoring"],
+            allowed_work=list(_INFRA_AND_SHELL_TOOLS),
+        )
+    )
+    return profiles
 
 
 def get_default_agents() -> List[AgentProfile]:
@@ -90,8 +187,9 @@ def get_default_agents() -> List[AgentProfile]:
     Returns:
         List of pre-configured AgentProfile instances.
         Issue #620: Refactored to use helper functions for each agent.
+        #11251 P1: routing-map agents get first-class profiles too.
     """
-    return [
+    return _create_routing_profiles() + [
         _create_research_agent(),
         _create_documentation_agent(),
         _create_system_agent(),
@@ -99,14 +197,28 @@ def get_default_agents() -> List[AgentProfile]:
     ]
 
 
-class AgentRegistry:
+def match_forbidden_tool(tool_name: str, forbidden: "frozenset[str]") -> "str | None":
+    """Return the ``forbidden_work`` pattern matching *tool_name*, else None (GH#11145).
+
+    Thin wrapper over the canonical ``match_tool_name`` (GH#11206) so the agent loop
+    and the production tool-dispatch seam share one exact/prefix rule. Case-insensitive;
+    a manifest entry matches by exact name or as a name prefix (``deploy`` blocks
+    ``deploy_service``).
+    """
+    return match_tool_name(tool_name, forbidden)
+
+
+class AgentCapabilityRegistry:
     """Static profile registry for orchestration agent capabilities.
 
     Scope (#6828): holds in-memory AgentProfile + AgentCapability catalogue
     populated at orchestrator startup from DEFAULT_AGENT_CONFIGS.  This is
     the **what-can-each-agent-do** registry — it does not track live health or
-    database persistence.  See also:
-    - agents.agent_client.AgentRegistry — health-tracking runtime registry
+    database persistence.  It is the canonical implementer of the shared
+    ``AgentCapabilityLookup`` ("find an agent that can do X") and
+    ``AgentRegistryProtocol`` (specialization updates) protocols in
+    ``autobot_shared.agent_registry_protocol``.  See also:
+    - agents.agent_client.AgentHealthRegistry — health-tracking runtime registry
     - services.agent_registry_service.AgentRegistryService — DB-backed CRUD
     - agents.agent_orchestration.distributed_management.DistributedAgentManager — dynamic/distributed
     """
@@ -164,6 +276,28 @@ class AgentRegistry:
     def get_all(self) -> Dict[str, AgentProfile]:
         """Get all registered agents."""
         return self._agents.copy()
+
+    def forbidden_tools(self, agent_id: str) -> "frozenset[str]":
+        """Return the tool names *agent_id* is forbidden to invoke (GH#11139).
+
+        Reads the declarative ``forbidden_work`` manifest off the agent's profile.
+        Unknown agents return an empty set (no boundary → falls back to the loop's
+        global SENSITIVE_TOOLS approval gate).
+        """
+        agent = self._agents.get(agent_id)
+        return frozenset(agent.forbidden_work) if agent is not None else frozenset()
+
+    def work_boundary(self, agent_id: str) -> "tuple[List[str], List[str]]":
+        """Return ``(allowed_work, forbidden_work)`` for *agent_id* (GH#11139).
+
+        The single query point for an agent's capability boundary — callers read
+        this instead of reconstructing the boundary from RBAC + sensitive-tool +
+        vault state separately.
+        """
+        agent = self._agents.get(agent_id)
+        if agent is None:
+            return ([], [])
+        return (list(agent.allowed_work), list(agent.forbidden_work))
 
     def find_by_capability(self, capability: AgentCapability) -> List[AgentProfile]:
         """Find all agents with a specific capability."""
@@ -262,6 +396,29 @@ class AgentRegistry:
             agent.current_workload -= 1
         return True
 
+    async def update_specializations(
+        self,
+        agent_id: str,
+        top_types: List[str],
+        rates: Dict[str, float],
+    ) -> None:
+        """Persist discovered specializations onto an agent's profile (#6828).
+
+        Concrete implementation of the shared ``AgentRegistryProtocol`` — the
+        callback surface ``AgentEvolutionTracker`` uses to report emergent
+        specializations.  Discovered types are promoted to the front of the
+        profile's ``specializations`` (existing ones retained, deduplicated);
+        per-type success rates are recorded in ``performance_metrics`` under
+        ``specialization:<task_type>`` keys.
+        """
+        agent = self._agents.get(agent_id)
+        if agent is None:
+            logger.warning("update_specializations: unknown agent %s — ignored", agent_id)
+            return
+        agent.specializations = list(top_types) + [s for s in agent.specializations if s not in top_types]
+        agent.performance_metrics.update({f"specialization:{task_type}": rate for task_type, rate in rates.items()})
+        logger.info("Agent %s specializations updated: %s", agent_id, top_types)
+
     def update_performance(
         self,
         agent_id: str,
@@ -299,3 +456,36 @@ class AgentRegistry:
     def __contains__(self, agent_id: str) -> bool:
         """Check if agent is registered."""
         return agent_id in self._agents
+
+
+# GH#11145: process-wide read-only registry of the default capability manifests,
+# seeded once from get_default_agents() (the same SSOT the orchestrator uses, so
+# no drift). Lets the production tool-dispatch seam resolve an agent's boundary
+# cheaply without constructing an Orchestrator on every tool call.
+_default_registry: "AgentCapabilityRegistry | None" = None
+
+
+def get_default_capability_registry() -> AgentCapabilityRegistry:
+    """Return the process-wide default AgentCapabilityRegistry (#6828).
+
+    The canonical read entry point for "find an agent that can do X" against
+    the default profiles — API fallbacks (api/agent_org, api/agent) and the
+    tool-dispatch boundary (``resolve_forbidden_tools``) share this instance
+    instead of constructing ad-hoc registries per call.
+    """
+    global _default_registry  # noqa: PLW0603
+    if _default_registry is None:
+        _default_registry = AgentCapabilityRegistry(initialize_defaults=True)
+    return _default_registry
+
+
+def resolve_forbidden_tools(agent_id: "str | None") -> "frozenset[str]":
+    """Resolve *agent_id*'s ``forbidden_work`` manifest from the default profiles.
+
+    Cached, read-only lookup reused by both the agent loop and the production tool
+    dispatch (GH#11145). An unknown or ``None`` ``agent_id`` returns an empty set —
+    no boundary — so callers no-op safely for the plain (profile-less) chat agent.
+    """
+    if not agent_id:
+        return frozenset()
+    return get_default_capability_registry().forbidden_tools(agent_id)

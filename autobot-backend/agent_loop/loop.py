@@ -20,21 +20,25 @@ and Think Tool into a cohesive execution system.
 import asyncio
 import hashlib
 import json
+import os
 import time
 import uuid
 from typing import Any
 
 from agent_loop.belief_state import BeliefStateUpdater
+from agent_loop.pre_action_verifier import PreActionVerifier, VerifierResult, VerifierVerdict
 from agent_loop.slack_hook import get_slack_hook
 from agent_loop.think_tool import ThinkTool
 from agent_loop.types import (
     AgentLoopConfig,
     AgentMessage,
+    HumanQuestion,
     IterationResult,
     LoopOutcome,
     LoopPhase,
     LoopState,
     MessageType,
+    SteeringEntry,
     TaskContext,
     ThinkCategory,
 )
@@ -45,13 +49,23 @@ from autobot_shared.error_boundaries import (
     classify_error,
 )
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.tool_catalogue import SENSITIVE_TOOLS, match_tool_name
+from autobot_shared.tracing import step_span
 from events import EventStreamManager, EventType
 from events.bus import PersistStrategy
 from events.bus import publish_event as _bus_publish_event
 from events.event_types import AGENT_ABSTAINED as EVT_AGENT_ABSTAINED
 from events.event_types import APPROVAL_REQUIRED as EVT_APPROVAL_REQUIRED
 from events.event_types import BELIEF_CACHE_HIT as EVT_BELIEF_CACHE_HIT
-from events.types import create_approval_required_event, create_message_event
+from events.event_types import HUMAN_ANSWER_RECEIVED as EVT_HUMAN_ANSWER_RECEIVED
+from events.event_types import HUMAN_QUESTION as EVT_HUMAN_QUESTION
+from events.event_types import STEERING_RECEIVED as EVT_STEERING_RECEIVED
+from events.event_types import VERIFIER_VERDICT as EVT_VERIFIER_VERDICT
+from events.types import (
+    create_approval_required_event,
+    create_human_question_event,
+    create_message_event,
+)
 from planner import PlannerModule
 from tools.parallel import ParallelToolExecutor
 
@@ -61,49 +75,9 @@ logger = get_logger(__name__)
 # Approval Workflow – Sensitive Tool Classification (Issue #4092)
 # =============================================================================
 
-#: Tools that require explicit user approval before execution.
-#: Covers file modifications, system commands, and deployment operations.
-SENSITIVE_TOOLS: frozenset[str] = frozenset(
-    {
-        # File & filesystem mutations
-        "write_file",
-        "edit_file",
-        "delete_file",
-        "move_file",
-        "copy_file",
-        "create_directory",
-        "remove_directory",
-        # Shell / system commands
-        "bash",
-        "shell",
-        "execute_command",
-        "run_command",
-        "terminal",
-        "system_exec",
-        # Deployment / infrastructure
-        "deploy",
-        "ansible",
-        "docker",
-        "kubectl",
-        "helm",
-        "terraform",
-        # Git mutations (write-side)
-        "git_push",
-        "git_commit",
-        "git_merge",
-        "git_rebase",
-        "git_reset",
-        "git_force_push",
-        # Network / HTTP mutations
-        "http_post",
-        "http_put",
-        "http_patch",
-        "http_delete",
-        "send_request",
-        # Code execution
-        "code_interpreter",
-    }
-)
+#: Tools that require explicit user approval before execution (file/system/deploy/
+#: git/http mutations + code execution). GH#11206: composed from the canonical
+#: tool catalogue (SSOT) — imported at module top as ``SENSITIVE_TOOLS``.
 
 # =============================================================================
 # Repetition-Halt Guard (Issue #3859, #3862, #3877)
@@ -117,6 +91,17 @@ _HALT_SENTINEL = "__repetition_halt__"
 # Sentinel key for stagnation halts (Issue #6627).
 _STAGNATION_SENTINEL = "__stagnation_halt__"
 
+# Durable run checkpointing (GH#11175). A run's progress snapshot is persisted to
+# Redis after each iteration so a crashed/restarted process can resume via
+# resume_run(). TTL is env-tunable so stale checkpoints self-expire.
+_RUN_CHECKPOINT_TTL_SECONDS: int = int(os.environ.get("AUTOBOT_RUN_CHECKPOINT_TTL_SECONDS", str(24 * 3600)))
+
+
+def _run_checkpoint_key(task_id: str) -> str:
+    """Redis key for a run's durable progress snapshot (GH#11175)."""
+    return f"autobot:run:checkpoint:{task_id}"
+
+
 # =============================================================================
 # Agent Loop
 # =============================================================================
@@ -128,6 +113,20 @@ class AgentLoop:
 
     Implements the Manus-inspired 6-step iteration pattern with
     event stream integration, planning, and parallel tool execution.
+
+    PRODUCTION STATUS (#11221): this class is **not instantiated anywhere in
+    production** — the only references to ``AgentLoop`` are this module and the
+    re-export/docstring in ``agent_loop/__init__.py``. The live tool-execution
+    seam is ``chat_workflow`` (``_dispatch_tool_call``), not this loop. Reusable
+    building blocks under ``agent_loop/`` (belief_state, extractors, guards) are
+    imported directly by other subsystems, but the loop *orchestrator* below is
+    dormant.
+
+    Consequence: any capability wired ONLY into this loop (e.g. the guard stack,
+    which is additionally inert until the loop is given an ``agent_id``) has no
+    runtime effect until a production caller instantiates ``AgentLoop``. Treat
+    this as a library of parts + a reference implementation, not a live code
+    path, when reasoning about what actually runs.
     """
 
     def __init__(
@@ -137,6 +136,7 @@ class AgentLoop:
         tool_executor: ParallelToolExecutor | None = None,
         think_tool: ThinkTool | None = None,
         config: AgentLoopConfig | None = None,
+        agent_id: str | None = None,
     ):
         """
         Initialize the agent loop.
@@ -147,14 +147,29 @@ class AgentLoop:
             tool_executor: Optional parallel tool executor
             think_tool: Optional think tool for reasoning
             config: Loop configuration
+            agent_id: Optional agent identity (GH#11145). When set, the agent's
+                ``forbidden_work`` manifest is resolved from ``AgentCapabilityRegistry`` and
+                applied to ``config.forbidden_tools`` so ``_check_forbidden`` hard-
+                blocks out-of-manifest tools. When unset (the default), the loop
+                runs as no particular agent and the manifest is empty (no change).
         """
         self.event_stream = event_stream
         self.planner = planner
         self.tool_executor = tool_executor
         self.think_tool = think_tool or ThinkTool()
-        self.config = config or AgentLoopConfig()
+        self.agent_id = agent_id
+        # GH#11150: when no explicit config is supplied, resolve the discretionary
+        # guard defaults from AUTOBOT_GUARD_PROFILE (standard == today's defaults).
+        # An explicitly-passed config is respected as-is — the caller owns it.
+        base_config = config if config is not None else AgentLoopConfig.with_guard_profile()
+        self.config = self._resolve_forbidden_tools(base_config, agent_id)
         self._belief_updater = BeliefStateUpdater(
             contradiction_surface_threshold=self.config.contradiction_surface_threshold
+        )
+
+        # Adversarial pre-action verifier (#10547)
+        self._verifier: PreActionVerifier | None = (
+            PreActionVerifier() if self.config.pre_action_verifier_enabled else None
         )
 
         # State
@@ -163,6 +178,14 @@ class AgentLoop:
         self._current_context: TaskContext | None = None
         self._iteration_count = 0
         self._consecutive_errors = 0
+        # GH#11149: files read/grepped this task, for the fact-forcing gate.
+        self._investigated_files: set[str] = set()
+        # Steering inbox: human guidance messages queued for the next iteration (#10543)
+        self._steering_inbox: asyncio.Queue[SteeringEntry] = asyncio.Queue()
+        # Human-answer inbox: answers arrive here via answer() and resolve ask_human() waits (#10553)
+        self._human_answer_inbox: asyncio.Queue[tuple[str, str]] = asyncio.Queue()  # (question_id, answer)
+        # Set while loop is suspended waiting for a human answer (#10553)
+        self._waiting_for_human: bool = False
         # Issue #3877: explicit flag set when repetition halt fires; checked by
         # _should_continue() so the main while-loop exits on the very next guard
         # check rather than relying solely on _should_iterate()'s error detection.
@@ -233,7 +256,22 @@ class AgentLoop:
         )
         self._state = LoopState.INITIALIZING
         self._iteration_count = 0
+        self._reset_run_flags()
+        # Clear any leftover steering messages from a previous run.
+        self._steering_inbox = asyncio.Queue()
+        # Clear answer inbox and waiting flag from a previous run (#10553).
+        self._human_answer_inbox = asyncio.Queue()
+        self._waiting_for_human = False
+
+    def _reset_run_flags(self) -> None:
+        """Reset per-run halt/error latch state (GH#11175).
+
+        Shared by ``_init_task_context`` (fresh run) and ``resume_run`` (crash
+        recovery) so a resumed run does not inherit a stale halt/abstain/error
+        latch that ``_should_continue`` would trip on immediately.
+        """
         self._consecutive_errors = 0
+        self._investigated_files = set()  # GH#11149: reset fact-forcing state per task
         self._halted_on_repetition = False
         self._abstained = False
         self._abstention_reason = None
@@ -258,6 +296,9 @@ class AgentLoop:
         while self._should_continue():
             iteration_result = await self._run_iteration()
             results.append(iteration_result)
+
+            # GH#11175: persist progress so a crash/restart can resume_run().
+            await self._checkpoint_run()
 
             if not iteration_result.should_continue:
                 break
@@ -400,6 +441,36 @@ class AgentLoop:
 
         finally:
             self._current_phase = LoopPhase.STANDBY
+            # GH#11175: clear the resume checkpoint on any terminal path
+            # (success/failure/cancel). A hard process crash skips finally, so its
+            # checkpoint survives for resume_run() — which is the intended behaviour.
+            await self._clear_run_checkpoint(task_id)
+
+    async def resume_run(self, task_id: str) -> dict[str, Any]:
+        """Resume a crashed/restarted run from its last persisted checkpoint (GH#11175).
+
+        Loads the Redis snapshot written by :meth:`_checkpoint_run`, restores the
+        task context and iteration counter, and continues the main loop to a
+        terminal state. Raises ``ValueError`` when no checkpoint exists for
+        *task_id* (nothing to resume).
+        """
+        snapshot = await self.load_run_snapshot(task_id)
+        if snapshot is None:
+            raise ValueError(f"no run checkpoint found for task_id: {task_id}")
+
+        self._current_context = TaskContext.from_snapshot(snapshot)
+        self._iteration_count = self._current_context.iteration_count
+        self._reset_run_flags()  # start from a clean halt/error latch (GH#11175)
+        logger.info(
+            "AgentLoop: resuming task %s from iteration %d",
+            task_id,
+            self._iteration_count,
+        )
+
+        results = await self._execute_main_loop()
+        result = await self._finalize_task(results)
+        await self._clear_run_checkpoint(task_id)
+        return result
 
     async def cancel(self) -> None:
         """Cancel the current task."""
@@ -418,6 +489,49 @@ class AgentLoop:
         if self._state == LoopState.PAUSED:
             self._state = LoopState.RUNNING
             logger.info("AgentLoop: Task resumed")
+
+    async def steer(self, steering_id: str, guidance: str) -> bool:
+        """Queue a human steering message for the next ANALYZE_EVENTS phase (#10543).
+
+        Steering is distinct from cancel/pause: the loop continues without
+        interruption; the guidance is absorbed at the top of the next iteration
+        and used to amend the current plan.  Returns False when no task is
+        running (caller should surface a 409 / noop to the frontend).
+        """
+        if self._state != LoopState.RUNNING:
+            logger.warning(
+                "AgentLoop: steer() called while state=%s — message dropped (steering_id=%s)",
+                self._state.name,
+                steering_id,
+            )
+            return False
+        entry = SteeringEntry(
+            steering_id=steering_id,
+            guidance=guidance,
+            iteration=self._iteration_count,
+        )
+        await self._steering_inbox.put(entry)
+        logger.info("AgentLoop: steering message queued (steering_id=%s)", steering_id)
+        return True
+
+    async def answer(self, question_id: str, answer_text: str) -> bool:
+        """Deliver a human's answer to a suspended ask_human() call (#10553).
+
+        Routes the answer into the ``_human_answer_inbox`` queue so the
+        awaiting ``ask_human()`` coroutine picks it up immediately.
+        Returns False when no task is running (caller should surface 409).
+        Mirrors ``steer()`` — same guard logic, same inbox pattern.
+        """
+        if self._state not in (LoopState.RUNNING, LoopState.WAITING_FOR_HUMAN):
+            logger.warning(
+                "AgentLoop: answer() called while state=%s — dropped (question_id=%s)",
+                self._state.name,
+                question_id,
+            )
+            return False
+        await self._human_answer_inbox.put((question_id, answer_text))
+        logger.info("AgentLoop: human answer queued (question_id=%s)", question_id)
+        return True
 
     # =========================================================================
     # Iteration Logic
@@ -585,14 +699,16 @@ class AgentLoop:
         start_time = time.monotonic()
         logger.debug("AgentLoop: Starting iteration %d", self._iteration_count)
 
+        task_id = self._current_context.task_id if self._current_context else None
         result = IterationResult(iteration_number=self._iteration_count)
 
-        try:
-            result = await self._execute_iteration_phases(result)
-        except Exception as e:
-            result.error = str(e)
-            result.should_continue = await self._handle_iteration_error(e)
-            self._current_context.add_error(str(e))
+        with step_span(self._iteration_count, task_id=task_id):
+            try:
+                result = await self._execute_iteration_phases(result)
+            except Exception as e:
+                result.error = str(e)
+                result.should_continue = await self._handle_iteration_error(e)
+                self._current_context.add_error(str(e))
 
         self._log_iteration_completion(start_time, result)
         return result
@@ -601,12 +717,56 @@ class AgentLoop:
     # Phase Implementations
     # =========================================================================
 
+    async def _drain_steering_inbox(self) -> list[SteeringEntry]:
+        """Drain all pending steering messages from the inbox without blocking.
+
+        Called at the top of ANALYZE_EVENTS each iteration (#10543).  Each
+        drained entry is recorded in the trajectory and published to the live
+        event bus so the frontend can surface an acknowledgement.
+        """
+        drained: list[SteeringEntry] = []
+        while not self._steering_inbox.empty():
+            try:
+                entry = self._steering_inbox.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            drained.append(entry)
+            if self._current_context is not None:
+                self._current_context.add_steering(entry)
+            task_id = self._current_context.task_id if self._current_context else None
+            await _bus_publish_event(
+                f"task:{task_id}" if task_id else "global",
+                EVT_STEERING_RECEIVED,
+                {
+                    "steering_id": entry.steering_id,
+                    "guidance": entry.guidance,
+                    "iteration": self._iteration_count,
+                    "task_id": task_id,
+                },
+                persist=PersistStrategy.MEMORY,
+            )
+            logger.info(
+                "AgentLoop: steering message absorbed (steering_id=%s, iteration=%d)",
+                entry.steering_id,
+                self._iteration_count,
+            )
+        return drained
+
     async def _analyze_events(self) -> dict[str, Any]:
         """
         Phase 1: Analyze recent events from the event stream.
 
+        Drains the steering inbox first so that human guidance is always the
+        highest-priority context for tool selection in this iteration (#10543).
+
         Returns context for tool selection.
         """
+        # (#10543) Drain steering inbox BEFORE reading the event stream so that
+        # any guidance queued since the last iteration is already in the context
+        # when _select_tools() runs.  This is non-blocking (get_nowait) so the
+        # loop never stalls waiting for a steering message that is not there.
+        steering_entries = await self._drain_steering_inbox()
+
         events = await self.event_stream.get_latest(
             count=self.config.events_to_analyze,
             task_id=self._current_context.task_id if self._current_context else None,
@@ -617,13 +777,24 @@ class AgentLoop:
             events = [e for e in events if e.event_type != EventType.SYSTEM]
 
         # Build context from events
-        context = {
+        context: dict[str, Any] = {
             "events": [e.to_dict() for e in events],
             "event_count": len(events),
             "event_types": list(set(e.event_type.name for e in events)),
             "recent_actions": [e.content for e in events if e.event_type == EventType.ACTION][-5:],
             "recent_observations": [e.content for e in events if e.event_type == EventType.OBSERVATION][-5:],
         }
+
+        # (#10543) Inject steering guidance as a high-priority context amendment.
+        # When present, _select_tools() must treat these as goal constraints that
+        # supersede the original plan without restarting the loop.
+        if steering_entries:
+            context["steering_guidance"] = [e.to_dict() for e in steering_entries]
+            context["has_steering"] = True
+            logger.debug(
+                "AgentLoop: %d steering message(s) injected into ANALYZE_EVENTS context",
+                len(steering_entries),
+            )
 
         # Issue #4481: inject a first-turn context hint so the LLM knows no
         # prior tool results exist yet.  Only added on iteration 1 (the very
@@ -694,6 +865,26 @@ class AgentLoop:
                 halt_results[t_name] = {"error": halt_msg}
             self._halted_on_repetition = True
             return halt_results
+
+        # GH#11139: hard-block tools outside this agent's capability manifest
+        # (forbidden_work) BEFORE the approval gate — a forbidden tool is never
+        # offered for approval.
+        forbidden_results = self._check_forbidden(tools)
+        if forbidden_results:
+            return forbidden_results
+
+        # GH#11148: block writes that would weaken a linter/formatter config —
+        # steer the agent to fix the code, not the gate.
+        config_results = self._check_config_protection(tools)
+        if config_results:
+            return config_results
+
+        # GH#11149: fact-forcing — block the first edit to an existing file until
+        # it has been read/grepped this task. Records reads in this batch first so
+        # a read+edit of the same file in one turn is allowed.
+        fact_results = self._check_fact_forcing(tools)
+        if fact_results:
+            return fact_results
 
         # Issue #4092: Gate sensitive operations behind user approval.
         denied_results = await self._check_approvals(tools)
@@ -821,6 +1012,242 @@ class AgentLoop:
         # This would integrate with the event stream subscription
         # Placeholder - actual implementation would wait for user MESSAGE event
         return ""
+
+    async def ask_human(
+        self,
+        question: str,
+        choices: list[str] | None = None,
+        escalation_policy: str | None = None,
+        default_answer: str | None = None,
+        question_id_override: str | None = None,
+    ) -> str:
+        """Emit a clarifying question, suspend the loop, and resume on answer (#10553).
+
+        The loop state transitions to WAITING_FOR_HUMAN; the question is published
+        to the live task channel so the in-app UI renders an answer affordance.
+        Slack/push are notified via the existing hooks (fire-and-forget).
+        The pending question is checkpointed to Redis so a restarted loop can
+        detect it is still suspended.
+
+        Returns the human's answer text (authoritative; injects into trajectory).
+        Raises asyncio.TimeoutError only when escalation_policy="abandon" and the
+        deadline passes; callers should treat that as TIMED_OUT_WAITING.
+        """
+        question_id = question_id_override or str(uuid.uuid4())
+        task_id = self._current_context.task_id if self._current_context else None
+        policy = escalation_policy or self.config.ask_human_escalation_policy
+        timeout = self.config.ask_human_timeout_seconds
+
+        hq = HumanQuestion(
+            question_id=question_id,
+            question=question,
+            iteration=self._iteration_count,
+            choices=choices,
+            escalation_policy=policy,
+            default_answer=default_answer,
+        )
+        if self._current_context is not None:
+            self._current_context.add_human_question(hq)
+
+        await self._checkpoint_question(hq, task_id)
+        await self._emit_human_question(hq, task_id, timeout)
+
+        prev_state = self._state
+        self._state = LoopState.WAITING_FOR_HUMAN
+        self._waiting_for_human = True
+        try:
+            return await self._wait_for_answer(hq, timeout, policy, default_answer)
+        finally:
+            self._waiting_for_human = False
+            if self._state == LoopState.WAITING_FOR_HUMAN:
+                self._state = prev_state
+            await self._clear_question_checkpoint(question_id, task_id)
+
+    async def _emit_human_question(
+        self,
+        hq: "HumanQuestion",
+        task_id: str | None,
+        timeout: int,
+    ) -> None:
+        """Publish HUMAN_QUESTION to the event bus + Slack/push (fire-and-forget)."""
+        event = create_human_question_event(
+            question_id=hq.question_id,
+            question=hq.question,
+            timeout_seconds=timeout,
+            task_id=task_id,
+            choices=hq.choices,
+        )
+        await self.event_stream.publish(event)
+        channel = f"task:{task_id}" if task_id else "global"
+        await _bus_publish_event(
+            channel,
+            EVT_HUMAN_QUESTION,
+            {
+                "question_id": hq.question_id,
+                "question": hq.question,
+                "choices": hq.choices,
+                "timeout_seconds": timeout,
+                "task_id": task_id,
+                "iteration": hq.iteration,
+            },
+            persist=PersistStrategy.MEMORY,
+        )
+        slack = get_slack_hook()
+        await slack.ask_human(
+            question_id=hq.question_id,
+            question=hq.question,
+            choices=hq.choices,
+            task_id=task_id,
+        )
+        logger.info(
+            "AgentLoop: ask_human emitted (question_id=%s, policy=%s, timeout=%ds)",
+            hq.question_id,
+            hq.escalation_policy,
+            timeout,
+        )
+
+    async def _wait_for_answer(
+        self,
+        hq: "HumanQuestion",
+        timeout: int,
+        policy: str,
+        default_answer: str | None,
+    ) -> str:
+        """Wait up to *timeout* seconds for a human answer (#10553).
+
+        Two sources are drained concurrently:
+        1. ``_human_answer_inbox`` — direct in-process delivery via answer().
+        2. Event stream subscription — delivery via the REST endpoint or any
+           other channel that publishes a HUMAN_ANSWER event with matching id.
+
+        Applies escalation policy when the deadline expires:
+        - "abandon": raises asyncio.TimeoutError (caller sets TIMED_OUT_WAITING).
+        - "default": returns default_answer (or "" if unset).
+        - "re_ask": retries once; abandons after the second timeout.
+        """
+
+        async def _drain() -> str:
+            # Race between in-process queue and event stream subscription.
+            queue_task = asyncio.ensure_future(self._drain_answer_queue(hq.question_id))
+            stream_task = asyncio.ensure_future(self._drain_answer_stream(hq.question_id))
+            done, pending = await asyncio.wait({queue_task, stream_task}, return_when=asyncio.FIRST_COMPLETED)
+            for t in pending:
+                t.cancel()
+            return next(iter(done)).result()
+
+        try:
+            answer = await asyncio.wait_for(_drain(), timeout=timeout)
+        except asyncio.TimeoutError:
+            if policy == "default":
+                answer = default_answer or ""
+                logger.warning(
+                    "AgentLoop: ask_human timeout — using default answer (question_id=%s)",
+                    hq.question_id,
+                )
+            elif policy == "re_ask":
+                logger.warning("AgentLoop: ask_human timeout — re-asking once (question_id=%s)", hq.question_id)
+                re_ask_task_id = self._current_context.task_id if self._current_context else None
+                await self._emit_human_question(hq, re_ask_task_id, timeout)
+                try:
+                    answer = await asyncio.wait_for(_drain(), timeout=timeout)
+                except asyncio.TimeoutError:
+                    raise
+            else:  # "abandon"
+                raise
+
+        task_id = self._current_context.task_id if self._current_context else None
+        await _bus_publish_event(
+            f"task:{task_id}" if task_id else "global",
+            EVT_HUMAN_ANSWER_RECEIVED,
+            {"question_id": hq.question_id, "answer": answer, "task_id": task_id},
+            persist=PersistStrategy.MEMORY,
+        )
+        logger.info(
+            "AgentLoop: ask_human resolved (question_id=%s, answer=%r)",
+            hq.question_id,
+            answer[:80],
+        )
+        return answer
+
+    async def _drain_answer_queue(self, question_id: str) -> str:
+        """Block until the in-process answer inbox yields the matching answer (#10553)."""
+        while True:
+            qid, ans = await self._human_answer_inbox.get()
+            if qid == question_id:
+                return ans
+            # Unrelated question_id — put it back and retry.
+            await self._human_answer_inbox.put((qid, ans))
+
+    async def _drain_answer_stream(self, question_id: str) -> str:
+        """Subscribe to the event stream and return when a HUMAN_ANSWER matches (#10553).
+
+        Mirrors _request_approval's subscribe() pattern so remote answers (REST,
+        Slack reply, mobile push) resolve the wait the moment they are published.
+        """
+        async for event in self.event_stream.subscribe(event_types=[EventType.HUMAN_ANSWER]):
+            if event.content.get("question_id") == question_id:
+                return event.content.get("answer", "")
+        return ""  # stream exhausted (loop shutdown)
+
+    async def _checkpoint_question(self, hq: "HumanQuestion", task_id: str | None) -> None:
+        """Persist the pending question to Redis so a restart can detect suspension (#10553)."""
+        try:
+            from autobot_shared.redis_client import redis_set
+
+            key = f"autobot:ask_human:{task_id or 'global'}:{hq.question_id}"
+            await redis_set(key, json.dumps(hq.to_dict()), expire=self.config.ask_human_timeout_seconds + 60)
+        except Exception as exc:
+            logger.warning("AgentLoop: ask_human checkpoint failed (non-critical): %s", exc)
+
+    async def _clear_question_checkpoint(self, question_id: str, task_id: str | None) -> None:
+        """Remove the Redis checkpoint after the question is resolved or abandoned (#10553)."""
+        try:
+            from autobot_shared.redis_client import redis_delete
+
+            key = f"autobot:ask_human:{task_id or 'global'}:{question_id}"
+            await redis_delete(key)
+        except Exception as exc:
+            logger.warning("AgentLoop: ask_human checkpoint clear failed (non-critical): %s", exc)
+
+    async def _checkpoint_run(self) -> None:
+        """Persist the current run's progress snapshot to Redis (GH#11175).
+
+        Called after each iteration so a crashed/restarted process can resume via
+        :meth:`resume_run`. Best-effort — a checkpoint failure logs and never
+        interrupts the run.
+        """
+        if self._current_context is None:
+            return
+        try:
+            from autobot_shared.redis_client import redis_set
+
+            # The live iteration counter is the AgentLoop attribute; mirror it onto
+            # the context so the snapshot records real progress (else resume → 0).
+            self._current_context.iteration_count = self._iteration_count
+            key = _run_checkpoint_key(self._current_context.task_id)
+            snapshot = self._current_context.to_snapshot()
+            await redis_set(key, json.dumps(snapshot), expire=_RUN_CHECKPOINT_TTL_SECONDS)
+        except Exception as exc:
+            logger.warning("AgentLoop: run checkpoint failed (non-critical): %s", exc)
+
+    async def _clear_run_checkpoint(self, task_id: str) -> None:
+        """Remove a run's Redis checkpoint once the run completes (GH#11175)."""
+        try:
+            from autobot_shared.redis_client import redis_delete
+
+            await redis_delete(_run_checkpoint_key(task_id))
+        except Exception as exc:
+            logger.warning("AgentLoop: run checkpoint clear failed (non-critical): %s", exc)
+
+    @staticmethod
+    async def load_run_snapshot(task_id: str) -> dict | None:
+        """Load a run's persisted progress snapshot, or None if absent (GH#11175)."""
+        from autobot_shared.redis_client import redis_get
+
+        raw = await redis_get(_run_checkpoint_key(task_id))
+        if not raw:
+            return None
+        return json.loads(raw)
 
     # =========================================================================
     # Think Tool Integration
@@ -1002,15 +1429,146 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
 
     @staticmethod
     def _sensitive_tool_name(tool: dict[str, Any]) -> str | None:
-        """Return the tool name if it is in SENSITIVE_TOOLS, else None."""
-        name = tool.get("tool_name", "").lower()
-        if name in SENSITIVE_TOOLS:
-            return name
-        # Also match by prefix so e.g. "bash_run" → "bash" is caught.
-        for sensitive in SENSITIVE_TOOLS:
-            if name.startswith(sensitive):
-                return sensitive
-        return None
+        """Return the matched SENSITIVE_TOOLS name (exact or prefix, e.g. "bash_run" →
+        "bash"), else None. GH#11206: uses the canonical ``match_tool_name``."""
+        return match_tool_name(tool.get("tool_name", ""), SENSITIVE_TOOLS)
+
+    @staticmethod
+    def _resolve_forbidden_tools(config: "AgentLoopConfig", agent_id: str | None) -> "AgentLoopConfig":
+        """Populate ``config.forbidden_tools`` from the agent's manifest (GH#11145).
+
+        Reads ``forbidden_work`` off the agent's ``AgentProfile`` via
+        ``AgentCapabilityRegistry`` and returns a config with those tools hard-blocked. When
+        no ``agent_id`` is given, or the config already carries an explicit
+        ``forbidden_tools`` set, or the agent has no boundary, the config is
+        returned unchanged. Registry resolution never raises into the loop — a
+        lookup failure logs and falls back to the (unbounded) config.
+        """
+        if not agent_id or config.forbidden_tools:
+            return config
+        try:
+            from dataclasses import replace
+
+            from orchestration.agent_registry import resolve_forbidden_tools
+
+            forbidden = resolve_forbidden_tools(agent_id)
+        except Exception as exc:  # pragma: no cover - defensive; registry import/lookup
+            logger.warning(
+                "AgentLoop: could not resolve forbidden_work for agent '%s': %s",
+                agent_id,
+                exc,
+            )
+            return config
+        if not forbidden:
+            return config
+        logger.info(
+            "AgentLoop: agent '%s' forbidden_work manifest active (%d tools)",
+            agent_id,
+            len(forbidden),
+        )
+        return replace(config, forbidden_tools=forbidden)
+
+    def _forbidden_tool_name(self, tool: dict[str, Any]) -> str | None:
+        """Return the matched forbidden-tool name for *tool*, else None (GH#11139).
+
+        Delegates to the shared ``match_forbidden_tool`` matcher (GH#11145) so the
+        loop and the production tool-dispatch seam apply the identical name/prefix
+        rule against the agent's ``forbidden_work`` manifest.
+        """
+        from orchestration.agent_registry import match_forbidden_tool
+
+        return match_forbidden_tool(tool.get("tool_name", ""), self.config.forbidden_tools)
+
+    def _check_forbidden(self, tools: list[dict[str, Any]]) -> dict[str, Any]:
+        """Hard-block the first tool the agent's manifest forbids (GH#11139).
+
+        Returns a denial result dict (same shape as a user-denied approval) for
+        the first forbidden tool, or ``{}`` when none are forbidden.
+        """
+        for tool in tools:
+            matched = self._forbidden_tool_name(tool)
+            if matched is not None:
+                tool_name = tool.get("tool_name", "unknown")
+                logger.warning(
+                    "AgentLoop: tool '%s' blocked by agent forbidden_work manifest (matched '%s')",
+                    tool_name,
+                    matched,
+                )
+                return {
+                    tool_name: {
+                        "error": (
+                            f"Tool '{tool_name}' is forbidden by this agent's capability "
+                            f"manifest (matched '{matched}')"
+                        )
+                    }
+                }
+        return {}
+
+    def _check_config_protection(self, tools: list[dict[str, Any]]) -> dict[str, Any]:
+        """Block the first write that would weaken a linter/formatter config (GH#11148).
+
+        Returns a denial result dict for the first protected-config write, or
+        ``{}`` when none are protected or ``AUTOBOT_ALLOW_CONFIG_EDITS`` opts out.
+        """
+        from agent_loop.config_protection import config_edits_allowed, protected_config_write
+
+        if config_edits_allowed():
+            return {}
+        for tool in tools:
+            matched = protected_config_write(tool)
+            if matched is not None:
+                tool_name = tool.get("tool_name", "unknown")
+                logger.warning(
+                    "AgentLoop: tool '%s' blocked from editing linter/formatter config '%s' (config-protection)",
+                    tool_name,
+                    matched,
+                )
+                return {
+                    tool_name: {
+                        "error": (
+                            f"Editing linter/formatter config '{matched}' is blocked "
+                            f"(config-protection): fix the code to satisfy the gate instead of "
+                            f"weakening it. Set AUTOBOT_ALLOW_CONFIG_EDITS=1 for an intentional change."
+                        )
+                    }
+                }
+        return {}
+
+    def _check_fact_forcing(self, tools: list[dict[str, Any]]) -> dict[str, Any]:
+        """Block the first edit to an existing, uninvestigated file (GH#11149).
+
+        Records this batch's investigations first (so read+edit in one turn is
+        allowed), then blocks the first edit to an existing file not yet read this
+        task. New files are never blocked. Self-clearing: the agent reads the file
+        and retries. Returns ``{}`` when disabled or nothing is gated.
+        """
+        from agent_loop.fact_forcing import (
+            fact_forcing_env_enabled,
+            first_uninvestigated_edit,
+            record_investigations,
+        )
+
+        if not (self.config.fact_forcing_enabled or fact_forcing_env_enabled()):
+            return {}
+        record_investigations(tools, self._investigated_files)
+        for tool in tools:
+            path = first_uninvestigated_edit(tool, self._investigated_files)
+            if path is not None:
+                tool_name = tool.get("tool_name", "unknown")
+                logger.warning(
+                    "AgentLoop: edit to '%s' blocked by fact-forcing gate — read it first (%s)",
+                    path,
+                    tool_name,
+                )
+                return {
+                    tool_name: {
+                        "error": (
+                            f"Editing '{path}' is blocked (fact-forcing): read the file and "
+                            f"its importers/call-sites first so the change is grounded, then retry."
+                        )
+                    }
+                }
+        return {}
 
     def _requires_approval(self, tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Return the subset of *tools* that require user approval.
@@ -1034,6 +1592,40 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
         """
         for tool in self._requires_approval(tools):
             tool_name = tool.get("tool_name", "unknown")
+            args = tool.get("args", tool.get("arguments", tool.get("parameters", {})))
+            if not isinstance(args, dict):
+                args = {"value": repr(args)}
+            reason = tool.get("reason", "")
+
+            # Adversarial pre-action verifier pass (#10547) — runs before human approval.
+            verifier_result = await self._run_verifier(tool_name, args, reason)
+            if verifier_result is not None:
+                await self._record_verifier_verdict(verifier_result)
+                if verifier_result.verdict == VerifierVerdict.BLOCK:
+                    from agent_loop.pre_action_verifier import HARD_BLOCK
+
+                    if HARD_BLOCK:
+                        logger.warning(
+                            "AgentLoop: verifier hard-blocked tool '%s' — %s",
+                            tool_name,
+                            verifier_result.rationale[:120],
+                        )
+                        return {
+                            tool_name: {
+                                "error": (
+                                    f"Tool '{tool_name}' was hard-blocked by the adversarial "
+                                    f"verifier (prob={verifier_result.refutation_probability:.2f}): "
+                                    f"{verifier_result.rationale}"
+                                )
+                            }
+                        }
+                    # Soft-block: escalate to human with verifier rationale attached
+                    tool = dict(tool)
+                    tool["verifier_rationale"] = (
+                        f"[Verifier BLOCK prob={verifier_result.refutation_probability:.2f}] "
+                        f"{verifier_result.rationale}"
+                    )
+
             approval_id = str(uuid.uuid4())
             approved = await self._request_approval(tool, approval_id)
             if not approved:
@@ -1046,6 +1638,60 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
                     tool_name: {"error": (f"Tool '{tool_name}' was denied by the user " f"(approval_id={approval_id})")}
                 }
         return {}
+
+    async def _run_verifier(
+        self,
+        tool_name: str,
+        args: dict[str, Any],
+        reason: str,
+    ) -> "VerifierResult | None":
+        """Dispatch the adversarial verifier for *tool_name* and return its result.
+
+        Returns None when the verifier is disabled or not configured.
+        Errors are swallowed and logged — a broken verifier must not block the loop.
+        """
+        if self._verifier is None:
+            return None
+        task_id = self._current_context.task_id if self._current_context else None
+        try:
+
+            result = await self._verifier.verify(
+                tool_name=tool_name,
+                args=args,
+                reason=reason,
+                task_id=task_id,
+            )
+            return result
+        except Exception as exc:
+            logger.warning(
+                "AgentLoop: pre-action verifier raised unexpectedly (%s: %r) — skipping",
+                type(exc).__name__,
+                exc,
+            )
+            return None
+
+    async def _record_verifier_verdict(self, result: "VerifierResult") -> None:
+        """Publish the verifier verdict to the event bus and task trajectory.
+
+        The verdict is visible to the human at the approval gate so the operator
+        sees "verifier flagged X" before deciding whether to approve.
+        """
+        task_id = self._current_context.task_id if self._current_context else None
+        payload = result.to_dict()
+        await _bus_publish_event(
+            f"task:{task_id}" if task_id else "global",
+            EVT_VERIFIER_VERDICT,
+            payload,
+            persist=PersistStrategy.MEMORY,
+        )
+        if self._current_context is not None:
+            self._current_context.metadata.setdefault("verifier_verdicts", []).append(payload)
+        logger.debug(
+            "AgentLoop: verifier verdict recorded tool=%s verdict=%s prob=%.2f",
+            result.tool_name,
+            result.verdict.value,
+            result.refutation_probability,
+        )
 
     async def _request_approval(
         self,
@@ -1157,7 +1803,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
             return False
         if self._halted_on_stagnation:
             return False
-        if self._state not in (LoopState.RUNNING, LoopState.PAUSED):
+        if self._state not in (LoopState.RUNNING, LoopState.PAUSED, LoopState.WAITING_FOR_HUMAN):
             return False
         if self._iteration_count >= self.config.max_iterations:
             return False
@@ -1296,6 +1942,8 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
             return LoopOutcome.STAGNATED
         if self._halted_on_repetition:
             return LoopOutcome.HALTED
+        if self._halt_outcome == LoopOutcome.TIMED_OUT_WAITING:
+            return LoopOutcome.TIMED_OUT_WAITING
         if self._state == LoopState.CANCELLED:
             return LoopOutcome.CANCELLED
         if self._state == LoopState.FAILED:

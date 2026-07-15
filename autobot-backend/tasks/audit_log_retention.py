@@ -20,8 +20,8 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as ssot_config
 from celery_app import celery_app
-from services.audit.unified_audit import AuditCategory, AuditEvent
-from services.audit.unified_audit import emit as audit_emit
+from services.audit.audit import AuditCategory, AuditEvent
+from services.audit.audit import emit as audit_emit
 
 logger = get_logger(__name__)
 

@@ -99,6 +99,20 @@ import { getApiBase } from '@/config/ssot-config'
 import BaseAlert from '@/components/ui/BaseAlert.vue'
 import { useLoadingState } from '@/composables/useLoadingState'
 
+interface LoginUser {
+  user_id?: string
+  username: string
+  email?: string
+  role?: string
+}
+
+interface LoginResponse {
+  success: boolean
+  message?: string
+  token?: string
+  user?: LoginUser
+}
+
 const router = useRouter()
 const userStore = useUserStore()
 
@@ -187,7 +201,7 @@ async function handleLogin() {
   await wrap(async () => {
   try {
     // ApiClient.post() returns parsed JSON directly (#810)
-    const response = await ApiClient.post<any>(`${getApiBase()}/auth/login`, {
+    const response = await ApiClient.post<LoginResponse>(`${getApiBase()}/auth/login`, {
       username: credentials.username,
       password: credentials.password
     })
@@ -235,11 +249,11 @@ async function handleLogin() {
       loginError.value = response.message || t('auth.login.loginFailed')
     }
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Login error:', error)
 
     // ApiClient throws Error with message like "HTTP 401: Invalid username or password"
-    const statusMatch = error.message?.match(/HTTP (\d+)/)
+    const statusMatch = (error as Error).message?.match(/HTTP (\d+)/)
     const status = statusMatch ? parseInt(statusMatch[1]) : 0
     if (status === 401) {
       loginError.value = t('auth.login.invalidCredentials')
@@ -250,7 +264,7 @@ async function handleLogin() {
     } else if (status >= 500) {
       loginError.value = t('auth.login.serverError')
     } else {
-      loginError.value = error.message || t('auth.login.unexpectedError')
+      loginError.value = (error as Error).message || t('auth.login.unexpectedError')
     }
   }
   })

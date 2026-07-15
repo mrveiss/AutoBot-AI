@@ -25,6 +25,7 @@ from autobot_shared.ssot_config import (
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
+from llm_shared.types import LLMType
 
 from .base_agent import DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -495,7 +496,7 @@ class LLMFailsafeAgent(StandardizedAgent):
                 try:
                     messages = self._create_structured_messages(prompt, context)
                     response_data = await asyncio.wait_for(
-                        llm.chat(messages, llm_type="task"),
+                        llm.chat(messages, llm_type=LLMType.TASK),
                         timeout=self.timeouts[LLMTier.PRIMARY],
                     )
                     response = response_data.content
@@ -526,7 +527,7 @@ class LLMFailsafeAgent(StandardizedAgent):
                 try:
                     messages = [{"role": "user", "content": simplified_prompt}]
                     response_data = await asyncio.wait_for(
-                        llm.chat(messages, llm_type="task"),
+                        llm.chat(messages, llm_type=LLMType.TASK),
                         timeout=self.timeouts[LLMTier.SECONDARY],
                     )
                     response = response_data.content

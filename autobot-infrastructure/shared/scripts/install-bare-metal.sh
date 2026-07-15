@@ -37,7 +37,7 @@ DEFAULT_GIT_REPO="https://github.com/mrveiss/AutoBot-AI.git"
 DEFAULT_BRANCH="Dev_new_gui"
 
 # Python version
-PYTHON_VERSION="3.12"
+PYTHON_VERSION="3.14"
 PYTHON_BIN="python${PYTHON_VERSION}"
 
 # Runtime variables
@@ -187,7 +187,7 @@ install_prerequisites() {
         nginx \
         jq
 
-    # Python 3.12 via deadsnakes PPA
+    # Python 3.14 via deadsnakes PPA
     if ! command -v "${PYTHON_BIN}" &>/dev/null; then
         log_info "Installing Python ${PYTHON_VERSION} from deadsnakes PPA"
         add-apt-repository -y ppa:deadsnakes/ppa

@@ -107,7 +107,7 @@ const hasData = computed(() => {
  * All values are read from design-tokens.css and adapt to dark/light theme
  * Hardcoded fallbacks match design-tokens.css defaults for SSR compatibility
  */
-const darkTheme: any = {
+const darkTheme: Record<string, unknown> = {
   chart: {
     background: 'transparent',
     foreColor: getCssVar('--text-primary', '#e2e8f0'),

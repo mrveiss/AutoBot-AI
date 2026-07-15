@@ -112,7 +112,7 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import type { AuditEntry } from '@/types/audit'
 import { AUDIT_RESULT_CONFIG } from '@/types/audit'

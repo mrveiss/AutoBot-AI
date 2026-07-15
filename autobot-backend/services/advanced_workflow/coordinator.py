@@ -103,8 +103,8 @@ class WorkflowCoordinator:
             intelligence = await self._build_workflow_intelligence(workflow_id, optimized_steps)
             self.workflow_intelligence[workflow_id] = intelligence
 
-            # Step 5: Create enhanced workflow
-            await self._create_enhanced_workflow(workflow_id, user_request, optimized_steps, session_id, intelligence)
+            # Step 5: Create workflow
+            await self._create_workflow(workflow_id, user_request, optimized_steps, session_id, intelligence)
 
             # Step 6: Learn from workflow generation
             await self.learning_model.record_workflow_generation(user_request, intent_analysis, optimized_steps)
@@ -119,7 +119,7 @@ class WorkflowCoordinator:
             logger.error("Failed to generate intelligent workflow: %s", e)
             raise
 
-    async def _create_enhanced_workflow(
+    async def _create_workflow(
         self,
         workflow_id: str,
         user_request: str,
@@ -127,7 +127,7 @@ class WorkflowCoordinator:
         session_id: str,
         intelligence: WorkflowIntelligence,
     ) -> str:
-        """Create enhanced workflow with AI intelligence"""
+        """Create workflow with AI intelligence."""
         # Convert SmartWorkflowSteps to regular WorkflowSteps for compatibility
         regular_steps = []
         for smart_step in steps:

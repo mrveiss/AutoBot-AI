@@ -38,7 +38,7 @@ export async function testComponentChunkLoading(components: string[]): Promise<C
       const startTime = Date.now()
 
       // Test based on component type
-      let _module: any
+      let _module: Record<string, unknown>
 
       if (component.includes('View')) {
         // Test view components
@@ -198,7 +198,7 @@ export async function runComprehensiveChunkTests(): Promise<void> {
 
     // Store test results for debugging
     if (typeof window !== 'undefined') {
-      (window as any).__chunkTestResults = report
+      (window as unknown as Record<string, unknown>).__chunkTestResults = report
     }
 
   } catch (error) {
@@ -238,7 +238,7 @@ export async function quickChunkValidation(): Promise<boolean> {
 
 // Export for browser console testing
 if (typeof window !== 'undefined') {
-  (window as any).chunkTest = {
+  (window as unknown as Record<string, unknown>).chunkTest = {
     runComprehensive: runComprehensiveChunkTests,
     quickValidation: quickChunkValidation,
     testComponents: testComponentChunkLoading,

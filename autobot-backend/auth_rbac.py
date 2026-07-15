@@ -108,28 +108,6 @@ def has_permission(user_data: dict, permission: Permission | str) -> bool:
     return _get_security_layer().check_permission(user_role, perm_str)
 
 
-def _check_single_user_bypass(permission: Permission | str) -> bool:
-    """
-    Check if single-user mode bypass should apply. Issue #620.
-
-    Args:
-        permission: The permission being checked
-
-    Returns:
-        True if bypass applies, False otherwise
-    """
-    from user_management.config import DeploymentMode, get_deployment_config
-
-    deployment_config = get_deployment_config()
-    if deployment_config.mode == DeploymentMode.SINGLE_USER:
-        logger.debug(
-            "Single user mode: bypassing permission check for %s",
-            permission,
-        )
-        return True
-    return False
-
-
 def _deny_permission_access(user_data: dict, perm_str: str, request: Request) -> None:
     """
     Log denied access and raise auth error. Issue #620.
@@ -160,7 +138,6 @@ def _deny_permission_access(user_data: dict, perm_str: str, request: Request) ->
 
 def require_permission(
     permission: Permission | str,
-    allow_single_user_bypass: bool = True,
 ) -> Callable:
     """
     FastAPI dependency that requires a specific permission.
@@ -175,7 +152,6 @@ def require_permission(
 
     Args:
         permission: The required permission
-        allow_single_user_bypass: If True, bypass check in single-user mode
 
     Returns:
         FastAPI dependency function
@@ -185,9 +161,6 @@ def require_permission(
 
     def dependency(request: Request) -> bool:
         """Check permission and return True or raise error."""
-        if allow_single_user_bypass and _check_single_user_bypass(permission):
-            return True
-
         user_data = get_auth_middleware().get_user_from_request(request)
         if not user_data:
             raise_auth_error("AUTH_0002", "Authentication required")
@@ -258,7 +231,7 @@ def _deny_any_permission_access(user_data: dict, perm_strs: List[str], request: 
     )
 
 
-def require_role(*roles: Role | str, allow_single_user_bypass: bool = True) -> Callable:
+def require_role(*roles: Role | str) -> Callable:
     """
     FastAPI dependency that requires one of the specified roles.
 
@@ -272,7 +245,6 @@ def require_role(*roles: Role | str, allow_single_user_bypass: bool = True) -> C
 
     Args:
         *roles: The allowed roles
-        allow_single_user_bypass: If True, bypass check in single-user mode
 
     Returns:
         FastAPI dependency function
@@ -282,9 +254,6 @@ def require_role(*roles: Role | str, allow_single_user_bypass: bool = True) -> C
 
     def dependency(request: Request) -> bool:
         """Check role and return True or raise error."""
-        if allow_single_user_bypass and _check_single_user_bypass("role_check"):
-            return True
-
         user_data = get_auth_middleware().get_user_from_request(request)
         if not user_data:
             raise_auth_error("AUTH_0002", "Authentication required")
@@ -302,7 +271,6 @@ def require_role(*roles: Role | str, allow_single_user_bypass: bool = True) -> C
 
 def require_any_permission(
     *permissions: Permission | str,
-    allow_single_user_bypass: bool = True,
 ) -> Callable:
     """
     FastAPI dependency that requires ANY of the specified permissions.
@@ -320,7 +288,6 @@ def require_any_permission(
 
     Args:
         *permissions: The permissions (user needs at least one)
-        allow_single_user_bypass: If True, bypass check in single-user mode
 
     Returns:
         FastAPI dependency function
@@ -328,9 +295,6 @@ def require_any_permission(
 
     def dependency(request: Request) -> bool:
         """Check at least one permission and return True or raise error."""
-        if allow_single_user_bypass and _check_single_user_bypass("any_permission"):
-            return True
-
         user_data = get_auth_middleware().get_user_from_request(request)
         if not user_data:
             raise_auth_error("AUTH_0002", "Authentication required")
@@ -373,4 +337,4 @@ def check_agent_execute_permission(request: Request) -> bool:
 
 def check_shell_execute_permission(request: Request) -> bool:
     """Dependency for shell execution (dangerous). Issue #744."""
-    return require_permission(Permission.SHELL_EXECUTE, allow_single_user_bypass=False)(request)
+    return require_permission(Permission.SHELL_EXECUTE)(request)

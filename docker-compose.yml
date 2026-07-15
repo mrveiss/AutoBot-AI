@@ -318,14 +318,21 @@ services:
     # survives the with-secrets.sh entrypoint's `exec "$@"` as proper argv.
     entrypoint: ["/bin/sh", "/usr/local/bin/with-secrets.sh"]
     command:
-      - python3.12
+      - python3.14
       - -m
       - celery
       - -A
       - celery_app
       - worker
       - --loglevel=info
-      - --queues=celery,deployments,provisioning,services
+      # provisioning/services queues removed — no tasks route to them since
+      # deployment tasks moved to the SLM server (#729, cleanup #11608).
+      # #11631: memory + analytics added — task_routes sends memory write-path
+      # and background-analytics tasks there; with no consumer they sat in
+      # Redis until eviction. Must stay a superset of the queues task_routes
+      # targets (SSOT: task_queues in autobot-backend/celery_app.py; guarded
+      # by autobot-backend/celery_queue_coverage_test.py).
+      - --queues=celery,deployments,memory,analytics
       - --concurrency=2
     working_dir: /app/autobot-backend
     env_file:
@@ -374,7 +381,7 @@ services:
       # $$HOSTNAME (escaped) expands inside the container at runtime. A single
       # $HOSTNAME is interpolated by Compose at parse time to an empty string,
       # making --destination "celery@" match no node → false unhealthy (#9714).
-      test: ["CMD-SHELL", "python3.12 -m celery -A celery_app inspect ping --destination celery@$$HOSTNAME --timeout 5"]
+      test: ["CMD-SHELL", "python3.14 -m celery -A celery_app inspect ping --destination celery@$$HOSTNAME --timeout 5"]
       interval: 30s
       timeout: 10s
       start_period: 30s
@@ -423,7 +430,7 @@ services:
     # beat — do not add it, or beat and the backend would run
     # `alembic upgrade head` concurrently (alembic takes no advisory lock).
     command: >
-      python3.12 -m celery -A celery_app beat
+      python3.14 -m celery -A celery_app beat
       --loglevel=info
       --scheduler celery.beat.PersistentScheduler
       --schedule /app/data/celerybeat-schedule
@@ -511,6 +518,10 @@ services:
       - SLM_POSTGRES_HOST=autobot-postgres
       - SLM_ADMIN_PASSWORD=${SLM_ADMIN_PASSWORD:-admin}
       - SLM_DATA_DIR=/app/data
+      # Point LoggingManager at the writable slm_logs volume so read_only: true
+      # in the hardened overlay doesn't fail with EROFS when mkdir("logs") is
+      # called relative to the /app/autobot-slm-backend working directory (#11574).
+      - AUTOBOT_LOGS_DIR=/app/logs
       # Surface each compose service container as a fleet node (#9761). Off by
       # default so production/Ansible VM fleets are unaffected; on for compose.
       - SLM_COMPOSE_NODES=${SLM_COMPOSE_NODES:-true}
@@ -538,7 +549,10 @@ services:
       interval: 20s
       timeout: 10s
       retries: 5
-      start_period: 60s
+      # #11283: SLM (FastAPI + model/registry init) can exceed 60s on a busy CI
+      # runner, so it was intermittently marked unhealthy before ready, failing
+      # smoke-test's compose startup ~60% of the time. Match autobot-backend's 120s.
+      start_period: 120s
     deploy:
       resources:
         limits:

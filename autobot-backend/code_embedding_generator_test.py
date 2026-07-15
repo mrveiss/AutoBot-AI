@@ -76,7 +76,11 @@ def test_convert_to_openvino_selects_npu_when_available():
 
     assert gen._openvino_device == "npu"
     assert gen.openvino_model is mock_compiled
-    mock_core_instance.compile_model.assert_called_once_with(mock_ov_model, "NPU")
+    # #10623 added a CACHE_DIR compile config; assert NPU device + cache config.
+    args, _ = mock_core_instance.compile_model.call_args
+    assert args[0] is mock_ov_model and args[1] == "NPU"
+    assert "CACHE_DIR" in args[2]
+    assert gen.npu_underutilized is False  # #10689: NPU used → not underutilized
 
 
 def test_convert_to_openvino_falls_back_to_cpu_on_error():
@@ -99,6 +103,8 @@ def test_convert_to_openvino_falls_back_to_cpu_on_error():
     assert gen.openvino_model is None
     assert gen.npu_available is False
     assert gen._openvino_device == "cpu"
+    # #10689: NPU was detected pre-fallback but we're now on CPU → underutilized
+    assert gen.npu_underutilized is True
 
 
 # ---------------------------------------------------------------------------
@@ -242,3 +248,27 @@ async def test_get_stats_no_npu_utilization_on_cpu_fallback():
 
     assert stats["compiled_device"] == "pytorch"
     assert stats["npu_utilization_reported"] is False
+
+
+def test_npu_underutilized_predicate():
+    """#10689: predicate is True only when NPU exists but the device isn't NPU."""
+    assert CodeEmbeddingGenerator._npu_underutilized(True, "cpu") is True
+    assert CodeEmbeddingGenerator._npu_underutilized(True, "gpu") is True
+    assert CodeEmbeddingGenerator._npu_underutilized(True, "npu") is False
+    assert CodeEmbeddingGenerator._npu_underutilized(True, "NPU") is False  # case-insensitive
+    assert CodeEmbeddingGenerator._npu_underutilized(False, "cpu") is False  # no NPU hardware
+
+
+def test_emit_utilization_signal_sets_flag():
+    """#10689: the signal flags an available-but-unused NPU and clears otherwise."""
+    gen = CodeEmbeddingGenerator.__new__(CodeEmbeddingGenerator)  # bypass heavy __init__
+    gen.npu_underutilized = False
+
+    gen._emit_utilization_signal(npu_present=True, device_used="cpu")
+    assert gen.npu_underutilized is True  # NPU present but on CPU → flagged
+
+    gen._emit_utilization_signal(npu_present=True, device_used="npu")
+    assert gen.npu_underutilized is False  # NPU actually used → cleared
+
+    gen._emit_utilization_signal(npu_present=False, device_used="cpu")
+    assert gen.npu_underutilized is False  # no NPU hardware → not underutilized

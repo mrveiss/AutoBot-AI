@@ -27,6 +27,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 from constants.ttl_constants import TTL_5_MINUTES
 
 logger = get_logger(__name__)
@@ -464,15 +465,4 @@ class TokenOptimizer:
         )
 
 
-# Module-level singleton
-_optimizer: TokenOptimizer | None = None
-
-
-def get_token_optimizer(
-    config: TokenOptimizerConfig | None = None,
-) -> TokenOptimizer:
-    """Get or create the global TokenOptimizer instance."""
-    global _optimizer
-    if _optimizer is None:
-        _optimizer = TokenOptimizer(config)
-    return _optimizer
+get_token_optimizer = lazy_singleton(TokenOptimizer)

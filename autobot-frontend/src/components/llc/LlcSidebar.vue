@@ -6,26 +6,66 @@
   GH#9627: Contextual LLC sidebar — navigation spine for company-scoped views.
 
   Rendered by LlcCompanyLayout inside /llc/companies/:companyId/… routes.
-  Links only routes that exist in router/index.ts:
-    - Dashboard / Goals / Org Chart are query-scoped (?company=) views (#9861)
-    - Backlog / Approvals / Costs / CEO Chat / Heartbeat are :companyId-scoped
+  Every link targets a :companyId-scoped child route so the layout — and this
+  sidebar — stays mounted on navigation (#10750 B3). Dashboard / Goals /
+  Org Chart resolve the active company from :companyId (via
+  useLlcCompanyContext, which still falls back to ?company= for back-compat).
   Sprint & Kanban boards need a :boardId and are reached via the Backlog.
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useLlcCompanyStore } from '@/stores/useLlcCompanyStore'
+import { useApiClient } from '@/plugins/api'
+import { useLiveEvents } from '@/composables/useLiveEvents'
+import { createLogger } from '@/utils/debugUtils'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const companyStore = useLlcCompanyStore()
+const api = useApiClient()
+const live = useLiveEvents()
+const logger = createLogger('LlcSidebar')
 
 const companyId = computed(() => {
   const raw = route.params.companyId
   return (Array.isArray(raw) ? raw[0] : raw) ?? companyStore.selectedCompanyId
 })
+
+// FR-GOV-03: pending board-approval count badge on the Approvals link.
+const pendingApprovals = ref(0)
+
+async function fetchPendingCount(): Promise<void> {
+  const id = companyId.value
+  if (!id) return
+  try {
+    // GET /api/llc/approvals returns the pending list for a company.
+    const list = await api.get<unknown[]>(`/api/llc/approvals?company_id=${id}`)
+    pendingApprovals.value = Array.isArray(list) ? list.length : 0
+  } catch (err) {
+    logger.error('Failed to load pending approval count', err)
+  }
+}
+
+// Track + rebind the live subscription across company switches: the sidebar
+// stays mounted (#10750 B3) and companyId is a computed, so re-subscribe on
+// change (immediate covers mount). useLiveEvents also auto-cleans on unmount.
+let unsubApprovals: (() => void) | null = null
+watch(
+  companyId,
+  (id) => {
+    void fetchPendingCount()
+    if (unsubApprovals) unsubApprovals()
+    unsubApprovals = id
+      ? live.subscribe(`company:${id}`, (ev) => {
+          if (String(ev.event_type).includes('approval')) void fetchPendingCount()
+        })
+      : null
+  },
+  { immediate: true },
+)
 
 interface SidebarLink {
   labelKey: string
@@ -35,24 +75,31 @@ interface SidebarLink {
 const links = computed<SidebarLink[]>(() => {
   const id = companyId.value
   return [
-    // Query-scoped views (resolve company via ?company= — see #9861)
-    { labelKey: 'nav.llcDashboard', to: { path: '/llc/dashboard', query: { company: id } } },
-    // Company-scoped views (/llc/companies/:companyId/…)
+    // All views are company-scoped (/llc/companies/:companyId/…) so the
+    // LlcCompanyLayout — and therefore this sidebar — stays mounted (#10750 B3).
+    { labelKey: 'nav.llcDashboard', to: { path: `/llc/companies/${id}/dashboard` } },
     { labelKey: 'nav.llcBacklog', to: { path: `/llc/companies/${id}/backlog` } },
     { labelKey: 'nav.llcBoards', to: { path: `/llc/companies/${id}/boards` } },
     { labelKey: 'nav.llcReviewInbox', to: { path: `/llc/companies/${id}/reviews` } },
     { labelKey: 'nav.llcPortfolios', to: { path: `/llc/companies/${id}/portfolios` } },
     { labelKey: 'nav.llcTimeline', to: { path: `/llc/companies/${id}/timeline` } },
-    { labelKey: 'nav.llcGoals', to: { path: '/llc/goals', query: { company: id } } },
-    { labelKey: 'nav.llcOrgChart', to: { path: '/llc/org-chart', query: { company: id } } },
+    { labelKey: 'nav.llcGoals', to: { path: `/llc/companies/${id}/goals` } },
+    { labelKey: 'nav.llcOrgChart', to: { path: `/llc/companies/${id}/org-chart` } },
+    { labelKey: 'nav.llcMembers', to: { path: `/llc/companies/${id}/members` } },
     { labelKey: 'nav.llcApprovals', to: { path: `/llc/companies/${id}/approvals` } },
     { labelKey: 'nav.llcCosts', to: { path: `/llc/companies/${id}/costs` } },
     { labelKey: 'nav.llcHeartbeat', to: { path: `/llc/companies/${id}/heartbeat` } },
+    { labelKey: 'nav.llcRoutines', to: { path: `/llc/companies/${id}/routines` } },
     { labelKey: 'nav.llcCeoChat', to: { path: `/llc/companies/${id}/ceo-chat` } },
+    { labelKey: 'nav.llcActivity', to: { path: `/llc/companies/${id}/activity` } },
+    { labelKey: 'nav.llcPortability', to: { path: `/llc/companies/${id}/portability` } },
+    { labelKey: 'nav.llcSecrets', to: { path: `/llc/companies/${id}/secrets` } },
   ]
 })
 
 function isActive(link: SidebarLink): boolean {
+  // All links are now plain company-scoped paths (#10750 B3); compare the
+  // resolved route path only (query no longer participates in scoping).
   return route.path === link.to.path
 }
 
@@ -109,7 +156,14 @@ async function onCompanyChange(event: Event): Promise<void> {
         :class="{ active: isActive(link) }"
         :aria-current="isActive(link) ? 'page' : undefined"
       >
-        {{ t(link.labelKey) }}
+        <span class="llc-nav-label">{{ t(link.labelKey) }}</span>
+        <span
+          v-if="link.labelKey === 'nav.llcApprovals' && pendingApprovals > 0"
+          class="llc-nav-badge"
+          :aria-label="t('nav.llcApprovalsPending', { count: pendingApprovals })"
+        >
+          {{ pendingApprovals }}
+        </span>
       </RouterLink>
     </nav>
   </aside>
@@ -172,13 +226,29 @@ async function onCompanyChange(event: Event): Promise<void> {
 }
 
 .llc-nav-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   padding: 0.4375rem 0.625rem;
   font-size: 0.875rem;
   border-radius: var(--radius-md, 8px);
   border-left: 2px solid transparent;
   color: var(--text-secondary, #4b5563);
   text-decoration: none;
+}
+
+.llc-nav-badge {
+  flex: none;
+  min-width: 1.25rem;
+  padding: 0 0.375rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  text-align: center;
+  border-radius: 999px;
+  background: var(--color-accent, #c4651a);
+  color: #fff;
 }
 
 .llc-nav-item:hover {

@@ -13,6 +13,7 @@
  */
 
 import { computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
@@ -22,6 +23,7 @@ import { useHighContrast } from '@/composables/useAccessibility'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const fleetStore = useFleetStore()
 const authStore = useAuthStore()
 const codeSync = useCodeSync()
@@ -54,29 +56,29 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { name: 'Fleet Overview', path: '/fleet', icon: 'grid' },
+  { name: t('common.sidebar.fleetOverview'), path: '/fleet', icon: 'grid' },
   // Issue #850: Consolidated Services and Roles into Orchestration
-  { name: 'Orchestration', path: '/orchestration', icon: 'orchestration' },
+  { name: t('common.sidebar.orchestration'), path: '/orchestration', icon: 'orchestration' },
   // Issue #4706: Wire RolesView into router
-  { name: 'Roles', path: '/roles', icon: 'roles' },
+  { name: t('common.sidebar.roles'), path: '/roles', icon: 'roles' },
   // Issue #4762: Wire ServicesView as direct /services route
-  { name: 'Services', path: '/services', icon: 'services' },
-  { name: 'Deployments', path: '/deployments', icon: 'rocket' },
-  { name: 'Backups', path: '/backups', icon: 'database' },
-  { name: 'Replication', path: '/replications', icon: 'replicate' },
+  { name: t('common.sidebar.services'), path: '/services', icon: 'services' },
+  { name: t('common.sidebar.deployments'), path: '/deployments', icon: 'rocket' },
+  { name: t('common.sidebar.backups'), path: '/backups', icon: 'database' },
+  { name: t('common.sidebar.replication'), path: '/replications', icon: 'replicate' },
   // Issue #760: Agents — local + external (merged)
-  { name: 'Agents', path: '/agents', icon: 'agents' },
+  { name: t('common.sidebar.agents'), path: '/agents', icon: 'agents' },
   // Issue #731: Skills system management
-  { name: 'Skills', path: '/skills', icon: 'skills' },
+  { name: t('common.sidebar.skills'), path: '/skills', icon: 'skills' },
   // Issue #840: Updates moved into Maintenance tab
-  { name: 'Maintenance', path: '/maintenance', icon: 'wrench', showBadge: true },
-  { name: 'Settings', path: '/settings', icon: 'cog' },
+  { name: t('common.sidebar.maintenance'), path: '/maintenance', icon: 'wrench', showBadge: true },
+  { name: t('common.sidebar.settings'), path: '/settings', icon: 'cog' },
   // Issue #752: Performance moved into Monitoring tab
-  { name: 'Monitoring', path: '/monitoring', icon: 'chart' },
-  { name: 'Security', path: '/security', icon: 'shield' },
-  { name: 'Tools', path: '/tools', icon: 'tools' },
+  { name: t('common.sidebar.monitoring'), path: '/monitoring', icon: 'chart' },
+  { name: t('common.sidebar.security'), path: '/security', icon: 'shield' },
+  { name: t('common.sidebar.tools'), path: '/tools', icon: 'tools' },
   // GH#8996 / #10488: Shared chat links — admin-only operator view
-  { name: 'Shared Links', path: '/shared-links', icon: 'link', adminOnly: true },
+  { name: t('common.sidebar.sharedLinks'), path: '/shared-links', icon: 'link', adminOnly: true },
 ]
 
 const currentPath = computed(() => route.path)
@@ -105,7 +107,7 @@ const healthClass = computed(() => {
 })
 
 const healthLabel = computed(() => {
-  return `Fleet health: ${fleetStore.overallHealth || 'unknown'}`
+  return t('common.sidebar.fleetHealthStatus', { status: fleetStore.overallHealth || t('common.sidebar.unknown') })
 })
 
 /**
@@ -188,7 +190,7 @@ onUnmounted(() => {
 <template>
   <aside
     class="w-64 bg-gray-900 text-white min-h-screen flex flex-col"
-    aria-label="Sidebar navigation"
+    :aria-label="$t('common.sidebar.sidebarNavigationAria')"
   >
     <!-- Logo & Title -->
     <div class="p-4 border-b border-gray-800">
@@ -237,7 +239,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Navigation -->
-    <nav class="flex-1 p-4" aria-label="Main navigation">
+    <nav class="flex-1 p-4" :aria-label="$t('common.sidebar.mainNavigationAria')">
       <ul class="space-y-1" role="menubar" aria-orientation="vertical">
         <li v-for="(item, index) in visibleNavItems" :key="item.path" role="none">
           <button
@@ -339,7 +341,7 @@ onUnmounted(() => {
               v-if="item.showBadge && hasCombinedUpdates"
               class="nav-badge"
               :style="{ background: badgeColor }"
-              :aria-label="`${combinedUpdateCount} updates available`"
+              :aria-label="$t('common.sidebar.updatesAvailableAria', { count: combinedUpdateCount })"
               role="status"
             >
               {{ combinedUpdateCount }}
@@ -356,12 +358,12 @@ onUnmounted(() => {
         @click="highContrast.toggle()"
         class="w-full flex items-center gap-2 px-3 py-2 mb-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white rounded-lg transition-colors"
         :aria-pressed="highContrast.enabled.value"
-        aria-label="Toggle high contrast mode"
+        :aria-label="$t('common.sidebar.toggleHighContrastAria')"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
         </svg>
-        <span>{{ highContrast.enabled.value ? 'Standard Mode' : 'High Contrast' }}</span>
+        <span>{{ highContrast.enabled.value ? $t('common.sidebar.standardMode') : $t('common.sidebar.highContrast') }}</span>
       </button>
 
       <div class="flex items-center justify-between mb-2">
@@ -370,17 +372,17 @@ onUnmounted(() => {
             class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-sm font-medium"
             aria-hidden="true"
           >
-            {{ authStore.user?.username?.charAt(0).toUpperCase() || 'U' }}
+            {{ authStore.user?.username?.charAt(0).toUpperCase() || $t('common.sidebar.user').charAt(0) }}
           </div>
           <div>
-            <p class="text-sm font-medium">{{ authStore.user?.username || 'User' }}</p>
-            <p class="text-xs text-gray-400">{{ authStore.isAdmin ? 'Admin' : 'User' }}</p>
+            <p class="text-sm font-medium">{{ authStore.user?.username || $t('common.sidebar.user') }}</p>
+            <p class="text-xs text-gray-400">{{ authStore.isAdmin ? $t('common.sidebar.admin') : $t('common.sidebar.user') }}</p>
           </div>
         </div>
         <button
           @click="handleLogout"
           class="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-          aria-label="Log out"
+          :aria-label="$t('common.sidebar.logOutAria')"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

@@ -154,9 +154,6 @@ const detectionStatus = computed(() => {
     </div>
 
     <!-- Memory Info -->
-    <div v-if="npuStatus?.capabilities?.memoryGB" class="mt-3 text-xs text-gray-500">
-      {{ npuStatus.capabilities.memoryGB }} GB Memory |
-      Max {{ npuStatus.capabilities.maxConcurrent }} concurrent
-    </div>
+    <div v-if="npuStatus?.capabilities?.memoryGB" class="mt-3 text-xs text-gray-500">{{ $t('fleet.nPUNodeCard.value0GBMemoryMaxValue1Concurrent', { value0: npuStatus.capabilities.memoryGB, value1: npuStatus.capabilities.maxConcurrent }) }}</div>
   </div>
 </template>

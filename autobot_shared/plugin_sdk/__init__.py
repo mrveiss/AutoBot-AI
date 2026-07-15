@@ -24,7 +24,7 @@ from .hooks import HOOK_REGISTRY, Hook, HookRegistry, HookSignature, validate_ho
 from .loader import PluginLoader
 from .manifest_contract import ManifestContract
 from .plugin_manager import PluginManager
-from .unified_registry import UnifiedRegistry, get_unified_registry
+from .registry import Registry, get_registry
 
 __all__ = [
     "BasePlugin",
@@ -44,7 +44,7 @@ __all__ = [
     "PluginLoader",
     "PluginManager",
     "TrustTier",
-    "UnifiedRegistry",
-    "get_unified_registry",
+    "Registry",
+    "get_registry",
     "validate_hook_names",
 ]

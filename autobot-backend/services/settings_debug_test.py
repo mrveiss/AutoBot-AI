@@ -10,7 +10,7 @@ import os
 import sys
 import time
 
-import requests
+import aiohttp
 
 # Add the project root to Python path
 sys.path.insert(0, os.getcwd())
@@ -69,26 +69,30 @@ async def test_api_endpoint():
     """Test the API endpoint directly"""
     print("Testing API endpoint with timeout...")  # noqa: print
 
+    start_time = time.time()
     try:
-        start_time = time.time()
-        response = requests.get(get_test_backend_url() + "/api/settings/", timeout=10)
-        end_time = time.time()
+        timeout = aiohttp.ClientTimeout(total=10)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(get_test_backend_url() + "/api/settings/") as response:
+                end_time = time.time()
 
-        if response.status_code == 200:
-            print(f"✅ API endpoint responded in {end_time - start_time:.2f} seconds")  # noqa: print  # noqa: print
-            data = response.json()
-            print(f"Response keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")  # noqa: print
-            return True
-        else:
-            print(f"❌ API endpoint returned status {response.status_code}")  # noqa: print  # noqa: print
-            return False
-    except requests.exceptions.Timeout:
+                if response.status == 200:
+                    print(f"✅ API endpoint responded in {end_time - start_time:.2f} seconds")  # noqa: print
+                    data = await response.json()
+                    print(
+                        f"Response keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}"
+                    )  # noqa: print
+                    return True
+                else:
+                    print(f"❌ API endpoint returned status {response.status}")  # noqa: print
+                    return False
+    except asyncio.TimeoutError:
         end_time = time.time()
-        print(f"❌ API endpoint timed out after {end_time - start_time:.2f} seconds")  # noqa: print  # noqa: print
+        print(f"❌ API endpoint timed out after {end_time - start_time:.2f} seconds")  # noqa: print
         return False
     except Exception as e:
         end_time = time.time()
-        print(f"❌ API endpoint error after {end_time - start_time:.2f} seconds: {e}")  # noqa: print  # noqa: print
+        print(f"❌ API endpoint error after {end_time - start_time:.2f} seconds: {e}")  # noqa: print
         return False
 
 

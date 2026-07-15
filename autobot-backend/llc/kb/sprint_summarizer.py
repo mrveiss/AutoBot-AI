@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
+from llm_shared.types import LLMType
 
 from ..kb.collections import KbCollectionManager
 from ..models.sprint import LLCSprint
@@ -242,7 +243,7 @@ class SprintKbSummarizer:
         try:
             response = await llm.chat(
                 [{"role": "user", "content": prompt}],
-                llm_type="summarization",
+                llm_type=LLMType.ANALYSIS,
                 max_tokens=1024,
             )
         except Exception as exc:

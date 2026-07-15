@@ -27,7 +27,7 @@ Ansible role for configuring AutoBot agents with Python environment, AI/ML frame
 service_user: autobot          # Service account
 service_group: autobot         # Service group
 project_root: /opt/autobot     # Installation directory
-python_version: "3.12"         # Python version to install (deadsnakes PPA)
+python_version: "3.14"         # Python version to install (deadsnakes PPA)
 agent_role: general            # Agent role (general, ai_stack, browser, etc.)
 agent_port: 8090               # Agent API port
 ```
@@ -171,10 +171,10 @@ curl http://localhost:8090/health
 
 ### Python version mismatch
 
-If Python 3.12 is missing, install via deadsnakes PPA (Issue #1898):
+If Python 3.14 is missing, install via deadsnakes PPA (Issue #1898):
 ```bash
 sudo add-apt-repository ppa:deadsnakes/ppa
-sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
+sudo apt-get install -y python3.14 python3.14-venv python3.14-dev
 ```
 
 ### OpenVINO GPU access denied

@@ -226,12 +226,12 @@ function getCategoryIcon(category: string): string {
       <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
         <div>
           <h3 class="text-lg font-semibold text-gray-900">{{ $t('deploymentWizard.newDeployment') }}</h3>
-          <p class="text-sm text-gray-500">Step {{ step }} of 3</p>
+          <p class="text-sm text-gray-500">{{ $t('deploymentWizard.stepValue0Of3', { value0: step }) }}</p>
         </div>
         <button
           @click="$emit('close')"
           class="text-gray-400 hover:text-gray-600 transition-colors"
-          aria-label="Close"
+          :aria-label="$t('deploymentWizard.close')"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -284,7 +284,7 @@ function getCategoryIcon(category: string): string {
                 v-model="manualHostname"
                 type="text"
                 class="input"
-                placeholder="e.g., web-server-01"
+                :placeholder="$t('deploymentWizard.eGWebServer01')"
               />
             </div>
             <div>
@@ -293,7 +293,7 @@ function getCategoryIcon(category: string): string {
                 v-model="manualIp"
                 type="text"
                 class="input"
-                placeholder="e.g., 192.168.1.100"
+                :placeholder="$t('deploymentWizard.egIPAddress')"
               />
             </div>
             <p class="text-sm text-gray-500">
@@ -404,9 +404,7 @@ function getCategoryIcon(category: string): string {
                     <div class="flex-1">
                       <div class="font-medium text-gray-900">{{ role.name }}</div>
                       <div class="text-sm text-gray-500">{{ role.description }}</div>
-                      <div v-if="role.dependencies.length > 0" class="mt-1 text-xs text-gray-400">
-                        Requires: {{ role.dependencies.join(', ') }}
-                      </div>
+                      <div v-if="role.dependencies.length > 0" class="mt-1 text-xs text-gray-400">{{ $t('deploymentWizard.requiresValue0', { value0: role.dependencies.join(', ') }) }}</div>
                     </div>
                   </div>
                 </div>
@@ -511,7 +509,7 @@ function getCategoryIcon(category: string): string {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            {{ isDeploying ? 'Deploying...' : 'Deploy' }}
+            {{ isDeploying ? $t('deploymentWizard.deploying') : $t('deploymentWizard.deploy') }}
           </button>
         </div>
       </div>

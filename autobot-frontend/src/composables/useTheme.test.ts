@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 describe('useTheme', () => {
-  let useTheme: any
+  let useTheme: typeof import('./useTheme').useTheme
 
   beforeEach(async () => {
     // Mock matchMedia before each test
@@ -205,7 +205,7 @@ describe('useTheme', () => {
       const originalGetItem = localStorage.getItem
       localStorage.getItem = vi.fn(() => {
         throw new Error('localStorage not available')
-      }) as any
+      }) as typeof localStorage.getItem
       vi.resetModules()
       const module = await import('./useTheme')
       const { theme, accentColor } = module.useTheme()

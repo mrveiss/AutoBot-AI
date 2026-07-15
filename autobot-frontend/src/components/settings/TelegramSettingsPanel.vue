@@ -292,10 +292,10 @@ onMounted(loadConfig)
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
-  color: var(--color-danger);
+  color: var(--color-error);
 }
 
 .panel-actions {

@@ -39,7 +39,7 @@
     </div>
 
     <!-- Table with virtual scrolling -->
-    <div v-else class="table-container">
+    <div v-else ref="containerRef" class="table-container">
       <table>
         <thead class="sticky top-0 z-10">
           <tr>
@@ -112,7 +112,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVirtualList } from '@/composables/useVirtualList'
 import { useDebounce } from '@/composables/useDebounce'

@@ -132,6 +132,17 @@ async def test_multiple_fallback_hops():
     )
 
     mgr = _chain_manager_with("claude-opus-4", ["claude-sonnet-4", "claude-haiku-4"])
+    # FallbackChainManager.get_next_fallback looks chains up by primary model
+    # only, so each hop model needs its own chain — exactly how the production
+    # defaults in _load_default_chains achieve multi-hop.  (Before #11661 the
+    # patch below was inert — no parent bind, so it patched the llm_shared
+    # MagicMock stub — and this test silently ran against those real defaults.)
+    mgr._chains["claude-sonnet-4"] = FallbackChain(
+        primary_model="claude-sonnet-4",
+        fallback_models=["claude-haiku-4"],
+        primary_provider="anthropic",
+        fallback_providers=["anthropic"],
+    )
 
     with patch("llm_shared.model_fallback_coordinator.get_fallback_chain_manager", return_value=mgr):
         result = await coordinator.execute_with_fallback(_make_request("claude-opus-4"), registry, max_attempts=3)

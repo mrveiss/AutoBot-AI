@@ -17,19 +17,23 @@ from pathlib import Path
 from typing import TYPE_CHECKING, List
 
 import redis
-from llama_index.core import Settings, VectorStoreIndex
-from llama_index.core.storage.storage_context import StorageContext
-from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
-from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
-from llama_index.vector_stores.chroma import ChromaVectorStore
 from redis import asyncio as aioredis
+
+# llama_index is imported lazily inside the methods that use it (#11391) so that
+# merely importing knowledge.base does not require the (heavy, optional-in-tests)
+# llama_index family — its absence otherwise ModuleNotFound'd any import chain
+# reaching this module (e.g. test collection for concurrent_limiter). Sibling
+# knowledge mixins (index.py, facts.py, search.py, stats.py) already guard theirs.
+if TYPE_CHECKING:
+    from llama_index.core import VectorStoreIndex
+    from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
-from knowledge.backends import BaseCollection, get_default_client
+from knowledge.backends import BaseCollection, get_async_default_client, get_default_client
 from utils.knowledge_base_timeouts import kb_timeouts
 
 if TYPE_CHECKING:
@@ -105,6 +109,9 @@ class KnowledgeBaseCore:
         self.vector_store: ChromaVectorStore | None = None
         self.vector_index: VectorStoreIndex | None = None
         self._async_chroma_collection: "BaseCollection" | None = None
+        # Async ChromaDB client for callers that create/read sibling collections
+        # (e.g. LLC per-company KB collections) — populated during _init_vector_store.
+        self._async_chroma_client = None
         self.llama_index_configured = False
         self.embedding_model_name: str | None = None
         self.embedding_dimensions: int | None = None
@@ -187,7 +194,11 @@ class KnowledgeBaseCore:
             timeout: Request timeout in seconds
             ssot_config: SSOT configuration object
         """
+        from llama_index.core import Settings
+
         if provider == "ollama":
+            from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
+
             Settings.llm = LlamaIndexOllamaLLM(
                 model=model,
                 request_timeout=timeout,
@@ -224,7 +235,11 @@ class KnowledgeBaseCore:
         Returns:
             int: Embedding dimensions for the configured provider
         """
+        from llama_index.core import Settings
+
         if provider == "ollama":
+            from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
+
             Settings.embed_model = LlamaIndexOllamaEmbedding(
                 model_name=model_name,
                 base_url=endpoint,
@@ -379,6 +394,8 @@ class KnowledgeBaseCore:
         # LlamaIndex ChromaVectorStore requires the raw chromadb collection.
         # ChromaDBCollection._raw holds the underlying chromadb object.
         raw_collection = getattr(abc_collection, "_raw", abc_collection)
+        from llama_index.vector_stores.chroma import ChromaVectorStore
+
         self.vector_store = ChromaVectorStore(chroma_collection=raw_collection)
 
         # Issue #8391: Instantiate VectorWriteBuffer backed by this collection.
@@ -429,6 +446,10 @@ class KnowledgeBaseCore:
             hnsw_metadata = self._build_hnsw_metadata()
             await self._create_chroma_collection(chroma_client, hnsw_metadata)
 
+            # Async client for non-blocking sibling-collection access (LLC KB, etc.).
+            # Callers reference kb._async_chroma_client.get_or_create_collection(...).
+            self._async_chroma_client = await get_async_default_client()
+
             logger.info("Skipping eager vector index creation - will create on first query")
 
         except Exception as e:
@@ -450,6 +471,9 @@ class KnowledgeBaseCore:
                 return
 
             logger.info("Creating initial vector index with ChromaDB...")
+
+            from llama_index.core import VectorStoreIndex
+            from llama_index.core.storage.storage_context import StorageContext
 
             # Create storage context with ChromaDB vector store
             storage_context = StorageContext.from_defaults(vector_store=self.vector_store)

@@ -15,7 +15,7 @@ import asyncio
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from enhanced_memory_manager_async import TaskPriority
+from memory import TaskPriority  # canonical enum (#10626)
 from task_execution_tracker import get_task_tracker
 
 from ..models import ContextElement, DecisionContext
@@ -155,7 +155,7 @@ class ContextCollector:
                     confidence=0.8,
                     relevance_score=0.7,
                     timestamp=self.time_provider.current_timestamp(),
-                    source="enhanced_memory_system",
+                    source="memory_system",
                     metadata={
                         "type": "decision_history",
                         "decision_type": decision_type.value,

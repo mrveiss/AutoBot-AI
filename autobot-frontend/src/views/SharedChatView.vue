@@ -100,6 +100,16 @@ interface Message {
   created_at?: string | null
 }
 
+interface SharedChatPayload {
+  has_password?: boolean
+  messages?: Message[]
+}
+
+interface HttpErrorLike {
+  response?: { status?: number }
+  status?: number
+}
+
 const loading = ref(true)
 const error = ref('')
 const needsPassword = ref(false)
@@ -111,7 +121,7 @@ const messages = ref<Message[]>([])
 const token = route.params.token as string
 
 const handleResponse = (data: Record<string, unknown>) => {
-  const payload = (data as any)?.data ?? data
+  const payload = ((data as { data?: SharedChatPayload }).data ?? data) as SharedChatPayload
   if (payload?.has_password && (!payload.messages || payload.messages.length === 0)) {
     needsPassword.value = true
     return
@@ -122,10 +132,11 @@ const handleResponse = (data: Record<string, unknown>) => {
 
 onMounted(async () => {
   try {
-    const result = await ApiClient.get<any>(`${getApiBase()}/chat/shared/${token}`)
+    const result = await ApiClient.get<Record<string, unknown>>(`${getApiBase()}/chat/shared/${token}`)
     handleResponse(result)
-  } catch (err: any) {
-    const status = err?.response?.status ?? err?.status
+  } catch (err) {
+    const e = err as HttpErrorLike
+    const status = e?.response?.status ?? e?.status
     if (status === 404) {
       error.value = t('chat.share.linkNotFound')
     } else if (status === 410) {
@@ -144,12 +155,13 @@ const submitPassword = async () => {
   unlocking.value = true
   passwordError.value = ''
   try {
-    const result = await ApiClient.post<any>(`${getApiBase()}/chat/shared/${token}/access`, {
+    const result = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/chat/shared/${token}/access`, {
       password: passwordInput.value.trim(),
     })
     handleResponse(result)
-  } catch (err: any) {
-    const status = err?.response?.status ?? err?.status
+  } catch (err) {
+    const e = err as HttpErrorLike
+    const status = e?.response?.status ?? e?.status
     if (status === 401) {
       passwordError.value = t('chat.share.wrongPassword')
     } else {

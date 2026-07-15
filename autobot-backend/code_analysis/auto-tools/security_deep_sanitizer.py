@@ -4,7 +4,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Enhanced AutoBot Security Fix Agent - XSS Vulnerability Remediation Tool
+AutoBot Security Fix Agent (Deep Sanitizer) - XSS Vulnerability Remediation Tool
 
 This enhanced agent identifies and fixes Cross-Site Scripting (XSS) vulnerabilities
 in HTML files, specifically optimized for Playwright test reports and other complex
@@ -105,7 +105,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 
-class EnhancedSecurityFixAgent:
+class SecurityFixAgent:
     """
     Enhanced automated security fix agent for comprehensive XSS vulnerability remediation.
     """
@@ -180,7 +180,14 @@ class EnhancedSecurityFixAgent:
         Issue #1183: Extracted from __init__() to reduce function length.
         """
         return {
-            "csp_header": """<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; media-src 'self'; object-src 'none'; child-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self';">""",
+            "csp_header": (
+                '<meta http-equiv="Content-Security-Policy" content="'
+                "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+                "font-src 'self' data:; connect-src 'self' ws: wss:; media-src 'self'; "
+                "object-src 'none'; child-src 'self'; frame-ancestors 'self'; "
+                "base-uri 'self'; form-action 'self';\">"
+            ),
             "dom_purify_script": _DOM_PURIFY_SCRIPT,
             "security_meta_tags": """
 <meta name="robots" content="noindex, nofollow">
@@ -907,7 +914,7 @@ def main():
         sys.exit(1)
 
     # Create and run the enhanced security fix agent
-    agent = EnhancedSecurityFixAgent()
+    agent = SecurityFixAgent()
     agent.run(target_path)
 
 

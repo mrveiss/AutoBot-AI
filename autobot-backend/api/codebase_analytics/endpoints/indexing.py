@@ -116,10 +116,10 @@ async def _validate_and_get_path(
             )
         if not source.clone_path:
             from ..source_models import SourceStatus
-            from .sources import _make_clone_path
+            from ..source_paths import make_clone_path
 
-            source.clone_path = _make_clone_path(source.id)
-            source.status = SourceStatus.PENDING
+            source.clone_path = make_clone_path(source.id)
+            source.status = SourceStatus.SYNCING
             from ..source_storage import save_source as _save
 
             await _save(source)

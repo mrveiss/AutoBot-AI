@@ -29,7 +29,6 @@ from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
 from services.workflow_permission_service import WorkflowPermissionService
-from user_management.config import DeploymentMode, get_deployment_config
 
 logger = get_logger(__name__)
 
@@ -46,7 +45,7 @@ def require_workflow_permission(action: str) -> Callable:
     FastAPI dependency factory — enforce a per-workflow permission.
 
     Reads *workflow_id* from the request path parameters.
-    Admins and single-user mode bypass the check.
+    Admins bypass the check.
 
     Args:
         action: Lifecycle action to enforce (view | edit | run | delete | …).
@@ -63,11 +62,6 @@ def require_workflow_permission(action: str) -> Callable:
         session: AsyncSession = Depends(get_db_session),
     ) -> bool:
         """Check per-workflow permission and return True or raise 403."""
-        # Single-user mode bypass
-        deployment_config = get_deployment_config()
-        if deployment_config.mode == DeploymentMode.SINGLE_USER:
-            return True
-
         # System-wide admins always have access
         if _is_admin(current_user):
             return True

@@ -9,8 +9,10 @@ Provides JWT-based authentication, session management, and role-based access con
 
 import datetime
 import json
+import os
 import secrets
 from datetime import timezone
+from pathlib import Path
 from typing import Dict, Tuple
 
 from fastapi import HTTPException, Request, status
@@ -114,16 +116,30 @@ class AuthenticationMiddleware:
             # Still return the secure secret even if we can't store it
             return secure_secret
 
+    @staticmethod
+    def _jwt_key_file() -> Path:
+        """Return the durable RSA private key file path.
+
+        The file lives in ``{AUTOBOT_DATA_DIR}/service-keys/jwt_rsa_private.pem``,
+        which is outside the code directory (``autobot-backend/``) and therefore
+        survives code-sync rsyncs and process restarts (#10750 E2).
+        """
+        return ssot_config.path.data_path / "service-keys" / "jwt_rsa_private.pem"
+
     def _get_rs256_keypair(self) -> Tuple[str, str, str]:
         """Load or auto-generate the RS256 keypair for signing user JWTs (#10196).
 
         Priority order:
-        1. ``AUTOBOT_JWT_PRIVATE_KEY`` env var (PEM string)
-        2. Auto-generate a 2048-bit RSA keypair, persist in security config
-           (mirrors the existing HS256 generated-secret pattern)
+        1. ``AUTOBOT_JWT_PRIVATE_KEY`` env var (PEM string) — highest precedence.
+        2. Durable key file at ``{AUTOBOT_DATA_DIR}/service-keys/jwt_rsa_private.pem``
+           — survives restarts and code-sync deploys (#10750 E2).
+        3. In-memory security config dict (``jwt_private_key_pem``) — written by
+           a previous process; migrated to the durable file on first access.
+        4. Auto-generate RSA-2048 and write to the durable file so the next
+           restart reuses the same key.
 
-        The public key is always derived from the private key so they are
-        guaranteed to be consistent even when only the private key is supplied.
+        The public key is always derived from the private key so the pair is
+        guaranteed to be consistent.
 
         Returns:
             Tuple of (pem_private_key, pem_public_key, kid).
@@ -133,48 +149,74 @@ class AuthenticationMiddleware:
         from cryptography.hazmat.primitives.asymmetric import rsa
 
         kid = ssot_config.misc.jwt_kid or "autobot-1"
+        key_file = self._jwt_key_file()
 
-        # 1. Check env var for private key
+        def _derive_public(private_key) -> str:
+            return (
+                private_key.public_key()
+                .public_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                )
+                .decode("utf-8")
+            )
+
+        def _load_pem(pem: str):
+            return serialization.load_pem_private_key(
+                pem.encode("utf-8"),
+                password=None,
+                backend=default_backend(),
+            )
+
+        def _write_key_file(pem: str) -> None:
+            """Write PEM to the durable file with mode 0600."""
+            try:
+                key_file.parent.mkdir(parents=True, exist_ok=True)
+                key_file.write_text(pem, encoding="utf-8")
+                os.chmod(key_file, 0o600)
+                logger.info("RS256 private key written to durable file %s", key_file)
+            except Exception as exc:
+                logger.error(
+                    "Failed to write RS256 key to %s: %s — key will be ephemeral this session",
+                    key_file,
+                    exc,
+                )
+
+        # Tier 1: env var
         pem_private = ssot_config.misc.jwt_private_key
         if pem_private:
             try:
-                private_key = serialization.load_pem_private_key(
-                    pem_private.encode("utf-8"),
-                    password=None,
-                    backend=default_backend(),
-                )
-                public_key = private_key.public_key()
-                pem_public = public_key.public_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                ).decode("utf-8")
+                private_key = _load_pem(pem_private)
                 logger.info("RS256 private key loaded from AUTOBOT_JWT_PRIVATE_KEY")
-                return pem_private, pem_public, kid
+                return pem_private, _derive_public(private_key), kid
             except Exception as exc:
                 logger.error("Failed to load AUTOBOT_JWT_PRIVATE_KEY: %s — will auto-generate", exc)
 
-        # 2. Check security config for a previously persisted keypair
+        # Tier 2: durable file (survives restart and code-sync deploys)
+        if key_file.exists():
+            try:
+                pem_private = key_file.read_text(encoding="utf-8")
+                private_key = _load_pem(pem_private)
+                logger.info("RS256 private key loaded from durable file %s", key_file)
+                return pem_private, _derive_public(private_key), kid
+            except Exception as exc:
+                logger.warning("Durable RS256 key file %s is invalid: %s — regenerating", key_file, exc)
+
+        # Tier 3: in-memory security config (previous process wrote it without persisting to file)
         stored_pem = self.security_config.get("jwt_private_key_pem", "")
         if stored_pem:
             try:
-                private_key = serialization.load_pem_private_key(
-                    stored_pem.encode("utf-8"),
-                    password=None,
-                    backend=default_backend(),
-                )
-                public_key = private_key.public_key()
-                pem_public = public_key.public_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                ).decode("utf-8")
-                logger.info("RS256 keypair loaded from security config (previously auto-generated)")
-                return stored_pem, pem_public, kid
+                private_key = _load_pem(stored_pem)
+                # Migrate to the durable file so the next restart reuses it
+                _write_key_file(stored_pem)
+                logger.info("RS256 keypair migrated from security config to durable file")
+                return stored_pem, _derive_public(private_key), kid
             except Exception as exc:
                 logger.warning("Stored RS256 keypair in config is invalid: %s — regenerating", exc)
 
-        # 3. Auto-generate a fresh RSA-2048 keypair and persist it
+        # Tier 4: auto-generate and persist to durable file
         logger.warning(
-            "No RS256 private key configured. Auto-generating RSA-2048 keypair. "
+            "No RS256 private key found. Auto-generating RSA-2048 keypair. "
             "Set AUTOBOT_JWT_PRIVATE_KEY to use a stable externally-managed key."
         )
         private_key = rsa.generate_private_key(
@@ -182,23 +224,14 @@ class AuthenticationMiddleware:
             key_size=2048,
             backend=default_backend(),
         )
-        public_key = private_key.public_key()
-
         pem_private = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption(),
         ).decode("utf-8")
-        pem_public = public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        ).decode("utf-8")
+        pem_public = _derive_public(private_key)
 
-        try:
-            config.set_nested("security_config.jwt_private_key_pem", pem_private)
-            logger.info("Auto-generated RS256 keypair persisted in security config")
-        except Exception as exc:
-            logger.error("Failed to persist RS256 keypair in config: %s — keypair is ephemeral", exc)
+        _write_key_file(pem_private)
 
         return pem_private, pem_public, kid
 
@@ -267,7 +300,7 @@ class AuthenticationMiddleware:
         """
         return {
             # user_id/sub so user endpoints (e.g. /users/me/preferences) resolve
-            # the identity in single_user mode; without them they 401'd ('User ID
+            # the identity when auth is disabled; without them they 401'd ('User ID
             # not found in token') → frontend logout → login redirect loop.
             "user_id": "admin",
             "sub": "admin",
@@ -364,7 +397,11 @@ class AuthenticationMiddleware:
             "username": user_data["username"],
             "role": user_data["role"],
             "email": user_data.get("email", ""),
-            "iat": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
+            # iat MUST be a numeric (integer) Unix timestamp — PyJWT >=2.10
+            # rejects a non-integer iat on decode ("Issued At claim (iat) must
+            # be an integer"), which silently broke JWT verification (every
+            # /api/auth/me 401'd → login redirect loop) once real auth ran.
+            "iat": int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp()),
         }
 
         # Issue #684: Include org/user hierarchy in token
@@ -667,16 +704,6 @@ class AuthenticationMiddleware:
         if not self.enable_auth:
             return self._get_auth_disabled_user()
 
-        # Single-user mode: bypass auth (mirrors check_admin_permission behavior)
-        try:
-            from user_management.config import DeploymentMode, get_deployment_config
-
-            deployment_config = get_deployment_config()
-            if deployment_config.mode == DeploymentMode.SINGLE_USER:
-                return self._get_auth_disabled_user()
-        except Exception:
-            logger.debug("Suppressed exception in try block", exc_info=True)
-
         # Try authentication methods in priority order
         user = self._extract_user_from_jwt(request)
         if user:
@@ -821,8 +848,7 @@ async def get_current_user(request: Request) -> Dict:
     Raises HTTPException if authentication fails.
     """
     # Issue #1779: Allow trusted internal services via API key
-    _internal_key = ssot_config.misc.internal_api_key
-    if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
+    if verify_internal_api_key(request.headers.get("X-Internal-API-Key")):
         return {"username": "service:slm", "role": "admin", "service": True}
 
     middleware = get_auth_middleware()
@@ -877,6 +903,19 @@ async def get_current_user(request: Request) -> Dict:
     raise_auth_error("AUTH_0002", "Authentication required")
 
 
+def verify_internal_api_key(provided: str | None) -> bool:
+    """Constant-time check of the trusted internal-service API key (Issue #1145).
+
+    Returns True only when the internal key is configured AND ``provided`` matches
+    it exactly. Uses :func:`secrets.compare_digest` so a partial match cannot be
+    inferred from response timing; a missing/``None`` header can never match.
+    """
+    expected = ssot_config.misc.internal_api_key
+    if not expected or not provided:
+        return False
+    return secrets.compare_digest(provided, expected)
+
+
 def check_admin_permission(request: Request) -> bool:
     """
     FastAPI dependency to check if user has admin permission.
@@ -894,18 +933,8 @@ def check_admin_permission(request: Request) -> bool:
     """
     # Issue #1145: Allow trusted internal services (e.g. SLM backend) via API key.
     # The key is set via AUTOBOT_INTERNAL_API_KEY env var on both services.
-    _internal_key = ssot_config.misc.internal_api_key
-    if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
+    if verify_internal_api_key(request.headers.get("X-Internal-API-Key")):
         logger.debug("Internal API key auth: granting admin access")
-        return True
-
-    # Check for single user mode - bypass auth and grant admin access
-    from user_management.config import DeploymentMode, get_deployment_config
-
-    deployment_config = get_deployment_config()
-    if deployment_config.mode == DeploymentMode.SINGLE_USER:
-        # In single user mode, all requests are treated as admin
-        logger.debug("Single user mode: granting admin access")
         return True
 
     user_data = get_auth_middleware().get_user_from_request(request)
@@ -1001,9 +1030,7 @@ async def require_device_jwt(
 async def authenticate_websocket(websocket) -> dict | None:
     """Authenticate a WebSocket connection.
 
-    Checks for JWT token in query params. Falls back to synthetic admin
-    in single-user mode (mirrors get_user_from_request single-user bypass).
-    Returns None if unauthenticated.
+    Checks for JWT token in query params. Returns None if unauthenticated.
 
     Issue #2818: Add auth before websocket.accept() to reject unauthenticated
     connections at the protocol handshake level.
@@ -1018,8 +1045,10 @@ async def authenticate_websocket(websocket) -> dict | None:
     token = websocket.query_params.get("token")
     if token:
         try:
-            auth = AuthenticationMiddleware()
-            token_data = auth.verify_jwt_token(token)
+            # Use the singleton — a fresh AuthenticationMiddleware() generates a
+            # NEW ephemeral RS256 keypair, so it can't verify tokens signed by the
+            # singleton used at login → every WS handshake 403'd ("Disconnected").
+            token_data = get_auth_middleware().verify_jwt_token(token)
             if token_data:
                 result = {
                     "username": token_data["username"],
@@ -1035,25 +1064,5 @@ async def authenticate_websocket(websocket) -> dict | None:
         except Exception:
             logger.warning("WebSocket JWT authentication failed")
             return None
-
-    # Single-user mode bypass — same logic as get_user_from_request
-    try:
-        from user_management.config import DeploymentMode, get_deployment_config
-
-        deployment_config = get_deployment_config()
-        if deployment_config.mode == DeploymentMode.SINGLE_USER:
-            return {
-                # user_id/sub so user endpoints (e.g. /users/me/preferences) can
-                # resolve the identity; without them they 401'd ('User ID not found
-                # in token') and the frontend logged out → login redirect loop.
-                "user_id": "admin",
-                "sub": "admin",
-                "username": "admin",
-                "role": "admin",
-                "email": f"admin@{ssot_config.auth.domain}",
-                "source": "single_user_mode",
-            }
-    except Exception:
-        logger.debug("Suppressed exception in single-user mode check", exc_info=True)
 
     return None

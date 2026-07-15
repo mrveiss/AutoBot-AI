@@ -19,6 +19,22 @@ function isCoLocated(): boolean {
 }
 
 /**
+ * Resolve VITE_API_URL from every source Vite would consult, in priority order:
+ *   1. inline / shell env  (process.env.VITE_API_URL — how `build:slm` passes it)
+ *   2. .env* files         (loadEnv result)
+ *
+ * loadEnv() ONLY reads .env* files — it does NOT include inline `VAR=x vite build`
+ * env vars. Relying on Vite's implicit `import.meta.env.VITE_*` replacement for an
+ * inline var is fragile: the value must be resolved explicitly here and baked via
+ * `define` so the built bundle is deterministic regardless of how the var arrives.
+ */
+function resolveApiUrl(fileEnv: Record<string, string>): string {
+  const inline = process.env.VITE_API_URL
+  if (inline !== undefined && inline !== '') return inline
+  return fileEnv.VITE_API_URL || ''
+}
+
+/**
  * Vite plugin that errors when VITE_API_URL is unset in a co-located build.
  *
  * NOTE: This guard only applies to `vite build` (built artifacts).
@@ -26,13 +42,13 @@ function isCoLocated(): boolean {
  * below, so VITE_API_URL is never read — the dev server never bakes it into
  * the bundle.  No guard is needed (or useful) for the dev server.
  */
-function coLocatedApiUrlGuard(): import('vite').Plugin {
+function coLocatedApiUrlGuard(apiUrl: string): import('vite').Plugin {
   return {
     name: 'slm-co-located-api-url-guard',
     configResolved(config) {
       // Only check during builds — dev server uses proxy config, not baked VITE_API_URL.
       if (config.command !== 'build') return
-      if (process.env.VITE_API_URL) return
+      if (apiUrl) return
       if (!isCoLocated()) return
       // Co-located build without VITE_API_URL — the baked-in base URL will be
       // empty string, so all API calls will silently route to the wrong backend
@@ -53,9 +69,21 @@ export default defineConfig(({ mode }) => {
   const slmTarget = env.VITE_SLM_PROXY_TARGET || 'https://localhost'
   const autobotTarget = env.VITE_AUTOBOT_PROXY_TARGET || 'http://localhost:8001'
 
+  // Resolve the API base once, from inline env or .env files, and bake it
+  // explicitly via `define`. This is immune to Vite version changes and to
+  // shell/npm quirks in how `VAR=x vite build` propagates the inline var —
+  // the bundle always contains the value resolved here.
+  const apiUrl = resolveApiUrl(env)
+
   return {
     base: '/slm/',
-    plugins: [vue(), coLocatedApiUrlGuard()],
+    plugins: [vue(), coLocatedApiUrlGuard(apiUrl)],
+    // Statically replace import.meta.env.VITE_API_URL in the source. Without
+    // this, baking relied on Vite implicitly exposing an inline process.env
+    // var — fragile across versions and invocation styles. See resolveApiUrl().
+    define: {
+      'import.meta.env.VITE_API_URL': JSON.stringify(apiUrl),
+    },
     resolve: {
       // preserveSymlinks: true keeps module resolution relative to the symlink
       // path (node_modules/@autobot/vnc, @autobot/terminal) rather than the

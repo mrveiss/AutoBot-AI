@@ -88,29 +88,44 @@ def registry():
     import sys
     from pathlib import Path
 
-    # Remove any stub that might be in sys.modules
-    for key in list(sys.modules.keys()):
-        if key == "llm_shared" or key.startswith("llm_shared."):
+    # Snapshot every ``llm_shared*`` entry the conftest stub installed so we can
+    # restore it on teardown.  Swapping the conftest stub for the real package
+    # without restoring it leaks process-wide and breaks co-collected tests that
+    # rely on the stub (e.g. test_langfuse_observer / test_anthropic_provider),
+    # the same top-level-sys.modules-stub anti-pattern fixed in #10879 (#10910).
+    saved = {
+        key: sys.modules[key]
+        for key in list(sys.modules.keys())
+        if key == "llm_shared" or key.startswith("llm_shared.")
+    }
+    for key in saved:
+        del sys.modules[key]
+
+    try:
+        # Load the real modules directly
+        backend_root = Path(__file__).parent.parent.parent
+
+        # Load llm_shared package
+        llm_shared_path = backend_root / "llm_shared" / "__init__.py"
+        spec = importlib.util.spec_from_file_location("llm_shared", llm_shared_path)
+        llm_shared = importlib.util.module_from_spec(spec)
+        sys.modules["llm_shared"] = llm_shared
+        spec.loader.exec_module(llm_shared)
+
+        # Now import observability (will use the real llm_shared)
+        from llm_shared import observability
+
+        # Clear before test
+        observability.clear()
+        yield observability
+        # Clear after test
+        observability.clear()
+    finally:
+        # Restore whatever the conftest installed: drop any real llm_shared*
+        # modules loaded above, then re-instate the saved stubs.
+        for key in [k for k in list(sys.modules.keys()) if k == "llm_shared" or k.startswith("llm_shared.")]:
             del sys.modules[key]
-
-    # Load the real modules directly
-    backend_root = Path(__file__).parent.parent.parent
-
-    # Load llm_shared package
-    llm_shared_path = backend_root / "llm_shared" / "__init__.py"
-    spec = importlib.util.spec_from_file_location("llm_shared", llm_shared_path)
-    llm_shared = importlib.util.module_from_spec(spec)
-    sys.modules["llm_shared"] = llm_shared
-    spec.loader.exec_module(llm_shared)
-
-    # Now import observability (will use the real llm_shared)
-    from llm_shared import observability
-
-    # Clear before test
-    observability.clear()
-    yield observability
-    # Clear after test
-    observability.clear()
+        sys.modules.update(saved)
 
 
 # ---------------------------------------------------------------------------

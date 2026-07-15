@@ -3,7 +3,8 @@
 import { vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
-import type { Router } from 'vue-router'
+import type { Router, RouteRecordRaw } from 'vue-router'
+import type { Pinia } from 'pinia'
 // Issue #172: Import from consolidated network.ts (TypeScript + .env support)
 import { NetworkConstants, ServiceURLs } from '@/constants/network'
 
@@ -22,8 +23,8 @@ export const setupTestEnv = () => {
 export const setupWindowMocks = () => {
   // Mock window.location
   // Issue #156 Fix: Type assertion for window.location mock
-  delete (window as any).location
-  ;(window as any).location = {
+  delete (window as unknown as Record<string, unknown>).location
+  ;(window as unknown as Record<string, unknown>).location = {
     ...window.location,
     href: 'http://localhost:3000/',
     origin: 'http://localhost:3000',
@@ -66,9 +67,9 @@ export const setupWindowMocks = () => {
 
   // Mock notification API
   // Issue #156 Fix: Type assertions for Notification mock
-  global.Notification = vi.fn() as any
-  ;(global.Notification as any).permission = 'granted'
-  ;(global.Notification as any).requestPermission = vi.fn(() => Promise.resolve('granted'))
+  global.Notification = vi.fn() as unknown as typeof Notification
+  ;(global.Notification as unknown as Record<string, unknown>).permission = 'granted'
+  ;(global.Notification as unknown as Record<string, unknown>).requestPermission = vi.fn(() => Promise.resolve('granted'))
 }
 
 // Setup Pinia store for testing
@@ -79,7 +80,7 @@ export const setupPiniaStore = () => {
 }
 
 // Setup Vue Router for testing
-export const setupTestRouter = (routes: any[] = []) => {
+export const setupTestRouter = (routes: RouteRecordRaw[] = []) => {
   const defaultRoutes = [
     { path: '/', name: 'home', component: { template: '<div>Home</div>' } },
     { path: '/chat', name: 'chat', component: { template: '<div>Chat</div>' } },
@@ -97,9 +98,9 @@ export const setupTestRouter = (routes: any[] = []) => {
 }
 
 // Mock fetch API with custom responses
-export const setupFetchMock = (responses: Record<string, any> = {}) => {
+export const setupFetchMock = (responses: Record<string, unknown> = {}) => {
   // Issue #156 Fix: Type url parameter as string | URL
-  global.fetch = vi.fn((url: string | URL, options?: any) => {
+  global.fetch = vi.fn((url: string | URL, options?: RequestInit) => {
     const urlString = typeof url === 'string' ? url : url.toString()
     const method = options?.method || 'GET'
     const key = `${method} ${urlString}`
@@ -128,7 +129,7 @@ export const setupFetchMock = (responses: Record<string, any> = {}) => {
     }
 
     return Promise.resolve(defaultResponse)
-  }) as any
+  }) as unknown as typeof fetch
 }
 
 // Setup WebSocket mocks
@@ -145,14 +146,14 @@ export const setupWebSocketMocks = () => {
     onclose: null,
     onmessage: null,
     onerror: null,
-  })) as any
+  })) as unknown as typeof WebSocket
 
   // WebSocket constants
   // Issue #156 Fix: Type assertions for read-only WebSocket constants
-  ;(global.WebSocket as any).CONNECTING = 0
-  ;(global.WebSocket as any).OPEN = 1
-  ;(global.WebSocket as any).CLOSING = 2
-  ;(global.WebSocket as any).CLOSED = 3
+  ;(global.WebSocket as unknown as Record<string, number>).CONNECTING = 0
+  ;(global.WebSocket as unknown as Record<string, number>).OPEN = 1
+  ;(global.WebSocket as unknown as Record<string, number>).CLOSING = 2
+  ;(global.WebSocket as unknown as Record<string, number>).CLOSED = 3
 }
 
 // Setup console mocks to reduce test noise
@@ -233,7 +234,7 @@ export const setupFileAPIMocks = () => {
     slice: vi.fn(),
     stream: vi.fn(),
     text: () => Promise.resolve(parts.join('')),
-  })) as any
+  })) as unknown as typeof File
 
   global.FileReader = vi.fn().mockImplementation(() => ({
     readAsDataURL: vi.fn(),
@@ -252,7 +253,7 @@ export const setupFileAPIMocks = () => {
     LOADING: 1,
     DONE: 2,
     readyState: 0,
-  })) as any
+  })) as unknown as typeof FileReader
 }
 
 // Comprehensive test environment setup
@@ -262,7 +263,7 @@ export const setupTestEnvironment = (options: {
   mockFetch?: boolean
   mockWebSocket?: boolean
   mockTimers?: boolean
-  fetchResponses?: Record<string, any>
+  fetchResponses?: Record<string, unknown>
 } = {}) => {
   const {
     includeRouter = true,
@@ -284,8 +285,8 @@ export const setupTestEnvironment = (options: {
 
   const setup: {
     router?: Router
-    pinia?: any
-    timers?: any
+    pinia?: Pinia
+    timers?: ReturnType<typeof setupTimerMocks>
   } = {}
 
   // Optional setups
@@ -341,7 +342,7 @@ export const generateTestData = {
     ...overrides,
   }),
 
-  apiResponse: (data: any, success = true) => ({
+  apiResponse: (data: unknown, success = true) => ({
     success,
     data,
     message: success ? 'Success' : 'Error occurred',

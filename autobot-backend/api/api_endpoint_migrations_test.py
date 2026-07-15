@@ -11119,55 +11119,55 @@ class TestBatch69AgentTerminalMigrations(unittest.TestCase):
         self.assertIn("session_id=session_id", source)
 
 
-class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
-    """Test batch 70 migrations: agent_enhanced.py first 3 endpoints"""
+class TestBatch70AgentMigrations(unittest.TestCase):
+    """Test batch 70 migrations: agent.py first 3 endpoints"""
 
-    # Test 1: execute_enhanced_goal decorator presence
-    def test_execute_enhanced_goal_decorator_present(self):
-        """Test execute_enhanced_goal has @with_error_handling decorator"""
-        from api.agent import execute_enhanced_goal
+    # Test 1: execute_orchestrated_goal decorator presence
+    def test_execute_orchestrated_goal_decorator_present(self):
+        """Test execute_orchestrated_goal has @with_error_handling decorator"""
+        from api.agent import execute_orchestrated_goal
 
-        source = inspect.getsource(execute_enhanced_goal)
+        source = inspect.getsource(execute_orchestrated_goal)
         self.assertIn(
             "@with_error_handling",
             source,
-            "execute_enhanced_goal should have @with_error_handling decorator",
+            "execute_orchestrated_goal should have @with_error_handling decorator",
         )
         self.assertIn(
             "ErrorCategory.SERVER_ERROR",
             source,
-            "execute_enhanced_goal should use SERVER_ERROR category",
+            "execute_orchestrated_goal should use SERVER_ERROR category",
         )
         self.assertIn(
-            'error_code_prefix="AGENT_ENHANCED"',
+            'error_code_prefix="AGENT"',
             source,
-            "execute_enhanced_goal should use AGENT_ENHANCED error code prefix",
+            "execute_orchestrated_goal should use AGENT error code prefix",
         )
 
-    # Test 2: execute_enhanced_goal Mixed Pattern compliance
-    def test_execute_enhanced_goal_mixed_pattern(self):
-        """Test execute_enhanced_goal uses Mixed Pattern - preserves nested try-catches"""
-        from api.agent import execute_enhanced_goal
+    # Test 2: execute_orchestrated_goal Mixed Pattern compliance
+    def test_execute_orchestrated_goal_mixed_pattern(self):
+        """Test execute_orchestrated_goal uses Mixed Pattern - preserves nested try-catches"""
+        from api.agent import execute_orchestrated_goal
 
-        source = inspect.getsource(execute_enhanced_goal)
+        source = inspect.getsource(execute_orchestrated_goal)
         # Should have nested try-catches for: agent list, KB enhancement, AIStackError
         try_count = source.count("    try:")
         self.assertGreaterEqual(
             try_count,
             3,
-            "execute_enhanced_goal should have at least 3 nested try-catch blocks (agent list, KB, AIStackError)",
+            "execute_orchestrated_goal should have at least 3 nested try-catch blocks (agent list, KB, AIStackError)",
         )
         # Should have AIStackError handling
         self.assertIn("except AIStackError", source)
         # Should have fallback for agent list
         self.assertIn('available_agents = ["chat", "rag", "research"]', source)
 
-    # Test 3: execute_enhanced_goal business logic preserved
-    def test_execute_enhanced_goal_business_logic(self):
-        """Test execute_enhanced_goal preserves business logic - HTTPException for unavailable agents"""
-        from api.agent import execute_enhanced_goal
+    # Test 3: execute_orchestrated_goal business logic preserved
+    def test_execute_orchestrated_goal_business_logic(self):
+        """Test execute_orchestrated_goal preserves business logic - HTTPException for unavailable agents"""
+        from api.agent import execute_orchestrated_goal
 
-        source = inspect.getsource(execute_enhanced_goal)
+        source = inspect.getsource(execute_orchestrated_goal)
         # Should raise HTTPException for unavailable agents
         self.assertIn("if not selected_agents:", source)
         self.assertIn("raise HTTPException", source)
@@ -11194,9 +11194,9 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
             "coordinate_multi_agent_task should use SERVER_ERROR category",
         )
         self.assertIn(
-            'error_code_prefix="AGENT_ENHANCED"',
+            'error_code_prefix="AGENT"',
             source,
-            "coordinate_multi_agent_task should use AGENT_ENHANCED error code prefix",
+            "coordinate_multi_agent_task should use AGENT error code prefix",
         )
 
     # Test 5: coordinate_multi_agent_task Mixed Pattern compliance
@@ -11241,9 +11241,9 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
             "comprehensive_research_task should use SERVER_ERROR category",
         )
         self.assertIn(
-            'error_code_prefix="AGENT_ENHANCED"',
+            'error_code_prefix="AGENT"',
             source,
-            "comprehensive_research_task should use AGENT_ENHANCED error code prefix",
+            "comprehensive_research_task should use AGENT error code prefix",
         )
 
     # Test 8: comprehensive_research_task Mixed Pattern compliance
@@ -11284,11 +11284,11 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
         from api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
-            execute_enhanced_goal,
+            execute_orchestrated_goal,
         )
 
         for endpoint in [
-            execute_enhanced_goal,
+            execute_orchestrated_goal,
             coordinate_multi_agent_task,
             comprehensive_research_task,
         ]:
@@ -11301,23 +11301,23 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
 
     # Test 11: Batch 70 consistency - all endpoints use same error code prefix
     def test_batch70_error_prefix_consistency(self):
-        """Test all batch 70 endpoints use AGENT_ENHANCED error code prefix"""
+        """Test all batch 70 endpoints use AGENT error code prefix"""
         from api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
-            execute_enhanced_goal,
+            execute_orchestrated_goal,
         )
 
         for endpoint in [
-            execute_enhanced_goal,
+            execute_orchestrated_goal,
             coordinate_multi_agent_task,
             comprehensive_research_task,
         ]:
             source = inspect.getsource(endpoint)
             self.assertIn(
-                'error_code_prefix="AGENT_ENHANCED"',
+                'error_code_prefix="AGENT"',
                 source,
-                f"{endpoint.__name__} should use AGENT_ENHANCED error code prefix",
+                f"{endpoint.__name__} should use AGENT error code prefix",
             )
 
     # Test 12: Batch 70 consistency - all endpoints follow Mixed Pattern
@@ -11326,11 +11326,11 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
         from api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
-            execute_enhanced_goal,
+            execute_orchestrated_goal,
         )
 
         for endpoint in [
-            execute_enhanced_goal,
+            execute_orchestrated_goal,
             coordinate_multi_agent_task,
             comprehensive_research_task,
         ]:
@@ -11348,11 +11348,11 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
         from api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
-            execute_enhanced_goal,
+            execute_orchestrated_goal,
         )
 
         for endpoint in [
-            execute_enhanced_goal,
+            execute_orchestrated_goal,
             coordinate_multi_agent_task,
             comprehensive_research_task,
         ]:
@@ -11371,11 +11371,11 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
         from api.agent import (
             comprehensive_research_task,
             coordinate_multi_agent_task,
-            execute_enhanced_goal,
+            execute_orchestrated_goal,
         )
 
         for endpoint in [
-            execute_enhanced_goal,
+            execute_orchestrated_goal,
             coordinate_multi_agent_task,
             comprehensive_research_task,
         ]:
@@ -11393,8 +11393,8 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
             )
 
 
-class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
-    """Test batch 71 migrations: agent_enhanced.py next 3 endpoints"""
+class TestBatch71AgentMigrations(unittest.TestCase):
+    """Test batch 71 migrations: agent.py next 3 endpoints"""
 
     def test_analyze_development_task_decorator_present(self):
         """Test analyze_development_task has @with_error_handling decorator"""
@@ -11403,7 +11403,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
         source = inspect.getsource(analyze_development_task)
         self.assertIn("@with_error_handling", source)
         self.assertIn("ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('error_code_prefix="AGENT_ENHANCED"', source)
+        self.assertIn('error_code_prefix="AGENT"', source)
 
     def test_analyze_development_task_mixed_pattern(self):
         """Test analyze_development_task uses Mixed Pattern - preserves nested try-catch"""
@@ -11430,7 +11430,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
         source = inspect.getsource(list_available_agents)
         self.assertIn("@with_error_handling", source)
         self.assertIn("ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('error_code_prefix="AGENT_ENHANCED"', source)
+        self.assertIn('error_code_prefix="AGENT"', source)
 
     def test_list_available_agents_mixed_pattern(self):
         """Test list_available_agents uses Mixed Pattern - preserves nested try-catch"""
@@ -11457,7 +11457,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
         source = inspect.getsource(get_agents_status)
         self.assertIn("@with_error_handling", source)
         self.assertIn("ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('error_code_prefix="AGENT_ENHANCED"', source)
+        self.assertIn('error_code_prefix="AGENT"', source)
 
     def test_get_agents_status_mixed_pattern(self):
         """Test get_agents_status uses Mixed Pattern - preserves nested try-catch"""
@@ -11521,7 +11521,7 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
             )
 
     def test_batch71_error_prefix_consistency(self):
-        """Test batch 71 endpoints all use AGENT_ENHANCED prefix"""
+        """Test batch 71 endpoints all use AGENT prefix"""
         from api.agent import (
             analyze_development_task,
             get_agents_status,
@@ -11535,9 +11535,9 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
         ]:
             source = inspect.getsource(endpoint)
             self.assertIn(
-                'error_code_prefix="AGENT_ENHANCED"',
+                'error_code_prefix="AGENT"',
                 source,
-                f"{endpoint.__name__} should use AGENT_ENHANCED prefix",
+                f"{endpoint.__name__} should use AGENT prefix",
             )
 
     def test_batch71_mixed_pattern_consistency(self):
@@ -11587,8 +11587,8 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
             )
 
 
-class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
-    """Test batch 72 migrations: agent_enhanced.py final 2 endpoints"""
+class TestBatch72AgentMigrations(unittest.TestCase):
+    """Test batch 72 migrations: agent.py final 2 endpoints"""
 
     def test_receive_goal_compat_decorator_present(self):
         """Test receive_goal_compat has @with_error_handling decorator"""
@@ -11597,7 +11597,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
         source = inspect.getsource(receive_goal_compat)
         self.assertIn("@with_error_handling", source)
         self.assertIn("ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('error_code_prefix="AGENT_ENHANCED"', source)
+        self.assertIn('error_code_prefix="AGENT"', source)
 
     def test_receive_goal_compat_mixed_pattern(self):
         """Test receive_goal_compat uses Mixed Pattern - preserves outer try-catch"""
@@ -11618,39 +11618,39 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
         self.assertIn("except Exception", source)
         self.assertIn("fallback", source.lower())
 
-    def test_enhanced_agent_health_decorator_present(self):
-        """Test enhanced_agent_health has @with_error_handling decorator"""
-        from api.agent import enhanced_agent_health
+    def test_agent_health_decorator_present(self):
+        """Test agent_health has @with_error_handling decorator"""
+        from api.agent import agent_health
 
-        source = inspect.getsource(enhanced_agent_health)
+        source = inspect.getsource(agent_health)
         self.assertIn("@with_error_handling", source)
         self.assertIn("ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('error_code_prefix="AGENT_ENHANCED"', source)
+        self.assertIn('error_code_prefix="AGENT"', source)
 
-    def test_enhanced_agent_health_mixed_pattern(self):
-        """Test enhanced_agent_health uses Mixed Pattern - preserves outer try-catch"""
-        from api.agent import enhanced_agent_health
+    def test_agent_health_mixed_pattern(self):
+        """Test agent_health uses Mixed Pattern - preserves outer try-catch"""
+        from api.agent import agent_health
 
-        source = inspect.getsource(enhanced_agent_health)
+        source = inspect.getsource(agent_health)
         # Should preserve outer try-catch for degraded status business logic
         try_count = source.count("    try:")
         self.assertGreaterEqual(try_count, 1, "Should preserve outer try-catch for degraded status logic")
         self.assertIn("except Exception", source)
 
-    def test_enhanced_agent_health_degraded_logic(self):
-        """Test enhanced_agent_health preserves degraded status business logic"""
-        from api.agent import enhanced_agent_health
+    def test_agent_health_degraded_logic(self):
+        """Test agent_health preserves degraded status business logic"""
+        from api.agent import agent_health
 
-        source = inspect.getsource(enhanced_agent_health)
+        source = inspect.getsource(agent_health)
         # Should return degraded status on exception
         self.assertIn("except Exception", source)
         self.assertIn('"status": "degraded"', source)
 
     def test_batch72_decorator_placement(self):
         """Test batch 72 endpoints have decorators in correct order"""
-        from api.agent import enhanced_agent_health, receive_goal_compat
+        from api.agent import agent_health, receive_goal_compat
 
-        for endpoint in [receive_goal_compat, enhanced_agent_health]:
+        for endpoint in [receive_goal_compat, agent_health]:
             source = inspect.getsource(endpoint)
             # Router decorator should come before error handling decorator
             router_pos = source.find("@router")
@@ -11663,9 +11663,9 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_error_category_consistency(self):
         """Test batch 72 endpoints all use ErrorCategory.SERVER_ERROR"""
-        from api.agent import enhanced_agent_health, receive_goal_compat
+        from api.agent import agent_health, receive_goal_compat
 
-        for endpoint in [receive_goal_compat, enhanced_agent_health]:
+        for endpoint in [receive_goal_compat, agent_health]:
             source = inspect.getsource(endpoint)
             self.assertIn(
                 "ErrorCategory.SERVER_ERROR",
@@ -11674,22 +11674,22 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
             )
 
     def test_batch72_error_prefix_consistency(self):
-        """Test batch 72 endpoints all use AGENT_ENHANCED prefix"""
-        from api.agent import enhanced_agent_health, receive_goal_compat
+        """Test batch 72 endpoints all use AGENT prefix"""
+        from api.agent import agent_health, receive_goal_compat
 
-        for endpoint in [receive_goal_compat, enhanced_agent_health]:
+        for endpoint in [receive_goal_compat, agent_health]:
             source = inspect.getsource(endpoint)
             self.assertIn(
-                'error_code_prefix="AGENT_ENHANCED"',
+                'error_code_prefix="AGENT"',
                 source,
-                f"{endpoint.__name__} should use AGENT_ENHANCED prefix",
+                f"{endpoint.__name__} should use AGENT prefix",
             )
 
     def test_batch72_mixed_pattern_consistency(self):
         """Test batch 72 endpoints all use Mixed Pattern (preserve outer try-catch)"""
-        from api.agent import enhanced_agent_health, receive_goal_compat
+        from api.agent import agent_health, receive_goal_compat
 
-        for endpoint in [receive_goal_compat, enhanced_agent_health]:
+        for endpoint in [receive_goal_compat, agent_health]:
             source = inspect.getsource(endpoint)
             try_count = source.count("    try:")
             self.assertGreaterEqual(
@@ -11700,15 +11700,15 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_business_logic_preservation(self):
         """Test batch 72 endpoints preserve business logic (fallback/degraded responses)"""
-        from api.agent import enhanced_agent_health, receive_goal_compat
+        from api.agent import agent_health, receive_goal_compat
 
         # receive_goal_compat should have fallback logic
         compat_source = inspect.getsource(receive_goal_compat)
         self.assertIn("except Exception", compat_source)
         self.assertIn("fallback", compat_source.lower())
 
-        # enhanced_agent_health should have degraded status logic
-        health_source = inspect.getsource(enhanced_agent_health)
+        # agent_health should have degraded status logic
+        health_source = inspect.getsource(agent_health)
         self.assertIn("except Exception", health_source)
         self.assertIn('"status": "degraded"', health_source)
 
@@ -14239,7 +14239,7 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
 
     def test_enhanced_chat_decorator_present(self):
         """Test enhanced_chat has @with_error_handling decorator"""
-        from api.ai_stack_integration import enhanced_chat
+        from api.ai_stack_integration import chat as enhanced_chat
 
         source = inspect.getsource(enhanced_chat)
         self.assertIn("@with_error_handling", source)
@@ -14259,7 +14259,9 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
         """Test batch 87 endpoints use correct patterns (2 Simple, 1 Mixed)"""
         from api.ai_stack_integration import (
             analyze_documents,
-            enhanced_chat,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             extract_knowledge,
         )
 
@@ -14289,7 +14291,7 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
 
     def test_enhanced_chat_kb_context_enhancement_preserved(self):
         """Test enhanced_chat preserves knowledge base context enhancement logic"""
-        from api.ai_stack_integration import enhanced_chat
+        from api.ai_stack_integration import chat as enhanced_chat
 
         source = inspect.getsource(enhanced_chat)
         # Should have KB context enhancement try-catch preserved
@@ -14316,13 +14318,15 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
         """Test batch 87 endpoints have correct operation names in decorator"""
         from api.ai_stack_integration import (
             analyze_documents,
-            enhanced_chat,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             extract_knowledge,
         )
 
         endpoints = [
             (analyze_documents, "analyze_documents"),
-            (enhanced_chat, "enhanced_chat"),
+            (enhanced_chat, "chat"),
             (extract_knowledge, "extract_knowledge"),
         ]
 
@@ -14357,7 +14361,7 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
 
     def test_batch_87_business_logic_preserved(self):
         """Test batch 87 Mixed Pattern endpoint preserves business logic"""
-        from api.ai_stack_integration import enhanced_chat
+        from api.ai_stack_integration import chat as enhanced_chat
 
         source = inspect.getsource(enhanced_chat)
 
@@ -14369,7 +14373,7 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
 
     def test_batch_87_kb_context_enhancement_logic(self):
         """Test batch 87 knowledge base context enhancement logic is preserved"""
-        from api.ai_stack_integration import enhanced_chat
+        from api.ai_stack_integration import chat as enhanced_chat
 
         source = inspect.getsource(enhanced_chat)
 
@@ -14390,7 +14394,9 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
         """Test batch 87 endpoints have correct decorator parameters"""
         from api.ai_stack_integration import (
             analyze_documents,
-            enhanced_chat,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             extract_knowledge,
         )
 
@@ -14409,7 +14415,9 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
         """Test batch 87 endpoints don't call handle_ai_stack_error"""
         from api.ai_stack_integration import (
             analyze_documents,
-            enhanced_chat,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             extract_knowledge,
         )
 
@@ -14427,7 +14435,9 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
         from api.ai_stack_integration import (
             ai_stack_health_check,
             analyze_documents,
-            enhanced_chat,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             extract_knowledge,
             list_ai_agents,
             rag_query,
@@ -14457,13 +14467,15 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
         """Comprehensive test for all batch 87 migrations"""
         from api.ai_stack_integration import (
             analyze_documents,
-            enhanced_chat,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             extract_knowledge,
         )
 
         endpoints = [
             ("analyze_documents", analyze_documents, "Simple"),
-            ("enhanced_chat", enhanced_chat, "Mixed"),
+            ("chat", enhanced_chat, "Mixed"),
             ("extract_knowledge", extract_knowledge, "Simple"),
         ]
 
@@ -14501,11 +14513,15 @@ class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
         from api.ai_stack_integration import (
             ai_stack_health_check,
             analyze_documents,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             comprehensive_research,
-            enhanced_chat,
-            enhanced_knowledge_search,
             extract_knowledge,
             get_system_knowledge,
+        )
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import (
             list_ai_agents,
             rag_query,
             reformulate_query,
@@ -14537,8 +14553,10 @@ class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
         """Test batch 88 endpoints use correct patterns (2 Simple, 2 Mixed)"""
         from api.ai_stack_integration import (
             comprehensive_research,
-            enhanced_knowledge_search,
             get_system_knowledge,
+        )
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import (
             web_research,
         )
 
@@ -14566,17 +14584,17 @@ class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
 
     def test_batch_88_enhanced_knowledge_search_has_decorator(self):
         """Test enhanced_knowledge_search has @with_error_handling decorator"""
-        from api.ai_stack_integration import enhanced_knowledge_search
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
 
         source = inspect.getsource(enhanced_knowledge_search)
         self.assertIn("@with_error_handling", source)
         self.assertIn("ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="enhanced_knowledge_search"', source)
+        self.assertIn('operation="knowledge_search"', source)
         self.assertIn('error_code_prefix="AI_STACK"', source)
 
     def test_batch_88_enhanced_knowledge_search_preserves_kb_fallback(self):
         """Test enhanced_knowledge_search preserves KB search fallback (Mixed Pattern)"""
-        from api.ai_stack_integration import enhanced_knowledge_search
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
 
         source = inspect.getsource(enhanced_knowledge_search)
         # Should preserve inner try-catch for KB fallback
@@ -14652,8 +14670,10 @@ class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
         """Test all batch 88 endpoints use AI_STACK error code prefix"""
         from api.ai_stack_integration import (
             comprehensive_research,
-            enhanced_knowledge_search,
             get_system_knowledge,
+        )
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import (
             web_research,
         )
 
@@ -14672,14 +14692,16 @@ class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
         """Test batch 88 endpoints removed outer try-catch blocks"""
         from api.ai_stack_integration import (
             comprehensive_research,
-            enhanced_knowledge_search,
             get_system_knowledge,
+        )
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import (
             web_research,
         )
 
         # All endpoints should have decorator at function level, not nested in try
         endpoints_info = [
-            ("enhanced_knowledge_search", enhanced_knowledge_search),
+            ("knowledge_search", enhanced_knowledge_search),
             ("get_system_knowledge", get_system_knowledge),
             ("comprehensive_research", comprehensive_research),
             ("web_research", web_research),
@@ -14724,13 +14746,15 @@ class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
         """Test all batch 88 endpoints comprehensively"""
         from api.ai_stack_integration import (
             comprehensive_research,
-            enhanced_knowledge_search,
             get_system_knowledge,
+        )
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import (
             web_research,
         )
 
         endpoints_info = [
-            ("enhanced_knowledge_search", enhanced_knowledge_search, "Mixed"),
+            ("knowledge_search", enhanced_knowledge_search, "Mixed"),
             ("get_system_knowledge", get_system_knowledge, "Simple"),
             ("comprehensive_research", comprehensive_research, "Mixed"),
             ("web_research", web_research, "Simple"),
@@ -14793,12 +14817,16 @@ class TestBatch89AIStackIntegrationMigrations(unittest.TestCase):
             ai_stack_health_check,
             analyze_development_speedup,
             analyze_documents,
+        )
+        from api.ai_stack_integration import chat as enhanced_chat
+        from api.ai_stack_integration import (
             classify_content,
             comprehensive_research,
-            enhanced_chat,
-            enhanced_knowledge_search,
             extract_knowledge,
             get_system_knowledge,
+        )
+        from api.ai_stack_integration import knowledge_search as enhanced_knowledge_search
+        from api.ai_stack_integration import (
             list_ai_agents,
             rag_query,
             reformulate_query,
@@ -15072,21 +15100,24 @@ class TestBatch89AIStackIntegrationMigrations(unittest.TestCase):
 
 
 class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
-    """Test batch 90 migrations: ai_stack_integration.py final 3 endpoints (multi_agent_query, legacy_rag_search, legacy_enhanced_chat) - FINAL BATCH"""
+    """Test batch 90 migrations: ai_stack_integration.py final 2 endpoints (multi_agent_query, legacy_rag_search) - FINAL BATCH"""
 
     def test_ai_stack_integration_py_100_percent_complete(self):
-        """Test ai_stack_integration.py is 100% complete - all 17 endpoints migrated"""
+        """Test ai_stack_integration.py is 100% complete - all 16 endpoints migrated"""
         from api.ai_stack_integration import (
             ai_stack_health_check,
             analyze_development_speedup,
             analyze_documents,
+        )
+        from api.ai_stack_integration import chat as ai_stack_chat
+        from api.ai_stack_integration import (
             classify_content,
             comprehensive_research,
-            enhanced_chat,
-            enhanced_knowledge_search,
             extract_knowledge,
             get_system_knowledge,
-            legacy_enhanced_chat,
+        )
+        from api.ai_stack_integration import knowledge_search as ai_stack_knowledge_search
+        from api.ai_stack_integration import (
             legacy_rag_search,
             list_ai_agents,
             multi_agent_query,
@@ -15096,16 +15127,16 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             web_research,
         )
 
-        # All 17 endpoints must have @with_error_handling decorator
+        # All 16 endpoints must have @with_error_handling decorator
         all_endpoints = [
             ai_stack_health_check,
             list_ai_agents,
             rag_query,
             reformulate_query,
             analyze_documents,
-            enhanced_chat,
+            ai_stack_chat,
             extract_knowledge,
-            enhanced_knowledge_search,
+            ai_stack_knowledge_search,
             get_system_knowledge,
             comprehensive_research,
             web_research,
@@ -15114,10 +15145,9 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             classify_content,
             multi_agent_query,
             legacy_rag_search,
-            legacy_enhanced_chat,
         ]
 
-        # All 17 endpoints must have decorator
+        # All 16 endpoints must have decorator
         for endpoint in all_endpoints:
             source = inspect.getsource(endpoint)
             self.assertIn("@with_error_handling", source)
@@ -15125,18 +15155,21 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="AI_STACK"', source)
 
     def test_batch_90_progress_validation(self):
-        """Test batch 90 brings ai_stack_integration.py to 17/17 endpoints (100%)"""
+        """Test batch 90 brings ai_stack_integration.py to 16/16 endpoints (100%)"""
         from api.ai_stack_integration import (
             ai_stack_health_check,
             analyze_development_speedup,
             analyze_documents,
+        )
+        from api.ai_stack_integration import chat as ai_stack_chat
+        from api.ai_stack_integration import (
             classify_content,
             comprehensive_research,
-            enhanced_chat,
-            enhanced_knowledge_search,
             extract_knowledge,
             get_system_knowledge,
-            legacy_enhanced_chat,
+        )
+        from api.ai_stack_integration import knowledge_search as ai_stack_knowledge_search
+        from api.ai_stack_integration import (
             legacy_rag_search,
             list_ai_agents,
             multi_agent_query,
@@ -15153,9 +15186,9 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             rag_query,
             reformulate_query,
             analyze_documents,
-            enhanced_chat,
+            ai_stack_chat,
             extract_knowledge,
-            enhanced_knowledge_search,
+            ai_stack_knowledge_search,
             get_system_knowledge,
             comprehensive_research,
             web_research,
@@ -15164,11 +15197,10 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             classify_content,
             multi_agent_query,
             legacy_rag_search,
-            legacy_enhanced_chat,
         ]
 
-        # Verify we have exactly 17 endpoints
-        self.assertEqual(len(migrated_endpoints), 17)
+        # Verify we have exactly 16 endpoints
+        self.assertEqual(len(migrated_endpoints), 16)
 
         for endpoint in migrated_endpoints:
             source = inspect.getsource(endpoint)
@@ -15177,24 +15209,15 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="AI_STACK"', source)
 
     def test_batch_90_pattern_validation(self):
-        """Test batch 90 endpoints use correct patterns (2 Simple, 1 Mixed)"""
+        """Test batch 90 endpoints use correct patterns (1 Simple, 1 Mixed)"""
         from api.ai_stack_integration import (
-            legacy_enhanced_chat,
             legacy_rag_search,
             multi_agent_query,
         )
 
-        # Simple Pattern endpoints (should have 0 try-catch at function level)
-        simple_pattern_endpoints = [
-            ("legacy_rag_search", legacy_rag_search),
-            ("legacy_enhanced_chat", legacy_enhanced_chat),
-        ]
-
-        for name, endpoint in simple_pattern_endpoints:
-            source = inspect.getsource(endpoint)
-            # Count function-level try blocks (should be 0)
-            # Legacy endpoints are wrappers, no try-catch
-            self.assertNotIn("    try:", source, f"{name} should have no try-catch")
+        # Simple Pattern endpoint (should have 0 try-catch at function level)
+        source = inspect.getsource(legacy_rag_search)
+        self.assertNotIn("    try:", source, "legacy_rag_search should have no try-catch")
 
         # Mixed Pattern endpoint (should have inner try-catch blocks)
         source = inspect.getsource(multi_agent_query)
@@ -15245,30 +15268,9 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
         # Should call rag_query
         self.assertIn("await rag_query(request)", source)
 
-    def test_batch_90_legacy_enhanced_chat_has_decorator(self):
-        """Test legacy_enhanced_chat has @with_error_handling decorator"""
-        from api.ai_stack_integration import legacy_enhanced_chat
-
-        source = inspect.getsource(legacy_enhanced_chat)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="legacy_enhanced_chat"', source)
-        self.assertIn('error_code_prefix="AI_STACK"', source)
-
-    def test_batch_90_legacy_enhanced_chat_is_simple_wrapper(self):
-        """Test legacy_enhanced_chat is simple wrapper with no error handling (Simple Pattern)"""
-        from api.ai_stack_integration import legacy_enhanced_chat
-
-        source = inspect.getsource(legacy_enhanced_chat)
-        # Should be simple wrapper - no try-catch
-        self.assertNotIn("try:", source)
-        # Should call enhanced_chat
-        self.assertIn("await enhanced_chat(request)", source)
-
     def test_batch_90_all_endpoints_use_ai_stack_prefix(self):
         """Test all batch 90 endpoints use AI_STACK error code prefix"""
         from api.ai_stack_integration import (
-            legacy_enhanced_chat,
             legacy_rag_search,
             multi_agent_query,
         )
@@ -15276,7 +15278,6 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
         endpoints = [
             multi_agent_query,
             legacy_rag_search,
-            legacy_enhanced_chat,
         ]
 
         for endpoint in endpoints:
@@ -15285,22 +15286,12 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
 
     def test_batch_90_legacy_endpoints_are_concise(self):
         """Test batch 90 legacy endpoints are concise wrappers"""
-        from api.ai_stack_integration import legacy_enhanced_chat, legacy_rag_search
+        from api.ai_stack_integration import legacy_rag_search
 
         # Legacy endpoints should be simple wrappers (8-10 lines)
-        legacy_endpoints = [
-            ("legacy_rag_search", legacy_rag_search, 10),
-            ("legacy_enhanced_chat", legacy_enhanced_chat, 10),
-        ]
-
-        for name, endpoint, max_lines in legacy_endpoints:
-            source = inspect.getsource(endpoint)
-            line_count = len([ln for ln in source.split("\n") if ln.strip()])
-            self.assertLessEqual(
-                line_count,
-                max_lines,
-                f"{name} should be concise (≤{max_lines} lines)",
-            )
+        source = inspect.getsource(legacy_rag_search)
+        line_count = len([ln for ln in source.split("\n") if ln.strip()])
+        self.assertLessEqual(line_count, 10, "legacy_rag_search should be concise (≤10 lines)")
 
     def test_batch_90_multi_agent_query_removed_outer_exception(self):
         """Test multi_agent_query removed outer Exception with HTTPException raise"""
@@ -15315,7 +15306,6 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
     def test_batch_90_comprehensive_validation(self):
         """Test all batch 90 endpoints comprehensively"""
         from api.ai_stack_integration import (
-            legacy_enhanced_chat,
             legacy_rag_search,
             multi_agent_query,
         )
@@ -15323,7 +15313,6 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
         endpoints_info = [
             ("multi_agent_query", multi_agent_query, "Mixed"),
             ("legacy_rag_search", legacy_rag_search, "Simple"),
-            ("legacy_enhanced_chat", legacy_enhanced_chat, "Simple"),
         ]
 
         for name, endpoint, pattern in endpoints_info:
@@ -15380,13 +15369,16 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             ai_stack_health_check,
             analyze_development_speedup,
             analyze_documents,
+        )
+        from api.ai_stack_integration import chat as ai_stack_chat
+        from api.ai_stack_integration import (
             classify_content,
             comprehensive_research,
-            enhanced_chat,
-            enhanced_knowledge_search,
             extract_knowledge,
             get_system_knowledge,
-            legacy_enhanced_chat,
+        )
+        from api.ai_stack_integration import knowledge_search as ai_stack_knowledge_search
+        from api.ai_stack_integration import (
             legacy_rag_search,
             list_ai_agents,
             multi_agent_query,
@@ -15402,9 +15394,9 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             rag_query,
             reformulate_query,
             analyze_documents,
-            enhanced_chat,
+            ai_stack_chat,
             extract_knowledge,
-            enhanced_knowledge_search,
+            ai_stack_knowledge_search,
             get_system_knowledge,
             comprehensive_research,
             web_research,
@@ -15413,16 +15405,15 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
             classify_content,
             multi_agent_query,
             legacy_rag_search,
-            legacy_enhanced_chat,
         ]
 
-        # Verify ALL 17 endpoints have the decorator
+        # Verify ALL 16 endpoints have the decorator
         for endpoint in all_endpoints:
             source = inspect.getsource(endpoint)
             self.assertIn("@with_error_handling", source)
 
         # This confirms 100% completion
-        self.assertEqual(len(all_endpoints), 17)
+        self.assertEqual(len(all_endpoints), 16)
 
 
 class TestBatch91ServiceMonitorMigrations(unittest.TestCase):
@@ -18604,16 +18595,16 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertNotIn("except", source)
 
     def test_batch_110_consolidated_websocket_mixed_pattern(self):
-        """Verify consolidated_terminal_websocket uses Mixed Pattern"""
+        """Verify terminal_websocket uses Mixed Pattern"""
         from api import terminal
 
-        source = inspect.getsource(terminal.consolidated_terminal_websocket)
+        source = inspect.getsource(terminal.terminal_websocket)
         # Should have @with_error_handling decorator
         self.assertIn("@with_error_handling", source)
         # Should have category parameter
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         # Should have operation parameter
-        self.assertIn('operation="consolidated_terminal_websocket"', source)
+        self.assertIn('operation="terminal_websocket"', source)
         # Mixed Pattern - should have try-catch blocks (connection lifecycle)
         self.assertIn("try:", source)
         self.assertIn("except", source)
@@ -18635,16 +18626,16 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify canonical WebSocket endpoint has @with_error_handling decorator"""
         from api import terminal
 
-        source = inspect.getsource(terminal.consolidated_terminal_websocket)
+        source = inspect.getsource(terminal.terminal_websocket)
         self.assertIn(
             "@with_error_handling",
             source,
-            "consolidated_terminal_websocket should have @with_error_handling decorator",
+            "terminal_websocket should have @with_error_handling decorator",
         )
         self.assertIn(
             "@router.websocket",
             source,
-            "consolidated_terminal_websocket should have @router.websocket decorator",
+            "terminal_websocket should have @router.websocket decorator",
         )
 
     def test_batch_110_terminal_100_percent_milestone(self):
@@ -18691,7 +18682,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("endpoints", source_info)
 
         # Check consolidated WebSocket
-        source_ws = inspect.getsource(terminal.consolidated_terminal_websocket)
+        source_ws = inspect.getsource(terminal.terminal_websocket)
         self.assertIn("websocket.accept", source_ws)
         self.assertIn("session_manager", source_ws)
 
@@ -18699,7 +18690,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify canonical WebSocket endpoint preserves security level management"""
         from api import terminal
 
-        source = inspect.getsource(terminal.consolidated_terminal_websocket)
+        source = inspect.getsource(terminal.terminal_websocket)
         self.assertIn("SecurityLevel", source)
         self.assertIn("security_level", source)
 
@@ -22389,7 +22380,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         source = inspect.getsource(secrets.get_secret_types)
         self.assertIn("SecretType", source)
-        self.assertIn("SecretScope", source)
+        self.assertIn("ChatSecretScope", source)  # renamed from SecretScope (#11759)
 
     def test_batch_132_migration_preserves_statistics_calculation(self):
         """Verify migration preserves statistics calculation logic"""
@@ -22732,7 +22723,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertEqual(progress_percentage, 100.0)
 
     def test_batch_135_migration_preserves_state_tracker_integration(self):
-        """Verify migration preserves enhanced_project_state_tracker integration"""
+        """Verify migration preserves project_state_tracker integration"""
         from api import state_tracking
 
         # Check get_state_tracking_status preserves tracker usage
@@ -22837,14 +22828,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("completion_percentage", source)
 
     # ==============================================
-    # BATCH 136: enhanced_memory.py - COMPLETE (100%)
+    # BATCH 136: task_memory.py - COMPLETE (100%)
     # ==============================================
 
     def test_batch_136_get_memory_statistics_simple_pattern(self):
         """Verify get_memory_statistics endpoint uses Simple Pattern"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.get_memory_statistics)
+        source = inspect.getsource(task_memory.get_memory_statistics)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="get_memory_statistics"', source)
@@ -22852,9 +22843,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_get_task_history_simple_pattern(self):
         """Verify get_task_history endpoint uses Simple Pattern"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.get_task_history)
+        source = inspect.getsource(task_memory.get_task_history)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="get_task_history"', source)
@@ -22862,9 +22853,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_create_task_simple_pattern(self):
         """Verify create_task endpoint uses Simple Pattern"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.create_task)
+        source = inspect.getsource(task_memory.create_task)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="create_task"', source)
@@ -22872,9 +22863,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_update_task_simple_pattern(self):
         """Verify update_task endpoint uses Simple Pattern"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.update_task)
+        source = inspect.getsource(task_memory.update_task)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="update_task"', source)
@@ -22882,9 +22873,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_add_markdown_reference_simple_pattern(self):
         """Verify add_markdown_reference endpoint uses Simple Pattern"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.add_markdown_reference)
+        source = inspect.getsource(task_memory.add_markdown_reference)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="add_markdown_reference"', source)
@@ -22892,9 +22883,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_scan_markdown_system_simple_pattern(self):
         """Verify scan_markdown_system endpoint uses Simple Pattern"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.scan_markdown_system)
+        source = inspect.getsource(task_memory.scan_markdown_system)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="scan_markdown_system"', source)
@@ -22902,9 +22893,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_search_markdown_simple_pattern(self):
         """Verify search_markdown endpoint uses Simple Pattern"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.search_markdown)
+        source = inspect.getsource(task_memory.search_markdown)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="search_markdown"', source)
@@ -22912,9 +22903,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_get_document_references_simple_pattern(self):
         """Verify get_document_references endpoint uses Simple Pattern"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.get_document_references)
+        source = inspect.getsource(task_memory.get_document_references)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="get_document_references"', source)
@@ -22922,9 +22913,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_get_embedding_cache_stats_simple_pattern(self):
         """Verify get_embedding_cache_stats endpoint uses Simple Pattern"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.get_embedding_cache_stats)
+        source = inspect.getsource(task_memory.get_embedding_cache_stats)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="get_embedding_cache_stats"', source)
@@ -22932,9 +22923,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_cleanup_old_data_simple_pattern(self):
         """Verify cleanup_old_data endpoint uses Simple Pattern"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.cleanup_old_data)
+        source = inspect.getsource(task_memory.cleanup_old_data)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="cleanup_old_data"', source)
@@ -22942,30 +22933,30 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_get_active_tasks_simple_pattern(self):
         """Verify get_active_tasks endpoint uses Simple Pattern"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.get_active_tasks)
+        source = inspect.getsource(task_memory.get_active_tasks)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="get_active_tasks"', source)
         self.assertIn('error_code_prefix="MEMORY"', source)
 
-    def test_batch_136_all_enhanced_memory_endpoints_have_decorator(self):
-        """Verify all enhanced_memory endpoints have @with_error_handling decorator"""
-        from api import enhanced_memory
+    def test_batch_136_all_task_memory_endpoints_have_decorator(self):
+        """Verify all task_memory endpoints have @with_error_handling decorator"""
+        from api import task_memory
 
         endpoint_functions = [
-            enhanced_memory.get_memory_statistics,
-            enhanced_memory.get_task_history,
-            enhanced_memory.create_task,
-            enhanced_memory.update_task,
-            enhanced_memory.add_markdown_reference,
-            enhanced_memory.scan_markdown_system,
-            enhanced_memory.search_markdown,
-            enhanced_memory.get_document_references,
-            enhanced_memory.get_embedding_cache_stats,
-            enhanced_memory.cleanup_old_data,
-            enhanced_memory.get_active_tasks,
+            task_memory.get_memory_statistics,
+            task_memory.get_task_history,
+            task_memory.create_task,
+            task_memory.update_task,
+            task_memory.add_markdown_reference,
+            task_memory.scan_markdown_system,
+            task_memory.search_markdown,
+            task_memory.get_document_references,
+            task_memory.get_embedding_cache_stats,
+            task_memory.cleanup_old_data,
+            task_memory.get_active_tasks,
         ]
 
         for func in endpoint_functions:
@@ -22976,22 +22967,22 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
                 f"Endpoint {func.__name__} missing @with_error_handling decorator",
             )
 
-    def test_batch_136_enhanced_memory_100_percent_milestone(self):
-        """Verify enhanced_memory.py has reached 100% migration"""
-        from api import enhanced_memory
+    def test_batch_136_task_memory_100_percent_milestone(self):
+        """Verify task_memory.py has reached 100% migration"""
+        from api import task_memory
 
         endpoint_functions = [
-            enhanced_memory.get_memory_statistics,
-            enhanced_memory.get_task_history,
-            enhanced_memory.create_task,
-            enhanced_memory.update_task,
-            enhanced_memory.add_markdown_reference,
-            enhanced_memory.scan_markdown_system,
-            enhanced_memory.search_markdown,
-            enhanced_memory.get_document_references,
-            enhanced_memory.get_embedding_cache_stats,
-            enhanced_memory.cleanup_old_data,
-            enhanced_memory.get_active_tasks,
+            task_memory.get_memory_statistics,
+            task_memory.get_task_history,
+            task_memory.create_task,
+            task_memory.update_task,
+            task_memory.add_markdown_reference,
+            task_memory.scan_markdown_system,
+            task_memory.search_markdown,
+            task_memory.get_document_references,
+            task_memory.get_embedding_cache_stats,
+            task_memory.cleanup_old_data,
+            task_memory.get_active_tasks,
         ]
 
         migrated_count = sum(1 for func in endpoint_functions if "@with_error_handling" in inspect.getsource(func))
@@ -23007,9 +22998,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_migration_preserves_task_statistics(self):
         """Verify migration preserves task statistics gathering"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.get_memory_statistics)
+        source = inspect.getsource(task_memory.get_memory_statistics)
         self.assertIn("memory_manager.get_task_statistics(days_back)", source)
         self.assertIn("markdown_system.get_markdown_statistics()", source)
         self.assertIn("task_tracker.get_active_tasks()", source)
@@ -23017,9 +23008,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_migration_preserves_task_history_filtering(self):
         """Verify migration preserves task history filtering with enums"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.get_task_history)
+        source = inspect.getsource(task_memory.get_task_history)
         self.assertIn("TaskStatus(status)", source)
         self.assertIn("agent_type=agent_type", source)
         self.assertIn("status=status_enum", source)
@@ -23028,9 +23019,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_migration_preserves_task_creation_priority(self):
         """Verify migration preserves task creation with TaskPriority enum"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.create_task)
+        source = inspect.getsource(task_memory.create_task)
         self.assertIn("TaskPriority(request.priority)", source)
         self.assertIn("memory_manager.create_task_record", source)
         self.assertIn("priority=priority_enum", source)
@@ -23038,9 +23029,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_migration_preserves_task_status_updates(self):
         """Verify migration preserves task status update logic with enums"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.update_task)
+        source = inspect.getsource(task_memory.update_task)
         self.assertIn("TaskStatus(request.status)", source)
         self.assertIn("TaskStatus.IN_PROGRESS", source)
         self.assertIn("TaskStatus.COMPLETED", source)
@@ -23051,23 +23042,23 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_migration_preserves_markdown_reference_system(self):
         """Verify migration preserves markdown reference system integration"""
-        from api import enhanced_memory
+        from api import task_memory
 
         # Check add_markdown_reference
-        source_add = inspect.getsource(enhanced_memory.add_markdown_reference)
+        source_add = inspect.getsource(task_memory.add_markdown_reference)
         self.assertIn("memory_manager.add_markdown_reference", source_add)
         self.assertIn("task_id=request.task_id", source_add)
         self.assertIn("reference_type=request.reference_type", source_add)
 
         # Check scan_markdown_system
-        source_scan = inspect.getsource(enhanced_memory.scan_markdown_system)
+        source_scan = inspect.getsource(task_memory.scan_markdown_system)
         self.assertIn("markdown_system.initialize_system_scan()", source_scan)
 
     def test_batch_136_migration_preserves_markdown_search_filtering(self):
         """Verify migration preserves markdown search with filtering"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.search_markdown)
+        source = inspect.getsource(task_memory.search_markdown)
         self.assertIn("Query(..., min_length=2)", source)
         self.assertIn("Query(20, ge=1, le=100)", source)
         self.assertIn("markdown_system.search_markdown_content", source)
@@ -23077,34 +23068,34 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_136_migration_preserves_document_references(self):
         """Verify migration preserves document reference retrieval"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.get_document_references)
+        source = inspect.getsource(task_memory.get_document_references)
         self.assertIn("file_path:path", source)
         self.assertIn("markdown_system.get_document_references(file_path)", source)
 
     def test_batch_136_migration_preserves_embedding_cache_stats(self):
         """Verify migration preserves embedding cache statistics"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.get_embedding_cache_stats)
+        source = inspect.getsource(task_memory.get_embedding_cache_stats)
         self.assertIn("memory_manager._get_embedding_cache_size()", source)
         self.assertIn("cache_size", source)
 
     def test_batch_136_migration_preserves_cleanup_logic(self):
         """Verify migration preserves cleanup with days_to_keep validation"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.cleanup_old_data)
+        source = inspect.getsource(task_memory.cleanup_old_data)
         self.assertIn("Query(90, ge=30, le=365)", source)
         self.assertIn("memory_manager.cleanup_old_data(days_to_keep)", source)
         self.assertIn("cleanup_result", source)
 
     def test_batch_136_migration_preserves_active_tasks_tracking(self):
         """Verify migration preserves active tasks tracking"""
-        from api import enhanced_memory
+        from api import task_memory
 
-        source = inspect.getsource(enhanced_memory.get_active_tasks)
+        source = inspect.getsource(task_memory.get_active_tasks)
         self.assertIn("task_tracker.get_active_tasks()", source)
         self.assertIn("len(active_tasks)", source)
 
@@ -23210,9 +23201,8 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import security
 
         source = inspect.getsource(security.get_security_status)
-        self.assertIn("enhanced_security_layer", source)
         self.assertIn("security_layer", source)
-        self.assertIn("EnhancedSecurityLayer()", source)
+        self.assertIn("SecurityLayer()", source)
         self.assertIn("get_pending_approvals()", source)
 
     def test_batch_137_migration_preserves_command_approval(self):
@@ -24335,7 +24325,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import chat_enhanced
 
         source = inspect.getsource(chat_enhanced.compatible_chat_message)
-        self.assertIn("EnhancedChatMessage", source)
+        self.assertIn("ChatMessage", source)
         self.assertIn("use_ai_stack", source)
         self.assertIn("use_knowledge_base", source)
 
@@ -25074,17 +25064,17 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_150_enhanced_semantic_search_simple_pattern(self):
         """Verify enhanced_semantic_search endpoint uses Simple Pattern"""
-        from api import enhanced_search
+        from api import search as enhanced_search
 
-        source = inspect.getsource(enhanced_search.enhanced_semantic_search)
+        source = inspect.getsource(enhanced_search.semantic_search)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="enhanced_semantic_search"', source)
+        self.assertIn('operation="semantic_search"', source)
         self.assertIn('error_code_prefix="ENHANCED_SEARCH"', source)
 
     def test_batch_150_get_hardware_status_simple_pattern(self):
         """Verify get_hardware_status endpoint uses Simple Pattern"""
-        from api import enhanced_search
+        from api import search as enhanced_search
 
         source = inspect.getsource(enhanced_search.get_hardware_status)
         self.assertIn("@with_error_handling", source)
@@ -25094,7 +25084,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_150_benchmark_search_performance_simple_pattern(self):
         """Verify benchmark_search_performance endpoint uses Simple Pattern"""
-        from api import enhanced_search
+        from api import search as enhanced_search
 
         source = inspect.getsource(enhanced_search.benchmark_search_performance)
         self.assertIn("@with_error_handling", source)
@@ -25104,7 +25094,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_150_optimize_search_engine_simple_pattern(self):
         """Verify optimize_search_engine endpoint uses Simple Pattern"""
-        from api import enhanced_search
+        from api import search as enhanced_search
 
         source = inspect.getsource(enhanced_search.optimize_search_engine)
         self.assertIn("@with_error_handling", source)
@@ -25114,7 +25104,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_150_get_performance_analytics_simple_pattern(self):
         """Verify get_performance_analytics endpoint uses Simple Pattern"""
-        from api import enhanced_search
+        from api import search as enhanced_search
 
         source = inspect.getsource(enhanced_search.get_performance_analytics)
         self.assertIn("@with_error_handling", source)
@@ -25124,7 +25114,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_150_test_npu_connectivity_simple_pattern(self):
         """Verify test_npu_connectivity endpoint uses Simple Pattern"""
-        from api import enhanced_search
+        from api import search as enhanced_search
 
         source = inspect.getsource(enhanced_search.test_npu_connectivity)
         self.assertIn("@with_error_handling", source)
@@ -25134,7 +25124,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_150_health_check_simple_pattern(self):
         """Verify health_check endpoint uses Simple Pattern"""
-        from api import enhanced_search
+        from api import search as enhanced_search
 
         source = inspect.getsource(enhanced_search.health_check)
         self.assertIn("@with_error_handling", source)
@@ -25144,10 +25134,10 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_150_all_enhanced_search_endpoints_have_decorator(self):
         """Verify all enhanced_search endpoints have @with_error_handling decorator"""
-        from api import enhanced_search
+        from api import search as enhanced_search
 
         endpoint_functions = [
-            enhanced_search.enhanced_semantic_search,
+            enhanced_search.semantic_search,
             enhanced_search.get_hardware_status,
             enhanced_search.benchmark_search_performance,
             enhanced_search.optimize_search_engine,
@@ -25166,10 +25156,10 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_150_enhanced_search_100_percent_milestone(self):
         """Verify enhanced_search.py has reached 100% migration"""
-        from api import enhanced_search
+        from api import search as enhanced_search
 
         endpoint_functions = [
-            enhanced_search.enhanced_semantic_search,
+            enhanced_search.semantic_search,
             enhanced_search.get_hardware_status,
             enhanced_search.benchmark_search_performance,
             enhanced_search.optimize_search_engine,
@@ -25191,33 +25181,33 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_150_migration_preserves_npu_semantic_search(self):
         """Verify migration preserves NPU semantic search functionality"""
-        from api import enhanced_search
+        from api import search as enhanced_search
 
-        source = inspect.getsource(enhanced_search.enhanced_semantic_search)
+        source = inspect.getsource(enhanced_search.semantic_search)
         self.assertIn("get_npu_search_engine", source)
         self.assertIn("enhanced_search", source)
         self.assertIn("enable_npu_acceleration", source)
 
     def test_batch_150_migration_preserves_hardware_device_enum(self):
         """Verify migration preserves HardwareDevice enum handling"""
-        from api import enhanced_search
+        from api import search as enhanced_search
 
-        source = inspect.getsource(enhanced_search.enhanced_semantic_search)
+        source = inspect.getsource(enhanced_search.semantic_search)
         self.assertIn("HardwareDevice", source)
         self.assertIn("force_device", source)
 
     def test_batch_150_migration_preserves_search_metrics(self):
         """Verify migration preserves SearchMetrics and SearchResult models"""
-        from api import enhanced_search
+        from api import search as enhanced_search
 
-        source = inspect.getsource(enhanced_search.enhanced_semantic_search)
+        source = inspect.getsource(enhanced_search.semantic_search)
         self.assertIn("SearchResponse", source)
         self.assertIn("metrics", source)
         self.assertIn("results_data", source)
 
     def test_batch_150_migration_preserves_benchmark_functionality(self):
         """Verify migration preserves benchmark functionality"""
-        from api import enhanced_search
+        from api import search as enhanced_search
 
         source = inspect.getsource(enhanced_search.benchmark_search_performance)
         self.assertIn("benchmark_search_performance", source)
@@ -25226,7 +25216,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_150_migration_preserves_optimization_workload_types(self):
         """Verify migration preserves optimization workload types"""
-        from api import enhanced_search
+        from api import search as enhanced_search
 
         source = inspect.getsource(enhanced_search.optimize_search_engine)
         self.assertIn("optimize_for_workload", source)
@@ -25234,7 +25224,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_150_migration_preserves_performance_recommendations(self):
         """Verify migration preserves performance recommendation helpers"""
-        from api import enhanced_search
+        from api import search as enhanced_search
 
         # Verify helper functions exist
         self.assertTrue(hasattr(enhanced_search, "_generate_performance_recommendations"))
@@ -25656,10 +25646,10 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify enhanced_search endpoint uses Simple Pattern"""
         from api import knowledge_ai_stack
 
-        source = inspect.getsource(knowledge_ai_stack.enhanced_search)
+        source = inspect.getsource(knowledge_ai_stack.search)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="enhanced_search"', source)
+        self.assertIn('operation="search"', source)
         self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
 
     def test_batch_153_rag_search_simple_pattern(self):
@@ -25712,24 +25702,24 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="get_system_knowledge_insights"', source)
         self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
 
-    def test_batch_153_get_enhanced_stats_simple_pattern(self):
-        """Verify get_enhanced_stats endpoint uses Simple Pattern"""
+    def test_batch_153_get_aistack_stats_simple_pattern(self):
+        """Verify get_aistack_stats endpoint uses Simple Pattern"""
         from api import knowledge_ai_stack
 
-        source = inspect.getsource(knowledge_ai_stack.get_enhanced_stats)
+        source = inspect.getsource(knowledge_ai_stack.get_aistack_stats)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="get_enhanced_stats"', source)
-        self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
+        self.assertIn('operation="get_aistack_stats"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_AI_STACK"', source)
 
     def test_batch_153_enhanced_knowledge_health_simple_pattern(self):
         """Verify enhanced_knowledge_health endpoint uses Simple Pattern"""
         from api import knowledge_ai_stack
 
-        source = inspect.getsource(knowledge_ai_stack.enhanced_knowledge_health)
+        source = inspect.getsource(knowledge_ai_stack.knowledge_health)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="enhanced_knowledge_health"', source)
+        self.assertIn('operation="knowledge_health"', source)
         self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
 
     def test_batch_153_all_knowledge_ai_stack_endpoints_have_decorator(self):
@@ -25737,14 +25727,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import knowledge_ai_stack
 
         endpoint_functions = [
-            knowledge_ai_stack.enhanced_search,
+            knowledge_ai_stack.search,
             knowledge_ai_stack.rag_search,
             knowledge_ai_stack.extract_knowledge,
             knowledge_ai_stack.analyze_documents,
             knowledge_ai_stack.reformulate_query,
             knowledge_ai_stack.get_system_knowledge_insights,
-            knowledge_ai_stack.get_enhanced_stats,
-            knowledge_ai_stack.enhanced_knowledge_health,
+            knowledge_ai_stack.get_aistack_stats,
+            knowledge_ai_stack.knowledge_health,
         ]
 
         for func in endpoint_functions:
@@ -25760,14 +25750,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import knowledge_ai_stack
 
         endpoint_functions = [
-            knowledge_ai_stack.enhanced_search,
+            knowledge_ai_stack.search,
             knowledge_ai_stack.rag_search,
             knowledge_ai_stack.extract_knowledge,
             knowledge_ai_stack.analyze_documents,
             knowledge_ai_stack.reformulate_query,
             knowledge_ai_stack.get_system_knowledge_insights,
-            knowledge_ai_stack.get_enhanced_stats,
-            knowledge_ai_stack.enhanced_knowledge_health,
+            knowledge_ai_stack.get_aistack_stats,
+            knowledge_ai_stack.knowledge_health,
         ]
 
         migrated_count = sum(1 for func in endpoint_functions if "@with_error_handling" in inspect.getsource(func))
@@ -25786,7 +25776,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import knowledge_ai_stack
 
         # Verify AI Stack client dependency injection
-        enhanced_search_source = inspect.getsource(knowledge_ai_stack.enhanced_search)
+        enhanced_search_source = inspect.getsource(knowledge_ai_stack.search)
         self.assertIn("get_ai_stack_client", enhanced_search_source)
         self.assertIn("ai_client", enhanced_search_source)
 
@@ -25804,7 +25794,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("documents", rag_source)
 
         # Verify enhanced search combines RAG
-        enhanced_source = inspect.getsource(knowledge_ai_stack.enhanced_search)
+        enhanced_source = inspect.getsource(knowledge_ai_stack.search)
         self.assertIn("include_rag", enhanced_source)
         self.assertIn("rag_enhanced", enhanced_source)
 
@@ -25840,18 +25830,19 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("context", reformulate_source)
 
     def test_batch_153_migration_preserves_pydantic_models(self):
-        """Verify migration preserves Pydantic request models"""
+        """Verify migration preserves Pydantic request models (#10666 B1: SearchRequest
+        renamed to SearchRequest; AIStackSearchRequest is the ai_stack variant)"""
         from api import knowledge_ai_stack
 
-        # Verify request models are defined
-        self.assertTrue(hasattr(knowledge_ai_stack, "EnhancedSearchRequest"))
+        # Verify request models are defined (AIStackSearchRequest is the ai-stack variant)
+        self.assertTrue(hasattr(knowledge_ai_stack, "AIStackSearchRequest"))
         self.assertTrue(hasattr(knowledge_ai_stack, "KnowledgeExtractionRequest"))
         self.assertTrue(hasattr(knowledge_ai_stack, "DocumentAnalysisRequest"))
         self.assertTrue(hasattr(knowledge_ai_stack, "RAGQueryRequest"))
 
         # Verify models are used in endpoints
-        enhanced_search_source = inspect.getsource(knowledge_ai_stack.enhanced_search)
-        self.assertIn("EnhancedSearchRequest", enhanced_search_source)
+        enhanced_search_source = inspect.getsource(knowledge_ai_stack.search)
+        self.assertIn("AIStackSearchRequest", enhanced_search_source)
 
     # ==============================================
     # BATCH 154: metrics.py - COMPLETE (100%)
@@ -26603,14 +26594,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="read_container_logs"', source)
         self.assertIn('error_code_prefix="LOGS"', source)
 
-    def test_batch_157_get_unified_logs_simple_pattern(self):
-        """Verify get_unified_logs endpoint uses Simple Pattern"""
+    def test_batch_157_get_combined_logs_simple_pattern(self):
+        """Verify get_combined_logs endpoint uses Simple Pattern"""
         from api import logs
 
-        source = inspect.getsource(logs.get_unified_logs)
+        source = inspect.getsource(logs.get_combined_logs)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="get_unified_logs"', source)
+        self.assertIn('operation="get_combined_logs"', source)
         self.assertIn('error_code_prefix="LOGS"', source)
 
     def test_batch_157_stream_log_simple_pattern(self):
@@ -26653,7 +26644,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             logs.list_logs,
             logs.read_log,
             logs.read_container_logs,
-            logs.get_unified_logs,
+            logs.get_combined_logs,
             logs.stream_log,
             logs.search_logs,
             logs.clear_log,
@@ -26677,7 +26668,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             logs.list_logs,
             logs.read_log,
             logs.read_container_logs,
-            logs.get_unified_logs,
+            logs.get_combined_logs,
             logs.stream_log,
             logs.search_logs,
             logs.clear_log,
@@ -26762,8 +26753,8 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Verify parse_file_log_line exists and is used
         self.assertTrue(hasattr(logs, "parse_file_log_line"))
-        unified_source = inspect.getsource(logs.get_unified_logs)
-        self.assertIn("parse_file_log_line", unified_source)
+        combined_source = inspect.getsource(logs.get_combined_logs)
+        self.assertIn("parse_file_log_line", combined_source)
 
     def test_batch_157_migration_preserves_streaming_response(self):
         """Verify migration preserves streaming response functionality"""
@@ -26797,16 +26788,16 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("case_sensitive", search_source)
         self.assertIn("max_results", search_source)
 
-    def test_batch_157_migration_preserves_unified_log_merging(self):
-        """Verify migration preserves unified log merging by timestamp"""
+    def test_batch_157_migration_preserves_combined_log_merging(self):
+        """Verify migration preserves combined log merging by timestamp"""
         from api import logs
 
-        # Verify get_unified_logs merges logs
-        unified_source = inspect.getsource(logs.get_unified_logs)
-        self.assertIn("all_logs", unified_source)
-        self.assertIn("sort", unified_source)
-        self.assertIn("timestamp", unified_source)
-        self.assertIn("source_type", unified_source)
+        # Verify get_combined_logs merges logs from docker + file sources
+        combined_source = inspect.getsource(logs.get_combined_logs)
+        self.assertIn("all_logs", combined_source)
+        self.assertIn("sort", combined_source)
+        self.assertIn("timestamp", combined_source)
+        self.assertIn("source_type", combined_source)
 
     # ==============================================
     # BATCH 158: llm_awareness.py - COMPLETE (100%)
@@ -27070,15 +27061,15 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("_cache_timestamp", metrics_source)
         self.assertIn("_cache_ttl", metrics_source)
 
-        """Verify migration preserves unified log merging by timestamp"""
+        """Verify migration preserves combined log merging by timestamp"""
         from api import logs
 
-        # Verify get_unified_logs merges logs
-        unified_source = inspect.getsource(logs.get_unified_logs)
-        self.assertIn("all_logs", unified_source)
-        self.assertIn("sort", unified_source)
-        self.assertIn("timestamp", unified_source)
-        self.assertIn("source_type", unified_source)
+        # Verify get_combined_logs merges logs from docker + file sources
+        combined_source = inspect.getsource(logs.get_combined_logs)
+        self.assertIn("all_logs", combined_source)
+        self.assertIn("sort", combined_source)
+        self.assertIn("timestamp", combined_source)
+        self.assertIn("source_type", combined_source)
 
         """Verify migration preserves RemoteSessionType enum"""
         from api import remote_terminal
@@ -28860,7 +28851,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             logs.list_logs,
             logs.read_log,
             logs.read_container_logs,
-            logs.get_unified_logs,
+            logs.get_combined_logs,
             logs.stream_log,
             logs.tail_log,
             logs.search_logs,
@@ -29323,17 +29314,29 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify migration preserves LLM judges integration for workflow evaluation"""
         from api import workflow_automation
 
-        # Verify judges availability flag exists
-        self.assertTrue(hasattr(workflow_automation, "JUDGES_AVAILABLE"))
+        # Issue #10880: JUDGES_AVAILABLE was removed; judge availability now
+        # lives in services.workflow_automation.step_evaluator via a try/except
+        # import inside WorkflowStepEvaluator._initialize_judges. Verify the
+        # shim still exposes the manager and the availability mechanism moved
+        # to the step evaluator.
+        from services.workflow_automation.step_evaluator import WorkflowStepEvaluator
+
+        self.assertTrue(hasattr(WorkflowStepEvaluator, "_initialize_judges"))
 
         # Verify WorkflowAutomationManager class exists
         self.assertTrue(hasattr(workflow_automation, "WorkflowAutomationManager"))
 
-        # Verify get_workflow_manager singleton pattern
+        # Verify get_workflow_manager singleton pattern (#11409): it is now a
+        # lazy_singleton(WorkflowAutomationManager) factory — the old
+        # module-global `_workflow_manager`/`global` source-substring assert
+        # rotted when the implementation moved.  Assert the canonical
+        # lazy_singleton contract (callable factory exposing the reset /
+        # set_for_test test seams) instead of matching source text.
         self.assertTrue(hasattr(workflow_automation, "get_workflow_manager"))
-        get_manager_source = inspect.getsource(workflow_automation.get_workflow_manager)
-        self.assertIn("_workflow_manager", get_manager_source)
-        self.assertIn("global", get_manager_source)
+        get_manager = workflow_automation.get_workflow_manager
+        self.assertTrue(callable(get_manager))
+        self.assertTrue(hasattr(get_manager, "reset"))
+        self.assertTrue(hasattr(get_manager, "set_for_test"))
 
     def test_batch_168_migration_preserves_workflow_templates(self):
         """Verify migration preserves workflow template functionality"""
@@ -30207,25 +30210,25 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         progress_percentage = (migrated_count / total_endpoints) * 100
         self.assertEqual(progress_percentage, 100.0)
 
-    def test_batch_171_migration_preserves_unified_processor(self):
-        """Verify migration preserves unified_processor integration"""
+    def test_batch_171_migration_preserves_processor(self):
+        """Verify migration preserves processor singleton integration"""
         from api import multimodal
 
-        # Verify unified_processor is imported
-        self.assertTrue(hasattr(multimodal, "unified_processor"))
+        # Verify processor is imported
+        self.assertTrue(hasattr(multimodal, "processor"))
 
-        # Verify process_image uses unified_processor.process
+        # Verify process_image uses processor.process
         image_source = inspect.getsource(multimodal.process_image)
-        self.assertIn("unified_processor.process", image_source)
+        self.assertIn("processor.process", image_source)
         self.assertIn("MultiModalInput", image_source)
 
-        # Verify process_audio uses unified_processor.process
+        # Verify process_audio uses processor.process
         audio_source = inspect.getsource(multimodal.process_audio)
-        self.assertIn("unified_processor.process", audio_source)
+        self.assertIn("processor.process", audio_source)
 
-        # Verify process_text uses unified_processor.process
+        # Verify process_text uses processor.process
         text_source = inspect.getsource(multimodal.process_text)
-        self.assertIn("unified_processor.process", text_source)
+        self.assertIn("processor.process", text_source)
 
     def test_batch_171_migration_preserves_modality_types(self):
         """Verify migration preserves ModalityType enum usage"""
@@ -30315,7 +30318,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Verify get_performance_stats uses performance_monitor
         stats_source = inspect.getsource(multimodal.get_performance_stats)
-        self.assertIn("unified_processor.performance_monitor", stats_source)
+        self.assertIn("processor.performance_monitor", stats_source)
         self.assertIn("monitor_processing_performance", stats_source)
 
         # Verify optimize_performance uses optimization method

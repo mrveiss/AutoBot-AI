@@ -8,7 +8,7 @@ Mock fixtures for AutoBot backend testing (canonical location for #6994).
 Provides mock implementations of core components for tests and the
 `__main__` demo blocks under `intelligence/`:
 
-- MockLLMInterface  - Mock for UnifiedLLMInterface (llm_multi_provider); covers
+- MockLLMInterface  - Mock for LLMInterface (llm_multi_provider); covers
                       both chat_completion() and legacy generate_response().
 - MockLLMService    - Mock matching the LLMService surface that replaced
                       LLMInterface in #3185. Returns LLMResponse-shaped
@@ -18,23 +18,68 @@ Provides mock implementations of core components for tests and the
 - MockCommandValidator - Mock validator for command safety testing.
 - MockKnowledgeBase    - In-memory knowledge base for testing.
 - MockWorkerNode       - Mock NPU/worker node for distributed-flow tests.
+- ModuleStubRegistry   - Recording sys.modules stubber that restores the
+                         originals after import-time module loading (#11604).
 """
 
 from __future__ import annotations
 
+import sys
+import types
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
+
+if TYPE_CHECKING:
+    from unittest.mock import AsyncMock
+
+
+class ModuleStubRegistry:
+    """Install module stubs in ``sys.modules`` and restore originals afterwards.
+
+    Test modules that exec production files against lightweight module stubs
+    (the heartbeat-scheduler family) previously left those stubs in
+    ``sys.modules`` forever, shadowing the real modules for every test module
+    collected later in the same session (GH#11604).  This registry records the
+    original entry for each stubbed name; call :meth:`restore` once the
+    import-time load is done — the exec'd module keeps its bound references,
+    while later test modules import the real code again.
+    """
+
+    def __init__(self) -> None:
+        self._originals: Dict[str, types.ModuleType | None] = {}
+
+    def stub(self, name: str, **attrs: Any) -> types.ModuleType:
+        """Create a bare module with the given attributes and register it."""
+        mod = types.ModuleType(name)
+        for key, value in attrs.items():
+            setattr(mod, key, value)
+        return self.register(name, mod)
+
+    def register(self, name: str, module: types.ModuleType) -> types.ModuleType:
+        """Register an existing module object, recording the prior entry."""
+        self._originals.setdefault(name, sys.modules.get(name))
+        sys.modules[name] = module
+        return module
+
+    def restore(self) -> None:
+        """Put back every recorded original; drop names that did not exist."""
+        for name, original in self._originals.items():
+            if original is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = original
+        self._originals.clear()
 
 
 class MockLLMInterface:
-    """Mock for ``UnifiedLLMInterface`` (``llm_multi_provider.UnifiedLLMInterface``).
+    """Mock for ``LLMInterface`` (``llm_multi_provider.LLMInterface``).
 
-    Covers the full surface of ``UnifiedLLMInterface``: both the primary
+    Covers the full surface of ``LLMInterface``: both the primary
     ``chat_completion()`` method and the legacy ``generate_response()`` shim.
     New test code should prefer ``MockLLMService`` (which mocks the canonical
     ``LLMService.chat()`` surface); this class is retained for tests that
-    still exercise ``UnifiedLLMInterface`` directly.
+    still exercise ``LLMInterface`` directly.
     """
 
     def __init__(self, responses: Dict[str, str] | None = None):
@@ -60,20 +105,20 @@ class MockLLMInterface:
         messages: List[Dict[str, Any]],
         **kwargs: Any,
     ) -> Any:
-        """Mock primary method matching ``UnifiedLLMInterface.chat_completion``."""
+        """Mock primary method matching ``LLMInterface.chat_completion``."""
         prompt = messages[-1].get("content", "") if messages else ""
         self._call_count += 1
         self._call_history.append({"prompt": prompt, "kwargs": kwargs})
         return make_llm_response(content=self._pick_response(prompt))
 
     async def generate_response(self, prompt: str, **kwargs: Any) -> str:
-        """Legacy shim matching ``UnifiedLLMInterface.generate_response``."""
+        """Legacy shim matching ``LLMInterface.generate_response``."""
         self._call_count += 1
         self._call_history.append({"prompt": prompt, "kwargs": kwargs})
         return self._pick_response(prompt)
 
     async def initialize(self) -> None:
-        """No-op — matches ``UnifiedLLMInterface.initialize``."""
+        """No-op — matches ``LLMInterface.initialize``."""
 
     @property
     def call_count(self) -> int:
@@ -618,6 +663,7 @@ __all__ = [
     "MockCommandValidator",
     "MockKnowledgeBase",
     "MockWorkerNode",
+    "ModuleStubRegistry",
     "make_llm_response",
     "make_async_redis",
     "make_redis_pipeline",

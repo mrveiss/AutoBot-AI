@@ -28,7 +28,7 @@ describe('KnowledgeRepository verification endpoints (#5207 audit)', () => {
     postSpy = vi.fn()
     // @ts-expect-error - override inherited methods for unit test isolation
     repo.get = getSpy
-    // @ts-expect-error
+    // @ts-expect-error - override inherited methods for unit test isolation
     repo.post = postSpy
   })
 

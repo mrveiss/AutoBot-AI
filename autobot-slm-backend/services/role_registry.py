@@ -103,8 +103,25 @@ _BACKEND_ROLES = [
         "auto_restart": True,
         "health_check_port": 8443,
         "health_check_path": "/api/health",
+        # Install deps into the backend venv, then migrate. Mirrors the backend
+        # ansible role (#11117): strip only the editable autobot_shared, and
+        # rewrite the two sibling-relative includes to the canonical code_source
+        # path so pip can resolve them — `-c ../constraints/` (#10524 constraints)
+        # and `-r ../requirements.txt` (the ~23 root runtime deps: paramiko,
+        # asyncssh, pypdf, python-docx/pptx, openpyxl, …). Both siblings live in
+        # code_source but NOT next to the synced autobot-backend/, so stripping
+        # `-r` (as before) silently dropped those deps on deploy — #11135. A bare
+        # `pip install -r requirements.txt` would error on the unresolvable
+        # include and, via the && short-circuit, silently skip alembic (#11069).
         "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-backend && " "pip install -r requirements.txt && " "alembic upgrade head"
+            f"cd {_BASE_DIR}/autobot-backend && "
+            "grep -Ev '^-e.*autobot[-_]shared' requirements.txt "
+            f"| sed 's|^-c \\.\\./constraints/|-c {_BASE_DIR}/code_source/constraints/|;"
+            f" s|^-r \\.\\./requirements.txt|-r {_BASE_DIR}/code_source/requirements.txt|' "
+            "> /tmp/requirements-filtered-slm.txt && "
+            "PIP_USE_DEPRECATED=legacy-resolver PIP_DEFAULT_TIMEOUT=120 "
+            "venv/bin/pip install -r /tmp/requirements-filtered-slm.txt && "
+            "venv/bin/alembic upgrade head"
         ),
         "required": True,
         "degraded_without": [],
@@ -403,25 +420,25 @@ ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
 
 # Static dependency map: role -> infrastructure packages required.
 # Used by setup_wizard.py to compute node_dependencies for provisioning Phase 0.
-# Dependencies are Ansible role names: nginx, python312, nodejs, postgresql.
+# Dependencies are Ansible role names: nginx, python314, nodejs, postgresql.
 ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     # SLM roles
-    "slm-backend": ["python312", "nginx"],
+    "slm-backend": ["python314", "nginx"],
     "slm-frontend": ["nodejs", "nginx"],
     "slm-database": ["postgresql"],
     "slm-monitoring": [],
     # Service roles
-    "backend": ["python312", "nginx"],
-    "celery": ["python312"],
-    "scheduler": ["python312"],
+    "backend": ["python314", "nginx"],
+    "celery": ["python314"],
+    "scheduler": ["python314"],
     "frontend": ["nodejs", "nginx"],
     "redis": [],
     "postgres": ["postgresql"],
-    "ai-stack": ["python312"],
-    "chromadb": ["python312"],
+    "ai-stack": ["python314"],
+    "chromadb": ["python314"],
     "browser-service": ["nodejs"],
-    "npu-worker": ["python312"],
-    "tts-worker": ["python312"],
+    "npu-worker": ["python314"],
+    "tts-worker": ["python314"],
     "autobot-llm-cpu": [],
     "autobot-llm-gpu": [],
     "vnc": [],
@@ -430,17 +447,38 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
 
 
 async def seed_default_roles(db: AsyncSession) -> int:
-    """Seed default roles if they don't exist."""
+    """Seed default roles, upserting registry-owned fields on existing rows (#11132).
+
+    Previously insert-only, so any edit to ``DEFAULT_ROLES`` (post_sync_cmd,
+    source_paths, health checks, …) reached only a *fresh* DB — an already-seeded
+    SLM DB kept the stale values, silently reverting historical registry fixes
+    (e.g. #11069's post_sync_cmd correction stayed broken). Now every field the
+    registry defines for a role is refreshed on the existing row when it differs;
+    DB-managed columns (``id``/``created_at``) and any column a role doesn't define
+    are left untouched, so operator-set fields outside the registry are preserved.
+
+    Returns the number of roles *created* (new rows), preserving the prior contract.
+    """
     created = 0
+    updated = 0
     for role_data in DEFAULT_ROLES:
         result = await db.execute(select(Role).where(Role.name == role_data["name"]))
-        if not result.scalar_one_or_none():
-            role = Role(**role_data)
-            db.add(role)
+        role = result.scalar_one_or_none()
+        if role is None:
+            db.add(Role(**role_data))
             created += 1
             logger.info("Created default role: %s", role_data["name"])
+            continue
+        # Refresh only the registry-owned fields this role defines, and only when a
+        # value actually changed (avoids spurious updated_at churn).
+        changed = [f for f, v in role_data.items() if getattr(role, f) != v]
+        if changed:
+            for field in changed:
+                setattr(role, field, role_data[field])
+            updated += 1
+            logger.info("Synced default role %s from registry (fields: %s)", role_data["name"], ", ".join(changed))
 
-    if created > 0:
+    if created or updated:
         await db.commit()
 
     return created

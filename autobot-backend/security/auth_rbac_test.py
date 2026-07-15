@@ -189,21 +189,14 @@ class TestRequirePermissionDecorator:
         request.url.path = "/api/test"
         return request
 
-    @patch("user_management.config.get_deployment_config")
-    def test_single_user_mode_bypass(self, mock_config):
-        """Should bypass permission check in single-user mode."""
-        from user_management.config import DeploymentMode
-
-        mock_deployment = Mock()
-        mock_deployment.mode = DeploymentMode.SINGLE_USER
-        mock_config.return_value = mock_deployment
-
+    @patch("auth_rbac.get_auth_middleware")
+    def test_unauthenticated_request_denied(self, mock_mw):
+        """No authenticated user → the decorator raises (full auth always required)."""
+        mock_mw.return_value.get_user_from_request.return_value = None
         request = self._create_mock_request()
         dependency = require_permission(Permission.ADMIN_SYSTEM)
-
-        # In single user mode, should return True
-        result = dependency(request)
-        assert result is True
+        with pytest.raises(Exception):
+            dependency(request)
 
 
 class TestRequireRoleDecorator:
@@ -219,21 +212,14 @@ class TestRequireRoleDecorator:
         request.url.path = "/api/test"
         return request
 
-    @patch("user_management.config.get_deployment_config")
-    def test_single_user_mode_bypass(self, mock_config):
-        """Should bypass role check in single-user mode."""
-        from user_management.config import DeploymentMode
-
-        mock_deployment = Mock()
-        mock_deployment.mode = DeploymentMode.SINGLE_USER
-        mock_config.return_value = mock_deployment
-
+    @patch("auth_rbac.get_auth_middleware")
+    def test_unauthenticated_request_denied(self, mock_mw):
+        """No authenticated user → the decorator raises (full auth always required)."""
+        mock_mw.return_value.get_user_from_request.return_value = None
         request = self._create_mock_request()
         dependency = require_role(Role.ADMIN)
-
-        # In single user mode, should return True
-        result = dependency(request)
-        assert result is True
+        with pytest.raises(Exception):
+            dependency(request)
 
 
 class TestRequireAnyPermission:
@@ -249,21 +235,14 @@ class TestRequireAnyPermission:
         request.url.path = "/api/test"
         return request
 
-    @patch("user_management.config.get_deployment_config")
-    def test_single_user_mode_bypass(self, mock_config):
-        """Should bypass permission check in single-user mode."""
-        from user_management.config import DeploymentMode
-
-        mock_deployment = Mock()
-        mock_deployment.mode = DeploymentMode.SINGLE_USER
-        mock_config.return_value = mock_deployment
-
+    @patch("auth_rbac.get_auth_middleware")
+    def test_unauthenticated_request_denied(self, mock_mw):
+        """No authenticated user → the decorator raises (full auth always required)."""
+        mock_mw.return_value.get_user_from_request.return_value = None
         request = self._create_mock_request()
         dependency = require_any_permission(Permission.ANALYTICS_VIEW, Permission.ADMIN_SYSTEM)
-
-        # In single user mode, should return True
-        result = dependency(request)
-        assert result is True
+        with pytest.raises(Exception):
+            dependency(request)
 
 
 class TestPermissionIntegration:

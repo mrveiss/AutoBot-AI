@@ -272,6 +272,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
@@ -289,13 +290,10 @@ import { useOverseerAgent } from '@/composables/useOverseerAgent'
 // GH#9062: migrated from useGlobalWebSocket — context events flow through
 // LiveEventManager (global channel), so useEventBus is the correct subscriber
 import { useEventBus } from '@/composables/useEventBus'
-import ApiClient from '@/utils/ApiClient'
 import batchApiService from '@/services/BatchApiService'
 // MIGRATED: Using AppConfig.js for better configuration management
 import appConfig from '@/config/AppConfig.js'
 import { getApiBase } from '@/config/ssot-config'
-// FIXED: Import NetworkConstants for IP fallback values
-import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('ChatInterface')
@@ -326,8 +324,28 @@ import { useContextWindow } from '@/composables/chat/useContextWindow'
 // GH#9043: context overflow protection — auto-summarize on overflow
 import { useContextOverflowProtection } from '@/composables/chat/useContextOverflowProtection'
 
+// Chat context passed to KnowledgePersistenceDialog (mirrors its chatContext prop).
+interface KnowledgeChatContext {
+  topic?: string
+  keywords?: string[]
+  file_count?: number
+}
+
+// Payload of context_warning / context_compressed live events (GH#8990/#9043).
+interface ContextWindowEventPayload {
+  usage_percent?: number
+}
+
+// TOOL_CALL detected from chat messages and forwarded from ChatTabContent.
+interface DetectedToolCall {
+  command: string
+  purpose: string
+  terminal_session_id?: string | null
+}
+
 // i18n
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 // Router — tab routes (#6415)
 const route = useRoute()
@@ -361,7 +379,7 @@ const contextWindowProps = computed(() => ({
 }))
 
 // GH#9043: context overflow protection — auto-summarize when approaching limit
-const { isProtectionActive, isSummarizing } = useContextOverflowProtection({
+const { isProtectionActive: _isProtectionActive, isSummarizing } = useContextOverflowProtection({
   sessionId: computed(() => store.currentSessionId),
   messages: computed(() => store.currentSession?.messages ?? []),
   modelName: computed(() => store.settings.model),
@@ -401,7 +419,7 @@ const _stopCountdown = (): void => {
   }
 }
 
-const _startCountdown = (timeoutSeconds: number, deadlineTs?: number): void => {
+const _startCountdown = (timeoutSeconds: number, _deadlineTs?: number): void => {
   _stopCountdown()
   toolApprovalSecondsLeft.value = timeoutSeconds
   _countdownInterval = setInterval(() => {
@@ -462,7 +480,7 @@ const onToolDenied = async (comment?: string): Promise<void> => {
 // Voice output (#928)
 const {
   voiceOutputEnabled, isSpeaking, toggleVoiceOutput,
-  speak, speakStreaming, flushStreaming,
+  speak: _speak, speakStreaming, flushStreaming,
 } = useVoiceOutput()
 
 // Voice conversation (#1029)
@@ -499,7 +517,7 @@ const contextWarningShown = ref(false)
 // Listen for context_warning events (80% threshold)
 subscribe('global', (event) => {
   if (event.event_type === 'context_warning') {
-    const data = event.payload as any
+    const data = event.payload as ContextWindowEventPayload
     logger.debug('[ContextWindow] Warning event received:', data)
 
     // Only show toast if mode is 'auto' or 'warn', and not already shown
@@ -512,7 +530,7 @@ subscribe('global', (event) => {
       contextWarningShown.value = true
     }
   } else if (event.event_type === 'context_compressed') {
-    const data = event.payload as any
+    const data = event.payload as ContextWindowEventPayload
     logger.info('[ContextWindow] Context compressed:', data)
 
     // Reset warning flag so next session can show it again
@@ -544,7 +562,7 @@ const showMobileSidebar = ref(false)
 const showChatSettings = ref(false)
 
 // Dialog data
-const currentChatContext = ref<any>(null)
+const currentChatContext = ref<KnowledgeChatContext | null>(null)
 const pendingCommand = ref({
   command: '',
   purpose: '',
@@ -623,7 +641,7 @@ provide('submitOverseerQuery', submitOverseerQuery)
 
 // Connection state with stabilized status management.
 // #6773: backend-health is now sourced from `appStore.backendStatus`, which is
-// driven by `OptimizedHealthMonitor` (the canonical /api/system/health poller
+// driven by `HealthMonitor` (the canonical /api/system/health poller
 // wired in App.vue). Removed the local 60 s heartbeat poller that previously
 // also hit /api/system/health, eliminating duplicate polling.
 const baseConnectionStatus = ref(t('status.connected'))
@@ -739,7 +757,7 @@ const exportSession = async () => {
 const clearSession = async () => {
   if (!store.currentSessionId) return
 
-  if (confirm(t('chat.interface.confirmClear'))) {
+  if (await confirm({ title: t('common.confirm'), message: t('chat.interface.confirmClear') })) {
     try {
       await controller.resetCurrentChat()
     } catch (error) {
@@ -754,29 +772,36 @@ const handleTabChange = (tabKey: string) => {
   logger.debug('Tab change requested:', tabKey)
   activeTab.value = tabKey
   const routeName = tabKey === 'chat' ? 'chat-default' : `chat-${tabKey}`
-  router.push({ name: routeName }).catch(() => {})
+  // Vue Router throws synchronously (not via the returned promise) when the
+  // named route isn't registered, so `.catch()` can't swallow it — guard with
+  // hasRoute() before navigating so an unmapped tab can't raise a console error.
+  if (router.hasRoute(routeName)) {
+    router.push({ name: routeName }).catch(() => {})
+  } else {
+    logger.debug(`No route registered for tab "${tabKey}" (${routeName}); skipping URL sync`)
+  }
   logger.debug('Active tab changed to:', activeTab.value)
 }
 
 // Terminal tab handler for explicit new tab opening (not used for tab clicks)
-const openTerminalInNewTab = () => {
+const _openTerminalInNewTab = () => {
   // Open terminal in a new browser tab by navigating to tools/terminal
   window.open('/tools/terminal', '_blank')
 }
 
 // Dialog handlers
-const onKnowledgeDecisionsApplied = (decisions: any) => {
+const onKnowledgeDecisionsApplied = (decisions: unknown) => {
   logger.debug('Knowledge decisions applied:', decisions)
   // Handle knowledge persistence decisions
 }
 
-const onChatCompiled = (compiledData: any) => {
+const onChatCompiled = (compiledData: unknown) => {
   logger.debug('Chat compiled:', compiledData)
   // Handle compiled chat data
 }
 
 // Handle TOOL_CALL detection from chat messages
-const handleToolCallDetected = async (toolCall: any) => {
+const handleToolCallDetected = async (toolCall: DetectedToolCall) => {
   logger.debug('TOOL_CALL detected, showing approval dialog:', toolCall)
 
   // Assess risk level (simple heuristics for now)
@@ -871,7 +896,7 @@ const handleVisionSendToChat = (payload: {
   })
 }
 
-const onCommandApproved = async (commandData: any) => {
+const onCommandApproved = async (commandData: { command: string; result: unknown; rememberChoice: boolean }) => {
   logger.debug('Command approved:', commandData)
 
   // IMPORTANT: The backend is already waiting for approval and will execute automatically.
@@ -894,7 +919,7 @@ const onCommandDenied = ({ reason }: { command: string; reason: string }) => {
   // Handle command denial
 }
 
-const onCommandCommented = async (commentData: any) => {
+const onCommandCommented = async (commentData: { command: string; comment: string; response: unknown }) => {
   logger.debug('Command commented:', commentData)
 
   try {
@@ -919,7 +944,7 @@ const onCommandCommented = async (commentData: any) => {
         throw new Error(`Server returned ${response.status}`)
       }
 
-      const result = await response.json()
+      await response.json()
 
       logger.debug('Command denied with user feedback/alternative approach')
       notify(t('chat.interface.feedbackSent'), 'success')
@@ -937,9 +962,9 @@ const onCommandCommented = async (commentData: any) => {
 }
 
 // #6773: connection state is mirrored from `appStore.backendStatus`, which
-// `OptimizedHealthMonitor` updates from /api/system/health. Replaces the
+// `HealthMonitor` updates from /api/system/health. Replaces the
 // previous 60 s `appConfig.validateConnection()` poller — that poller was
-// hitting the same endpoint as `OptimizedHealthMonitor`, producing duplicate
+// hitting the same endpoint as `HealthMonitor`, producing duplicate
 // /api/system/health requests per polling interval.
 const syncConnectionFromStore = (): void => {
   const cls = appStore.backendStatus.class
@@ -952,7 +977,7 @@ const syncConnectionFromStore = (): void => {
     : t('status.disconnected')
 }
 
-// React to OptimizedHealthMonitor → appStore updates immediately.
+// React to HealthMonitor → appStore updates immediately.
 watch(() => appStore.backendStatus.class, syncConnectionFromStore, { immediate: false })
 
 // #6746: autosave poller deleted. Backend now persists every chat message
@@ -1113,7 +1138,7 @@ onMounted(async () => {
   await loadNovncUrl()
 
   // #6773: connection state mirrors appStore.backendStatus (driven by
-  // OptimizedHealthMonitor). Seed once from current store state so initial
+  // HealthMonitor). Seed once from current store state so initial
   // render reflects the latest known status without an extra fetch.
   syncConnectionFromStore()
   // #6746: autosave removed; backend persists messages directly
@@ -1247,7 +1272,7 @@ watch(
     }
     return null
   },
-  (current, previous) => {
+  (current, _previous) => {
     if (!voiceOutputEnabled.value || voiceConversation.isActive.value) return
     if (!current) return
 
@@ -1411,9 +1436,9 @@ function _extractCompleteSentences(text: string): string[] {
 .tool-approval-btn { @apply flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors; }
 .tool-approval-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .tool-approval-btn--deny { background: var(--color-error-bg); color: var(--color-error); border: 1px solid var(--color-error-border); }
-.tool-approval-btn--deny:hover:not(:disabled) { background: var(--color-error); color: #fff; }
+.tool-approval-btn--deny:hover:not(:disabled) { background: var(--color-error); color: var(--text-on-error); }
 .tool-approval-btn--approve { background: var(--color-success-bg); color: var(--color-success); border: 1px solid var(--color-success-border); }
-.tool-approval-btn--approve:hover:not(:disabled) { background: var(--color-success); color: #fff; }
+.tool-approval-btn--approve:hover:not(:disabled) { background: var(--color-success); color: var(--text-on-success); }
 /* Issue #4960: countdown timer */
 .tool-approval-countdown { @apply flex flex-col gap-1 pt-1; }
 .tool-approval-countdown-bar-track { @apply w-full rounded-full overflow-hidden; height: 4px; background: var(--bg-tertiary); }

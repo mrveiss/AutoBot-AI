@@ -420,7 +420,7 @@ interface OwnershipAnalysisResult {
   metrics: OwnershipMetrics
 }
 
-const props = defineProps<{
+defineProps<{
   analysis: OwnershipAnalysisResult | null
   loading: boolean
   error: string | null

@@ -158,7 +158,7 @@ ui:
 ```yaml
 developer:
   enabled: false                          # Enable developer mode
-  enhanced_errors: true                   # Show detailed error messages
+  detailed_errors: true                   # Show detailed error messages
   endpoint_suggestions: true              # Suggest similar endpoints on 404
   debug_logging: false                    # Enable debug logging
 ```
@@ -405,7 +405,7 @@ ui:
 
 developer:
   enabled: true
-  enhanced_errors: true
+  detailed_errors: true
   debug_logging: true
 
 logging:

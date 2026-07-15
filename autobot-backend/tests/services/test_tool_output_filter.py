@@ -16,6 +16,7 @@ from services.tool_output_filter import (
     _strip_ansi,
     _tail_lines,
     apply_no_op_detection,
+    cap_unmatched_output,
     classify_tool,
     condense_unified_diff,
     filter_markdown_body,
@@ -729,3 +730,67 @@ def test_filter_savings_not_inflated_by_tee_hint(tmp_path, monkeypatch):
         orig_len, filt_len = saved_args[0]
         # filt_len must NOT include "[full output saved: ...]" line
         assert "[full output saved:" not in result[:filt_len] or filt_len < len(result)
+
+
+# ---------------------------------------------------------------------------
+# cap_unmatched_output — terminal hard-size cap (#11543)
+# ---------------------------------------------------------------------------
+
+
+def test_cap_unmatched_output_under_cap_untouched():
+    pass
+
+    small_output = "just a normal short unmatched output\n"
+    result = cap_unmatched_output("some-unknown-tool", small_output, exit_code=0)
+    assert result == small_output
+
+
+def test_cap_unmatched_output_multi_mb_is_truncated(tmp_path, monkeypatch):
+    import services.tool_output_filter as mod
+
+    monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
+    huge_output = "x" * (3 * 1024 * 1024)  # 3 MB
+
+    result = cap_unmatched_output("totally-unknown-tool-xyz", huge_output, exit_code=0)
+
+    assert len(result) < len(huge_output)
+    assert "chars omitted" in result
+
+
+def test_cap_unmatched_output_hint_points_at_real_teed_file(tmp_path, monkeypatch):
+    import services.tool_output_filter as mod
+
+    monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
+    huge_output = "y" * (mod._MAX_UNMATCHED_OUTPUT_CHARS * 3)
+
+    result = cap_unmatched_output("another-unknown-tool", huge_output, exit_code=0)
+
+    saved_files = list(tmp_path.glob("*.txt"))
+    assert len(saved_files) == 1
+    assert saved_files[0].read_text(encoding="utf-8") == huge_output
+    assert str(saved_files[0]) in result
+
+
+def test_filter_wires_unmatched_output_through_cap(tmp_path, monkeypatch):
+    import services.tool_output_filter as mod
+
+    monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
+    f = _make_filter({})  # no rules → _match_rule always returns None
+    huge_output = "z" * (mod._MAX_UNMATCHED_OUTPUT_CHARS * 3)
+
+    result = f.filter("totally-unmatched-command --xyz", huge_output, exit_code=0)
+
+    assert len(result) < len(huge_output)
+    assert "chars omitted" in result
+    assert "full output saved" in result
+
+
+def test_filter_matched_rule_output_unaffected_by_cap(tmp_path, monkeypatch):
+    """Existing rule-based filters (below the cap) must be unaffected."""
+    import services.tool_output_filter as mod
+
+    monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
+    f = _make_filter({"r": {"match_command": "^cmd", "max_lines": 3}})
+    result = f.filter("cmd", "\n".join(str(i) for i in range(10)))
+    assert "7\n8\n9" in result
+    assert "7 lines omitted" in result

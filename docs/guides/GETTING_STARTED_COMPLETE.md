@@ -63,7 +63,7 @@ Regardless of your role, get AutoBot running in 5 minutes:
 ### **Prerequisites**
 - Linux/WSL2 environment
 - Docker and Docker Compose
-- Python 3.12+
+- Python 3.14+
 - 16GB+ RAM recommended
 
 ### **Installation**

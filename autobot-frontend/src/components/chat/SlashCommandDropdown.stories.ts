@@ -18,8 +18,8 @@ const meta = {
 } as Meta<typeof SlashCommandDropdown>
 
 export default meta
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>
 
 const samplePresets = [
   { id: '1', name: 'standup', description: 'Daily standup summary', content: 'Give me a standup summary...', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },

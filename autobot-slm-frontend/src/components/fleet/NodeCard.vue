@@ -11,6 +11,7 @@
  */
 
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { SLMNode } from '@/types/slm'
 import { useFleetStore } from '@/stores/fleet'
 
@@ -22,6 +23,7 @@ const emit = defineEmits<{
   (e: 'action', action: string, nodeId: string): void
 }>()
 
+const { t } = useI18n()
 const fleetStore = useFleetStore()
 const showMenu = ref(false)
 
@@ -47,17 +49,17 @@ const statusText = computed(() => {
 
 const lastSeen = computed(() => {
   // Issue #989: online nodes are actively connected — last_heartbeat can be stale
-  if (props.node.status === 'online') return 'Just now'
-  if (!props.node.health?.last_heartbeat) return 'Never'
+  if (props.node.status === 'online') return t('fleet.nodeCard.justNow')
+  if (!props.node.health?.last_heartbeat) return t('fleet.nodeCard.never')
   const date = new Date(props.node.health.last_heartbeat)
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
   const diffSec = Math.floor(diffMs / 1000)
-  if (diffSec < 60) return `${diffSec}s ago`
+  if (diffSec < 60) return t('fleet.nodeCard.secondsAgo', { seconds: diffSec })
   const diffMin = Math.floor(diffSec / 60)
-  if (diffMin < 60) return `${diffMin}m ago`
+  if (diffMin < 60) return t('fleet.nodeCard.minutesAgo', { minutes: diffMin })
   const diffHr = Math.floor(diffMin / 60)
-  return `${diffHr}h ago`
+  return t('fleet.nodeCard.hoursAgo', { hours: diffHr })
 })
 
 const canEnroll = computed(() => {
@@ -76,11 +78,11 @@ const authMethodBadge = computed(() => {
   const method = props.node.auth_method || 'password'
   switch (method) {
     case 'key':
-      return { label: 'SSH Key', class: 'bg-green-100 text-green-700' }
+      return { label: t('fleet.nodeCard.authMethodKey'), class: 'bg-green-100 text-green-700' }
     case 'pki':
-      return { label: 'PKI', class: 'bg-blue-100 text-blue-700' }
+      return { label: t('fleet.nodeCard.authMethodPki'), class: 'bg-blue-100 text-blue-700' }
     default:
-      return { label: 'Password', class: 'bg-yellow-100 text-yellow-700' }
+      return { label: t('fleet.nodeCard.authMethodPassword'), class: 'bg-yellow-100 text-yellow-700' }
   }
 })
 
@@ -129,7 +131,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
   <div
     :class="['card p-4 hover:shadow-md transition-shadow relative', isDecommissioned ? 'opacity-60 border-dashed' : '']"
     role="listitem"
-    :aria-label="`Node ${node.hostname}, status: ${statusText}`"
+    :aria-label="$t('fleet.nodeCard.nodeStatusAria', { hostname: node.hostname, status: statusText })"
     @mouseleave="closeMenu"
   >
     <!-- Header -->
@@ -138,7 +140,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
         <div
           :class="['w-3 h-3 rounded-full shrink-0', statusClass]"
           role="img"
-          :aria-label="`Status: ${statusText}`"
+          :aria-label="$t('fleet.nodeCard.statusAria', { status: statusText })"
         ></div>
         <span class="font-medium text-gray-900 truncate">{{ node.hostname }}</span>
       </div>
@@ -149,7 +151,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
           <button
             @click.stop="toggleMenu"
             class="p-1 text-gray-400 hover:text-gray-600 transition-colors rounded-sm hover:bg-gray-100"
-            :aria-label="`Actions for ${node.hostname}`"
+            :aria-label="$t('fleet.nodeCard.actionsForNodeAria', { hostname: node.hostname })"
             :aria-expanded="showMenu"
             aria-haspopup="true"
           >
@@ -162,7 +164,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
             v-if="showMenu"
             class="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
             role="menu"
-            :aria-label="`Actions for ${node.hostname}`"
+            :aria-label="$t('fleet.nodeCard.actionsForNodeAria', { hostname: node.hostname })"
             @keydown="handleMenuKeydown"
           >
             <button @click="handleAction('edit')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
@@ -181,7 +183,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              {{ isEnrolling ? 'Enrolling...' : 'Enroll Node' }}
+              {{ isEnrolling ? $t('fleet.nodeCard.enrolling') : $t('fleet.nodeCard.enrollNode') }}
             </button>
             <button @click="handleAction('test')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -250,7 +252,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
       </div>
       <span
         :class="['px-2 py-0.5 text-xs font-medium rounded-sm', authMethodBadge.class]"
-        :title="`Authentication: ${authMethodBadge.label}`"
+        :title="$t('fleet.nodeCard.authenticationAria', { method: authMethodBadge.label })"
       >
         {{ authMethodBadge.label }}
       </span>
@@ -261,7 +263,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
       v-if="isEnrolling"
       class="flex items-center gap-2 px-2 py-1.5 mb-3 bg-blue-50 border border-blue-200 rounded-sm text-xs text-blue-700"
       role="status"
-      aria-label="Node is being enrolled"
+      :aria-label="$t('fleet.nodeCard.nodeIsBeingEnrolledAria')"
     >
       <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -271,7 +273,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
     </div>
 
     <!-- Roles -->
-    <div class="flex flex-wrap gap-1 mb-3" aria-label="Assigned roles">
+    <div class="flex flex-wrap gap-1 mb-3" :aria-label="$t('fleet.nodeCard.assignedRolesAria')">
       <span
         v-for="role in node.roles"
         :key="role"
@@ -288,12 +290,12 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
     <div v-if="a2aSkillCount !== null" class="flex items-center gap-1.5 mb-2">
       <span
         class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-sm bg-indigo-50 text-indigo-700 border border-indigo-200"
-        :title="`A2A Agent Card: ${a2aSkillCount} skill${a2aSkillCount !== 1 ? 's' : ''}`"
+        :title="$t('fleet.nodeCard.a2aAgentCardAria', { count: a2aSkillCount, plural: a2aSkillCount !== 1 ? 's' : '' })"
       >
         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
-        A2A · {{ a2aSkillCount }} skill{{ a2aSkillCount !== 1 ? 's' : '' }}
+        {{ $t('fleet.nodeCard.a2aAgentCardBadge', { count: a2aSkillCount, plural: a2aSkillCount !== 1 ? 's' : '' }) }}
       </span>
     </div>
 
@@ -301,25 +303,25 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
     <div v-if="hasUpdates" class="flex items-center gap-2 mb-3">
       <button
         @click="handleAction('updates')"
-        :aria-label="`${updateSummary?.total_updates} updates available for ${node.hostname}`"
+        :aria-label="$t('fleet.nodeCard.updatesAvailableForNodeAria', { count: updateSummary?.total_updates, hostname: node.hostname })"
         class="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors w-full"
       >
         <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
         </svg>
         <span v-if="updateSummary?.system_updates" class="whitespace-nowrap">
-          {{ updateSummary.system_updates }} pkg{{ updateSummary.system_updates !== 1 ? 's' : '' }}
+          {{ $t('fleet.nodeCard.packagesCount', { count: updateSummary.system_updates, plural: updateSummary.system_updates !== 1 ? 's' : '' }) }}
         </span>
         <span v-if="updateSummary?.system_updates && updateSummary?.code_update_available" class="text-amber-400" aria-hidden="true">+</span>
-        <span v-if="updateSummary?.code_update_available" class="whitespace-nowrap">code</span>
+        <span v-if="updateSummary?.code_update_available" class="whitespace-nowrap">{{ $t('fleet.nodeCard.codeUpdateLabel') }}</span>
       </button>
     </div>
 
     <!-- Health Metrics (Issue #754: progressbar roles) -->
-    <div v-if="node.health" class="space-y-2 mb-3" aria-label="Health metrics">
+    <div v-if="node.health" class="space-y-2 mb-3" :aria-label="$t('fleet.nodeCard.healthMetricsAria')">
       <!-- CPU -->
       <div class="flex items-center gap-2 text-xs">
-        <span class="w-12 text-gray-500" :id="`cpu-label-${node.node_id}`">CPU</span>
+        <span class="w-12 text-gray-500" :id="`cpu-label-${node.node_id}`">{{ $t('fleet.nodeCard.cpu') }}</span>
         <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.cpu_percent" aria-valuemin="0" aria-valuemax="100" :aria-labelledby="`cpu-label-${node.node_id}`">
           <div
             :class="['h-full rounded-full transition-all', node.health.cpu_percent > 80 ? 'bg-red-500' : node.health.cpu_percent > 60 ? 'bg-yellow-500' : 'bg-green-500']"
@@ -331,7 +333,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
 
       <!-- Memory -->
       <div class="flex items-center gap-2 text-xs">
-        <span class="w-12 text-gray-500" :id="`mem-label-${node.node_id}`">MEM</span>
+        <span class="w-12 text-gray-500" :id="`mem-label-${node.node_id}`">{{ $t('fleet.nodeCard.memory') }}</span>
         <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.memory_percent" aria-valuemin="0" aria-valuemax="100" :aria-labelledby="`mem-label-${node.node_id}`">
           <div
             :class="['h-full rounded-full transition-all', node.health.memory_percent > 80 ? 'bg-red-500' : node.health.memory_percent > 60 ? 'bg-yellow-500' : 'bg-green-500']"
@@ -343,7 +345,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
 
       <!-- Disk -->
       <div class="flex items-center gap-2 text-xs">
-        <span class="w-12 text-gray-500" :id="`disk-label-${node.node_id}`">DISK</span>
+        <span class="w-12 text-gray-500" :id="`disk-label-${node.node_id}`">{{ $t('fleet.nodeCard.disk') }}</span>
         <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.disk_percent" aria-valuemin="0" aria-valuemax="100" :aria-labelledby="`disk-label-${node.node_id}`">
           <div
             :class="['h-full rounded-full transition-all', node.health.disk_percent > 80 ? 'bg-red-500' : node.health.disk_percent > 60 ? 'bg-yellow-500' : 'bg-green-500']"
@@ -363,7 +365,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
     <div
       v-if="serviceSummary && serviceSummary.total > 0"
       class="flex items-center gap-2 mb-3 text-xs"
-      aria-label="Service health summary"
+      :aria-label="$t('fleet.nodeCard.serviceHealthSummaryAria')"
     >
       <span class="text-gray-500">{{ $t('fleet.nodeCard.services1') }}</span>
       <span v-if="serviceSummary.running > 0" class="inline-flex items-center gap-1 text-green-600">
@@ -379,12 +381,12 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
 
     <!-- Footer -->
     <div class="flex items-center justify-between pt-3 border-t border-gray-100">
-      <span class="text-xs text-gray-400">Last seen: {{ lastSeen }}</span>
+      <span class="text-xs text-gray-400">{{ $t('fleet.nodeCard.lastSeen', { time: lastSeen }) }}</span>
       <div class="flex gap-1">
         <button
           @click="handleAction('view')"
           class="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors rounded-sm"
-          :aria-label="`View details for ${node.hostname}`"
+          :aria-label="$t('fleet.nodeCard.viewDetailsForNodeAria', { hostname: node.hostname })"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -394,7 +396,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
         <button
           @click="handleAction('restart')"
           class="p-1.5 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 transition-colors rounded-sm"
-          :aria-label="`Restart ${node.hostname}`"
+          :aria-label="$t('fleet.nodeCard.restartNodeAria', { hostname: node.hostname })"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

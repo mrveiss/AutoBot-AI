@@ -148,7 +148,7 @@ interface Props {
   filter?: OperationsFilter
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   loading: false,
   selectedId: null,
   emptyMessage: undefined,

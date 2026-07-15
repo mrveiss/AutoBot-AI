@@ -98,7 +98,9 @@ class ManifestPort(BaseModel):
 class ManifestHealth(BaseModel):
     """Health check configuration."""
 
-    endpoint: str = Field(description="Full health URL (e.g. https://localhost:8443/api/health)")
+    endpoint: str = Field(
+        description="Full health URL (e.g. https://localhost:8443/api/health)"  # canonical: ignore py-hardcoded-url
+    )
     interval: str = Field(default="30s")
     timeout: str = Field(default="10s")
     retries: int = Field(default=3)

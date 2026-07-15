@@ -116,21 +116,16 @@ class TestRequestApproval:
         loop = _make_loop()
         approval_id = "appr-001"
 
-        # Simulate an APPROVAL_RESPONSE event that matches
+        # Simulate an APPROVAL_RESPONSE event that matches. _request_approval uses
+        # event_stream.subscribe() (async generator), not get_latest() polling.
         resp_event = MagicMock()
         resp_event.event_type = EventType.APPROVAL_RESPONSE
         resp_event.content = {"approval_id": approval_id, "approved": True}
 
-        call_count = 0
+        async def mock_subscribe(**kwargs):
+            yield resp_event
 
-        async def mock_get_latest(**kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count >= 2:
-                return [resp_event]
-            return []
-
-        loop.event_stream.get_latest = mock_get_latest
+        loop.event_stream.subscribe = mock_subscribe
 
         result = await loop._request_approval(_make_tool("bash"), approval_id)
         assert result is True
@@ -170,16 +165,12 @@ class TestRequestApproval:
         matching.event_type = EventType.APPROVAL_RESPONSE
         matching.content = {"approval_id": approval_id, "approved": True}
 
-        call_count = 0
+        async def mock_subscribe(**kwargs):
+            # The unrelated approval_id must be skipped; the matching one resolves.
+            yield unrelated
+            yield matching
 
-        async def mock_get_latest(**kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return [unrelated]
-            return [matching]
-
-        loop.event_stream.get_latest = mock_get_latest
+        loop.event_stream.subscribe = mock_subscribe
         result = await loop._request_approval(_make_tool("bash"), approval_id)
         assert result is True
 

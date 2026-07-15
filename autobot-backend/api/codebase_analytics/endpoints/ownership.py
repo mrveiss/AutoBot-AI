@@ -22,6 +22,8 @@ from fastapi.responses import JSONResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
+from .shared import resolve_project_root
+
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/ownership", tags=["ownership"])
@@ -69,8 +71,8 @@ def _get_ownership_analyzer():
 
 
 def _get_project_root() -> str:
-    """Get project root path (4 levels up from this file)."""
-    return str(Path(__file__).resolve().parents[4])
+    """Get project root path — delegates to shared resolver (#10730)."""
+    return resolve_project_root()
 
 
 def _validate_path_security(path: str, project_root: str) -> JSONResponse | None:

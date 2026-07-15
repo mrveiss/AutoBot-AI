@@ -113,6 +113,64 @@
   --color-agent-draft-border: #60A5FA;
   --color-agent-draft-bg: #1E3A5F;
   --color-user-edit-cursor: #34D399;
+
+  /* ============================================
+   * LLC CATEGORICAL BADGE PALETTE — GH#10868
+   * Dark-surface variants: deep desaturated backgrounds with light
+   * same-hue foregrounds (WCAG AA), preserving each category's hue.
+   * ============================================ */
+
+  /* Work-item type */
+  --badge-type-epic-bg: #362b6b;      --badge-type-epic-fg: #d6ccff;   /* violet */
+  --badge-type-feature-bg: #1e365f;   --badge-type-feature-fg: #bfd7ff; /* blue */
+  --badge-type-pbi-bg: #123b2c;       --badge-type-pbi-fg: #a7ecc9;    /* green */
+  --badge-type-task-bg: #0e3a52;      --badge-type-task-fg: #b3e2f7;   /* cyan */
+  --badge-type-bug-bg: #4a1d1d;       --badge-type-bug-fg: #ffc4c4;    /* red */
+  --badge-type-spike-bg: #4a3411;     --badge-type-spike-fg: #fbdf9b;  /* amber */
+  --badge-type-subtask-bg: #2f3742;   --badge-type-subtask-fg: #cdd6e2; /* slate */
+  --badge-type-risk-bg: #4a1f38;      --badge-type-risk-fg: #f9c0dd;   /* pink */
+
+  /* Work-item status */
+  --badge-status-backlog-bg: #2f3742;     --badge-status-backlog-fg: #cdd6e2;
+  --badge-status-ready-bg: #0e3a52;       --badge-status-ready-fg: #b3e2f7;
+  --badge-status-in_progress-bg: #362b6b; --badge-status-in_progress-fg: #d6ccff;
+  --badge-status-in_review-bg: #4a3d11;   --badge-status-in_review-fg: #f5e39b;
+  --badge-status-done-bg: #123b2c;        --badge-status-done-fg: #a7ecc9;
+  --badge-status-blocked-bg: #4a1d1d;     --badge-status-blocked-fg: #ffc4c4;
+  --badge-status-cancelled-bg: #2f3742;   --badge-status-cancelled-fg: #9aa5b3;
+
+  /* Work-item priority pill */
+  --badge-priority-critical-bg: #4a1d1d;  --badge-priority-critical-fg: #ffc4c4;
+  --badge-priority-high-bg: #4a2c11;      --badge-priority-high-fg: #ffcea1;
+  --badge-priority-medium-bg: #4a3d11;    --badge-priority-medium-fg: #f5e39b;
+  --badge-priority-low-bg: #163a1f;       --badge-priority-low-fg: #aeeabb;
+
+  /* Priority dot (solid fill indicators) — brighten for dark surface */
+  --badge-dot-critical: #f87171;
+  --badge-dot-high: #fb923c;
+  --badge-dot-medium: #facc15;
+  --badge-dot-low: #4ade80;
+
+  /* Approval request type (ApprovalsInbox) */
+  --badge-approval-budget_increase-bg: #4a3411; --badge-approval-budget_increase-fg: #fbdf9b;
+  --badge-approval-agent_spawn-bg: #362b6b;     --badge-approval-agent_spawn-fg: #d6ccff;
+  --badge-approval-external_api-bg: #1e365f;    --badge-approval-external_api-fg: #bfd7ff;
+  --badge-approval-code_deploy-bg: #4a1d1d;     --badge-approval-code_deploy-fg: #ffc4c4;
+  --badge-approval-data_access-bg: #123b2c;     --badge-approval-data_access-fg: #a7ecc9;
+  --badge-approval-policy_change-bg: #4a1f38;   --badge-approval-policy_change-fg: #f9c0dd;
+  --badge-approval-contract_sign-bg: #4a2c11;   --badge-approval-contract_sign-fg: #ffcea1;
+  --badge-approval-hiring-bg: #0e3a52;          --badge-approval-hiring-fg: #b3e2f7;
+
+  /* Approval decision status (ApprovalsInbox) */
+  --badge-approval-approved-bg: #123b2c;          --badge-approval-approved-fg: #a7ecc9;
+  --badge-approval-rejected-bg: #4a1d1d;          --badge-approval-rejected-fg: #ffc4c4;
+  --badge-approval-changes_requested-bg: #4a3411; --badge-approval-changes_requested-fg: #fbdf9b;
+
+  /* Sprint status (SprintBoardView) */
+  --badge-sprint-planning-bg: #4a3d11;  --badge-sprint-planning-fg: #f5e39b;
+  --badge-sprint-active-bg: #123b2c;    --badge-sprint-active-fg: #a7ecc9;
+  --badge-sprint-review-bg: #362b6b;    --badge-sprint-review-fg: #d6ccff;
+  --badge-sprint-closed-bg: #2f3742;    --badge-sprint-closed-fg: #cdd6e2;
 }
 
 /* ============================================

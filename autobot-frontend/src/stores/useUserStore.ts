@@ -5,6 +5,7 @@ import { defineStore } from 'pinia'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { isRealAuthToken } from '@/utils/authToken'
 
 const logger = createLogger('useUserStore')
 
@@ -283,8 +284,9 @@ export const useUserStore = defineStore('user', () => {
         const auth = JSON.parse(storedAuth)
         const user = JSON.parse(storedUser)
 
-        // Only restore if there's a real JWT token (not fake single_user_mode token) (#972)
-        const hasRealToken = auth.token && auth.token !== 'single_user_mode'
+        // Only restore when a real JWT token is present. Any legacy
+        // `single_user_mode` marker from a retired deployment is rejected (#972, #10861).
+        const hasRealToken = isRealAuthToken(auth.token)
         // Check if token is not expired
         if (hasRealToken && (!auth.expiresAt || new Date(auth.expiresAt) > new Date())) {
           authState.value = {
@@ -326,7 +328,9 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  // Check auth status from backend (handles single_user mode auto-auth)
+  // Verify a bearer-authenticated session against the backend and restore the
+  // user profile. Auth is always enabled (#10713), so this only succeeds when a
+  // valid JWT is already attached by fetchWithAuth; there is no auto-auth mode.
   async function checkAuthFromBackend(): Promise<boolean> {
     try {
       // Issue #916: Use relative URL — nginx at .21 proxies /api/* to backend
@@ -344,9 +348,9 @@ export const useUserStore = defineStore('user', () => {
       if (response.ok) {
         const data = await response.json()
         if (data.authenticated) {
-          // Auto-login with data from backend
+          // Restore the profile for the JWT-authenticated session.
           const user: UserProfile = {
-            id: data.username,  // Use username as ID for single_user mode
+            id: data.username,
             username: data.username,
             email: data.email || '',
             displayName: data.username.charAt(0).toUpperCase() + data.username.slice(1),
@@ -356,17 +360,13 @@ export const useUserStore = defineStore('user', () => {
             lastLoginAt: new Date()
           }
           currentUser.value = user
+          // Preserve the existing JWT (from the login flow / storage). The token
+          // is never invented here — overwriting it would drop a valid JWT (#979).
           authState.value = {
-            isAuthenticated: true,
-            token: data.deployment_mode === 'single_user' ? 'single_user_mode' : undefined
+            ...authState.value,
+            isAuthenticated: true
           }
-          // Only persist when we have a real token marker (single_user mode).
-          // For JWT deployments the token comes from the login flow; persisting
-          // token:undefined here would overwrite a valid JWT in storage (#979).
-          if (data.deployment_mode === 'single_user') {
-            persistToStorage()
-          }
-          logger.info('Auto-authenticated from backend:', data.deployment_mode)
+          logger.info('Restored authenticated session from backend')
           return true
         }
       }

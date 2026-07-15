@@ -32,6 +32,62 @@ tags:
   - code-search
 ---
 
+## Capability Tiers
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ github-search                                                 │
+├─────────────────────────────────────────────────────────────┤
+│ STANDALONE   (always works, zero config)                     │
+│   • Search public repos / issues / PRs via unauthenticated   │
+│     GitHub REST API (curl fallback)                          │
+├─────────────────────────────────────────────────────────────┤
+│ SUPERCHARGED (unlocks when you connect a tool)               │
+│   • gh auth login / GITHUB_TOKEN → gh CLI subcommands,       │
+│     higher rate limits, private-repo access, JSON/jq output  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**STANDALONE — always works, zero config**
+
+- Search public repositories, issues, and pull requests through the
+  unauthenticated GitHub REST API (`curl 'https://api.github.com/search/...'`).
+- Subject to GitHub's low anonymous rate limit; public results only.
+
+**SUPERCHARGED — unlocks per connected tool**
+
+| Connect this | Unlocks |
+|--------------|---------|
+| `gh auth login` **or** `GITHUB_TOKEN` | Native `gh search` / `gh view` subcommands, `--json` / `--jq` / `--template` output, higher authenticated rate limits, and access to private repos the token can see. |
+
+The skill prefers the authenticated `gh` path when available and degrades to the
+anonymous REST tier otherwise — no configuration change is required to fall back.
+
+## Output Contract
+
+Search results are returned in this fixed shape:
+
+```
+## GitHub Search: <query>
+
+**Tier used:** gh-cli (authenticated) | rest-api (anonymous)
+**Results:** <n>
+
+| # | Name / Ref | Stars/State | Description |
+|---|-----------|-------------|-------------|
+| 1 | owner/repo | ★ 1.2k     | ...         |
+```
+
+Detail lookups (`view_issue` / `view_pr`) return:
+
+```
+## <owner>/<repo>#<number> — <title>
+
+**State:** open | closed   **Author:** <login>   **Labels:** ...
+
+<body excerpt>
+```
+
 ## When to Use
 
 Use this skill when an agent needs to search or retrieve data from GitHub —

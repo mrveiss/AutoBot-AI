@@ -121,7 +121,7 @@
       </button>
     </div>
     <!-- AI goal input strip (MVA-1380) -->
-    <div v-if="markRegionsMode && showAiGoalInput" class="flex items-center gap-2 px-3 py-2 border-b" style="border-color: var(--color-border); background: var(--color-bg-secondary)">
+    <div v-if="markRegionsMode && showAiGoalInput" class="flex items-center gap-2 px-3 py-2 border-b" style="border-color: var(--border-default); background: var(--color-bg-secondary)">
       <input
         v-model="aiGoalText"
         type="text"
@@ -248,22 +248,22 @@
         </div>
 
         <!-- Loading state while VNC URL is being fetched -->
-        <div v-if="!vncUrl" class="w-full h-full flex items-center justify-center bg-gray-900 text-white">
+        <div v-if="!vncUrl" class="w-full h-full flex items-center justify-center bg-autobot-bg-primary text-white">
           <div class="text-center p-8">
             <Icon name="robot" class="text-6xl mb-4 text-blue-400" />
             <h3 class="text-xl font-semibold mb-2">{{ $t('desktop.popoutBrowser.headlessBrowserMode') }}</h3>
-            <p class="text-gray-300 mb-4">
+            <p class="text-autobot-text-muted mb-4">
               {{ $t('desktop.popoutBrowser.headlessDesc') }}
             </p>
-            <p class="text-sm text-gray-400 mb-4">
+            <p class="text-sm text-autobot-text-muted mb-4">
               {{ $t('desktop.popoutBrowser.headlessInstructions') }}
             </p>
-            <div class="bg-gray-800 rounded p-4 text-left max-w-md mx-auto">
-              <div class="text-xs text-gray-400 mb-2">{{ $t('desktop.popoutBrowser.currentStatus') }}</div>
+            <div class="bg-autobot-bg-secondary rounded p-4 text-left max-w-md mx-auto">
+              <div class="text-xs text-autobot-text-muted mb-2">{{ $t('desktop.popoutBrowser.currentStatus') }}</div>
               <div class="text-sm">
                 <div>{{ $t('desktop.popoutBrowser.statusLabel') }} <span class="text-green-400">{{ browserStatus }}</span></div>
                 <div v-if="currentUrl">{{ $t('desktop.popoutBrowser.urlLabel') }} <span class="text-blue-300">{{ currentUrl }}</span></div>
-                <div v-if="pageTitle">{{ $t('desktop.popoutBrowser.titleLabel') }} <span class="text-gray-200">{{ pageTitle }}</span></div>
+                <div v-if="pageTitle">{{ $t('desktop.popoutBrowser.titleLabel') }} <span class="text-autobot-text-primary">{{ pageTitle }}</span></div>
               </div>
             </div>
           </div>
@@ -374,10 +374,10 @@
       </LoadingBoundary>
 
       <!-- Developer Tools Overlay -->
-      <div v-if="showDevTools" class="absolute bottom-0 left-0 right-0 h-1/3 bg-gray-900 border-t border-gray-600">
-        <div class="flex items-center justify-between bg-gray-800 p-2 text-white text-sm">
+      <div v-if="showDevTools" class="absolute bottom-0 left-0 right-0 h-1/3 bg-autobot-bg-primary border-t border-autobot-border-strong">
+        <div class="flex items-center justify-between bg-autobot-bg-secondary p-2 text-white text-sm">
           <span>{{ $t('desktop.popoutBrowser.developerConsole') }}</span>
-          <button @click="showDevTools = false" class="text-gray-400 hover:text-white" :aria-label="$t('common.close')">
+          <button @click="showDevTools = false" class="text-autobot-text-muted hover:text-white" :aria-label="$t('common.close')">
             <Icon name="times" />
           </button>
         </div>
@@ -418,9 +418,9 @@
 </template>
 
 <script lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import type { Ref } from 'vue'
-import type { AutomationResults, SearchData, TestData, MessageData } from '@/types/browser'
+import type { AutomationResults, SearchData, TestData, TestResult, MessageData, TestStep } from '@/types/browser'
 import appConfig from '@/config/AppConfig.js'
 import { useBrowserSessionData } from '@/composables/desktop/useBrowserSessionData'
 import type { PlaywrightNavigationResponse, PageRegion, SnapshotWithRegionsResult } from '@/composables/desktop/useBrowserSessionData'
@@ -431,7 +431,6 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { NetworkConstants } from '@/constants/network'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
@@ -443,6 +442,24 @@ interface ConsoleLogEntry {
   timestamp: string
   level: string
   message: string
+}
+
+interface PopoutBrowserProps {
+  sessionId: string
+  initialUrl: string
+  canResize: boolean
+  autoPopout: boolean
+}
+
+type PopoutBrowserEmit = (event: 'close' | 'navigate' | 'interact' | 'popout' | 'dock', ...args: unknown[]) => void
+
+// Minimal shape of an Electron <webview> element (only the methods this component calls)
+interface WebviewElement {
+  canGoBack(): boolean
+  canGoForward(): boolean
+  goBack(): void
+  goForward(): void
+  reload(): void
 }
 
 export default {
@@ -475,7 +492,7 @@ export default {
     }
   },
   emits: ['close', 'navigate', 'interact', 'popout', 'dock'],
-  setup(props: any, { emit }: any) {
+  setup(props: PopoutBrowserProps, { emit }: { emit: PopoutBrowserEmit }) {
     // Browser session data composable (replaces inline fetchWithAuth/apiClient calls)
     const browserApi = useBrowserSessionData()
 
@@ -525,7 +542,7 @@ export default {
 
     // Refs
     const vncIframe: Ref<HTMLIFrameElement | null> = ref(null)
-    const webview: Ref<any | null> = ref(null)
+    const webview: Ref<WebviewElement | null> = ref(null)
     const remoteIframe: Ref<HTMLIFrameElement | null> = ref(null)
 
     // Region-marking state (#5136 / #6446) — snapshot-with-regions wire-in
@@ -792,7 +809,7 @@ export default {
         onSuccess: (data) => {
           if (data) {
             automationResults.value.lastSearch = data as unknown as SearchData
-            addConsoleLog('info', `Search completed: ${(data as any).results?.length || 0} results found`)
+            addConsoleLog('info', `Search completed: ${(data as SearchData).results?.length || 0} results found`)
           }
         },
         onError: (error) => {
@@ -813,8 +830,8 @@ export default {
       {
         onSuccess: (data) => {
           if (data) {
-            const tests = (data as any).tests
-            const passed = tests?.filter((t: any) => t.status === 'PASS').length || 0
+            const tests = (data as TestData).tests
+            const passed = tests?.filter((t: TestResult) => t.status === 'PASS').length || 0
             const total = tests?.length || 0
 
             automationResults.value.lastTest = { passed, total, data } as TestData
@@ -840,8 +857,8 @@ export default {
         onSuccess: (data) => {
           if (data) {
             automationResults.value.lastMessage = data as unknown as MessageData
-            const steps = (data as any).steps
-            const successSteps = steps?.filter((s: any) => s.status === 'SUCCESS').length || 0
+            const steps = (data as MessageData).steps
+            const successSteps = steps?.filter((s: TestStep) => s.status === 'SUCCESS').length || 0
             addConsoleLog('info', `Test message completed: ${successSteps} steps successful`)
           }
         },
@@ -991,7 +1008,7 @@ export default {
       browserStatus.value = 'connected'
     }
 
-    const handlePlaywrightError = (error: any) => {
+    const handlePlaywrightError = (error: Error) => {
       logger.error('Playwright connection error:', error)
       browserStatus.value = 'error'
       addConsoleLog('error', `Playwright connection failed: ${error.message || error}`)
@@ -1008,7 +1025,7 @@ export default {
       browserStatus.value = 'ready'
     }
 
-    const handleSessionError = (error: any) => {
+    const handleSessionError = (error: Error) => {
       logger.error('Session initialization error:', error)
       loading.value = false
       browserStatus.value = 'error'

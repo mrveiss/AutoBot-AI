@@ -238,7 +238,7 @@ onMounted(async () => {
             ]"
             role="switch"
             :aria-checked="enabled"
-            aria-label="Enable personality"
+            :aria-label="$t('settings.admin.personalitySettings.enablePersonality')"
             @click="handleToggle"
           >
             <span
@@ -250,7 +250,7 @@ onMounted(async () => {
           </button>
         </div>
         <p class="text-xs text-gray-500">
-          {{ enabled ? 'Active — injected into system prompt' : 'Disabled — no personality applied' }}
+          {{ enabled ? $t('settings.admin.personalitySettings.activeInjectedIntoSystemPrompt') : $t('settings.admin.personalitySettings.disabledNoPersonalityApplied') }}
         </p>
       </div>
 
@@ -322,7 +322,7 @@ onMounted(async () => {
           <div>
             <h3 class="text-lg font-semibold text-gray-900">{{ editForm.name }}</h3>
             <p class="text-xs text-gray-400 mt-0.5">
-              {{ editForm.is_system ? 'System profile' : `Created by ${editForm.created_by}` }}
+              {{ editForm.is_system ? $t('settings.admin.personalitySettings.systemProfile') : `Created by ${editForm.created_by}` }}
             </p>
           </div>
           <!-- Action buttons -->
@@ -368,7 +368,7 @@ onMounted(async () => {
               <input
                 v-model="editForm.tagline"
                 type="text"
-                placeholder="One-line description"
+                :placeholder="$t('settings.admin.personalitySettings.oneLineDescription')"
                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
               />
             </div>
@@ -410,7 +410,7 @@ onMounted(async () => {
               <input
                 v-model="traitInput"
                 type="text"
-                placeholder="Add a trait…"
+                :placeholder="$t('settings.admin.personalitySettings.addATrait')"
                 class="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
                 @keydown.enter.prevent="addTrait"
               />
@@ -439,7 +439,7 @@ onMounted(async () => {
               <input
                 v-model="styleInput"
                 type="text"
-                placeholder="Add a style guideline…"
+                :placeholder="$t('settings.admin.personalitySettings.addAStyleGuideline')"
                 class="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
                 @keydown.enter.prevent="addStyle"
               />
@@ -468,7 +468,7 @@ onMounted(async () => {
               <input
                 v-model="limitInput"
                 type="text"
-                placeholder="Add a hard limit…"
+                :placeholder="$t('settings.admin.personalitySettings.addAHardLimit')"
                 class="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
                 @keydown.enter.prevent="addLimit"
               />
@@ -486,7 +486,7 @@ onMounted(async () => {
             <textarea
               v-model="editForm.custom_notes"
               rows="4"
-              placeholder="Any additional freeform instructions…"
+              :placeholder="$t('settings.admin.personalitySettings.anyAdditionalFreeformInstructions')"
               class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400 resize-none"
             />
           </div>
@@ -503,7 +503,7 @@ onMounted(async () => {
                 v-for="v in voiceList"
                 :key="v.id"
                 :value="v.id"
-              >{{ v.name }}{{ v.builtin ? ' (built-in)' : '' }}</option>
+              >{{ v.name }}{{ v.builtin ? $t('settings.admin.personalitySettings.builtIn') : '' }}</option>
             </select>
             <p class="mt-1 text-xs text-gray-400">
               {{ $t('settings.admin.personalitySettings.whenThisPersonalityIs') }}
@@ -518,7 +518,7 @@ onMounted(async () => {
               class="px-5 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
               @click="handleSave"
             >
-              {{ saving ? 'Saving…' : 'Save Changes' }}
+              {{ saving ? $t('settings.admin.personalitySettings.saving') : $t('settings.admin.personalitySettings.saveChanges') }}
             </button>
           </div>
 
@@ -540,7 +540,7 @@ onMounted(async () => {
           <input
             v-model="newName"
             type="text"
-            placeholder="Profile name"
+            :placeholder="$t('settings.admin.personalitySettings.profileName')"
             autofocus
             class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-400 mb-4"
             @keydown.enter="handleNewProfile"

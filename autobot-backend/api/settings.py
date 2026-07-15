@@ -962,10 +962,13 @@ async def update_hardware_priority(
     operation="get_telemetry_settings",
     error_code_prefix="SETTINGS",
 )
-async def get_telemetry_settings(
-    current_user: dict = Depends(get_current_user),
-):
+async def get_telemetry_settings():
     """Get current telemetry settings (Issue #9035).
+
+    Public: returns only global, non-sensitive telemetry config (enabled flags +
+    first-run-prompt state). Checked at app load before auth is established, so
+    gating it behind get_current_user caused spurious 401s (#10750 A13). The
+    consent-changing POST /telemetry remains authenticated.
 
     Returns telemetry opt-in/opt-out status and whether the first-run
     prompt has been shown.
@@ -979,6 +982,45 @@ async def get_telemetry_settings(
         anonymous_usage_stats=config.telemetry.anonymous_usage_stats,
         first_run_prompt_shown=config.telemetry.first_run_prompt_shown,
     )
+
+
+async def _persist_telemetry_patch(
+    fields: dict,
+    session: Optional[AsyncSession],
+    created_by: str,
+) -> dict:
+    """Merge *fields* into the telemetry config, persist, and audit.
+
+    Shared save path for both the admin consent POST and the authenticated
+    prompt-dismissal endpoint (#11344). Only the keys present in *fields* are
+    written, so a dismissal never clobbers the enable/disable flags. Returns
+    the merged telemetry sub-config.
+    """
+    from config.loader import deep_merge
+
+    before_config: dict = ConfigService.get_full_config()
+    merged_config = deep_merge(copy.deepcopy(before_config), {"telemetry": fields})
+    ConfigService.save_full_config(merged_config)
+    ConfigService.clear_cache()
+
+    changed = _compute_flat_diff(before_config, merged_config)
+
+    # Record a DB audit-trail revision (Issue #10000). Defensive None-guard
+    # retained in case an override yields no session.
+    if session is not None:
+        await ConfigRevisionService(session).create_revision(
+            entity_type="system",
+            entity_id="telemetry_settings",
+            before_config=before_config,
+            after_config=merged_config,
+            source="api",
+            created_by=created_by,
+        )
+    else:
+        logger.debug("Telemetry audit trail skipped: Postgres unavailable in current deployment mode")
+
+    logger.info("Telemetry settings updated (changed keys: %d)", len(changed))
+    return merged_config.get("telemetry", {})
 
 
 @router.post("/telemetry", response_model=TelemetrySettingsResponse)
@@ -995,14 +1037,13 @@ async def update_telemetry_settings(
 ):
     """Update telemetry settings (Issue #9035).
 
-    Allows users to opt in/out of telemetry collection. When telemetry
+    Allows admins to opt in/out of telemetry collection. When telemetry
     is disabled, the AnalyticsMiddleware and VoiceRealtimeTelemetry
     services skip data collection.
 
-    Requires admin permission.  Works in single_user mode (no Postgres
-    required): the consent state is persisted to settings.json via
-    ConfigService; the DB audit trail is skipped when Postgres is
-    unavailable (Issue #10000).
+    Requires admin permission.  The consent state is persisted to
+    settings.json via ConfigService; a DB audit-trail revision is also
+    recorded (Issue #10000).
 
     Args:
         request: New telemetry settings
@@ -1010,49 +1051,51 @@ async def update_telemetry_settings(
     Returns:
         Updated telemetry settings
     """
-    before_config: dict = ConfigService.get_full_config()
-
-    # Build the minimal patch
-    patch: dict = {
-        "telemetry": {
+    await _persist_telemetry_patch(
+        {
             "enabled": request.enabled,
             "anonymous_usage_stats": request.anonymous_usage_stats,
             "first_run_prompt_shown": request.first_run_prompt_shown,
-        }
-    }
-
-    # Deep-merge into a copy
-    from config.loader import deep_merge
-
-    merged_config = deep_merge(copy.deepcopy(before_config), patch)
-    ConfigService.save_full_config(merged_config)
-    ConfigService.clear_cache()
-
-    changed = _compute_flat_diff(before_config, merged_config)
-
-    # Audit trail requires Postgres — skip gracefully in single_user mode
-    # (Issue #10000: telemetry consent must save without user management).
-    if session is not None:
-        await ConfigRevisionService(session).create_revision(
-            entity_type="system",
-            entity_id="telemetry_settings",
-            before_config=before_config,
-            after_config=merged_config,
-            source="api",
-            created_by=current_user.get("id", "unknown"),
-        )
-    else:
-        logger.debug("Telemetry audit trail skipped: Postgres unavailable in current deployment mode")
-
-    logger.info(
-        "Telemetry settings updated: enabled=%s, anonymous_usage_stats=%s (changed keys: %d)",
-        request.enabled,
-        request.anonymous_usage_stats,
-        len(changed),
+        },
+        session,
+        current_user.get("id", "unknown"),
     )
 
     return TelemetrySettingsResponse(
         enabled=request.enabled,
         anonymous_usage_stats=request.anonymous_usage_stats,
         first_run_prompt_shown=request.first_run_prompt_shown,
+    )
+
+
+@router.post("/telemetry/prompt-shown", response_model=TelemetrySettingsResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="dismiss_telemetry_prompt",
+    error_code_prefix="SETTINGS",
+)
+async def dismiss_telemetry_prompt(
+    session: Optional[AsyncSession] = Depends(get_optional_db_session),
+    current_user: dict = Depends(get_current_user),
+):
+    """Mark the first-run telemetry prompt as shown (Issue #11344).
+
+    Records a UI-dismissal state only — it never changes the enable/disable
+    flags — so it is available to any authenticated user (not just admins).
+    This lets non-admins dismiss the consent modal without a 403, which
+    previously caused it to re-appear on every refresh. Toggling telemetry
+    itself still requires the admin-gated POST /telemetry endpoint.
+    """
+    from autobot_shared.ssot_config import config
+
+    await _persist_telemetry_patch(
+        {"first_run_prompt_shown": True},
+        session,
+        current_user.get("id", "unknown"),
+    )
+
+    return TelemetrySettingsResponse(
+        enabled=config.telemetry.enabled,
+        anonymous_usage_stats=config.telemetry.anonymous_usage_stats,
+        first_run_prompt_shown=True,
     )

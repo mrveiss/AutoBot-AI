@@ -16,10 +16,15 @@ import asyncio
 import html
 import json
 import re
-from typing import TYPE_CHECKING, Any
+import uuid
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
+from chat_workflow.code_exec.tool_policy import CODEEXEC_READONLY_TOOLS
+from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
 
@@ -38,6 +43,17 @@ from chat_workflow.session_handler import (
 )
 
 logger = get_logger(__name__)
+
+# GH#11568: compose tool feature flag and tuning constants.
+CODEEXEC_ENABLED: bool = env_flag("AUTOBOT_CODEEXEC_ENABLED", default=False)
+CODEEXEC_AUTOAPPROVE_READONLY: bool = env_flag("AUTOBOT_CODEEXEC_AUTOAPPROVE_READONLY", default=True)
+CODEEXEC_MAX_SCRIPT_RETRIES: int = env_int("AUTOBOT_CODEEXEC_MAX_SCRIPT_RETRIES", default=1)
+# GH#11568 BLOCKER-4 / GH#11662: the read-only tool set eligible for auto-approval
+# (design §3.1) is CODEEXEC_READONLY_TOOLS, imported above from the single
+# tool-policy classification source (readonly ⊆ injectable; sensitive excluded).
+# Approval-wait polling knobs (mirrors terminal-command approval loop).
+CODEEXEC_APPROVAL_WAIT_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_WAIT_SECONDS", default=1800)
+CODEEXEC_APPROVAL_POLL_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_POLL_SECONDS", default=2)
 
 # Issue #4482: Default retry count for schema self-correction loop.
 _DEFAULT_SCHEMA_RETRIES = 3
@@ -208,6 +224,31 @@ MAP_SITE_SCHEMA: dict = {
     "required": ["domain"],
 }
 
+CONTENT_REACH_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "source": {
+            "type": "string",
+            "enum": ["web_search", "web_page", "youtube", "reddit", "social"],
+            "description": "Which content source chain to use.",
+        },
+        "query": {
+            "type": "string",
+            "description": "Search query (web_search, reddit, youtube search).",
+        },
+        "url": {
+            "type": "string",
+            "description": "Target URL (web_page, youtube, reddit, social).",
+        },
+        "limit": {
+            "type": "integer",
+            "default": 5,
+            "description": "Max results for search sources.",
+        },
+    },
+    "required": ["source"],
+}
+
 EXTRACT_STRUCTURED_DATA_SCHEMA: dict = {
     "type": "object",
     "properties": {
@@ -323,7 +364,34 @@ _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     "crawl_site": CRAWL_SITE_SCHEMA,
     "map_site": MAP_SITE_SCHEMA,
     "extract_structured_data": EXTRACT_STRUCTURED_DATA_SCHEMA,
+    # #10932: Unified content_reach gateway (5 source chains).
+    "content_reach": CONTENT_REACH_SCHEMA,
+    # #11501: LLC board/CEO-chat work-object tools (create_task, update_goal,
+    # request_approval, record_decision). Company-scoped; dispatched to the
+    # existing llc/services. Merged below so they validate like any built-in.
+    **LLC_TOOL_SCHEMAS,
 }
+
+# GH#11568: compose tool — sandboxed Python script with injectable RPC shims.
+COMPOSE_TOOL_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "program": {
+            "type": "string",
+            "description": (
+                "Python program to execute. Import autobot_tools and call tool " "functions as async coroutines."
+            ),
+        },
+        "description": {
+            "type": "string",
+            "description": "Human-readable description of what this program does.",
+        },
+    },
+    "required": ["program"],
+}
+
+if CODEEXEC_ENABLED:
+    _BUILTIN_TOOL_SCHEMAS["compose"] = COMPOSE_TOOL_SCHEMA
 
 
 def _validate_builtin_tool_arguments(tool_name: str, tool_call: dict[str, Any]) -> WorkflowMessage | None:
@@ -379,10 +447,53 @@ BROWSER_TOOL_NAMES: frozenset[str] = frozenset(
     }
 )
 
+# Issue #7509: web research tools — direct internal dispatch via web_fetch.
+WEB_RESEARCH_TOOL_NAMES: frozenset[str] = frozenset({"scrape_url", "crawl_site", "map_site", "extract_structured_data"})
+
+# GH#11489: builtin tools sharing the uniform dispatch gate (invalid-call
+# counter reset → Issue #4529 schema validation → handler). ``_builtin_route``
+# maps each name to its handler, so adding a tool here needs no new branch at
+# the ``_dispatch_tool_call`` seam.
+_UNIFORM_BUILTIN_TOOLS: frozenset[str] = (
+    BROWSER_TOOL_NAMES | WEB_RESEARCH_TOOL_NAMES | frozenset({"web_search", "execute_command"})
+)
+
+# GH#11160: maps a declared approval category (a work item's
+# ``requires_approval_before`` entry) to the tools that constitute that action. A
+# tool is approval-gated only when the work item declared its category; names
+# match by exact or prefix (e.g. ``deploy`` gates ``deploy_service``).
+# GH#11206: sourced from the canonical tool catalogue (SSOT).
+_APPROVAL_CATEGORY_TOOLS: dict[str, tuple[str, ...]] = APPROVAL_CATEGORY_TOOLS
+
+
+def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
+    """Return the declared category that gates *tool_name*, else None (GH#11160).
+
+    GH#11206: uses the canonical ``match_tool_name`` with word-boundary matching
+    (so ``deploy`` gates ``deploy_service`` but not ``deployment_status``). A false
+    positive only ever adds an approval hold — the fail-safe direction — never a bypass.
+    """
+    for category in declared:
+        if match_tool_name(tool_name, _APPROVAL_CATEGORY_TOOLS.get(category, ()), word_boundary=True):
+            return category
+    return None
+
+
 # Issue #650: Pre-compiled regex for tool call parsing (performance optimization)
 # Handles both uppercase and lowercase TOOL_CALL tags with nested JSON in params
+# #11545: the closing `>` is optional — some chat models emit `</TOOL_CALL`
+# (newline/prose after) without it.
+# #11552: the closing tag itself is often TRUNCATED to `</TOOL` (the model drops
+# `_CALL`) or spaced (`</TOOL_ CALL>`), then a hallucinated success line follows.
+# Both previously left the tool call unparsed → raw tag leaked, tool never ran
+# (0 work items, CEO chat). The close now tolerates `</TOOL[_[ ]CALL][>]`: the
+# `_CALL` and trailing `>` are both optional. The close requires a word boundary
+# after `tool` (either the proper `_call\b` continuation, or `\b` when `_CALL` is
+# dropped) so `</tool_callable…`/`</toolbox…` never match; the opening tag
+# (`<TOOL_CALL name=… params=…>`) is still required, so a bare `</tool>` in prose
+# can never match on its own.
 _TOOL_CALL_PATTERN = re.compile(
-    r'<tool_call\s+name="([^"]+)"\s+params=(["\'])(.+?)\2>([^<]*)</tool_call>',
+    r'<tool_call\s+name="([^"]+)"\s+params=(["\'])(.+?)\2>([^<]*)</tool(?:_?\s*call\b|\b)\s*>?',
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -793,6 +904,19 @@ def _format_full_search_results(query: str, entries: list[dict]) -> str:
         else:
             lines.append("")
     return "\n".join(lines)
+
+
+def _search_unavailable_message(query: str) -> str:
+    """Actionable message when every search backend yields nothing (#11665).
+
+    Flows straight into LLM context, so it stays one sentence and names the
+    exact configuration that unlocks topic search instead of a silent "".
+    """
+    return (
+        f'Web search for "{query}" returned no results because no search backend is available — '
+        "configure SEARXNG_INSTANCE_URL or BRAVE_SEARCH_API_KEY (or make a Playwright browser "
+        "reachable) to enable topic search."
+    )
 
 
 def _format_crawl_results(seed_urls: list, results: list) -> str:
@@ -1745,54 +1869,113 @@ class ToolHandlerMixin:
 
         return message, break_loop_requested, respond_content
 
-    def _handle_delegate_tool(
-        self, tool_call: dict[str, Any], execution_results: list[dict[str, Any]]
-    ) -> WorkflowMessage:
-        """
-        Handle the 'delegate' tool for subordinate agent delegation.
+    async def _handle_delegate_tool(
+        self,
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
+        ctx: "LLMIterationContext" | None = None,
+    ):
+        """Handle the 'delegate' tool (Issue #657; GH#11207 execution).
 
-        Issue #665: Extracted from _process_tool_calls for single responsibility.
-        Issue #657: Original delegate tool handling logic.
-
-        Returns:
-            WorkflowMessage for delegation status
+        When ``AUTOBOT_DELEGATION_ENABLED`` is off (default) this keeps the original
+        record-only behaviour — no change to the live chat path. When on, it runs
+        the subtask as a governed subagent (its ``forbidden_work`` constrains it) via
+        the selected engine and returns the result. Yields WorkflowMessage(s).
         """
+        from chat_workflow.delegation import (
+            DELEGATION_ENABLED,
+            MAX_DELEGATIONS_PER_TURN,
+            run_delegated_subtask,
+        )
+
         params = tool_call.get("params", {})
         task = params.get("task", "")
         reason = params.get("reason", "Task delegation")
-        wait_for_result = params.get("wait_for_result", True)
 
-        logger.info("[Issue #657] Delegate tool invoked: task=%s, reason=%s", task[:100], reason)
+        if not DELEGATION_ENABLED:
+            logger.info("[Issue #657] Delegate tool invoked (record-only): task=%s, reason=%s", task[:100], reason)
+            execution_results.append(
+                {
+                    "tool": "delegate",
+                    "task": task,
+                    "reason": reason,
+                    "wait_for_result": params.get("wait_for_result", True),
+                    "status": "pending_delegation",
+                }
+            )
+            yield WorkflowMessage(
+                type="delegation",
+                content=f"Delegating subtask: {task[:100]}...",
+                metadata={"message_type": "delegate_tool", "reason": reason, "task": task},
+            )
+            return
 
-        # Record delegation for manager to process
-        execution_results.append(
-            {
-                "tool": "delegate",
-                "task": task,
-                "reason": reason,
-                "wait_for_result": wait_for_result,
-                "status": "pending_delegation",
-            }
-        )
+        # GH#11266: enforce per-turn delegation fan-out limit.
+        ctx_dict = (getattr(ctx, "context", None) or {}) if ctx else {}
+        delegations_this_turn: int = ctx_dict.get("delegations_this_turn", 0)
+        if delegations_this_turn >= MAX_DELEGATIONS_PER_TURN:
+            error = f"per-turn delegation limit ({MAX_DELEGATIONS_PER_TURN}) reached"
+            logger.warning("[GH#11266] %s", error)
+            execution_results.append({"tool": "delegate", "task": task, "status": "error", "error": error})
+            yield WorkflowMessage(
+                type="error",
+                content=f"Delegation blocked: {error}",
+                metadata={"message_type": "delegate_tool", "error": True},
+            )
+            return
+        if ctx is not None and ctx.context is not None:
+            ctx.context["delegations_this_turn"] = delegations_this_turn + 1
 
-        return WorkflowMessage(
-            type="delegation",
-            content=f"Delegating subtask: {task[:100]}...",
-            metadata={
-                "message_type": "delegate_tool",
-                "reason": reason,
-                "task": task,
-            },
-        )
+        agent_type = params.get("agent_type", "research_agent")
+        engine = params.get("engine", "claude_code")
+        depth = int(ctx_dict.get("delegation_depth", 0))
+        parent_agent_id = ctx.agent_context.agent_id if ctx and ctx.agent_context else None
+        try:
+            result = await run_delegated_subtask(
+                task,
+                agent_type=agent_type,
+                depth=depth,
+                engine=engine,
+                parent_agent_id=parent_agent_id,
+            )
+            execution_results.append(
+                {
+                    "tool": "delegate",
+                    "task": task,
+                    "agent_type": agent_type,
+                    "engine": engine,
+                    "status": "completed",
+                    "result": result,
+                }
+            )
+            yield WorkflowMessage(
+                type="delegation",
+                content=f"Subagent ({agent_type}) completed: {result[:200]}",
+                metadata={"message_type": "delegate_tool", "agent_type": agent_type, "engine": engine},
+            )
+        except Exception as exc:
+            logger.warning("[GH#11207] Delegation failed: %s", exc)
+            execution_results.append({"tool": "delegate", "task": task, "status": "error", "error": str(exc)})
+            yield WorkflowMessage(
+                type="error",
+                content=f"Delegation failed: {exc}",
+                metadata={"message_type": "delegate_tool", "error": True},
+            )
 
     def _validate_browser_params(self, tool_name: str, params: dict[str, Any]) -> str | None:
-        """Validate browser tool params. Returns error message or None. #1368."""
+        """Validate browser tool params. Returns a user-friendly block notice or None.
+
+        #1368 / #10914: a disallowed URL or unsafe script is an *expected* policy
+        outcome, so the returned text reads as a friendly notice (rendered as a
+        normal assistant message, not a scary error banner — see _handle_browser_tool).
+        """
         from api.browser_mcp import is_script_safe, is_url_allowed
 
         if tool_name == "navigate" and not is_url_allowed(params.get("url", "")):
-            return f"URL not allowed: {params.get('url', '')}"
+            url = params.get("url", "")
+            return f"I can't open that link ({url}) — it isn't on the list of sites I'm allowed to browse."
         if tool_name == "evaluate" and not is_script_safe(params.get("script", "")):
-            return "JavaScript blocked by security policy"
+            return "I can't run that browser action — it was blocked by the security policy."
         return None
 
     async def _handle_browser_tool(
@@ -1825,11 +2008,15 @@ class ToolHandlerMixin:
         try:
             validation_error = self._validate_browser_params(tool_name, params)
             if validation_error:
+                # Keep status="error" so the agent loop still knows the tool didn't run.
                 execution_results.append({"tool": tool_name, "status": "error", "error": validation_error})
+                # #10914: a disallowed URL / unsafe script is an expected policy block,
+                # not a system failure — surface it to the user as a normal assistant
+                # notice (tool_result) so the UI doesn't render a scary red "Error:" banner.
                 yield WorkflowMessage(
-                    type="error",
+                    type="tool_result",
                     content=validation_error,
-                    metadata={"tool": tool_name, "error": True},
+                    metadata={"tool": tool_name, "blocked": True},
                 )
                 return
 
@@ -2091,6 +2278,46 @@ class ToolHandlerMixin:
                 metadata={"tool": tool_name, "error": True},
             )
 
+    async def _handle_llc_tool(self, tool_name, tool_call, execution_results, ctx):
+        """Dispatch an LLC work-object tool company-scoped (#11501).
+
+        company_id comes from the chat request context (set by the CEO-chat
+        endpoint, T2). A missing/invalid context surfaces as a tool error the
+        LLM can react to, rather than a crash.
+        """
+        params = tool_call.get("params", {}) or {}
+        _cctx = ctx.context if ctx is not None and ctx.context else {}
+        company_id = _cctx.get("company_id")
+        # #11501 review: actor for audit/authz comes from the authenticated chat
+        # context, never from LLM-supplied params.
+        user_id = _cctx.get("user_id")
+        try:
+            result = await dispatch_llc_tool(tool_name, params, company_id, user_id)
+            execution_results.append({"tool": tool_name, "status": "success", "output": result})
+            entity = result.get("entity_type", "item")
+            entity_id = result.get("entity_id")
+            summary = f"Done ({entity})" + (f" [{entity_id}]" if entity_id else "")
+            yield WorkflowMessage(
+                type="command_output",
+                content=summary,
+                metadata={"tool": tool_name, "status": "success", "result": result},
+            )
+        except LLCToolError as exc:
+            execution_results.append({"tool": tool_name, "status": "error", "error": str(exc)})
+            yield WorkflowMessage(
+                type="error",
+                content=f"{tool_name}: {exc}",
+                metadata={"tool": tool_name, "error": True},
+            )
+        except Exception as exc:  # noqa: BLE001 — surface any service error to the LLM, don't crash the turn
+            logger.error("[#11501] LLC tool %s failed: %s", tool_name, exc)
+            execution_results.append({"tool": tool_name, "status": "error", "error": str(exc)})
+            yield WorkflowMessage(
+                type="error",
+                content=f"{tool_name} failed: {exc}",
+                metadata={"tool": tool_name, "error": True},
+            )
+
     async def _exec_scrape_url(self, params: dict) -> str:
         """Fetch a URL and return markdown content. Issue #7509."""
         from web_fetch import RenderMode, WebFetcher
@@ -2176,7 +2403,7 @@ class ToolHandlerMixin:
             logger.debug("[Issue #2306] Playwright search unavailable: %s", e)
 
         # Fallback: browser VM with DuckDuckGo HTML
-        return await self._web_search_via_browser_vm(query)
+        return await self._web_search_final_fallback(query)
 
     async def _execute_web_search_full(self, query: str, max_pages: int) -> str:
         """Search + full-page fetch mode. Issue #7404.
@@ -2194,7 +2421,7 @@ class ToolHandlerMixin:
         """
         entries = await self._web_search_structured_entries(query, max_pages)
         if not entries:
-            return await self._web_search_via_browser_vm(query)
+            return await self._web_search_final_fallback(query)
         enriched = await _fetch_pages_concurrent(entries, max_pages)
         return _format_full_search_results(query, enriched)
 
@@ -2251,6 +2478,22 @@ class ToolHandlerMixin:
             lines.append(f"{i}. **{title}**\n   {url}\n   {snippet}\n")
         return "\n".join(lines)
 
+    async def _web_search_final_fallback(self, query: str) -> str:
+        """Browser-VM last resort with actionable guidance instead of silence (#11665).
+
+        When the registry and Playwright yielded nothing and even the browser
+        VM is unreachable (or returns nothing), the model used to receive ""
+        or a generic "Web search failed" — now it gets one sentence naming the
+        configuration that unlocks topic search.
+        """
+        try:
+            result = await self._web_search_via_browser_vm(query)
+            if result:
+                return result
+        except Exception as exc:
+            logger.debug("[#11665] Browser VM search fallback unavailable: %s", exc)
+        return _search_unavailable_message(query)
+
     async def _web_search_via_browser_vm(self, query: str) -> str:
         """Fallback: search via browser VM DuckDuckGo HTML page. Issue #2306."""
         from urllib.parse import (  # stdlib — lazy to match surrounding pattern
@@ -2298,20 +2541,8 @@ class ToolHandlerMixin:
         execution_results: list[dict[str, Any]],
     ) -> WorkflowMessage:
         """Build error message for an unknown tool call (#2305, #2310)."""
-        # Issue #7509: Added web research tools to known_tools hint.
-        known_tools = sorted(
-            {
-                "respond",
-                "delegate",
-                "execute_command",
-                "web_search",
-                "scrape_url",
-                "crawl_site",
-                "map_site",
-                "extract_structured_data",
-            }
-            | BROWSER_TOOL_NAMES
-        )
+        # GH#11489: derive from the routing SSOT so the hint never drifts.
+        known_tools = sorted({"respond", "delegate"} | _UNIFORM_BUILTIN_TOOLS)
         if ctx is not None:
             ctx.consecutive_invalid_tool_calls += 1
         consecutive = ctx.consecutive_invalid_tool_calls if ctx is not None else 0
@@ -2326,6 +2557,166 @@ class ToolHandlerMixin:
             type="error",
             content=error_msg,
             metadata={"message_type": "unknown_tool", "tool_name": tool_name},
+        )
+
+    def _enforce_forbidden_work(
+        self,
+        tool_call: dict[str, Any],
+        ctx: "LLMIterationContext" | None,
+        execution_results: list[dict[str, Any]],
+    ) -> WorkflowMessage | None:
+        """Hard-block a tool the acting agent's forbidden_work manifest forbids (GH#11145).
+
+        Resolves the acting agent id from ``ctx.agent_context`` and matches the tool
+        against that agent's manifest via the shared ``match_forbidden_tool`` matcher.
+        Records the failure in ``execution_results`` and returns an error
+        ``WorkflowMessage`` when the tool is forbidden, else ``None``. Profile-less
+        agents resolve to an empty manifest and are never blocked here.
+        """
+        from orchestration.agent_registry import match_forbidden_tool, resolve_forbidden_tools
+
+        agent_id = ctx.agent_context.agent_id if (ctx is not None and ctx.agent_context is not None) else None
+        forbidden = resolve_forbidden_tools(agent_id)
+        if not forbidden:
+            return None
+        tool_name = tool_call.get("name", "")
+        matched = match_forbidden_tool(tool_name, forbidden)
+        if matched is None:
+            return None
+        error = f"Tool '{tool_name}' is forbidden by agent '{agent_id}' capability manifest (matched '{matched}')"
+        logger.warning(
+            "[GH#11145] Blocked forbidden tool '%s' for agent '%s' (matched '%s')",
+            tool_name,
+            agent_id,
+            matched,
+        )
+        execution_results.append({"tool": tool_name, "status": "error", "error": error, "forbidden_by_manifest": True})
+        return WorkflowMessage(
+            type="error",
+            content=error,
+            metadata={"tool": tool_name, "error": True, "forbidden_by_manifest": True},
+        )
+
+    def _enforce_config_protection(
+        self,
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
+    ) -> WorkflowMessage | None:
+        """Block a write that would weaken a linter/formatter config (GH#11177).
+
+        Reuses the dependency-free ``autobot_shared.config_guard`` matcher against
+        the tool's target path (``params`` for built-in tools, ``arguments`` for
+        MCP). Records the failure and returns an error ``WorkflowMessage`` when the
+        target is a protected config, else ``None``. ``AUTOBOT_ALLOW_CONFIG_EDITS``
+        opts out.
+        """
+        from autobot_shared.config_guard import config_edits_allowed, protected_config_for
+
+        if config_edits_allowed():
+            return None
+        args = tool_call.get("params") or tool_call.get("arguments") or {}
+        matched = protected_config_for(tool_call.get("name", ""), args)
+        if matched is None:
+            return None
+        tool_name = tool_call.get("name", "")
+        error = (
+            f"Editing linter/formatter config '{matched}' is blocked (config-protection): "
+            f"fix the code to satisfy the gate instead of weakening it. "
+            f"Set AUTOBOT_ALLOW_CONFIG_EDITS=1 for an intentional change."
+        )
+        logger.warning("[GH#11177] Blocked config-protection write to '%s' (tool '%s')", matched, tool_name)
+        execution_results.append({"tool": tool_name, "status": "error", "error": error, "config_protection": True})
+        return WorkflowMessage(
+            type="error",
+            content=error,
+            metadata={"tool": tool_name, "error": True, "config_protection": True},
+        )
+
+    def _enforce_fact_forcing(
+        self,
+        tool_call: dict[str, Any],
+        ctx: "LLMIterationContext" | None,
+        execution_results: list[dict[str, Any]],
+    ) -> WorkflowMessage | None:
+        """Block the first edit to an existing, uninvestigated file (GH#11178).
+
+        Records this call's read/grep target on the turn-scoped investigated set
+        (``ctx.context``), then blocks an edit to an existing file not yet read
+        this turn. New files are never blocked; the block self-clears once the
+        agent reads the file. Off unless ``AUTOBOT_FACT_FORCING`` is set, and a
+        no-op without a ``ctx`` to carry the per-turn state.
+        """
+        from autobot_shared.fact_forcing_guard import (
+            fact_forcing_env_enabled,
+            record_investigation,
+            uninvestigated_edit_path,
+        )
+
+        if not fact_forcing_env_enabled() or ctx is None:
+            return None
+        investigated: set[str] = ctx.context.setdefault("_fact_forcing_investigated", set())
+        name = tool_call.get("name", "")
+        args = tool_call.get("params") or tool_call.get("arguments") or {}
+        record_investigation(name, args, investigated)
+        path = uninvestigated_edit_path(name, args, investigated)
+        if path is None:
+            return None
+        error = (
+            f"Editing '{path}' is blocked (fact-forcing): read the file and its "
+            f"importers/call-sites first so the change is grounded, then retry."
+        )
+        logger.warning("[GH#11178] Blocked fact-forcing edit to '%s' (tool '%s')", path, name)
+        execution_results.append({"tool": name, "status": "error", "error": error, "fact_forcing": True})
+        return WorkflowMessage(
+            type="error",
+            content=error,
+            metadata={"tool": name, "error": True, "fact_forcing": True},
+        )
+
+    def _enforce_work_item_approval(
+        self,
+        tool_call: dict[str, Any],
+        ctx: "LLMIterationContext" | None,
+        execution_results: list[dict[str, Any]],
+    ) -> WorkflowMessage | None:
+        """Hold a tool the work item declared as approval-gated (GH#11160).
+
+        When the run carries a work item whose ``requires_approval_before`` names
+        the action category of this tool, the action is held pending approval — the
+        declared gate is honored at the production seam. No work item / no matching
+        category → ``None``. Categories are resolved onto the context upstream, so
+        this needs no DB round-trip.
+        """
+        if ctx is None or not getattr(ctx, "requires_approval_before", None):
+            return None
+        tool_name = tool_call.get("name", "")
+        category = _approval_category_for(tool_name, ctx.requires_approval_before)
+        if category is None:
+            return None
+        work_item_id = getattr(ctx, "work_item_id", None)
+        msg = (
+            f"Action '{tool_name}' requires approval before proceeding — the work item "
+            f"declares '{category}' as approval-gated (requires_approval_before)."
+        )
+        logger.warning("[GH#11160] Held tool '%s' pending approval — declared category '%s'", tool_name, category)
+        execution_results.append(
+            {
+                "tool": tool_name,
+                "status": "pending_approval",
+                "reason": msg,
+                "approval_category": category,
+                "work_item_id": work_item_id,
+            }
+        )
+        return WorkflowMessage(
+            type="approval_required",
+            content=msg,
+            metadata={
+                "tool": tool_name,
+                "approval_required": True,
+                "category": category,
+                "work_item_id": work_item_id,
+            },
         )
 
     async def _dispatch_tool_call(
@@ -2343,9 +2734,50 @@ class ToolHandlerMixin:
         """Route a tool call to the appropriate handler. Issue #620/#2310/#2629.
 
         Yields WorkflowMessage for execution stages, or (break_loop, respond_content) tuple
-        for the respond tool. Helpers handle MCP, browser, web_search, and execute_command.
+        for the respond tool. Uniform builtins (GH#11489: browser, web_search, web
+        research, execute_command) share one gate and route via ``_builtin_route``;
+        everything else falls through to MCP/unknown handling.
         """
         tool_name = tool_call["name"]
+
+        # GH#11145: enforce the acting agent's forbidden_work manifest at the single
+        # production dispatch seam — before any tool-specific branch. Every tool call
+        # funnels through here, so this is the one place the capability boundary is
+        # applied. No-ops for the plain chat agent (no profile → empty manifest);
+        # bites profile-bound agents (e.g. a delegated research_agent cannot run bash).
+        forbidden_msg = self._enforce_forbidden_work(tool_call, ctx, execution_results)
+        if forbidden_msg is not None:
+            yield forbidden_msg
+            return
+
+        # GH#11177: block writes that would weaken a linter/formatter config at the
+        # same production seam — steer the agent to fix the code, not the gate.
+        config_msg = self._enforce_config_protection(tool_call, execution_results)
+        if config_msg is not None:
+            yield config_msg
+            return
+
+        # GH#11178: fact-forcing — record reads/greps and block the first edit to
+        # an existing file not yet investigated this turn, at the same seam.
+        fact_msg = self._enforce_fact_forcing(tool_call, ctx, execution_results)
+        if fact_msg is not None:
+            yield fact_msg
+            return
+
+        # GH#11160: hold a tool the work item declared as approval-gated
+        # (requires_approval_before) pending approval, at the same seam.
+        approval_msg = self._enforce_work_item_approval(tool_call, ctx, execution_results)
+        if approval_msg is not None:
+            yield approval_msg
+            return
+
+        # GH#11568: sandboxed Python composition tool (main-chat only).
+        if tool_name == "compose" and CODEEXEC_ENABLED:
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
+            async for msg in self._handle_compose_tool(tool_call, session_id, execution_results, ctx):
+                yield msg
+            return
 
         if tool_name == "respond":
             if ctx is not None:
@@ -2358,53 +2790,15 @@ class ToolHandlerMixin:
         if tool_name == "delegate":
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
-            yield self._handle_delegate_tool(tool_call, execution_results)
-            return
-
-        # Issue #1368: Route browser tools to browser VM
-        if tool_name in BROWSER_TOOL_NAMES:
-            if ctx is not None:
-                ctx.consecutive_invalid_tool_calls = 0
-            # Issue #4529: Validate arguments against schema before dispatch.
-            validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
-            if validation_msg is not None:
-                execution_results.append(
-                    {
-                        "tool": tool_name,
-                        "status": "schema_error",
-                        "error": validation_msg.content,
-                        "schema_validation_failed": True,
-                    }
-                )
-                yield validation_msg
-                return
-            async for msg in self._handle_browser_tool(tool_call, execution_results, session_id):
+            async for msg in self._handle_delegate_tool(tool_call, execution_results, ctx):
                 yield msg
             return
 
-        # Issue #2306: web_search convenience tool wraps browser multi-step flow
-        if tool_name == "web_search":
-            if ctx is not None:
-                ctx.consecutive_invalid_tool_calls = 0
-            # Issue #4529: Validate arguments against schema before dispatch.
-            validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
-            if validation_msg is not None:
-                execution_results.append(
-                    {
-                        "tool": tool_name,
-                        "status": "schema_error",
-                        "error": validation_msg.content,
-                        "schema_validation_failed": True,
-                    }
-                )
-                yield validation_msg
-                return
-            async for msg in self._handle_web_search_tool(tool_call, execution_results, session_id):
-                yield msg
-            return
-
-        # Issue #7509: Web research tools — direct internal dispatch.
-        if tool_name in ("scrape_url", "crawl_site", "map_site", "extract_structured_data"):
+        # #11501: LLC board/CEO-chat work-object tools — company-scoped dispatch
+        # to the existing llc/services. Handled here (not via _builtin_route)
+        # because the handler needs ctx.context["company_id"], which the uniform
+        # route does not receive.
+        if tool_name in LLC_TOOL_NAMES:
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
             validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
@@ -2419,42 +2813,80 @@ class ToolHandlerMixin:
                 )
                 yield validation_msg
                 return
-            async for msg in self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id):
+            async for msg in self._handle_llc_tool(tool_name, tool_call, execution_results, ctx):
                 yield msg
             return
 
-        if tool_name != "execute_command":
-            async for msg in self._dispatch_mcp_or_unknown(
-                tool_name, tool_call, execution_results, ctx, role, session_id
+        # GH#11489: every uniform builtin (browser #1368, web_search #2306, web
+        # research #7509, execute_command) passes one shared gate — invalid-call
+        # counter reset, then Issue #4529 schema validation — before its handler.
+        if tool_name in _UNIFORM_BUILTIN_TOOLS:
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
+            validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
+            if validation_msg is not None:
+                execution_results.append(
+                    {
+                        "tool": tool_name,
+                        "status": "schema_error",
+                        "error": validation_msg.content,
+                        "schema_validation_failed": True,
+                    }
+                )
+                yield validation_msg
+                return
+            async for msg in self._builtin_route(
+                tool_name,
+                tool_call,
+                session_id,
+                terminal_session_id,
+                ollama_endpoint,
+                selected_model,
+                execution_results,
+                additional_response_parts,
             ):
                 yield msg
             return
 
-        if ctx is not None:
-            ctx.consecutive_invalid_tool_calls = 0
-        # Issue #4529: Validate arguments against schema before dispatch.
-        validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
-        if validation_msg is not None:
-            execution_results.append(
-                {
-                    "tool": tool_name,
-                    "status": "schema_error",
-                    "error": validation_msg.content,
-                    "schema_validation_failed": True,
-                }
-            )
-            yield validation_msg
-            return
-        async for msg in self._dispatch_execute_command(
-            tool_call,
-            session_id,
-            terminal_session_id,
-            ollama_endpoint,
-            selected_model,
-            execution_results,
-            additional_response_parts,
-        ):
+        async for msg in self._dispatch_mcp_or_unknown(tool_name, tool_call, execution_results, ctx, role, session_id):
             yield msg
+
+    def _builtin_route(
+        self,
+        tool_name: str,
+        tool_call: dict[str, Any],
+        session_id: str,
+        terminal_session_id: str,
+        ollama_endpoint: str,
+        selected_model: str,
+        execution_results: list[dict[str, Any]],
+        additional_response_parts: list[str],
+    ) -> AsyncIterator[Any]:
+        """Return the handler async-generator for a uniform builtin tool (GH#11489).
+
+        Membership SSOT is ``_UNIFORM_BUILTIN_TOOLS``; the caller has already run
+        the shared gate. Adding a builtin that follows the standard gate takes a
+        schema entry plus one row here — no new branch at the dispatch seam.
+        """
+        if tool_name in BROWSER_TOOL_NAMES:  # Issue #1368: route to browser VM
+            return self._handle_browser_tool(tool_call, execution_results, session_id)
+        if tool_name == "web_search":  # Issue #2306: multi-step browser flow
+            return self._handle_web_search_tool(tool_call, execution_results, session_id)
+        if tool_name in WEB_RESEARCH_TOOL_NAMES:  # Issue #7509
+            return self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id)
+        if tool_name == "execute_command":
+            return self._dispatch_execute_command(
+                tool_call,
+                session_id,
+                terminal_session_id,
+                ollama_endpoint,
+                selected_model,
+                execution_results,
+                additional_response_parts,
+            )
+        # A member of _UNIFORM_BUILTIN_TOOLS without a route row is a wiring bug —
+        # fail loudly rather than falling through to a high-blast-radius handler.
+        raise ValueError(f"_builtin_route: no route for {tool_name!r}; add a row alongside _UNIFORM_BUILTIN_TOOLS")
 
     async def _dispatch_mcp_or_unknown(
         self,
@@ -2504,6 +2936,221 @@ class ToolHandlerMixin:
             additional_response_parts,
         ):
             yield msg
+
+    # ------------------------------------------------------------------ #
+    # GH#11568: compose tool handlers                                     #
+    # ------------------------------------------------------------------ #
+
+    def _guard_compose(self, program: str, agent_id: "str | None") -> "WorkflowMessage | None":
+        """Run AST guard; return error WorkflowMessage on violation, else None."""
+        from chat_workflow.code_exec.ast_guard import check_script
+        from chat_workflow.code_exec.shim_codegen import injectable_tool_set
+        from orchestration.agent_registry import resolve_forbidden_tools
+
+        forbidden = resolve_forbidden_tools(agent_id)
+        injected = frozenset(injectable_tool_set([], forbidden))
+        verdict = check_script(program, frozenset(forbidden), injected_tools=injected)
+        if verdict.ok:
+            return None
+        lines = "; ".join(f"line {v['line']}: {v['message']}" for v in verdict.violations)
+        return WorkflowMessage(
+            type="tool_result",
+            content=f"compose script rejected by AST guard: {lines}",
+            metadata={"tool_name": "compose", "ast_violations": verdict.violations},
+        )
+
+    @staticmethod
+    def _compose_auto_approvable(shim_snapshot: list[str]) -> bool:
+        """Auto-approve only when the flag is on AND all shims are read-only (design §3.1)."""
+        return CODEEXEC_AUTOAPPROVE_READONLY and set(shim_snapshot) <= CODEEXEC_READONLY_TOOLS
+
+    async def _approve_compose(self, program: str, shim_snapshot: list[str], session_id: str) -> "str | None":
+        """Return an approval id requiring a gate, or ``None`` to auto-approve (GH#11568).
+
+        Auto-approval requires the flag AND a fully read-only shim set; any
+        non-read-only shim forces the WORKFLOW_GATE even with the flag on.
+        """
+        if self._compose_auto_approvable(shim_snapshot):
+            return None
+        return await self._persist_compose_approval(program, shim_snapshot, session_id)
+
+    async def _poll_compose_approval(self, approval_id: str) -> str:
+        """Poll the WORKFLOW_GATE until decided; return its terminal status (GH#11568 MINOR-2).
+
+        Mirrors the terminal-command approval loop: a bounded poll on the persisted
+        gate. Returns ``approved``/``rejected``/``revision_requested``, or
+        ``timeout`` when no decision lands within the wait budget.
+        """
+        import uuid as _uuid
+
+        from services.approval_gate_service import ApprovalGateService
+        from user_management.database import get_async_session_factory
+
+        elapsed = 0
+        session_factory = get_async_session_factory()
+        while elapsed < CODEEXEC_APPROVAL_WAIT_SECONDS:
+            async with session_factory() as db:
+                approval = await ApprovalGateService(db).get(_uuid.UUID(approval_id))
+            status = getattr(approval, "status", None)
+            if status and status != "pending":
+                return status
+            await asyncio.sleep(CODEEXEC_APPROVAL_POLL_SECONDS)
+            elapsed += CODEEXEC_APPROVAL_POLL_SECONDS
+        return "timeout"
+
+    async def _persist_compose_approval(self, program: str, shim_snapshot: list[str], session_id: str) -> "str | None":
+        """Persist a WORKFLOW_GATE Approval carrying program + shims + budgets (GH#11568)."""
+        from chat_workflow.code_exec.broker import CODEEXEC_MAX_TOOL_CALLS
+        from models.approval import ApprovalType
+        from secure_sandbox_executor import CODEEXEC_TIMEOUT_SECONDS
+        from services.approval_gate_service import ApprovalGateService
+        from user_management.database import get_async_session_factory
+
+        context = {
+            "program": program,
+            "shim_snapshot": shim_snapshot,
+            "budgets": {"max_tool_calls": CODEEXEC_MAX_TOOL_CALLS, "timeout_seconds": CODEEXEC_TIMEOUT_SECONDS},
+        }
+        session_factory = get_async_session_factory()
+        async with session_factory() as db:
+            approval = await ApprovalGateService(db).create_approval(
+                title="compose script execution",
+                approval_type=ApprovalType.WORKFLOW_GATE.value,
+                requested_by_agent="chat_agent",
+                description="Sandboxed Python compose script awaiting approval.",
+                workflow_id=session_id,
+                workflow_step="compose",
+                context=context,
+            )
+            return str(approval.id)
+
+    def _build_compose_dispatch(self, session_id: str, ctx: "LLMIterationContext | None"):
+        """Return an async dispatch callable routing shim calls through the seam (GH#11568)."""
+
+        async def _dispatch(tool: str, params: dict) -> Any:
+            sub_results: list[dict[str, Any]] = []
+            sub_call = {"name": tool, "params": params}
+            async for _ in self._dispatch_tool_call(sub_call, session_id, session_id, "", "", sub_results, [], ctx=ctx):
+                pass
+            last = sub_results[-1] if sub_results else {}
+            if last.get("status") == "error":
+                raise RepairableException(last.get("error", "tool dispatch failed"))
+            return last.get("output", last)
+
+        return _dispatch
+
+    async def _execute_compose(
+        self, program: str, agent_id: "str | None", run_id: str, session_id: str, ctx: "LLMIterationContext | None"
+    ) -> "WorkflowMessage":
+        """Run the script inside the sandbox via a live broker; return result msg."""
+        from chat_workflow.code_exec.broker import CodeExecBroker
+        from chat_workflow.code_exec.shim_codegen import generate_shim_module, injectable_tool_set
+        from orchestration.agent_registry import resolve_forbidden_tools
+        from secure_sandbox_executor import CODEEXEC_TIMEOUT_SECONDS, SecureSandboxExecutor  # lazy
+
+        forbidden = resolve_forbidden_tools(agent_id)
+        tools = injectable_tool_set([], forbidden)
+        shim_src = generate_shim_module(tools)
+        broker = CodeExecBroker(
+            self._build_compose_dispatch(session_id, ctx),
+            tools,
+            forbidden,
+            run_id,
+            f"autobot:codeexec:security:events:{run_id}",
+            progress_channel=f"workflow:{session_id}",
+        )
+        executor = SecureSandboxExecutor()
+        result = await executor.execute_with_stdio_broker(program, shim_src, broker, CODEEXEC_TIMEOUT_SECONDS, run_id)
+        return self._compose_result_message(result, run_id)
+
+    def _compose_result_message(self, result: Any, run_id: str) -> "WorkflowMessage":
+        """Build the tool_result WorkflowMessage from a SandboxResult (GH#11568)."""
+        if result.success:
+            return WorkflowMessage(
+                type="tool_result",
+                content=result.stdout or "(no output)",
+                metadata={"tool_name": "compose", "run_id": run_id},
+            )
+        content = f"compose execution failed (exit {result.exit_code}): {result.stderr or result.stdout}"
+        return WorkflowMessage(
+            type="tool_result",
+            content=content,
+            metadata={"tool_name": "compose", "run_id": run_id, "failed": True},
+        )
+
+    def _compose_shim_snapshot(self, agent_id: "str | None") -> list[str]:
+        """Injectable-tool snapshot for this agent (allowlist ∩ allowed − forbidden)."""
+        from chat_workflow.code_exec.shim_codegen import injectable_tool_set
+        from orchestration.agent_registry import resolve_forbidden_tools
+
+        return injectable_tool_set([], resolve_forbidden_tools(agent_id))
+
+    def _reject_delegated_compose(self, agent_id: "str | None") -> "WorkflowMessage | None":
+        """Main-chat-only: reject compose for any profile-bound (delegated) agent (GH#11568)."""
+        if agent_id is None:
+            return None
+        return WorkflowMessage(
+            type="tool_result",
+            content="compose is not available for delegated subagents",
+            metadata={"tool_name": "compose"},
+        )
+
+    def _compose_gate_request_msg(self, approval_id: str, shim_snapshot: list[str]) -> "WorkflowMessage":
+        """Build the WORKFLOW_GATE approval-required notification (GH#11568)."""
+        return WorkflowMessage(
+            type="approval_required",
+            content="compose script requires approval before execution",
+            metadata={
+                "tool": "compose",
+                "approval_required": True,
+                "approval_id": approval_id,
+                "shim_snapshot": shim_snapshot,
+            },
+        )
+
+    def _compose_gate_refusal_msg(self, status: str) -> "WorkflowMessage":
+        """Terminal refusal message for a non-approved gate (GH#11568)."""
+        return WorkflowMessage(
+            type="tool_result",
+            content=f"compose execution not approved (gate status: {status}).",
+            metadata={"tool_name": "compose", "approval_status": status, "denied": True},
+        )
+
+    async def _handle_compose_tool(
+        self,
+        tool_call: dict[str, Any],
+        session_id: str,
+        execution_results: list[dict[str, Any]],
+        ctx: "LLMIterationContext | None",
+    ):
+        """Handle the compose tool call — main chat agent only (GH#11568)."""
+        program: str = tool_call.get("params", {}).get("program", "")
+        agent_id: str | None = ctx.agent_context.agent_id if (ctx and ctx.agent_context) else None
+        subagent_msg = self._reject_delegated_compose(agent_id)
+        if subagent_msg is not None:
+            yield subagent_msg
+            return
+
+        guard_msg = self._guard_compose(program, agent_id)
+        if guard_msg is not None:
+            execution_results.append({"tool": "compose", "status": "ast_rejected"})
+            yield guard_msg
+            return
+
+        shim_snapshot = self._compose_shim_snapshot(agent_id)
+        approval_id = await self._approve_compose(program, shim_snapshot, session_id)
+        if approval_id is not None:
+            yield self._compose_gate_request_msg(approval_id, shim_snapshot)
+            status = await self._poll_compose_approval(approval_id)
+            if status != "approved":
+                execution_results.append({"tool": "compose", "status": "gated", "approval_status": status})
+                yield self._compose_gate_refusal_msg(status)
+                return
+
+        run_id = str(uuid.uuid4())
+        result_msg = await self._execute_compose(program, agent_id, run_id, session_id, ctx)
+        execution_results.append({"tool": "compose", "status": "executed", "run_id": run_id})
+        yield result_msg
 
     async def _process_tool_calls(
         self,

@@ -23,6 +23,7 @@ needed for modules that those test files import directly.
 Issue: #3499
 """
 
+import ast
 import sys
 import types
 from pathlib import Path
@@ -103,27 +104,46 @@ for _m in [
     _stub(_m)
 
 # ── services ──────────────────────────────────────────────────────────────────
-for _m in [
-    "services",
-    "services.auth",
-    "services.database",
+# The services.* modules api/code_sync.py imports are AST-derived from its
+# source (#11575) — a hand-maintained list rots the moment code_sync gains a
+# new `from services.X import ...` (exactly how #11481 broke, and the same
+# anti-pattern behind the #11461 schema-list rot).  Pattern mirrors the
+# schema-name derivation in tests/api/test_collect_outdated_node_ids.py.
+_code_sync_ast = ast.parse((Path(__file__).parent / "api" / "code_sync.py").read_text(encoding="utf-8"))
+_CODE_SYNC_SERVICE_MODULES = frozenset(
+    {
+        _node.module
+        for _node in ast.walk(_code_sync_ast)
+        if isinstance(_node, ast.ImportFrom) and _node.module and _node.module.startswith("services.")
+    }
+    | {
+        _alias.name
+        for _node in ast.walk(_code_sync_ast)
+        if isinstance(_node, ast.Import)
+        for _alias in _node.names
+        if _alias.name.startswith("services.")
+    }
+)
+del _code_sync_ast
+
+# services.* modules NOT imported by code_sync.py but stubbed for other api/*
+# modules under test.  These have their own consumers and are not exposed to
+# the code_sync rot source above.
+_EXTRA_SERVICE_MODULES = (
     "services.blue_green",
-    "services.code_distributor",
     "services.deployment",
-    "services.drift_checker",
     "services.encryption",
-    "services.fleet_sync_guard",
-    "services.git_tracker",
-    "services.playbook_executor",
     "services.reconciler",
     "services.replication",
     "services.role_registry",
     "services.service_categorizer",
     "services.service_orchestrator",
-    "services.sync_orchestrator",
     "services.tls_credentials",
     "services.vnc_credentials",
-]:
+)
+
+# Parent package first so each child stub binds onto it (see _stub docstring).
+for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_MODULES))):
     _stub(_m)
 
 # ── python-multipart ─────────────────────────────────────────────────────────

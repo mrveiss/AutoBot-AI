@@ -61,8 +61,28 @@ except ImportError:
 
 logger = get_logger(__name__)
 
-# Issue #380: Module-level tuple for literal value AST types
-_LITERAL_VALUE_TYPES = (ast.Str, ast.Num)
+
+# Issue #380: literal value AST helpers.
+# The legacy Str/Num node types were removed in Python 3.12; both are now
+# ast.Constant. These helpers recover the str-vs-num distinction those checks
+# relied on.
+def _is_str_constant(node: ast.AST) -> bool:
+    """True for a string literal constant (a string-valued ast.Constant)."""
+    return isinstance(node, ast.Constant) and isinstance(node.value, str)
+
+
+def _is_num_constant(node: ast.AST) -> bool:
+    """True for a numeric literal constant (a numeric-valued ast.Constant).
+
+    bool is a subclass of int but a True/False literal was never a numeric
+    literal, so exclude it.
+    """
+    return (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, (int, float, complex))
+        and not isinstance(node.value, bool)
+    )
+
 
 # Issue #380: Module-level tuple for config file extensions
 _CONFIG_FILE_EXTENSIONS = (
@@ -570,7 +590,7 @@ class EnvironmentAnalyzer:
         # Check module docstring
         if tree.body and isinstance(tree.body[0], ast.Expr):
             expr_value = tree.body[0].value
-            if isinstance(expr_value, (ast.Str, ast.Constant)):
+            if isinstance(expr_value, ast.Constant):
                 node = tree.body[0]
                 start = node.lineno
                 end = getattr(node, "end_lineno", start) or start
@@ -583,9 +603,7 @@ class EnvironmentAnalyzer:
                 if node.body and isinstance(node.body[0], ast.Expr):
                     expr_value = node.body[0].value
                     # Check for string constant (docstring)
-                    is_docstring = isinstance(expr_value, ast.Str) or (
-                        isinstance(expr_value, ast.Constant) and isinstance(expr_value.value, str)
-                    )
+                    is_docstring = isinstance(expr_value, ast.Constant) and isinstance(expr_value.value, str)
                     if is_docstring:
                         doc_node = node.body[0]
                         start = doc_node.lineno
@@ -632,27 +650,27 @@ class EnvironmentAnalyzer:
 
     def _extract_hardcoded_from_node(self, node: ast.AST, file_path: str, lines: list[str]) -> HardcodedValue | None:
         """Extract hardcoded value from AST node (Issue #340 - extracted)"""
-        # String literals
-        if isinstance(node, ast.Str):
+        # String literals (string-valued constant)
+        if _is_str_constant(node):
             return self._extract_from_str_node(node, file_path, lines)
-        # Numeric constants
-        if isinstance(node, ast.Num):
+        # Numeric constants (numeric-valued constant; bool excluded)
+        if _is_num_constant(node):
             return self._extract_from_num_node(node, file_path, lines)
         # Assignment nodes
         if isinstance(node, ast.Assign):
             return self._extract_from_assign_node(node, file_path, lines)
         return None
 
-    def _extract_from_str_node(self, node: ast.Str, file_path: str, lines: list[str]) -> HardcodedValue | None:
+    def _extract_from_str_node(self, node: ast.Constant, file_path: str, lines: list[str]) -> HardcodedValue | None:
         """Extract from string literal node (Issue #340 - extracted)"""
-        value = node.s
+        value = node.value
         if not self._is_potentially_configurable(value):
             return None
         return self._create_hardcoded_value(file_path, node.lineno, None, value, lines)
 
-    def _extract_from_num_node(self, node: ast.Num, file_path: str, lines: list[str]) -> HardcodedValue | None:
+    def _extract_from_num_node(self, node: ast.Constant, file_path: str, lines: list[str]) -> HardcodedValue | None:
         """Extract from numeric node (Issue #340 - extracted, Issue #630 - context filtering)"""
-        value = str(node.n)
+        value = str(node.value)
         if not self._is_numeric_config_candidate(value):
             return None
 
@@ -704,11 +722,13 @@ class EnvironmentAnalyzer:
         """Try to extract a named hardcoded value (Issue #340 - extracted)"""
         if not isinstance(target, ast.Name):
             return None
-        if not isinstance(value_node, _LITERAL_VALUE_TYPES):  # Issue #380
+        # Issue #380: only string and numeric literal constants.
+        # Excludes bool/None constants, matching the original literal-only check.
+        if not (_is_str_constant(value_node) or _is_num_constant(value_node)):
             return None
 
         var_name = target.id
-        value = value_node.s if isinstance(value_node, ast.Str) else str(value_node.n)
+        value = value_node.value if _is_str_constant(value_node) else str(value_node.value)
 
         is_config = self._is_potentially_configurable(value) or self._is_numeric_config_candidate(value)
         if not is_config:

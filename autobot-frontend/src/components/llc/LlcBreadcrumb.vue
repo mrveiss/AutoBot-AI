@@ -57,11 +57,11 @@ defineProps<{
 }
 
 .crumb-current {
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
   font-weight: 600;
 }
 
 .crumb-sep {
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 </style>

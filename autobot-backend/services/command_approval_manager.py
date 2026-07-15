@@ -458,16 +458,16 @@ class CommandApprovalManager:
         return False
 
     # =========================================================================
-    # Permission System v2 Integration (Claude Code-style)
+    # Permission System Integration (Claude Code-style)
     # =========================================================================
 
     @staticmethod
-    def is_permission_v2_enabled() -> bool:
+    def is_permission_system_enabled() -> bool:
         """
-        Check if permission system v2 (Claude Code-style) is enabled.
+        Check if the permission system (Claude Code-style) is enabled.
 
         Returns:
-            True if permission v2 is enabled
+            True if the permission system is enabled
         """
         try:
             from autobot_shared.ssot_config import config
@@ -494,7 +494,7 @@ class CommandApprovalManager:
             return None
 
     @staticmethod
-    async def check_permission_rules_v2(
+    async def check_permission_rules(
         command: str,
         tool: str = "Bash",
         is_admin: bool = False,
@@ -561,7 +561,7 @@ class CommandApprovalManager:
             return None, None
 
     @staticmethod
-    async def check_approval_memory_v2(
+    async def check_approval_memory(
         command: str,
         project_path: str,
         user_id: str,
@@ -606,7 +606,7 @@ class CommandApprovalManager:
             return False
 
     @staticmethod
-    async def store_approval_memory_v2(
+    async def store_approval_memory(
         command: str,
         project_path: str,
         user_id: str,

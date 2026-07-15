@@ -10,8 +10,8 @@ Extracted from terminal.py for better maintainability (Issue #185, #210).
 Further modularized with Issue #290 (God class refactoring).
 
 Classes:
-- ConsolidatedTerminalWebSocket: WebSocket handler for real-time terminal I/O
-- ConsolidatedTerminalManager: Session registry and lifecycle management
+- TerminalWebSocket: WebSocket handler for real-time terminal I/O
+- TerminalManager: Session registry and lifecycle management
 
 Supporting modules (backend/services/terminal_websocket/):
 - security.py: Command risk assessment
@@ -143,7 +143,7 @@ async def _save_buffered_output_to_chat(
         return False, None
 
 
-class ConsolidatedTerminalWebSocket:
+class TerminalWebSocket:
     """
     Enhanced terminal WebSocket handler that combines features
     from all implementations
@@ -1295,17 +1295,17 @@ class ConsolidatedTerminalWebSocket:
 
 
 # Enhanced session manager for consolidated terminal
-class ConsolidatedTerminalManager:
+class TerminalManager:
     """Enhanced session manager for consolidated terminal API"""
 
     def __init__(self):
         """Initialize manager with session tracking dictionaries."""
         self.session_configs = {}  # session_id -> config
-        self.active_connections = {}  # session_id -> ConsolidatedTerminalWebSocket
+        self.active_connections = {}  # session_id -> TerminalWebSocket
         self.session_stats = {}  # session_id -> statistics
         self._lock = asyncio.Lock()  # CRITICAL: Protect concurrent dictionary access
 
-    def add_connection(self, session_id: str, terminal: ConsolidatedTerminalWebSocket):
+    def add_connection(self, session_id: str, terminal: TerminalWebSocket):
         """Add a WebSocket connection for a session"""
         # Note: Should be called within async context with lock acquired
         self.active_connections[session_id] = terminal
@@ -1498,4 +1498,4 @@ class ConsolidatedTerminalManager:
 
 
 # Global session manager
-session_manager = ConsolidatedTerminalManager()
+session_manager = TerminalManager()

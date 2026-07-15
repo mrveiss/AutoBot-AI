@@ -8,17 +8,28 @@ Health Collector for SLM Agent
 Collects system and service health metrics for reporting to admin.
 """
 
+import json
 import logging
 import os
 import platform
 import socket
 import subprocess  # nosec B404 - required for systemctl interaction
+import urllib.request
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 import psutil
 
 logger = logging.getLogger(__name__)
+
+# App-level /health probes for services that expose engine state beyond
+# systemd (#11723). Local-only URLs, short timeout, never fatal to service
+# discovery. Env-overridable so a non-default port needs no code change.
+TTS_HEALTH_URL = os.getenv("SLM_AGENT_TTS_HEALTH_URL", "http://127.0.0.1:8083/health")
+APP_HEALTH_PROBES: Dict[str, str] = {
+    "autobot-tts-worker": TTS_HEALTH_URL,
+}
+APP_HEALTH_TIMEOUT_SECONDS = float(os.getenv("SLM_AGENT_APP_HEALTH_TIMEOUT", "2.0"))
 
 
 class HealthCollector:
@@ -135,6 +146,7 @@ class HealthCollector:
                 if service_info:
                     if service_info["status"] == "running":
                         service_info.update(self._get_service_details(service_info["name"]))
+                        service_info.update(self._probe_app_health(service_info["name"]))
                     services.append(service_info)
 
         except subprocess.TimeoutExpired:
@@ -238,6 +250,34 @@ class HealthCollector:
             logger.debug("Could not get details for %s: %s", service_name, e)
 
         return details
+
+    def _probe_app_health(self, service_name: str) -> Dict:
+        """Fold app-level /health engine state into service info (#11723).
+
+        Only services listed in APP_HEALTH_PROBES are probed (local URL,
+        short timeout). Never raises: any failure (timeout, refused,
+        non-JSON, missing fields) returns {} so systemd discovery and the
+        heartbeat are unaffected. The returned keys feed
+        services/service_extra_data.engine_degraded_fields on the SLM
+        backend, which lights the NodeServicesPanel degraded badge (#11718).
+        """
+        url = APP_HEALTH_PROBES.get(service_name)
+        if not url:
+            return {}
+        try:
+            with urllib.request.urlopen(  # nosec B310 - fixed local http:// URL, not user input
+                url, timeout=APP_HEALTH_TIMEOUT_SECONDS
+            ) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            logger.debug("App health probe failed for %s: %s", service_name, e)
+            return {}
+        if not isinstance(payload, dict) or "engine_degraded" not in payload:
+            return {}
+        return {
+            "engine_degraded": bool(payload.get("engine_degraded")),
+            "degraded_reason": payload.get("degraded_reason"),
+        }
 
     def is_healthy(self, thresholds: Optional[Dict] = None) -> bool:
         """Quick health check against thresholds."""

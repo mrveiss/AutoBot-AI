@@ -52,6 +52,15 @@ def _project(company_id):
     m.auto_rollover = None
     m.open_work_item_count = 0
     m.active_sprint_name = None
+    # Pin the repo-linkage fields (#11129) so the MagicMock doesn't auto-vivify
+    # them into non-serializable Mocks when ProjectResponse.model_validate reads.
+    m.code_source_id = None
+    m.code_source = None
+    # Pin lifecycle fields (#11129 P2) — must not auto-vivify into Mocks.
+    m.lifecycle_state = "active"
+    m.archived_at = None
+    m.disposal_scheduled_at = None
+    m.disposal_approval_id = None
     return m
 
 
@@ -147,6 +156,31 @@ def test_list_programs_attaches_project_count():
     resp = client.get(f"/portfolios/{pf_id}/programs")
     assert resp.status_code == 200
     assert resp.json()[0]["project_count"] == 7
+
+
+def test_list_company_projects_hydrates_code_source(monkeypatch):
+    """#11406: a linked repo must survive a plain project-list refetch — the
+    list path must hydrate `code_source`, not just the attach / with-repos paths."""
+    import llc.api.sprints as sprints_mod  # noqa: PLC0415
+
+    org = str(uuid.uuid4())
+    pr = _project(org)
+    pr.code_source_id = "src-1"
+
+    async def _fake_summary(code_source_id):
+        if not code_source_id:
+            return None
+        return sprints_mod.CodeSourceSummary(
+            id=code_source_id, repo="owner/repo", branch="main", clone_path="/tmp/x", status="ready"
+        )
+
+    monkeypatch.setattr(sprints_mod, "_project_source_summary", _fake_summary)
+    client = _client(org, [pr], [(pr.id, 0)], [])  # no open items, no active sprint
+    resp = client.get(f"/companies/{org}/projects")
+    assert resp.status_code == 200
+    body = resp.json()[0]
+    assert body["code_source"] is not None, "code_source must be hydrated on the list path (#11406)"
+    assert body["code_source"]["repo"] == "owner/repo"
 
 
 def test_list_company_projects_attaches_open_count_and_active_sprint():

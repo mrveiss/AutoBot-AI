@@ -27,7 +27,7 @@ const meta = {
 } as Meta<typeof LoadingBoundary>
 
 export default meta
-type Story = StoryObj<any>
+type Story = StoryObj<Record<string, unknown>>
 
 export const Loading: Story = {
   render: () => ({

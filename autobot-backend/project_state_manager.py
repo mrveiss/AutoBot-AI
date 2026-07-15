@@ -256,7 +256,7 @@ class ProjectStateManager:
                 "security_layer",
                 "Command security and validation",
                 "file_exists",
-                "src/enhanced_security_layer.py",
+                "src/security_layer.py",
             ),
             PhaseCapability(
                 "secure_executor",

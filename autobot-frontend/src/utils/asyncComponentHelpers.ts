@@ -1,11 +1,12 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { defineAsyncComponent, defineComponent, h } from 'vue'
-import type { AsyncComponentLoader } from 'vue'
+import type { AsyncComponentLoader, Component } from 'vue'
 import AsyncErrorFallback from '@/components/async/AsyncErrorFallback.vue'
 // Issue #156 Fix: Import RumAgent to get complete Window.rum type
 import '../utils/RumAgent'
 import { createLogger } from '@/utils/debugUtils'
+import { isChunkLoadError } from '@/utils/chunkLoadError'
 
 // Create scoped logger for asyncComponentHelpers
 const logger = createLogger('AsyncComponent')
@@ -15,7 +16,7 @@ declare global {
   interface Window {
     // Issue #156 Fix: rum is declared in RumAgent.ts with complete type
     __webpack_require__?: {
-      cache: Record<string, any>
+      cache: Record<string, unknown>
     }
   }
 }
@@ -32,7 +33,7 @@ export interface AsyncComponentOptions {
   /** Loading timeout in milliseconds */
   timeout?: number
   /** Props to pass to the component */
-  props?: Record<string, any>
+  props?: Record<string, unknown>
   /** Whether to show detailed loading progress */
   showProgress?: boolean
   /** Custom error handler */
@@ -133,12 +134,10 @@ export function defineRobustAsyncComponent(
       logger.error(`Failed to load ${name}:`, error)
 
       // Issue #156 Fix: Type guard for error message property
-      const errorMessage = (error as any)?.message || String(error)
+      const errorMessage = (error as Error | undefined)?.message || String(error)
 
       // Check if this is a chunk loading error
-      const isChunkError = errorMessage.includes('Loading chunk') ||
-                           errorMessage.includes('ChunkLoadError') ||
-                           errorMessage.includes('Loading CSS chunk')
+      const isChunkError = isChunkLoadError(errorMessage)
 
       if (isChunkError) {
         logger.warn(`Chunk loading error detected for ${name}, using cache management...`)
@@ -233,26 +232,24 @@ export function createRouteComponent(
  * @returns Component with chunk loading error boundaries
  */
 export function createLazyComponent(
-  importFn: () => Promise<any>,
+  importFn: () => Promise<{ default?: Component } | Component>,
   componentName: string
 ) {
   return defineRobustAsyncComponent(
     async () => {
       try {
         const module = await importFn()
-        return module.default || module
-      } catch (error: any) {
+        return (module as { default?: Component }).default || (module as Component)
+      } catch (error) {
         // Handle specific chunk loading errors
-        if (error?.message?.includes('Loading chunk') ||
-            error?.message?.includes('ChunkLoadError') ||
-            error?.message?.includes('Loading CSS chunk')) {
+        if (isChunkLoadError(error)) {
 
           logger.warn(`Chunk loading failed for ${componentName}, attempting cache bust...`)
 
           // Attempt to clear module cache and retry once
-          if (typeof window !== 'undefined' && (window as any).__webpack_require__) {
+          if (typeof window !== 'undefined' && window.__webpack_require__) {
             // Clear webpack module cache if possible
-            const webpackRequire = (window as any).__webpack_require__
+            const webpackRequire = window.__webpack_require__
             if (webpackRequire.cache) {
               Object.keys(webpackRequire.cache).forEach(key => {
                 if (key.includes(componentName.toLowerCase())) {
@@ -265,7 +262,7 @@ export function createLazyComponent(
           // Use cache management system for chunk errors
           try {
             const { handleChunkLoadingError } = await import('./cacheManagement')
-            await handleChunkLoadingError(error, componentName)
+            await handleChunkLoadingError(error as Error, componentName)
             return // Cache management will handle the reload
           } catch (cacheError) {
             logger.error(`Cache management failed for ${componentName}:`, cacheError)
@@ -361,9 +358,7 @@ export function setupAsyncComponentErrorHandler() {
   window.addEventListener('unhandledrejection', async (event) => {
     const error = event.reason
 
-    if (error?.message?.includes('Loading chunk') ||
-        error?.message?.includes('ChunkLoadError') ||
-        error?.message?.includes('Loading CSS chunk')) {
+    if (isChunkLoadError(error)) {
 
       logger.warn('Detected chunk loading failure:', error)
 

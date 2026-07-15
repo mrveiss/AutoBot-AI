@@ -12,6 +12,7 @@ import os
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
 
@@ -19,18 +20,13 @@ TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "chat_templa
 SUPPORTED_TEMPLATES = {"chatml", "zephyr", "vicuna"}
 DEFAULT_TEMPLATE = "chatml"
 
-_env = None
-
-
-def _get_env() -> Environment:
-    global _env
-    if _env is None:
-        _env = Environment(
-            loader=FileSystemLoader(TEMPLATES_DIR),
-            autoescape=select_autoescape([]),
-            keep_trailing_newline=True,
-        )
-    return _env
+_get_env = lazy_singleton(
+    lambda: Environment(
+        loader=FileSystemLoader(TEMPLATES_DIR),
+        autoescape=select_autoescape([]),
+        keep_trailing_newline=True,
+    )
+)
 
 
 def render_chat_template(messages: list, template_name: str = DEFAULT_TEMPLATE) -> str:

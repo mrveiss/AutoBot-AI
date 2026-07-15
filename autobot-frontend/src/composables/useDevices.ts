@@ -50,8 +50,8 @@ export function useDevices() {
         const response = await api.get<DeviceListResponse>('/devices')
         devices.value = response.devices || []
         logger.debug('Fetched devices:', devices.value.length)
-      } catch (err: any) {
-        const msg = err?.message || 'Failed to load devices'
+      } catch (err) {
+        const msg = (err as Error)?.message || 'Failed to load devices'
         error.value = msg
         logger.error('Failed to fetch devices:', err)
         throw err
@@ -66,8 +66,8 @@ export function useDevices() {
         await api.delete(`/devices/${deviceId}`)
         devices.value = devices.value.filter(d => d.id !== deviceId)
         logger.info('Device deleted:', deviceId)
-      } catch (err: any) {
-        const msg = err?.message || 'Failed to delete device'
+      } catch (err) {
+        const msg = (err as Error)?.message || 'Failed to delete device'
         error.value = msg
         logger.error('Failed to delete device:', err)
         throw err
@@ -82,8 +82,8 @@ export function useDevices() {
         const response = await api.get('/devices/pair-qr')
         logger.debug('Got QR challenge')
         return response
-      } catch (err: any) {
-        const msg = err?.message || 'Failed to get pairing QR code'
+      } catch (err) {
+        const msg = (err as Error)?.message || 'Failed to get pairing QR code'
         error.value = msg
         logger.error('Failed to get QR challenge:', err)
         throw err
@@ -105,8 +105,8 @@ export function useDevices() {
         await fetchDevices()
         logger.info('Device paired:', response.device_id)
         return response
-      } catch (err: any) {
-        const msg = err?.message || 'Failed to pair device'
+      } catch (err) {
+        const msg = (err as Error)?.message || 'Failed to pair device'
         error.value = msg
         logger.error('Failed to pair device:', err)
         throw err

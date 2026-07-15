@@ -29,6 +29,8 @@ from integrations.communication_integration import (
     SlackIntegration,
     TeamsIntegration,
 )
+from integrations.messaging_adapters import DiscordMessagingAdapter, SlackMessagingAdapter
+from integrations.protocols import MessagingProtocol
 
 logger = get_logger(__name__)
 
@@ -165,15 +167,28 @@ async def send_message(
     token: str,
     message: SendMessageRequest,
 ) -> Dict[str, Any]:
-    """Send a message to the specified provider channel."""
+    """Send a message to the specified provider channel.
+
+    Slack and Discord are resolved through ``MessagingProtocol`` adapters
+    (#11524); Teams still uses its webhook-only execute_action path because
+    it targets a webhook URL rather than a channel_id and does not satisfy
+    the full MessagingProtocol contract.
+    """
     provider_lower = provider.lower()
     config = _create_config(provider_lower, token)
-    integration = _get_integration(provider_lower, config)
+
+    # Built OUTSIDE the try so an unknown provider's HTTPException(400)
+    # reaches FastAPI directly instead of being re-wrapped as a 500
+    # (#11524 review blocker) — same pattern as _get_integration elsewhere.
+    adapter = _build_messaging_adapter(provider_lower, config)
 
     try:
+        if isinstance(adapter, MessagingProtocol):
+            channel_id, text = _extract_channel_and_text(provider_lower, message)
+            return await adapter.send_message(channel_id, text)
+        # Teams fallback: not a MessagingProtocol implementation
         params = _build_message_params(provider_lower, message)
-        result = await integration.execute_action("send_message", params)
-        return result
+        return await adapter.execute_action("send_message", params)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed") from exc
     except Exception as exc:
@@ -338,3 +353,41 @@ def _build_message_params(
             raise ValueError("Discord requires 'channel_id' and 'content'")
         return {"channel_id": message.channel_id, "content": message.content}
     raise ValueError(f"Unsupported provider: {provider}")
+
+
+def _build_messaging_adapter(provider: str, config: IntegrationConfig) -> Any:
+    """Return a ``MessagingProtocol`` adapter for Slack/Discord or raw integration for Teams.
+
+    Slack and Discord are wrapped in their respective adapters so consumers use
+    the vendor-neutral ``MessagingProtocol`` surface (#11524).  Teams does not
+    satisfy ``MessagingProtocol`` (webhook-only, no channel_id–based fetch) so
+    it is returned as a raw ``TeamsIntegration`` instance.
+
+    Helper for send_message (Issue #11524).
+    """
+    if provider == "slack":
+        return SlackMessagingAdapter(SlackIntegration(config))
+    if provider == "discord":
+        return DiscordMessagingAdapter(DiscordIntegration(config))
+    if provider == "teams":
+        return TeamsIntegration(config)
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Unsupported provider: {provider}",
+    )
+
+
+def _extract_channel_and_text(provider: str, message: SendMessageRequest) -> tuple[str, str]:
+    """Extract (channel_id, text) from *message* for MessagingProtocol.send_message.
+
+    Helper for send_message (Issue #11524).
+    """
+    if provider == "slack":
+        if not message.channel or not message.text:
+            raise ValueError("Slack requires 'channel' and 'text'")
+        return message.channel, message.text
+    if provider == "discord":
+        if not message.channel_id or not message.content:
+            raise ValueError("Discord requires 'channel_id' and 'content'")
+        return message.channel_id, message.content
+    raise ValueError(f"Provider {provider!r} does not map to MessagingProtocol")

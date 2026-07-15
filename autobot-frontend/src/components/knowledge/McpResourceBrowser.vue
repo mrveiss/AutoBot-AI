@@ -65,6 +65,7 @@
 
     <!-- Resource Viewer Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-if="viewingResource"
       :model-value="!!viewingResource"
       :title="viewingResource.name"
@@ -108,9 +109,11 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
 import { createLogger } from '@/utils/debugUtils'
+const { t } = useI18n()
 
 const logger = createLogger('McpResourceBrowser')
 const api = useApiClient()

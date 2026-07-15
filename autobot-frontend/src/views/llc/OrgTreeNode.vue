@@ -30,7 +30,7 @@ const emit = defineEmits<{ select: [node: OrgNode] }>()
   <div class="flex flex-col items-center gap-1">
     <div
       class="relative cursor-pointer rounded-xl border-2 p-3 min-w-[130px] text-center transition-shadow hover:shadow-md"
-      :class="node.is_human ? 'border-blue-300 bg-blue-50 dark:bg-blue-900/20' : 'border-indigo-200 bg-white dark:bg-gray-800'"
+      :class="node.is_human ? 'border-blue-300 bg-blue-50 dark:bg-blue-900/20' : 'border-indigo-200 bg-autobot-bg-card'"
       @click="emit('select', node)"
     >
       <div class="flex justify-center mb-1">
@@ -41,19 +41,19 @@ const emit = defineEmits<{ select: [node: OrgNode] }>()
           {{ node.name.charAt(0).toUpperCase() }}
         </div>
       </div>
-      <p class="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">{{ node.name }}</p>
-      <p class="text-xs text-gray-500 truncate">{{ node.title }}</p>
+      <p class="text-xs font-semibold text-autobot-text-primary truncate">{{ node.name }}</p>
+      <p class="text-xs text-autobot-text-muted truncate">{{ node.title }}</p>
       <div class="flex justify-center items-center gap-1 mt-1">
         <span class="w-2 h-2 rounded-full" :class="agentStatusColor(node.status)" />
-        <span class="text-xs text-gray-400">{{ node.adapter_type }}</span>
+        <span class="text-xs text-autobot-text-muted">{{ node.adapter_type }}</span>
       </div>
     </div>
 
     <template v-if="node.children.length > 0">
-      <div class="w-px h-4 bg-gray-300" />
+      <div class="w-px h-4 bg-autobot-border" />
       <div class="flex gap-4">
         <div v-for="child in node.children" :key="child.id" class="flex flex-col items-center">
-          <div class="w-px h-4 bg-gray-300" />
+          <div class="w-px h-4 bg-autobot-border" />
           <OrgTreeNode :node="child" :depth="(depth ?? 0) + 1" @select="emit('select', $event)" />
         </div>
       </div>

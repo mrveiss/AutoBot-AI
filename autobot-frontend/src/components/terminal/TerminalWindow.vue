@@ -283,8 +283,9 @@
 <script>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import { useTerminalService } from '@/services/TerminalService';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import AdvancedStepConfirmationModal from './AdvancedStepConfirmationModal.vue';
 import CompletionSuggestions from './CompletionSuggestions.vue';
 import TerminalHeader from './TerminalHeader.vue';
@@ -303,8 +304,8 @@ export default {
   },
   setup() {
     const { t } = useI18n();
+    const { confirm } = useConfirmDialog();
     const route = useRoute();
-    const router = useRouter();
 
     // Get the terminal service with all its methods
     const {
@@ -314,9 +315,7 @@ export default {
       isConnected,
       resize,
       connect: connectToService,
-      disconnect,
-      createSession,
-      closeSession
+      disconnect
     } = useTerminalService();
 
     // Get current chat ID from parent or route params
@@ -1052,8 +1051,8 @@ export default {
       }
     };
 
-    const closeWindow = () => {
-      if (confirm('Are you sure you want to close this terminal window?')) {
+    const closeWindow = async () => {
+      if (await confirm({ title: t('common.confirm'), message: t('terminal.window.closeConfirm') })) {
         if (isConnected(sessionId.value)) {
           disconnect(sessionId.value);
         }
@@ -1099,7 +1098,7 @@ export default {
         try {
           await navigator.clipboard.writeText(url);
           alert('Terminal URL copied to clipboard!');
-        } catch (error) {
+        } catch {
           prompt('Copy this URL:', url);
         }
       }
@@ -1489,7 +1488,8 @@ export default {
 .terminal-window-standalone {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* #10750 C2: fill the flex parent (viewport - header) instead of full viewport */
+  height: 100%;
   background-color: #000;
   color: #ffffff;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -1545,7 +1545,7 @@ export default {
 }
 
 .control-button.danger:hover:not(:disabled) {
-  background-color: var(--color-danger);
+  background-color: var(--color-error);
 }
 
 .terminal-status-bar {
@@ -1575,7 +1575,7 @@ export default {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: var(--color-danger);
+  background-color: var(--color-error);
 }
 
 .connection-status.connected .status-dot {
@@ -1788,7 +1788,7 @@ export default {
 }
 
 .btn-danger {
-  background-color: var(--color-danger);
+  background-color: var(--color-error);
   color: var(--text-on-error);
 }
 
@@ -1871,7 +1871,7 @@ export default {
 }
 
 .confirmation-modal.emergency {
-  border-color: var(--color-danger);
+  border-color: var(--color-error);
   box-shadow: 0 10px 30px var(--color-danger-bg);
 }
 
@@ -1961,7 +1961,7 @@ export default {
 .risk-level.critical {
   background-color: var(--color-danger-bg);
   color: var(--color-error-light);
-  border: 1px solid var(--color-danger);
+  border: 1px solid var(--color-error);
   animation: pulse-danger 2s infinite;
 }
 
@@ -2047,7 +2047,7 @@ export default {
 }
 
 .line-command.critical {
-  border-left: 3px solid var(--color-danger);
+  border-left: 3px solid var(--color-error);
   background-color: var(--color-danger-bg);
 }
 

@@ -67,3 +67,29 @@ def env_int_clamped(
     if max_v is not None:
         value = min(max_v, value)
     return value
+
+
+# Canonical truthy set for boolean env flags. Single source of truth so guards
+# don't drift (config_guard used to omit "on", silently ignoring
+# ``AUTOBOT_ALLOW_CONFIG_EDITS=on`` — #11220).
+_TRUTHY_VALUES: frozenset[str] = frozenset({"1", "true", "yes", "on"})
+
+
+def truthy(raw: str | None) -> bool:
+    """Return True iff *raw* is a recognized truthy flag value (1/true/yes/on).
+
+    Case-insensitive and whitespace-tolerant. ``None`` and any other value
+    (``0``/``false``/``off``/empty) read as False.
+    """
+    return raw is not None and raw.strip().lower() in _TRUTHY_VALUES
+
+
+def env_flag(name: str, default: bool = False) -> bool:
+    """Read a boolean environment variable via the canonical truthy set.
+
+    Returns *default* when the var is absent; otherwise ``truthy(value)``. Using
+    this everywhere guarantees ``on``/``yes``/``true``/``1`` behave identically
+    across all flags.
+    """
+    raw = os.environ.get(name)
+    return default if raw is None else truthy(raw)

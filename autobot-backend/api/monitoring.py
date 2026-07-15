@@ -26,8 +26,7 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 
-# Hardware monitor moved to monitoring_hardware.py (Issue #213)
-from api.monitoring_hardware import hardware_monitor
+from api.monitoring_hardware import local_hardware_monitor
 
 # Import monitoring utility functions
 from api.monitoring_utils import (
@@ -53,6 +52,9 @@ from api.schemas_system import (
     ThresholdUpdate,
     ThresholdUpdateResponse,
 )
+
+# Hardware monitor moved to monitoring_hardware.py (Issue #213)
+from api.ws_security import enforce_ws_origin
 from auth_middleware import check_admin_permission
 
 # Import AutoBot monitoring system
@@ -205,45 +207,53 @@ _HEATMAP_RANGE: Dict[str, tuple] = {
 # Issue #474: AlertManager API timeout and cache
 _ALERTMANAGER_TIMEOUT = 5.0  # seconds
 _alertmanager_cache: Dict[str, Any] = {"alerts": [], "timestamp": 0, "ttl": 10}
+# Issue #10786: guard concurrent cache read-check + write (TOCTOU across await)
+_alertmanager_cache_lock = asyncio.Lock()
 
 
 async def _fetch_alertmanager_alerts() -> List[Dict[str, Any]]:
     """Fetch active alerts from Prometheus AlertManager.
 
     Issue #474: Provides real-time alert data from AlertManager.
+    Issue #10786: _alertmanager_cache_lock prevents thundering-herd: concurrent
+    callers that all see a stale timestamp would otherwise each launch an HTTP
+    request and race to overwrite the cache.  The lock serialises the check and
+    the write so only the first caller fetches; the rest get the freshly-cached
+    result.
 
     Returns:
         List of active alerts in frontend-compatible format.
     """
-    current_time = time.time()
+    async with _alertmanager_cache_lock:
+        current_time = time.time()
 
-    # Return cached data if still valid
-    if current_time - _alertmanager_cache["timestamp"] < _alertmanager_cache["ttl"]:
-        return _alertmanager_cache["alerts"]
+        # Return cached data if still valid (checked inside lock to avoid TOCTOU)
+        if current_time - _alertmanager_cache["timestamp"] < _alertmanager_cache["ttl"]:
+            return _alertmanager_cache["alerts"]
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            # AlertManager v2 API for active alerts
-            url = f"{ServiceURLs.ALERTMANAGER_API}/api/v2/alerts"
-            async with session.get(url, timeout=_ALERTMANAGER_TIMEOUT) as response:
-                if response.status == 200:
-                    raw_alerts = await response.json()
-                    formatted_alerts = _format_alertmanager_alerts(raw_alerts)
-                    _alertmanager_cache["alerts"] = formatted_alerts
-                    _alertmanager_cache["timestamp"] = current_time
-                    return formatted_alerts
-                else:
-                    logger.warning("AlertManager returned status %d", response.status)
-                    return _alertmanager_cache["alerts"]  # Return stale cache
-    except asyncio.TimeoutError:
-        logger.warning("AlertManager request timed out")
-        return _alertmanager_cache["alerts"]
-    except aiohttp.ClientError as e:
-        logger.warning("AlertManager connection error: %s", e)
-        return _alertmanager_cache["alerts"]
-    except Exception as e:
-        logger.error("Failed to fetch AlertManager alerts: %s", e)
-        return _alertmanager_cache["alerts"]
+        try:
+            async with aiohttp.ClientSession() as session:
+                # AlertManager v2 API for active alerts
+                url = f"{ServiceURLs.ALERTMANAGER_API}/api/v2/alerts"
+                async with session.get(url, timeout=_ALERTMANAGER_TIMEOUT) as response:
+                    if response.status == 200:
+                        raw_alerts = await response.json()
+                        formatted_alerts = _format_alertmanager_alerts(raw_alerts)
+                        _alertmanager_cache["alerts"] = formatted_alerts
+                        _alertmanager_cache["timestamp"] = current_time
+                        return formatted_alerts
+                    else:
+                        logger.warning("AlertManager returned status %d", response.status)
+                        return _alertmanager_cache["alerts"]  # Return stale cache
+        except asyncio.TimeoutError:
+            logger.warning("AlertManager request timed out")
+            return _alertmanager_cache["alerts"]
+        except aiohttp.ClientError as e:
+            logger.warning("AlertManager connection error: %s", e)
+            return _alertmanager_cache["alerts"]
+        except Exception as e:
+            logger.error("Failed to fetch AlertManager alerts: %s", e)
+            return _alertmanager_cache["alerts"]
 
 
 def _format_alertmanager_alerts(raw_alerts: List[Dict]) -> List[Dict[str, Any]]:
@@ -299,27 +309,40 @@ class MonitoringWebSocketManager:
         self.active_connections: List[WebSocket] = []
         self.update_task: asyncio.Task | None = None
         self.update_interval = 2.0  # Send updates every 2 seconds
+        # Issue #10924: asyncio.Lock serialises the append+check+create_task
+        # sequence so two concurrent connects cannot both see len==1 and each
+        # spawn a duplicate update task.  disconnect() uses the same lock for
+        # the remove+check+cancel sequence to avoid a TOCTOU there too.
+        self._connect_lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket):
         """Accept WebSocket connection and start periodic update task if first."""
         await websocket.accept()
-        self.active_connections.append(websocket)
-        logger.info(f"WebSocket connected. Active connections: {len(self.active_connections)}")
+        async with self._connect_lock:
+            self.active_connections.append(websocket)
+            logger.info(
+                "WebSocket connected. Active connections: %d",
+                len(self.active_connections),
+            )
+            # Start update task if this is the first connection.
+            # Guarded inside the lock so two concurrent connects cannot both
+            # observe len==1 and each call create_task().
+            if len(self.active_connections) == 1 and not self.update_task:
+                self.update_task = asyncio.create_task(self._send_periodic_updates())
 
-        # Start update task if this is the first connection
-        if len(self.active_connections) == 1 and not self.update_task:
-            self.update_task = asyncio.create_task(self._send_periodic_updates())
-
-    def disconnect(self, websocket: WebSocket):
+    async def disconnect(self, websocket: WebSocket):
         """Remove WebSocket connection and cancel update task if last."""
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-        logger.info(f"WebSocket disconnected. Active connections: {len(self.active_connections)}")
-
-        # Stop update task if no connections
-        if len(self.active_connections) == 0 and self.update_task:
-            self.update_task.cancel()
-            self.update_task = None
+        async with self._connect_lock:
+            if websocket in self.active_connections:
+                self.active_connections.remove(websocket)
+            logger.info(
+                "WebSocket disconnected. Active connections: %d",
+                len(self.active_connections),
+            )
+            # Stop update task if no connections remain.
+            if len(self.active_connections) == 0 and self.update_task:
+                self.update_task.cancel()
+                self.update_task = None
 
     async def broadcast_update(self, data: Metadata):
         """Broadcast update to all connected clients"""
@@ -336,9 +359,9 @@ class MonitoringWebSocketManager:
                 logger.warning("Failed to send WebSocket message: %s", e)
                 disconnected.append(connection)
 
-        # Remove disconnected connections
+        # Remove disconnected connections (disconnect is now async — Issue #10924)
         for connection in disconnected:
-            self.disconnect(connection)
+            await self.disconnect(connection)
 
     async def _send_periodic_updates(self):
         """Send periodic performance updates to connected clients"""
@@ -1112,6 +1135,8 @@ async def realtime_monitoring_websocket(websocket: WebSocket):
 
     Issue #315: Refactored to use dictionary dispatch for command handling.
     """
+    if not await enforce_ws_origin(websocket):
+        return
     await ws_manager.connect(websocket)
     try:
         while True:
@@ -1125,10 +1150,10 @@ async def realtime_monitoring_websocket(websocket: WebSocket):
                 logger.debug("Invalid JSON in monitoring WebSocket: %s", e)
 
     except WebSocketDisconnect:
-        ws_manager.disconnect(websocket)
+        await ws_manager.disconnect(websocket)
     except Exception as e:
         logger.error("WebSocket error: %s", e)
-        ws_manager.disconnect(websocket)
+        await ws_manager.disconnect(websocket)
 
 
 # Helper functions
@@ -1173,7 +1198,7 @@ async def get_hardware_npu_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Get NPU hardware status. Issue #729: infrastructure monitoring on SLM server."""
-    return await hardware_monitor.get_npu_status()
+    return await local_hardware_monitor.get_npu_status()
 
 
 @router.get("/hardware/gpu", response_model=dict)
@@ -1186,7 +1211,7 @@ async def get_hardware_gpu_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Get GPU hardware status. Issue #729: infrastructure monitoring on SLM server."""
-    return await hardware_monitor.get_gpu_status()
+    return await local_hardware_monitor.get_gpu_status()
 
 
 @router.get("/hardware/system", response_model=dict)
@@ -1199,7 +1224,7 @@ async def get_hardware_system_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Get system resource metrics (CPU, memory, disk)."""
-    return await hardware_monitor.get_system_resources()
+    return await local_hardware_monitor.get_system_resources()
 
 
 # External API status endpoints — extracted from monitoring_compat.py (Issue #1283)

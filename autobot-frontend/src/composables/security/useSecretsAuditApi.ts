@@ -53,7 +53,7 @@ export function useSecretsAuditApi() {
   /** Delete a legacy infrastructure host by id. */
   async function deleteInfraHost(id: string): Promise<void> {
     const backendUrl = getBackendUrl();
-    await apiClient.delete<any>(`${backendUrl}/api/infrastructure/hosts/${id}`);
+    await apiClient.delete<unknown>(`${backendUrl}/api/infrastructure/hosts/${id}`);
   }
 
   return { fetchInfraHosts, fetchSecretsUsage, deleteInfraHost };

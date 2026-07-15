@@ -38,22 +38,15 @@ export const routeConfig: RouteConfig[] = [
   },
   {
     path: '/knowledge',
-    redirectTo: '/knowledge/search',
+    redirectTo: '/knowledge/browser',
     description: 'Knowledge base',
     icon: 'fas fa-brain',
     children: [
       {
-        path: '/knowledge/search',
-        name: 'knowledge-search',
-        component: 'KnowledgeSearch',
-        description: 'Knowledge search',
-        icon: 'fas fa-search'
-      },
-      {
-        path: '/knowledge/categories',
-        name: 'knowledge-categories',
-        component: 'KnowledgeCategories',
-        description: 'Categories management',
+        path: '/knowledge/browser',
+        name: 'knowledge-browser',
+        component: 'KnowledgeBrowser',
+        description: 'Unified knowledge browser',
         icon: 'fas fa-folder-tree'
       },
       {
@@ -71,11 +64,11 @@ export const routeConfig: RouteConfig[] = [
         icon: 'fas fa-file-alt'
       },
       {
-        path: '/knowledge/stats',
-        name: 'knowledge-stats',
-        component: 'KnowledgeStats',
-        description: 'Knowledge statistics',
-        icon: 'fas fa-chart-bar'
+        path: '/knowledge/health',
+        name: 'knowledge-health',
+        component: 'KnowledgeHealth',
+        description: 'Knowledge health, analytics and tools',
+        icon: 'fas fa-heartbeat'
       }
     ]
   },

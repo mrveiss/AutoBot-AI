@@ -39,6 +39,10 @@ Environment=PYTHONUNBUFFERED=1
 # Issue #9226: Redis connection for autobot_shared imports
 Environment=REDIS_HOST={{ slm_agent_redis_host }}
 Environment=AUTOBOT_REDIS_HOST={{ slm_agent_redis_host }}
+# #11450: AUTOBOT_INTERNAL_API_KEY for machine-to-machine auth. Loaded from a
+# 0600 file (not baked into this world-readable unit). Optional (-) so a node
+# missing the file still starts (the agent warns and heartbeats 401 until fixed).
+EnvironmentFile=-{{ slm_agent_data_dir }}/agent-secrets.env
 
 # Agent execution — admin_url resolved from SLM_ADMIN_URL env var above,
 # not baked into CLI args, so re-provisioning updates it (#2833).

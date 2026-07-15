@@ -31,7 +31,7 @@ def skill() -> CommunityGrowthSkill:
             "discord_webhook_url": "https://discord.com/api/webhooks/test",
             "github_token": "ghp_test",
             "default_content_mode": "hybrid",
-            "ollama_host": "http://localhost:11434",
+            "ollama_host": "http://localhost:11434",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
             "ollama_model": "mistral",
         }
     )

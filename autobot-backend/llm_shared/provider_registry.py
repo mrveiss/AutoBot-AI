@@ -34,6 +34,10 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.credential_gated_registry import (
+    CredentialGatedRegistry,
+    gated_registry_singleton,
+)
 from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -42,6 +46,7 @@ from llm_shared.models import LLMRequest
 from prepared_facts import ProviderRuntimeFact
 
 from .base_provider import BaseProvider
+from .provider_degradation import get_degradation_store
 
 logger = get_logger(__name__)
 
@@ -64,16 +69,18 @@ _NPU_PIPELINE_MAX_LATENCY_MULTIPLIER: float = env_float("NPU_PIPELINE_MAX_LATENC
 _NPU_POOL_PROVIDER_NAME = "npu_pool"
 
 
-class ProviderRegistry:
+class ProviderRegistry(CredentialGatedRegistry[BaseProvider]):
     """
     Manages the set of available LLM providers with fallback and per-conversation
     overrides.
 
-    This is a per-process singleton (obtained via ``get_provider_registry()``).
+    Built on ``CredentialGatedRegistry`` (#11664) — shared with the search and
+    capability registries. This is a per-process singleton (obtained via
+    ``get_provider_registry()``).
     """
 
     def __init__(self) -> None:
-        self._providers: Dict[str, BaseProvider] = {}
+        super().__init__()  # sets self._providers (#11664)
         self._fallback_chain: List[str] = []
         self._conversation_overrides: Dict[str, str] = {}
         # {provider_name: (is_available: bool, checked_at: float)}
@@ -99,9 +106,7 @@ class ProviderRegistry:
         name = provider.provider_name
         if not name:
             raise ValueError("Provider must set provider_name before registration.")
-        if name in self._providers:
-            logger.warning("Replacing existing provider: %s", name)
-        self._providers[name] = provider
+        self._store_entry(name, provider)
         self._provider_facts[name] = ProviderRuntimeFact.build_at_startup(name, provider)
         logger.info("Registered provider: %s", name)
 
@@ -325,6 +330,7 @@ class ProviderRegistry:
         from llm_shared.providers.custom_openai import CustomOpenAIProvider
         from llm_shared.providers.groq import GroqProvider
         from llm_shared.providers.huggingface import HuggingFaceProvider
+        from llm_shared.providers.mistral import MistralProvider
         from llm_shared.providers.nous_portal import NousPortalProvider
         from llm_shared.providers.ollama_provider import OllamaProvider
         from llm_shared.providers.openai import OpenAIProvider
@@ -337,6 +343,7 @@ class ProviderRegistry:
             "openai": OpenAIProvider,
             "ollama": OllamaProvider,
             "groq": GroqProvider,
+            "mistral": MistralProvider,
             "huggingface": HuggingFaceProvider,
             "custom_openai": CustomOpenAIProvider,
             "openrouter": OpenRouterProvider,
@@ -431,11 +438,40 @@ class ProviderRegistry:
                 candidates.append(name)
 
         primary = candidates[0] if candidates else None
+        model_name: str | None = request.model_name if request else None
+        degradation = get_degradation_store()
+
+        # Determine which candidates are currently degraded (Issue #11519).
+        # All candidates are checked up-front so we can detect the all-degraded
+        # edge case and fall through rather than returning None.
+        degraded_set: set[str] = set()
         for name in candidates:
+            if await degradation.is_degraded(name, model_name):
+                degraded_set.add(name)
+        all_degraded = len(candidates) > 0 and degraded_set == set(candidates)
+        if all_degraded:
+            logger.warning(
+                "degradation: all %d candidates degraded — proceeding anyway",
+                len(candidates),
+            )
+
+        degraded_skipped: list[str] = []
+        for name in candidates:
+            if name in degraded_set and not all_degraded:
+                logger.debug("degradation: skipping degraded provider %s", name)
+                degraded_skipped.append(name)
+                continue
             provider = await self.get_provider(name)
             if provider is not None:
                 if request is not None:
                     self.enrich_request(request, name)
+                    # Record the resolved provider so the fallback coordinator
+                    # marks the provider actually used, not the (possibly
+                    # absent) one on the request (#11519).
+                    request.metadata["selected_provider"] = name
+                    # Attach observability field so callers know what was skipped.
+                    if degraded_skipped:
+                        request.metadata["degraded_skipped"] = degraded_skipped
                 if name != primary:
                     logger.debug(
                         "Fallback chain selected non-primary provider: %s (preferred: %s)",
@@ -466,7 +502,7 @@ class ProviderRegistry:
         This is the public accessor for ``_providers``; callers should use this
         instead of accessing the private attribute directly.
         """
-        return self._providers.get(name)
+        return self._get_entry(name)
 
     def get_provider_facts(self) -> Dict[str, ProviderRuntimeFact]:
         """Return a snapshot of pre-computed provider capability facts (#7370)."""
@@ -490,29 +526,6 @@ class ProviderRegistry:
         }
 
 
-# ---------------------------------------------------------------------------
-# Singleton accessor
-# ---------------------------------------------------------------------------
-
-_registry_instance: ProviderRegistry | None = None
-_registry_lock = asyncio.Lock()
-
-
-def get_provider_registry() -> ProviderRegistry:
-    """
-    Return the process-level ProviderRegistry singleton.
-
-    The first caller triggers lazy initialisation of default providers from the
-    SSOT config.  Use ``initialize_default_providers()`` explicitly during
-    application startup to control when this happens and to catch errors early.
-    """
-    global _registry_instance
-    if _registry_instance is None:
-        _registry_instance = ProviderRegistry()
-        _populate_default_providers(_registry_instance)
-    return _registry_instance
-
-
 def _populate_default_providers(registry: ProviderRegistry) -> None:
     """
     Register provider instances based on available configuration.
@@ -528,6 +541,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     from llm_shared.providers.custom_openai import CustomOpenAIProvider
     from llm_shared.providers.groq import GroqProvider
     from llm_shared.providers.huggingface import HuggingFaceProvider
+    from llm_shared.providers.mistral import MistralProvider
     from llm_shared.providers.nous_portal import NousPortalProvider
     from llm_shared.providers.openai import OpenAIProvider
     from llm_shared.providers.openrouter import OpenRouterProvider
@@ -574,6 +588,21 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         fallback.append(groq_provider.provider_name)
     else:
         logger.debug("GROQ_API_KEY not set — Groq provider not registered")
+
+    # Mistral — registered when API key is present (Issue #10549)
+    mistral_key = config.mistral_api_key
+    if mistral_key:
+        mistral_provider = MistralProvider(
+            settings={
+                "api_key": mistral_key,
+                "base_url": config.mistral_api_base_url or None,
+                "default_model": config.mistral_default_model or None,
+            }
+        )
+        registry.register(mistral_provider)
+        fallback.append(mistral_provider.provider_name)
+    else:
+        logger.debug("MISTRAL_API_KEY not set — Mistral provider not registered")
 
     # HuggingFace — registered when HF token is present
     hf_token = config.hf_token or config.huggingface_api_token
@@ -715,6 +744,20 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         len(fallback),
         fallback,
     )
+
+
+# ---------------------------------------------------------------------------
+# Singleton accessor
+# ---------------------------------------------------------------------------
+
+# Process-level ProviderRegistry singleton: the first caller triggers lazy
+# initialisation of default providers from the SSOT config. Population
+# failures are logged, never raised (see gated_registry_singleton, #11664).
+get_provider_registry = gated_registry_singleton(
+    ProviderRegistry,
+    _populate_default_providers,
+    log=logger,
+)
 
 
 __all__ = [

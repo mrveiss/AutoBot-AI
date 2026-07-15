@@ -44,7 +44,8 @@ class CircuitBreakerConfig:
     failure_threshold: int = CircuitBreakerDefaults.DEFAULT_FAILURE_THRESHOLD
     recovery_timeout: float = CircuitBreakerDefaults.DEFAULT_RECOVERY_TIMEOUT
     success_threshold: int = CircuitBreakerDefaults.DEFAULT_SUCCESS_THRESHOLD
-    timeout: float = CircuitBreakerDefaults.DEFAULT_TIMEOUT
+    # None disables the breaker-level asyncio.wait_for (caller/SDK owns latency). GH#11488.
+    timeout: float | None = CircuitBreakerDefaults.DEFAULT_TIMEOUT
 
     # Exceptions that should trigger circuit breaker
     monitored_exceptions: tuple = (

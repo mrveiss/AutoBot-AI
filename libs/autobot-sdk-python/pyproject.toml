@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 name = "autobot-sdk"
 version = "0.1.0"
 description = "Typed Python SDK for the AutoBot API"
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 license = { text = "Apache-2.0" }
 dependencies = [
     "httpx>=0.27",

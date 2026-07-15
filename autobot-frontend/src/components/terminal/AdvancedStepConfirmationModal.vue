@@ -13,7 +13,7 @@
 
 import Icon from '@/components/ui/Icon.vue'
 import { computed, ref, watch } from 'vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -181,6 +181,7 @@ function resetEdit(): void {
 
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     v-model="isOpen"
     :title="t('terminal.window.workflowStepConfirmation')"
     size="md"
@@ -522,7 +523,7 @@ function resetEdit(): void {
   align-items: center;
   gap: var(--spacing-1, 0.25rem);
   font-size: 0.8125rem;
-  color: var(--color-danger, #ef4444);
+  color: var(--color-error, #ef4444);
   margin: var(--spacing-0);
 }
 

@@ -15,16 +15,48 @@ from __future__ import annotations
 import asyncio
 import time
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitBreakerOpenError,
+    get_circuit_breaker_manager,
+)
+from constants import CircuitBreakerDefaults
 
 from .cross_worker_rate_limiter import get_llm_rate_limiter
 from .models import LLMRequest, LLMResponse
 from .observability import registry as obs_registry
-from .rate_limit_backoff import get_backoff_handler, raise_if_rate_limited
+from .provider_auth import ApiKeyAuth, ProviderAuthError, ProviderAuthStrategy
+from .rate_limit_backoff import extract_rate_limit_info, get_backoff_handler, raise_if_rate_limited
 
 logger = get_logger(__name__)
+
+# GH#11488: one breaker config for all provider completion breakers. ``timeout=None``
+# is deliberate — the breaker owns availability accounting only; latency budgets
+# belong to each provider/SDK (some use unbounded reads for long local generations,
+# and ``LLMRequest.timeout`` may legitimately exceed any fixed constant here).
+_LLM_BREAKER_CONFIG = CircuitBreakerConfig(
+    failure_threshold=CircuitBreakerDefaults.LLM_FAILURE_THRESHOLD,
+    recovery_timeout=CircuitBreakerDefaults.LLM_RECOVERY_TIMEOUT,
+    timeout=None,
+)
+
+
+class _CompletionErrorSignal(Exception):
+    """Internal: carries an error LLMResponse through the circuit breaker.
+
+    ``_chat_completion_impl`` must not raise (errors travel via
+    ``LLMResponse.error``), so the breaker cannot observe failures directly.
+    Raising this inside the breaker-guarded call records the failure; the
+    caller unwraps and returns the original response (#11488).
+    """
+
+    def __init__(self, response: LLMResponse) -> None:
+        super().__init__(response.error or "provider completion failed")
+        self.response = response
 
 
 class BaseProvider(ABC):
@@ -44,7 +76,11 @@ class BaseProvider(ABC):
     #: Override in each subclass with the provider's string identifier.
     provider_name: str = ""
 
-    def __init__(self, settings: Dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        settings: Dict[str, Any] | None = None,
+        auth_strategy: Optional[ProviderAuthStrategy] = None,
+    ) -> None:
         """
         Initialize the provider.
 
@@ -52,11 +88,24 @@ class BaseProvider(ABC):
             settings: Optional dict of provider-specific configuration values.
                       Keys are provider-specific (e.g., ``api_key``,
                       ``base_url``, ``default_model``).
+            auth_strategy: Optional auth strategy (``ApiKeyAuth``, ``OAuthAuth``,
+                           ``DeviceCodeAuth``, ``SessionAuth``).  When omitted, the
+                           legacy ``settings["api_key"]`` path is used via
+                           ``ApiKeyAuth`` — fully backward-compatible.
         """
         self.settings: Dict[str, Any] = settings or {}
         self._total_requests = 0
         self._total_errors = 0
-        logger.debug("Initialized %s provider", self.provider_name)
+        # Resolve auth strategy: explicit arg wins; fall back to ApiKeyAuth when an
+        # api_key is present in settings; leave None for local providers (Ollama etc.)
+        # that need no credential at all.
+        if auth_strategy is not None:
+            self._auth_strategy: Optional[ProviderAuthStrategy] = auth_strategy
+        elif self.settings.get("api_key"):
+            self._auth_strategy = ApiKeyAuth(self.settings["api_key"])
+        else:
+            self._auth_strategy = None
+        logger.debug("Initialized %s provider (auth=%s)", self.provider_name, type(self._auth_strategy).__name__)
 
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
         """
@@ -65,6 +114,7 @@ class BaseProvider(ABC):
         Wraps ``_chat_completion_impl`` with:
         - Issue #8170: cross-worker Redis rate limiter (proactive token acquire)
         - GH#8502: exponential backoff + auto-resume on provider rate-limit / quota reset
+        - GH#11488: per-provider circuit breaker (fail fast while a provider is down)
         - Observer fan-out (GH#6593)
 
         Errors are returned via ``LLMResponse.error`` so the registry can
@@ -79,7 +129,7 @@ class BaseProvider(ABC):
             async with get_llm_rate_limiter().acquire(provider_key):
                 start = time.monotonic()
                 try:
-                    response = await self._chat_completion_impl(request)
+                    response = await self._guarded_completion(request)
                     latency_ms = (time.monotonic() - start) * 1000
                     try:
                         asyncio.get_running_loop().create_task(obs_registry.notify_response(response, latency_ms, 0.0))
@@ -101,6 +151,58 @@ class BaseProvider(ABC):
             # Backoff exhausted — return the last error response if we have one,
             # otherwise let the exception propagate to the registry for fallback.
             raise
+
+    def _completion_circuit_breaker(self) -> "CircuitBreaker":
+        """Return this provider's completion circuit breaker (GH#11488).
+
+        Name-keyed on ``{provider_name}_service`` so all instances of a
+        provider share one breaker (config binds on first registration).
+        """
+        name = f"{self.provider_name or 'default'}_service"
+        return get_circuit_breaker_manager().get_circuit_breaker(name, _LLM_BREAKER_CONFIG)
+
+    def _breaker_error_response(self, request: LLMRequest, error: str, start: float) -> LLMResponse:
+        """Build the error LLMResponse for breaker-open / breaker-timeout outcomes."""
+        self._total_requests += 1  # blocked attempts still count as requests
+        self._total_errors += 1
+        return LLMResponse(
+            content="",
+            model=request.model_name or "",
+            provider=self.provider_name,
+            processing_time=time.monotonic() - start,
+            request_id=request.request_id,
+            error=error,
+        )
+
+    async def _guarded_completion(self, request: LLMRequest) -> LLMResponse:
+        """Run ``_chat_completion_impl`` through the provider circuit breaker (GH#11488).
+
+        Error responses count as breaker failures — except rate limits, which
+        the backoff handler owns (GH#8502) and which prove the provider is up.
+        An open breaker fails fast with an error response, sparing the caller
+        the provider's connect/latency cost while it is down. (The response
+        surfaces like any provider error; registry-level avoidance of
+        breaker-open providers is tracked separately.)
+        """
+        breaker = self._completion_circuit_breaker()
+        start = time.monotonic()
+
+        async def _run() -> LLMResponse:
+            response = await self._chat_completion_impl(request)
+            is_rate_limited, _ = extract_rate_limit_info(response)
+            if response.error and not is_rate_limited:
+                raise _CompletionErrorSignal(response)
+            return response
+
+        try:
+            return await breaker.call_async(_run)
+        except _CompletionErrorSignal as signal:
+            return signal.response
+        except CircuitBreakerOpenError as exc:
+            logger.warning("Provider %s circuit breaker open; failing fast", self.provider_name)
+            return self._breaker_error_response(request, f"circuit breaker open: {exc}", start)
+        except TimeoutError as exc:
+            return self._breaker_error_response(request, str(exc), start)
 
     @abstractmethod
     async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
@@ -149,11 +251,32 @@ class BaseProvider(ABC):
             "total_requests": self._total_requests,
             "total_errors": self._total_errors,
             "error_rate": (self._total_errors / self._total_requests if self._total_requests else 0.0),
+            "auth_strategy": type(self._auth_strategy).__name__ if self._auth_strategy else "none",
         }
 
     def _get_setting(self, key: str, default: Any = None) -> Any:
         """Safely retrieve a value from the settings dict."""
         return self.settings.get(key, default)
+
+    async def _get_auth_token(self, session: Any = None) -> str | None:
+        """Return a valid auth token via the active strategy, or None.
+
+        Concrete providers call this instead of reading ``settings["api_key"]``
+        directly so that OAuth / device-code / session auth is transparent.
+
+        Args:
+            session: SQLAlchemy ``AsyncSession`` required by vault-backed strategies
+                     (``OAuthAuth``, ``DeviceCodeAuth``, ``SessionAuth``).
+
+        Returns:
+            Token string, or None when no auth strategy is configured (e.g. Ollama).
+
+        Raises:
+            ProviderAuthError: When a vault-backed strategy cannot obtain a token.
+        """
+        if self._auth_strategy is None:
+            return None
+        return await self._auth_strategy.resolve_token(session)
 
     def _build_provider_metadata(
         self,
@@ -183,4 +306,4 @@ class BaseProvider(ABC):
         return metadata
 
 
-__all__ = ["BaseProvider"]
+__all__ = ["BaseProvider", "ProviderAuthError"]

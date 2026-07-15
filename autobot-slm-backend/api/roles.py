@@ -131,13 +131,23 @@ class ExecuteActionRequest(BaseModel):
     category: str = Field(..., min_length=1)
 
 
+_ROLES_LIST_TIMEOUT = 10.0  # seconds; guards against slow DB / detection hangs (#11360)
+
+
 @router.get("", response_model=List[RoleResponse])
 async def get_roles(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
 ) -> List[RoleResponse]:
     """List all role definitions."""
-    roles = await list_roles(db)
+    try:
+        roles = await asyncio.wait_for(list_roles(db), timeout=_ROLES_LIST_TIMEOUT)
+    except asyncio.TimeoutError:
+        logger.warning("GET /roles timed out after %.0fs (#11360)", _ROLES_LIST_TIMEOUT)
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Role listing timed out — DB may be under heavy load",
+        )
     return [RoleResponse.model_validate(r) for r in roles]
 
 
@@ -187,9 +197,35 @@ async def get_fleet_health(
 
 
 async def _get_active_role_names(db: AsyncSession) -> set:
-    """Return set of role names with at least one active NodeRole record."""
-    result = await db.execute(select(NodeRole.role_name).where(NodeRole.status == RoleStatus.ACTIVE.value).distinct())
-    return set(result.scalars().all())
+    """Return role names that are active in the fleet (#11360).
+
+    A role counts as active when EITHER:
+    - It has an ACTIVE NodeRole row on any node, OR
+    - It is listed in Node.roles for an ONLINE self-managed node (these nodes
+      are heartbeated locally and confirmed up, so their assigned roles are
+      available even before a code-sync run creates ACTIVE NodeRole rows).
+    """
+    from services.compose_fleet import _SELF_MANAGED_NODE_IDS
+
+    active: set[str] = set()
+
+    nr_result = await db.execute(
+        select(NodeRole.role_name).where(NodeRole.status == RoleStatus.ACTIVE.value).distinct()
+    )
+    active.update(nr_result.scalars().all())
+
+    if _SELF_MANAGED_NODE_IDS:
+        node_result = await db.execute(
+            select(Node.roles).where(
+                Node.node_id.in_(_SELF_MANAGED_NODE_IDS),
+                Node.status == "online",
+            )
+        )
+        for (roles,) in node_result.all():
+            if roles:
+                active.update(roles)
+
+    return active
 
 
 def _classify_fleet_health(all_roles: list, active_role_names: set) -> FleetHealthResponse:
@@ -557,7 +593,7 @@ async def _run_ssh_cmd(node: Node, remote_cmd: str) -> tuple:
     """Run a command on a node via SSH. Returns (success, output)."""
     ssh_user = node.ssh_user or "autobot"
     ssh_port = node.ssh_port or 22
-    ssh_key = "/home/autobot/.ssh/id_rsa"  # noqa: ssot-path
+    ssh_key = "/home/autobot/.ssh/id_rsa"  # noqa: S108
     ssh_cmd = [
         "/usr/bin/ssh",
         "-o",

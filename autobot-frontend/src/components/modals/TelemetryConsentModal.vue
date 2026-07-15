@@ -8,70 +8,66 @@ Issue #9035: Operator-controlled local usage metrics (never transmitted)
 -->
 
 <template>
-  <Teleport to="body">
-    <div v-if="isVisible" class="modal-overlay" @click="handleBackdropClick">
-      <div class="modal-container" role="dialog" aria-labelledby="consent-title" aria-modal="true">
-        <div class="modal-header">
-          <h2 id="consent-title" class="modal-title">
-            <Icon name="shield-alt" aria-hidden="true" />
-            Local Usage Metrics
-          </h2>
-        </div>
+  <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
+    v-model="isVisible"
+    title="Local Usage Metrics"
+    size="sm"
+    :show-close="false"
+    :close-on-overlay="false"
+  >
+    <div class="modal-body">
+      <p class="consent-intro">
+        AutoBot can record <strong>anonymous operational metrics</strong> locally to power your
+        own monitoring dashboards. This data stays on your infrastructure and is
+        <strong>never sent to anyone</strong>.
+      </p>
 
-        <div class="modal-body">
-          <p class="consent-intro">
-            AutoBot can record <strong>anonymous operational metrics</strong> locally to power your
-            own monitoring dashboards. This data stays on your infrastructure and is
-            <strong>never sent to anyone</strong>.
-          </p>
-
-          <div class="data-summary">
-            <h3 class="summary-title">
-              <Icon name="chart-line" aria-hidden="true" />
-              What's recorded locally:
-            </h3>
-            <ul class="data-list">
-              <li>API endpoint usage and response times</li>
-              <li>Voice session duration and token counts</li>
-              <li>Feature usage patterns</li>
-            </ul>
-          </div>
-
-          <div class="privacy-note">
-            <Icon name="lock" aria-hidden="true" />
-            <span>
-              <strong>Never recorded:</strong> personal data, code content, or chat messages.
-            </span>
-          </div>
-
-          <p class="consent-footer">
-            You can change this preference anytime in <strong>Settings → Privacy</strong>.
-          </p>
-        </div>
-
-        <div class="modal-actions">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            @click="handleDecline"
-            :disabled="isProcessing"
-          >
-            <Icon name="times" aria-hidden="true" />
-            Keep Off
-          </button>
-          <button
-            type="button"
-            class="btn btn-primary"
-            @click="handleAccept"
-            :disabled="isProcessing"
-          >
-            <Icon name="check" aria-hidden="true" />
-            {{ isProcessing ? 'Saving...' : 'Enable' }}
-          </button>
-        </div>
+      <div class="data-summary">
+        <h3 class="summary-title">
+          <Icon name="chart-line" aria-hidden="true" />
+          What's recorded locally:
+        </h3>
+        <ul class="data-list">
+          <li>API endpoint usage and response times</li>
+          <li>Voice session duration and token counts</li>
+          <li>Feature usage patterns</li>
+        </ul>
       </div>
+
+      <div class="privacy-note">
+        <Icon name="lock" aria-hidden="true" />
+        <span>
+          <strong>Never recorded:</strong> personal data, code content, or chat messages.
+        </span>
+      </div>
+
+      <p class="consent-footer">
+        You can change this preference anytime in <strong>Settings → Privacy</strong>.
+      </p>
     </div>
-  </Teleport>
+
+    <template #actions>
+      <button
+        type="button"
+        class="btn btn-secondary"
+        @click="handleDecline"
+        :disabled="isProcessing"
+      >
+        <Icon name="times" aria-hidden="true" />
+        Keep Off
+      </button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        @click="handleAccept"
+        :disabled="isProcessing"
+      >
+        <Icon name="check" aria-hidden="true" />
+        {{ isProcessing ? 'Saving...' : 'Enable' }}
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
@@ -79,6 +75,9 @@ import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import Icon from '@/components/ui/Icon.vue'
+import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
 const logger = createLogger('TelemetryConsentModal')
 const api = useApiClient()
@@ -135,79 +134,38 @@ async function updateConsent(enabled: boolean) {
   isProcessing.value = true
 
   try {
+    // Persist the enable/disable choice (admin-gated). Non-admins will get a
+    // 403 here — that is expected and handled below by the prompt-shown call.
     await api.post('/api/settings/telemetry', {
       enabled,
       anonymous_usage_stats: enabled,
       first_run_prompt_shown: true,
     })
-
-    localStorage.setItem(CONSENT_STORAGE_KEY, 'true')
-    isVisible.value = false
-
     logger.debug(`Telemetry consent: ${enabled ? 'accepted' : 'declined'}`)
   } catch (error) {
     logger.error('Failed to save telemetry consent', error)
-    // Close the modal even on error to avoid blocking the user
-    isVisible.value = false
   } finally {
-    isProcessing.value = false
-  }
-}
+    // Record the dismissal for ANY authenticated user (#11344). This is a
+    // non-admin endpoint, so it persists server-side even when the admin POST
+    // above 403s. Best-effort: a failure here still falls through to the
+    // localStorage flag so the modal never re-nags on this browser.
+    try {
+      await api.post('/api/settings/telemetry/prompt-shown', {})
+    } catch (error) {
+      logger.error('Failed to persist telemetry prompt dismissal', error)
+    }
 
-function handleBackdropClick(event: MouseEvent) {
-  // Don't close on backdrop click - user must make a choice
-  if (event.target === event.currentTarget) {
-    return
+    // Always mark shown locally and close, regardless of POST success/failure,
+    // so the consent modal never re-appears on refresh (#11344).
+    localStorage.setItem(CONSENT_STORAGE_KEY, 'true')
+    isVisible.value = false
+    isProcessing.value = false
   }
 }
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: var(--spacing-lg);
-}
-
-.modal-container {
-  background: var(--bg-primary);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-  max-width: 500px;
-  width: 100%;
-  border: 1px solid var(--border-color);
-}
-
-.modal-header {
-  padding: var(--spacing-lg);
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-}
-
-.modal-title {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  font-size: var(--font-size-xl);
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.modal-title i {
-  color: var(--color-primary);
-}
-
 .modal-body {
-  padding: var(--spacing-lg);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
@@ -276,15 +234,6 @@ function handleBackdropClick(event: MouseEvent) {
   color: var(--text-secondary);
   text-align: center;
   margin: var(--spacing-sm) 0 0 0;
-}
-
-.modal-actions {
-  display: flex;
-  gap: var(--spacing-md);
-  padding: var(--spacing-lg);
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  justify-content: flex-end;
 }
 
 .btn {

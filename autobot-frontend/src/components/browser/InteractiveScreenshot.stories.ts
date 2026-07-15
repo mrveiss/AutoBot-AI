@@ -60,8 +60,8 @@ const meta = {
 } as Meta<typeof InteractiveScreenshot>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 /** No screenshot loaded — shows placeholder message */
 export const Empty: Story = {

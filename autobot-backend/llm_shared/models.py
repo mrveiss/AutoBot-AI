@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -136,6 +136,7 @@ class LLMResponse:
     hidden_params: Dict[str, Any] = field(default_factory=dict)
     tool_calls: List["ToolCall"] | None = None
     lightweight_mode_used: bool = False  # MVA-1993: Set when trivial tier is used
+    reasoning_content: Optional[str] = None  # #10582: captured reasoning/thinking text
 
 
 @dataclass

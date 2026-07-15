@@ -17,6 +17,7 @@ from enum import Enum
 from typing import Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.scoping import Principal, ResourceDescriptor, ScopeLevel, is_visible
 
 logger = get_logger(__name__)
 
@@ -33,18 +34,12 @@ class AccessLevel(str, Enum):
     USER = "user"  # User-created content (scoped by visibility, default)
 
 
-class VisibilityLevel(str, Enum):
-    """Visibility levels for knowledge facts.
-
-    Issue #679: Extended with hierarchical scopes.
-    """
-
-    PRIVATE = "private"  # Only owner can access
-    SHARED = "shared"  # Owner + explicitly shared users/groups
-    GROUP = "group"  # Accessible to specific group/team members
-    ORGANIZATION = "organization"  # Accessible to all org members
-    SYSTEM = "system"  # Platform-wide, accessible to all users
-    PUBLIC = "public"  # Alias for SYSTEM (backward compatibility)
+# Deprecated alias (#11290): VisibilityLevel is now the canonical
+# autobot_shared.scoping.ScopeLevel. Kept so existing imports keep working;
+# new code should import ScopeLevel directly. Stored knowledge visibility
+# metadata values (private/shared/group/organization/system/public) are
+# unchanged — the canonical enum carries the same .value strings.
+VisibilityLevel = ScopeLevel
 
 
 class SourceType(str, Enum):
@@ -195,29 +190,30 @@ class KnowledgeOwnership:
         """Helper for check_access. Ref: #1088.
 
         Evaluates owner, visibility, org, group, and share grants.
+
+        #11290: thin adapter over the canonical
+        ``autobot_shared.scoping.is_visible`` primitive — owner, system/public
+        (authenticated), org, and group rules delegate to the shared rule; the
+        explicit ``shared_with`` list is modeled as this subsystem's grant
+        lookup.
         """
-        # Owner always has access
-        if owner_id and owner_id == user_id:
-            return True
-
-        # System-level facts are accessible to all authenticated users
-        if visibility in (VisibilityLevel.SYSTEM, VisibilityLevel.PUBLIC):
-            return is_authenticated
-
-        # Organization-level facts accessible to org members
-        if visibility == VisibilityLevel.ORGANIZATION and user_org_id and fact_org_id == user_org_id:
-            return True
-
-        # Group-level facts accessible to group members
-        if visibility == VisibilityLevel.GROUP and fact_group_ids:
-            if any(gid in user_group_ids for gid in fact_group_ids):
-                return True
-
-        # Check if explicitly shared with user
-        if visibility == VisibilityLevel.SHARED and user_id in shared_with:
-            return True
-
-        return False
+        principal = Principal(
+            user_id=user_id,
+            company_id=user_org_id or None,
+            group_ids=frozenset(user_group_ids),
+            is_authenticated=is_authenticated,
+        )
+        try:
+            scope = ScopeLevel(visibility)
+        except ValueError:
+            scope = ScopeLevel.PRIVATE  # unknown stored visibility: fail closed (owner-only)
+        resource = ResourceDescriptor(
+            owner_id=owner_id or None,
+            company_id=fact_org_id or None,
+            scope=scope,
+            group_ids=frozenset(fact_group_ids),
+        )
+        return is_visible(principal, resource, lambda: scope is ScopeLevel.SHARED and user_id in shared_with)
 
     async def check_access(
         self,

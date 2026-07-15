@@ -59,7 +59,7 @@ export interface RUMSettings {
 // Developer Settings Interface
 export interface DeveloperSettings {
   enabled: boolean;
-  enhanced_errors: boolean;
+  detailed_errors: boolean;
   endpoint_suggestions: boolean;
   debug_logging: boolean;
   rum: RUMSettings;
@@ -194,7 +194,7 @@ export const createDefaultRUMSettings = (): RUMSettings => ({
 
 export const createDefaultDeveloperSettings = (): DeveloperSettings => ({
   enabled: false,
-  enhanced_errors: true,
+  detailed_errors: true,
   endpoint_suggestions: true,
   debug_logging: false,
   rum: createDefaultRUMSettings()

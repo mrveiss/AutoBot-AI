@@ -187,6 +187,7 @@
 <script>
 import { ref, onMounted, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import { useMachineKnowledge } from '@/composables/knowledge/useMachineKnowledge';
 import { useManPages } from '@/composables/knowledge/useManPages';
 import { useKnowledgeJobs } from '@/composables/knowledge/useKnowledgeJobs';
@@ -211,6 +212,7 @@ export default {
 
   setup() {
     const { t } = useI18n();
+    const { confirm } = useConfirmDialog();
 
     // Domain composables (migrated from useKnowledgeBase BC shim in #5193).
     // `formatKey` is now imported from @/utils/formatHelpers as an alias for
@@ -264,12 +266,12 @@ export default {
 
     // Use composables for async operations
     const { isLoading, wrap: fetchStatsOp } = useLoadingState()
-    const { isLoading: isInitializing, wrap: initializeMachineKnowledgeOp } = useLoadingState()
-    const { isLoading: isReindexing, wrap: reindexDocumentsOp } = useLoadingState()
-    const { isLoading: isRefreshing, wrap: refreshSystemKnowledgeOp } = useLoadingState()
-    const { isLoading: isPopulating, wrap: populateManPagesOp } = useLoadingState()
-    const { isLoading: isDocPopulating, wrap: populateAutoBotDocsOp } = useLoadingState()
-    const { isLoading: isVectorizing, wrap: generateVectorEmbeddingsOp } = useLoadingState()
+    const { isLoading: isInitializing } = useLoadingState()
+    const { isLoading: isReindexing } = useLoadingState()
+    const { isLoading: isRefreshing } = useLoadingState()
+    const { isLoading: isPopulating } = useLoadingState()
+    const { isLoading: isDocPopulating } = useLoadingState()
+    const { isLoading: isVectorizing } = useLoadingState()
 
     const addLogEntry = (message, status) => {
       const time = new Date().toLocaleTimeString();
@@ -307,7 +309,7 @@ export default {
     const initializeMachineKnowledge = async () => {
       if (isInitializing.value) return;
 
-      if (!confirm(t('knowledge.systemKnowledge.confirmInitialize'))) {
+      if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.systemKnowledge.confirmInitialize') }))) {
         return;
       }
 
@@ -364,7 +366,7 @@ export default {
     const reindexDocuments = async () => {
       if (isReindexing.value) return;
 
-      if (!confirm(t('knowledge.systemKnowledge.confirmReindex'))) {
+      if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.systemKnowledge.confirmReindex') }))) {
         return;
       }
 
@@ -484,7 +486,7 @@ export default {
     const refreshSystemKnowledge = async () => {
       if (isRefreshing.value) return;
 
-      if (!confirm(t('knowledge.systemKnowledge.confirmRefreshManPages'))) {
+      if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.systemKnowledge.confirmRefreshManPages') }))) {
         return;
       }
 
@@ -576,7 +578,7 @@ export default {
       if (isDocPopulating.value) return;
 
       // Ask if user wants to force reindex all files
-      const forceReindex = confirm(t('knowledge.systemKnowledge.confirmIndexDocs'));
+      const forceReindex = await confirm({ title: t('common.confirm'), message: t('knowledge.systemKnowledge.confirmIndexDocs') });
 
       isDocPopulating.value = true;
       progressMessage.value = forceReindex ? 'Force reindexing ALL AutoBot documentation...' : 'Indexing AutoBot documentation...';
@@ -627,7 +629,7 @@ export default {
       const totalVectors = stats.value.total_vectors || 0;
       const needsVectorization = totalFacts - totalVectors;
 
-      if (!confirm(t('knowledge.systemKnowledge.confirmVectorize', { totalFacts, totalVectors, needsVectorization }))) {
+      if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.systemKnowledge.confirmVectorize', { totalFacts, totalVectors, needsVectorization }) }))) {
         return;
       }
 

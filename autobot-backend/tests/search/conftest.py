@@ -61,7 +61,15 @@ _load_real("agent_loop.search.base", "agent_loop/search/base.py")
 _load_real("agent_loop.search.registry", "agent_loop/search/registry.py")
 _load_real("agent_loop.search.searxng_provider", "agent_loop/search/searxng_provider.py")
 _load_real("agent_loop.search.brave_provider", "agent_loop/search/brave_provider.py")
+_load_real("agent_loop.search.content_reach_provider", "agent_loop/search/content_reach_provider.py")
 _load_real("agent_loop.search", "agent_loop/search/__init__.py")
+
+# Attach submodules as attributes on the package so unittest.mock.patch can
+# resolve them via getattr (patch walks the dotted path via attribute access).
+for _submod in ["base", "registry", "searxng_provider", "brave_provider", "content_reach_provider"]:
+    _full = f"agent_loop.search.{_submod}"
+    if _full in sys.modules:
+        setattr(_search_pkg, _submod, sys.modules[_full])
 
 
 def pytest_unconfigure(config) -> None:  # noqa: ARG001

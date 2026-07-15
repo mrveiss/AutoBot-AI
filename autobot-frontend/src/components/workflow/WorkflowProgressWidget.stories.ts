@@ -16,8 +16,8 @@ const meta = {
 } as Meta<typeof WorkflowProgressWidget>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 // WorkflowProgressWidget fetches its own data via the API using the workflowId prop.
 // Stories show the idle state (no workflowId) and the loading state (workflowId set).

@@ -2,6 +2,7 @@
   <div>
     <!-- Connection Lost Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :modelValue="showReconnectModal"
       @update:modelValue="val => !val && $emit('hide-reconnect-modal')"
       :title="$t('terminal.modals.connectionLost')"
@@ -42,6 +43,7 @@
 
     <!-- Command Confirmation Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :modelValue="showCommandConfirmation"
       @update:modelValue="val => !val && cancelCommand()"
       :title="$t('terminal.modals.destructiveCommand')"
@@ -108,6 +110,7 @@
 
     <!-- Emergency Kill Confirmation Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :modelValue="showKillConfirmation"
       @update:modelValue="val => !val && cancelKill()"
       :title="$t('terminal.modals.emergencyKillTitle')"
@@ -158,6 +161,7 @@
 
     <!-- Legacy Manual Step Confirmation Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       :modelValue="showLegacyModal"
       @update:modelValue="val => !val && handleTakeManualControl()"
       :title="$t('terminal.modals.workflowTitle')"
@@ -235,12 +239,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('TerminalModals')
-import BaseModal from '@/components/ui/BaseModal.vue'
+const { t } = useI18n()
 
 interface ProcessInfo {
   pid: number
@@ -319,20 +325,25 @@ const clearMessages = () => {
 }
 
 // Standard error handler
-const handleError = (error: any, setter: (msg: string) => void) => {
+const handleError = (error: unknown, setter: (msg: string) => void) => {
   logger.error('Terminal modal error:', error)
 
   let errorMessage = 'An unexpected error occurred'
 
-  if (error?.message) {
-    errorMessage = error.message
-  } else if (error?.response?.data?.detail) {
-    errorMessage = error.response.data.detail
-  } else if (error?.response?.status === 408) {
+  const err = error as {
+    message?: string
+    response?: { data?: { detail?: string }; status?: number }
+  }
+
+  if (err?.message) {
+    errorMessage = err.message
+  } else if (err?.response?.data?.detail) {
+    errorMessage = err.response!.data!.detail!
+  } else if (err?.response?.status === 408) {
     errorMessage = 'Request timed out. Please try again.'
-  } else if (error?.response?.status === 500) {
+  } else if (err?.response?.status === 500) {
     errorMessage = 'Server error. Please try again later.'
-  } else if (error?.response?.status === 404) {
+  } else if (err?.response?.status === 404) {
     errorMessage = 'Service not found. Please check your connection.'
   } else if (typeof error === 'string') {
     errorMessage = error

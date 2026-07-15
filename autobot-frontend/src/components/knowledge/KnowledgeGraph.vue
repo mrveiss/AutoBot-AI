@@ -66,7 +66,7 @@
     <div v-if="errorMessage" class="error-notification" role="alert">
       <Icon name="exclamation-circle" />
       <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = ''" class="close-btn">
+      <button @click="clearError()" class="close-btn">
         <Icon name="times" />
       </button>
     </div>
@@ -395,6 +395,7 @@ import { useCytoscapeLibrary } from '@/composables/charts/useCytoscapeLibrary'
 import { useKnowledgeGraph } from '@/composables/knowledge/useKnowledgeGraph'
 import type { GraphEntity as Entity, GraphRelation as Relation } from '@/composables/knowledge/useKnowledgeGraph'
 import { createLogger } from '@/utils/debugUtils'
+import { useTransientError } from '@/composables/useTransientError'
 import { getCssVar } from '@/composables/useCssVars'
 import { useDebouncedFn } from '@/composables/useDebounce'
 import MemoryOrphanManager from '@/components/knowledge/MemoryOrphanManager.vue'
@@ -443,10 +444,16 @@ const {
   entities,
   relations,
   isLoading,
-  errorMessage,
+  errorMessage: graphError,
   fetchGraphData,
   createGraphEntity,
 } = useKnowledgeGraph()
+
+const { message: errorMessage, show: showError, clear: clearError } = useTransientError(5000)
+watch(graphError, (msg) => {
+  if (msg) showError(msg)
+  else clearError()
+})
 
 const isCreating = ref(false)
 const selectedEntity = ref<Entity | null>(null)
@@ -905,12 +912,12 @@ async function refreshGraph(): Promise<void> {
  */
 async function createEntity(): Promise<void> {
   if (!newEntity.value.name || !newEntity.value.type || !newEntity.value.observations) {
-    errorMessage.value = 'Please fill in all required fields'
+    showError('Please fill in all required fields')
     return
   }
 
   isCreating.value = true
-  errorMessage.value = ''
+  clearError()
 
   try {
     const created = await createGraphEntity(newEntity.value)
@@ -925,7 +932,7 @@ async function createEntity(): Promise<void> {
     newEntity.value = { name: '', type: '', observations: '' }
   } catch (error) {
     logger.error('Failed to create entity:', error)
-    errorMessage.value = error instanceof Error ? error.message : 'Failed to create entity'
+    showError(error instanceof Error ? error.message : 'Failed to create entity')
   } finally {
     isCreating.value = false
   }

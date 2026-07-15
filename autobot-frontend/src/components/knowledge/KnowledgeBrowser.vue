@@ -1,5 +1,11 @@
 <template>
   <div class="knowledge-file-browser">
+    <!-- Error toast for document branch / editor errors -->
+    <div v-if="docBranchError" class="error-toast" role="alert">{{ docBranchError }}</div>
+
+    <!-- Search bar (Issue #11526: unified search) -->
+    <KnowledgeSearchBar :search="search" @search="selectedDocId = null" />
+
     <!-- Main Categories -->
     <KnowledgeMainCategories
       :categories="mainCategories"
@@ -9,6 +15,7 @@
       @select="selectMainCategory"
       @populate="handlePopulate"
       @import="() => router.push('/knowledge/upload')"
+      @edit="handleEditCategory"
     />
 
     <!-- Header -->
@@ -113,6 +120,14 @@
       </span>
     </div>
 
+    <!-- Issue #11555: Category edit modal wired into the browser -->
+    <CategoryEditModal
+      v-model="showCategoryEditModal"
+      :category="categoryToEdit"
+      @updated="handleCategoryUpdated"
+      @deleted="handleCategoryDeleted"
+    />
+
     <!-- Split pane layout -->
     <div class="split-pane">
       <!-- Left: Tree Navigation (30%) -->
@@ -171,11 +186,33 @@
             <Icon name="spinner" class="animate-spin" />
             <span>{{ $t('knowledge.browser.loadingMoreEntries') }}</span>
           </div>
+
+          <!-- AI Documents branch (Issue #11526) -->
+          <KnowledgeDocumentsBranch
+            :selected-doc-id="selectedDocId"
+            @select="onDocSelect"
+            @deleted="onDocDeleted"
+            @error="showDocBranchError($event)"
+          />
         </div>
       </div>
 
-      <!-- Right: Content Viewer (70%) -->
+      <!-- Right pane: editor > results > content viewer -->
+      <AIDocumentEditor
+        v-if="rightPane === 'editor'"
+        :doc-id="selectedDocId!"
+        class="content-pane"
+        @error="showDocBranchError($event)"
+        @load-error="(msg: string) => { showDocBranchError(msg); selectedDocId = null }"
+      />
+      <KnowledgeSearchResults
+        v-else-if="rightPane === 'results'"
+        :search="search"
+        class="content-pane"
+        @close="search.clearResults()"
+      />
       <KnowledgeContentViewer
+        v-else
         :selected-file="selectedFile"
         :content="fileContent"
         :is-loading="isLoadingContent"
@@ -191,7 +228,7 @@ import Icon from '@/components/ui/Icon.vue'
 import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { createLogger } from '@/utils/debugUtils'
 import {
   fetchMainCategories,
@@ -205,25 +242,32 @@ import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { useKnowledgeCategories } from '@/composables/knowledge/useKnowledgeCategories'
 import { useMachineKnowledge } from '@/composables/knowledge/useMachineKnowledge'
 import { useManPages } from '@/composables/knowledge/useManPages'
-import { formatDate, formatFileSize, formatCategoryName } from '@/utils/formatHelpers'
+import { formatCategoryName } from '@/utils/formatHelpers'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
 import { useLoadingState } from '@/composables/useLoadingState'
-import { usePagination } from '@/composables/usePagination'
 import { useDebounce } from '@/composables/useTimeout'
+import { useKnowledgeSearch } from '@/composables/knowledge/useKnowledgeSearch'
+import { useTransientError } from '@/composables/useTransientError'
 import TreeNodeComponent, { type TreeNode } from './TreeNodeComponent.vue'
 import VectorizationProgressModal from './VectorizationProgressModal.vue'
 import KnowledgeBrowserHeader from './KnowledgeBrowserHeader.vue'
 import KnowledgeContentViewer from './KnowledgeContentViewer.vue'
+import KnowledgeSearchBar from './KnowledgeSearchBar.vue'
+import KnowledgeSearchResults from './KnowledgeSearchResults.vue'
+import KnowledgeDocumentsBranch from './KnowledgeDocumentsBranch.vue'
+import AIDocumentEditor from '@/components/documents/AIDocumentEditor.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import KnowledgeMainCategories from './KnowledgeMainCategories.vue'
+import CategoryEditModal from './modals/CategoryEditModal.vue'
+import type { Category } from './modals/CategoryEditModal.vue'
 
 // Create scoped logger for KnowledgeBrowser
 const logger = createLogger('KnowledgeBrowser')
 
 // Domain composables (migrated from useKnowledgeBase BC shim in #5193)
 const { getCategoryIcon, getFileIcon: getFileIconUtil } = useKnowledgeIcons()
-const { getCategorizedFacts, buildCategoryFilterOptions } = useKnowledgeCategories()
+const { getCategorizedFacts: _getCategorizedFacts, buildCategoryFilterOptions: _buildCategoryFilterOptions } = useKnowledgeCategories()
 const { refreshSystemKnowledge } = useMachineKnowledge()
 const { populateAutoBotDocs } = useManPages()
 
@@ -243,8 +287,9 @@ const {
   cleanup: cleanupVectorization
 } = useKnowledgeVectorization()
 
-// Router for navigation
+// Router / route for navigation and deep-link handling
 const router = useRouter()
+const route = useRoute()
 
 // Props
 interface Props {
@@ -264,6 +309,27 @@ interface CategoryOption {
   label: string
   icon: IconName
   count: number
+}
+
+// Loose shape of a knowledge fact/entry as returned by the KB endpoints
+// (Record<string, unknown> at the wire; these are the fields we read).
+interface KnowledgeFactLike {
+  key?: string
+  title?: string
+  source?: string
+  content?: string
+  full_content?: string
+  timestamp?: string
+  created_at?: string
+  category?: string
+  metadata?: Record<string, unknown>
+}
+
+// Nested folder scaffold built while grouping facts by path segment. Each key
+// is either a nested directory or the special `_files` bucket of leaf nodes.
+interface NestedDir {
+  _files?: TreeNode[]
+  [segment: string]: NestedDir | TreeNode[] | undefined
 }
 
 // State
@@ -298,6 +364,30 @@ const populationStates = ref<Record<string, { isPopulating: boolean; progress: n
   'system-knowledge': { isPopulating: false, progress: 0 }
 })
 
+// Issue #11555: category edit modal state
+const showCategoryEditModal = ref(false)
+const categoryToEdit = ref<Category | null>(null)
+
+// Search, document editor and branch state (Issue #11526)
+const search = useKnowledgeSearch(selectedCategory)
+const selectedDocId = ref<string | null>(null)
+const { message: docBranchError, show: showDocBranchError } = useTransientError()
+
+// Right-pane priority: document editor > search results > content viewer
+const rightPane = computed<'editor' | 'results' | 'viewer'>(() => {
+  if (selectedDocId.value) return 'editor'
+  if (search.searchPerformed.value) return 'results'
+  return 'viewer'
+})
+
+function onDocSelect(id: string) {
+  selectedDocId.value = id
+  clearSelection()
+}
+
+function onDocDeleted(id: string) {
+  if (selectedDocId.value === id) selectedDocId.value = null
+}
 
 // Use composables for async operations
 const { isLoading, wrap: loadKnowledgeTree } = useLoadingState()
@@ -306,7 +396,7 @@ const { isLoading: isLoadingContent, wrap: loadFileContentOp } = useLoadingState
 const contentError = ref<Error | null>(null)
 
 // Cursor-based pagination for user knowledge entries
-const allLoadedEntries = ref<any[]>([])
+const allLoadedEntries = ref<Record<string, unknown>[]>([])
 const entriesCursor = ref<string>('0')
 const hasMoreEntries = ref<boolean>(true)
 const isLoadingMore = ref<boolean>(false)
@@ -454,12 +544,12 @@ const filteredTree = computed(() => {
 })
 
 // Helper function to build nested folder structure from file paths
-const buildNestedTree = (facts: any[], category: string): TreeNode[] => {
-  const root: Record<string, any> = {}
+const buildNestedTree = (facts: Record<string, unknown>[], category: string): TreeNode[] => {
+  const root: NestedDir = {};
 
-  facts.forEach((fact: any, factIdx: number) => {
+  (facts as KnowledgeFactLike[]).forEach((fact, factIdx: number) => {
     // Extract filename from metadata
-    const filename = fact.metadata?.filename || fact.title || `Fact ${factIdx + 1}`
+    const filename = (fact.metadata?.filename || fact.title || `Fact ${factIdx + 1}`) as string
 
     // Parse the path (e.g., "docs/api/endpoints.md" -> ["docs", "api", "endpoints.md"])
     const pathParts = filename.split('/').filter((p: string) => p)
@@ -475,7 +565,7 @@ const buildNestedTree = (facts: any[], category: string): TreeNode[] => {
         if (!current._files) current._files = []
         // Extract the actual fact ID from the Redis key (e.g., "fact:UUID" -> "UUID")
         const factId = fact.key ? fact.key.replace('fact:', '') : `fact-${category}-${factIdx}`
-        const fileContent = fact.full_content || fact.content || ''
+        const fileContent = (fact.full_content || fact.content || '') as string
         current._files.push({
           id: factId, // Use actual fact ID from Redis, not synthetic ID
           name: part,
@@ -495,13 +585,13 @@ const buildNestedTree = (facts: any[], category: string): TreeNode[] => {
         if (!current[part]) {
           current[part] = {}
         }
-        current = current[part]
+        current = current[part] as NestedDir
       }
     }
   })
 
   // Convert nested object to TreeNode array
-  const convertToTreeNodes = (obj: Record<string, any>, prefix = ''): TreeNode[] => {
+  const convertToTreeNodes = (obj: NestedDir, prefix = ''): TreeNode[] => {
     const nodes: TreeNode[] = []
 
     // Add folders
@@ -509,11 +599,12 @@ const buildNestedTree = (facts: any[], category: string): TreeNode[] => {
       if (key === '_files') return
 
       const folderPath = prefix ? `${prefix}/${key}` : key
-      const children = convertToTreeNodes(obj[key], folderPath)
+      const children = convertToTreeNodes(obj[key] as NestedDir, folderPath)
 
       // Add files from this level
-      if (obj[key]._files) {
-        children.push(...obj[key]._files)
+      const childFiles = (obj[key] as NestedDir)._files
+      if (childFiles) {
+        children.push(...childFiles)
       }
 
       nodes.push({
@@ -548,6 +639,27 @@ const selectMainCategory = (mainCatId: string) => {
   selectedMainCategory.value = mainCatId
   // Filter subcategories based on main category
   // This will be handled by filteredTree computed property
+}
+
+// Issue #11555: open the category edit modal from the browser card
+const handleEditCategory = (cat: MainCategory) => {
+  categoryToEdit.value = cat as Category
+  showCategoryEditModal.value = true
+}
+
+const handleCategoryUpdated = (updated: Category) => {
+  const idx = mainCategories.value.findIndex(c => c.id === updated.id)
+  if (idx !== -1) {
+    mainCategories.value[idx] = { ...mainCategories.value[idx], ...updated }
+  }
+  showCategoryEditModal.value = false
+  categoryToEdit.value = null
+}
+
+const handleCategoryDeleted = (categoryId: string) => {
+  mainCategories.value = mainCategories.value.filter(c => c.id !== categoryId)
+  showCategoryEditModal.value = false
+  categoryToEdit.value = null
 }
 
 const loadMainCategories = async () => {
@@ -687,7 +799,7 @@ const loadKnowledgeTreeFn = async () => {
   }
 }
 
-const loadUserKnowledge = async () => {
+const _loadUserKnowledge = async () => {
   // Reset pagination and load first page
   resetPagination()
   await loadMore()
@@ -707,12 +819,12 @@ const loadMoreEntries = async () => {
   restoreExpandedState(treeData.value, expandedPaths)
 }
 
-const buildTreeFromEntries = (entries: any[]) => {
+const buildTreeFromEntries = (entries: Record<string, unknown>[]) => {
   // Build tree from entries (group by category)
   const categoryMap = new Map<string, TreeNode[]>()
 
   if (Array.isArray(entries)) {
-    entries.forEach((entry: any, idx: number) => {
+    (entries as KnowledgeFactLike[]).forEach((entry, idx: number) => {
       const category = entry.category || 'Uncategorized'
 
       if (!categoryMap.has(category)) {
@@ -764,6 +876,7 @@ const toggleNode = (nodeId: string) => {
 
 const selectNode = async (node: TreeNode) => {
   if (node.type === 'file') {
+    selectedDocId.value = null  // picking a fact leaves the AI document editor
     selectedFile.value = node
     await loadFileContent(node)
   } else {
@@ -926,7 +1039,7 @@ const handlePopulate = async (categoryId: string) => {
   }
 }
 
-const handleImport = () => {
+const _handleImport = () => {
   router.push('/knowledge/upload')
 }
 
@@ -935,18 +1048,18 @@ const loadFolderContents = async (folder: TreeNode) => {
     const data = await fetchFolderContents(folder.category || '')
 
     if (data.results && Array.isArray(data.results)) {
-      folder.children = data.results.map((item: any, idx: number) => ({
+      folder.children = (data.results as KnowledgeFactLike[]).map((item, idx: number) => ({
         id: `file-${folder.id}-${idx}`,
-        name: item.metadata?.title || item.metadata?.source || `Document ${idx + 1}`,
+        name: (item.metadata?.title || item.metadata?.source || `Document ${idx + 1}`) as string,
         type: 'file' as const,
         path: `${folder.path}/${item.metadata?.title || item.metadata?.source}`,
-        size: item.content?.length || 0,
-        date: item.metadata?.timestamp,
+        size: (item.content?.length as number | undefined) || 0,
+        date: item.metadata?.timestamp as string | undefined,
         category: folder.category,
         metadata: item
       }))
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Failed to load folder contents:', err)
   }
 }
@@ -1055,7 +1168,7 @@ const clearSearch = () => {
 }
 
 // Utility functions (now using composable)
-const getFileIcon = (node: TreeNode): string => {
+const _getFileIcon = (node: TreeNode): string => {
   if (node.type === 'folder') {
     return nodeExpansion.isExpanded(node.id) ? 'folder-open' : 'folder'
   }
@@ -1075,6 +1188,17 @@ onMounted(() => {
   if (props.preselectedCategory) {
     selectedMainCategory.value = props.preselectedCategory
   }
+
+  // Deep links: ?doc= opens the editor, ?q= runs a search, ?view=system
+  // pre-selects the system main category (fixes the previously inert
+  // query set by the legacy manpages/system-knowledge redirects).
+  if (typeof route.query.doc === 'string') selectedDocId.value = route.query.doc
+  if (typeof route.query.category === 'string') selectedCategory.value = route.query.category
+  if (typeof route.query.view === 'string' && route.query.view === 'system') selectedMainCategory.value = 'system-knowledge'
+  if (typeof route.query.q === 'string' && route.query.q.trim()) {
+    search.searchQuery.value = route.query.q
+    search.handleSearch()
+  }
 })
 
 onUnmounted(() => {
@@ -1090,6 +1214,7 @@ watch(() => props.mode, () => {
     error.value = err instanceof Error ? err : new Error(String(err))
   })
   clearSelection()
+  selectedDocId.value = null
   nodeExpansion.collapseAll()
 })
 </script>
@@ -1574,5 +1699,22 @@ watch(() => props.mode, () => {
 .tree-pane::-webkit-scrollbar-thumb:hover,
 .content-pane::-webkit-scrollbar-thumb:hover {
   background: var(--border-secondary);
+}
+
+/* Error toast — Issue #11526 (moved from DocumentsView) */
+.error-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-2-5) var(--spacing-5);
+  font-size: var(--text-sm);
+  z-index: var(--z-popover);
+  max-width: 90vw;
+  text-align: center;
 }
 </style>

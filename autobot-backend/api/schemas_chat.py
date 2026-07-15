@@ -189,6 +189,34 @@ class ThinkingMetadata(BaseModel):
     tokens_used: int | None = Field(None, description="Number of thinking tokens consumed (null if thinking not used)")
 
 
+class Citation(BaseModel):
+    """Structured source citation attached to a RAG-grounded response (#10548).
+
+    Propagated from retrieval (kb_results / RAGMetrics) through the response
+    builder to the API payload and rendered by CitationsDisplay.vue as chips.
+    """
+
+    id: str = Field(..., description="Unique citation identifier (chunk/doc/graph-node id)")
+    source_type: str = Field(
+        ...,
+        description="Origin of this citation: 'doc' | 'chunk' | 'graph'",
+    )
+    title: str = Field(..., description="Human-readable title or file name")
+    uri: str | None = Field(None, description="Relative path or URI for deep-linking")
+    score: float = Field(..., ge=0.0, le=1.0, description="Retrieval relevance score (0–1)")
+
+
+class GroundingStatus(BaseModel):
+    """Grounding transparency marker attached to every assistant response (#10548).
+
+    ``grounded=True``  → citations[] is non-empty and comes from real retrieval.
+    ``grounded=False`` → model-only claim; no KB/graph evidence was found.
+    """
+
+    grounded: bool = Field(..., description="True when citations[] contains verified retrieval evidence")
+    strategy: str | None = Field(None, description="Retrieval strategy used: 'rag' | 'cag' | 'kag' | None")
+
+
 class ChatMessageData(BaseModel):
     """data payload for POST /chat and POST /chat/message (alias).
 
@@ -205,25 +233,38 @@ class ChatMessageData(BaseModel):
     thinking_metadata: ThinkingMetadata | None = Field(
         None, description="Thinking mode metadata (Claude 3.7+ reasoning models)"
     )
+    # Issue #10548: grounded citations — default-on; empty list = no retrieval evidence.
+    citations: List[Citation] = Field(
+        default_factory=list,
+        description="Structured source citations from RAG retrieval. " "Non-empty only when grounding.grounded=True.",
+    )
+    grounding: GroundingStatus | None = Field(
+        None,
+        description="Grounding transparency marker. grounded=False signals a model-only claim.",
+    )
 
 
 class ChatHealthComponents(BaseModel):
-    """Component health subsection of ChatHealthData."""
+    """Component health subsection of ChatHealthData (kept for import compat)."""
 
     chat_history_manager: str
     llm_service: str
 
 
 class ChatHealthData(BaseModel):
-    """Response shape for GET /chat/health (#6497).
+    """Response shape for GET /chat/health and GET /health-ai-stack (#6497, #10654).
 
-    Wire format is the model itself — no DataResponse envelope. The route
-    declares response_model=ChatHealthData directly.
+    Canonical model for both health endpoints. Wire format is the model itself —
+    no DataResponse envelope. ``components`` is Dict[str, Any] so it handles
+    both the fixed {chat_history_manager, llm_service} shape from /chat/health
+    and the heterogeneous per-component map from /health-ai-stack.
+    ``error`` is only populated on the /health-ai-stack error path.
     """
 
     status: str
     timestamp: str
-    components: ChatHealthComponents
+    components: Dict[str, Any]
+    error: str | None = None
 
 
 class ChatStatsData(BaseModel):
@@ -253,11 +294,11 @@ class ChatDeleteData(BaseModel):
     deleted: Any
 
 
-class EnhancedChatData(BaseModel):
-    """data payload for POST /enhanced.
+class ChatData(BaseModel):
+    """data payload for POST /ai-stack.
 
     Mirrors ChatMessageData with an additional ``knowledge_sources``
-    field for KB-augmented enhanced chats.
+    field for KB-augmented AI Stack chats.
     """
 
     content: str
@@ -269,29 +310,15 @@ class EnhancedChatData(BaseModel):
     knowledge_sources: List[Dict[str, Any]] | None = None
 
 
-class EnhancedChatHealthData(BaseModel):
-    """Response shape for GET /health-enhanced (#6497).
-
-    Wire format is the model itself — no DataResponse envelope. The
-    components map is heterogeneous (per-component status strings keyed
-    by component name) so it is typed as Dict[str, Any].
-    """
-
-    status: str
-    timestamp: str
-    components: Dict[str, Any]
-    error: str | None = None
-
-
-class EnhancedChatCapabilitiesData(BaseModel):
+class ChatCapabilitiesData(BaseModel):
     """data payload for GET /capabilities.
 
     Some fields are absent on the fallback path when AI Stack is
-    unavailable (only ``enhanced_chat``, ``ai_stack_integration``,
+    unavailable (only ``ai_stack_chat_available``, ``ai_stack_integration``,
     ``knowledge_base_integration``, ``error`` are populated then).
     """
 
-    enhanced_chat: bool
+    ai_stack_chat_available: bool
     ai_stack_integration: bool
     knowledge_base_integration: bool
     source_citations: bool | None = None
@@ -459,7 +486,14 @@ class ChatResetRequest(BaseModel):
 
 
 class ChatMessage(BaseModel):
-    """Chat message model for requests"""
+    """Chat message model for requests — canonical for both /chat and /enhanced (#10654).
+
+    Fields from the former enhanced variant (use_ai_stack, use_knowledge_base,
+    response_style, include_sources) carry defaults so a plain /chat request
+    that omits them validates without change. ``reasoning_effort`` is used by
+    /chat only and is also optional, so /enhanced requests that omit it still
+    validate.
+    """
 
     content: str = Field(..., min_length=1, max_length=50000, description="Message content")
     role: str = Field(
@@ -475,6 +509,12 @@ class ChatMessage(BaseModel):
         description="Preferred response language code (e.g. 'en', 'es', 'de'). "
         "Overrides personality language when set.",
     )
+    # AI Stack fields (used by /enhanced endpoints; defaulted so /chat requests omit safely)
+    use_ai_stack: bool = Field(True, description="Whether to use AI Stack for enhanced responses")
+    use_knowledge_base: bool = Field(True, description="Whether to include knowledge base context")
+    response_style: str = Field("conversational", description="Response style preference")
+    include_sources: bool = Field(True, description="Whether to include source citations")
+    # Thinking / reasoning fields (shared by both /chat and /enhanced)
     thinking_mode_enabled: bool | None = Field(
         None,
         description="Enable extended thinking mode for reasoning models (Claude 3.7+, DeepSeek R1). "
@@ -493,6 +533,20 @@ class ChatMessage(BaseModel):
         description="Per-conversation reasoning effort override (low, medium, high, auto). "
         "Overrides the user's account-level default. Omit to use the user default. "
         "When 'auto' or absent the provider's own defaults are used (#9017).",
+    )
+    # Per-request model/provider override (#11585)
+    model: str | None = Field(
+        None,
+        max_length=200,
+        description="Per-request model override. Overrides the per-conversation and "
+        "global default model for this message; omit to use the current default (#11585).",
+    )
+    provider: str | None = Field(
+        None,
+        max_length=100,
+        description="Per-request LLM provider override. Validated against registered "
+        "providers (422 on unknown names) and pinned to the conversation so later "
+        "messages inherit it (#11585).",
     )
 
 
@@ -515,41 +569,6 @@ class MessageHistory(BaseModel):
     total_count: int
     page: int = 1
     per_page: int = 50
-
-
-class EnhancedChatMessage(BaseModel):
-    """Enhanced chat message with AI Stack integration."""
-
-    content: str = Field(..., min_length=1, max_length=50000, description="Message content")
-    role: str = Field(
-        default=CategoryDefaults.ROLE_USER,
-        pattern="^(user|assistant|system)$",
-        description="Message role",
-    )
-    session_id: str = Field(..., description="Chat session ID")
-    message_type: str | None = Field("text", description="Message type")
-    metadata: Metadata | None = Field(default_factory=dict, description="Additional metadata")
-    language: str | None = Field(
-        None,
-        description="Preferred response language code (e.g. 'en', 'es', 'de'). "
-        "Overrides personality language when set.",
-    )
-    use_ai_stack: bool = Field(True, description="Whether to use AI Stack for enhanced responses")
-    use_knowledge_base: bool = Field(True, description="Whether to include knowledge base context")
-    response_style: str = Field("conversational", description="Response style preference")
-    include_sources: bool = Field(True, description="Whether to include source citations")
-    thinking_mode_enabled: bool | None = Field(
-        None,
-        description="Enable extended thinking mode for reasoning models (Claude 3.7+, DeepSeek R1). "
-        "When enabled, the model performs chain-of-thought reasoning before responding.",
-    )
-    thinking_budget_tokens: int | None = Field(
-        None,
-        ge=1000,
-        le=128000,
-        description="Thinking budget in tokens (e.g., 1000, 5000, 10000, 63000). "
-        "Only used when thinking_mode_enabled=True. Limits the amount of reasoning tokens.",
-    )
 
 
 class ChatPreferences(BaseModel):

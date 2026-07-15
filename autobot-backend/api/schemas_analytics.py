@@ -579,7 +579,7 @@ class OptimizationQuickWinsResponse(BaseModel):
 class MaintenanceDashboardResponse(BaseModel):
     """Response for GET /maintenance/dashboard.
 
-    Shape from service.get_unified_dashboard() — opaque; extra allowed.
+    Shape from service.get_analytics_dashboard() — opaque; extra allowed.
     """
 
     model_config = {"extra": "allow"}
@@ -1658,12 +1658,14 @@ class AlertThresholdRequest(BaseModel):
 
 
 class RumEvent(BaseModel):
+    model_config = {"populate_by_name": True}
+
     type: str
     timestamp: str
     sessionId: str
     url: str
     userAgent: str
-    data: Metadata = {}
+    data: Metadata = Field(default_factory=dict)
 
 
 class RumConfig(BaseModel):
@@ -2838,6 +2840,7 @@ class MetricCategory(str, Enum):
     PERFORMANCE = "performance"
     TESTABILITY = "testability"
     DOCUMENTATION = "documentation"
+    RUNTIME_RISK = "runtime_risk"
 
 
 class QualityMetric(BaseModel):

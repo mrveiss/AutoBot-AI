@@ -19,7 +19,7 @@
           d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = ''" :aria-label="'Close error'">
+      <button @click="clearError()" :aria-label="'Close error'">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -238,9 +238,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useTransientError } from '@/composables/useTransientError'
 
 const logger = createLogger('ChromaDBExplorer')
 const apiClient = useApiClient()
@@ -249,20 +250,20 @@ const apiClient = useApiClient()
 interface CollectionMetadata {
   name: string
   count: number
-  metadata: Record<string, any> | null
+  metadata: Record<string, unknown> | null
 }
 
 interface DocumentItem {
   id: string
   document: string | null
-  metadata: Record<string, any> | null
+  metadata: Record<string, unknown> | null
   embedding_dim: number | null
 }
 
 interface SearchResultItem {
   id: string
   document: string | null
-  metadata: Record<string, any> | null
+  metadata: Record<string, unknown> | null
   distance: number | null
 }
 
@@ -273,7 +274,7 @@ const searchResults = ref<SearchResultItem[]>([])
 const isLoading = ref(false)
 const isLoadingDocuments = ref(false)
 const isSearching = ref(false)
-const errorMessage = ref('')
+const { message: errorMessage, show: showError, clear: clearError } = useTransientError(5000)
 const currentPage = ref(0)
 const currentOffset = ref(0)
 const pageSize = ref(50)
@@ -284,7 +285,7 @@ const expandedDocs = ref(new Set<number>())
 // Methods
 async function loadCollections() {
   isLoading.value = true
-  errorMessage.value = ''
+  clearError()
 
   try {
     const response = await apiClient.get<{ success: boolean; data: CollectionMetadata[]; error?: string }>(
@@ -294,11 +295,11 @@ async function loadCollections() {
       collections.value = response.data
       logger.info(`Loaded ${collections.value.length} collections`)
     } else {
-      errorMessage.value = response.error || 'Failed to load collections'
+      showError(response.error || 'Failed to load collections')
     }
   } catch (error) {
     logger.error('Failed to load collections:', error)
-    errorMessage.value = error instanceof Error ? error.message : 'Failed to load collections'
+    showError(error instanceof Error ? error.message : 'Failed to load collections')
   } finally {
     isLoading.value = false
   }
@@ -317,7 +318,7 @@ async function loadDocuments() {
   if (!selectedCollection.value) return
 
   isLoadingDocuments.value = true
-  errorMessage.value = ''
+  clearError()
 
   try {
     const params = new URLSearchParams({
@@ -329,7 +330,7 @@ async function loadDocuments() {
       data: {
         ids: string[]
         documents: (string | null)[]
-        metadatas: (Record<string, any> | null)[]
+        metadatas: (Record<string, unknown> | null)[]
         embedding_dim: number | null
       }
       total: number
@@ -350,11 +351,11 @@ async function loadDocuments() {
 
       logger.info(`Loaded ${documents.value.length} documents`)
     } else {
-      errorMessage.value = response.error || 'Failed to load documents'
+      showError(response.error || 'Failed to load documents')
     }
   } catch (error) {
     logger.error('Failed to load documents:', error)
-    errorMessage.value = error instanceof Error ? error.message : 'Failed to load documents'
+    showError(error instanceof Error ? error.message : 'Failed to load documents')
   } finally {
     isLoadingDocuments.value = false
   }
@@ -364,7 +365,7 @@ async function performSearch() {
   if (!selectedCollection.value || !searchQuery.value) return
 
   isSearching.value = true
-  errorMessage.value = ''
+  clearError()
 
   try {
     const response = await apiClient.post<{
@@ -384,11 +385,11 @@ async function performSearch() {
       searchResults.value = response.data
       logger.info(`Found ${searchResults.value.length} search results`)
     } else {
-      errorMessage.value = response.error || 'Search failed'
+      showError(response.error || 'Search failed')
     }
   } catch (error) {
     logger.error('Search failed:', error)
-    errorMessage.value = error instanceof Error ? error.message : 'Search failed'
+    showError(error instanceof Error ? error.message : 'Search failed')
   } finally {
     isSearching.value = false
   }
@@ -437,6 +438,11 @@ onMounted(() => {
   padding: var(--spacing-6);
   max-width: 1400px;
   margin: 0 auto;
+  /* #10750 C2: fill the bounded .knowledge-content scroller; panels scroll internally */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* ============================================
@@ -485,7 +491,7 @@ onMounted(() => {
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
   border-radius: var(--radius-md);
-  color: var(--color-danger);
+  color: var(--color-error);
   margin-bottom: var(--spacing-4);
 }
 
@@ -502,7 +508,7 @@ onMounted(() => {
 .error-alert button {
   background: none;
   border: none;
-  color: var(--color-danger);
+  color: var(--color-error);
   cursor: pointer;
   padding: var(--spacing-1);
 }
@@ -520,7 +526,9 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: var(--spacing-4);
-  min-height: 600px;
+  /* #10750 C2: take remaining height so panels resolve max-height:100% */
+  flex: 1;
+  min-height: 0;
 }
 
 /* ============================================
@@ -533,7 +541,9 @@ onMounted(() => {
   border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 200px);
+  /* #10750 C2: bounded by grid cell, not the viewport */
+  min-height: 0;
+  max-height: 100%;
   overflow: hidden;
   transition: all var(--duration-200) ease;
 }
@@ -719,7 +729,9 @@ onMounted(() => {
   border-radius: var(--radius-lg);
   padding: var(--spacing-5);
   overflow-y: auto;
-  max-height: calc(100vh - 200px);
+  /* #10750 C2: bounded by grid cell, not the viewport */
+  min-height: 0;
+  max-height: 100%;
 }
 
 .details-header {

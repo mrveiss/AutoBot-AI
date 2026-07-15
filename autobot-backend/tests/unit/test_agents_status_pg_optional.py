@@ -7,7 +7,7 @@ Unit tests for the PG-optional /api/agents/status endpoint (#10511, #10526).
 
 Verifies:
 - _fallback_agents_from_registry() returns valid AgentStatusItem-shaped dicts
-  when called without a Postgres session (single_user mode).
+  when called without a Postgres session (defensive fallback).
 - Agent type mapping (_ORCH_TYPE_MAP) covers all default agent types.
 - AdapterRegistry population: _init_llm_adapters registers at least the
   Ollama adapter without raising.
@@ -57,20 +57,20 @@ class TestFallbackAgentsFromRegistry:
             raise ImportError("Could not load api/agent_org.py")
 
         # We can't exec the full module without heavy stubs; instead test the logic
-        # inline by calling the AgentRegistry directly.
+        # inline by calling the AgentCapabilityRegistry directly.
         return None
 
     def test_fallback_returns_list(self):
         """_fallback_agents_from_registry must return a non-empty list."""
-        from orchestration.agent_registry import AgentRegistry
+        from orchestration.agent_registry import AgentCapabilityRegistry
 
-        registry = AgentRegistry(initialize_defaults=True)
+        registry = AgentCapabilityRegistry(initialize_defaults=True)
         agents = registry.get_all()
         assert len(agents) >= 4, "Expected at least 4 default agents"
 
     def test_fallback_shapes(self):
         """Every in-memory agent maps to an AgentStatusItem-compatible dict."""
-        from orchestration.agent_registry import AgentRegistry
+        from orchestration.agent_registry import AgentCapabilityRegistry
 
         _ORCH_TYPE_MAP = {
             "research": "analyzer",
@@ -79,7 +79,7 @@ class TestFallbackAgentsFromRegistry:
             "orchestrator": "orchestrator",
         }
 
-        registry = AgentRegistry(initialize_defaults=True)
+        registry = AgentCapabilityRegistry(initialize_defaults=True)
         required_keys = {
             "id",
             "name",
@@ -112,7 +112,7 @@ class TestFallbackAgentsFromRegistry:
 
     def test_orch_type_map_covers_defaults(self):
         """All default agent types appear in _ORCH_TYPE_MAP or fall back to 'worker'."""
-        from orchestration.agent_registry import AgentRegistry
+        from orchestration.agent_registry import AgentCapabilityRegistry
 
         _ORCH_TYPE_MAP = {
             "research": "analyzer",
@@ -122,7 +122,7 @@ class TestFallbackAgentsFromRegistry:
         }
         valid_types = {"analyzer", "executor", "orchestrator", "worker"}
 
-        registry = AgentRegistry(initialize_defaults=True)
+        registry = AgentCapabilityRegistry(initialize_defaults=True)
         for profile in registry.get_all().values():
             mapped = _ORCH_TYPE_MAP.get(profile.agent_type, "worker")
             assert mapped in valid_types, f"Unexpected type '{mapped}' for {profile.agent_id}"
@@ -134,8 +134,6 @@ class TestFallbackAgentsFromRegistry:
 # The conftest stubs llm_shared as a MagicMock, so these tests implement the
 # registry contract inline to stay isolated from the import chain.
 # ---------------------------------------------------------------------------
-
-import pytest  # noqa: E402
 
 
 class TestAdapterRegistryContract:

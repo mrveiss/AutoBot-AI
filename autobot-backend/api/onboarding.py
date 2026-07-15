@@ -41,8 +41,7 @@ async def list_presets() -> DataResponse:
     """Return all curated starter presets.
 
     Auth-gated (#6568): the preset catalogue exposes platform capability
-    info and should not be enumerable pre-login. ``single_user`` deployments
-    still pass through via the synthetic admin in ``get_current_user``.
+    info and should not be enumerable pre-login.
     """
     presets = get_all_presets()
     return DataResponse(data=presets)

@@ -61,7 +61,7 @@ async def test_phase2_migration():
     claude_monitor = ClaudeAPIMonitor()
 
     # Record API call (should push to Prometheus)
-    claude_monitor.record_api_call(
+    await claude_monitor.record_api_call(
         payload_size=1024,
         response_size=512,
         response_time=0.5,

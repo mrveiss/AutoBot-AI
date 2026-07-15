@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
 
@@ -215,17 +216,15 @@ class FFmpegService:
             raise RuntimeError(f"Failed to get audio duration: {exc}")
 
 
-# Singleton instance
-_ffmpeg_service: Optional[FFmpegService] = None
+# Issue #10916: lazy_singleton provides double-checked locking so concurrent
+# callers cannot each create a separate FFmpegService instance.
+_get_ffmpeg_service_singleton = lazy_singleton(FFmpegService)
 
 
 def get_ffmpeg_service() -> FFmpegService:
-    """Get or create FFmpeg service singleton.
+    """Get or create FFmpeg service singleton (thread-safe).
 
     Returns:
         FFmpegService instance
     """
-    global _ffmpeg_service
-    if _ffmpeg_service is None:
-        _ffmpeg_service = FFmpegService()
-    return _ffmpeg_service
+    return _get_ffmpeg_service_singleton()

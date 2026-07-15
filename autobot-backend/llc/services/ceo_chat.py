@@ -4,25 +4,23 @@
 # Author: mrveiss
 """CEO Chat service — company-scoped chat resolving to work objects (GH#8233).
 
-CeoChatService.send() flow:
-  1. RAG-query ``company:{company_id}`` KB collection with message text (top 5).
-  2. Call LLM via ``llm_shared`` with board-interface system prompt.
-  3. Interpret structured JSON response → call appropriate LLC service.
-  4. Persist resolution in ``resolved_entity_type`` + ``resolved_entity_id``.
-  5. Return system reply message with link to the resolved entity.
+#11501 T2: CeoChatService.send() now delegates to the shared chat pipeline
+(chat_workflow) instead of a bespoke intent-classifier. The board LLM gets the
+same experience as /chat and creates work objects by calling the LLC tools
+(create_task / update_goal / request_approval / record_decision), which are
+taught in the system prompt only when the request context carries a company_id.
 
-Resolution intents:
-  create_task        → WorkItemService.create()
-  update_goal        → GoalService.update()
-  request_approval   → ApprovalService.create()
-  record_decision    → stored as thread annotation (resolved_entity_type="decision")
-  clarify            → no entity created; asks for more info
+Flow:
+  1. Persist the human message.
+  2. RAG-query the company + decisions KB for grounding (top 5 chunks).
+  3. Delegate to ChatWorkflowManager.process_message_stream with
+     {company_id, user_id} context; the LLC tools execute company-scoped.
+  4. Persist the streamed reply; set resolved_entity_type/id from the tool
+     result when the LLM created an entity.
 """
 
-import json
 import logging
-import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,17 +30,23 @@ from .base import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 
-_BOARD_SYSTEM_PROMPT = (
-    "You are the board interface for {company_name}. "
-    "Your goal is to resolve this message into one of: "
-    "[create_task, update_goal, request_approval, record_decision, clarify]. "
-    "Return structured JSON with keys: "
-    '{"intent": "<one of the above>", "summary": "<brief>", "entity": {<relevant fields>}}. '
-    "Respond ONLY with valid JSON."
-)
+# #11501 T2: the bespoke phi3 intent-classifier (prompts, JSON extraction,
+# intent dispatch) is retired — the board LLM now uses the shared chat pipeline
+# + LLC tools. See CeoChatService._run_pipeline.
 
 _AUTHOR_HUMAN = "human"
 _AUTHOR_SYSTEM = "system"
+
+
+def _get_workflow_manager():
+    """Return the shared chat-workflow manager (#11501 T2).
+
+    Wrapped so the heavy chat_workflow import is lazy and tests can patch this
+    without importing the full pipeline.
+    """
+    from chat_workflow import get_chat_workflow_manager
+
+    return get_chat_workflow_manager()
 
 
 class CeoChatService(LLCServiceBase):
@@ -101,15 +105,15 @@ class CeoChatService(LLCServiceBase):
         *,
         company_name: str = "the company",
     ) -> LLCCeoChatMessage:
-        """Process a human message and return the system reply.
+        """Process a human board message and return the system reply (#11501 T2).
 
         Steps:
           1. Persist the human message.
-          2. RAG-query the company KB for context.
-          3. Call LLM to resolve the intent.
-          4. Call the appropriate LLC service for non-clarify intents.
-          5. Update thread resolution fields.
-          6. Persist and return the system reply message.
+          2. RAG-query the company + decisions KB for grounding.
+          3-6. Delegate to the shared chat pipeline (_run_pipeline): the board
+             LLM answers and creates work objects via the LLC tools, then the
+             reply is persisted and the thread resolution updated if an entity
+             was created. company_name grounds the prompt.
         """
         # 1. Persist the incoming human message
         human_msg = LLCCeoChatMessage(
@@ -128,34 +132,27 @@ class CeoChatService(LLCServiceBase):
         decision_chunks = await self._query_decisions(company_id, message)
         kb_chunks = kb_chunks + decision_chunks
 
-        # 3. LLM resolution
-        resolution = await self._resolve_via_llm(
+        # 3-6. Delegate to the shared chat pipeline (#11501 T2). The board LLM
+        # gets the same /chat experience and creates work objects via the LLC
+        # tools (create_task/update_goal/request_approval/record_decision),
+        # company-scoped from context. Retires the bespoke phi3 intent-classifier
+        # that always fell back to "clarify" (KeyError('"intent"')).
+        reply_body, entity_type, entity_id = await self._run_pipeline(
+            thread_id=thread_id,
             message=message,
+            company_id=company_id,
+            user_id=user_id,
             kb_chunks=kb_chunks,
             company_name=company_name,
-            conversation_id=thread_id,
         )
 
-        # 4. Act on resolved intent (company_id resolved above in step 2)
-        entity_type, entity_id = await self._dispatch_intent(
-            session=session,
-            company_id=company_id,
-            resolution=resolution,
-        )
-
-        # 5. Update thread resolution fields when we created/updated an entity
         if entity_type and entity_id:
             await session.execute(
                 update(LLCCeoChatThread)
                 .where(LLCCeoChatThread.id == thread_id)
-                .values(
-                    resolved_entity_type=entity_type,
-                    resolved_entity_id=entity_id,
-                )
+                .values(resolved_entity_type=entity_type, resolved_entity_id=entity_id)
             )
 
-        # 6. Build and persist system reply
-        reply_body = self._build_reply(resolution, entity_type, entity_id)
         system_msg = LLCCeoChatMessage(
             thread_id=thread_id,
             author_type=_AUTHOR_SYSTEM,
@@ -165,6 +162,54 @@ class CeoChatService(LLCServiceBase):
         session.add(system_msg)
         await session.flush()
         return system_msg
+
+    async def _run_pipeline(
+        self,
+        *,
+        thread_id: str,
+        message: str,
+        company_id: str,
+        user_id: Optional[str],
+        kb_chunks: List[str],
+        company_name: str = "the company",
+    ) -> tuple[str, Optional[str], Optional[str]]:
+        """Run the board message through the shared chat pipeline (#11501 T2).
+
+        Returns (reply_text, entity_type, entity_id). company_id/user_id go in
+        the context so the LLC tools (create_task/...) execute company-scoped;
+        the thread_id is the chat session_id. Company name + KB chunks are
+        prepended as grounding. The created entity (if any) is read from the LLC
+        tool-result metadata.
+
+        Reply assembly (#11525 review): streaming ``response`` chunks are
+        cumulative snapshots keyed by message id, so we keep the latest content
+        per id and join distinct segments in order — robust whether the model
+        ends with a single ``respond`` message or interleaves prose + thoughts.
+        """
+        grounded = f"[Company: {company_name}]\n"
+        if kb_chunks:
+            grounded += "Company context:\n" + "\n".join(kb_chunks[:5]) + "\n\n---\n\n"
+        grounded += message
+        context = {"company_id": company_id, "user_id": user_id or ""}
+
+        responses: "dict[str, str]" = {}  # message-id → latest full content, in order
+        entity_type: Optional[str] = None
+        entity_id: Optional[str] = None
+        manager = _get_workflow_manager()
+        async for msg in manager.process_message_stream(thread_id, grounded, context):
+            mtype = getattr(msg, "type", None)
+            content = getattr(msg, "content", "") or ""
+            meta = getattr(msg, "metadata", None) or {}
+            if mtype == "response" and content:
+                mid = getattr(msg, "id", None) or f"_seg{len(responses)}"
+                responses[mid] = content  # snapshots replace; new segments append
+            result = meta.get("result") if isinstance(meta, dict) else None
+            if isinstance(result, dict) and result.get("entity_type") and result.get("entity_id"):
+                entity_type = result["entity_type"]
+                entity_id = result["entity_id"]
+
+        reply = "\n\n".join(v for v in responses.values() if v).strip() or "Done."
+        return reply, entity_type, entity_id
 
     # --------------------------------------------------------------- Helpers
 
@@ -203,123 +248,3 @@ class CeoChatService(LLCServiceBase):
         except Exception as exc:
             logger.warning("Decisions RAG query failed for company %s: %s", company_id, exc)
             return []
-
-    async def _resolve_via_llm(
-        self,
-        *,
-        message: str,
-        kb_chunks: List[str],
-        company_name: str,
-        conversation_id: str,
-    ) -> Dict[str, Any]:
-        """Call the LLM and return parsed resolution dict."""
-        try:
-            from llm_shared.types import LLMType
-            from services.llm_service import get_llm_service
-
-            svc = get_llm_service()
-            context = "\n".join(kb_chunks) if kb_chunks else ""
-            system_prompt = _BOARD_SYSTEM_PROMPT.format(company_name=company_name)
-
-            messages: List[Dict[str, str]] = []
-            if context:
-                messages.append({"role": "system", "content": f"{system_prompt}\n\nContext:\n{context}"})
-            else:
-                messages.append({"role": "system", "content": system_prompt})
-            messages.append({"role": "user", "content": message})
-
-            response = await svc.chat(
-                messages=messages,
-                conversation_id=conversation_id,
-                llm_type=LLMType.EXTRACTION,
-            )
-
-            raw = (response.content or "").strip()
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-            return json.loads(raw)
-        except Exception as exc:
-            logger.warning("LLM resolution failed: %s", exc)
-            return {"intent": "clarify", "summary": str(exc), "entity": {}}
-
-    async def _dispatch_intent(
-        self,
-        *,
-        session: AsyncSession,
-        company_id: str,
-        resolution: Dict[str, Any],
-    ) -> tuple[Optional[str], Optional[uuid.UUID]]:
-        """Call the appropriate LLC service and return (entity_type, entity_id)."""
-        intent = resolution.get("intent", "clarify")
-        entity_data = resolution.get("entity", {})
-
-        try:
-            if intent == "create_task":
-                from ..models.enums import WorkItemPriority, WorkItemType
-                from .work_item_service import WorkItemService
-
-                item_svc = WorkItemService()
-                item = await item_svc.create(
-                    session,
-                    company_id=company_id,
-                    type=WorkItemType.TASK,
-                    title=entity_data.get("title", resolution.get("summary", "CEO Chat Task")),
-                    description=entity_data.get("description"),
-                    priority=WorkItemPriority(entity_data.get("priority", "medium")),
-                )
-                return "work_item", item.id
-
-            if intent == "update_goal":
-                goal_id = entity_data.get("goal_id")
-                if goal_id:
-                    from .goal import GoalService
-
-                    goal_svc = GoalService()
-                    updates = {k: v for k, v in entity_data.items() if k != "goal_id"}
-                    await goal_svc.update(session, goal_id=goal_id, **updates)
-                    return "goal", uuid.UUID(goal_id)
-
-            if intent == "request_approval":
-                from ..models.enums import ApprovalType
-                from .approval import ApprovalService
-
-                appr_svc = ApprovalService()
-                appr = await appr_svc.create(
-                    session,
-                    company_id=company_id,
-                    type=ApprovalType(entity_data.get("type", "general")),
-                    requested_by_agent_id=entity_data.get("agent_id", str(uuid.uuid4())),
-                    payload=entity_data,
-                )
-                return "approval", appr.id
-
-            if intent == "record_decision":
-                # No external service call — the thread itself is the record.
-                return "decision", None
-
-        except Exception as exc:
-            logger.warning("Intent dispatch failed for intent=%s: %s", intent, exc)
-
-        return None, None
-
-    @staticmethod
-    def _build_reply(
-        resolution: Dict[str, Any],
-        entity_type: Optional[str],
-        entity_id: Optional[uuid.UUID],
-    ) -> str:
-        intent = resolution.get("intent", "clarify")
-        summary = resolution.get("summary", "")
-
-        if intent == "clarify":
-            return f"Could you clarify? {summary}"
-
-        if not entity_type:
-            return f"Resolved as '{intent}': {summary} (no entity created due to missing context)."
-
-        if entity_id:
-            return f"Resolved as '{intent}': {summary}. Created {entity_type} [{entity_id}]."
-
-        return f"Resolved as '{intent}': {summary}. Recorded as {entity_type}."

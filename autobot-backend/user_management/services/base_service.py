@@ -24,7 +24,6 @@ class TenantContext:
     """
     Tenant context for multi-tenancy operations.
 
-    In single_user mode, org_id is None.
     In single_company mode, org_id is the implicit organization.
     In multi_company/provider modes, org_id is set from JWT/session.
     """

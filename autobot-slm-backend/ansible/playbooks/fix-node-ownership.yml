@@ -8,8 +8,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 
+# #11455: target `infrastructure` (not `infrastructure:!slm_server`). A co-located
+# single-node host is in BOTH groups after #11436, so `!slm_server` wrongly
+# excluded it and its /opt/autobot ownership was never fixed. A pure SLM
+# controller is only in `slm_server` (not `infrastructure`), so it is still
+# excluded — matching update-all-nodes.yml Play 2's membership model.
 - name: "Fix AutoBot file ownership on all nodes"
-  hosts: infrastructure:!slm_server
+  hosts: infrastructure
   gather_facts: false
   serial: 3
 

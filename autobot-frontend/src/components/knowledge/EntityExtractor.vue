@@ -116,7 +116,7 @@
     <div v-if="errorMessage" class="error-notification" role="alert">
       <Icon name="exclamation-circle" />
       <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = ''" class="close-btn">
+      <button @click="clearError()" class="close-btn">
         <Icon name="times" />
       </button>
     </div>
@@ -172,6 +172,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { createLogger } from '@/utils/debugUtils'
+import { useTransientError } from '@/composables/useTransientError'
 import { extractEntities as extractEntitiesApi } from '@/composables/knowledge/useKnowledgeEntities'
 import type { EntityMessage } from '@/composables/knowledge/useKnowledgeEntities'
 
@@ -202,7 +203,7 @@ interface ExtractionResult {
 const conversationId = ref('')
 const textInput = ref('')
 const isExtracting = ref(false)
-const errorMessage = ref('')
+const { message: errorMessage, show: showError, clear: clearError } = useTransientError(5000)
 const extractionResult = ref<ExtractionResult | null>(null)
 const extractionHistory = ref<ExtractionResult[]>([])
 
@@ -270,12 +271,12 @@ function parseMessages(text: string): EntityMessage[] {
  */
 async function extractEntities(): Promise<void> {
   if (!textInput.value.trim() || !conversationId.value.trim()) {
-    errorMessage.value = t('knowledge.entityExtractor.errorBothRequired')
+    showError(t('knowledge.entityExtractor.errorBothRequired'))
     return
   }
 
   isExtracting.value = true
-  errorMessage.value = ''
+  clearError()
   extractionResult.value = null
 
   try {
@@ -300,7 +301,7 @@ async function extractEntities(): Promise<void> {
     logger.info(`Extraction complete: ${result.entities_created} entities`)
   } catch (error) {
     logger.error('Entity extraction failed:', error)
-    errorMessage.value = error instanceof Error ? error.message : t('knowledge.entityExtractor.errorExtractionFailed')
+    showError(error instanceof Error ? error.message : t('knowledge.entityExtractor.errorExtractionFailed'))
   } finally {
     isExtracting.value = false
   }

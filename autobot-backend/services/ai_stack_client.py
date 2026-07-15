@@ -135,7 +135,7 @@ class AIStackClient:
         """Initialize AI Stack client with base URL and HTTP client configuration.
 
         When `enabled` is False (env AUTOBOT_AI_STACK_ENABLED=false, default off
-        for compose/single_user with no AI Stack VM), health probes short-circuit
+        for deployments with no AI Stack VM), health probes short-circuit
         to a "disabled" status with no network attempts — stopping the per-boot
         warning flood (#9782).
         """
@@ -537,11 +537,9 @@ class AIStackClient:
     # Knowledge Base Librarian Integration
     # ====================================================================
 
-    async def search_knowledge_enhanced(
-        self, query: str, search_type: str = "comprehensive", max_results: int = 10
-    ) -> Metadata:
+    async def search_knowledge(self, query: str, search_type: str = "comprehensive", max_results: int = 10) -> Metadata:
         """
-        Enhanced knowledge base search using KB Librarian.
+        Knowledge base search using KB Librarian.
 
         Args:
             query: Search query
@@ -549,7 +547,7 @@ class AIStackClient:
             max_results: Maximum results to return
 
         Returns:
-            Enhanced search results with relevance ranking
+            Search results with relevance ranking
         """
         payload = {
             "query": query,

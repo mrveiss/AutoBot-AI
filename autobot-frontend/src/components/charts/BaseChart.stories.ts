@@ -41,9 +41,9 @@ const meta = {
 } as Meta<typeof BaseChart>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
 import type { StoryObj } from '@storybook/vue3';
-type Story = StoryObj<any>;
+type Story = StoryObj<Record<string, unknown>>;
 
 export const BarChart: Story = {
   args: {

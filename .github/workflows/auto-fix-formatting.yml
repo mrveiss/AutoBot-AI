@@ -32,7 +32,7 @@ jobs:
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.14'
           cache: 'pip'
 
       - name: Install formatters
@@ -72,8 +72,6 @@ jobs:
 
           Applied Black, isort, and autoflake to match code-quality checks.
           Triggered by workflow auto-fix-formatting.yml.
-
-          Co-Authored-By: Paperclip <noreply@paperclip.ing>
           EOF
           )"
             git push

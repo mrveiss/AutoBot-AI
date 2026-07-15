@@ -26,7 +26,7 @@ from multimodal_processor import (
     ModalityType,
     MultiModalInput,
     ProcessingIntent,
-    unified_processor,
+    processor,
 )
 from task_execution_tracker import get_task_tracker
 
@@ -75,7 +75,7 @@ class ScreenAnalyzer:
         self.context_analyzer = ContextAnalyzer()
 
         # Multi-modal processor integration
-        self.multimodal_processor = unified_processor
+        self.multimodal_processor = processor
         self.enable_multimodal_analysis = True
 
         # Cache recent screenshots for comparison

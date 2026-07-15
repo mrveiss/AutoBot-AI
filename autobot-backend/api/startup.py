@@ -25,6 +25,7 @@ import threading
 
 from api.schemas_common import DataResponse
 from api.schemas_system import StartupMessage, StartupPhase, StartupPhaseUpdateData, StartupStatusResponse
+from api.ws_security import enforce_ws_origin
 
 _startup_lock = threading.Lock()
 
@@ -132,6 +133,8 @@ async def get_startup_status():
 )
 async def startup_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time startup messages"""
+    if not await enforce_ws_origin(websocket):
+        return
     await websocket.accept()
 
     async with _ws_lock:

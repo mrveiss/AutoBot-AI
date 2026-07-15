@@ -460,7 +460,9 @@ async def desktop_mouse_click_mcp(request: DesktopMouseClickRequest) -> Metadata
     button_map = {"left": "1", "middle": "2", "right": "3"}
     button_num = button_map.get(request.button, "1")
 
-    result = _run_xdotool_cmd(["mousemove", str(request.x), str(request.y), "click", button_num])
+    result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, validated by _run_xdotool_cmd
+        _run_xdotool_cmd, ["mousemove", str(request.x), str(request.y), "click", button_num]
+    )
 
     return {
         "success": result["status"] == "success",
@@ -484,7 +486,9 @@ async def desktop_keyboard_type_mcp(request: DesktopKeyboardTypeRequest) -> Meta
     """
     from api.vnc_manager import _run_xdotool_cmd
 
-    result = _run_xdotool_cmd(["type", "--", request.text])
+    result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, validated by _run_xdotool_cmd
+        _run_xdotool_cmd, ["type", "--", request.text]
+    )
 
     return {
         "success": result["status"] == "success",
@@ -507,7 +511,9 @@ async def desktop_special_key_mcp(request: DesktopSpecialKeyRequest) -> Metadata
     """
     from api.vnc_manager import _run_xdotool_cmd
 
-    result = _run_xdotool_cmd(["key", request.key])
+    result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, validated by _run_xdotool_cmd
+        _run_xdotool_cmd, ["key", request.key]
+    )
 
     return {
         "success": result["status"] == "success",
@@ -538,7 +544,8 @@ async def desktop_screenshot_mcp() -> Metadata:
             tmp_path = tmp_file.name
 
         # Use scrot to capture screenshot
-        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+        result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
+            subprocess.run,
             ["scrot", "-o", tmp_path],
             capture_output=True,
             text=True,
@@ -548,7 +555,8 @@ async def desktop_screenshot_mcp() -> Metadata:
 
         if result.returncode != 0:
             # Fallback to import command
-            result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+            result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
+                subprocess.run,
                 ["import", "-window", "root", tmp_path],
                 capture_output=True,
                 text=True,
@@ -608,7 +616,8 @@ async def desktop_observe_state_mcp(request: DesktopObserveStateRequest) -> Meta
 
     # Get screen resolution
     try:
-        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+        result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
+            subprocess.run,
             ["xdpyinfo"],
             capture_output=True,
             text=True,
@@ -627,7 +636,8 @@ async def desktop_observe_state_mcp(request: DesktopObserveStateRequest) -> Meta
 
     # Get active window info
     try:
-        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+        result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
+            subprocess.run,
             ["xdotool", "getactivewindow", "getwindowname"],
             capture_output=True,
             text=True,

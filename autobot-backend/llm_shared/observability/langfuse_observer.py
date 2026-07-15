@@ -46,7 +46,10 @@ class LangFuseObserver:
             metadata={
                 "agent_id": request.metadata.get("agent_id"),
                 "run_id": request.metadata.get("run_id"),
-                "llm_type": str(request.llm_type),
+                # llm_type may be an LLMType(str, Enum) member or a plain str;
+                # use the enum value ('extraction'), not str(member) which yields
+                # 'LLMType.EXTRACTION' on Python <3.11 (#11091).
+                "llm_type": getattr(request.llm_type, "value", request.llm_type),
             },
         )
         self._pending[request.request_id] = gen

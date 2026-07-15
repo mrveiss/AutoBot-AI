@@ -308,13 +308,13 @@
     </div>
 
     <!-- Patterns Modal -->
-    <div v-if="showPatterns" class="modal-overlay" @click.self="showPatterns = false">
-      <div class="modal patterns-modal">
-        <div class="modal-header">
-          <h3>{{ $t('analytics.performanceAnalysis.performancePatterns') }}</h3>
-          <button class="close-btn" @click="showPatterns = false">×</button>
-        </div>
-        <div class="modal-content">
+    <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
+      :model-value="showPatterns"
+      :title="$t('analytics.performanceAnalysis.performancePatterns')"
+      size="md"
+      @close="showPatterns = false"
+    >
           <div
             v-for="cat in patternCategories"
             :key="cat"
@@ -345,14 +345,13 @@
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+    </BaseModal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import api from '@/services/api'
@@ -364,10 +363,10 @@ const logger = createLogger('PerformanceAnalysisDashboard')
 
 // Issue #701: Type for API response with data property
 interface ApiDataResponse {
-  data?: any
+  data?: unknown
   total_issues?: number
   issues?: PerformanceIssue[]
-  [key: string]: any
+  [key: string]: unknown
 }
 
 // Types
@@ -538,9 +537,9 @@ async function runAnalysis() {
       params: { path: selectedPath.value }
     })
     // Issue #701: Response is returned directly, handle both response structures
-    lastResult.value = (response as ApiDataResponse).data || response as unknown as AnalysisResult
+    lastResult.value = ((response as ApiDataResponse).data as AnalysisResult | undefined) || response as unknown as AnalysisResult
 
-    const totalIssues = (response as ApiDataResponse).total_issues ?? (response as ApiDataResponse).data?.total_issues ?? 0
+    const totalIssues = (response as ApiDataResponse).total_issues ?? ((response as ApiDataResponse).data as AnalysisResult | undefined)?.total_issues ?? 0
     if (totalIssues === 0) {
       showToast(t('analytics.performanceAnalysis.noIssuesFound'), 'success')
     } else {
@@ -561,7 +560,7 @@ async function loadPatterns() {
     // Issue #701: Added type assertion for response
     const response = await api.get<Pattern[] | ApiDataResponse>(`${getApiBase()}/performance/patterns`)
     // Issue #701: Response could be array directly or wrapped in data
-    patterns.value = Array.isArray(response) ? response : ((response as ApiDataResponse).data || [])
+    patterns.value = Array.isArray(response) ? response : (((response as ApiDataResponse).data as Pattern[] | undefined) || [])
   } catch (error) {
     logger.warn('Failed to load patterns:', error)
     patterns.value = []
@@ -573,7 +572,7 @@ async function loadHotspots() {
     // Issue #701: Added type assertion for response
     const response = await api.get<Hotspot[] | ApiDataResponse>(`${getApiBase()}/performance/hotspots`)
     // Issue #701: Response could be array directly or wrapped in data
-    hotspots.value = Array.isArray(response) ? response : ((response as ApiDataResponse).data || [])
+    hotspots.value = Array.isArray(response) ? response : (((response as ApiDataResponse).data as Hotspot[] | undefined) || [])
   } catch (error) {
     logger.warn('Failed to load hotspots:', error)
     hotspots.value = []
@@ -584,7 +583,7 @@ async function togglePattern(pattern: Pattern) {
   const newState = !pattern.enabled
   try {
     // Issue #701: Fixed api.post call - data should be second arg, options third
-    await api.post<any>(`${getApiBase()}/performance/patterns/${pattern.id}/toggle`, { enabled: newState })
+    await api.post<unknown>(`${getApiBase()}/performance/patterns/${pattern.id}/toggle`, { enabled: newState })
     pattern.enabled = newState
   } catch (error) {
     logger.warn('Failed to toggle pattern:', error)
@@ -607,6 +606,9 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-6);
+  /* #10750: fill the scrolling .analytics-router-view; the issues grid grows
+     to absorb vertical slack instead of leaving dead space below. */
+  min-height: 100%;
 }
 
 /* Path Selection */
@@ -725,7 +727,25 @@ onMounted(() => {
 .content-grid {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
+  grid-auto-rows: 1fr;
   gap: var(--spacing-6);
+  /* #10750: primary data region — grow to fill remaining height. */
+  flex: 1;
+  min-height: 0;
+}
+
+/* #10750: issues panel is the grower; its list scrolls internally instead of
+   the shared fixed 400px cap. */
+.content-grid .panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.content-grid .panel-content {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
 }
 
 /* Category Tabs */

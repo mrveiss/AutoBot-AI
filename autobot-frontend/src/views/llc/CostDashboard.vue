@@ -4,28 +4,28 @@
 <template>
   <div class="cost-dashboard">
     <div class="dash-header">
-      <h2 class="view-title">Cost Dashboard</h2>
-      <button class="btn-export" @click="exportCsv">Export CSV</button>
+      <h2 class="view-title">{{ $t('llc.cost.title') }}</h2>
+      <button class="btn-export" @click="exportCsv">{{ $t('llc.cost.exportCsv') }}</button>
     </div>
 
-    <div v-if="!companyId" class="state-msg">Select a company to view costs.</div>
+    <div v-if="!companyId" class="state-msg">{{ $t('llc.cost.selectCompany') }}</div>
 
     <template v-else>
     <!-- Summary cards -->
     <div class="summary-cards">
       <div class="summary-card">
-        <div class="card-label">Total This Month</div>
+        <div class="card-label">{{ $t('llc.cost.totalThisMonth') }}</div>
         <div class="card-value">${{ totalThisMonth.toFixed(4) }}</div>
       </div>
       <div class="summary-card">
-        <div class="card-label">By Company</div>
+        <div class="card-label">{{ $t('llc.cost.byCompany') }}</div>
         <div class="card-value">${{ totalByCompany.toFixed(4) }}</div>
         <div class="card-sub">{{ companyId }}</div>
       </div>
       <div v-if="totalTokensThisMonth > 0" class="summary-card">
-        <div class="card-label">Total Tokens This Month</div>
+        <div class="card-label">{{ $t('llc.cost.totalTokens') }}</div>
         <div class="card-value">{{ formatTokens(totalTokensThisMonth) }}</div>
-        <div class="card-sub">{{ tokenModeAgents }} token-mode agents</div>
+        <div class="card-sub">{{ $t('llc.cost.tokenModeAgents', { count: tokenModeAgents }) }}</div>
       </div>
       <div
         v-for="agent in topAgents"
@@ -34,18 +34,18 @@
       >
         <div class="card-label">{{ agent.name }}</div>
         <div class="card-value">${{ agent.cost.toFixed(4) }}</div>
-        <div class="card-sub">top agent</div>
+        <div class="card-sub">{{ $t('llc.cost.topAgent') }}</div>
       </div>
     </div>
 
     <!-- Budget health -->
     <div v-if="budgets.length > 0" class="budget-section">
-      <h3 class="section-title">Budget Health</h3>
+      <h3 class="section-title">{{ $t('llc.cost.budgetHealth') }}</h3>
       <div class="budget-rows">
         <div v-for="b in budgets" :key="b.agent_id" class="budget-row">
           <span class="budget-agent">{{ b.agent_name ?? b.agent_id }}</span>
           <span class="mode-badge" :class="`mode-${b.budget_mode}`">
-            {{ b.budget_mode === 'tokens' ? 'Tokens' : '$' }}
+            {{ b.budget_mode === 'tokens' ? $t('llc.cost.tokensBadge') : '$' }}
           </span>
           <div class="gauge-track">
             <div
@@ -69,40 +69,41 @@
               ${{ parseFloat(b.budget_spent).toFixed(4) }} / ${{ parseFloat(b.budget_limit).toFixed(4) }}
             </template>
           </span>
-          <button class="btn-settings" title="Edit budget settings" @click="openSettings(b)">⚙</button>
+          <button class="btn-settings" :title="$t('llc.cost.editSettings')" @click="openSettings(b)">⚙</button>
         </div>
       </div>
     </div>
 
     <!-- Budget settings modal -->
-    <div v-if="settingsModal.visible" class="modal-overlay" @click.self="closeSettings">
-      <div class="modal-box">
-        <div class="modal-header">
-          <h3 class="modal-title">Budget Settings</h3>
-          <button class="btn-close" @click="closeSettings">✕</button>
-        </div>
+    <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
+      :model-value="settingsModal.visible"
+      :title="$t('llc.cost.settingsTitle')"
+      size="sm"
+      @close="closeSettings"
+    >
         <div class="modal-agent-name">{{ settingsModal.budget?.agent_name ?? settingsModal.budget?.agent_id }}</div>
 
         <div class="field-group">
-          <label class="field-label">Budget Mode</label>
+          <label class="field-label">{{ $t('llc.cost.budgetMode') }}</label>
           <div class="mode-toggle">
             <button
               :class="{ active: settingsForm.budget_mode === 'dollars' }"
               @click="settingsForm.budget_mode = 'dollars'"
             >
-              Dollar Limit
+              {{ $t('llc.cost.dollarLimit') }}
             </button>
             <button
               :class="{ active: settingsForm.budget_mode === 'tokens' }"
               @click="settingsForm.budget_mode = 'tokens'"
             >
-              Token Limit
+              {{ $t('llc.cost.tokenLimit') }}
             </button>
           </div>
         </div>
 
         <div v-if="settingsForm.budget_mode === 'dollars'" class="field-group">
-          <label class="field-label">Monthly Dollar Limit</label>
+          <label class="field-label">{{ $t('llc.cost.monthlyDollarLimit') }}</label>
           <div class="input-prefix-wrap">
             <span class="input-prefix">$</span>
             <input
@@ -116,20 +117,20 @@
         </div>
 
         <div v-else class="field-group">
-          <label class="field-label">Monthly Token Limit</label>
+          <label class="field-label">{{ $t('llc.cost.monthlyTokenLimit') }}</label>
           <input
             v-model.number="settingsForm.token_limit"
             type="number"
             step="100000"
             min="0"
             class="field-input"
-            placeholder="e.g. 1000000"
+            :placeholder="$t('llc.cost.tokenLimitPlaceholder')"
           />
-          <p class="field-hint">Recommended: 1M–5M for subscription plans, 100K for free tier</p>
+          <p class="field-hint">{{ $t('llc.cost.tokenLimitHint') }}</p>
         </div>
 
         <div class="field-group">
-          <label class="field-label">Alert Threshold: {{ settingsForm.alert_threshold_pct }}%</label>
+          <label class="field-label">{{ $t('llc.cost.alertThreshold', { pct: settingsForm.alert_threshold_pct }) }}</label>
           <input
             v-model.number="settingsForm.alert_threshold_pct"
             type="range"
@@ -142,19 +143,18 @@
 
         <div v-if="settingsModal.error" class="modal-error">{{ settingsModal.error }}</div>
 
-        <div class="modal-actions">
-          <button class="btn-secondary" @click="closeSettings">Cancel</button>
+        <template #actions>
+          <button class="btn-secondary" @click="closeSettings">{{ $t('llc.cost.cancel') }}</button>
           <button class="btn-primary" :disabled="settingsModal.saving" @click="saveBudgetSettings">
-            {{ settingsModal.saving ? 'Saving…' : 'Save' }}
+            {{ settingsModal.saving ? $t('llc.cost.saving') : $t('llc.cost.save') }}
           </button>
-        </div>
-      </div>
-    </div>
+        </template>
+    </BaseModal>
 
     <!-- Bar chart: daily spend -->
     <div class="chart-section">
-      <h3 class="section-title">Daily Spend – Last 30 Days</h3>
-      <div v-if="dailyBars.length === 0" class="state-msg">No spend data available.</div>
+      <h3 class="section-title">{{ $t('llc.cost.dailySpend') }}</h3>
+      <div v-if="dailyBars.length === 0" class="state-msg">{{ $t('llc.cost.noSpendData') }}</div>
       <div v-else class="bar-chart">
         <div
           v-for="bar in dailyBars"
@@ -171,38 +171,38 @@
     <!-- Filters -->
     <div class="table-filters">
       <select v-model="filters.agent" class="filter-select">
-        <option value="">All Agents</option>
+        <option value="">{{ $t('llc.cost.allAgents') }}</option>
         <option v-for="a in agentOptions" :key="a" :value="a">{{ a }}</option>
       </select>
       <input v-model="filters.dateFrom" type="date" class="filter-date" />
-      <span class="date-sep">to</span>
+      <span class="date-sep">{{ $t('llc.cost.to') }}</span>
       <input v-model="filters.dateTo" type="date" class="filter-date" />
     </div>
 
     <!-- Cost events table -->
     <div class="table-wrapper">
       <div v-if="costEventsUnavailable" class="state-msg">
-        Cost events endpoint not available (404).
+        {{ $t('llc.cost.costEventsUnavailable') }}
       </div>
       <table v-else class="cost-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Agent</th>
-            <th>Work Item</th>
-            <th>Model</th>
-            <th>Provider</th>
-            <th>Input Tokens</th>
-            <th>Output Tokens</th>
-            <th>Cost</th>
+            <th>{{ $t('llc.cost.colDate') }}</th>
+            <th>{{ $t('llc.cost.colAgent') }}</th>
+            <th>{{ $t('llc.cost.colWorkItem') }}</th>
+            <th>{{ $t('llc.cost.colModel') }}</th>
+            <th>{{ $t('llc.cost.colProvider') }}</th>
+            <th>{{ $t('llc.cost.colInputTokens') }}</th>
+            <th>{{ $t('llc.cost.colOutputTokens') }}</th>
+            <th>{{ $t('llc.cost.colCost') }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="isLoading">
-            <td colspan="8" class="state-msg">Loading...</td>
+            <td colspan="8" class="state-msg">{{ $t('llc.cost.loading') }}</td>
           </tr>
           <tr v-else-if="filteredEvents.length === 0">
-            <td colspan="8" class="state-msg">No cost events match filters.</td>
+            <td colspan="8" class="state-msg">{{ $t('llc.cost.noEvents') }}</td>
           </tr>
           <tr v-for="ev in filteredEvents" :key="ev.id">
             <td>{{ formatDate(ev.created_at) }}</td>
@@ -226,10 +226,14 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { formatDate as fmtDate } from '@/utils/formatHelpers'
+import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('CostDashboard')
 const api = useApiClient()
 const route = useRoute()
+const { t } = useI18n()
 
 const props = defineProps<{ companyId?: string }>()
 const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
@@ -366,7 +370,7 @@ const dailyBars = computed(() => {
 })
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString()
+  return fmtDate(iso)
 }
 
 function exportCsv() {
@@ -427,7 +431,7 @@ async function saveBudgetSettings() {
     closeSettings()
     await fetchBudgets()
   } catch (err: unknown) {
-    settingsModal.error = (err as { message?: string })?.message ?? 'Save failed'
+    settingsModal.error = (err as { message?: string })?.message ?? t('llc.cost.saveFailed')
     logger.error('Budget settings save failed', err)
   } finally {
     settingsModal.saving = false
@@ -476,8 +480,8 @@ onMounted(async () => {
   height: 100%;
   padding: 1.5rem;
   gap: 1.25rem;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   overflow-y: auto;
 }
 
@@ -495,9 +499,9 @@ onMounted(async () => {
 
 .btn-export {
   padding: 0.4rem 1rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
-  border: 1px solid var(--color-border, #d1d5db);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   cursor: pointer;
@@ -513,8 +517,8 @@ onMounted(async () => {
   flex: 1;
   min-width: 160px;
   padding: 1rem;
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
   display: flex;
   flex-direction: column;
@@ -523,7 +527,7 @@ onMounted(async () => {
 
 .card-label {
   font-size: 0.8rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   font-weight: 500;
 }
 
@@ -534,7 +538,7 @@ onMounted(async () => {
 
 .card-sub {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   word-break: break-all;
 }
 
@@ -546,8 +550,8 @@ onMounted(async () => {
 
 .budget-section,
 .chart-section {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
   padding: 1rem;
 }
@@ -593,20 +597,20 @@ onMounted(async () => {
 .gauge-track {
   flex: 1;
   height: 0.5rem;
-  background: var(--color-surface-elevated, #f3f4f6);
+  background: var(--bg-elevated, #f3f4f6);
   border-radius: 9999px;
   overflow: hidden;
 }
 
 .gauge-fill {
   height: 100%;
-  background: #10b981;
+  background: var(--color-success);
   border-radius: 9999px;
   transition: width 0.3s;
 }
 
-.gauge-warn { background: #f59e0b; }
-.gauge-over { background: #ef4444; }
+.gauge-warn { background: var(--color-warning); }
+.gauge-over { background: var(--color-error); }
 
 .gauge-label {
   min-width: 3.5rem;
@@ -614,17 +618,17 @@ onMounted(async () => {
   font-size: 0.8rem;
 }
 
-.text-warn { color: #f59e0b; font-weight: 600; }
+.text-warn { color: var(--color-warning); font-weight: 600; }
 
 .budget-amounts {
   min-width: 12rem;
   text-align: right;
   font-size: 0.8rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .shadow-cost {
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   font-size: 0.75rem;
   margin-left: 0.25rem;
 }
@@ -632,11 +636,11 @@ onMounted(async () => {
 .btn-settings {
   padding: 0.2rem 0.45rem;
   background: transparent;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.25rem;
   cursor: pointer;
   font-size: 0.85rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   opacity: 0.6;
   transition: opacity 0.15s;
 }
@@ -644,52 +648,9 @@ onMounted(async () => {
 .btn-settings:hover { opacity: 1; }
 
 /* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.modal-box {
-  background: var(--color-surface, #fff);
-  border-radius: 0.75rem;
-  padding: 1.5rem;
-  width: 100%;
-  max-width: 26rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.modal-title {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.btn-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1rem;
-  color: var(--color-text-secondary, #6b7280);
-  padding: 0.2rem;
-}
-
 .modal-agent-name {
   font-size: 0.85rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   margin-top: -0.5rem;
 }
 
@@ -707,7 +668,7 @@ onMounted(async () => {
 .mode-toggle {
   display: flex;
   gap: 0;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
   overflow: hidden;
 }
@@ -719,7 +680,7 @@ onMounted(async () => {
   border: none;
   cursor: pointer;
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   transition: background 0.15s, color 0.15s;
 }
 
@@ -731,25 +692,25 @@ onMounted(async () => {
 .input-prefix-wrap {
   display: flex;
   align-items: center;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
   overflow: hidden;
 }
 
 .input-prefix {
   padding: 0.45rem 0.6rem;
-  background: var(--color-surface-elevated, #f9fafb);
-  border-right: 1px solid var(--color-border, #d1d5db);
+  background: var(--bg-elevated, #f9fafb);
+  border-right: 1px solid var(--border-default, #d1d5db);
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .field-input {
   padding: 0.45rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
   font-size: 0.875rem;
   width: 100%;
 }
@@ -761,7 +722,7 @@ onMounted(async () => {
 
 .field-hint {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   margin: 0;
 }
 
@@ -772,17 +733,10 @@ onMounted(async () => {
 
 .modal-error {
   font-size: 0.825rem;
-  color: #ef4444;
+  color: var(--color-error);
   padding: 0.5rem 0.75rem;
-  background: #fef2f2;
+  background: var(--color-error-bg);
   border-radius: 0.375rem;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 0.25rem;
 }
 
 .btn-primary {
@@ -804,8 +758,8 @@ onMounted(async () => {
 .btn-secondary {
   padding: 0.45rem 1rem;
   background: transparent;
-  color: var(--color-text);
-  border: 1px solid var(--color-border, #d1d5db);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   cursor: pointer;
@@ -841,7 +795,7 @@ onMounted(async () => {
 
 .bar-label {
   font-size: 0.6rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   transform: rotate(-45deg);
   transform-origin: center;
   white-space: nowrap;
@@ -857,21 +811,21 @@ onMounted(async () => {
 .filter-select,
 .filter-date {
   padding: 0.4rem 0.75rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: 0.375rem;
-  background: var(--color-surface, #fff);
-  color: var(--color-text);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
   font-size: 0.875rem;
 }
 
 .date-sep {
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .table-wrapper {
   overflow: auto;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem;
 }
 
@@ -885,14 +839,14 @@ onMounted(async () => {
   padding: 0.625rem 0.75rem;
   text-align: left;
   font-weight: 600;
-  background: var(--color-surface-elevated, #f9fafb);
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-elevated, #f9fafb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
   white-space: nowrap;
 }
 
 .cost-table td {
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--color-border, #f3f4f6);
+  border-bottom: 1px solid var(--border-default, #f3f4f6);
 }
 
 .num-cell {
@@ -903,6 +857,6 @@ onMounted(async () => {
 .state-msg {
   text-align: center;
   padding: 2rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 </style>

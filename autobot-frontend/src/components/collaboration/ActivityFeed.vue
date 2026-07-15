@@ -49,7 +49,7 @@ const getActivityColor = (type: string): string => {
     case 'file': return 'text-blue-400'
     case 'browser': return 'text-purple-400'
     case 'desktop': return 'text-orange-400'
-    default: return 'text-gray-400'
+    default: return 'text-autobot-text-muted'
   }
 }
 

@@ -366,6 +366,7 @@
 
   <!-- Edit Session Name Modal -->
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     v-model="showEditModal"
     :title="$t('chat.sidebar.editChatName')"
     size="md"
@@ -401,6 +402,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 
 // #1804: emit close-mobile so ChatInterface can close the mobile overlay
 const emit = defineEmits<{ 'close-mobile': [] }>()
@@ -420,13 +422,14 @@ import { getApiBase } from '@/config/ssot-config'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 
 const logger = createLogger('ChatSidebar')
 
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 const store = useChatStore()
 const controller = useChatController()
 const folderStore = useFolderStore()
@@ -600,7 +603,7 @@ const deleteSession = async (sessionId: string) => {
   const [fileStatsResult, kbFactsResult] = await Promise.allSettled([
     // Fetch file stats
     (async () => {
-      const data = await ApiClient.get<any>(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
+      const data = await ApiClient.get<{ stats?: FileStats }>(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
       return data?.stats || null
     })(),
     // Fetch KB facts (Issue #547)
@@ -636,7 +639,7 @@ const deleteCurrentSession = () => {
   }
 }
 
-const handleDeleteConfirm = async (fileAction: string, fileOptions: any, selectedFactIds: string[] = []) => {
+const handleDeleteConfirm = async (fileAction: string, fileOptions: Record<string, unknown> | undefined, selectedFactIds: string[] = []) => {
   if (!deleteTargetSessionId.value) return
   const sessionId = deleteTargetSessionId.value
 
@@ -658,7 +661,7 @@ const handleDeleteConfirm = async (fileAction: string, fileOptions: any, selecte
     }
 
     // Delete the session
-    await controller.deleteChatSession(sessionId, fileAction as any, fileOptions)
+    await controller.deleteChatSession(sessionId, fileAction as 'delete' | 'transfer_kb' | 'transfer_shared', fileOptions)
 
     // Issue #547: Show toast with KB cleanup results
     const totalFacts = deleteKBFacts.value?.length || 0
@@ -713,8 +716,8 @@ const reloadSystem = async () => {
 
   try {
     // Call real system reload API
-    const response = await ApiClient.post<any>(`${getApiBase()}/system/reload_config`)
-    const data = await (response as any).json()
+    const response = await ApiClient.post<unknown>(`${getApiBase()}/system/reload_config`)
+    const data = await (response as { json: () => Promise<Record<string, unknown>> }).json()
 
     if (data && data.success) {
       systemStatus.value = t('status.ready')
@@ -748,14 +751,14 @@ const cancelSelection = () => {
   sessionSelection.clear()
 }
 
-const toggleSelection = (sessionId: string) => {
+const _toggleSelection = (sessionId: string) => {
   sessionSelection.toggleByKey(sessionId)
 }
 
 const deleteSelectedSessions = async () => {
   if (sessionSelection.selectedCount.value === 0) return
 
-  const confirmed = confirm(t('chat.sidebar.confirmDeleteSelected', { count: sessionSelection.selectedCount.value }))
+  const confirmed = await confirm({ title: t('common.confirm'), message: t('chat.sidebar.confirmDeleteSelected', { count: sessionSelection.selectedCount.value }) })
   if (!confirmed) return
 
   // Delete all selected sessions in parallel - eliminates N+1 sequential API calls

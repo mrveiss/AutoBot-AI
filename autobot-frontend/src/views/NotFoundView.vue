@@ -55,10 +55,7 @@
 <script setup lang="ts">
 // View-level component for 404 error page
 // Issue #753: Design token usage instead of Tailwind utilities
-import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
-
-const { t } = useI18n()
 </script>
 
 <style scoped>

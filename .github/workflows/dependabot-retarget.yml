@@ -1,0 +1,75 @@
+# Retarget Dependabot PRs to Dev_new_gui
+#
+# Dependabot SECURITY updates always open against the repository default
+# branch (main) and ignore dependabot.yml `target-branch` — a documented
+# GitHub limitation. Manually retargeting does not stick: the next
+# `@dependabot rebase` reverts the base back to main (observed on #11566).
+#
+# This workflow enforces the Dev_new_gui-first flow by PATCHing the base of
+# every Dependabot-authored PR that targets main over to Dev_new_gui. It runs
+# on `synchronize` too, so a Dependabot rebase/force-push that reverts the
+# base is immediately re-retargeted.
+#
+# Uses pull_request_target (base-branch workflow definition, token with write
+# scope). Safe: PR code is never checked out or executed.
+#
+# See: https://github.com/mrveiss/AutoBot-AI/issues/11696
+
+name: Retarget Dependabot PRs
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  retarget:
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Retarget base to Dev_new_gui
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            try {
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                base: 'Dev_new_gui',
+              });
+              console.log('Retargeted PR #' + pr.number + ' from main to Dev_new_gui');
+              if (context.payload.action !== 'synchronize') {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  body: 'Retargeted to `Dev_new_gui` (Dev_new_gui-first flow, #11696). ' +
+                        'Dependabot security updates always open against the default ' +
+                        'branch; this workflow re-applies the retarget after every ' +
+                        'Dependabot push, so rebases cannot revert it.',
+                });
+              }
+            } catch (error) {
+              // Base change can fail when Dev_new_gui already contains the bump
+              // (empty diff / no commits between branches). Surface it for the
+              // superseded-close flow instead of failing silently.
+              console.log('Could not retarget PR #' + pr.number + ': ' + error.message);
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: 'Auto-retarget to `Dev_new_gui` failed: ' + error.message +
+                      '. If Dev_new_gui already carries this bump, close as superseded (#11696).',
+              });
+            }

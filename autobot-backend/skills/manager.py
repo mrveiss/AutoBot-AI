@@ -40,18 +40,46 @@ class SkillManager:
         return self._registry
 
     async def initialize(self) -> Dict[str, Any]:
-        """Initialize the skills system: discover and load all skills.
-
-        Returns summary of initialization results.
-        """
+        """Initialize the skills system: discover and load all skills."""
         count = self._registry.discover_builtin_skills()
+        custom = await self._load_custom_definitions()
         await self._load_persisted_configs()
 
         return {
             "skills_discovered": count,
+            "custom_reregistered": custom,
             "total_registered": self._registry.skill_count,
             "categories": list(self._registry.categories),
         }
+
+    async def _load_custom_definitions(self) -> int:
+        """Re-register custom/hub skill definitions so they survive restart (#11277 T0).
+
+        Hub skills persist to Redis but are otherwise lost from the in-process
+        registry on restart. Re-register each as a declarative descriptor so it
+        reappears in list/route. (MCP process reattachment is handled in T2.2.)
+        """
+        from skills.base_skill import SkillManifest
+        from skills.hub import SkillHub
+
+        registered = 0
+        try:
+            installed = await SkillHub().list_installed()
+        except Exception:
+            logger.exception("Failed to list hub skills during reload")
+            return 0
+        for rec in installed:
+            manifest = SkillManifest(
+                name=rec.name,
+                version=rec.version or "1.0.0",
+                description=f"Hub skill {rec.name}",
+                category="hub",
+            )
+            if self._registry.register_declarative(manifest, source="hub"):
+                registered += 1
+        if registered:
+            logger.info("Re-registered %d custom/hub skill(s) at boot", registered)
+        return registered
 
     async def execute_skill(
         self,

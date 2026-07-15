@@ -65,8 +65,8 @@ describe('iconMappings utility', () => {
     })
 
     it('should throw on null/undefined input', () => {
-      expect(() => getStatusIcon(null as any)).toThrow()
-      expect(() => getStatusIcon(undefined as any)).toThrow()
+      expect(() => getStatusIcon(null as unknown as string)).toThrow()
+      expect(() => getStatusIcon(undefined as unknown as string)).toThrow()
     })
 
     // Issue #156 Fix: Removed tests for options parameter that doesn't exist in current API

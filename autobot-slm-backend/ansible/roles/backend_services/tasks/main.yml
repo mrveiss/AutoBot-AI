@@ -23,11 +23,31 @@
     - /opt/autobot/config
     - /opt/autobot/venv
 
+# #11374: Install the target interpreter BEFORE any venv work. The
+# ensure_venv_version step below removes a wrong-version venv, and the
+# subsequent pip step recreates it with virtualenv_python: python3.14 —
+# both fail if python3.14 is absent (the live py3.12 drift). The python314
+# role is idempotent (checks `python3.14 --version` first) and fail-loud
+# (verifies the interpreter after install), so re-running is a no-op.
+- name: "Backend Services | Install target Python interpreter (python3.14)"
+  ansible.builtin.include_role:
+    name: python314
+  vars:
+    python_interpreter_version: "3.14"
+
+- name: "Backend Services | Enforce venv target Python version (env-drift fix)"
+  ansible.builtin.include_role:
+    name: python314
+    tasks_from: ensure_venv_version
+  vars:
+    venv_path: /opt/autobot/venv
+    venv_python: python3.14
+
 - name: Install Python dependencies
   pip:
     requirements: /opt/autobot/app/requirements.txt
     virtualenv: /opt/autobot/venv
-    virtualenv_python: python3.12
+    virtualenv_python: python3.14
   become_user: autobot
   environment:
     PIP_DEFAULT_TIMEOUT: "120"

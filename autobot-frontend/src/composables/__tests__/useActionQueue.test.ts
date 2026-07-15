@@ -6,12 +6,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { nextTick } from 'vue'
+import { nextTick, ref } from 'vue'
 
 
 // Mock useNetworkStatus so queue tests are isolated from real network probes
 vi.mock('../useNetworkStatus', () => {
-  const { ref } = require('vue')
   const isOnline = ref(true)
   return {
     useNetworkStatus: vi.fn(() => ({

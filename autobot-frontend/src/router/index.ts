@@ -27,6 +27,7 @@ import { createRouter, createWebHistory, type RouteLocationNormalized, type Rout
 import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
 import { setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'
+import { isChunkLoadError } from '@/utils/chunkLoadError'
 import { createLogger } from '@/utils/debugUtils'
 import { getBackendUrl, getSLMAdminUrl } from '@/config/ssot-config'
 import { llcCompanyParamGuard } from './llcGuards'
@@ -149,39 +150,7 @@ export const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'knowledge-default',
-        redirect: '/knowledge/search'
-      },
-      {
-        path: 'search',
-        name: 'knowledge-search',
-        component: () => import('@/components/knowledge/KnowledgeSearch.vue'),
-        meta: {
-          title: 'Search Knowledge',
-          parent: 'knowledge'
-        }
-      },
-      {
-        // TASK 1a (#3245): AI Documents migrated under Knowledge sidebar.
-        // Legacy /documents + /documents/:docId redirect here (see below).
-        path: 'documents',
-        name: 'knowledge-documents',
-        component: () => import('@/views/DocumentsView.vue'),
-        meta: {
-          title: 'AI Documents',
-          parent: 'knowledge'
-        },
-        children: [
-          {
-            path: ':docId',
-            name: 'document-detail',
-            component: () => import('@/views/DocumentsView.vue'),
-            props: true,
-            meta: {
-              title: 'AI Document',
-              parent: 'knowledge'
-            }
-          }
-        ]
+        redirect: '/knowledge/browser'
       },
       {
         // TASK 1b (#9044): Transcriber migrated under Knowledge sidebar.
@@ -216,11 +185,21 @@ export const routes: RouteRecordRaw[] = [
         ]
       },
       {
-        path: 'categories',
-        name: 'knowledge-categories',
+        path: 'browser',
+        name: 'knowledge-browser',
         component: () => import('@/components/knowledge/KnowledgeBrowser.vue'),
         meta: {
-          title: 'Browse Knowledge',
+          title: 'Knowledge Browser',
+          parent: 'knowledge'
+        }
+      },
+      {
+        // Issue #11555: System documentation viewer and exporter
+        path: 'system-docs',
+        name: 'knowledge-system-docs',
+        component: () => import('@/components/knowledge/KnowledgeSystemDocs.vue'),
+        meta: {
+          title: 'System Docs',
           parent: 'knowledge'
         }
       },
@@ -234,15 +213,6 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/components/knowledge/KnowledgeEntries.vue'),
         meta: {
           title: 'Manage Knowledge',
-          parent: 'knowledge'
-        }
-      },
-      {
-        path: 'verification',
-        name: 'knowledge-verification',
-        component: () => import('@/components/knowledge/KnowledgeVerificationQueue.vue'),
-        meta: {
-          title: 'Source Verification',
           parent: 'knowledge'
         }
       },
@@ -287,15 +257,6 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
-        path: 'stats',
-        name: 'knowledge-stats',
-        component: () => import('@/components/knowledge/KnowledgeStats.vue'),
-        meta: {
-          title: 'Statistics',
-          parent: 'knowledge'
-        }
-      },
-      {
         // Issue #3850: web research settings UI
         path: 'web-research-settings',
         name: 'knowledge-web-research-settings',
@@ -318,24 +279,24 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'manpages',
         redirect: () => ({
-          path: '/knowledge/categories',
+          path: '/knowledge/browser',
           query: { view: 'system' }
         })
       },
       {
         path: 'system-knowledge',
         redirect: () => ({
-          path: '/knowledge/categories',
+          path: '/knowledge/browser',
           query: { view: 'system' }
         })
       },
       {
         path: 'browser/user',
-        redirect: '/knowledge/categories'
+        redirect: '/knowledge/browser'
       },
       {
         path: 'browser/autobot',
-        redirect: '/knowledge/categories'
+        redirect: '/knowledge/browser'
       },
       {
         path: 'graph',
@@ -396,11 +357,11 @@ export const routes: RouteRecordRaw[] = [
         }
       },
       {
-        path: 'maintenance',
-        name: 'knowledge-maintenance',
-        component: () => import('@/components/knowledge/KnowledgeMaintenance.vue'),
+        path: 'health',
+        name: 'knowledge-health',
+        component: () => import('@/components/knowledge/KnowledgeHealth.vue'),
         meta: {
-          title: 'Knowledge Maintenance',
+          title: 'Knowledge Health',
           parent: 'knowledge'
         }
       },
@@ -816,15 +777,15 @@ export const routes: RouteRecordRaw[] = [
     redirect: '/analytics/codebase'
   },
   // Issue #902: Dev Tools moved into /analytics/dev-tools tab
-  // TASK 1a: AI Documents moved under /knowledge/documents. Keep legacy paths
-  // as redirects so existing bookmarks and deep links keep working.
+  // AI Documents now live in the unified /knowledge/browser (#11526). Keep legacy
+  // /documents paths as redirects so existing bookmarks and deep links keep working.
   {
     path: '/documents',
-    redirect: '/knowledge/documents',
+    redirect: '/knowledge/browser',
   },
   {
     path: '/documents/:docId',
-    redirect: (to) => ({ path: `/knowledge/documents/${to.params.docId}` }),
+    redirect: (to) => ({ path: '/knowledge/browser', query: { doc: String(to.params.docId) } }),
   },
   // MVA-360: Live Canvas — route always registered (preserves bookmarks/direct nav);
   // nav item gated by VITE_FEATURE_CANVAS via navItems.ts (GH#8758)
@@ -888,6 +849,18 @@ export const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       admin: true,
       hideInNav: true,
+    },
+  },
+  // Issue #10932: Admin System Health panel — CONTENT_REACH probe
+  {
+    path: '/admin/system-health',
+    name: 'admin-system-health',
+    component: () => import('@/views/SystemHealthView.vue'),
+    meta: {
+      title: 'System Health',
+      hideInNav: true,
+      requiresAuth: true,
+      admin: true,
     },
   },
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
@@ -1173,7 +1146,19 @@ export const routes: RouteRecordRaw[] = [
       { path: 'approvals', name: 'llc-approvals', component: () => import('@/views/llc/ApprovalsInbox.vue'), props: true, meta: { title: 'Approvals Inbox', requiresAuth: true } },
       { path: 'costs', name: 'llc-costs', component: () => import('@/views/llc/CostDashboard.vue'), props: true, meta: { title: 'Cost Dashboard', requiresAuth: true } },
       { path: 'heartbeat', name: 'llc-heartbeat', component: () => import('@/views/llc/HeartbeatMonitor.vue'), props: true, meta: { title: 'Heartbeat Monitor', requiresAuth: true } },
+      { path: 'routines', name: 'llc-routines', component: () => import('@/views/llc/RoutinesView.vue'), props: true, meta: { title: 'Routines', requiresAuth: true } },
       { path: 'ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true } },
+      { path: 'activity', name: 'llc-activity', component: () => import('@/views/llc/ActivityFeedView.vue'), props: true, meta: { title: 'Activity', requiresAuth: true } },
+      { path: 'members', name: 'llc-members', component: () => import('@/views/llc/MembersView.vue'), props: true, meta: { title: 'Members', requiresAuth: true } },
+      { path: 'portability', name: 'llc-company-portability', component: () => import('@/views/llc/CompanyPortabilityView.vue'), props: true, meta: { title: 'Portability', requiresAuth: true } },
+      { path: 'secrets', name: 'llc-company-secrets', component: () => import('@/views/llc/SecretsView.vue'), props: true, meta: { title: 'Secrets', requiresAuth: true } },
+      // GH#10750 (B3): in-layout variants of the formerly top-level dashboard/
+      // goals/org-chart views so the LlcSidebar stays mounted on navigation.
+      // The views resolve the active company from :companyId via
+      // useLlcCompanyContext (param -> ?company= fallback for back-compat).
+      { path: 'dashboard', name: 'llc-company-dashboard', component: () => import('@/views/llc/CompanyDashboard.vue'), props: true, meta: { title: 'Company Dashboard', requiresAuth: true } },
+      { path: 'goals', name: 'llc-company-goals', component: () => import('@/views/llc/GoalTree.vue'), props: true, meta: { title: 'Goal Tree', requiresAuth: true } },
+      { path: 'org-chart', name: 'llc-company-org-chart', component: () => import('@/views/llc/OrgChart.vue'), props: true, meta: { title: 'Org Chart', requiresAuth: true } },
     ],
   },
   // Issue #9044: Transcriber — audio/video transcription module
@@ -1225,9 +1210,7 @@ router.onError((error) => {
   logger.error('Navigation error:', error)
 
   // Handle chunk loading failures with enhanced error recovery
-  if (error.message.includes('Loading chunk') ||
-      error.message.includes('Loading CSS chunk') ||
-      error.message.includes('ChunkLoadError')) {
+  if (isChunkLoadError(error)) {
 
     logger.warn('Chunk loading failed, attempting recovery...', {
       error: error.message,
@@ -1320,13 +1303,15 @@ router.beforeEach(async (to, from) => {
     // Check authentication requirements
     const requiresAuth = to.matched.some(record => record.meta.requiresAuth === true)
 
-    // If route requires auth and user not authenticated, try backend check first
-    // This handles single_user mode where backend auto-authenticates
+    // If route requires auth and the store has no session yet, verify a
+    // bearer-authenticated session against the backend before redirecting. Auth
+    // is always enabled (#10713); this restores a valid JWT session, it does not
+    // auto-authenticate.
     if (requiresAuth && !userStore.isAuthenticated) {
-      logger.debug('Route requires auth, checking backend for auto-auth (single_user mode)')
+      logger.debug('Route requires auth, verifying session against backend')
       const backendAuthenticated = await userStore.checkAuthFromBackend()
       if (backendAuthenticated) {
-        logger.debug('Backend auto-authenticated user (single_user mode)')
+        logger.debug('Backend confirmed authenticated session')
         // Continue to route - user is now authenticated
         return
       }

@@ -38,6 +38,8 @@ vi.mock('@/stores/useChatStore', () => ({
     updateSettings: vi.fn(),
     toggleSidebar: vi.fn(),
     isTyping: false,
+    activeChatContext: {},          // #11690: no scope in the general path
+    setActiveChatContext: vi.fn(),  // #11690
     settings: { autoSave: false, persistHistory: true }
   }))
 }))
@@ -103,15 +105,15 @@ describe('ChatController', () => {
 
   describe('autoSave methods removed', () => {
     it('should not have enableAutoSave method', () => {
-      expect((controller as any).enableAutoSave).toBeUndefined()
+      expect((controller as unknown as Record<string, unknown>).enableAutoSave).toBeUndefined()
     })
 
     it('should not have disableAutoSave method', () => {
-      expect((controller as any).disableAutoSave).toBeUndefined()
+      expect((controller as unknown as Record<string, unknown>).disableAutoSave).toBeUndefined()
     })
 
     it('should not have _autoSaveIntervalId field', () => {
-      expect((controller as any)._autoSaveIntervalId).toBeUndefined()
+      expect((controller as unknown as Record<string, unknown>)._autoSaveIntervalId).toBeUndefined()
     })
   })
 })

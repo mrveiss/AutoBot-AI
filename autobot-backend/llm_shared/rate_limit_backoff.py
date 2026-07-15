@@ -25,6 +25,7 @@ import time
 from typing import TYPE_CHECKING
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 
 from .optimization.rate_limiter import RateLimitConfig, RateLimitError, RateLimitHandler, RetryStrategy
 
@@ -57,15 +58,7 @@ _DEFAULT_CONFIG = RateLimitConfig(
     jitter_factor=0.3,
     strategy=RetryStrategy.EXPONENTIAL,
 )
-_handler: RateLimitHandler | None = None
-
-
-def get_backoff_handler() -> RateLimitHandler:
-    """Return the process-wide RateLimitHandler (lazy singleton)."""
-    global _handler
-    if _handler is None:
-        _handler = RateLimitHandler(config=_DEFAULT_CONFIG)
-    return _handler
+get_backoff_handler = lazy_singleton(lambda: RateLimitHandler(config=_DEFAULT_CONFIG))
 
 
 def extract_rate_limit_info(response: "LLMResponse") -> tuple[bool, float | None]:

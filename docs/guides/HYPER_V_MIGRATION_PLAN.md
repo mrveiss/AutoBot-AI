@@ -140,7 +140,7 @@
 - [ ] **User Setup**: Create `autobot` user with sudo access
 - [ ] **SSH Keys**: Configure SSH key-based authentication
 - [ ] **Network**: Static IP assignment and DNS configuration
-- [ ] **Packages**: Install Docker (for migration scripts), Python 3.12+, Node.js 18+
+- [ ] **Packages**: Install Docker (for migration scripts), Python 3.14+, Node.js 18+
 - [ ] **Security**: Configure UFW firewall rules
 - [ ] **Monitoring**: Install basic monitoring tools
 - [ ] **Storage**: Mount additional storage for data/models as needed

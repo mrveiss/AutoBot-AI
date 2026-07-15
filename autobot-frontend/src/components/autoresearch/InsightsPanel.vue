@@ -37,7 +37,7 @@ function confidenceColor(confidence: number): string {
       <input
         v-model="searchQuery"
         placeholder="Search insights..."
-        class="flex-1 rounded-md border px-3 py-1.5 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+        class="flex-1 rounded-md border px-3 py-1.5 text-sm"
         @keyup.enter="handleSearch"
       />
       <button
@@ -49,7 +49,7 @@ function confidenceColor(confidence: number): string {
     </div>
 
     <!-- Insights list -->
-    <div v-if="insights.length === 0" class="py-4 text-center text-sm text-neutral-500">
+    <div v-if="insights.length === 0" class="py-4 text-center text-sm text-autobot-text-muted">
       No insights yet. Run experiments and trigger synthesis.
     </div>
 
@@ -57,20 +57,20 @@ function confidenceColor(confidence: number): string {
       <div
         v-for="insight in insights"
         :key="insight.id"
-        class="rounded-md border p-3 dark:border-neutral-700"
+        class="rounded-md border p-3"
       >
         <div class="mb-1 flex items-center justify-between">
           <span :class="confidenceColor(insight.confidence)" class="text-xs font-medium">
             {{ (insight.confidence * 100).toFixed(0) }}% confidence
           </span>
-          <span class="text-xs text-neutral-500">
+          <span class="text-xs text-autobot-text-muted">
             {{ insight.related_hyperparams.join(', ') }}
           </span>
         </div>
-        <p class="text-sm text-neutral-700 dark:text-neutral-300">
+        <p class="text-sm text-autobot-text-secondary">
           {{ insight.statement }}
         </p>
-        <div class="mt-1 text-xs text-neutral-400">
+        <div class="mt-1 text-xs text-autobot-text-muted">
           Based on {{ insight.supporting_experiments.length }} experiment(s)
         </div>
       </div>

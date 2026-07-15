@@ -1,5 +1,6 @@
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :model-value="visible"
     :title="$t('chat.share.title')"
     size="md"
@@ -220,16 +221,16 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
-import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useBatchSelection } from '@/composables/useBatchSelection'
 import Icon from '@/components/ui/Icon.vue'
-
 const { t } = useI18n()
+
 const logger = createLogger('ShareConversationDialog')
 
 interface ShareFact {
@@ -303,7 +304,7 @@ const loadFacts = async () => {
   if (!props.sessionId) return
   factsLoading.value = true
   try {
-    const data = await ApiClient.get<any>(`${getApiBase()}/chat/sessions/${props.sessionId}/share/preview`)
+    const data = await ApiClient.get<{ data?: { facts?: ShareFact[] } }>(`${getApiBase()}/chat/sessions/${props.sessionId}/share/preview`)
     facts.value = data?.data?.facts || []
     factSelection.selectAll()
   } catch (err) {
@@ -325,7 +326,7 @@ const handleShare = async () => {
     if (includeKnowledge.value && factSelection.selectedCount.value > 0) {
       body.knowledge_facts = Array.from(factSelection.selected.value)
     }
-    const result = await ApiClient.post<any>(`${getApiBase()}/chat/sessions/${props.sessionId}/share`, body)
+    const result = await ApiClient.post<{ data?: Record<string, unknown> }>(`${getApiBase()}/chat/sessions/${props.sessionId}/share`, body)
     emit('shared', result?.data || {})
     emit('update:visible', false)
   } catch (err) {
@@ -343,7 +344,7 @@ const handleCreateLink = async () => {
     if (linkPassword.value.trim()) body.password = linkPassword.value.trim()
     if (expirySeconds.value) body.expires_in_seconds = expirySeconds.value
 
-    const result = await ApiClient.post<any>(
+    const result = await ApiClient.post<SharedLinkData & { data?: SharedLinkData }>(
       `${getApiBase()}/chat/sessions/${props.sessionId}/share-link`,
       body
     )

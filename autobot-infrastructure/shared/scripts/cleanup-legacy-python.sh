@@ -4,13 +4,13 @@
 # Author: mrveiss
 #
 # Issue #1924: Remove stale pyenv and conda installations from VMs.
-# After standardizing to deadsnakes PPA + Python 3.12 (#1898), legacy
+# After standardizing to deadsnakes PPA + Python 3.14 (#1898), legacy
 # pyenv and conda directories are no longer needed.
 #
 # Usage: Run on each VM as the autobot user (or with sudo for system-wide cleanup):
 #   bash cleanup-legacy-python.sh
 #
-# Safety: This script verifies python3.12 is available before removing anything.
+# Safety: This script verifies python3.14 is available before removing anything.
 
 set -e  # Exit on error
 
@@ -20,17 +20,17 @@ echo "=================================================="
 echo ""
 
 # -------------------------------------------------------------------
-# Safety check: verify python3.12 is installed before removing legacy
+# Safety check: verify python3.14 is installed before removing legacy
 # -------------------------------------------------------------------
-echo "Step 1: Verifying python3.12 is available..."
-if ! command -v python3.12 &>/dev/null; then
-    echo "ERROR: python3.12 is NOT installed."
-    echo "Install python3.12 via deadsnakes PPA before running this script."
+echo "Step 1: Verifying python3.14 is available..."
+if ! command -v python3.14 &>/dev/null; then
+    echo "ERROR: python3.14 is NOT installed."
+    echo "Install python3.14 via deadsnakes PPA before running this script."
     echo "See: setup-runner-python.sh"
     exit 1
 fi
 
-PYTHON_VERSION=$(python3.12 --version 2>&1)
+PYTHON_VERSION=$(python3.14 --version 2>&1)
 echo "  Found: ${PYTHON_VERSION}"
 echo ""
 
@@ -133,8 +133,8 @@ echo ""
 # Final verification
 # -------------------------------------------------------------------
 echo "Step 5: Final verification..."
-echo "  python3.12 location: $(which python3.12)"
-echo "  python3.12 version:  $(python3.12 --version 2>&1)"
+echo "  python3.14 location: $(which python3.14)"
+echo "  python3.14 version:  $(python3.14 --version 2>&1)"
 
 if [ -d "${PYENV_DIR}" ]; then
     echo "  WARNING: pyenv directory still exists at ${PYENV_DIR}"
@@ -153,6 +153,6 @@ echo "=================================================="
 echo "Legacy Python Cleanup Complete!"
 echo "=================================================="
 echo ""
-echo "Python 3.12 (deadsnakes PPA) remains as the standard."
+echo "Python 3.14 (deadsnakes PPA) remains as the standard."
 echo "Removed: pyenv, conda/miniconda (if present)."
 echo ""

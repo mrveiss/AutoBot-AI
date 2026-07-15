@@ -34,13 +34,14 @@ from api.schemas_workflows import (
     AdvancedControlTakeoverSessionStatusResponse,
     AdvancedControlTakeoverSystemStatusResponse,
 )
+from api.ws_security import enforce_ws_origin
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.threshold_constants import TimingConstants
 from desktop_streaming_manager import get_desktop_streaming
-from enhanced_memory_manager_async import TaskPriority
+from memory import TaskPriority  # canonical enum (#10626)
 from takeover_manager import TakeoverTrigger, get_takeover_manager
 from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata
@@ -347,7 +348,7 @@ async def get_pending_takeovers(
 
     Issue #744: Requires admin authentication.
     """
-    pending = get_takeover_manager().get_pending_requests()
+    pending = await get_takeover_manager().get_pending_requests()
     return {"pending_requests": pending, "count": len(pending)}
 
 
@@ -365,7 +366,7 @@ async def get_active_takeovers(
 
     Issue #744: Requires admin authentication.
     """
-    active = get_takeover_manager().get_active_sessions()
+    active = await get_takeover_manager().get_active_sessions()
     return {"active_sessions": active, "count": len(active)}
 
 
@@ -383,7 +384,7 @@ async def get_takeover_status(
 
     Issue #744: Requires admin authentication.
     """
-    status = get_takeover_manager().get_system_status()
+    status = await get_takeover_manager().get_system_status()
     return status
 
 
@@ -417,8 +418,8 @@ async def get_system_status(
     streaming_sessions = get_desktop_streaming().vnc_manager.list_active_sessions()
 
     # Get takeover data
-    pending_takeovers = get_takeover_manager().get_pending_requests()
-    active_takeovers = get_takeover_manager().get_active_sessions()
+    pending_takeovers = await get_takeover_manager().get_pending_requests()
+    active_takeovers = await get_takeover_manager().get_active_sessions()
     system_status = {
         "status": "healthy",
         "timestamp": psutil.boot_time(),
@@ -482,15 +483,18 @@ async def get_system_health(
 
     Issue #744: Requires admin authentication.
     """
+    # C1: attributes removed in #11639 Redis refactor; use async helpers instead.
     try:
+        dsm = get_desktop_streaming()
+        tm = get_takeover_manager()
         health_status = {
             "status": "healthy",
-            "desktop_streaming_available": get_desktop_streaming().vnc_manager.vnc_available,
-            "novnc_available": get_desktop_streaming().vnc_manager.novnc_available,
-            "active_streaming_sessions": len(get_desktop_streaming().vnc_manager.active_sessions),
-            "pending_takeovers": len(get_takeover_manager().pending_requests),
-            "active_takeovers": len(get_takeover_manager().active_sessions),
-            "paused_tasks": len(get_takeover_manager().paused_tasks),
+            "desktop_streaming_available": dsm.vnc_manager.vnc_available,
+            "novnc_available": dsm.vnc_manager.novnc_available,
+            "active_streaming_sessions": len(dsm.vnc_manager.active_sessions),
+            "pending_takeovers": len(await tm.get_pending_requests()),
+            "active_takeovers": len(await tm.get_active_sessions()),
+            "paused_tasks": await tm._paused_count(),
         }
 
         return health_status
@@ -509,6 +513,8 @@ async def get_system_health(
 )
 async def monitoring_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time system monitoring"""
+    if not await enforce_ws_origin(websocket):
+        return
     await websocket.accept()
     logger.info("Monitoring WebSocket client connected")
 
@@ -547,6 +553,8 @@ async def monitoring_websocket(websocket: WebSocket):
 )
 async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for desktop streaming control"""
+    if not await enforce_ws_origin(websocket):
+        return
     await websocket.accept()
 
     try:

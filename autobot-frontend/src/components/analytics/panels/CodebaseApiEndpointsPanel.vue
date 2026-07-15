@@ -273,7 +273,7 @@ interface ApiEndpointAnalysisResult {
   [key: string]: unknown
 }
 
-const props = defineProps<{
+defineProps<{
   analysis: ApiEndpointAnalysisResult | null
   loading: boolean
   error: string | null

@@ -214,8 +214,8 @@ const { t } = useI18n()
 const logger = createLogger('DesktopInterface')
 
 // Async operation composables
-const { isLoading: loadingVnc, wrap: wrapLoadVnc } = useLoadingState()
-const { isLoading: loadingCheck, wrap: wrapCheckConnection } = useLoadingState()
+const { wrap: wrapLoadVnc } = useLoadingState()
+const { wrap: wrapCheckConnection } = useLoadingState()
 const errorVnc = ref<Error | null>(null)
 const errorCheck = ref<Error | null>(null)
 

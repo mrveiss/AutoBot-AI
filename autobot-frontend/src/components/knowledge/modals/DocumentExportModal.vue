@@ -15,7 +15,7 @@
 
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
@@ -204,6 +204,7 @@ watch(() => props.modelValue, (isOpen) => {
 
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     v-model="isOpen"
     :title="modalTitle"
     size="sm"

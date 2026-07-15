@@ -318,7 +318,7 @@ onUnmounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
       <div class="flex items-center gap-3">
-        <h3 class="text-lg font-semibold text-gray-900">{{ nodeName }} - Services</h3>
+        <h3 class="text-lg font-semibold text-gray-900">{{ $t('fleet.nodeServicesPanel.value0Services', { value0: nodeName }) }}</h3>
         <!-- WebSocket Status -->
         <span
           :class="[
@@ -328,7 +328,7 @@ onUnmounted(() => {
           :title="connected ? 'Live updates active' : 'Live updates offline'"
         >
           <span :class="['w-1.5 h-1.5 rounded-full', connected ? 'bg-green-500' : 'bg-gray-400']"></span>
-          {{ connected ? 'Live' : 'Offline' }}
+          {{ connected ? $t('fleet.nodeServicesPanel.live') : $t('fleet.nodeServicesPanel.offline') }}
         </span>
         <div class="flex items-center gap-2 text-sm">
           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm bg-green-100 text-green-700">
@@ -348,7 +348,7 @@ onUnmounted(() => {
       <button
         @click="emit('close')"
         class="text-gray-400 hover:text-gray-600 transition-colors"
-        aria-label="Close"
+        :aria-label="$t('fleet.nodeServicesPanel.close')"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -359,7 +359,7 @@ onUnmounted(() => {
     <!-- Error Banner -->
     <div v-if="errorMessage" class="px-4 py-2 bg-red-50 border-b border-red-100 text-sm text-red-700 flex items-center justify-between">
       <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700" aria-label="Dismiss error">
+      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700" :aria-label="$t('fleet.nodeServicesPanel.dismissError')">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -376,7 +376,7 @@ onUnmounted(() => {
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search services..."
+          :placeholder="$t('fleet.nodeServicesPanel.searchServices')"
           class="w-full pl-9 pr-4 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
         />
       </div>
@@ -399,7 +399,7 @@ onUnmounted(() => {
         @click="fetchServices"
         :disabled="isLoading"
         class="p-1.5 text-gray-500 hover:text-gray-700 disabled:opacity-50"
-        title="Refresh"
+        :title="$t('fleet.nodeServicesPanel.refresh')"
       >
         <svg :class="['w-5 h-5', isLoading ? 'animate-spin' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -466,9 +466,24 @@ onUnmounted(() => {
 
             <!-- Service Name, Description & Error Context (#1019) -->
             <td class="px-4 py-3">
-              <div class="font-medium text-gray-900">{{ service.service_name }}</div>
+              <div class="font-medium text-gray-900 flex items-center gap-1.5">
+                {{ service.service_name }}
+                <span
+                  v-if="service.extra_data?.engine_degraded"
+                  class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium bg-yellow-100 text-yellow-800"
+                  :title="String(service.extra_data.degraded_reason || '')"
+                >
+                  {{ $t('fleet.nodeServicesPanel.engineDegraded') }}
+                </span>
+              </div>
               <div v-if="service.description" class="text-xs text-gray-500 truncate max-w-xs" :title="service.description">
                 {{ service.description }}
+              </div>
+              <div
+                v-if="service.extra_data?.engine_degraded && service.extra_data?.degraded_reason"
+                class="mt-1 text-xs text-yellow-700"
+              >
+                {{ service.extra_data.degraded_reason }}
               </div>
               <div
                 v-if="service.status === 'failed' && service.extra_data?.error_message"
@@ -477,9 +492,7 @@ onUnmounted(() => {
                 <button
                   @click="toggleErrorDetail(service.service_name)"
                   class="text-red-600 hover:text-red-800 underline"
-                >
-                  {{ expandedErrors.has(service.service_name) ? 'Hide' : 'Show' }} error context
-                </button>
+                >{{ $t('fleet.nodeServicesPanel.value0ErrorContext', { value0: expandedErrors.has(service.service_name) ? $t('fleet.nodeServicesPanel.hide') : $t('fleet.nodeServicesPanel.show') }) }}</button>
                 <pre
                   v-if="expandedErrors.has(service.service_name)"
                   class="mt-1 p-2 bg-red-50 border border-red-200 rounded-sm text-red-700 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto"
@@ -495,7 +508,7 @@ onUnmounted(() => {
                   service.enabled ? 'text-green-600' : 'text-gray-400',
                 ]"
               >
-                {{ service.enabled ? 'Yes' : 'No' }}
+                {{ service.enabled ? $t('fleet.nodeServicesPanel.yes') : $t('fleet.nodeServicesPanel.no') }}
               </span>
             </td>
 
@@ -518,7 +531,7 @@ onUnmounted(() => {
                   @click="handleAction(service.service_name, 'start')"
                   :disabled="isActionInProgress"
                   class="p-1.5 text-green-600 hover:bg-green-50 rounded-sm disabled:opacity-50"
-                  title="Start"
+                  :title="$t('fleet.nodeServicesPanel.start')"
                 >
                   <svg v-if="actionService === service.service_name" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -535,7 +548,7 @@ onUnmounted(() => {
                   @click="handleAction(service.service_name, 'stop')"
                   :disabled="isActionInProgress"
                   class="p-1.5 text-red-600 hover:bg-red-50 rounded-sm disabled:opacity-50"
-                  title="Stop"
+                  :title="$t('fleet.nodeServicesPanel.stop')"
                 >
                   <svg v-if="actionService === service.service_name" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -551,7 +564,7 @@ onUnmounted(() => {
                   @click="handleAction(service.service_name, 'restart')"
                   :disabled="isActionInProgress"
                   class="p-1.5 text-blue-600 hover:bg-blue-50 rounded-sm disabled:opacity-50"
-                  title="Restart"
+                  :title="$t('fleet.nodeServicesPanel.restart')"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -562,7 +575,7 @@ onUnmounted(() => {
                 <button
                   @click="viewLogs(service.service_name)"
                   class="p-1.5 text-gray-500 hover:bg-gray-100 rounded-sm"
-                  title="View Logs"
+                  :title="$t('fleet.nodeServicesPanel.viewLogs')"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -582,13 +595,9 @@ onUnmounted(() => {
           type="checkbox"
           v-model="autoRefresh"
           class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
-        />
-        Auto-refresh (every {{ Math.round(autoRefreshInterval / 1000) }}s)
-      </label>
+        />{{ $t('fleet.nodeServicesPanel.autoRefreshEveryValue0S', { value0: Math.round(autoRefreshInterval / 1000) }) }}</label>
       <div class="text-xs text-gray-500">
-        <span class="font-medium text-gray-700">{{ filteredServices.length }}</span>
-        of {{ totalServices }} services
-        <span v-if="lastRefresh"> &bull; Updated {{ formatRelativeTime(lastRefresh) }}</span>
+        <span class="font-medium text-gray-700">{{ filteredServices.length }}</span>{{ $t('fleet.nodeServicesPanel.ofValue0Services', { value0: totalServices }) }}<span v-if="lastRefresh">{{ $t('fleet.nodeServicesPanel.updatedValue0', { value0: formatRelativeTime(lastRefresh) }) }}</span>
       </div>
     </div>
 
@@ -602,13 +611,11 @@ onUnmounted(() => {
         <div class="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] flex flex-col">
           <!-- Header -->
           <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-            <h3 class="text-lg font-semibold text-gray-900">
-              Logs: {{ logsServiceName }}
-            </h3>
+            <h3 class="text-lg font-semibold text-gray-900">{{ $t('fleet.nodeServicesPanel.logsValue0', { value0: logsServiceName }) }}</h3>
             <button
               @click="closeLogsModal"
               class="text-gray-400 hover:text-gray-600 transition-colors"
-              aria-label="Close"
+              :aria-label="$t('fleet.nodeServicesPanel.close')"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

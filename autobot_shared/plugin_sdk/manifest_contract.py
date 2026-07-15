@@ -6,7 +6,7 @@
 ManifestContract Protocol (GH#7369)
 
 Structural protocol that plugin, skill, and extension manifests must satisfy
-for participation in the UnifiedRegistry.
+for participation in the Registry.
 """
 
 from typing import Protocol, runtime_checkable

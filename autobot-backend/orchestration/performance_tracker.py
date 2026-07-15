@@ -11,7 +11,7 @@ from autobot_shared.logging_manager import get_logger
 from orchestration.types import AgentPerformance
 
 if TYPE_CHECKING:
-    from enhanced_orchestration.types import WorkflowPlan
+    from orchestration.types import WorkflowPlan
 
 logger = get_logger("performance_tracker")
 

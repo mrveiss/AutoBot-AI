@@ -8,38 +8,70 @@ Unit tests for cognifier _parse_llm_response and conversion logic.
 Issue #1075: Test coverage for knowledge pipeline cognifiers.
 """
 
+import contextlib
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
-# Mock llm_shared before importing cognifiers
-_mock_llm = ModuleType("llm_shared")
-_mock_llm.LLMInterface = MagicMock
-sys.modules["llm_shared"] = _mock_llm
 
-# Mock autobot_shared.redis_client before importing cognifiers
-_mock_shared = ModuleType("autobot_shared")
-_mock_redis_mod = ModuleType("autobot_shared.redis_client")
-_mock_redis_mod.get_redis_client = MagicMock()
-sys.modules["autobot_shared"] = _mock_shared
-sys.modules["autobot_shared.redis_client"] = _mock_redis_mod
+@contextlib.contextmanager
+def _stubbed_import_modules():
+    """Install lightweight ``sys.modules`` stubs only while importing cognifiers.
 
-from knowledge.pipeline.cognifiers.entity_extractor import EntityExtractor  # noqa: E402
-from knowledge.pipeline.cognifiers.event_extractor import EventExtractor  # noqa: E402
-from knowledge.pipeline.cognifiers.relationship_extractor import (  # noqa: E402
-    SYMMETRIC_RELATIONS,
-    RelationshipExtractor,
-)
-from knowledge.pipeline.cognifiers.summarizer import (  # noqa: E402
-    HierarchicalSummarizer,
-)
-from knowledge.pipeline.models.chunk import ProcessedChunk  # noqa: E402
-from knowledge.pipeline.models.entity import Entity  # noqa: E402
+    ``llm_shared`` and ``autobot_shared.redis_client`` pull heavy runtime deps at
+    import time, so they are stubbed before the cognifier modules load.  These stubs
+    previously lived at module top level and leaked process-wide — when this file was
+    collected in the same pytest run as ``services/chat_knowledge_service_test.py`` the
+    leaked ``autobot_shared.redis_client`` stub lacked ``get_async_redis_client`` and
+    broke that module's import (#10879).  Scope them to the import window and restore
+    whatever the parent conftest installed on exit.
+
+    Only the ``autobot_shared.redis_client`` submodule is stubbed — never the
+    ``autobot_shared`` package itself — so sibling imports like
+    ``autobot_shared.logging_manager`` keep resolving through the real package.
+    """
+    saved = {name: sys.modules.get(name) for name in ("llm_shared", "autobot_shared.redis_client")}
+
+    _mock_llm = ModuleType("llm_shared")
+    _mock_llm.LLMInterface = MagicMock
+    sys.modules["llm_shared"] = _mock_llm
+
+    _mock_redis_mod = ModuleType("autobot_shared.redis_client")
+    _mock_redis_mod.get_redis_client = MagicMock()
+
+    async def _get_async_redis_client_stub(*_a, **_k):
+        return None
+
+    _mock_redis_mod.get_async_redis_client = _get_async_redis_client_stub
+    sys.modules["autobot_shared.redis_client"] = _mock_redis_mod
+
+    try:
+        yield
+    finally:
+        for name, original in saved.items():
+            if original is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = original
+
+
+with _stubbed_import_modules():
+    from knowledge.pipeline.cognifiers.entity_extractor import EntityExtractor
+    from knowledge.pipeline.cognifiers.event_extractor import EventExtractor
+    from knowledge.pipeline.cognifiers.relationship_extractor import (
+        SYMMETRIC_RELATIONS,
+        RelationshipExtractor,
+    )
+    from knowledge.pipeline.cognifiers.summarizer import (
+        HierarchicalSummarizer,
+    )
+    from knowledge.pipeline.models.chunk import ProcessedChunk
+    from knowledge.pipeline.models.entity import Entity
 
 # --- Fixtures ---
 
@@ -372,7 +404,7 @@ class TestEventExtractorTemporal:
     def test_today(self, event_extractor):
         result = event_extractor._parse_temporal("today")
         assert result is not None
-        assert result.date() == datetime.now().date()
+        assert result.date() == datetime.now(tz=timezone.utc).date()
 
     def test_yesterday(self, event_extractor):
         result = event_extractor._parse_temporal("yesterday")
@@ -533,13 +565,20 @@ class TestSummarizerEntityResolution:
 # ---------------------------------------------------------------------------
 
 
-def _make_context(n_chunks=2, doc_id="doc-1"):
+def _make_context(n_chunks=2, doc_id=None):
     from knowledge.pipeline.base import PipelineContext
     from knowledge.pipeline.models.chunk import ProcessedChunk
 
-    ctx = PipelineContext(document_id=doc_id)
+    document_id = doc_id or uuid4()
+    ctx = PipelineContext()
+    ctx.document_id = document_id
     for i in range(n_chunks):
-        chunk = ProcessedChunk(content=f"chunk text {i}", metadata={})
+        chunk = ProcessedChunk(
+            content=f"chunk text {i}",
+            document_id=document_id,
+            chunk_index=i,
+            metadata={},
+        )
         ctx.chunks.append(chunk)
     return ctx
 
@@ -571,9 +610,15 @@ class TestContextGeneratorDisabled:
         assert result.chunks == []
 
 
-@patch.dict("os.environ", {"CONTEXT_ENABLED": "true"})
+# config.context_enabled is a bool read once at import from CONTEXT_ENABLED;
+# patch the attribute on the singleton (env-patching is too late for the
+# already-imported config) so is_enabled() sees the flag (#10644).
+@patch("knowledge.pipeline.cognifiers.context_generator.config.context_enabled", True)
 class TestContextGeneratorEnabled:
-    """ContextGeneratorCognifier enriches chunks when CONTEXT_ENABLED=true."""
+    """ContextGeneratorCognifier enriches chunks when CONTEXT_ENABLED=true.
+
+    Patches is_enabled() directly so the config singleton doesn't need reload.
+    """
 
     def _mock_redis(self, cached=None):
         mock_r = MagicMock()
@@ -598,7 +643,7 @@ class TestContextGeneratorEnabled:
         cog.llm = MagicMock()
         summary_resp = self._mock_llm_response("Doc summary.")
         chunk_resp = self._mock_llm_response("Chunk context.")
-        cog.llm.chat_completion = AsyncMock(side_effect=[summary_resp, chunk_resp, chunk_resp])
+        cog.llm.chat = AsyncMock(side_effect=[summary_resp, chunk_resp, chunk_resp])
 
         ctx = _make_context(n_chunks=2)
         result = await cog.process(ctx)
@@ -622,12 +667,12 @@ class TestContextGeneratorEnabled:
         cog = ContextGeneratorCognifier()
         cog.llm = MagicMock()
         chunk_resp = self._mock_llm_response("ctx")
-        cog.llm.chat_completion = AsyncMock(return_value=chunk_resp)
+        cog.llm.chat = AsyncMock(return_value=chunk_resp)
 
         ctx = _make_context(n_chunks=2)
         await cog.process(ctx)
 
-        assert cog.llm.chat_completion.call_count == 2
+        assert cog.llm.chat.call_count == 2
 
     @pytest.mark.asyncio
     @patch("knowledge.pipeline.cognifiers.context_generator.get_redis_client")
@@ -639,7 +684,7 @@ class TestContextGeneratorEnabled:
         mock_get_redis.return_value = self._mock_redis()
         cog = ContextGeneratorCognifier()
         cog.llm = MagicMock()
-        cog.llm.chat_completion = AsyncMock(side_effect=RuntimeError("LLM down"))
+        cog.llm.chat = AsyncMock(side_effect=RuntimeError("LLM down"))
 
         ctx = _make_context(n_chunks=1)
         result = await cog.process(ctx)
@@ -657,7 +702,7 @@ class TestContextGeneratorEnabled:
         mock_get_redis.return_value = self._mock_redis()
         cog = ContextGeneratorCognifier()
         cog.llm = MagicMock()
-        cog.llm.chat_completion = AsyncMock(
+        cog.llm.chat = AsyncMock(
             side_effect=[
                 self._mock_llm_response("doc summary"),
                 self._mock_llm_response("ctx sentence"),
@@ -665,7 +710,97 @@ class TestContextGeneratorEnabled:
         )
 
         ctx = _make_context(n_chunks=1)
-        original = ctx.chunks[0].content
+        ctx.chunks[0].content
         result = await cog.process(ctx)
 
-        assert result.chunks[0].content == f"ctx sentence\n\n{original}"
+        assert result.chunks[0].content == "ctx sentence\n\nchunk text 0"
+
+
+# ---------------------------------------------------------------------------
+# Issue #10645: cognifier fails loud on prompt-format / total-extraction failure
+# ---------------------------------------------------------------------------
+
+
+class TestEntityExtractorFailLoud:
+    """EntityExtractor raises CognifyError on total-extraction failure (#10645).
+
+    A broken prompt or total LLM outage must not silently return an empty graph.
+    """
+
+    @pytest.mark.asyncio
+    async def test_all_chunks_fail_raises_cognify_error(self, entity_extractor):
+        """All chunks returning [] triggers CognifyError, not a silent empty list."""
+        from knowledge.pipeline.base import CognifyError, PipelineContext
+
+        # Simulate LLM always failing transiently — each chunk returns []
+        entity_extractor.llm = MagicMock()
+        entity_extractor.llm.chat = AsyncMock(side_effect=RuntimeError("network error"))
+
+        ctx = PipelineContext()
+        ctx.document_id = uuid4()
+        ctx.chunks = [
+            ProcessedChunk(content="chunk A", document_id=ctx.document_id, chunk_index=0),
+            ProcessedChunk(content="chunk B", document_id=ctx.document_id, chunk_index=1),
+        ]
+
+        with pytest.raises(CognifyError, match="0 entities"):
+            await entity_extractor.process(ctx)
+
+    @pytest.mark.asyncio
+    async def test_malformed_prompt_missing_key_propagates(self, entity_extractor):
+        """A KeyError from prompt .format() propagates rather than being swallowed (#10645)."""
+        import knowledge.pipeline.cognifiers.entity_extractor as ee_mod
+        from knowledge.pipeline.base import PipelineContext
+
+        original_prompt = ee_mod.ENTITY_EXTRACTION_PROMPT
+        # Inject a broken prompt that references a missing key
+        ee_mod.ENTITY_EXTRACTION_PROMPT = "Missing: {nonexistent_key}\nText: {text}"
+        try:
+            chunk = ProcessedChunk(content="some text", document_id=uuid4(), chunk_index=0)
+            ctx = PipelineContext()
+            ctx.document_id = chunk.document_id
+            # KeyError from .format() must propagate, not be caught silently
+            with pytest.raises(KeyError):
+                await entity_extractor._extract_from_chunk(chunk, ctx)
+        finally:
+            ee_mod.ENTITY_EXTRACTION_PROMPT = original_prompt
+
+    @pytest.mark.asyncio
+    async def test_parse_error_propagates_from_extract_from_chunk(self, entity_extractor):
+        """A malformed (non-JSON) LLM response raises JSONDecodeError via strict=True (#10645)."""
+        import json
+
+        from knowledge.pipeline.base import PipelineContext
+
+        resp = MagicMock()
+        resp.content = "not valid json at all {{"
+        entity_extractor.llm = MagicMock()
+        entity_extractor.llm.chat = AsyncMock(return_value=resp)
+
+        chunk = ProcessedChunk(content="test text", document_id=uuid4(), chunk_index=0)
+        ctx = PipelineContext()
+        ctx.document_id = chunk.document_id
+
+        with pytest.raises(json.JSONDecodeError):
+            await entity_extractor._extract_from_chunk(chunk, ctx)
+
+    @pytest.mark.asyncio
+    async def test_partial_chunk_failure_does_not_raise(self, entity_extractor):
+        """Only SOME chunks failing (transient) is OK as long as total is non-zero."""
+        from knowledge.pipeline.base import PipelineContext
+
+        good_resp = MagicMock()
+        good_resp.content = '[{"name": "Python", "type": "TECHNOLOGY", "confidence": 0.9}]'
+        bad_exc = RuntimeError("timeout")
+        entity_extractor.llm = MagicMock()
+        entity_extractor.llm.chat = AsyncMock(side_effect=[bad_exc, good_resp])
+
+        ctx = PipelineContext()
+        ctx.document_id = uuid4()
+        ctx.chunks = [
+            ProcessedChunk(content="chunk A", document_id=ctx.document_id, chunk_index=0),
+            ProcessedChunk(content="chunk B", document_id=ctx.document_id, chunk_index=1),
+        ]
+        # Should complete without raising — partial failure is recoverable
+        result = await entity_extractor.process(ctx)
+        assert len(result.entities) >= 1

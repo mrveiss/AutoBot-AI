@@ -89,7 +89,7 @@ function navigateTo(path: string): void {
         </div>
 
         <!-- Quick Stats Bar -->
-        <div class="flex items-center gap-6 text-sm" role="status" aria-label="Performance summary">
+        <div class="flex items-center gap-6 text-sm" role="status" :aria-label="$t('performanceView.performanceSummary')">
           <div class="flex items-center gap-2 text-gray-600">
             <span class="text-gray-400">{{ $t('performanceView.avgLatency') }}</span>
             <span class="font-semibold">{{ avgLatency.toFixed(1) }}ms</span>
@@ -115,7 +115,7 @@ function navigateTo(path: string): void {
             @click="fetchOverview"
             :disabled="loading"
             class="p-1.5 text-gray-400 hover:text-gray-600 rounded-sm transition-colors"
-            aria-label="Refresh performance data"
+            :aria-label="$t('performanceView.refreshPerformanceData')"
           >
             <svg
               :class="['w-4 h-4', loading ? 'animate-spin' : '']"
@@ -139,7 +139,7 @@ function navigateTo(path: string): void {
       <div
         class="flex gap-1 mt-4 -mb-4 overflow-x-auto"
         role="tablist"
-        aria-label="Performance sections"
+        :aria-label="$t('performanceView.performanceSections')"
       >
         <button
           v-for="tab in tabs"

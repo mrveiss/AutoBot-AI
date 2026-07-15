@@ -94,17 +94,17 @@
   changed_when: false
   failed_when: false
 
-- name: Remove stale venv if not Python 3.12 (#3534)
+- name: Remove stale venv if not Python 3.14 (#3534)
   ansible.builtin.file:
     path: "{{ ai_install_dir }}/venv"
     state: absent
   when:
     - _ai_venv_python_version.rc == 0
-    - "'Python 3.12' not in _ai_venv_python_version.stdout"
+    - "'Python 3.14' not in _ai_venv_python_version.stdout"
 
 - name: Create Python virtual environment (#3534)
   ansible.builtin.command:
-    cmd: python3.12 -m venv {{ ai_install_dir }}/venv
+    cmd: python3.14 -m venv {{ ai_install_dir }}/venv
     creates: "{{ ai_install_dir }}/venv/bin/python"
 
 - name: Fix venv ownership

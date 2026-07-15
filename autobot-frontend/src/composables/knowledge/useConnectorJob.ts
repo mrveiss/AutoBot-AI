@@ -24,8 +24,9 @@ export async function fetchConnectorJob(connectorId: string): Promise<ConnectorJ
     return await apiClient.get<ConnectorJobState>(
       `${getApiBase()}/knowledge_base/connectors/${connectorId}/job`
     )
-  } catch (err: any) {
-    if (err?.status === 404 || err?.response?.status === 404) {
+  } catch (err) {
+    const e = err as { status?: number; response?: { status?: number } }
+    if (e?.status === 404 || e?.response?.status === 404) {
       return null
     }
     logger.error('fetchConnectorJob error', err)

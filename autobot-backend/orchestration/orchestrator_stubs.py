@@ -18,6 +18,20 @@ try:
 except ImportError:
     CLASSIFICATION_AVAILABLE = False
 
+    class GemmaClassificationAgent:  # type: ignore[no-redef]
+        """Placeholder when the classification agent can't be imported.
+
+        Re-exported via ``__all__`` and imported by orchestrator.py, so the name
+        must exist even when the real agent is unavailable.  It is only ever
+        *instantiated* behind a ``CLASSIFICATION_AVAILABLE`` guard, so this body
+        never runs in practice — it just keeps the import from failing (matching
+        the AgentManager / WorkflowStep fallbacks below).
+        """
+
+        def __init__(self, *args, **kwargs):
+            """No-op init — CLASSIFICATION_AVAILABLE is False when this stub is used."""
+
+
 try:
     from agents.agent_manager import AgentManager
 

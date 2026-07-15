@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 from autobot_shared.logging_manager import get_logger
 
-from .base_adapter import BaseAdapter, NormalizedResponse, UnifiedMessage
+from .base_adapter import BaseAdapter, GatewayMessage, NormalizedResponse
 
 logger = get_logger(__name__)
 
@@ -19,7 +19,7 @@ class TelegramAdapter(BaseAdapter):
     def __init__(self) -> None:
         super().__init__("telegram")
 
-    async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:
+    async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
         """
         Convert Telegram Update/Message object to unified schema.
 
@@ -60,7 +60,7 @@ class TelegramAdapter(BaseAdapter):
             metadata["command"] = command_info["command"]
             metadata["command_args"] = command_info["args"]
 
-        return UnifiedMessage(
+        return GatewayMessage(
             user_id=str(from_user.get("id", "")),
             platform="telegram",
             channel_id=str(chat.get("id", "")),

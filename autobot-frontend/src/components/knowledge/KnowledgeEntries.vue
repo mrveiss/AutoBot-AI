@@ -16,35 +16,10 @@
       >
         <Icon name="edit" class="mr-2" />{{ $t('knowledge.entries.manageTab') }}
       </BaseButton>
-      <BaseButton
-        variant="ghost"
-        @click="manageTab = 'advanced'"
-        :class="['manage-tab-btn', { active: manageTab === 'advanced' }]"
-      >
-        <Icon name="cog" class="mr-2" />{{ $t('knowledge.entries.advancedTab') }}
-      </BaseButton>
     </div>
 
     <!-- Upload Tab Content -->
     <KnowledgeUpload v-if="manageTab === 'upload'" />
-
-    <!-- Advanced Tab Content -->
-    <div v-if="manageTab === 'advanced'" class="advanced-content">
-      <!-- System Knowledge Management: Initialize, Reindex, Repopulate -->
-      <SystemKnowledgeManager />
-
-      <!-- Deduplication & Orphan Management: Remove duplicates and clean up orphaned documents -->
-      <DeduplicationManager />
-
-      <!-- Session Orphan Cleanup: Remove KB facts from deleted conversations (Issue #547) -->
-      <SessionOrphanManager />
-
-      <!-- Failed Vectorizations Manager: Retry or Clear Failed Vectorization Jobs -->
-      <FailedVectorizationsManager />
-
-      <!-- Man Page Management: Search, Browse, and Integrate Man Pages -->
-      <ManPageManager />
-    </div>
 
     <!-- Manage Tab Content -->
     <div v-if="manageTab === 'manage'" class="entries-content">
@@ -290,6 +265,7 @@
 
     <!-- View/Edit Dialog -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showDialog"
       :title="dialogMode === 'view' ? $t('knowledge.entries.viewEntry') : $t('knowledge.entries.editEntry')"
       size="lg"
@@ -437,17 +413,11 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import KnowledgeUpload from './KnowledgeUpload.vue'
-// @ts-ignore - Component lacks TypeScript declaration file
-import SystemKnowledgeManager from '@/components/knowledge/SystemKnowledgeManager.vue'
-// @ts-ignore - Component lacks TypeScript declaration file
-import ManPageManager from '@/components/manpage/ManPageManager.vue'
-import FailedVectorizationsManager from '@/components/knowledge/FailedVectorizationsManager.vue'
-import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vue'
-import SessionOrphanManager from '@/components/knowledge/SessionOrphanManager.vue'
 import BulkActionsToolbar from '@/components/knowledge/BulkActionsToolbar.vue'
 import BulkEditModal from '@/components/knowledge/modals/BulkEditModal.vue'
 import type { BulkEditMode, BulkEditEntry } from '@/components/knowledge/modals/BulkEditModal.vue'
@@ -459,7 +429,7 @@ import { useVirtualScroll } from '@/composables/useVirtualScroll'
 import { useBatchSelection } from '@/composables/useBatchSelection'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import { useModal } from '@/composables/useModal'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -467,12 +437,13 @@ type ExportFormat = 'json' | 'csv' | 'markdown'
 
 const logger = createLogger('KnowledgeEntries')
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
 
 // Manage tab state
-const manageTab = ref<'upload' | 'manage' | 'advanced'>('upload')
+const manageTab = ref<'upload' | 'manage'>('upload')
 
 // Search and filter state
 const searchQuery = ref('')
@@ -614,10 +585,6 @@ const sortEntries = () => {
   // Sorting is handled in the computed property
 }
 
-const toggleSelection = (id: string) => {
-  selection.toggleByKey(id)
-}
-
 const toggleSelectAll = () => {
   if (selection.allSelected.value) {
     // Deselect all on current page
@@ -646,7 +613,7 @@ const editEntry = (entry: KnowledgeDocument) => {
 }
 
 const deleteEntry = async (entry: KnowledgeDocument) => {
-  if (!confirm(t('knowledge.entries.confirmDelete', { title: entry.title || t('knowledge.entries.untitled') }))) return
+  if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.entries.confirmDelete', { title: entry.title || t('knowledge.entries.untitled') }) }))) return
 
   try {
     await controller.deleteDocument(entry.id)
@@ -656,7 +623,7 @@ const deleteEntry = async (entry: KnowledgeDocument) => {
 }
 
 const deleteSelected = async () => {
-  if (!confirm(t('knowledge.entries.confirmDeleteSelected', { count: selection.selectedCount.value }))) return
+  if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.entries.confirmDeleteSelected', { count: selection.selectedCount.value }) }))) return
 
   try {
     await controller.bulkDeleteDocuments([...selection.selected.value])
@@ -664,10 +631,6 @@ const deleteSelected = async () => {
   } catch (error) {
     logger.error('Failed to delete entries:', error)
   }
-}
-
-const exportSelected = async () => {
-  handleExport('json')
 }
 
 // Issue #747: Enhanced export with multiple formats
@@ -1360,23 +1323,4 @@ tr.selected {
   flex-direction: column;
 }
 
-.advanced-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-}
-
-/* System Knowledge Content */
-.system-knowledge-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--spacing-4);
-}
-
-.man-pages-section {
-  margin-top: var(--spacing-8);
-  border-top: 2px solid var(--border-default);
-  padding-top: var(--spacing-8);
-}
 </style>

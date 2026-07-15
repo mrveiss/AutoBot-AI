@@ -24,6 +24,7 @@ from .context import router as context_router
 from .controls import router as controls_router
 from .costs import router as costs_router
 from .decisions import router as decisions_router
+from .findings import router as findings_router
 from .github_webhooks import router as github_webhooks_router
 from .goals import router as goals_router
 from .health import router as health_router
@@ -39,9 +40,9 @@ from .sprints import router as sprints_router
 from .templates import router as templates_router
 from .work_items import router as work_items_router
 
-# GH#10010: All LLC routes require Postgres.  In single_user mode the session
-# factory hard-raises; the postgres_required dependency converts that to a
-# clean 503 Service Unavailable before any handler or sub-dependency runs.
+# GH#10010: All LLC routes require Postgres, which AutoBot always provides
+# (#10636).  The postgres_required dependency is retained as a router-level
+# hook for these Postgres-backed routes.
 router = APIRouter(prefix="/llc", tags=["llc"], dependencies=[Depends(postgres_required)])
 router.include_router(activity_router)
 router.include_router(boards_router)
@@ -56,6 +57,7 @@ router.include_router(agent_hires_router)
 router.include_router(goals_router)
 router.include_router(health_router)
 router.include_router(secrets_router)
+router.include_router(findings_router)
 router.include_router(sprints_router)
 router.include_router(work_items_router)
 router.include_router(github_webhooks_router)

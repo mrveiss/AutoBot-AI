@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from autobot_shared.auth.permissions import Permission
+from autobot_shared.ssot_config import config as _ssot_config
 from models.database import Node, Setting
 from services.auth import require_permission
 from services.database import get_db
@@ -308,7 +309,7 @@ async def test_llm_connection(
     """Test LLM provider connection (admin only)."""
     provider = request.provider.lower()
     if provider == "ollama":
-        endpoint = request.endpoint or "http://localhost:11434"
+        endpoint = request.endpoint or _ssot_config.llm.ollama_endpoint
         return await _test_ollama(endpoint)
 
     if not request.endpoint:

@@ -149,11 +149,13 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import Icon from '@/components/ui/Icon.vue'
 import { useFolderStore, type ChatFolder } from '@/stores/useFolderStore'
 import type { ChatSession } from '@/stores/useChatStore'
 
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 const props = defineProps<{
   folder: ChatFolder
@@ -206,7 +208,7 @@ function cancelRename() {
 }
 
 async function deleteThisFolder() {
-  if (!confirm(t('chat.folders.confirmDelete', { name: props.folder.name }))) return
+  if (!(await confirm({ title: t('common.confirm'), message: t('chat.folders.confirmDelete', { name: props.folder.name }) }))) return
   await folderStore.deleteFolder(props.folder.id)
 }
 

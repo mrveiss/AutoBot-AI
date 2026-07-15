@@ -252,7 +252,8 @@ class ConfigService:
             },
             "developer": {
                 "enabled": get("developer.enabled", False),
-                "enhanced_errors": get("developer.enhanced_errors", True),
+                # Back-compat: fall back to the legacy ``enhanced_errors`` key for configs written before #10792.
+                "detailed_errors": get("developer.detailed_errors", get("developer.enhanced_errors", True)),
                 "endpoint_suggestions": get("developer.endpoint_suggestions", True),
                 "debug_logging": get("developer.debug_logging", False),
             },

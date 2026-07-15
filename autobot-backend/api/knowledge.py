@@ -104,9 +104,10 @@ from knowledge.schemas.stats import (
 
 # NOTE: Pydantic models moved to knowledge_maintenance.py (Issue #185 - split oversized files)
 # NOTE: Tag-related models moved to knowledge_tags.py
-# NOTE: Search models (EnhancedSearchRequest) moved to knowledge_search.py
+# NOTE: Search models (SearchRequest) defined in schemas_knowledge.py (#10666 B1)
 from knowledge_factory import get_or_create_knowledge_base
-from services.audit.unified_audit import AuditAction, audit_record  # GH#8290 Phase 2
+from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
+from services.knowledge.stats_service import fetch_kb_core_stats  # Issue #11554 canonical stats
 from utils.path_validation import contains_path_traversal
 
 # =============================================================================
@@ -288,12 +289,10 @@ async def get_knowledge_stats(
             },
         )
 
-    stats = await kb_to_use.get_stats()
+    # Issue #11554: fetch via canonical shared function so health/dashboard
+    # and this endpoint cannot independently diverge from kb.get_stats().
+    stats = await fetch_kb_core_stats(kb_to_use)
     stats["rag_available"] = RAG_AVAILABLE
-
-    # Vectorization stats removed - get_stats() already provides fact counts using async operations
-    # The previous implementation used synchronous redis_client.hgetall() which blocked the event
-    # loop
 
     return KnowledgeStatsResponse(**stats)
 
@@ -1478,8 +1477,9 @@ async def upload_audio_file(
             pass
 
 
-# NOTE: Search endpoints moved to knowledge_search.py (Issue #209)
-# Includes: /search, /enhanced_search, /rag_search, /similarity_search
+# NOTE: Search endpoints in knowledge_search.py (Issue #209).
+# Canonical: /search only. Deprecated /enhanced_search, /rag_search,
+# /similarity_search, /enhanced_search (advanced) removed in #10666.
 
 
 @register_health_probe(KnownProbes.KNOWLEDGE)
@@ -2956,9 +2956,9 @@ router.include_router(maintenance_router)
 # These routers were previously registered separately in feature_routers.py
 # Now consolidated under the main knowledge router for cleaner organization
 
-# AI Stack RAG Integration - Enhanced search, knowledge extraction, document analysis
-# Provides: /search/enhanced, /search/rag, /extract, /analyze/documents, /query/reformulate,
-#           /system/insights, /stats/enhanced, /health/enhanced
+# AI Stack RAG Integration - Multi-source search, knowledge extraction, document analysis
+# Provides: /search, /search/rag, /extract, /analyze/documents, /query/reformulate,
+#           /system/insights, /stats, /health/status
 try:
     from api.knowledge_ai_stack import router as ai_stack_router
 
@@ -2975,15 +2975,15 @@ try:
 except ImportError as e:
     logging.warning("Knowledge debug router not available: %s", e)
 
-# Unified Search - Combined search across all knowledge sources
-# Provides: /unified/search, /unified/stats, /unified/context, /unified/documentation/*,
-#           /unified/graph (for KnowledgeGraph.vue visualization)
+# Multi-Source Search - Combined search across all knowledge sources
+# Provides: /multi-source/search, /multi-source/stats, /multi-source/context, /multi-source/documentation/*,
+#           /multi-source/graph (for KnowledgeGraph.vue visualization)
 try:
-    from api.knowledge_search_aggregator import router as unified_router
+    from api.knowledge_search_aggregator import router as multi_source_router
 
-    router.include_router(unified_router, tags=["knowledge-unified", "documentation"])
+    router.include_router(multi_source_router, tags=["knowledge-multi-source", "documentation"])
 except ImportError as e:
-    logging.warning("Unified knowledge search router not available: %s", e)
+    logging.warning("Multi-source knowledge search router not available: %s", e)
 
 
 # ===== KB WATCH FOLDERS (Issue #9000) =====

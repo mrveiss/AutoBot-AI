@@ -15,10 +15,12 @@ import pytest
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# Request models were renamed Collab* when moved to schemas_agent; aliased to
+# keep the test body stable (pre-existing collection rot fixed in #11290).
+from api.collaboration import CollabInviteRequest as InviteRequest
+from api.collaboration import CollabRemoveRequest as RemoveRequest
+from api.collaboration import CollabShareSecretRequest as ShareSecretRequest
 from api.collaboration import (
-    InviteRequest,
-    RemoveRequest,
-    ShareSecretRequest,
     _ensure_permission,
     _get_or_create_collab,
     _get_session_collab,

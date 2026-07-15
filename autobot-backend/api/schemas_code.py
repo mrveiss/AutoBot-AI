@@ -247,8 +247,8 @@ class LogContainerResponse(BaseModel):
     source_type: str
 
 
-class LogUnifiedResponse(BaseModel):
-    """Response for GET /logs/unified."""
+class LogCombinedResponse(BaseModel):
+    """Response for GET /logs/combined (docker + file logs merged into one stream)."""
 
     logs: List[Any]
     total_count: int

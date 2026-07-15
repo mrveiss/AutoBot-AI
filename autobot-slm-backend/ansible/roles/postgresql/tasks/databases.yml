@@ -14,7 +14,7 @@
 - name: Read existing password from credentials file
   ansible.builtin.shell:
     cmd: >-
-      grep '^SLM_DB_PASSWORD='
+      grep '^{{ db_env_prefix }}_DB_PASSWORD='
       {{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}
       | cut -d= -f2
   register: _existing_db_password
@@ -67,6 +67,21 @@
     database: "{{ item }}"
     privs: ALL
     type: database
+    role: "{{ db_user }}"
+    login_unix_socket: /var/run/postgresql
+  become: true
+  become_user: postgres
+  loop: "{{ databases }}"
+
+# PG15+ no longer grants CREATE on schema public to non-owners, so the
+# database-level grant above is not enough for Alembic to create tables.
+# Grant schema-level privileges so app migrations can run (#10636).
+- name: Grant schema-public privileges
+  community.postgresql.postgresql_privs:
+    database: "{{ item }}"
+    type: schema
+    objs: public
+    privs: ALL
     role: "{{ db_user }}"
     login_unix_socket: /var/run/postgresql
   become: true

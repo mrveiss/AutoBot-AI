@@ -38,7 +38,9 @@ class TestSecretModel:
         assert secret.name == "test-secret"
         assert secret.type == SecretType.API_KEY.value
         assert secret.scope == SecretScope.USER.value
-        assert secret.is_active is True
+        # Python-side column default applies at INSERT, not at construction
+        # (stale expectation fixed in #11290); pin the column default instead.
+        assert Secret.__table__.c.is_active.default.arg is True
         assert secret.is_expired is False
 
     def test_secret_expiration(self):
@@ -97,9 +99,10 @@ class TestSecretModel:
         assert secret.is_accessible_by(owner_id) is True
         assert secret.is_accessible_by(owner_id, "other-session") is True
 
-        # Non-owner needs matching session
+        # Non-owner in the SAME session has access (session-scoped secrets are
+        # bound to the session, not the user — stale expectation fixed in #11290)
         other_user_id = uuid.uuid4()
-        assert secret.is_accessible_by(other_user_id, session_id) is False
+        assert secret.is_accessible_by(other_user_id, session_id) is True
         assert secret.is_accessible_by(other_user_id, "other-session") is False
 
     def test_shared_secret_access(self):
@@ -194,8 +197,8 @@ class TestSecretModel:
             encrypted_value="encrypted",
         )
 
-        assert secret.is_active is True
-
+        # Python-side default applies at INSERT, not construction (#11290);
+        # exercise the explicit transitions only.
         secret.deactivate()
         assert secret.is_active is False
 
@@ -218,6 +221,123 @@ class TestSecretModel:
         assert "test-secret" in repr_str
         assert str(owner_id) in repr_str
         assert SecretScope.USER.value in repr_str
+
+
+_OWNER = uuid.UUID("00000000-0000-0000-0000-000000000001")
+_STRANGER = uuid.UUID("00000000-0000-0000-0000-000000000002")
+_ORG = uuid.UUID("00000000-0000-0000-0000-00000000000a")
+_OTHER_ORG = uuid.UUID("00000000-0000-0000-0000-00000000000b")
+_TEAM = uuid.UUID("00000000-0000-0000-0000-0000000000aa")
+
+
+def _secret(scope: str, **kw) -> Secret:
+    base = dict(
+        owner_id=_OWNER,
+        name="matrix-secret",
+        type=SecretType.API_KEY.value,
+        scope=scope,
+        encrypted_value="encrypted",
+    )
+    base.update(kw)
+    return Secret(**base)
+
+
+# Parity matrix for Secret.is_accessible_by (#11290): pins the full
+# scope x principal decision table BEFORE consolidating SecretScope onto the
+# canonical autobot_shared.scoping.ScopeLevel, proving the refactor is
+# behavior-preserving.
+# (label, secret kwargs, call kwargs, expected)
+_ACCESS_MATRIX = [
+    ("user_owner", _secret("user"), dict(user_id=_OWNER), True),
+    ("user_stranger", _secret("user"), dict(user_id=_STRANGER), False),
+    ("session_owner_any_session", _secret("session", session_id="s1"), dict(user_id=_OWNER, session_id="sX"), True),
+    ("session_match", _secret("session", session_id="s1"), dict(user_id=_STRANGER, session_id="s1"), True),
+    ("session_mismatch", _secret("session", session_id="s1"), dict(user_id=_STRANGER, session_id="s2"), False),
+    ("session_none", _secret("session", session_id="s1"), dict(user_id=_STRANGER), False),
+    # session secret with NULL session_id and no caller session currently
+    # GRANTS (None == None) — pinned as-is (#11290); flagged for deliberate
+    # review together with the session-match rule above.
+    ("session_null_both", _secret("session"), dict(user_id=_STRANGER), True),
+    (
+        "shared_listed",
+        _secret("shared", shared_with=[str(_STRANGER)]),
+        dict(user_id=_STRANGER),
+        True,
+    ),
+    ("shared_unlisted", _secret("shared", shared_with=["someone-else"]), dict(user_id=_STRANGER), False),
+    ("shared_empty", _secret("shared", shared_with=[]), dict(user_id=_STRANGER), False),
+    # non-list JSONB payloads fall back to deny for non-owners
+    ("shared_nonlist_guard", _secret("shared", shared_with={"a": 1}), dict(user_id=_STRANGER), False),
+    (
+        "group_team_member",
+        _secret("group", team_ids=[str(_TEAM)]),
+        dict(user_id=_STRANGER, user_team_ids=[_TEAM]),
+        True,
+    ),
+    (
+        "group_non_member",
+        _secret("group", team_ids=[str(_TEAM)]),
+        dict(user_id=_STRANGER, user_team_ids=[uuid.uuid4()]),
+        False,
+    ),
+    ("group_no_teams", _secret("group", team_ids=[str(_TEAM)]), dict(user_id=_STRANGER), False),
+    # non-list JSONB payloads fall back to deny for non-owners
+    (
+        "group_nonlist_guard",
+        _secret("group", team_ids={"a": 1}),
+        dict(user_id=_STRANGER, user_team_ids=[_TEAM]),
+        False,
+    ),
+    (
+        "org_member",
+        _secret("organization", org_id=_ORG),
+        dict(user_id=_STRANGER, user_org_id=_ORG),
+        True,
+    ),
+    (
+        "org_other",
+        _secret("organization", org_id=_ORG),
+        dict(user_id=_STRANGER, user_org_id=_OTHER_ORG),
+        False,
+    ),
+    ("org_user_no_org", _secret("organization", org_id=_ORG), dict(user_id=_STRANGER), False),
+    # workflow scope: no non-owner grant path in is_accessible_by — fail closed
+    ("workflow_owner", _secret("workflow", workflow_id="wf1"), dict(user_id=_OWNER), True),
+    ("workflow_stranger", _secret("workflow", workflow_id="wf1"), dict(user_id=_STRANGER), False),
+    # unknown stored scope value: fail closed for non-owner
+    ("unknown_scope_stranger", _secret("bogus"), dict(user_id=_STRANGER), False),
+    ("unknown_scope_owner", _secret("bogus"), dict(user_id=_OWNER), True),
+]
+
+
+class TestSecretScopeCanonicalAlias:
+    """#11290: SecretScope is a thin alias of the canonical ScopeLevel."""
+
+    def test_alias_identity(self):
+        from autobot_shared.scoping import ScopeLevel
+
+        assert SecretScope is ScopeLevel
+
+    def test_persisted_values_unchanged(self):
+        """secrets.scope stored strings must survive the consolidation."""
+        assert SecretScope.USER.value == "user"
+        assert SecretScope.SESSION.value == "session"
+        assert SecretScope.SHARED.value == "shared"
+        assert SecretScope.GROUP.value == "group"
+        assert SecretScope.ORGANIZATION.value == "organization"
+        assert SecretScope.WORKFLOW.value == "workflow"
+
+
+class TestSecretAccessMatrix:
+    """Full is_accessible_by decision table (#11290 parity guard)."""
+
+    @pytest.mark.parametrize(
+        "label,secret,call_kwargs,expected",
+        _ACCESS_MATRIX,
+        ids=[row[0] for row in _ACCESS_MATRIX],
+    )
+    def test_decision_table(self, label, secret, call_kwargs, expected):
+        assert bool(secret.is_accessible_by(**call_kwargs)) is expected, label
 
 
 @pytest.mark.asyncio

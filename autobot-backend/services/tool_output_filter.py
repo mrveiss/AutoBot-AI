@@ -30,6 +30,7 @@ logger = get_logger(__name__)
 
 _DEFAULT_CONFIG = os.path.join(os.path.dirname(__file__), "..", "config", "tool_output_filters.yaml")
 _TEE_DIR = Path.home() / ".local" / "share" / "autobot" / "tee"
+_MAX_UNMATCHED_OUTPUT_CHARS = int(os.environ.get("AUTOBOT_MAX_UNMATCHED_OUTPUT_CHARS", "20000"))
 _NO_OP_PATTERNS = re.compile(
     r"(Everything up-to-date|nothing to commit|Already up to date|" r"no changes added|working tree clean)",
     re.IGNORECASE,
@@ -267,9 +268,35 @@ def tee_and_hint(raw: str, slug: str, exit_code: int, mode: str = "failures") ->
         tee_path = _TEE_DIR / filename
         tee_path.write_text(raw, encoding="utf-8")
         return f"[full output saved: {tee_path}]"
-    except Exception as exc:
-        logger.debug("tee_and_hint: failed to write %s: %s", filename, exc)
+    except Exception:
         return None
+
+
+def cap_unmatched_output(command: str, output: str, exit_code: int) -> str:
+    """
+    Hard safety net for output that no rule matched.
+
+    Rule-based filters understand the semantics of a specific command's output
+    (pytest failures, diff hunks, etc). This is the blunt fallback: if nothing
+    matched, output can otherwise flow into conversation history completely
+    uncapped. This guarantees a hard ceiling regardless of rule match, using the
+    same tee-and-hint mechanism the matched-rule path already relies on.
+    """
+    if len(output) <= _MAX_UNMATCHED_OUTPUT_CHARS:
+        return output
+
+    half = _MAX_UNMATCHED_OUTPUT_CHARS // 2
+    head = output[:half]
+    tail = output[-half:]
+    omitted = len(output) - (2 * half)
+    truncated = f"{head}\n[... {omitted} chars omitted ...]\n{tail}"
+
+    slug = command.strip().split()[0] if command.strip() else "unknown"
+    hint = tee_and_hint(output, slug, exit_code)
+    if hint:
+        truncated = truncated + "\n" + hint
+
+    return truncated
 
 
 def _line_similarity(a: str, b: str) -> float:
@@ -436,7 +463,7 @@ class ToolOutputFilter:
 
         rule = self._match_rule(command)
         if rule is None:
-            return output
+            return cap_unmatched_output(command, output, exit_code)
 
         filtered = self._apply(rule, output, exit_code)
         pre_hint_filtered = filtered  # snapshot before tee hint for accurate savings

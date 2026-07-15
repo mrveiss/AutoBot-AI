@@ -329,7 +329,6 @@ const {
   clear: deselectAllItems,
   selectedItems: selectedPendingItems,
   selectedCount,
-  selected: selectedKeys,
 } = useBatchSelection<PendingKnowledgeItem, string>(pendingItems, item => item.id);
 
 // someSelected is false when ALL items are selected — use selectedCount > 0 so

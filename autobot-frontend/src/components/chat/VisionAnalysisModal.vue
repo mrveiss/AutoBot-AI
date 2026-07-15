@@ -49,7 +49,7 @@ const analysisResult = ref<MultiModalResponse | null>(null)
 const error = ref<string | null>(null)
 const showRawJson = ref(false)
 
-const intentLabels = computed(() => ({
+const intentLabels = computed<Record<string, string>>(() => ({
   analysis: t('chat.vision.intentAnalysis'),
   visual_qa: t('chat.vision.intentVisualQA'),
   automation: t('chat.vision.intentAutomation'),
@@ -214,10 +214,7 @@ onUnmounted(() => {
           <div class="option-group">
             <label>{{ $t('chat.vision.intent') }}</label>
             <select v-model="selectedIntent">
-              <option value="analysis">{{ $t('chat.vision.intentAnalysis') }}</option>
-              <option value="visual_qa">{{ $t('chat.vision.intentVisualQA') }}</option>
-              <option value="automation">{{ $t('chat.vision.intentAutomation') }}</option>
-              <option value="content_generation">{{ $t('chat.vision.intentContentGeneration') }}</option>
+              <option v-for="(label, value) in intentLabels" :key="value" :value="value">{{ label }}</option>
             </select>
           </div>
           <div v-if="selectedIntent === 'visual_qa'" class="option-group flex-1">

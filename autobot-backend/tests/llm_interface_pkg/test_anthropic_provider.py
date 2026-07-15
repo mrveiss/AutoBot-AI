@@ -46,7 +46,9 @@ from llm_shared.models import LLMRequest  # noqa: E402
 from llm_shared.providers.anthropic import (  # noqa: E402  (import after stub)
     AnthropicProvider,
     _build_api_kwargs,
+    _extract_content_pair,
     _extract_text_content,
+    _extract_think_tag_content,
     _strip_think_blocks,
 )
 
@@ -401,3 +403,140 @@ class TestChatCompletionWithThinking:
 
         assert "<think>" in response.content
         assert "visible reasoning" in response.content
+
+
+# ---------------------------------------------------------------------------
+# _extract_think_tag_content  (#10582)
+# ---------------------------------------------------------------------------
+
+
+class TestExtractThinkTagContent:
+    def test_single_block_extracted(self):
+        result = _extract_think_tag_content("<think>reasoning</think>answer")
+        assert result == "reasoning"
+
+    def test_no_block_returns_none(self):
+        assert _extract_think_tag_content("plain text") is None
+
+    def test_multiple_blocks_joined(self):
+        result = _extract_think_tag_content("<think>step1</think>mid<think>step2</think>")
+        assert result is not None
+        assert "step1" in result
+        assert "step2" in result
+
+    def test_empty_tag_returns_none(self):
+        assert _extract_think_tag_content("<think></think>text") is None
+
+
+# ---------------------------------------------------------------------------
+# _extract_content_pair  (#10582)
+# ---------------------------------------------------------------------------
+
+
+class TestExtractContentPair:
+    def _make_block(self, block_type: str, text: str = "", thinking: str = "") -> Any:
+        block = MagicMock()
+        block.type = block_type
+        block.text = text or None
+        block.thinking = thinking or None
+        return block
+
+    def test_think_tag_in_text_block_captured(self):
+        blocks = [self._make_block("text", "<think>reasoning</think>answer")]
+        content, reasoning = _extract_content_pair(blocks, preserve_reasoning=False)
+        assert content == "answer"
+        assert reasoning == "reasoning"
+
+    def test_native_thinking_block_captured(self):
+        thinking_block = self._make_block("thinking", thinking="native reasoning")
+        text_block = self._make_block("text", "answer")
+        content, reasoning = _extract_content_pair([thinking_block, text_block], preserve_reasoning=False)
+        assert content == "answer"
+        assert reasoning == "native reasoning"
+
+    def test_no_reasoning_returns_none(self):
+        blocks = [self._make_block("text", "plain response")]
+        content, reasoning = _extract_content_pair(blocks, preserve_reasoning=False)
+        assert content == "plain response"
+        assert reasoning is None
+
+    def test_preserve_reasoning_keeps_tags_no_reasoning_field(self):
+        blocks = [self._make_block("text", "<think>visible</think>shown")]
+        content, reasoning = _extract_content_pair(blocks, preserve_reasoning=True)
+        assert "<think>" in content
+        # When preserve_reasoning=True, think tags are NOT stripped — reasoning captured separately only on strip path
+        assert reasoning is None
+
+
+# ---------------------------------------------------------------------------
+# reasoning_content wired into LLMResponse  (#10582)
+# ---------------------------------------------------------------------------
+
+
+class TestReasoningContentInResponse:
+    def _make_block(self, block_type: str, text: str = "", thinking: str = "") -> Any:
+        block = MagicMock()
+        block.type = block_type
+        block.text = text or None
+        block.thinking = thinking or None
+        return block
+
+    def _make_sdk_response(self, content_blocks):
+        resp = MagicMock()
+        resp.content = content_blocks
+        resp.model = "claude-sonnet-4-6"
+        resp.stop_reason = "end_turn"
+        resp.usage = MagicMock(input_tokens=100, output_tokens=200)
+        resp.usage.output_tokens_details = None
+        return resp
+
+    @pytest.mark.asyncio
+    async def test_think_tag_response_content_and_reasoning_split(self):
+        """A response with <think>reasoning</think>answer yields content=='answer'
+        and reasoning_content=='reasoning' (#10582 acceptance criterion)."""
+        text_block = self._make_block("text", "<think>reasoning</think>answer")
+        sdk_response = self._make_sdk_response([text_block])
+
+        provider = AnthropicProvider(settings={"api_key": "test-key"})
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=sdk_response)
+        provider._client = mock_client
+
+        request = LLMRequest(messages=[{"role": "user", "content": "think"}])
+        response = await provider.chat_completion(request)
+
+        assert response.content == "answer"
+        assert response.reasoning_content == "reasoning"
+
+    @pytest.mark.asyncio
+    async def test_native_thinking_block_in_reasoning_content(self):
+        thinking_block = self._make_block("thinking", thinking="chain of thought")
+        text_block = self._make_block("text", "Final answer")
+        sdk_response = self._make_sdk_response([thinking_block, text_block])
+
+        provider = AnthropicProvider(settings={"api_key": "test-key"})
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=sdk_response)
+        provider._client = mock_client
+
+        request = LLMRequest(messages=[{"role": "user", "content": "hello"}])
+        response = await provider.chat_completion(request)
+
+        assert response.content == "Final answer"
+        assert response.reasoning_content == "chain of thought"
+
+    @pytest.mark.asyncio
+    async def test_no_reasoning_content_is_none(self):
+        text_block = self._make_block("text", "Hello!")
+        sdk_response = self._make_sdk_response([text_block])
+
+        provider = AnthropicProvider(settings={"api_key": "test-key"})
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=sdk_response)
+        provider._client = mock_client
+
+        request = LLMRequest(messages=[{"role": "user", "content": "hi"}])
+        response = await provider.chat_completion(request)
+
+        assert response.content == "Hello!"
+        assert response.reasoning_content is None

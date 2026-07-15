@@ -132,6 +132,13 @@
   --color-success-bg: var(--green-bg);
   --color-danger: var(--red-500);
   --color-danger-bg: var(--red-bg);
+  /* #11457: alias the functional error/warning tokens to ember's own palette so
+     they resolve to ember hues instead of the base #ef4444 / #f59e0b. Warning maps
+     to ember's gold (its --color-highlight / --badge-dot-medium signal) so all four
+     functional statuses are ember-native (no queued-vs-failed palette split). */
+  --color-error: var(--color-danger);
+  --color-error-bg: var(--color-danger-bg);
+  --color-warning: var(--gold-500);
   --color-info: var(--wine-500);
   --color-info-bg: #f3e2ea;
 
@@ -145,6 +152,64 @@
   --shadow-sm: 0 1px 3px rgba(44, 28, 14, 0.08), 0 1px 2px rgba(44, 28, 14, 0.05);
   --shadow-md: 0 4px 12px rgba(44, 28, 14, 0.10), 0 2px 4px rgba(44, 28, 14, 0.05);
   --shadow-lg: 0 12px 32px rgba(44, 28, 14, 0.14), 0 4px 8px rgba(44, 28, 14, 0.06);
+
+  /* ============================================
+   * LLC CATEGORICAL BADGE PALETTE — GH#10868
+   * Ember light: warm apricot-linen tinted category chips, same hue
+   * identity as the base palette but shifted toward the ember warmth.
+   * ============================================ */
+
+  /* Work-item type */
+  --badge-type-epic-bg: #e6ddf5;      --badge-type-epic-fg: #59307a;
+  --badge-type-feature-bg: #d3ddf0;   --badge-type-feature-fg: #2a4a86;
+  --badge-type-pbi-bg: var(--green-bg); --badge-type-pbi-fg: #1c5a3f;
+  --badge-type-task-bg: #d7e6ee;      --badge-type-task-fg: #1c5670;
+  --badge-type-bug-bg: var(--red-bg); --badge-type-bug-fg: #8f2a20;
+  --badge-type-spike-bg: #f7e6c4;     --badge-type-spike-fg: #8a5410;
+  --badge-type-subtask-bg: var(--wax-100); --badge-type-subtask-fg: #4a3f30;
+  --badge-type-risk-bg: #f3dce6;      --badge-type-risk-fg: #8a2f57;
+
+  /* Work-item status */
+  --badge-status-backlog-bg: var(--wax-100);  --badge-status-backlog-fg: #4a3f30;
+  --badge-status-ready-bg: #d7e6ee;           --badge-status-ready-fg: #1c5670;
+  --badge-status-in_progress-bg: #e6ddf5;     --badge-status-in_progress-fg: #59307a;
+  --badge-status-in_review-bg: #f7ecc4;       --badge-status-in_review-fg: #7a5510;
+  --badge-status-done-bg: var(--green-bg);    --badge-status-done-fg: #1c5a3f;
+  --badge-status-blocked-bg: var(--red-bg);   --badge-status-blocked-fg: #8f2a20;
+  --badge-status-cancelled-bg: var(--wax-100); --badge-status-cancelled-fg: var(--wax-500);
+
+  /* Work-item priority pill */
+  --badge-priority-critical-bg: var(--red-bg); --badge-priority-critical-fg: #8f2a20;
+  --badge-priority-high-bg: #f8e0c6;           --badge-priority-high-fg: #a35214;
+  --badge-priority-medium-bg: #f7ecc4;         --badge-priority-medium-fg: #7a5510;
+  --badge-priority-low-bg: #e0efd8;            --badge-priority-low-fg: #35662a;
+
+  /* Priority dot (solid fill indicators) */
+  --badge-dot-critical: var(--red-500);
+  --badge-dot-high: var(--orange-500);
+  --badge-dot-medium: var(--gold-500);
+  --badge-dot-low: var(--green-500);
+
+  /* Approval request type (ApprovalsInbox) */
+  --badge-approval-budget_increase-bg: #f7e6c4; --badge-approval-budget_increase-fg: #8a5410;
+  --badge-approval-agent_spawn-bg: #e6ddf5;     --badge-approval-agent_spawn-fg: #59307a;
+  --badge-approval-external_api-bg: #d3ddf0;    --badge-approval-external_api-fg: #2a4a86;
+  --badge-approval-code_deploy-bg: var(--red-bg); --badge-approval-code_deploy-fg: #8f2a20;
+  --badge-approval-data_access-bg: var(--green-bg); --badge-approval-data_access-fg: #1c5a3f;
+  --badge-approval-policy_change-bg: #f3dce6;   --badge-approval-policy_change-fg: #8a2f57;
+  --badge-approval-contract_sign-bg: #f8e0c6;   --badge-approval-contract_sign-fg: #a35214;
+  --badge-approval-hiring-bg: #d7e6ee;          --badge-approval-hiring-fg: #1c5670;
+
+  /* Approval decision status (ApprovalsInbox) */
+  --badge-approval-approved-bg: var(--green-bg);  --badge-approval-approved-fg: #1c5a3f;
+  --badge-approval-rejected-bg: var(--red-bg);    --badge-approval-rejected-fg: #8f2a20;
+  --badge-approval-changes_requested-bg: #f7e6c4; --badge-approval-changes_requested-fg: #8a5410;
+
+  /* Sprint status (SprintBoardView) */
+  --badge-sprint-planning-bg: #f7ecc4;  --badge-sprint-planning-fg: #7a5510;
+  --badge-sprint-active-bg: var(--green-bg); --badge-sprint-active-fg: #1c5a3f;
+  --badge-sprint-review-bg: #e6ddf5;    --badge-sprint-review-fg: #59307a;
+  --badge-sprint-closed-bg: var(--wax-100); --badge-sprint-closed-fg: #4a3f30;
 }
 
 /* ----------------------------------------------------------------------------
@@ -200,6 +265,11 @@
   --color-success-bg: var(--green-bg-dk);
   --color-danger: var(--red-300);
   --color-danger-bg: var(--red-bg-dk);
+  /* #11457: dark-ember functional error/warning alias ember's dark palette
+     (danger red + gold) so all four functional statuses are ember-native. */
+  --color-error: var(--color-danger);
+  --color-error-bg: var(--color-danger-bg);
+  --color-warning: var(--gold-400);
   --color-info: var(--wine-300);
   --color-info-bg: #2e1822;
 
@@ -212,6 +282,64 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.65), 0 4px 8px rgba(0, 0, 0, 0.45);
+
+  /* ============================================
+   * LLC CATEGORICAL BADGE PALETTE — GH#10868
+   * Ember dark: mulberry-cocoa warm dark backgrounds with light
+   * same-hue foregrounds, hue identity preserved (WCAG AA).
+   * ============================================ */
+
+  /* Work-item type */
+  --badge-type-epic-bg: #3a2c56;      --badge-type-epic-fg: #d9caf0;
+  --badge-type-feature-bg: #26324f;   --badge-type-feature-fg: #c3d5f2;
+  --badge-type-pbi-bg: var(--green-bg-dk); --badge-type-pbi-fg: #7fd0a6;
+  --badge-type-task-bg: #1d3646;      --badge-type-task-fg: #a9d7ea;
+  --badge-type-bug-bg: var(--red-bg-dk); --badge-type-bug-fg: #ff9d8f;
+  --badge-type-spike-bg: #48350f;     --badge-type-spike-fg: #f5cf7d;
+  --badge-type-subtask-bg: #352a3a;   --badge-type-subtask-fg: #cabbc2;
+  --badge-type-risk-bg: #46213a;      --badge-type-risk-fg: #eaa9c6;
+
+  /* Work-item status */
+  --badge-status-backlog-bg: #352a3a;     --badge-status-backlog-fg: #cabbc2;
+  --badge-status-ready-bg: #1d3646;       --badge-status-ready-fg: #a9d7ea;
+  --badge-status-in_progress-bg: #3a2c56; --badge-status-in_progress-fg: #d9caf0;
+  --badge-status-in_review-bg: #48350f;   --badge-status-in_review-fg: #f5cf7d;
+  --badge-status-done-bg: var(--green-bg-dk); --badge-status-done-fg: #7fd0a6;
+  --badge-status-blocked-bg: var(--red-bg-dk); --badge-status-blocked-fg: #ff9d8f;
+  --badge-status-cancelled-bg: #352a3a;   --badge-status-cancelled-fg: #a08f97;
+
+  /* Work-item priority pill */
+  --badge-priority-critical-bg: var(--red-bg-dk); --badge-priority-critical-fg: #ff9d8f;
+  --badge-priority-high-bg: #472c10;      --badge-priority-high-fg: #f5b877;
+  --badge-priority-medium-bg: #48350f;    --badge-priority-medium-fg: #f5cf7d;
+  --badge-priority-low-bg: #163422;       --badge-priority-low-fg: #7fd0a6;
+
+  /* Priority dot (solid fill indicators) */
+  --badge-dot-critical: var(--red-300);
+  --badge-dot-high: var(--orange-300);
+  --badge-dot-medium: var(--gold-400);
+  --badge-dot-low: var(--green-300);
+
+  /* Approval request type (ApprovalsInbox) */
+  --badge-approval-budget_increase-bg: #48350f; --badge-approval-budget_increase-fg: #f5cf7d;
+  --badge-approval-agent_spawn-bg: #3a2c56;     --badge-approval-agent_spawn-fg: #d9caf0;
+  --badge-approval-external_api-bg: #26324f;    --badge-approval-external_api-fg: #c3d5f2;
+  --badge-approval-code_deploy-bg: var(--red-bg-dk); --badge-approval-code_deploy-fg: #ff9d8f;
+  --badge-approval-data_access-bg: var(--green-bg-dk); --badge-approval-data_access-fg: #7fd0a6;
+  --badge-approval-policy_change-bg: #46213a;   --badge-approval-policy_change-fg: #eaa9c6;
+  --badge-approval-contract_sign-bg: #472c10;   --badge-approval-contract_sign-fg: #f5b877;
+  --badge-approval-hiring-bg: #1d3646;          --badge-approval-hiring-fg: #a9d7ea;
+
+  /* Approval decision status (ApprovalsInbox) */
+  --badge-approval-approved-bg: var(--green-bg-dk);  --badge-approval-approved-fg: #7fd0a6;
+  --badge-approval-rejected-bg: var(--red-bg-dk);    --badge-approval-rejected-fg: #ff9d8f;
+  --badge-approval-changes_requested-bg: #48350f; --badge-approval-changes_requested-fg: #f5cf7d;
+
+  /* Sprint status (SprintBoardView) */
+  --badge-sprint-planning-bg: #48350f;  --badge-sprint-planning-fg: #f5cf7d;
+  --badge-sprint-active-bg: var(--green-bg-dk); --badge-sprint-active-fg: #7fd0a6;
+  --badge-sprint-review-bg: #3a2c56;    --badge-sprint-review-fg: #d9caf0;
+  --badge-sprint-closed-bg: #352a3a;    --badge-sprint-closed-fg: #cabbc2;
 }
 
 /* ----------------------------------------------------------------------------

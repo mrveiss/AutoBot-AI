@@ -89,12 +89,7 @@ function goToCodeSync(): void {
           </div>
           <!-- Message -->
           <p class="text-sm font-medium text-amber-800">
-            <span class="font-semibold">{{ codeSync.outdatedCount.value }}</span>
-            {{ codeSync.outdatedCount.value === 1 ? 'node needs' : 'nodes need' }}
-            code updates
-            <span v-if="codeSync.latestVersionShort.value" class="text-amber-600">
-              (latest: {{ codeSync.latestVersionShort.value }})
-            </span>
+            <span class="font-semibold">{{ codeSync.outdatedCount.value }}</span>{{ $t('updateNotification.value0CodeUpdates', { value0: codeSync.outdatedCount.value === 1 ? $t('updateNotification.nodeNeeds') : $t('updateNotification.nodesNeed') }) }}<span v-if="codeSync.latestVersionShort.value" class="text-amber-600">{{ $t('updateNotification.latestValue0', { value0: codeSync.latestVersionShort.value }) }}</span>
           </p>
         </div>
 
@@ -110,7 +105,7 @@ function goToCodeSync(): void {
           <button
             @click="dismiss"
             class="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-200 rounded-md transition-colors"
-            aria-label="Dismiss update notification"
+            :aria-label="$t('updateNotification.dismissUpdateNotification')"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

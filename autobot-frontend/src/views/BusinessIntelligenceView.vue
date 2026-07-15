@@ -65,7 +65,7 @@
           :class="['tab-btn', { active: activeTab === tab.id }]"
           @click="activeTab = tab.id"
         >
-          <Icon :name="(tab.icon as any)" />
+          <Icon :name="tab.icon" />
           {{ tab.label }}
           <span v-if="tab.badge" class="tab-badge" :class="tab.badgeClass">{{ tab.badge }}</span>
         </button>
@@ -324,14 +324,73 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('BusinessIntelligenceView')
 const { t } = useI18n()
 
+// Business Intelligence dashboard data shapes (Issue #744 /advanced/* endpoints)
+interface BiDashboard {
+  health?: { score?: number; grade?: string; status?: string }
+  cost?: { total_usd?: number; trend?: string; growth_rate?: number }
+  agents?: { total_agents?: number; total_tasks?: number; avg_success_rate?: number }
+  engagement?: { total_sessions?: number; page_views?: number }
+}
+
+interface MaintenanceRecommendation {
+  id: string
+  priority: string
+  category: string
+  title: string
+  description: string
+  affected_component: string
+  predicted_issue: string
+  confidence: number
+  recommended_action: string
+}
+
+interface BiMaintenance {
+  by_priority: { critical: number; high: number; medium: number; low: number }
+  recommendations?: MaintenanceRecommendation[]
+}
+
+interface OptimizationRecommendation {
+  id: string
+  resource_type: string
+  implementation_effort: string
+  title: string
+  details: string
+  expected_savings?: { cost_usd?: number; performance_percent?: number }
+  recommended_change: string
+}
+
+interface BiOptimization {
+  total_recommendations?: number
+  potential_savings?: { cost_usd?: number; performance_improvement_percent?: number }
+  recommendations?: OptimizationRecommendation[]
+}
+
+interface BiInsight {
+  priority: string
+  type: string
+  title: string
+  action: string
+  impact: string
+}
+
+interface BiInsights {
+  insights?: BiInsight[]
+}
+
+interface BiReport {
+  report_type?: string
+  generated_at: string
+  [key: string]: unknown
+}
+
 // State
 const loading = ref(false)
 const activeTab = ref('analytics')
-const dashboard = ref<any>(null)
-const maintenance = ref<any>(null)
-const optimization = ref<any>(null)
-const insights = ref<any>(null)
-const generatedReport = ref<any>(null)
+const dashboard = ref<BiDashboard | null>(null)
+const maintenance = ref<BiMaintenance | null>(null)
+const optimization = ref<BiOptimization | null>(null)
+const insights = ref<BiInsights | null>(null)
+const generatedReport = ref<BiReport | null>(null)
 
 // Tab configuration with badges
 const tabs = computed(() => [
@@ -341,7 +400,7 @@ const tabs = computed(() => [
     label: t('analytics.bi.tabs.maintenance'),
     icon: 'tools' as IconName,
     badge: maintenance.value?.by_priority?.critical || 0,
-    badgeClass: maintenance.value?.by_priority?.critical > 0 ? 'critical' : ''
+    badgeClass: (maintenance.value?.by_priority?.critical as number) > 0 ? 'critical' : ''
   },
   {
     id: 'optimization',
@@ -365,13 +424,13 @@ const formatDate = (dateStr: string): string => {
   return new Date(dateStr).toLocaleString()
 }
 
-const getTrendClass = (trend: string): string => {
+const getTrendClass = (trend: string | undefined): string => {
   if (trend === 'increasing') return 'trend-up'
   if (trend === 'decreasing') return 'trend-down'
   return 'trend-stable'
 }
 
-const getTrendIcon = (trend: string): IconName => {
+const getTrendIcon = (trend: string | undefined): IconName => {
   if (trend === 'increasing') return 'arrow-up'
   if (trend === 'decreasing') return 'arrow-down'
   return 'minus'
@@ -380,7 +439,7 @@ const getTrendIcon = (trend: string): IconName => {
 const fetchDashboard = async () => {
   try {
     // Issue #552: Fixed path - backend uses /api/advanced/* not /api/analytics/advanced/*
-    const res = await api.get<{ data: any }>(`${getApiBase()}/advanced/dashboard`)
+    const res = await api.get<{ data: BiDashboard }>(`${getApiBase()}/advanced/dashboard`)
     dashboard.value = res.data
   } catch (error) {
     logger.error('Failed to fetch dashboard:', error)
@@ -390,7 +449,7 @@ const fetchDashboard = async () => {
 const fetchMaintenance = async () => {
   try {
     // Issue #552: Fixed path - backend uses /api/advanced/* not /api/analytics/advanced/*
-    const res = await api.get<{ data: any }>(`${getApiBase()}/advanced/maintenance`)
+    const res = await api.get<{ data: BiMaintenance }>(`${getApiBase()}/advanced/maintenance`)
     maintenance.value = res.data
   } catch (error) {
     logger.error('Failed to fetch maintenance:', error)
@@ -400,7 +459,7 @@ const fetchMaintenance = async () => {
 const fetchOptimization = async () => {
   try {
     // Issue #552: Fixed path - backend uses /api/advanced/* not /api/analytics/advanced/*
-    const res = await api.get<{ data: any }>(`${getApiBase()}/advanced/optimization`)
+    const res = await api.get<{ data: BiOptimization }>(`${getApiBase()}/advanced/optimization`)
     optimization.value = res.data
   } catch (error) {
     logger.error('Failed to fetch optimization:', error)
@@ -410,7 +469,7 @@ const fetchOptimization = async () => {
 const fetchInsights = async () => {
   try {
     // Issue #552: Fixed path - backend uses /api/advanced/* not /api/analytics/advanced/*
-    const res = await api.get<{ data: any }>(`${getApiBase()}/advanced/insights`)
+    const res = await api.get<{ data: BiInsights }>(`${getApiBase()}/advanced/insights`)
     insights.value = res.data
   } catch (error) {
     logger.error('Failed to fetch insights:', error)
@@ -421,7 +480,7 @@ const generateReport = async (reportType: string) => {
   try {
     loading.value = true
     // Issue #552: Fixed path - backend uses /api/advanced/* not /api/analytics/advanced/*
-    const res = await api.post<{ data: any }>(`${getApiBase()}/advanced/report`, {
+    const res = await api.post<{ data: BiReport }>(`${getApiBase()}/advanced/report`, {
       report_type: reportType,
       days: 30
     })

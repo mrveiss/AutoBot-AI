@@ -7,7 +7,7 @@
  * the AutoBot application with the KB Librarian Agent integration.
  */
 
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 // Custom matchers for AutoBot-specific assertions
 expect.extend({
@@ -41,13 +41,11 @@ expect.extend({
   }
 });
 
-// Declare the extended matchers
-declare global {
-  namespace PlaywrightTest {
-    interface Matchers<R> {
-      toHaveKBLibrarianResponse(message: string): R;
-      toBeValidApiResponse(): R;
-    }
+// Declare the extended matchers via module augmentation (no namespace)
+declare module '@playwright/test' {
+  interface Matchers<R> {
+    toHaveKBLibrarianResponse(message: string): R;
+    toBeValidApiResponse(): R;
   }
 }
 
@@ -57,7 +55,7 @@ export class AutoBotTestHelpers {
   /**
    * Send a chat message and wait for response
    */
-  static async sendChatMessage(page: any, message: string) {
+  static async sendChatMessage(page: Page, message: string) {
     const input = page.locator('[data-testid="message-input"]');
     const sendButton = page.locator('[data-testid="send-button"]');
 
@@ -76,7 +74,7 @@ export class AutoBotTestHelpers {
   /**
    * Check if KB Librarian is enabled via API
    */
-  static async isKBLibrarianEnabled(page: any) {
+  static async isKBLibrarianEnabled(page: Page) {
     const response = await page.request.get('http://127.0.0.1:8001/api/kb-librarian/status');
     if (!response.ok()) return false;
 
@@ -87,7 +85,7 @@ export class AutoBotTestHelpers {
   /**
    * Wait for backend to be ready
    */
-  static async waitForBackend(page: any, timeout: number = 30000) {
+  static async waitForBackend(page: Page, timeout: number = 30000) {
     let attempts = 0;
     const maxAttempts = timeout / 1000;
 
@@ -111,7 +109,7 @@ export class AutoBotTestHelpers {
   /**
    * Add some test data to knowledge base (if needed)
    */
-  static async seedKnowledgeBase(page: any) {
+  static async seedKnowledgeBase(page: Page) {
     // This would typically add some test documents to the knowledge base
     // For now, we'll just verify the KB is accessible
     try {
@@ -125,7 +123,7 @@ export class AutoBotTestHelpers {
   /**
    * Clean up test data
    */
-  static async cleanupTestData(page: any) {
+  static async cleanupTestData(page: Page) {
     // Clean up any test-specific data if needed
     // This could include clearing test chats, resetting configurations, etc.
     try {
@@ -149,7 +147,7 @@ export class AutoBotTestHelpers {
   /**
    * Take screenshot with timestamp for debugging
    */
-  static async takeDebugScreenshot(page: any, name: string) {
+  static async takeDebugScreenshot(page: Page, name: string) {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     await page.screenshot({
       path: `test-results/screenshots/${name}-${timestamp}.png`,

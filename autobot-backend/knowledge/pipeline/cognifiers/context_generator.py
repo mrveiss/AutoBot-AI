@@ -17,6 +17,7 @@ from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.registry import TaskRegistry
+from llm_shared.types import LLMType
 from services.llm_service import get_llm_service
 
 logger = get_logger(__name__)
@@ -86,7 +87,7 @@ class ContextGeneratorCognifier(BaseCognifier):
     async def _call_llm_for_summary(self, doc_text: str) -> str:
         prompt = _SUMMARY_PROMPT.format(doc_text=doc_text[:_DOC_TEXT_LIMIT])
         try:
-            response = await self.llm.chat([{"role": "user", "content": prompt}])
+            response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type=LLMType.ANALYSIS)
             return response.content.strip()
         except Exception as e:  # noqa: BLE001
             logger.error("Context summary LLM call failed: %s", e)
@@ -108,7 +109,7 @@ class ContextGeneratorCognifier(BaseCognifier):
             return ""
         prompt = _CHUNK_PROMPT.format(doc_summary=doc_summary, chunk_text=chunk_text)
         try:
-            response = await self.llm.chat([{"role": "user", "content": prompt}])
+            response = await self.llm.chat([{"role": "user", "content": prompt}], llm_type=LLMType.ANALYSIS)
             return response.content.strip()
         except Exception as e:  # noqa: BLE001
             logger.error("Chunk context LLM call failed: %s", e)
@@ -116,4 +117,7 @@ class ContextGeneratorCognifier(BaseCognifier):
 
     @staticmethod
     def is_enabled() -> bool:
-        return config.context_enabled.lower() == "true"
+        # config.context_enabled is a bool (CONTEXT_ENABLED via ssot_config);
+        # #7437 left a stale ``.lower()`` string check here. Read the bool
+        # directly so the cognifier actually activates when enabled (#10644).
+        return bool(config.context_enabled)

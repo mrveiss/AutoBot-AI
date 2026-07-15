@@ -19,8 +19,8 @@ logger = get_logger(__name__)
 
 
 @dataclass
-class UnifiedMessage:
-    """Unified message schema normalized from all platforms."""
+class GatewayMessage:
+    """Raw inbound platform payload normalized from all platform adapters."""
 
     user_id: str
     platform: str  # 'web', 'slack', 'discord', 'whatsapp', 'teams'
@@ -56,7 +56,7 @@ class BaseAdapter(ABC):
         self.logger = get_logger(f"{__name__}.{platform_name}")
 
     @abstractmethod
-    async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:
+    async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
         """
         Convert platform-specific message to unified schema.
 
@@ -64,7 +64,7 @@ class BaseAdapter(ABC):
             raw_message: Platform-specific message object
 
         Returns:
-            UnifiedMessage in normalized format
+            GatewayMessage in normalized format
         """
 
     @abstractmethod

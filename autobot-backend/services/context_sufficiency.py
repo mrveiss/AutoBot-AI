@@ -23,6 +23,7 @@ from enum import Enum
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from llm_shared.types import LLMType
 
 logger = get_logger(__name__)
 
@@ -334,7 +335,7 @@ async def _llm_evaluate(
         response = await asyncio.wait_for(
             llm.chat(
                 messages=messages,
-                llm_type="task",
+                llm_type=LLMType.TASK,
                 max_tokens=5,
                 temperature=0.0,
             ),

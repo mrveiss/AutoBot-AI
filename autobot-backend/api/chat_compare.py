@@ -28,6 +28,7 @@ from api.schemas_chat import CompareRequest
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from llm_shared.types import LLMType
 
 logger = get_logger(__name__)
 
@@ -85,7 +86,7 @@ async def _stream_single_model(
         registry = get_provider_registry()
         llm_request = LLMRequest(
             messages=messages,
-            llm_type="chat",
+            llm_type=LLMType.CHAT,
             provider=provider_name or None,
             model_name=model_name or None,
             stream=True,

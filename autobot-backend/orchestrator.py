@@ -13,9 +13,9 @@ implementations:
 - enhanced_orchestration/EnhancedMultiAgentOrchestrator (merged in #5040)
 
 Refactored in #5058: god-class decomposed into collaborators.
-  - WorkflowRunner  (enhanced_orchestration/workflow_runner.py) — execution engine
+  - WorkflowRunner  (orchestration/workflow_runner.py) — execution engine (#10666 B3 moved)
   - PerformanceTracker (orchestration/performance_tracker.py) — metrics
-  - Three execution entry points unified: process_user_request → execute_enhanced_workflow
+  - Three execution entry points unified: process_user_request → run_workflow
     → create_workflow_plan + WorkflowRunner.execute_workflow
 
 Primitives extracted in #5060:
@@ -25,6 +25,8 @@ Primitives extracted in #5060:
                         orchestration/orchestrator_stubs.py
                         orchestration/orchestrator_legacy_api.py
                         orchestration/orchestrator_prompts.py
+
+Issue #10666 B3: enhanced_orchestration package fully merged into orchestration.
 """
 
 import asyncio
@@ -33,40 +35,35 @@ import time
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.workflow import ExecutionStrategy
 from config.manager import get_config_manager as _get_config_manager
 from constants.threshold_constants import LLMDefaults, TimingConstants
-from enhanced_orchestration.agent_router import AgentRouter
-from enhanced_orchestration.collaboration_coordinator import CollaborationCoordinator
-
-# Issue #5040: multi-agent imports
-from enhanced_orchestration.types import (
-    FALLBACK_TIERS,
-    AgentPerformance,
-    AgentTask,
-    ExecutionStrategy,
-    WorkflowPlan,
-)
-from enhanced_orchestration.workflow_planning import StrategyPlanner
-from enhanced_orchestration.workflow_runner import WorkflowRunner
 from memory import LongTermMemoryManager
 
-# Issue #381: shared orchestration types
-# GH #6820: wire-in AgentRegistry, WorkflowMemory, WorkflowPlanner (previously orphaned)
-# GH #6816: wire-in CausalExecutor, CausalErrorRecovery (previously orphaned)
+# Issue #5040 / #10666 B3: multi-agent imports (consolidated into orchestration)
 from orchestration import (
+    FALLBACK_TIERS,
     AgentCapability,
+    AgentCapabilityRegistry,
     AgentInteraction,
+    AgentPerformance,
     AgentProfile,
-    AgentRegistry,
+    AgentRouter,
+    AgentTask,
     CausalErrorRecovery,
+    CollaborationCoordinator,
     DocumentationType,
+    StrategyPlanner,
     WorkflowDocumentation,
     WorkflowDocumenter,
     WorkflowMemory,
+    WorkflowPlan,
     WorkflowPlanner,
+    WorkflowRunner,
+    get_default_agents,
     get_recovery_recommender,
 )
 from orchestration.causal_error_analyzer import (  # noqa: F401 (GH #6816)
@@ -110,7 +107,7 @@ except ImportError:
     KNOWLEDGE_BASE_AVAILABLE = False
     logger.warning("KnowledgeBase not available - auto-documentation features disabled")
 
-from agents.agent_client import AgentRegistry as _AgentClientRegistry
+from agents.agent_client import AgentHealthRegistry as _AgentClientRegistry
 from autobot_shared.status_enums import Priority as TaskPriority  # #7504 consolidation
 from autobot_shared.status_enums import WorkflowStatus  # #6973 consolidation
 from autobot_types import TaskComplexity
@@ -158,11 +155,13 @@ class Orchestrator(_DeprecatedRequestMixin):
             "average_response_time": 0,
         }
 
-    def _init_enhanced_components(self) -> None:
+    def _init_components(self) -> None:
         self.agent_registry: Dict[str, AgentProfile] = {}
-        # GH #6820: AgentRegistry — structured profile store with capability-based lookup.
+        # GH #6820: AgentCapabilityRegistry — structured profile store with capability-based lookup.
         # Runs alongside the plain-dict self.agent_registry for structured queries.
-        self._profile_registry = AgentRegistry(initialize_defaults=True)
+        # GH#11139: seeded by _initialize_default_agents() (called later in __init__)
+        # via register(), so skip the built-in defaults to avoid double instantiation.
+        self._profile_registry = AgentCapabilityRegistry(initialize_defaults=False)
         self.workflow_documentation: Dict[str, WorkflowDocumentation] = {}
         self.agent_interactions: List[AgentInteraction] = []
         self.knowledge_base = KnowledgeBase() if KNOWLEDGE_BASE_AVAILABLE else None
@@ -185,23 +184,18 @@ class Orchestrator(_DeprecatedRequestMixin):
 
     def _init_strategy_components(self) -> None:
         """Initialize multi-agent strategy components. Renamed from _init_multi_agent_state (#5058)."""
-        # Agent capabilities registry (task-routing layer distinct from agent_registry)
+        # #11251 Part 1: the routing capability map is now a PURE PROJECTION of the
+        # canonical AgentProfile registry (routing ids win) — no parallel hardcoded
+        # dict to drift against. Every routing id (ROUTING_AGENT_IDS) has a
+        # first-class profile in get_default_agents(); we project their capabilities
+        # and drop non-routing profiles. A test asserts this equals the previous
+        # literal so the routing candidate set is unchanged.
+        from orchestration.agent_registry import ROUTING_AGENT_IDS
+
         self.agent_capabilities: Dict[str, Set] = {
-            "research_agent": {AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
-            "classification_agent": {
-                AgentCapability.ANALYSIS,
-                AgentCapability.VALIDATION,
-            },
-            "kb_librarian": {AgentCapability.RESEARCH, AgentCapability.SYNTHESIS},
-            "system_commands": {AgentCapability.EXECUTION, AgentCapability.MONITORING},
-            "security_scanner": {AgentCapability.SECURITY, AgentCapability.VALIDATION},
-            "npu_code_search": {AgentCapability.ANALYSIS, AgentCapability.OPTIMIZATION},
-            "development_speedup": {
-                AgentCapability.ANALYSIS,
-                AgentCapability.OPTIMIZATION,
-            },
-            "json_formatter": {AgentCapability.VALIDATION, AgentCapability.SYNTHESIS},
-            "llm_failsafe": {AgentCapability.SYNTHESIS},
+            profile.agent_id: set(profile.capabilities)
+            for profile in get_default_agents()
+            if profile.agent_id in ROUTING_AGENT_IDS
         }
 
         # Workflow tracking
@@ -251,7 +245,7 @@ class Orchestrator(_DeprecatedRequestMixin):
     def __init__(self, config_mgr=None):
         self._init_core_components(config_mgr)
         self._init_task_state()
-        self._init_enhanced_components()
+        self._init_components()
         self._init_classification_agent()
         self._initialize_default_agents()
         self._init_strategy_components()
@@ -260,69 +254,23 @@ class Orchestrator(_DeprecatedRequestMixin):
     # ------------------------------------------------------- agent registration
 
     def _initialize_default_agents(self) -> None:
-        profiles = [
-            AgentProfile(
-                agent_id="research_agent",
-                agent_type="research",
-                capabilities={AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
-                specializations=[
-                    "web_search",
-                    "data_analysis",
-                    "information_synthesis",
-                ],
-                max_concurrent_tasks=5,
-                preferred_task_types=["research", "information_gathering", "analysis"],
-            ),
-            AgentProfile(
-                agent_id="documentation_agent",
-                agent_type="librarian",
-                capabilities={
-                    AgentCapability.DOCUMENTATION,
-                    AgentCapability.KNOWLEDGE_MANAGEMENT,
-                },
-                specializations=[
-                    "auto_documentation",
-                    "knowledge_extraction",
-                    "content_organization",
-                ],
-                max_concurrent_tasks=3,
-                preferred_task_types=["documentation", "knowledge_management"],
-            ),
-            AgentProfile(
-                agent_id="system_agent",
-                agent_type="system_commands",
-                capabilities={
-                    AgentCapability.SYSTEM_OPERATIONS,
-                    AgentCapability.CODE_GENERATION,
-                },
-                specializations=[
-                    "command_execution",
-                    "system_administration",
-                    "automation",
-                ],
-                max_concurrent_tasks=2,
-                preferred_task_types=["system_operations", "command_execution"],
-            ),
-            AgentProfile(
-                agent_id="coordination_agent",
-                agent_type="orchestrator",
-                capabilities={
-                    AgentCapability.WORKFLOW_COORDINATION,
-                    AgentCapability.ANALYSIS,
-                },
-                specializations=[
-                    "workflow_management",
-                    "resource_allocation",
-                    "decision_making",
-                ],
-                max_concurrent_tasks=10,
-                preferred_task_types=["coordination", "planning", "optimization"],
-            ),
-        ]
+        # GH#11139: single source — the same default profiles (incl. the
+        # allowed_work/forbidden_work manifest) that seed self._profile_registry.
+        # Previously duplicated inline here, which let the two populations drift.
+        profiles = get_default_agents()
         for profile in profiles:
             self.agent_registry[profile.agent_id] = profile
             self._profile_registry.register(profile)
         logger.info("Initialized %d default agent profiles", len(profiles))
+
+    def get_agent_work_boundary(self, agent_id: str) -> "tuple[list[str], list[str]]":
+        """Return ``(allowed_work, forbidden_work)`` for *agent_id* (GH#11139).
+
+        Single accessor onto the declarative capability manifest carried by the
+        agent profile — routing and tool enforcement both derive from here rather
+        than re-deriving the boundary from separate RBAC/sensitive-tool state.
+        """
+        return self._profile_registry.work_boundary(agent_id)
 
     async def register_agent(self, agent_profile: AgentProfile) -> bool:
         try:
@@ -456,17 +404,17 @@ class Orchestrator(_DeprecatedRequestMixin):
     # _update_success_metrics, _classify_task, _select_model_for_task,
     # _process_simple_request) are inherited from _DeprecatedRequestMixin (#5060).
 
-    # ------------------------------------------------- execute_enhanced_workflow
+    # ------------------------------------------------- run_workflow
 
-    def _get_enhanced_documenter(self) -> WorkflowDocumenter:
-        if not hasattr(self, "_enh_documenter") or self._enh_documenter is None:
-            self._enh_documenter = WorkflowDocumenter(
+    def _get_documenter(self) -> WorkflowDocumenter:
+        if not hasattr(self, "_documenter") or self._documenter is None:
+            self._documenter = WorkflowDocumenter(
                 knowledge_base=self.knowledge_base,
                 llm_service=self.llm_service,
             )
-        return self._enh_documenter
+        return self._documenter
 
-    async def execute_enhanced_workflow(
+    async def run_workflow(
         self,
         user_request: str,
         context: Dict[str, Any] | None = None,
@@ -485,7 +433,7 @@ class Orchestrator(_DeprecatedRequestMixin):
         start_time = time.time()
         context = context or {}
         workflow_id = str(uuid.uuid4())
-        logger.info("Starting enhanced workflow %s: %s", workflow_id, user_request[:80])
+        logger.info("Starting workflow %s: %s", workflow_id, user_request[:80])
 
         # GH #6820: WorkflowMemory — shared KV store for cross-step coordination.
         shared_memory = WorkflowMemory(workflow_id=workflow_id)
@@ -496,7 +444,7 @@ class Orchestrator(_DeprecatedRequestMixin):
             logger.debug("WorkflowMemory init store skipped: %s", _mem_exc)
 
         if auto_document:
-            documenter = self._get_enhanced_documenter()
+            documenter = self._get_documenter()
             doc = documenter.create_workflow_doc(
                 workflow_id=workflow_id,
                 title=f"Workflow: {user_request[:50]}...",
@@ -520,14 +468,14 @@ class Orchestrator(_DeprecatedRequestMixin):
             self.workflow_metrics["average_execution_time"] = ((cur_avg * (total - 1)) + elapsed) / total
 
             if auto_document:
-                documenter = self._get_enhanced_documenter()
+                documenter = self._get_documenter()
                 await documenter.generate_workflow_documentation(workflow_id, exec_result)
                 doc = documenter.get_doc(workflow_id)
                 if doc:
                     self.workflow_documentation[workflow_id] = doc
 
             if self.knowledge_extraction_enabled:
-                documenter = self._get_enhanced_documenter()
+                documenter = self._get_documenter()
                 await documenter.extract_workflow_knowledge(workflow_id, user_request, exec_result, self.agent_registry)
 
             return {
@@ -541,9 +489,9 @@ class Orchestrator(_DeprecatedRequestMixin):
             }
 
         except Exception as e:
-            logger.error("Enhanced workflow %s failed: %s", workflow_id, e)
+            logger.error("Workflow %s failed: %s", workflow_id, e)
             if auto_document:
-                documenter = self._get_enhanced_documenter()
+                documenter = self._get_documenter()
                 await documenter.document_workflow_failure(workflow_id, str(e))
                 doc = documenter.get_doc(workflow_id)
                 if doc:
@@ -633,12 +581,30 @@ class Orchestrator(_DeprecatedRequestMixin):
 
     # ------------------------------------------ workflow planning (canonical path)
 
-    def _build_planning_prompt(self, goal: str) -> str:
+    def _build_planning_prompt(
+        self,
+        goal: str,
+        *,
+        learned_prompt_template: str | None = None,
+        similar_trajectories: List[Any] | None = None,
+    ) -> str:
+        """Render the planning prompt.
+
+        #10580: passes ``learned_prompt_template`` from a high-confidence
+        LearnedStrategy so the planner benefits from proven approaches.
+        #10581: passes ``similar_trajectories`` as few-shot priors so the planner
+        can reuse proven decompositions from past high-reward executions.
+        """
         capabilities_json = json.dumps(
             {agent: [cap.value for cap in caps] for agent, caps in self.agent_capabilities.items()},
             indent=2,
         )
-        return build_planning_prompt(goal, capabilities_json)
+        return build_planning_prompt(
+            goal,
+            capabilities_json,
+            learned_prompt_template=learned_prompt_template,
+            similar_trajectories=similar_trajectories,
+        )
 
     def _parse_planning_response(self, response: Any, goal: str) -> Dict[str, Any]:
         if response.tier_used.value in FALLBACK_TIERS:
@@ -650,19 +616,176 @@ class Orchestrator(_DeprecatedRequestMixin):
             return parse_result.data
         return self._strategy_planner.create_fallback_plan(goal)
 
+    async def _fetch_planning_context(self, goal: str, context: Dict[str, Any] | None) -> Dict[str, Any]:
+        """Gather learned template and similar trajectories for #10580/#10581.
+
+        Non-fatal: always returns a dict (possibly empty) so planning continues
+        even when Redis or ChromaDB is unavailable.
+        """
+        result: Dict[str, Any] = {}
+        ctx = context or {}
+
+        # #11015 kill-switch: skip all planning-context I/O when disabled.
+        from autobot_shared.ssot_config import PLANNING_CONTEXT_ENABLED  # noqa: PLC0415
+
+        if not PLANNING_CONTEXT_ENABLED:
+            return result
+
+        # #11015: isolate trajectory retrieval to the caller's tenant so one org's
+        # history can never bias/inject into another's plan. Absent → un-scoped.
+        tenant_id = str(ctx.get("tenant_id") or "")
+
+        # #10580 — learned prompt template from TaskPatternLearner
+        try:
+            from agents.task_pattern_learner import (
+                LEARNED_STRATEGY_CONFIDENCE,
+                TaskPatternLearner,
+            )
+
+            task_type = ctx.get("task_type", "")
+            if task_type:
+                learner = TaskPatternLearner()
+                task_type = learner.normalize_task_type(task_type)
+                # GH#11071: scope the learned-strategy read to the caller's tenant so
+                # one org's synthesized template can't be injected into another's plan.
+                strategy = await learner.get_learned_strategy(task_type, tenant_id=tenant_id)
+                if strategy and strategy.confidence > LEARNED_STRATEGY_CONFIDENCE and strategy.best_prompt_template:
+                    result["learned_prompt_template"] = strategy.best_prompt_template
+                    logger.info(
+                        "used learned prompt template for %s (confidence=%.2f)",
+                        task_type,
+                        strategy.confidence,
+                    )
+        except Exception as exc:
+            logger.debug("Learned prompt template lookup failed (non-fatal): %s", exc)
+
+        # #10581 — similar trajectories from TrajectoryStore
+        try:
+            from memory.trajectory_store import get_trajectory_store
+
+            store = await get_trajectory_store()
+            user_id = str(ctx.get("user_id") or "")
+            similar = await store.find_similar_trajectories(
+                goal, top_k=5, min_reward=0.7, tenant_id=tenant_id or None, user_id=user_id or None
+            )
+            if similar:
+                result["similar_trajectories"] = similar
+        except Exception as exc:
+            logger.debug("Similar trajectory lookup failed (non-fatal): %s", exc)
+
+        return result
+
+    async def _generate_single_plan(
+        self,
+        goal: str,
+        context: Dict[str, Any] | None,
+        planning_ctx: Dict[str, Any],
+    ) -> WorkflowPlan:
+        """Generate one candidate plan from the LLM."""
+        from agents.llm_failsafe_agent import get_robust_llm_response
+
+        prompt = self._build_planning_prompt(
+            goal,
+            learned_prompt_template=planning_ctx.get("learned_prompt_template"),
+            similar_trajectories=planning_ctx.get("similar_trajectories"),
+        )
+        response = await get_robust_llm_response(prompt, context)
+        plan_data = self._parse_planning_response(response, goal)
+        return await self._strategy_planner.build_workflow_plan(goal, plan_data)
+
+    async def _score_plan(self, plan: WorkflowPlan, goal: str) -> float:
+        """Score a candidate plan with TaskOutcomeJudge (#10583)."""
+        try:
+            from judges.task_outcome_judge import TaskOutcomeJudge
+
+            judge = TaskOutcomeJudge()
+            # GH#11071: scope planning-outcome persistence to the plan's tenant; the
+            # score is returned regardless, but the write stays tenant-isolated.
+            tenant_id = str((getattr(plan, "metadata", None) or {}).get("tenant_id") or "")
+            result = await judge.evaluate_task_outcome(
+                task_type="planning",
+                goal=goal,
+                output=str(plan.tasks),
+                strategy_used=str(plan.execution_strategy),
+                tenant_id=tenant_id,
+            )
+            return result.overall_score
+        except Exception as exc:
+            logger.debug("Plan scoring failed (non-fatal): %s", exc)
+            return 0.0
+
+    async def _select_best_plan(
+        self,
+        goal: str,
+        context: Dict[str, Any] | None,
+        planning_ctx: Dict[str, Any],
+        n: int,
+    ) -> WorkflowPlan:
+        """Sample N candidate plans, score each, return the top-ranked (#10583).
+
+        Rejected candidates and their scores are recorded in the trajectory
+        context for explainability.  Scoring uses TaskOutcomeJudge directly —
+        no parallel scorer is introduced.
+        """
+        candidates: List[WorkflowPlan] = []
+        for i in range(n):
+            try:
+                plan = await self._generate_single_plan(goal, context, planning_ctx)
+                candidates.append(plan)
+            except Exception as exc:
+                logger.warning("Candidate plan %d/%d generation failed: %s", i + 1, n, exc)
+
+        if not candidates:
+            return self._strategy_planner.create_simple_workflow_plan(goal)
+
+        scored: List[tuple[float, WorkflowPlan]] = []
+        for plan in candidates:
+            score = await self._score_plan(plan, goal)
+            scored.append((score, plan))
+        scored.sort(key=lambda t: t[0], reverse=True)
+
+        best_score, best = scored[0]
+        rejected = [{"plan_id": p.plan_id, "score": s} for s, p in scored[1:]]
+        logger.info(
+            "best-of-%d plan selection: best_plan=%s score=%.3f rejected=%s",
+            n,
+            best.plan_id,
+            best_score,
+            rejected,
+        )
+        # Record rejected candidates on context for trajectory explainability.
+        if context is not None:
+            context.setdefault("plan_selection", {}).update({"best_score": best_score, "rejected_candidates": rejected})
+        return best
+
     async def create_workflow_plan(self, goal: str, context: Dict[str, Any] | None = None) -> WorkflowPlan:
         """Create an intelligent workflow plan for a goal via LLM planning.
 
         Issue #5040: merged from EnhancedMultiAgentOrchestrator.
+        #10580/#10581: injects learned prompt template and similar-trajectory priors.
+        #10583: when AUTOBOT_PLAN_BEST_OF_N_ENABLED=true, samples N candidate plans
+        and executes the top-ranked; flag OFF (default) = exactly one plan, zero
+        extra judge calls, cost/behaviour unchanged.
         """
+        from autobot_shared.ssot_config import PLAN_BEST_OF_N_COUNT, PLAN_BEST_OF_N_ENABLED
+
         logger.info("Creating workflow plan for: %s", goal)
         try:
-            from agents.llm_failsafe_agent import get_robust_llm_response
+            planning_ctx = await self._fetch_planning_context(goal, context)
 
-            planning_prompt = self._build_planning_prompt(goal)
-            response = await get_robust_llm_response(planning_prompt, context)
-            plan_data = self._parse_planning_response(response, goal)
-            plan = await self._strategy_planner.build_workflow_plan(goal, plan_data)
+            if PLAN_BEST_OF_N_ENABLED:
+                plan = await self._select_best_plan(goal, context, planning_ctx, PLAN_BEST_OF_N_COUNT)
+            else:
+                plan = await self._generate_single_plan(goal, context, planning_ctx)
+
+            # #11015: stamp caller identity so the trajectory captured after
+            # execution is tagged with the tenant that owns it, keeping future
+            # retrieval isolated. Stored in the existing metadata dict (no schema
+            # change). Absent context → empty (untenanted), same as before.
+            ctx = context or {}
+            plan.metadata.setdefault("tenant_id", str(ctx.get("tenant_id") or ""))
+            plan.metadata.setdefault("user_id", str(ctx.get("user_id") or ""))
+
             self.active_workflows[plan.plan_id] = plan
             return plan
         except Exception as e:
@@ -678,6 +801,10 @@ class Orchestrator(_DeprecatedRequestMixin):
     async def get_agent_recommendations(self, capabilities_needed: Set) -> List[str]:
         """Get recommended agents for a task. Delegates to WorkflowRunner (#5058)."""
         return await self._runner.get_agent_recommendations(capabilities_needed)
+
+    async def get_agent_recommendations_scored(self, capabilities_needed: Set) -> List[Tuple[str, float]]:
+        """Get (agent, score) recommendations. Delegates to WorkflowRunner (#10660)."""
+        return await self._runner.get_agent_recommendations_scored(capabilities_needed)
 
     def get_performance_report(self) -> Dict[str, Any]:
         """Performance report. Delegates to WorkflowRunner (#5058)."""

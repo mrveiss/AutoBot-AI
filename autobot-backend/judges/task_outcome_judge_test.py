@@ -69,8 +69,16 @@ class TestTaskOutcomeJudge:
     async def test_get_outcomes_empty(self, judge, mock_redis):
         judge._redis_client = mock_redis
         mock_redis.lrange.return_value = []
-        outcomes = await judge.get_outcomes("unknown_type")
+        outcomes = await judge.get_outcomes("unknown_type", tenant_id="org1")
         assert outcomes == []
+
+    @pytest.mark.asyncio
+    async def test_get_outcomes_fails_closed_without_tenant(self, judge, mock_redis):
+        """GH#11071: no tenant → no Redis read, returns [] (can't see a shared bucket)."""
+        judge._redis_client = mock_redis
+        outcomes = await judge.get_outcomes("t", tenant_id="")
+        assert outcomes == []
+        mock_redis.lrange.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_get_outcomes_returns_records(self, judge, mock_redis):
@@ -85,15 +93,17 @@ class TestTaskOutcomeJudge:
             timestamp="2025-01-01T00:00:00",
         )
         mock_redis.lrange.return_value = [json.dumps(record.__dict__).encode()]
-        outcomes = await judge.get_outcomes("t")
+        outcomes = await judge.get_outcomes("t", tenant_id="org1")
         assert len(outcomes) == 1
         assert outcomes[0].score == 0.7
+        # GH#11071: read from the tenant-scoped key
+        assert mock_redis.lrange.await_args.args[0] == "task:outcomes:org1:t"
 
     @pytest.mark.asyncio
     async def test_clear_outcomes(self, judge, mock_redis):
         judge._redis_client = mock_redis
-        await judge.clear_outcomes("mytype")
-        mock_redis.delete.assert_awaited_once_with(REDIS_OUTCOMES_KEY.format(task_type="mytype"))
+        await judge.clear_outcomes("mytype", tenant_id="org1")
+        mock_redis.delete.assert_awaited_once_with(REDIS_OUTCOMES_KEY.format(tenant_id="org1", task_type="mytype"))
 
     @pytest.mark.asyncio
     async def test_persist_outcome_trims_list(self, judge, mock_redis):
@@ -115,9 +125,9 @@ class TestTaskOutcomeJudge:
             processing_time_ms=10.0,
             llm_model_used="test",
         )
-        await judge._persist_outcome("t", "goal", "output", "strategy", result)
+        await judge._persist_outcome("t", "goal", "output", "strategy", result, tenant_id="org1")
         mock_redis.ltrim.assert_awaited_once_with(
-            REDIS_OUTCOMES_KEY.format(task_type="t"), 0, MAX_OUTCOMES_PER_TYPE - 1
+            REDIS_OUTCOMES_KEY.format(tenant_id="org1", task_type="t"), 0, MAX_OUTCOMES_PER_TYPE - 1
         )
 
     @pytest.mark.asyncio
@@ -142,7 +152,7 @@ class TestTaskOutcomeJudge:
             llm_model_used="test",
         )
         # Should not raise
-        await judge._persist_outcome("t", "g", "o", "s", result)
+        await judge._persist_outcome("t", "g", "o", "s", result, tenant_id="org1")
 
     @pytest.mark.asyncio
     async def test_prepare_judgment_prompt_contains_goal(self):

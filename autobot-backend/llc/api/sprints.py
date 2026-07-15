@@ -31,11 +31,11 @@ Routes:
 """
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,10 +45,12 @@ from llc.deps import get_session
 from user_management.services import TenantContext
 
 from ..kb.collections import KbCollectionManager
-from ..models.enums import SprintStatus, WorkItemRelationType, WorkItemStatus
+from ..models.enums import ApprovalType, SprintStatus, WorkItemRelationType, WorkItemStatus
 from ..models.sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from ..models.work_item import LLCWorkItem, LLCWorkItemRelation
 from ..services.approval import ApprovalNotFoundError, ApprovalService, ApprovalStateError
+from ..services.disposal_policy import get_disposal_policy
+from ..services.project_disposal import dispose
 from ..services.sprint_autoclose import SprintAutoCloseService
 from ..services.sprint_planning import SprintNotFound, SprintPlanningService
 from ..services.timeline import compute_critical_path, duration_days
@@ -119,6 +121,15 @@ class ProgramResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CodeSourceSummary(BaseModel):
+    id: str
+    repo: Optional[str] = None
+    branch: Optional[str] = None
+    clone_path: Optional[str] = None
+    status: Optional[str] = None
+    error_message: Optional[str] = None
+
+
 class ProjectCreate(BaseModel):
     company_id: uuid.UUID
     program_id: Optional[uuid.UUID] = None
@@ -160,6 +171,14 @@ class ProjectResponse(BaseModel):
     # Card enrichment (#10232) — populated by list endpoints; defaults on detail reads.
     open_work_item_count: int = 0
     active_sprint_name: Optional[str] = None
+    # Company OS ↔ codebase-analytics link (#11129).
+    code_source_id: Optional[str] = None
+    code_source: Optional[CodeSourceSummary] = None
+    # Archive→dispose lifecycle (#11129 P2).
+    lifecycle_state: str = "active"
+    archived_at: Optional[datetime] = None
+    disposal_scheduled_at: Optional[datetime] = None
+    disposal_approval_id: Optional[uuid.UUID] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -271,19 +290,52 @@ def _enrich(model_cls, orm_obj, **extra):
 
 
 async def _enrich_projects(session: AsyncSession, projects: List[LLCProject]) -> List[ProjectResponse]:
-    """Attach open-work-item counts + the active sprint name to project cards."""
+    """Attach open-work-item counts, the active sprint name, and the linked
+    code-source summary to project cards.
+
+    #11406: code_source must be hydrated here (not only on attach / with-repos)
+    so a linked repo survives a plain project-list refetch — otherwise the card
+    reverts to the empty state on refresh.
+    """
     pids = [p.id for p in projects]
     open_counts = await _open_work_item_counts(session, pids)
     active = await _active_sprint_names(session, pids)
-    return [
-        _enrich(
+    enriched: List[ProjectResponse] = []
+    for p in projects:
+        resp = _enrich(
             ProjectResponse,
             p,
             open_work_item_count=open_counts.get(p.id, 0),
             active_sprint_name=active.get(p.id),
         )
-        for p in projects
-    ]
+        resp.code_source = await _project_source_summary(p.code_source_id)
+        enriched.append(resp)
+    return enriched
+
+
+async def _project_source_summary(code_source_id: Optional[str]) -> Optional[CodeSourceSummary]:
+    """Resolve a CodeSource to a summary DTO; returns None when id is absent or source missing."""
+    if not code_source_id:
+        return None
+    from api.codebase_analytics.source_storage import get_source  # noqa: PLC0415 — lazy to avoid heavy __init__
+
+    src = await get_source(code_source_id)
+    if not src:
+        return None
+    return CodeSourceSummary(
+        id=src.id,
+        repo=src.repo,
+        branch=src.branch,
+        clone_path=src.clone_path,
+        status=src.status.value,
+        error_message=src.error_message,
+    )
+
+
+class AttachRepoRequest(BaseModel):
+    repo: str = Field(..., pattern=r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+    credential_id: Optional[str] = None
+    branch: str = "main"
 
 
 @router.get("/companies/{company_id}/portfolios", response_model=List[PortfolioResponse])
@@ -535,6 +587,33 @@ async def create_project(
     return project
 
 
+@router.get("/projects/with-repos", response_model=List[ProjectResponse])
+async def list_projects_with_repos(
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> List[ProjectResponse]:
+    """Return all projects in the caller's org that have a code source linked (#11129)."""
+    rows = (
+        (
+            await session.execute(
+                select(LLCProject).where(
+                    LLCProject.company_id == ctx.org_id,
+                    LLCProject.code_source_id.isnot(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    out: List[ProjectResponse] = []
+    for p in rows:
+        resp = ProjectResponse.model_validate(p)
+        resp.code_source = await _project_source_summary(p.code_source_id)
+        out.append(resp)
+    return out
+
+
 @router.get("/projects/{project_id}", response_model=ProjectResponse)
 async def get_project(
     project_id: uuid.UUID,
@@ -548,6 +627,54 @@ async def get_project(
     if project is None or str(project.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+@router.post("/projects/{project_id}/repo", response_model=ProjectResponse)
+async def attach_project_repo(
+    project_id: uuid.UUID,
+    body: AttachRepoRequest,
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> ProjectResponse:
+    """Attach a GitHub repo to a project by creating a CodeSource and storing its id (#11129)."""
+    project = (await session.execute(select(LLCProject).where(LLCProject.id == project_id))).scalar_one_or_none()
+    if project is None or str(project.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    # Re-attach: previous source link is overwritten; the old source object is left intact
+    # (lifecycle disposal is handled in Phase 2).
+    from api.codebase_analytics import source_service  # noqa: PLC0415 — lazy to avoid heavy __init__
+
+    src = await source_service.create_github_source(
+        name=f"{project.name} ({body.repo})",
+        repo=body.repo,
+        credential_id=body.credential_id,
+        branch=body.branch,
+        owner_id=str(_current_user.get("id") or _current_user.get("user_id") or ""),
+    )
+    project.code_source_id = src.id
+    await session.commit()
+    await session.refresh(project)
+    resp = ProjectResponse.model_validate(project)
+    resp.code_source = await _project_source_summary(project.code_source_id)
+    return resp
+
+
+@router.delete("/projects/{project_id}/repo", response_model=ProjectResponse)
+async def detach_project_repo(
+    project_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> ProjectResponse:
+    """Unlink the repo from a project; the CodeSource record survives (#11129)."""
+    project = (await session.execute(select(LLCProject).where(LLCProject.id == project_id))).scalar_one_or_none()
+    if project is None or str(project.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    project.code_source_id = None  # unlink only; source survives (deleted on disposal, Phase 2)
+    await session.commit()
+    await session.refresh(project)
+    return ProjectResponse.model_validate(project)
 
 
 @router.patch("/projects/{project_id}", response_model=ProjectResponse)
@@ -570,20 +697,106 @@ async def update_project(
     return project
 
 
-@router.delete("/projects/{project_id}", status_code=204)
-async def delete_project(
+async def _load_owned_project(project_id: uuid.UUID, session: AsyncSession, ctx: TenantContext) -> LLCProject:
+    """Load project by id; 404 when missing or owned by a different org (IDOR guard)."""
+    result = await session.execute(select(LLCProject).where(LLCProject.id == project_id))
+    project = result.scalar_one_or_none()
+    if project is None or str(project.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+@router.post("/projects/{project_id}/archive", response_model=ProjectResponse)
+async def archive_project(
     project_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> None:
-    result = await session.execute(select(LLCProject).where(LLCProject.id == project_id))
-    project = result.scalar_one_or_none()
-    # IDOR guard (#10148).
-    if project is None or str(project.company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=404, detail="Project not found")
-    await session.delete(project)
+) -> ProjectResponse:
+    """Move a project to the archived lifecycle state (#11129 P2)."""
+    project = await _load_owned_project(project_id, session, ctx)
+    project.lifecycle_state = "archived"
+    project.archived_at = datetime.now(timezone.utc)
     await session.commit()
+    await session.refresh(project)
+    return ProjectResponse.model_validate(project)
+
+
+@router.post("/projects/{project_id}/restore", response_model=ProjectResponse)
+async def restore_project(
+    project_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> ProjectResponse:
+    """Restore an archived / pending-disposal project to active (#11129 P2)."""
+    project = await _load_owned_project(project_id, session, ctx)
+    if project.lifecycle_state not in ("archived", "pending_disposal"):
+        raise HTTPException(status_code=409, detail="Project is not archived")
+    project.lifecycle_state = "active"
+    project.archived_at = None
+    project.disposal_scheduled_at = None
+    project.disposal_approval_id = None
+    await session.commit()
+    await session.refresh(project)
+    return ProjectResponse.model_validate(project)
+
+
+@router.post("/projects/{project_id}/dispose")
+async def dispose_project(
+    project_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> dict:
+    """Dispose an archived project (immediate / scheduled / approval-gated per SLM policy; #11129 P2)."""
+    project = await _load_owned_project(project_id, session, ctx)
+    if project.lifecycle_state != "archived":
+        raise HTTPException(status_code=409, detail="Project must be archived before disposal")
+    return await _apply_disposal(project, session, ctx, current_user)
+
+
+async def _apply_disposal(project: LLCProject, session: AsyncSession, ctx: TenantContext, current_user: dict) -> dict:
+    """Consult the SLM disposal policy and dispose immediately / schedule / gate on approval."""
+    policy = await get_disposal_policy()
+    if policy.require_approval:
+        approval = await _approval_svc.request_approval(
+            session,
+            company_id=ctx.org_id,
+            gate_type=ApprovalType.PROJECT_DISPOSAL,
+            payload={"project_id": str(project.id)},
+            requested_by=uuid.UUID(str(current_user["id"])),
+        )
+        project.lifecycle_state = "pending_disposal"
+        project.disposal_approval_id = approval.id
+        if policy.retention_days > 0:
+            project.disposal_scheduled_at = datetime.now(timezone.utc) + timedelta(days=policy.retention_days)
+        await session.commit()
+        # Notify reviewers the disposal gate is pending (Redis event, post-commit).
+        await _approval_svc.publish_requested(approval)
+        return {"result": "pending_approval", "approval_id": str(approval.id)}
+    if policy.retention_days > 0:
+        project.lifecycle_state = "pending_disposal"
+        project.disposal_scheduled_at = datetime.now(timezone.utc) + timedelta(days=policy.retention_days)
+        await session.commit()
+        return {"result": "scheduled", "disposal_scheduled_at": project.disposal_scheduled_at.isoformat()}
+    await dispose(project, session)
+    await session.commit()
+    return {"result": "disposed"}
+
+
+@router.delete("/projects/{project_id}", status_code=204)
+async def delete_project(
+    project_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> None:
+    """Delete a project — must be archived first; routes through the disposal workflow (#11129 P2)."""
+    project = await _load_owned_project(project_id, session, ctx)
+    if project.lifecycle_state != "archived":
+        raise HTTPException(status_code=409, detail="Archive the project before deleting")
+    await _apply_disposal(project, session, ctx, current_user)
 
 
 # ------------------------------------------------------------------ Sprint routes

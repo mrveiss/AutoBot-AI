@@ -225,6 +225,7 @@ See Also:
 - docs/architecture/TERMINAL_ARCHITECTURE_DIAGRAM.md - System architecture
 """
 
+import asyncio
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -236,6 +237,8 @@ from api.schemas_agent import (
     AgentTerminalResumeResponse,
 )
 from api.schemas_system import (
+    TaskAnswerRequest,
+    TaskSteeringRequest,
     TerminalApproveCommandRequest,
     TerminalCreateSessionRequest,
     TerminalExecuteCommandRequest,
@@ -580,6 +583,108 @@ async def submit_tool_approval(
     return {"status": "ok", "approval_id": approval_id, "approved": request.approved}
 
 
+@router.post("/tasks/{task_id}/steer")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="steer_agent_task",
+    error_code_prefix="AGENT_TERMINAL",
+)
+async def steer_agent_task(
+    task_id: str,
+    request: TaskSteeringRequest,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """Send a steering message to a running agent task without stopping it (#10543).
+
+    The guidance is queued in the loop's steering inbox and drained at the top
+    of the next ANALYZE_EVENTS phase.  The loop continues without restart;
+    the agent acknowledges the guidance in its next tool selection.
+
+    Returns 403 when the caller does not own the task (IDOR fix, #10553).
+    Returns 409 when no running loop owns the given task_id (stale or wrong ID).
+    Mirrors the approval-response path: publish a STEERING event so the live
+    event stream records the guidance in the task's trajectory.
+    """
+    import uuid
+
+    from events.stream_manager import RedisEventStreamManager
+    from events.types import create_steering_event
+    from services.task_owner import verify_task_owner
+
+    user_id = current_user.get("user_id") or current_user.get("sub") or current_user.get("username", "")
+    user_role = current_user.get("role", "")
+    if not await verify_task_owner(task_id, user_id, user_role):
+        raise HTTPException(status_code=403, detail="Not authorized to steer this task")
+
+    steering_id = str(uuid.uuid4())
+    event = create_steering_event(
+        steering_id=steering_id,
+        guidance=request.guidance,
+        task_id=task_id,
+    )
+    stream = RedisEventStreamManager()
+    await stream.publish(event)
+    logger.info(
+        "[API] Steering message published: task_id=%s steering_id=%s",
+        task_id,
+        steering_id,
+    )
+    return {
+        "status": "queued",
+        "task_id": task_id,
+        "steering_id": steering_id,
+        "guidance": request.guidance,
+    }
+
+
+@router.post("/tasks/{task_id}/answer")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="answer_human_question",
+    error_code_prefix="AGENT_TERMINAL",
+)
+async def answer_human_question(
+    task_id: str,
+    request: TaskAnswerRequest,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """Deliver a human's answer to a suspended ask_human() call (#10553).
+
+    The answer is published as a HUMAN_ANSWER event on the event stream so the
+    waiting loop can pick it up via its answer inbox.  Mirrors the steer endpoint
+    — publish-then-return; no blocking.
+
+    Returns 403 when the caller does not own the task (IDOR fix, #10553).
+    """
+    from events.stream_manager import RedisEventStreamManager
+    from events.types import create_human_answer_event
+    from services.task_owner import verify_task_owner
+
+    user_id = current_user.get("user_id") or current_user.get("sub") or current_user.get("username", "")
+    user_role = current_user.get("role", "")
+    if not await verify_task_owner(task_id, user_id, user_role):
+        raise HTTPException(status_code=403, detail="Not authorized to answer this task's question")
+
+    event = create_human_answer_event(
+        question_id=request.question_id,
+        answer=request.answer,
+        task_id=task_id,
+    )
+    stream = RedisEventStreamManager()
+    await stream.publish(event)
+    logger.info(
+        "[API] Human answer published: task_id=%s question_id=%s",
+        task_id,
+        request.question_id,
+    )
+    return {
+        "status": "delivered",
+        "task_id": task_id,
+        "question_id": request.question_id,
+        "answer": request.answer,
+    }
+
+
 @router.post("/sessions/{session_id}/interrupt", response_model=AgentTerminalInterruptResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -767,6 +872,8 @@ from datetime import datetime, timezone
 # In-memory store for pending host selection requests
 # In production, this would use Redis for persistence
 _pending_host_selections: Dict[str, Dict] = {}
+# Issue #10783 C: guard all check-then-act and iterate-while-mutate sequences
+_pending_host_selections_lock = asyncio.Lock()
 
 
 @router.post("/host-selection/request", response_model=AgentTerminalHostSelectionRequestResponse)
@@ -799,20 +906,21 @@ async def request_host_selection(
     request_id = str(uuid.uuid4())
 
     # Create pending selection request
-    _pending_host_selections[request_id] = {
-        "request_id": request_id,
-        "agent_session_id": request.agent_session_id,
-        "command": request.command,
-        "purpose": request.purpose,
-        "preferred_host_id": request.preferred_host_id,
-        "allow_auto_select": request.allow_auto_select,
-        "status": "pending_selection",
-        "selected_host_id": None,
-        "selected_host_name": None,
-        "connection_info": None,
-        "created_at": datetime.now(tz=timezone.utc).isoformat(),
-        "updated_at": None,
-    }
+    async with _pending_host_selections_lock:
+        _pending_host_selections[request_id] = {
+            "request_id": request_id,
+            "agent_session_id": request.agent_session_id,
+            "command": request.command,
+            "purpose": request.purpose,
+            "preferred_host_id": request.preferred_host_id,
+            "allow_auto_select": request.allow_auto_select,
+            "status": "pending_selection",
+            "selected_host_id": None,
+            "selected_host_name": None,
+            "connection_info": None,
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
+            "updated_at": None,
+        }
 
     logger.info(f"Host selection requested: {request_id}")
 
@@ -844,10 +952,10 @@ async def get_host_selection(
     - status: "pending_selection", "selected", or "cancelled"
     - If selected: includes host details and connection info
     """
-    if request_id not in _pending_host_selections:
-        raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
-
-    selection = _pending_host_selections[request_id]
+    async with _pending_host_selections_lock:
+        if request_id not in _pending_host_selections:
+            raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
+        selection = dict(_pending_host_selections[request_id])
 
     return {
         "request_id": selection["request_id"],
@@ -892,28 +1000,30 @@ async def submit_host_selection(
         username: SSH username
         remember_choice: Whether to use this host for future SSH commands
     """
-    if request_id not in _pending_host_selections:
-        raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
+    async with _pending_host_selections_lock:
+        if request_id not in _pending_host_selections:
+            raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
 
-    selection = _pending_host_selections[request_id]
+        selection = _pending_host_selections[request_id]
 
-    if selection["status"] != "pending_selection":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Host selection request {request_id} is not pending (status: {selection['status']})",
-        )
+        if selection["status"] != "pending_selection":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Host selection request {request_id} is not pending (status: {selection['status']})",
+            )
 
-    # Update selection with user's choice
-    selection["status"] = "selected"
-    selection["selected_host_id"] = host_id
-    selection["selected_host_name"] = host_name
-    selection["connection_info"] = {
-        "host": host,
-        "ssh_port": ssh_port,
-        "username": username,
-    }
-    selection["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
-    selection["remember_choice"] = remember_choice
+        # Update selection with user's choice
+        selection["status"] = "selected"
+        selection["selected_host_id"] = host_id
+        selection["selected_host_name"] = host_name
+        selection["connection_info"] = {
+            "host": host,
+            "ssh_port": ssh_port,
+            "username": username,
+        }
+        selection["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
+        selection["remember_choice"] = remember_choice
+        connection_info = dict(selection["connection_info"])
 
     logger.info(f"Host selected for request {request_id}: {host_name} ({username}@{host}:{ssh_port})")
 
@@ -922,7 +1032,7 @@ async def submit_host_selection(
         "request_id": request_id,
         "selected_host_id": host_id,
         "selected_host_name": host_name,
-        "connection_info": selection["connection_info"],
+        "connection_info": connection_info,
     }
 
 
@@ -943,20 +1053,21 @@ async def cancel_host_selection(
 
     Called by frontend when user closes the dialog without selecting.
     """
-    if request_id not in _pending_host_selections:
-        raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
+    async with _pending_host_selections_lock:
+        if request_id not in _pending_host_selections:
+            raise HTTPException(status_code=404, detail=f"Host selection request {request_id} not found")
 
-    selection = _pending_host_selections[request_id]
+        selection = _pending_host_selections[request_id]
 
-    if selection["status"] != "pending_selection":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Host selection request {request_id} is not pending (status: {selection['status']})",
-        )
+        if selection["status"] != "pending_selection":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Host selection request {request_id} is not pending (status: {selection['status']})",
+            )
 
-    # Mark as cancelled
-    selection["status"] = "cancelled"
-    selection["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
+        # Mark as cancelled
+        selection["status"] = "cancelled"
+        selection["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 
     logger.info(f"Host selection cancelled for request {request_id}")
 
@@ -982,16 +1093,17 @@ async def list_pending_host_selections(
 
     Frontend uses this to show any pending selection dialogs on page load.
     """
-    pending = [
-        {
-            "request_id": s["request_id"],
-            "command": s["command"],
-            "purpose": s["purpose"],
-            "created_at": s["created_at"],
-        }
-        for s in _pending_host_selections.values()
-        if s["status"] == "pending_selection"
-    ]
+    async with _pending_host_selections_lock:
+        pending = [
+            {
+                "request_id": s["request_id"],
+                "command": s["command"],
+                "purpose": s["purpose"],
+                "created_at": s["created_at"],
+            }
+            for s in _pending_host_selections.values()
+            if s["status"] == "pending_selection"
+        ]
 
     return {
         "status": "success",

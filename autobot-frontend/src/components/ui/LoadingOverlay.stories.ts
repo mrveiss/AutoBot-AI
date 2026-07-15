@@ -15,7 +15,7 @@ const meta = {
 } as Meta<typeof LoadingOverlay>
 
 export default meta
-type Story = StoryObj<any>
+type Story = StoryObj<Record<string, unknown>>
 
 export const Idle: Story = {
   render: () => ({

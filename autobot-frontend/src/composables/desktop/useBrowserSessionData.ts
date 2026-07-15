@@ -68,9 +68,9 @@ export function useBrowserSessionData() {
       return null
     }
     try {
-      return (await apiClient.get<any>(
+      return await apiClient.get<BrowserSessionResponse>(
         `${getApiBase()}/research-browser/browser/${sessionId}`
-      )) as BrowserSessionResponse
+      )
     } catch (err) {
       logger.warn('Could not get session info, using manual mode', err)
       return null
@@ -101,10 +101,10 @@ export function useBrowserSessionData() {
     sessionId: string
   ): Promise<PlaywrightNavigationResponse | null> {
     try {
-      return (await apiClient.post<any>(`${playwrightApiUrl}/navigate`, {
+      return await apiClient.post<PlaywrightNavigationResponse>(`${playwrightApiUrl}/navigate`, {
         url,
         session_id: sessionId
-      })) as unknown as PlaywrightNavigationResponse
+      })
     } catch (err) {
       logger.warn('Playwright navigation failed, relying on VNC', err)
       return null
@@ -115,34 +115,34 @@ export function useBrowserSessionData() {
    * Playwright back navigation.
    */
   async function navigateBack(): Promise<PlaywrightNavigationResponse> {
-    return (await apiClient.post<any>(
+    return await apiClient.post<PlaywrightNavigationResponse>(
       `${getApiBase()}/playwright/back`
-    )) as unknown as PlaywrightNavigationResponse
+    )
   }
 
   /**
    * Playwright forward navigation.
    */
   async function navigateForward(): Promise<PlaywrightNavigationResponse> {
-    return (await apiClient.post<any>(
+    return await apiClient.post<PlaywrightNavigationResponse>(
       `${getApiBase()}/playwright/forward`
-    )) as unknown as PlaywrightNavigationResponse
+    )
   }
 
   /**
    * Playwright page reload.
    */
   async function reloadPage(): Promise<PlaywrightNavigationResponse> {
-    return (await apiClient.post<any>(
+    return await apiClient.post<PlaywrightNavigationResponse>(
       `${getApiBase()}/playwright/reload`
-    )) as unknown as PlaywrightNavigationResponse
+    )
   }
 
   /**
    * Run a DuckDuckGo web search via Playwright.
    */
   async function webSearch(playwrightApiUrl: string, query: string): Promise<unknown> {
-    return await apiClient.post<any>(`${playwrightApiUrl}/search`, {
+    return await apiClient.post<unknown>(`${playwrightApiUrl}/search`, {
       query,
       search_engine: 'duckduckgo'
     })
@@ -152,7 +152,7 @@ export function useBrowserSessionData() {
    * Run Playwright frontend tests against the current origin.
    */
   async function runFrontendTests(playwrightApiUrl: string): Promise<unknown> {
-    return await apiClient.post<any>(`${playwrightApiUrl}/test-frontend`, {
+    return await apiClient.post<unknown>(`${playwrightApiUrl}/test-frontend`, {
       frontend_url: window.location.origin
     })
   }
@@ -161,7 +161,7 @@ export function useBrowserSessionData() {
    * Send a test automation message via Playwright.
    */
   async function sendTestMessage(playwrightApiUrl: string): Promise<unknown> {
-    return await apiClient.post<any>(`${playwrightApiUrl}/send-test-message`, {
+    return await apiClient.post<unknown>(`${playwrightApiUrl}/send-test-message`, {
       message: 'Test message from browser automation',
       frontend_url: window.location.origin
     })
@@ -182,10 +182,10 @@ export function useBrowserSessionData() {
     sessionId: string,
     goal = ''
   ): Promise<SnapshotWithRegionsResult> {
-    const envelope = await apiClient.post<any>(
+    const envelope = await apiClient.post<{ data: Record<string, unknown> }>(
       `${getApiBase()}/playwright/snapshot-with-regions`,
       { session_id: sessionId, goal }
-    ) as { data: Record<string, unknown> }
+    )
     const payload = envelope?.data ?? (envelope as unknown as Record<string, unknown>)
     const rawRegions = (payload.regions as Array<Record<string, unknown>>) ?? []
     return {
@@ -205,10 +205,10 @@ export function useBrowserSessionData() {
     sessionId: string,
     goal: string
   ): Promise<PageRegion[]> {
-    const envelope = await apiClient.post<any>(
+    const envelope = await apiClient.post<{ data: Record<string, unknown> }>(
       `${getApiBase()}/playwright/ai-propose-regions`,
       { session_id: sessionId, goal }
-    ) as { data: Record<string, unknown> }
+    )
     const payload = envelope?.data ?? (envelope as unknown as Record<string, unknown>)
     const rawRegions = (payload.proposed_regions as Array<Record<string, unknown>>) ?? []
     return rawRegions.map(r => ({

@@ -468,7 +468,7 @@ async def test_load_plugin_returns_none_when_required_env_missing(monkeypatch, c
         ]
     )
 
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
 
     with caplog.at_level("ERROR"):
         result = await loader.load_plugin(manifest)
@@ -497,7 +497,7 @@ async def test_load_plugin_succeeds_with_optional_env_missing(monkeypatch, caplo
         ],
     )
 
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
 
     with caplog.at_level("INFO"):
         plugin = await loader.load_plugin(manifest)
@@ -526,7 +526,7 @@ async def test_load_plugin_succeeds_when_all_required_env_set(monkeypatch) -> No
         ],
     )
 
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
 
     plugin = await loader.load_plugin(manifest)
     assert plugin is not None
@@ -566,7 +566,7 @@ async def test_get_env_status_returns_correct_shape(monkeypatch) -> None:
             },
         ],
     )
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
     await loader.load_plugin(manifest)
 
     status = loader.get_env_status("status-shape-plugin")
@@ -619,7 +619,7 @@ async def test_get_env_status_never_returns_value(monkeypatch) -> None:
             }
         ],
     )
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
     await loader.load_plugin(manifest)
 
     status = loader.get_env_status("leak-check-plugin")
@@ -692,7 +692,7 @@ async def test_load_plugin_validates_hook_names(monkeypatch) -> None:
     PluginRegistry().clear()
     loader = PluginLoader([])
     manifest = _make_manifest(name="hook-warn-plugin", hooks=["totally_invalid_hook"])
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -710,7 +710,7 @@ async def test_load_plugin_no_warning_for_known_hooks(monkeypatch) -> None:
     PluginRegistry().clear()
     loader = PluginLoader([])
     manifest = _make_manifest(name="hook-ok-plugin", hooks=[Hook.ON_STARTUP.value])
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -743,7 +743,7 @@ async def test_load_plugin_raises_plugin_load_error_when_required_env_missing(mo
         name="ple-test-plugin",
         required_env=[{"name": "TEST_PLE_VAR", "description": "x", "required": True}],
     )
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
 
     # Bypass the outer try/except to observe the raw exception
     with pytest.raises(PluginLoadError, match="TEST_PLE_VAR"):
@@ -767,10 +767,175 @@ async def test_load_plugin_returns_none_and_logs_when_required_env_missing(monke
         name="ple-bc-plugin",
         required_env=[{"name": "TEST_REQ_LOAD_FAIL_V2", "description": "x", "required": True}],
     )
-    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep: _ConcretePlugin)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, plugin_dir=None: _ConcretePlugin)
 
     with caplog.at_level("ERROR"):
         result = await loader.load_plugin(manifest)
 
     assert result is None
     assert "TEST_REQ_LOAD_FAIL_V2" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# GH#11522 — config_schema validation helpers
+# ---------------------------------------------------------------------------
+
+
+def test_validate_config_schema_accepts_valid_draft202012() -> None:
+    from plugin_sdk.loader import _validate_config_schema
+
+    _validate_config_schema("p", {"type": "object", "properties": {"host": {"type": "string"}}})
+
+
+def test_validate_config_schema_accepts_empty_schema() -> None:
+    from plugin_sdk.loader import _validate_config_schema
+
+    _validate_config_schema("p", {})
+
+
+def test_validate_config_schema_rejects_invalid_type() -> None:
+    from plugin_sdk.loader import _validate_config_schema
+
+    with pytest.raises(PluginLoadError, match="not valid JSON Schema"):
+        _validate_config_schema("p", {"type": "totally_invalid_type"})
+
+
+def test_validate_config_against_schema_accepts_conforming() -> None:
+    from plugin_sdk.loader import _validate_config_against_schema
+
+    schema = {
+        "type": "object",
+        "properties": {"host": {"type": "string"}, "port": {"type": "integer"}},
+        "required": ["host"],
+    }
+    _validate_config_against_schema("p", {"host": "localhost", "port": 8080}, schema)
+
+
+def test_validate_config_against_schema_rejects_wrong_type() -> None:
+    from plugin_sdk.loader import _validate_config_against_schema
+
+    schema = {"type": "object", "properties": {"port": {"type": "integer"}}}
+    with pytest.raises(PluginLoadError, match="does not conform to config_schema"):
+        _validate_config_against_schema("p", {"port": "not-an-int"}, schema)
+
+
+def test_validate_config_against_schema_field_level_detail() -> None:
+    """Error message must name the offending field."""
+    from plugin_sdk.loader import _validate_config_against_schema
+
+    schema = {
+        "type": "object",
+        "properties": {"timeout": {"type": "integer"}},
+        "required": ["timeout"],
+    }
+    with pytest.raises(PluginLoadError, match="timeout"):
+        _validate_config_against_schema("p", {}, schema)
+
+
+def test_validate_config_against_schema_missing_required() -> None:
+    from plugin_sdk.loader import _validate_config_against_schema
+
+    schema = {
+        "type": "object",
+        "properties": {"host": {"type": "string"}},
+        "required": ["host"],
+    }
+    with pytest.raises(PluginLoadError):
+        _validate_config_against_schema("p", {}, schema)
+
+
+# ---------------------------------------------------------------------------
+# GH#11522 — load_plugin enforces config_schema at load time
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_invalid_schema_returns_none_and_logs(monkeypatch, caplog) -> None:
+    """A manifest with an invalid config_schema returns None (outer handler swallows PluginLoadError)."""
+    from plugin_sdk.loader import PluginLoader
+
+    PluginRegistry().clear()
+    loader = PluginLoader([])
+    manifest = _make_manifest(
+        name="bad-schema-plugin",
+        config_schema={"type": "totally_invalid_type"},
+    )
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, d=None: _ConcretePlugin)
+
+    with caplog.at_level("ERROR"):
+        result = await loader.load_plugin(manifest)
+
+    assert result is None
+    assert "not valid JSON Schema" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_nonconforming_config_returns_none_and_logs(monkeypatch, caplog) -> None:
+    """A non-conforming config returns None and logs the field-level error."""
+    from plugin_sdk.loader import PluginLoader
+
+    PluginRegistry().clear()
+    loader = PluginLoader([])
+    schema = {"type": "object", "properties": {"host": {"type": "string"}}, "required": ["host"]}
+    manifest = _make_manifest(name="schema-plugin", config_schema=schema)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, d=None: _ConcretePlugin)
+
+    with caplog.at_level("ERROR"):
+        result = await loader.load_plugin(manifest, config={"host": 999})
+
+    assert result is None
+    assert "does not conform to config_schema" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_conforming_config_loads(monkeypatch) -> None:
+    """A valid schema + conforming config loads successfully."""
+    from plugin_sdk.loader import PluginLoader
+
+    PluginRegistry().clear()
+    schema = {"type": "object", "properties": {"host": {"type": "string"}}, "required": ["host"]}
+    loader = PluginLoader([])
+    manifest = _make_manifest(name="ok-schema-plugin", config_schema=schema)
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, d=None: _ConcretePlugin)
+
+    plugin = await loader.load_plugin(manifest, config={"host": "localhost"})
+    assert plugin is not None
+
+
+@pytest.mark.asyncio
+async def test_load_plugin_empty_schema_any_config_loads(monkeypatch) -> None:
+    """An absent config_schema keeps today's behaviour (no validation)."""
+    from plugin_sdk.loader import PluginLoader
+
+    PluginRegistry().clear()
+    loader = PluginLoader([])
+    manifest = _make_manifest(name="noschema-plugin")
+    monkeypatch.setattr(loader, "_import_plugin_class", lambda ep, d=None: _ConcretePlugin)
+
+    plugin = await loader.load_plugin(manifest, config={"anything": True})
+    assert plugin is not None
+
+
+def test_validate_config_valid_schema_with_unrenderable_properties() -> None:
+    """A valid schema whose properties are nested objects (unrenderable by the
+    UI form) must still pass load-time validation — renderability is a
+    frontend concern, not a load gate (#11522 review m-6)."""
+    from plugin_sdk.loader import _validate_config_against_schema, _validate_config_schema
+
+    schema = {
+        "type": "object",
+        "properties": {"nested": {"type": "object", "properties": {"inner": {"type": "string"}}}},
+    }
+    _validate_config_schema("p", schema)  # must not raise
+    _validate_config_against_schema("p", {"nested": {"inner": "ok"}}, schema)  # must not raise
+
+
+def test_validate_plugin_config_public_wrapper() -> None:
+    """Public wrapper validates config and skips cleanly on empty schema."""
+    from plugin_sdk.loader import validate_plugin_config
+
+    validate_plugin_config("p", {"anything": 1}, {})  # empty schema → no-op
+    schema = {"type": "object", "properties": {"timeout": {"type": "integer"}}}
+    validate_plugin_config("p", {"timeout": 5}, schema)  # conforming → no raise
+    with pytest.raises(PluginLoadError, match="timeout"):
+        validate_plugin_config("p", {"timeout": "not-an-int"}, schema)

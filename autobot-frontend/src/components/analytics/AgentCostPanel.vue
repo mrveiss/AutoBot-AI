@@ -146,7 +146,6 @@
 
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import api from '@/services/api'
@@ -154,7 +153,6 @@ import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('AgentCostPanel')
-const { t } = useI18n()
 
 interface AgentCost {
   agent_id: string
@@ -220,7 +218,7 @@ const closeBudgetDialog = () => {
 const saveBudget = async () => {
   budgetDialog.value.saving = true
   try {
-    await api.put<any>(
+    await api.put<unknown>(
       `${getApiBase()}/cost/by-agent/${budgetDialog.value.agentId}/budget`,
       { budget_monthly_usd: budgetDialog.value.amount }
     )

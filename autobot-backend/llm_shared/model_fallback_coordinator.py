@@ -28,10 +28,12 @@ import os
 from typing import TYPE_CHECKING, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.singleton_factory import lazy_singleton
 
 from .fallback_chain import get_fallback_chain_manager
 from .models import LLMRequest, LLMResponse
 from .optimization.rate_limiter import RateLimitError
+from .provider_degradation import get_degradation_store
 
 if TYPE_CHECKING:
     from .provider_registry import ProviderRegistry
@@ -102,6 +104,7 @@ class ModelFallbackCoordinator:
                     current_model=current_model,
                     attempt_count=attempt + 1,
                     chain_tried=chain_tried,
+                    degraded_skipped=request.metadata.get("degraded_skipped"),
                 )
                 if fallback_used:
                     logger.info(
@@ -120,6 +123,20 @@ class ModelFallbackCoordinator:
                     provider=current_provider or "",
                     error=str(exc),
                 )
+                # Mark the exhausted provider:model degraded so sibling workers
+                # skip it immediately (Issue #11519).  Use the provider the
+                # registry actually resolved at dispatch time — the request may
+                # carry no provider at all.  Marking happens before the
+                # max-attempts break so the final provider is marked too.
+                failed_provider = request.metadata.get("selected_provider") or current_provider
+                if failed_provider:
+                    await get_degradation_store().mark_degraded(failed_provider, current_model or None)
+                else:
+                    logger.debug(
+                        "degradation: provider unresolved for model=%r — mark skipped",
+                        current_model,
+                    )
+
                 if attempt >= max_attempts:
                     logger.warning(
                         "quota-fallback: all %d fallback attempts exhausted for model=%r",
@@ -161,6 +178,7 @@ class ModelFallbackCoordinator:
             attempt_count=len(chain_tried),
             chain_tried=chain_tried,
             exhausted=True,
+            degraded_skipped=request.metadata.get("degraded_skipped"),
         )
         return last_error_response
 
@@ -212,6 +230,7 @@ class ModelFallbackCoordinator:
         attempt_count: int,
         chain_tried: list[str],
         exhausted: bool = False,
+        degraded_skipped: list[str] | None = None,
     ) -> None:
         """Extend response.provider_metadata with fallback audit fields."""
         if response.provider_metadata is None:
@@ -226,6 +245,7 @@ class ModelFallbackCoordinator:
                 "attempt_count": attempt_count,
                 "fallback_chain_tried": chain_tried,
                 "fallback_exhausted": exhausted,
+                "degraded_skipped": degraded_skipped or [],
             }
         )
 
@@ -234,15 +254,7 @@ class ModelFallbackCoordinator:
 # Singleton
 # ---------------------------------------------------------------------------
 
-_coordinator: ModelFallbackCoordinator | None = None
-
-
-def get_fallback_coordinator() -> ModelFallbackCoordinator:
-    """Return the process-level ModelFallbackCoordinator singleton."""
-    global _coordinator
-    if _coordinator is None:
-        _coordinator = ModelFallbackCoordinator()
-    return _coordinator
+get_fallback_coordinator = lazy_singleton(ModelFallbackCoordinator)
 
 
 __all__ = ["ModelFallbackCoordinator", "get_fallback_coordinator"]

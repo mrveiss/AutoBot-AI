@@ -8,7 +8,6 @@
  */
 
 import { ref, computed, toRef, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
 import { useBatchSelection } from '@/composables/useBatchSelection'
 import { useFocusTrap } from '@/composables/useFocusTrap'
@@ -16,7 +15,6 @@ import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
 
-const { t } = useI18n()
 const { sessionPresence, shareSecretWithSession } = useSessionCollaboration()
 
 // Props

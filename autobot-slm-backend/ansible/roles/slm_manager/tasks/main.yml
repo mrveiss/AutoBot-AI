@@ -217,13 +217,13 @@
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
 
-- name: "SLM | Remove stale venv if not Python 3.12"
+- name: "SLM | Remove stale venv if not Python 3.14"
   ansible.builtin.file:
     path: "{{ slm_backend_dir }}/venv"
     state: absent
   when:
     - slm_requirements_stat.stat.exists
-    - _venv_py_version.rc != 0 or _venv_py_version.stdout != '3.12'
+    - _venv_py_version.rc != 0 or _venv_py_version.stdout != '3.14'
   tags: ['slm', 'backend']
 
 # #7052: also detect partially-corrupted venv (correct python version but
@@ -237,7 +237,7 @@
   when:
     - slm_requirements_stat.stat.exists
     - _venv_py_version.rc == 0
-    - _venv_py_version.stdout == '3.12'
+    - _venv_py_version.stdout == '3.14'
   tags: ['slm', 'backend']
 
 - name: "SLM | Remove broken venv when health check failed (#7052)"
@@ -249,9 +249,9 @@
     - (_slm_venv_health.rc | default(0)) != 0
   tags: ['slm', 'backend']
 
-- name: "SLM | Create Python 3.12 virtual environment"
+- name: "SLM | Create Python 3.14 virtual environment"
   ansible.builtin.command:
-    cmd: python3.12 -m venv {{ slm_backend_dir }}/venv
+    cmd: python3.14 -m venv {{ slm_backend_dir }}/venv
     creates: "{{ slm_backend_dir }}/venv/bin/python"
   become_user: "{{ slm_user }}"
   when: slm_requirements_stat.stat.exists
@@ -276,6 +276,44 @@
       - "--exclude=*.egg-info"
       - "--exclude=.git"
   when: slm_requirements_stat.stat.exists
+  tags: ['slm', 'backend']
+
+# Issue #10912: The drift/resolve sync removes the autobot_shared symlink
+# inside the SLM backend directory because the symlink is not present in the
+# code_source tree.  Without it the restarted process dies with
+# ModuleNotFoundError.  Ensure the symlink exists after every sync so that
+# code-sync restores are self-correcting even without Ansible.
+#
+# Step 1: Stat the embedded path to distinguish a real directory (must be
+# removed before a symlink can be created) from an existing symlink.
+- name: "SLM | Stat embedded autobot_shared path in SLM backend dir (#10912)"
+  ansible.builtin.stat:
+    path: "{{ slm_backend_dir }}/autobot_shared"
+  register: _slm_embedded_shared_stat
+  tags: ['slm', 'backend']
+
+# Step 2: Remove a stale real directory — ansible.builtin.file state:link
+# cannot replace a non-empty directory even with force: true.
+- name: "SLM | Remove stale embedded autobot_shared real-dir in SLM backend if present (#10912)"
+  ansible.builtin.file:
+    path: "{{ slm_backend_dir }}/autobot_shared"
+    state: absent
+  when:
+    - _slm_embedded_shared_stat.stat.exists
+    - not _slm_embedded_shared_stat.stat.islnk
+  tags: ['slm', 'backend']
+
+# Step 3: Create (or update) the symlink.  force: true replaces a wrong symlink.
+# Uses slm_shared_dir (= {{ slm_base_dir }}/autobot_shared) so the base is
+# governed by slm_base_dir — no hardcoded /opt/autobot path (#10912).
+- name: "SLM | Symlink embedded autobot_shared to canonical SLM copy (#10912)"
+  ansible.builtin.file:
+    src: "{{ slm_shared_dir }}"
+    dest: "{{ slm_backend_dir }}/autobot_shared"
+    state: link
+    force: true
+    owner: "{{ slm_user }}"
+    group: "{{ slm_group }}"
   tags: ['slm', 'backend']
 
 - name: "SLM | Install autobot_shared in venv (editable)"
@@ -435,6 +473,22 @@
   ansible.posix.synchronize:
     src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-plugins/"
     dest: "{{ slm_base_dir }}/autobot-plugins/"
+    rsync_opts:
+      - "--exclude=node_modules"
+      - "--exclude=dist"
+      - "--exclude=.git"
+    delete: true
+  tags: ['slm', 'frontend']
+
+# Sync libs/ so the @autobot/ui shared kit file: dep resolves (#10750 C2c).
+# autobot-frontend package.json declares "@autobot/ui": "file:../libs/autobot-ui";
+# npm install symlinks node_modules/@autobot/ui → ../../../libs/autobot-ui at
+# install time — if the target is absent the symlink dangles and Vite's rolldown
+# bundler fails to resolve the import at build time (same failure mode as MVA-893).
+- name: "SLM | Sync libs (shared @autobot/ui kit) from code_source (#10750 C2c)"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/libs/"
+    dest: "{{ slm_base_dir }}/libs/"
     rsync_opts:
       - "--exclude=node_modules"
       - "--exclude=dist"

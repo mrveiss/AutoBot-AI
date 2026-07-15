@@ -393,16 +393,16 @@ system_setup() {
             locale-gen en_US.UTF-8
     fi
 
-    # Issue #2705: Python 3.12 required by autobot_shared
-    if ! command -v python3.12 &>/dev/null; then
-        add_ppa_if_missing "ppa:deadsnakes/ppa" "deadsnakes/ppa" "deadsnakes (Python 3.12)"
-        run_ok "Updating package lists (Python 3.12)" \
+    # Issue #2705: Python 3.14 required by autobot_shared
+    if ! command -v python3.14 &>/dev/null; then
+        add_ppa_if_missing "ppa:deadsnakes/ppa" "deadsnakes/ppa" "deadsnakes (Python 3.14)"
+        run_ok "Updating package lists (Python 3.14)" \
             apt-get update -qq
-        run_ok "Installing Python 3.12" \
+        run_ok "Installing Python 3.14" \
             env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-                python3.12 python3.12-venv python3.12-dev
+                python3.14 python3.14-venv python3.14-dev
     else
-        success "  Python 3.12 already installed ($(python3.12 --version))"
+        success "  Python 3.14 already installed ($(python3.14 --version))"
     fi
 
     if ! command -v ansible-playbook &>/dev/null; then

@@ -169,7 +169,7 @@ onUnmounted(() => {
     <!-- Loading State -->
     <div v-if="loading" class="loading-overlay">
       <div class="loading-spinner"></div>
-      <p class="text-sm text-gray-600 mt-2">Loading {{ dashboardTitle }}...</p>
+      <p class="text-sm text-gray-600 mt-2">{{ $t('monitoring.grafanaDashboard.loadingValue0', { value0: dashboardTitle }) }}</p>
     </div>
 
     <!-- Error State -->

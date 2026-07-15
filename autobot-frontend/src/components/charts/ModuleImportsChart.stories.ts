@@ -36,9 +36,9 @@ const meta = {
 } as Meta<typeof ModuleImportsChart>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
 import type { StoryObj } from '@storybook/vue3';
-type Story = StoryObj<any>;
+type Story = StoryObj<Record<string, unknown>>;
 
 const sampleData = [
   { path: 'src/services/auth.py', name: 'auth', package: 'services', import_count: 42, functions: 12, classes: 3 },

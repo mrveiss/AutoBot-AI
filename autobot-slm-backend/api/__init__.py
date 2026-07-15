@@ -34,6 +34,7 @@ from .nodes_execution import router as nodes_execution_router
 from .npu import router as npu_router
 from .orchestration import router as orchestration_router
 from .rdp import node_rdp_router, rdp_router
+from .redis_service import router as redis_service_router
 from .scim import router as scim_router
 from .secrets import router as secrets_router
 from .security import router as security_router
@@ -95,4 +96,5 @@ __all__ = [
     "secrets_router",
     "setup_wizard_router",
     "sso_auth_router",
+    "redis_service_router",
 ]

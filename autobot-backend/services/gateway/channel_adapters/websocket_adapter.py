@@ -17,7 +17,7 @@ from starlette.websockets import WebSocketState
 
 from autobot_shared.logging_manager import get_logger
 
-from ..types import ChannelType, GatewaySession, MessageType, UnifiedMessage
+from ..types import ChannelMessage, ChannelType, GatewaySession, MessageType
 from .base import BaseChannelAdapter
 
 logger = get_logger(__name__)
@@ -36,7 +36,7 @@ class WebSocketAdapter(BaseChannelAdapter):
 
     async def send_message(
         self,
-        message: UnifiedMessage,
+        message: ChannelMessage,
         session: GatewaySession,
         connection_context: Any | None = None,
     ) -> bool:
@@ -78,7 +78,7 @@ class WebSocketAdapter(BaseChannelAdapter):
         self,
         raw_data: Any,
         session: GatewaySession,
-    ) -> UnifiedMessage | None:
+    ) -> ChannelMessage | None:
         """
         Receive and parse WebSocket message.
 
@@ -87,7 +87,7 @@ class WebSocketAdapter(BaseChannelAdapter):
             session: Session receiving the message
 
         Returns:
-            Parsed UnifiedMessage or None
+            Parsed ChannelMessage or None
         """
         try:
             # Parse JSON if string
@@ -182,7 +182,7 @@ class WebSocketAdapter(BaseChannelAdapter):
         try:
             if websocket.client_state == WebSocketState.CONNECTED:
                 # Send ping (WebSocket protocol handles this automatically)
-                heartbeat_msg = UnifiedMessage(
+                heartbeat_msg = ChannelMessage(
                     session_id=session.session_id,
                     channel=ChannelType.WEBSOCKET,
                     message_type=MessageType.SESSION_HEARTBEAT,
@@ -195,9 +195,9 @@ class WebSocketAdapter(BaseChannelAdapter):
             logger.error("Heartbeat failed: %s", e)
             return False
 
-    def _to_websocket_format(self, message: UnifiedMessage) -> Dict[str, Any]:
+    def _to_websocket_format(self, message: ChannelMessage) -> Dict[str, Any]:
         """
-        Convert UnifiedMessage to WebSocket format.
+        Convert ChannelMessage to WebSocket format.
 
         Args:
             message: Unified message
@@ -237,16 +237,16 @@ class WebSocketAdapter(BaseChannelAdapter):
         self,
         data: Dict[str, Any],
         session: GatewaySession,
-    ) -> UnifiedMessage:
+    ) -> ChannelMessage:
         """
-        Convert WebSocket message to UnifiedMessage.
+        Convert WebSocket message to ChannelMessage.
 
         Args:
             data: WebSocket message data
             session: Associated session
 
         Returns:
-            UnifiedMessage
+            ChannelMessage
         """
         # Map legacy WebSocket event types to MessageType
         type_map = {
@@ -263,7 +263,7 @@ class WebSocketAdapter(BaseChannelAdapter):
         # Extract content
         content = data.get("data") or data.get("content") or data.get("message", "")
 
-        return UnifiedMessage(
+        return ChannelMessage(
             session_id=session.session_id,
             channel=ChannelType.WEBSOCKET,
             message_type=message_type,

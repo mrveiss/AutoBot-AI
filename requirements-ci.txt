@@ -1,5 +1,5 @@
 # CI requirements — role-based split for isolated dependency management (#1655)
-# Python version: 3.12 (installed via actions/setup-python@v5 on ubuntu-latest)
+# Python version: 3.14 (installed via actions/setup-python@v5 on ubuntu-latest)
 #
 # Each file groups tightly-coupled packages so version conflicts
 # stay contained within their ecosystem. To debug a conflict,

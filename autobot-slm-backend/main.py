@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from api import (
     agents_router,
@@ -48,6 +49,7 @@ from api import (
     npu_router,
     orchestration_router,
     rdp_router,
+    redis_service_router,
     scim_router,
     secrets_router,
     security_router,
@@ -68,10 +70,11 @@ from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
 from api.voice_proxy import router as voice_proxy_router
+from autobot_shared.integrity_manifest import verify_integrity_at_startup
 from config import settings
-from middleware import SecurityHeadersMiddleware
+from middleware import ApiRequestCounterMiddleware, SecurityHeadersMiddleware
 from services.a2a_card_fetcher import start_card_refresh_task
-from services.auth import require_service_management
+from services.auth import require_service_management, require_service_management_or_internal
 from services.compose_fleet import (
     _SLM_MGMT_IP,
     _compose_nodes_enabled,
@@ -80,8 +83,13 @@ from services.compose_fleet import (
 )
 from services.database import db_service
 from services.git_tracker import start_version_checker
+from services.node_seeder import sync_slm_node_roles
 from services.reconciler import reconciler_service
 from services.schedule_executor import start_schedule_executor, stop_schedule_executor
+from services.security_posture_auditor import (
+    start_security_posture_auditor,
+    stop_security_posture_auditor,
+)
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -166,6 +174,11 @@ async def lifespan(app: FastAPI):
     logger.info("Starting SLM Backend v1.0.0")
     logger.info("Debug mode: %s", settings.debug)
 
+    # Non-fatal file-integrity check — detects out-of-band tampering of
+    # security-critical config files (#11265).  No-op unless
+    # AUTOBOT_INTEGRITY_CHECK_ENABLED=1 and AUTOBOT_INTEGRITY_MANIFEST_PATH are set.
+    verify_integrity_at_startup()
+
     # Validate that the two Base MetaData objects share no tablenames (#1878).
     # Must run before create_all / migrations so conflicts are caught immediately.
     try:
@@ -239,6 +252,26 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed to reconcile stale fleet sync jobs")
 
+    # Reconcile stale component sync jobs from prior crash (#11303).
+    # #11437: jobs interrupted by a racing restart are re-queued (once) and
+    # re-run here so their post-steps (incl. DB migrations) are not skipped.
+    try:
+        from api.code_sync import _run_component_resolve_job, reconcile_stale_component_sync_jobs
+
+        reconciled_comp, requeued_jobs = await reconcile_stale_component_sync_jobs()
+        if reconciled_comp:
+            logger.warning("Reconciled %d stale component sync job(s)", reconciled_comp)
+        import api.code_sync as _code_sync_mod
+
+        for _job_id, _component in requeued_jobs:
+            logger.warning("Re-running interrupted component sync job %s (%s)", _job_id, _component)
+            _task = asyncio.create_task(_run_component_resolve_job(_job_id, _component))
+            # #11460 review: keep a strong reference (GC) + same #1928 task
+            # tracking the endpoint path uses; the runner's finally pops it.
+            _code_sync_mod._running_tasks[_job_id] = _task
+    except Exception:
+        logger.exception("Failed to reconcile stale component sync jobs")
+
     # Resume any update-all fleet stage interrupted by SLM self-update restart (#9971)
     try:
         from api.code_sync import resume_update_all_orchestration
@@ -267,6 +300,10 @@ async def lifespan(app: FastAPI):
     start_schedule_executor()
     logger.info("Schedule executor started")
 
+    # Start fleet security-posture auditor (GH#11224)
+    start_security_posture_auditor()
+    logger.info("Security-posture auditor started")
+
     # Start A2A card refresh background task (Issue #962)
     a2a_card_task = start_card_refresh_task()
     logger.info("A2A card refresh task started")
@@ -293,6 +330,8 @@ async def lifespan(app: FastAPI):
         logger.info("A2A card refresh task stopped")
     stop_schedule_executor()
     logger.info("Schedule executor stopped")
+    stop_security_posture_auditor()
+    logger.info("Security-posture auditor stopped")
     await reconciler_service.stop()
     await db_service.close()
 
@@ -355,6 +394,7 @@ async def _ensure_local_node() -> None:
             # running (older rows predate this).
             if list(existing.detected_roles or []) != _SLM_ROLES:
                 existing.detected_roles = _SLM_ROLES
+            await sync_slm_node_roles(session, _SLM_NODE_ID, list(existing.roles or []), _SLM_ROLES)
             await session.commit()
             return
 
@@ -551,6 +591,9 @@ app.add_middleware(
 # Issue #2858 — explicit CSRF mitigation + security headers.
 # Registered after CORSMiddleware so CORS headers are already present.
 app.add_middleware(SecurityHeadersMiddleware)
+# Issue #10778 — HTTP API request counter for BI dashboard monthly operations.
+# Registered last so the route is already matched when the counter reads it.
+app.add_middleware(ApiRequestCounterMiddleware)
 
 # Routers intentionally left open (no service.management gate):
 #   health_router   — liveness/readiness probes; must be reachable without credentials
@@ -563,6 +606,13 @@ app.add_middleware(SecurityHeadersMiddleware)
 # Permission.SERVICE_MANAGEMENT.  Ordinary users (role=user/readonly/analyst/editor)
 # do not have this permission and receive 403.  Admin and Operator do.
 _SM = [Depends(require_service_management)]
+
+# #11450: routers that ALSO carry machine-to-machine agent-ingest endpoints
+# (heartbeat/enroll, roles/definitions, code-sync/notify, events/sync). The
+# node agent presents AUTOBOT_INTERNAL_API_KEY (no user JWT), so these mount
+# with a gate that accepts the internal key OR a service.management user —
+# preserving #10198's human-surface gate while un-breaking the agent plane.
+_SM_OR_AGENT = [Depends(require_service_management_or_internal)]
 
 app.include_router(health_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
@@ -577,7 +627,7 @@ app.include_router(scim_router)
 # --- Service-management–gated routers ---
 app.include_router(browser_router, prefix="/api", dependencies=_SM)
 app.include_router(agents_router, prefix="/api", dependencies=_SM)
-app.include_router(nodes_router, prefix="/api", dependencies=_SM)
+app.include_router(nodes_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(nodes_execution_router, prefix="/api", dependencies=_SM)  # Issue #3406
 app.include_router(services_router, prefix="/api", dependencies=_SM)
 app.include_router(fleet_services_router, prefix="/api", dependencies=_SM)
@@ -590,7 +640,7 @@ app.include_router(maintenance_router, prefix="/api", dependencies=_SM)
 app.include_router(monitoring_router, prefix="/api", dependencies=_SM)
 app.include_router(performance_router, prefix="/api", dependencies=_SM)
 app.include_router(errors_router, prefix="/api", dependencies=_SM)
-app.include_router(events_router, prefix="/api", dependencies=_SM)
+app.include_router(events_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(external_agents_router, prefix="/api", dependencies=_SM)
 app.include_router(node_rdp_router, prefix="/api", dependencies=_SM)
 app.include_router(rdp_router, prefix="/api", dependencies=_SM)
@@ -600,8 +650,8 @@ app.include_router(node_tls_router, prefix="/api", dependencies=_SM)
 app.include_router(tls_router, prefix="/api", dependencies=_SM)
 app.include_router(secrets_router, prefix="/api", dependencies=_SM)
 app.include_router(security_router, prefix="/api", dependencies=_SM)
-app.include_router(code_sync_router, prefix="/api", dependencies=_SM)
-app.include_router(roles_router, prefix="/api", dependencies=_SM)
+app.include_router(code_sync_router, prefix="/api", dependencies=_SM_OR_AGENT)
+app.include_router(roles_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(code_source_router, prefix="/api", dependencies=_SM)
 app.include_router(personality_proxy_router, prefix="/api", dependencies=_SM)  # Issue #1145
 app.include_router(voice_proxy_router, prefix="/api", dependencies=_SM)  # Voice proxy for personality voice assignment
@@ -623,6 +673,8 @@ app.include_router(api_keys_router, prefix="/api", dependencies=_SM)
 app.include_router(setup_wizard_router, prefix="/api", dependencies=_SM)
 # LLM Configuration (Issue #2371)
 app.include_router(llm_config_router, prefix="/api", dependencies=_SM)
+# Redis service lifecycle control (Issue #11340)
+app.include_router(redis_service_router, prefix="/api", dependencies=_SM)
 
 
 @app.get("/")
@@ -634,6 +686,31 @@ async def root():
         "status": "running",
         "docs": "/api/docs" if settings.debug else "disabled",
     }
+
+
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_registry_metrics() -> Response:
+    """Expose the shared Prometheus registry in text-exposition format (#10851).
+
+    Serves the canonical scrape path for Prometheus.  No authentication is
+    applied — scrapes originate from internal infrastructure (Prometheus server
+    on the same host/network) and must not be blocked by JWT middleware.
+
+    Collision avoidance: all existing metrics-adjacent routes live under the
+    ``/api`` prefix (``/api/metrics`` SystemMetrics, ``/api/metrics/prometheus``
+    DB-derived text, ``/api/metrics/fleet``, ``/api/metrics/node/{id}``, etc.).
+    This top-level ``/metrics`` path is reserved for the standard Prometheus
+    scrape target and does not overlap with any mounted router.
+
+    Import is deferred to avoid circular-import risk at module load time
+    (mirrors the lazy-import pattern used by ApiRequestCounterMiddleware,
+    Issue #10778).
+    """
+    from prometheus_client import CONTENT_TYPE_LATEST  # noqa: PLC0415
+
+    from monitoring.prometheus_metrics import get_metrics_manager  # noqa: PLC0415
+
+    return Response(content=get_metrics_manager().get_metrics(), media_type=CONTENT_TYPE_LATEST)
 
 
 if __name__ == "__main__":

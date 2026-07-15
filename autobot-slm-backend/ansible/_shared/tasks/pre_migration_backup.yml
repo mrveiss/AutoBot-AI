@@ -39,6 +39,8 @@
     mode: "0750"
 
 # Local fast path — full cluster dump from the on-node Postgres.
+# Runs as root so `su - postgres` needs no password (#10636 — the connection
+# user is autobot, which cannot su to postgres without authentication).
 - name: "Pre-migration backup | Local pg_dumpall (#10026, #10045)"
   ansible.builtin.shell: |
     set -o pipefail
@@ -46,6 +48,7 @@
       | gzip > /opt/autobot/backups/pre-migration/backend-$(date +%s).sql.gz
   args:
     executable: /bin/bash
+  become: true
   when: pre_migration_pg_dir.stat.exists
 
 # Remote path — Postgres lives on another node (colocated on the SLM server).

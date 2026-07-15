@@ -14,12 +14,100 @@ from typing import Any, Dict, List, Tuple
 
 from advanced_rag_optimizer import SearchResult
 from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.ssot_config import config
 from services.rag_service import RAGService
 
 from .context_enhancer import get_context_enhancer
 from .doc_searcher import DocumentationSearcher, get_documentation_searcher
 from .intent_detector import get_query_intent_detector
-from .types import EnhancedQuery, QueryIntentResult, QueryKnowledgeIntent
+from .types import Query, QueryIntentResult, QueryKnowledgeIntent
+
+# #10652, #10736: prepended to the KB context to instruct the model to cite sources.
+# Controlled by chat_citation_instruction_enabled (AUTOBOT_CHAT_CITATION_INSTRUCTION).
+CITATION_INSTRUCTION = (
+    "Answer the user's question using the knowledge sources below. Cite the sources "
+    "you rely on inline as [Source N]. If the sources do not contain the answer, say "
+    "you don't know rather than guessing."
+)
+
+
+def build_grounded_context(contents: List[str]) -> str:
+    """Build the KB context block: optional grounding instruction + [Source N] labels (#10652).
+
+    Shared by ChatKnowledgeService.format_knowledge_context and the chat
+    compression rebuild (llm_handler) so the format + grounding instruction
+    never drift between the two paths.
+    """
+    if not contents:
+        return ""
+    lines: List[str] = []
+    if config.chat_citation_instruction_enabled:
+        lines.append(CITATION_INSTRUCTION)
+    lines.append("KNOWLEDGE CONTEXT:")
+    for i, content in enumerate(contents, 1):
+        lines.append(f"[Source {i}] {content.strip()}")
+    return "\n".join(lines)
+
+
+async def budget_grounded_context(
+    kb_results: List[Dict[str, Any]],
+    model_name: str | None = None,
+) -> Tuple[str, List[Dict[str, Any]]]:
+    """Estimate tokens, compress when over budget, rebuild via build_grounded_context. (#10837)
+
+    Shared by llm_handler.py and async_chat_workflow._budget_kb_context so the
+    compress+rebuild sequence is never duplicated.  Each dict in kb_results must
+    have a ``"content"`` key; dicts without content are silently skipped.
+
+    Args:
+        kb_results: Dicts with at least a ``"content"`` key (citations or raw KB dicts).
+        model_name: Active LLM model name for per-model budget tuning.  Pass the
+            selected model (llm_handler path) or None to use the YAML default
+            (async_chat_workflow path).
+
+    Returns:
+        Tuple of (context_str, effective_kb_results) where:
+        - empty input → ("", [])
+        - under budget → (raw_context, kb_results) — full original list unchanged
+        - compressed → (compressed_context, trimmed) — trimmed is the subset kept
+          in the prompt, so callers can rebind citations to the trimmed list and
+          avoid showing the user sources the model never saw (#10837 regression fix).
+    """
+    if not kb_results:
+        return "", []
+
+    from context_window_manager import ContextWindowManager
+    from services.memory.compression import ContextCompressionService
+
+    raw_context = build_grounded_context([r.get("content", "") for r in kb_results if r.get("content")])
+    if not raw_context:
+        return "", []
+
+    cwm = ContextWindowManager()
+    kc_tokens = cwm.estimate_tokens(raw_context)
+    max_kb_tokens = cwm.get_max_history_tokens(model_name=model_name)
+    if not await cwm.async_should_compress(content_tokens=kc_tokens, model_name=model_name):
+        return raw_context, kb_results
+
+    svc = ContextCompressionService(
+        model_thresholds={
+            name: spec.get("compression_threshold", 8192)
+            for name, spec in cwm.config.get("models", {}).items()
+            if isinstance(spec, dict)
+        }
+    )
+    trimmed = await svc.compress_kb_results(kb_results, max_tokens=max_kb_tokens)
+    if not trimmed:
+        return "", []
+    compressed = build_grounded_context([r.get("content", "") for r in trimmed if r.get("content")])
+    logger.info(
+        "[#10837] KB compressed: %d → %d results (%d tokens)",
+        len(kb_results),
+        len(trimmed),
+        cwm.estimate_tokens(compressed),
+    )
+    return compressed, trimmed
+
 
 # Issue #556: Standard knowledge categories for chat RAG
 KNOWLEDGE_CATEGORIES = {
@@ -257,22 +345,11 @@ class ChatKnowledgeService:
         Returns:
             Formatted context string for LLM
         """
-        if not facts:
-            return ""
-
-        # Build context header
-        context_lines = ["KNOWLEDGE CONTEXT:"]
-
-        # Add each fact with ranking
-        for i, fact in enumerate(facts, 1):
-            # Use rerank_score if available for display
-            score = fact.rerank_score if fact.rerank_score is not None else fact.hybrid_score
-
-            # Format: "1. [score: 0.95] Fact content here"
-            context_lines.append(f"{i}. [score: {score:.2f}] {fact.content.strip()}")
-
-        # Join with newlines
-        return "\n".join(context_lines)
+        # #10652: delegate to the shared builder so the per-fact "[Source N]"
+        # labels and grounding instruction stay identical to the compression
+        # rebuild path in llm_handler. N aligns with the rank in
+        # format_citations() that the frontend displays.
+        return build_grounded_context([fact.content for fact in facts])
 
     def format_citations(self, facts: List[SearchResult]) -> List[Dict]:
         """
@@ -487,7 +564,7 @@ class ChatKnowledgeService:
         self,
         query: str,
         conversation_history: List[Dict[str, str]],
-    ) -> EnhancedQuery:
+    ) -> Query:
         """
         Enhance query with conversation context (Issue #665: extracted).
 
@@ -496,7 +573,7 @@ class ChatKnowledgeService:
             conversation_history: Previous exchanges
 
         Returns:
-            EnhancedQuery with context entities
+            Query with context entities
         """
         enhanced_query = self.context_enhancer.enhance_query(
             query=query,
@@ -549,7 +626,7 @@ class ChatKnowledgeService:
     def _get_search_query(
         self,
         query: str,
-        enhanced_query: EnhancedQuery,
+        enhanced_query: Query,
     ) -> str:
         """
         Get the search query to use for retrieval.
@@ -576,7 +653,7 @@ class ChatKnowledgeService:
         force_retrieval: bool = False,
         categories: List[str] | None = None,
         enable_smart_categories: bool = True,
-    ) -> Tuple[str, List[Dict], QueryIntentResult, EnhancedQuery | None]:
+    ) -> Tuple[str, List[Dict], QueryIntentResult, Query | None]:
         """Conversation-aware knowledge retrieval with context enhancement.
 
         Issue #249 Phase 3, #556, #665: Uses conversation history to enhance
@@ -604,10 +681,34 @@ class ChatKnowledgeService:
             categories=effective_categories,
         )
 
-        # Issue #1261: Also search indexed documentation (autobot_docs)
-        doc_context = self._retrieve_documentation_context(query)
-        if doc_context:
-            context_string = doc_context + "\n\n" + context_string if context_string else doc_context
+        # Issue #1261, #10658: Search indexed documentation (autobot_docs) and
+        # label each chunk as [Source N] continuing from KB source numbering so
+        # citation indices are contiguous and the frontend can resolve them.
+        doc_results = self._retrieve_raw_doc_results(query)
+        if doc_results:
+            kb_count = len(citations)
+            doc_lines: List[str] = []
+            for offset, result in enumerate(doc_results, 1):
+                source_n = kb_count + offset
+                content = result.get("content", "").strip()
+                doc_lines.append(f"[Source {source_n}] {content}")
+                citations.append(
+                    {
+                        "id": f"doc_{offset}",
+                        "content": content,
+                        "score": result.get("score", 0.0),
+                        "source": result.get("file_path", ""),
+                        "title": result.get("section", ""),
+                        "rank": source_n,
+                        "metadata": {
+                            "doc_type": result.get("doc_type", "documentation"),
+                            "section": result.get("section", ""),
+                            "subsection": result.get("subsection", ""),
+                        },
+                    }
+                )
+            doc_block = "AUTOBOT DOCUMENTATION CONTEXT:\n" + "\n".join(doc_lines)
+            context_string = doc_block + "\n\n" + context_string if context_string else doc_block
 
         logger.info(
             "[Conversation RAG] Completed in %.3fs - %d citations, " "enhanced=%s, categories=%s, docs=%s",
@@ -615,7 +716,7 @@ class ChatKnowledgeService:
             len(citations),
             enhanced_query.enhancement_applied,
             effective_categories or "all",
-            bool(doc_context),
+            bool(doc_results),
         )
         return context_string, citations, intent_result, enhanced_query
 
@@ -660,6 +761,35 @@ class ChatKnowledgeService:
         except Exception as e:
             logger.warning("[Doc Search] Failed: %s", e)
             return ""
+
+    def _retrieve_raw_doc_results(
+        self, query: str, n_results: int = 3, score_threshold: float = 0.3
+    ) -> List[Dict[str, Any]]:
+        """Return raw doc-search results without pre-formatting (#10658).
+
+        Used by ``conversation_aware_retrieve`` to build [Source N] labels that
+        continue from the KB citation count, keeping citation indices contiguous.
+        """
+        if not self.doc_searcher:
+            return []
+        try:
+            if not self.doc_searcher.is_documentation_query(query):
+                return []
+            results = self.doc_searcher.search(
+                query=query,
+                n_results=n_results,
+                score_threshold=score_threshold,
+            )
+            if results:
+                logger.info(
+                    "[Doc Search] Retrieved %d raw documentation chunks for: '%s...'",
+                    len(results),
+                    query[:50],
+                )
+            return results
+        except Exception as e:
+            logger.warning("[Doc Search] Raw retrieval failed: %s", e)
+            return []
 
     def _search_and_format_documentation(
         self,

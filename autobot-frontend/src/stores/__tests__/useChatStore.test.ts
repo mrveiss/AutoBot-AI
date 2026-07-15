@@ -3,6 +3,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useChatStore } from '../useChatStore'
+import type { ChatSession } from '../useChatStore'
 
 describe('useChatStore', () => {
   beforeEach(() => {
@@ -179,7 +180,7 @@ describe('useChatStore', () => {
       store.createNewSession('Local Session 2')
 
       // Sync with backend returning empty (explicit logout)
-      const backendSessions: any[] = []
+      const backendSessions: ChatSession[] = []
 
       store.syncSessionsWithBackend(backendSessions, true)
 

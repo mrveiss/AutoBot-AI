@@ -120,7 +120,7 @@ export function useFileBrowser() {
   // ---- DELETE /files/delete ----
   const { execute: deleteFileOrFolder, loading: isDeletingFile } = useAsyncHandler(
     async (path: string) => {
-      await apiClient.delete<any>(`${getApiBase()}/files/delete?path=${encodeURIComponent(path)}`)
+      await apiClient.delete<unknown>(`${getApiBase()}/files/delete?path=${encodeURIComponent(path)}`)
     },
     {
       logErrors: true,

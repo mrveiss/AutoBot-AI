@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -35,14 +36,45 @@ from api.schemas_analytics import (
     QualityTrendsResponse,
 )
 from api.schemas_common import DataResponse
+from api.ws_security import enforce_ws_origin
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.time_utils import parse_utc_iso
+from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 logger = get_logger(__name__)
 
+# ---------------------------------------------------------------------------
+# History persistence constants — env-backed (chat_history/cache.py pattern).
+# ---------------------------------------------------------------------------
+
+# Redis sorted-set key for quality health-score history (analytics DB).
+# Score = timestamp-ms; value = JSON-encoded snapshot.
+_HEALTH_HISTORY_KEY = "quality:health:history"
+
+# Maximum snapshots to retain (~2 years of daily metric computations).
+QUALITY_HISTORY_MAX_POINTS: int = int(os.environ.get("QUALITY_HISTORY_MAX_POINTS", "730"))
+
+# Redis sorted-set key for remediation delta history (written by remediation_loop).
+_DELTA_HISTORY_KEY = "remediation:delta:history"
+
+# Maximum remediation delta rows to surface on the read endpoint.
+_DELTA_READ_LIMIT: int = 100
+
 router = APIRouter(tags=["code-quality", "analytics"])  # Prefix set in router_registry
+
+# Single source of truth for quality dimension weights (must sum to 1.0).
+# runtime_risk funded by -0.05 maintainability and -0.05 testability (#11184).
+_QUALITY_WEIGHTS: dict[str, float] = {
+    "maintainability": 0.20,
+    "reliability": 0.20,
+    "security": 0.20,
+    "performance": 0.15,
+    "testability": 0.05,
+    "documentation": 0.10,
+    "runtime_risk": 0.10,
+}
+assert abs(sum(_QUALITY_WEIGHTS.values()) - 1.0) < 1e-9, "Quality weights must sum to 1.0"
 
 
 # ============================================================================
@@ -70,16 +102,7 @@ def get_grade(score: float) -> QualityGrade:
 
 def calculate_health_score(metrics: dict[str, float]) -> HealthScore:
     """Calculate overall health score from individual metrics."""
-    weights = {
-        "maintainability": 0.25,
-        "reliability": 0.20,
-        "security": 0.20,
-        "performance": 0.15,
-        "testability": 0.10,
-        "documentation": 0.10,
-    }
-
-    weighted_sum = sum(metrics.get(category, 70) * weight for category, weight in weights.items())
+    weighted_sum = sum(metrics.get(category, 70) * weight for category, weight in _QUALITY_WEIGHTS.items())
 
     overall = min(100, max(0, weighted_sum))
     grade = get_grade(overall)
@@ -453,6 +476,21 @@ def _calculate_documentation_score(stats: dict[str, Any]) -> float:
     return max(0.0, min(100.0, scaled_score))
 
 
+def _calculate_runtime_risk_score(runtime_risk_map: dict[str, float]) -> float:
+    """Return a HEALTH score (higher = better) from the runtime-risk map.
+
+    Inverts the mean risk across all known files: score = 100 * (1 - mean_risk).
+    When the map is empty (Redis unavailable or no failure data), returns 100.0
+    as a neutral signal so this dimension never degrades the health score without
+    real evidence (#11184).
+    """
+    if not runtime_risk_map:
+        logger.info("runtime_risk: no failure data — returning neutral 100.0")
+        return 100.0
+    mean_risk = sum(runtime_risk_map.values()) / len(runtime_risk_map)
+    return 100.0 * (1.0 - mean_risk)
+
+
 def _categorize_problems_for_patterns(
     problems: list[dict],
 ) -> list[dict[str, Any]]:
@@ -550,31 +588,69 @@ def _calculate_complexity_metrics(
     }
 
 
-def _build_quality_trends(metrics: dict[str, float], days: int = 30) -> list[dict]:
-    """
-    Build quality trend data for the specified number of days.
+async def _persist_health_snapshot(score: float, metrics: dict[str, float]) -> None:
+    """Write one health-score point to the analytics Redis sorted set.
 
-    Issue #620: Extracted from calculate_real_quality_metrics to reduce function length.
+    Mirrors the zadd/zremrangebyrank pattern from
+    ``analytics_bug_prediction._persist_prediction_to_redis``.
+    Degrades gracefully on Redis failure — logs a warning and returns.
 
     Args:
-        metrics: Dictionary of metric scores (maintainability, reliability, etc.)
-        days: Number of days of trend data to generate
+        score:   Weighted health score (0-100).
+        metrics: Per-dimension metric scores used to compute *score*.
+    """
+    try:
+        from autobot_shared.redis_client import get_async_redis_client
+
+        redis = await get_async_redis_client(database="analytics")
+        ts = now_utc()
+        ts_ms = int(ts.timestamp() * 1000)
+        payload = json.dumps({"ts": ts.isoformat(), "score": round(score, 2), "metrics": metrics})
+        await redis.zadd(_HEALTH_HISTORY_KEY, {payload: ts_ms})
+        await redis.zremrangebyrank(_HEALTH_HISTORY_KEY, 0, -(QUALITY_HISTORY_MAX_POINTS + 1))
+        logger.debug("quality health snapshot persisted (score=%.2f, ts_ms=%d)", score, ts_ms)
+    except Exception as exc:
+        logger.warning("quality health snapshot: Redis unavailable, skipping persist: %s", exc)
+
+
+async def _build_quality_trends(metrics: dict[str, float], days: int = 30) -> list[dict]:
+    """Return quality trend data points for the last *days* days.
+
+    Issue #620: Extracted from calculate_real_quality_metrics.
+    Issue #11203: Now reads REAL history from Redis sorted set
+    ``quality:health:history``.  Falls back to the previous flat-line
+    behaviour when Redis is unavailable or the history is empty, so a
+    fresh system always returns a valid (if monotonic) response.
+
+    Args:
+        metrics: Current metric scores used for the flat fallback only.
+        days:    Maximum age of points to return.
 
     Returns:
-        List of trend data points with date and weighted score
+        List of ``{date, score}`` dicts ordered oldest-first.
     """
-    # Weights for calculating overall weighted score
-    weights = {
-        "maintainability": 0.25,
-        "reliability": 0.20,
-        "security": 0.20,
-        "performance": 0.15,
-        "testability": 0.10,
-        "documentation": 0.10,
-    }
+    try:
+        from autobot_shared.redis_client import get_async_redis_client
 
-    weighted_score = sum(metrics.get(category, 0) * weight for category, weight in weights.items())
+        redis = await get_async_redis_client(database="analytics")
+        cutoff_ms = int((now_utc() - timedelta(days=days)).timestamp() * 1000)
+        now_ms = int(now_utc().timestamp() * 1000)
+        raw_entries = await redis.zrangebyscore(_HEALTH_HISTORY_KEY, cutoff_ms, now_ms)
+        if raw_entries:
+            points = []
+            for entry in raw_entries:
+                try:
+                    rec = json.loads(entry)
+                    points.append({"date": rec["ts"], "score": rec["score"]})
+                except (json.JSONDecodeError, KeyError):
+                    continue
+            if points:
+                return points
+    except Exception as exc:
+        logger.warning("quality trends: Redis unavailable, using flat fallback: %s", exc)
 
+    # Fallback: flat line at current weighted score (original behaviour).
+    weighted_score = sum(metrics.get(category, 0) * weight for category, weight in _QUALITY_WEIGHTS.items())
     return [
         {
             "date": (datetime.now(tz=timezone.utc) - timedelta(days=i)).isoformat(),
@@ -588,19 +664,19 @@ def _calculate_all_quality_scores(
     problems: list[dict],
     stats: dict[str, Any],
     total_files: int,
+    runtime_risk_map: dict[str, float] | None = None,
 ) -> dict[str, float]:
-    """
-    Calculate all quality metric scores from problems and stats.
+    """Calculate all quality metric scores from problems, stats, and runtime risk.
 
     Issue #620: Extracted from calculate_real_quality_metrics.
+    Issue #11184: Added runtime_risk dimension (health-inverted, neutral when empty).
 
     Args:
         problems: List of problem dictionaries from analysis
         stats: Codebase statistics from analysis
         total_files: Total number of files in codebase
-
-    Returns:
-        Dictionary mapping metric categories to scores
+        runtime_risk_map: Per-file runtime_risk scores from build_runtime_risk_map();
+                          pass None or empty dict when unavailable — returns neutral 100.
     """
     metrics = {
         "maintainability": _calculate_maintainability_score(problems, total_files),
@@ -609,17 +685,20 @@ def _calculate_all_quality_scores(
         "performance": _calculate_performance_score(problems),
         "testability": _calculate_testability_score(stats, total_files),
         "documentation": _calculate_documentation_score(stats),
+        "runtime_risk": _calculate_runtime_risk_score(runtime_risk_map or {}),
     }
 
     logger.info(
         "Calculated quality metrics: maintainability=%.1f, reliability=%.1f, "
-        "security=%.1f, performance=%.1f, testability=%.1f, documentation=%.1f",
+        "security=%.1f, performance=%.1f, testability=%.1f, documentation=%.1f, "
+        "runtime_risk=%.1f",
         metrics["maintainability"],
         metrics["reliability"],
         metrics["security"],
         metrics["performance"],
         metrics["testability"],
         metrics["documentation"],
+        metrics["runtime_risk"],
     )
 
     return metrics
@@ -658,8 +737,19 @@ async def calculate_real_quality_metrics(
     total_files = int(stats.get("total_files", 0)) or 100  # Default estimate
     total_lines = int(stats.get("total_lines", 0)) or 10000
 
-    # Calculate metrics using helper (Issue #620)
-    metrics = _calculate_all_quality_scores(problems, stats, total_files)
+    # Resolve runtime-risk map once (async) then pass into the sync helper (#11184).
+    # Awaited here so the sync helper never touches async infrastructure.
+    from code_analysis.src.runtime_risk import build_runtime_risk_map
+
+    runtime_risk_map = await build_runtime_risk_map()
+
+    # Calculate metrics using helper (Issue #620, #11184)
+    metrics = _calculate_all_quality_scores(problems, stats, total_files, runtime_risk_map)
+    weighted_score = sum(metrics.get(c, 0) * w for c, w in _QUALITY_WEIGHTS.items())
+
+    # Issue #11203: Persist real health snapshot + build real trend series.
+    await _persist_health_snapshot(weighted_score, metrics)
+    trends = await _build_quality_trends(metrics)
 
     return {
         "metrics": {k: round(v, 1) for k, v in metrics.items()},
@@ -670,7 +760,7 @@ async def calculate_real_quality_metrics(
             "line_count": total_lines,
             "issues_count": len(problems),
         },
-        "trends": _build_quality_trends(metrics),
+        "trends": trends,
         "source": "calculated",
         "calculated_at": datetime.now(tz=timezone.utc).isoformat(),
     }
@@ -815,6 +905,69 @@ def _build_quality_export_report(format_type: str, health: Any, metrics: dict, d
         "stats": data.get("stats", {}),
         "recommendations": health.recommendations,
     }
+
+
+async def _read_remediation_deltas(limit: int) -> list[dict]:
+    """Read recent remediation delta records from Redis sorted set.
+
+    Reads from ``remediation:delta:history`` (analytics DB, written by
+    ``code_analysis.src.remediation_loop._persist_delta``).  Returns at
+    most *limit* records ordered newest-first.  Returns [] on Redis error
+    or when the set is empty — never raises.
+
+    Args:
+        limit: Maximum number of records to return.
+
+    Returns:
+        List of delta dicts each containing ts, health_delta, findings_delta.
+    """
+    try:
+        from autobot_shared.redis_client import get_async_redis_client
+
+        redis = await get_async_redis_client(database="analytics")
+        raw = await redis.zrevrange(_DELTA_HISTORY_KEY, 0, limit - 1)
+        deltas = []
+        for entry in raw:
+            try:
+                rec = json.loads(entry)
+                deltas.append(
+                    {
+                        "ts": rec.get("timestamp", ""),
+                        "health_delta": rec.get("health_delta", 0.0),
+                        "findings_delta": rec.get("findings_delta", 0),
+                        "before_health": rec.get("before_health", 0.0),
+                        "after_health": rec.get("after_health", 0.0),
+                    }
+                )
+            except (json.JSONDecodeError, KeyError):
+                continue
+        return deltas
+    except Exception as exc:
+        logger.warning("remediation-deltas: Redis unavailable: %s", exc)
+        return []
+
+
+@router.get("/remediation-deltas")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_remediation_deltas",
+    error_code_prefix="ANALYTICS_QUALITY",
+)
+async def get_remediation_deltas(
+    limit: int = Query(50, ge=1, le=_DELTA_READ_LIMIT),
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict[str, Any]:
+    """Return recent remediation delta records written by the remediation loop.
+
+    Issue #11203: Surfaces ``remediation:delta:history`` so the quality
+    dashboard can show before/after health-score improvements alongside
+    the trend line.  Read-only; returns an empty list on a fresh system.
+
+    Args:
+        limit: Maximum number of recent delta records to return (1-100).
+    """
+    deltas = await _read_remediation_deltas(limit)
+    return {"status": "success", "count": len(deltas), "deltas": deltas}
 
 
 def _export_quality_as_csv(health: Any, metrics: dict) -> str:
@@ -985,14 +1138,7 @@ async def get_quality_metrics(
                     "value": value,
                     "grade": get_grade(value).value,
                     "trend": 0,  # Would be calculated from historical data
-                    "weight": {
-                        "maintainability": 0.25,
-                        "reliability": 0.20,
-                        "security": 0.20,
-                        "performance": 0.15,
-                        "testability": 0.10,
-                        "documentation": 0.10,
-                    }.get(cat, 0.1),
+                    "weight": _QUALITY_WEIGHTS.get(cat, 0.0),
                 }
             )
         except ValueError:
@@ -1291,6 +1437,27 @@ async def get_quality_snapshot(
     }
 
 
+async def _drill_down_runtime_risk(limit: int = 50) -> dict[str, Any]:
+    """Return top files by runtime_risk score, sorted descending (#11184).
+
+    Each entry: {file: str, runtime_risk: float}.  Returns no_data shape when
+    Redis is unavailable or no failure patterns are recorded.
+    """
+    from code_analysis.src.runtime_risk import build_runtime_risk_map
+
+    risk_map = await build_runtime_risk_map()
+    if not risk_map:
+        return _no_data_response("No runtime failure data available.")
+    sorted_files = sorted(risk_map.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+    return {
+        "status": "success",
+        "category": "runtime_risk",
+        "display_name": "Runtime Risk",
+        "files": [{"file": f, "runtime_risk": round(r, 4)} for f, r in sorted_files],
+        "total_files": len(sorted_files),
+    }
+
+
 @router.get("/drill-down/{category}", response_model=QualityDrillDownResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1316,6 +1483,11 @@ async def drill_down_category(
     project's clone directory so only files under source_root contribute.
     """
     source_root = await _resolve_source_root_or_404(source_id)
+
+    # Issue #11184: runtime_risk category resolves via the dedicated risk map.
+    if category.lower() == "runtime_risk":
+        return await _drill_down_runtime_risk(limit=limit)
+
     problems, stats = await _get_problems_from_chromadb(source_root=source_root)
 
     if not problems:
@@ -1429,6 +1601,8 @@ async def websocket_quality_updates(websocket: WebSocket):
     Clients receive updates when quality metrics change.
     Issue #315: Refactored to use dictionary dispatch for message handling.
     """
+    if not await enforce_ws_origin(websocket):
+        return
     await manager.connect(websocket)
 
     # Send initial snapshot

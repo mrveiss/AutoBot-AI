@@ -19,8 +19,8 @@
               :title="getSystemStatusTooltip()"
               :aria-label="getSystemStatusAriaLabel()"
             >
-              <div class="relative w-8 h-8 bg-white rounded flex items-center justify-center">
-                <span class="text-slate-800 font-bold text-sm font-mono">AB</span>
+              <div class="relative w-8 h-8 bg-autobot-bg-card rounded flex items-center justify-center">
+                <span class="text-autobot-text-primary font-bold text-sm font-mono">AB</span>
                 <!-- System status indicator dot -->
                 <div
                   :class="{
@@ -568,14 +568,14 @@ import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useRuntimeFeaturesStore } from '@/stores/useRuntimeFeaturesStore'
 import { useSystemStatus } from '@/composables/useSystemStatus'
-import { useHostSelection } from '@/composables/useHostSelection';
+import { useHostSelection, type InfrastructureHost } from '@/composables/useHostSelection';
 import { useNavOverflow } from '@/composables/useNavOverflow'
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import NavOverflowMenu from '@/components/layout/NavOverflowMenu.vue'
 import CommandPalette from '@/components/CommandPalette.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { cacheBuster } from '@/utils/CacheBuster.js';
-import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js';
+import { healthMonitor } from '@/utils/HealthMonitor.js';
 import { initializeNotificationBridge } from '@/utils/notificationBridge';
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js';
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
@@ -623,7 +623,8 @@ export default {
     const chatStore = useChatStore();
     const knowledgeStore = useKnowledgeStore();
     // #10502: runtime (deployment) feature flags from /api/frontend-config,
-    // used to gate the Company OS nav item in single_user deployments.
+    // used to gate the Company OS nav item when the deployment lacks the
+    // PostgreSQL company mode.
     const runtimeFeaturesStore = useRuntimeFeaturesStore();
     const router = useRouter();
     const route = useRoute();
@@ -677,7 +678,7 @@ export default {
     }))
 
     // Host selection event handlers
-    const onHostSelected = (result: { host: any; rememberChoice: boolean }) => {
+    const onHostSelected = (result: { host: InfrastructureHost; rememberChoice: boolean }) => {
       handleHostSelected(result)
     }
 
@@ -837,7 +838,7 @@ export default {
       logger.debug('Starting optimized health monitoring system...');
 
       // Listen for health changes from optimized monitor
-      optimizedHealthMonitor.onHealthChange((healthData) => {
+      healthMonitor.onHealthChange((healthData) => {
         // Update app store with health status
         if (appStore && typeof appStore.setBackendStatus === 'function') {
           const backendStatus = healthData.status.backend;
@@ -993,8 +994,8 @@ export default {
       stopOptimizedNotificationCleanup();
 
       // Destroy optimized health monitor
-      if (optimizedHealthMonitor && typeof optimizedHealthMonitor.destroy === 'function') {
-        optimizedHealthMonitor.destroy();
+      if (healthMonitor && typeof healthMonitor.destroy === 'function') {
+        healthMonitor.destroy();
       }
     });
 
@@ -1010,8 +1011,8 @@ export default {
     const navContainerRef = ref<HTMLElement | null>(null)
 
     // #10502: hide the Company OS entry when the deployment has no PostgreSQL
-    // company mode (single_user) — its endpoints return 503 there. The runtime
-    // flag defaults fail-closed until /frontend-config resolves.
+    // company mode — its endpoints return 503 there. The runtime flag defaults
+    // fail-closed until /frontend-config resolves.
     const filteredNavItems = computed(() =>
       filterByFeatureFlag(navItems).filter(
         (item) =>
@@ -1117,8 +1118,8 @@ export default {
   position: absolute;
   top: -40px;
   left: 0;
-  background: #000;
-  color: #fff;
+  background: var(--text-primary);
+  color: var(--bg-primary);
   padding: var(--spacing-2) var(--spacing-4);
   text-decoration: none;
   border-radius: 0 0 var(--radius-default) 0;
@@ -1130,7 +1131,7 @@ export default {
 
 .skip-link:focus {
   top: 0;
-  outline: 2px solid #fff;
+  outline: 2px solid var(--bg-primary);
   outline-offset: 2px;
 }
 

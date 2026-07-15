@@ -6,7 +6,7 @@
 
 Builds a legacy SQLite ``secrets.db`` in a temp dir, imports it into a Postgres
 unified store (migration-gate), and verifies each row is envelope-readable via
-UnifiedSecretsService owned by the creator's user vault.
+EnvelopeSecretsService owned by the creator's user vault.
 """
 
 import base64
@@ -18,8 +18,8 @@ from cryptography.fernet import Fernet
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from autobot_shared.secrets_vault import VaultKind, VaultRef
+from services.envelope_secrets_service import EnvelopeSecretsService
 from services.sqlite_secrets_importer import import_sqlite_secrets
-from services.unified_secrets_service import UnifiedSecretsService
 from tests.migrations.conftest import requires_postgres, run_alembic
 
 pytestmark = [pytest.mark.migration_gate, requires_postgres]
@@ -79,7 +79,7 @@ async def test_imports_and_envelope_readable(session, tmp_path):
     await session.commit()
     assert report.total == 2 and report.imported == 2 and report.failed == []
 
-    svc = UnifiedSecretsService(root_key=_ROOT)
+    svc = EnvelopeSecretsService(root_key=_ROOT)
     alice_secrets = await svc.list_for_vaults(session, accessible_vaults={VaultRef(VaultKind.USER, str(_ALICE))})
     assert len(alice_secrets) == 1
     assert (

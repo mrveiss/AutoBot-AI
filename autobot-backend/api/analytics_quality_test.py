@@ -279,3 +279,122 @@ class TestPerSourceStatsLookup:
         assert ["codebase_stats"] in id_queries
         assert all(q != ["codebase_stats_None"] for q in id_queries)
         assert stats["total_files"] == 99
+
+
+# ============================================================================
+# Issue #11184: runtime_risk dimension tests
+# ============================================================================
+
+
+class TestQualityWeights:
+    """Weights dict must sum to 1.0 after adding runtime_risk (#11184)."""
+
+    def test_weights_sum_to_one(self):
+        from api.analytics_quality import _QUALITY_WEIGHTS
+
+        total = sum(_QUALITY_WEIGHTS.values())
+        assert abs(total - 1.0) < 1e-9, f"Weights sum to {total}, expected 1.0"
+
+    def test_runtime_risk_key_present(self):
+        from api.analytics_quality import _QUALITY_WEIGHTS
+
+        assert "runtime_risk" in _QUALITY_WEIGHTS
+
+    def test_runtime_risk_weight_is_0_10(self):
+        from api.analytics_quality import _QUALITY_WEIGHTS
+
+        assert abs(_QUALITY_WEIGHTS["runtime_risk"] - 0.10) < 1e-9
+
+    def test_maintainability_reduced_to_0_20(self):
+        from api.analytics_quality import _QUALITY_WEIGHTS
+
+        assert abs(_QUALITY_WEIGHTS["maintainability"] - 0.20) < 1e-9
+
+    def test_testability_reduced_to_0_05(self):
+        from api.analytics_quality import _QUALITY_WEIGHTS
+
+        assert abs(_QUALITY_WEIGHTS["testability"] - 0.05) < 1e-9
+
+
+class TestCalculateRuntimeRiskScore:
+    """Unit tests for _calculate_runtime_risk_score (#11184)."""
+
+    def test_empty_map_returns_neutral_100(self):
+        """Empty map must return 100.0 — neutral, never drags health down."""
+        from api.analytics_quality import _calculate_runtime_risk_score
+
+        assert _calculate_runtime_risk_score({}) == 100.0
+
+    def test_high_risk_yields_low_health(self):
+        """High mean runtime_risk → low health score."""
+        from api.analytics_quality import _calculate_runtime_risk_score
+
+        # All files near max risk → health near 0
+        risk_map = {"a.py": 0.9, "b.py": 0.8, "c.py": 0.95}
+        score = _calculate_runtime_risk_score(risk_map)
+        assert score < 20.0, f"Expected low health for high risk, got {score}"
+
+    def test_zero_risk_yields_100_health(self):
+        """Zero risk across all files → perfect health of 100."""
+        from api.analytics_quality import _calculate_runtime_risk_score
+
+        risk_map = {"a.py": 0.0, "b.py": 0.0}
+        assert _calculate_runtime_risk_score(risk_map) == 100.0
+
+    def test_health_inversion_formula(self):
+        """score == 100 * (1 - mean(risk)) for non-empty map."""
+        from api.analytics_quality import _calculate_runtime_risk_score
+
+        risk_map = {"x.py": 0.4, "y.py": 0.6}
+        expected = 100.0 * (1.0 - 0.5)  # mean = 0.5
+        assert abs(_calculate_runtime_risk_score(risk_map) - expected) < 1e-9
+
+    def test_single_file_uses_that_value(self):
+        from api.analytics_quality import _calculate_runtime_risk_score
+
+        risk_map = {"solo.py": 0.3}
+        expected = 100.0 * (1.0 - 0.3)
+        assert abs(_calculate_runtime_risk_score(risk_map) - expected) < 1e-9
+
+
+class TestDrillDownRuntimeRisk:
+    """Tests for the runtime_risk drill-down path (#11184)."""
+
+    @pytest.mark.asyncio
+    async def test_returns_top_files_sorted_desc(self):
+        """drill-down returns files sorted by runtime_risk descending."""
+        risk_map = {"low.py": 0.1, "high.py": 0.9, "mid.py": 0.5}
+
+        with patch("code_analysis.src.runtime_risk.build_runtime_risk_map", new=AsyncMock(return_value=risk_map)):
+            from api import analytics_quality as aq
+
+            result = await aq._drill_down_runtime_risk(limit=10)
+
+        assert result["status"] == "success"
+        files = result["files"]
+        assert len(files) == 3
+        risks = [f["runtime_risk"] for f in files]
+        assert risks == sorted(risks, reverse=True)
+        assert files[0]["file"] == "high.py"
+
+    @pytest.mark.asyncio
+    async def test_empty_map_returns_no_data(self):
+        """Empty risk map yields no_data response, not a crash."""
+        with patch("code_analysis.src.runtime_risk.build_runtime_risk_map", new=AsyncMock(return_value={})):
+            from api import analytics_quality as aq
+
+            result = await aq._drill_down_runtime_risk()
+
+        assert result["status"] == "no_data"
+
+    @pytest.mark.asyncio
+    async def test_limit_is_respected(self):
+        """Only `limit` top files are returned."""
+        risk_map = {f"file{i}.py": i / 100.0 for i in range(20)}
+
+        with patch("code_analysis.src.runtime_risk.build_runtime_risk_map", new=AsyncMock(return_value=risk_map)):
+            from api import analytics_quality as aq
+
+            result = await aq._drill_down_runtime_risk(limit=5)
+
+        assert len(result["files"]) == 5

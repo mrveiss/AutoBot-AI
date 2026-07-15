@@ -287,7 +287,7 @@ class TestLinkPipelineJina:
         pipe = LinkPipeline()
         mock_session = self._make_jina_mock_session(status=200, content="Title\n\nSome content text here.")
 
-        with patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session):
+        with patch("media.link.pipeline._get_jina_session", new=AsyncMock(return_value=mock_session)):
             result = await pipe._try_jina("https://example.com")
 
         assert result == "Title\n\nSome content text here."
@@ -348,7 +348,7 @@ class TestLinkPipelineJina:
         bs4_result = {"type": "link_fetch", "confidence": 0.9, "url": "https://example.com"}
 
         with (
-            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
+            patch("media.link.pipeline._get_jina_session", new=AsyncMock(return_value=mock_session)),
             patch.object(pipe, "_parse_html", return_value=bs4_result),
         ):
             # _try_jina returns None on non-200, triggering BS4 fallback
@@ -390,7 +390,9 @@ class TestLinkPipelineJina:
     async def test_jina_skipped_for_localhost(self):
         """Jina fast-path is not attempted for localhost URLs."""
         pipe = LinkPipeline()
-        assert not pipe._is_public_url("http://localhost:8080/page")
+        assert not pipe._is_public_url(
+            "http://localhost:8080/page"
+        )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         assert not pipe._is_public_url("http://127.0.0.1/api")
 
     @pytest.mark.asyncio
@@ -545,12 +547,9 @@ def _reset_jina_state():
 
     pl._jina_cooldown_until = 0.0
     pl._jina_failures_in_window.clear()
-    # Force re-creation of pooled session on next use
-    pl._jina_session = None
     yield
     pl._jina_cooldown_until = 0.0
     pl._jina_failures_in_window.clear()
-    pl._jina_session = None
 
 
 class TestJinaCircuitBreaker:
@@ -643,13 +642,26 @@ class TestJinaCircuitBreaker:
 
 
 class TestJinaPooledSession:
-    """Pooled ClientSession is reused across sequential calls (#5022)."""
+    """Jina requests use the shared HTTPClientManager session (#11641)."""
 
     @pytest.mark.asyncio
-    async def test_pooled_session_reused_across_calls(self, _reset_jina_state):
-        """Two sequential _try_jina calls reuse the same _jina_session instance."""
+    async def test_delegates_to_shared_http_client(self, _reset_jina_state):
+        """_get_jina_session returns the canonical shared session."""
         from media.link import pipeline as pl
 
+        sentinel_session = MagicMock()
+        mock_manager = MagicMock()
+        mock_manager.get_session = AsyncMock(return_value=sentinel_session)
+
+        with patch("autobot_shared.http_client.get_http_client", return_value=mock_manager):
+            session = await pl._get_jina_session()
+
+        assert session is sentinel_session
+        mock_manager.get_session.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_shared_session_reused_across_calls(self, _reset_jina_state):
+        """Sequential _try_jina calls fetch through the same shared session."""
         pipe = LinkPipeline()
 
         mock_response = AsyncMock()
@@ -658,54 +670,16 @@ class TestJinaPooledSession:
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
 
-        # Patch aiohttp.ClientSession to return a tracked MagicMock (not AsyncMock,
-        # so `.closed` is a truthy-free MagicMock attribute; we set it explicitly).
-        created_session = MagicMock()
-        created_session.closed = False
-        created_session.get = MagicMock(return_value=mock_response)
+        shared_session = MagicMock()
+        shared_session.get = MagicMock(return_value=mock_response)
+        mock_manager = MagicMock()
+        mock_manager.get_session = AsyncMock(return_value=shared_session)
 
-        call_count = MagicMock(return_value=created_session)
-
-        with patch("media.link.pipeline.aiohttp.ClientSession", call_count):
+        with patch("autobot_shared.http_client.get_http_client", return_value=mock_manager):
             await pipe._try_jina("https://example.com/1")
-            first_id = id(pl._jina_session)
             await pipe._try_jina("https://example.com/2")
-            second_id = id(pl._jina_session)
 
-        assert first_id == second_id, "Pooled session must be the same instance across calls"
-        # aiohttp.ClientSession() constructor should have been called exactly once
-        assert call_count.call_count == 1
-
-    @pytest.mark.asyncio
-    async def test_close_jina_session_allows_recreation(self, _reset_jina_state):
-        """close_jina_session() closes the pooled session; next call creates a new one."""
-        from media.link import pipeline as pl
-
-        pipe = LinkPipeline()
-
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.text = AsyncMock(return_value="ok")
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=False)
-
-        session_a = MagicMock()
-        session_a.closed = False
-        session_a.get = MagicMock(return_value=mock_response)
-        session_a.close = AsyncMock()
-        session_b = MagicMock()
-        session_b.closed = False
-        session_b.get = MagicMock(return_value=mock_response)
-
-        with patch("media.link.pipeline.aiohttp.ClientSession", side_effect=[session_a, session_b]):
-            await pipe._try_jina("https://example.com/1")
-            assert pl._jina_session is session_a
-            await pl.close_jina_session()
-            assert pl._jina_session is None
-            await pipe._try_jina("https://example.com/2")
-            assert pl._jina_session is session_b
-
-        session_a.close.assert_awaited_once()
+        assert shared_session.get.call_count == 2, "Both fetches must use the shared session"
 
 
 class TestJinaTitleExtraction:

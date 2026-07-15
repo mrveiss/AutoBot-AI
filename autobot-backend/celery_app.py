@@ -16,6 +16,8 @@ from pathlib import Path
 
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import worker_process_init
+from kombu import Queue
 
 from autobot_shared.logging_manager import get_logger as _get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
@@ -87,6 +89,12 @@ celery_app = Celery(
     backend=ssot_config.celery_result_backend or _default_backend_url,
 )
 
+# GH#11262: priority tiers live in celery_priority (plain data so they can be
+# unit-tested without importing this heavy, pytest-stubbed module, issue #7766).
+from celery_priority import MAX_PRIORITY as _MAX_PRIORITY  # noqa: E402
+from celery_priority import PRIORITY_NORMAL as _PRIORITY_NORMAL
+from celery_priority import PRIORITY_TASK_ROUTES as _PRIORITY_TASK_ROUTES
+
 # Celery configuration
 celery_app.conf.update(
     # Serialization settings
@@ -98,11 +106,27 @@ celery_app.conf.update(
     enable_utc=True,
     # Task tracking
     task_track_started=True,
+    # GH#11262: enable priority queues so audit preempts low-priority maintenance.
+    task_queue_max_priority=_MAX_PRIORITY,
+    task_default_priority=_PRIORITY_NORMAL,
+    # #11631: explicit queue set — a worker started WITHOUT -Q (the Ansible
+    # systemd unit autobot-celery.service.j2) consumes exactly these queues;
+    # Celery's default without this is the lone `celery` queue, which left
+    # deployments/memory/analytics tasks unconsumed in that flavor. Every
+    # queue referenced by task_routes below MUST be listed here (guarded by
+    # celery_queue_coverage_test.py) or routed tasks sit in Redis forever.
+    task_queues=(
+        Queue("celery"),
+        Queue("deployments"),
+        Queue("memory"),
+        Queue("analytics"),
+    ),
     # Task routing - route tasks to appropriate queues
+    # #11608: phantom routes for tasks.deploy_host / tasks.provision_ssh_key /
+    # tasks.manage_service removed — those tasks moved to the SLM server (#729)
+    # and nothing sends those names to this broker anymore. The orphaned
+    # `provisioning` and `services` queues were dropped with them.
     task_routes={
-        "tasks.deploy_host": {"queue": "deployments"},
-        "tasks.provision_ssh_key": {"queue": "provisioning"},
-        "tasks.manage_service": {"queue": "services"},
         # Issue #687: RBAC initialization tasks
         "tasks.initialize_rbac": {"queue": "deployments"},
         # Issue #544: System update tasks
@@ -121,6 +145,8 @@ celery_app.conf.update(
         "analytics.run_bug_prediction_analysis": {"queue": "analytics"},
         "analytics.run_security_analysis": {"queue": "analytics"},
         "analytics.run_dashboard_analysis": {"queue": "analytics"},
+        # GH#11262: priority tiers on the shared default queue (audit > maintenance).
+        **_PRIORITY_TASK_ROUTES,
     },
     # Worker configuration for long-running Ansible playbooks
     # Uses centralized config from unified_config_manager
@@ -130,6 +156,9 @@ celery_app.conf.update(
     # Issue #725: Include SSL options when TLS is enabled
     broker_transport_options={
         "visibility_timeout": _visibility_timeout,
+        # GH#11262: drain higher-priority messages first so critical audit work
+        # is not stuck behind a backlog of low-priority cleanup on the same queue.
+        "queue_order_strategy": "priority",
         **(_broker_ssl_options or {}),
     },
     result_backend_transport_options={
@@ -151,57 +180,40 @@ import services.pricing_refresh  # noqa: F401
 
 # GH#4463: Mobile device tasks module
 import tasks.mobile_device_tasks  # noqa: F401
+from utils.celery_schedules import crontab_from_string  # noqa: E402
 
 # =========================================================================
 # Issue #4455: Periodic knowledge-base cleanup schedule
+# Issue #11606: cron parser extracted to utils.celery_schedules so it stays
+# importable when the test conftest stubs this module in sys.modules.
 # =========================================================================
-
-
-def _crontab_from_string(cron_expr: str) -> crontab:
-    """Parse a 5-field cron string ('m h dom mon dow') into a Celery crontab.
-
-    Falls back to a daily 03:00 UTC schedule if the expression is malformed,
-    logging a warning so misconfiguration does not prevent Beat from starting.
-    """
-
-    _log = _get_logger(__name__)
-    parts = cron_expr.strip().split()
-    if len(parts) != 5:
-        _log.warning(
-            "Invalid cron expression %r (expected 5 fields); falling back to '0 3 * * *'",
-            cron_expr,
-        )
-        parts = ["0", "3", "*", "*", "*"]
-    minute, hour, day_of_month, month_of_year, day_of_week = parts
-    return crontab(
-        minute=minute,
-        hour=hour,
-        day_of_month=day_of_month,
-        month_of_year=month_of_year,
-        day_of_week=day_of_week,
-    )
 
 
 celery_app.conf.beat_schedule = {
     "knowledge-cleanup-orphan-documents": {
         "task": "tasks.cleanup_orphan_documents",
-        "schedule": _crontab_from_string(ssot_config.knowledge_orphan_cleanup_schedule),
+        "schedule": crontab_from_string(ssot_config.knowledge_orphan_cleanup_schedule),
         "kwargs": {"dry_run": False},
     },
     "knowledge-cleanup-generated-files": {
         "task": "tasks.cleanup_generated_files",
-        "schedule": _crontab_from_string(ssot_config.knowledge_generated_files_cleanup_schedule),
+        "schedule": crontab_from_string(ssot_config.knowledge_generated_files_cleanup_schedule),
         "kwargs": {"dry_run": False},
     },
     # Issue #5081: prune expired entries from the doc_sync:queue:done zset
     "knowledge-sync-queue-prune": {
         "task": "tasks.prune_sync_queue_done",
-        "schedule": _crontab_from_string(ssot_config.knowledge_sync_queue_prune_schedule),
+        "schedule": crontab_from_string(ssot_config.knowledge_sync_queue_prune_schedule),
     },
     # GH#8224: detect expired active sprints and queue SPRINT_CLOSE approvals daily
     "llc-sprint-autoclose-daily": {
         "task": "llc.scheduler.sprint_autoclose.run_daily_check",
         "schedule": crontab(hour=0, minute=5),
+    },
+    # #11129 P2: dispose pending_disposal projects whose retention has elapsed
+    "llc-project-disposal-sweep": {
+        "task": "llc.scheduler.project_disposal_sweep.run_disposal_sweep",
+        "schedule": crontab(hour=1, minute=0),
     },
     # GH#7356: background audit daemon — testgaps, dead-code, claims
     # Beat pidfile must NOT reside on tmpfs (/run/autobot/ is wiped on reboot).
@@ -216,6 +228,12 @@ celery_app.conf.beat_schedule = {
     "audit-claims-weekly": {
         "task": "workers.audit_claims",
         "schedule": crontab(hour=3, minute=0, day_of_week=1),  # Monday 03:00 UTC
+    },
+    # GH#11263: nightly trajectory-store consolidation (dedupe + prune) so
+    # retrieval precision holds as the store grows. NORMAL priority (GH#11262).
+    "memory-consolidate-trajectories-daily": {
+        "task": "memory.consolidate_trajectories",
+        "schedule": crontab(hour=4, minute=0),  # 04:00 UTC, after nightly cleanup
     },
     # GH#6471: nightly eviction of stale per-task git worktree workspaces
     "workspace-cleanup-nightly": {
@@ -239,10 +257,10 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.cleanup_expired_snapshots",
         "schedule": crontab(hour=3, minute=0),
     },
-    # #10337: hourly reconciliation of mirrored unified credential copies against canonical
+    # #10337: hourly reconciliation of mirrored credential copies against canonical
     # SQLite — bounds the revoke-resurrection window of the connector-store cutover (#10088).
-    "reconcile-unified-credentials-hourly": {
-        "task": "tasks.reconcile_unified_credentials",
+    "reconcile-credentials-hourly": {
+        "task": "tasks.reconcile_credentials",
         "schedule": crontab(minute=20),
     },
     # GH#8995: data-hygiene retention tasks (nightly, staggered to avoid Redis contention)
@@ -250,26 +268,27 @@ celery_app.conf.beat_schedule = {
     # Schedules are configurable via AUTOBOT_*_RETENTION_SCHEDULE env vars (5-field cron).
     "data-retention-chats-nightly": {
         "task": "tasks.cleanup_expired_chats",
-        "schedule": _crontab_from_string(getattr(ssot_config.misc, "chat_retention_schedule", None) or "0 1 * * *"),
+        "schedule": crontab_from_string(getattr(ssot_config.misc, "chat_retention_schedule", None) or "0 1 * * *"),
         "kwargs": {"dry_run": False},
     },
     "data-retention-files-nightly": {
         "task": "tasks.cleanup_expired_files",
-        "schedule": _crontab_from_string(getattr(ssot_config.misc, "file_retention_schedule", None) or "15 1 * * *"),
+        "schedule": crontab_from_string(getattr(ssot_config.misc, "file_retention_schedule", None) or "15 1 * * *"),
         "kwargs": {"dry_run": False},
     },
     "data-retention-audit-nightly": {
         "task": "tasks.cleanup_expired_audit_logs",
-        "schedule": _crontab_from_string(getattr(ssot_config.misc, "audit_retention_schedule", None) or "30 1 * * *"),
+        "schedule": crontab_from_string(getattr(ssot_config.misc, "audit_retention_schedule", None) or "30 1 * * *"),
         "kwargs": {"dry_run": False},
     },
     "data-retention-kb-nightly": {
         "task": "tasks.cleanup_expired_kb_entries",
-        "schedule": _crontab_from_string(getattr(ssot_config.misc, "kb_retention_schedule", None) or "45 1 * * *"),
+        "schedule": crontab_from_string(getattr(ssot_config.misc, "kb_retention_schedule", None) or "45 1 * * *"),
         "kwargs": {"dry_run": False},
     },
 }
 
+import llc.scheduler.project_disposal_sweep  # noqa: F401
 import tasks.audit_log_retention  # noqa: F401
 
 # GH#8995: import retention tasks so Celery registers them at worker startup
@@ -287,3 +306,30 @@ except ImportError:
     pass  # pywebpush not installed — push notifications disabled
 except Exception:
     logger.warning("Push notification hook registration failed (GH#4459)", exc_info=True)
+
+
+# Issue #10936: Reset async Redis pool state in each forked worker process.
+#
+# The singleton RedisConnectionManager is created before the prefork pool forks.
+# After fork the child process inherits _async_pools populated from the parent's
+# event loop (which no longer exists in the child).  Any async Redis call that
+# tries to reuse those pools gets connections tied to the dead parent loop,
+# causing get_async_client() to catch the error and return None — the
+# AttributeError: 'NoneType' object has no attribute 'zrangebyscore' symptom.
+#
+# worker_process_init fires once inside each forked worker process, before any
+# task executes, making it the correct hook for this one-time reset.  The reset
+# is synchronous (no event loop required) and idempotent.
+@worker_process_init.connect
+def _reset_async_redis_pools_on_worker_init(sender=None, **kwargs):
+    """Clear inherited async Redis pools so each worker gets its own."""
+    try:
+        from autobot_shared.redis_client import reset_async_redis_pools
+
+        reset_async_redis_pools()
+        logger.info("worker_process_init: async Redis pools reset for new worker process (#10936)")
+    except Exception:
+        logger.warning(
+            "worker_process_init: async Redis pool reset failed (worker will still start)",
+            exc_info=True,
+        )

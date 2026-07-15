@@ -164,7 +164,7 @@ onMounted(load)
 }
 
 .asr-selector-error {
-  color: var(--color-error, var(--color-danger));
+  color: var(--color-error, var(--color-error));
 }
 
 .asr-selector-control {

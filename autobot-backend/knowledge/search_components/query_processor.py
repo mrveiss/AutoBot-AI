@@ -82,7 +82,7 @@ class QueryProcessor:
         """
         Expand query with synonyms and related terms.
 
-        Issue #281: Extracted from enhanced_search_v2 for clarity.
+        Issue #281: Extracted from advanced search for clarity.
 
         Args:
             query: Processed query string

@@ -16,8 +16,8 @@ const meta = {
 } as Meta<typeof OperationDetail>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = import('@storybook/vue3').StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = import('@storybook/vue3').StoryObj<Record<string, unknown>>;
 
 const baseOperation = {
   operation_id: 'op-abc123',

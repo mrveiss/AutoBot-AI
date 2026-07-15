@@ -8,13 +8,11 @@
  */
 
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import {
   useSessionCollaboration,
   type SecretSharingNotification
 } from '@/composables/useSessionCollaboration'
 
-const { t } = useI18n()
 const { secretNotifications, clearSecretNotifications } = useSessionCollaboration()
 
 // Format timestamp

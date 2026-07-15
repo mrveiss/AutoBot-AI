@@ -11,13 +11,11 @@
  */
 
 import { ref, onMounted, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useAgentRegistry, type SpecializedAgent, type BackendAgent } from '@/composables/useAgentRegistry'
+import { useAgentRegistry, type SpecializedAgent } from '@/composables/useAgentRegistry'
 import { useAvailableModels } from '@/composables/useAvailableModels'
 import AgentSettingsPanel from '@/components/agents/AgentSettingsPanel.vue'
 import { createLogger } from '@/utils/debugUtils'
 
-const { t } = useI18n()
 const logger = createLogger('AgentRegistryView')
 
 const {
@@ -36,7 +34,6 @@ const {
 const {
   availableModelNames,
   isLoading: isLoadingModels,
-  error: modelsError,
   hasErrors: modelsHaveErrors,
   providersErrored,
   fetchModels,
@@ -63,20 +60,13 @@ const colorMap: Record<string, string> = {
   green: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   yellow: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
   purple: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  gray: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
+  gray: 'bg-autobot-bg-tertiary text-autobot-text-primary',
 }
 
 function getColorClasses(color: string): string {
   return colorMap[color] || colorMap.gray
 }
 
-const categoryIcons: Record<string, string> = {
-  implementation: 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4',
-  analysis: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-  planning: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01',
-  specialized: 'M13 10V3L4 14h7v7l9-11h-7z',
-  general: 'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4',
-}
 
 async function openAgentDetail(agent: SpecializedAgent) {
   showDetailModal.value = true
@@ -253,7 +243,7 @@ onMounted(async () => {
                 <span
                   v-for="task in agent.tasks.slice(0, 3)"
                   :key="task"
-                  class="inline-block px-1.5 py-0.5 text-[10px] rounded bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                  class="inline-block px-1.5 py-0.5 text-[10px] rounded bg-autobot-bg-tertiary text-autobot-text-secondary"
                 >
                   {{ task }}
                 </span>
@@ -336,7 +326,7 @@ onMounted(async () => {
                 <span
                   v-for="tool in agent.tools.slice(0, 4)"
                   :key="tool"
-                  class="inline-block px-1.5 py-0.5 text-[10px] rounded bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                  class="inline-block px-1.5 py-0.5 text-[10px] rounded bg-autobot-bg-tertiary text-autobot-text-secondary"
                 >
                   {{ tool }}
                 </span>
@@ -380,7 +370,7 @@ onMounted(async () => {
               </span>
               <h3 class="text-lg font-semibold text-primary">{{ selectedAgent.name }}</h3>
             </div>
-            <div v-else class="h-6 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+            <div v-else class="h-6 w-48 bg-autobot-bg-tertiary rounded animate-pulse"></div>
             <button
               @click="closeDetailModal"
               class="text-secondary hover:text-primary"
@@ -403,7 +393,7 @@ onMounted(async () => {
                   {{ selectedAgent.category }}
                 </span>
                 <span v-for="tool in selectedAgent.tools" :key="tool"
-                  class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                  class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-autobot-bg-tertiary text-autobot-text-secondary"
                 >
                   {{ tool }}
                 </span>
@@ -412,7 +402,7 @@ onMounted(async () => {
               <!-- System Prompt -->
               <div class="mt-4">
                 <h4 class="text-sm font-medium text-primary mb-2">{{ $t('agent.registry.systemPrompt') }}</h4>
-                <pre class="text-xs text-secondary bg-gray-50 dark:bg-gray-800 rounded p-4 overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">{{ selectedAgent.system_prompt }}</pre>
+                <pre class="text-xs text-secondary bg-autobot-bg-surface rounded p-4 overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">{{ selectedAgent.system_prompt }}</pre>
               </div>
             </div>
           </div>

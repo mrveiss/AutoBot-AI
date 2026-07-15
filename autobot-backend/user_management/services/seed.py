@@ -12,8 +12,6 @@ Guards:
 - Skipped when ``AUTOBOT_ADMIN_PASSWORD`` is not set (no default shipped).
 - Idempotent: skipped when any ``is_platform_admin=True`` user or a user
   with the configured username already exists.
-- Postgres-gated: the caller in lifespan.py wraps this with
-  ``@requires_postgres`` so it is never reached in single_user/no-DB mode.
 """
 
 from sqlalchemy import or_, select

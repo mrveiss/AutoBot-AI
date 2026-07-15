@@ -35,7 +35,7 @@ from type_defs.common import Metadata
 from utils.system_metrics import get_metrics_collector
 
 # Import existing monitoring infrastructure
-from .monitoring_hardware import hardware_monitor
+from .monitoring_hardware import local_hardware_monitor
 
 logger = get_logger(__name__)
 
@@ -424,8 +424,8 @@ class AnalyticsController:
 
     async def _collect_hardware_performance(self) -> Dict:
         """Helper for collect_performance_metrics. Ref: #1088."""
-        gpu_status = await hardware_monitor.get_gpu_status()
-        npu_status = await hardware_monitor.get_npu_status()
+        gpu_status = await local_hardware_monitor.get_gpu_status()
+        npu_status = await local_hardware_monitor.get_npu_status()
         return {
             "gpu": gpu_status,
             "npu": npu_status,

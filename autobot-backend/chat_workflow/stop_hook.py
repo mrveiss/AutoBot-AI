@@ -32,6 +32,7 @@ async def on_turn_complete(
     assistant_response: str,
     user_id: str | None,
     turn_number: int,
+    tenant_id: str | None = None,
 ) -> None:
     """Enqueue memory tasks for a completed chat turn (fire-and-forget).
 
@@ -45,6 +46,7 @@ async def on_turn_complete(
         assistant_response: Full assembled assistant response text.
         user_id: Optional user identifier for privacy scoping.
         turn_number: Zero-based turn counter within the session.
+        tenant_id: Optional tenant/org identifier for trajectory scoping (#11261).
     """
     # Late imports keep this module free of circular deps at load time.
     # Test code may patch ``stop_hook.write_verbatim_task`` /
@@ -86,6 +88,22 @@ async def on_turn_complete(
             turn_number,
             exc,
         )
+
+    # #11261: store-after — score and capture this turn as a trajectory so future
+    # turns can retrieve it. Runs after the memory enqueues (a slow judge call must
+    # not delay durable writes). Gated by SELF_IMPROVEMENT_ENABLED and non-fatal.
+    try:
+        from chat_workflow.trajectory_context import capture_chat_trajectory
+
+        await capture_chat_trajectory(
+            user_message=user_message,
+            assistant_response=assistant_response,
+            user_id=user_id or "",
+            tenant_id=tenant_id or "",
+            session_id=session_id,
+        )
+    except Exception as exc:  # noqa: BLE001 — fire-and-forget by contract
+        logger.debug("stop_hook: trajectory capture skipped (non-fatal): %s", exc)
 
 
 __all__ = ["on_turn_complete"]

@@ -4,8 +4,10 @@
 <!-- WebResearchPanel — 4-tab web research UI (MVA-344) -->
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useTabs } from '@/composables/useTabs'
+import { useWebResearchStore } from '@/stores/useWebResearchStore'
 import ScrapeTab from '@/components/knowledge/web-research/ScrapeTab.vue'
 import CrawlTab from '@/components/knowledge/web-research/CrawlTab.vue'
 import SiteMapTab from '@/components/knowledge/web-research/SiteMapTab.vue'
@@ -13,9 +15,26 @@ import ExtractTab from '@/components/knowledge/web-research/ExtractTab.vue'
 
 const { t } = useI18n()
 
-type TabId = 'scrape' | 'crawl' | 'sitemap' | 'extract'
+// #11665: pre-flight — hydrate settings/status from the backend on mount and
+// block submits when the researcher is unavailable or research is disabled.
+const store = useWebResearchStore()
+const bannerDismissed = ref(false)
 
-const activeTab = ref<TabId>('scrape')
+const researchBlocked = computed(() => !store.researcherAvailable || !store.isEnabled)
+const bannerText = computed(() =>
+  !store.researcherAvailable
+    ? t('knowledge.webResearch.banner.unavailable')
+    : t('knowledge.webResearch.banner.disabled')
+)
+
+onMounted(() => {
+  store.loadFromBackend()
+})
+
+const TAB_IDS = ['scrape', 'crawl', 'sitemap', 'extract'] as const
+type TabId = (typeof TAB_IDS)[number]
+
+const { activeTab, tabAttrs, panelAttrs, handleKeydown, tablistRef } = useTabs(TAB_IDS)
 
 interface Tab {
   id: TabId
@@ -63,28 +82,58 @@ const tabs: Tab[] = [
       </div>
     </div>
 
+    <!-- Pre-flight banner (#11665) -->
+    <div v-if="researchBlocked && !bannerDismissed" class="wrp-banner" role="alert">
+      <svg class="wrp-banner__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <span class="wrp-banner__text">{{ bannerText }}</span>
+      <button
+        type="button"
+        class="wrp-banner__dismiss"
+        :aria-label="t('knowledge.webResearch.banner.dismiss')"
+        @click="bannerDismissed = true"
+      >
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" class="wrp-banner__dismiss-icon">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
     <!-- Tab bar -->
-    <div class="wrp-tabs" role="tablist" :aria-label="t('knowledge.webResearch.tabListAriaLabel')">
+    <div
+      ref="tablistRef"
+      class="wrp-tabs"
+      role="tablist"
+      :aria-label="t('knowledge.webResearch.tabListAriaLabel')"
+    >
       <button
         v-for="tab in tabs"
         :key="tab.id"
+        v-bind="tabAttrs(tab.id)"
         class="wrp-tab"
         :class="{ 'wrp-tab--active': activeTab === tab.id }"
-        role="tab"
-        :aria-selected="activeTab === tab.id"
         :aria-label="tab.ariaLabel"
         @click="activeTab = tab.id"
+        @keydown="handleKeydown"
       >
         {{ tab.label }}
       </button>
     </div>
 
-    <!-- Tab content -->
-    <div class="wrp-content" role="tabpanel">
-      <ScrapeTab v-if="activeTab === 'scrape'" />
-      <CrawlTab v-else-if="activeTab === 'crawl'" />
-      <SiteMapTab v-else-if="activeTab === 'sitemap'" />
-      <ExtractTab v-else-if="activeTab === 'extract'" />
+    <!-- Tab panels -->
+    <div v-if="activeTab === 'scrape'" v-bind="panelAttrs('scrape')" class="wrp-content">
+      <ScrapeTab :disabled="researchBlocked" />
+    </div>
+    <div v-else-if="activeTab === 'crawl'" v-bind="panelAttrs('crawl')" class="wrp-content">
+      <CrawlTab :disabled="researchBlocked" />
+    </div>
+    <div v-else-if="activeTab === 'sitemap'" v-bind="panelAttrs('sitemap')" class="wrp-content">
+      <SiteMapTab :disabled="researchBlocked" />
+    </div>
+    <div v-else-if="activeTab === 'extract'" v-bind="panelAttrs('extract')" class="wrp-content">
+      <ExtractTab :disabled="researchBlocked" />
     </div>
   </div>
 </template>
@@ -126,7 +175,7 @@ const tabs: Tab[] = [
 .wrp-header__icon {
   width: 22px;
   height: 22px;
-  color: var(--accent-primary, #00d4ff);
+  color: var(--color-primary);
   flex-shrink: 0;
 }
 
@@ -134,6 +183,54 @@ const tabs: Tab[] = [
   font-size: 0.875rem;
   color: var(--text-muted);
   margin: 0;
+}
+
+/* ── Pre-flight banner (#11665) ─────────────────────────────────────────── */
+
+.wrp-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 24px 0;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--status-warning) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-warning) 35%, transparent);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.wrp-banner__icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--status-warning);
+}
+
+.wrp-banner__text {
+  flex: 1;
+  line-height: 1.5;
+}
+
+.wrp-banner__dismiss {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.wrp-banner__dismiss:hover {
+  color: var(--text-primary);
+}
+
+.wrp-banner__dismiss-icon {
+  width: 16px;
+  height: 16px;
 }
 
 /* ── Tab bar ────────────────────────────────────────────────────────────── */
@@ -166,12 +263,12 @@ const tabs: Tab[] = [
 }
 
 .wrp-tab--active {
-  color: var(--accent-primary, #00d4ff);
-  border-bottom-color: var(--accent-primary, #00d4ff);
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
 }
 
 .wrp-tab:focus-visible {
-  outline: 2px solid var(--accent-primary, #00d4ff);
+  outline: 2px solid var(--color-primary);
   outline-offset: -2px;
 }
 
@@ -241,7 +338,7 @@ const tabs: Tab[] = [
 }
 
 .wr-input:focus {
-  border-color: var(--accent-primary, #00d4ff);
+  border-color: var(--color-primary);
 }
 
 .wr-input:disabled {
@@ -288,7 +385,7 @@ const tabs: Tab[] = [
 }
 
 .wr-textarea:focus {
-  border-color: var(--accent-primary, #00d4ff);
+  border-color: var(--color-primary);
 }
 
 .wr-checkbox-label {
@@ -302,7 +399,7 @@ const tabs: Tab[] = [
 
 .wr-field-error {
   font-size: 0.8rem;
-  color: var(--status-error, #f87171);
+  color: var(--color-error);
   margin: 0;
 }
 
@@ -329,7 +426,7 @@ const tabs: Tab[] = [
 }
 
 .wr-btn:focus-visible {
-  outline: 2px solid var(--accent-primary, #00d4ff);
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
@@ -339,8 +436,8 @@ const tabs: Tab[] = [
 }
 
 .wr-btn--primary {
-  background: var(--accent-primary, #00d4ff);
-  color: var(--bg-primary, #0a0a0a);
+  background: var(--color-primary);
+  color: var(--bg-primary);
 }
 
 .wr-btn--primary:not(:disabled):hover {
@@ -384,7 +481,7 @@ const tabs: Tab[] = [
 }
 
 .wr-skeleton {
-  background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary, #1a1a1a) 50%, var(--bg-secondary) 75%);
+  background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
   background-size: 200% 100%;
   border-radius: 4px;
   animation: wr-shimmer 1.4s infinite;
@@ -418,7 +515,7 @@ const tabs: Tab[] = [
 
 .wr-progress-bar__fill {
   height: 100%;
-  background: var(--accent-primary, #00d4ff);
+  background: var(--color-primary);
   border-radius: 2px;
   transition: width 0.3s ease;
 }
@@ -446,11 +543,11 @@ const tabs: Tab[] = [
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  background: color-mix(in srgb, var(--status-error, #f87171) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--status-error, #f87171) 30%, transparent);
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
   border-radius: 8px;
   font-size: 0.875rem;
-  color: var(--status-error, #f87171);
+  color: var(--color-error);
 }
 
 .wr-error__icon {
@@ -526,7 +623,7 @@ const tabs: Tab[] = [
 
 .wr-result__url a {
   font-size: 0.8rem;
-  color: var(--accent-primary, #00d4ff);
+  color: var(--color-primary);
   word-break: break-all;
   text-decoration: none;
 }
@@ -551,7 +648,7 @@ const tabs: Tab[] = [
 }
 
 .wr-result__content--json {
-  color: var(--text-code, #a3e635);
+  color: var(--code-string);
 }
 
 .wr-result__content--markdown {
@@ -573,23 +670,23 @@ const tabs: Tab[] = [
 }
 
 .wr-badge--success {
-  background: color-mix(in srgb, var(--status-success, #4ade80) 15%, transparent);
-  color: var(--status-success, #4ade80);
+  background: color-mix(in srgb, var(--color-success) 15%, transparent);
+  color: var(--color-success);
 }
 
 .wr-badge--error {
-  background: color-mix(in srgb, var(--status-error, #f87171) 15%, transparent);
-  color: var(--status-error, #f87171);
+  background: color-mix(in srgb, var(--color-error) 15%, transparent);
+  color: var(--color-error);
 }
 
 .wr-badge--warning {
-  background: color-mix(in srgb, var(--status-warning, #fbbf24) 15%, transparent);
-  color: var(--status-warning, #fbbf24);
+  background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+  color: var(--color-warning);
 }
 
 .wr-badge--info {
-  background: color-mix(in srgb, var(--accent-primary, #00d4ff) 15%, transparent);
-  color: var(--accent-primary, #00d4ff);
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  color: var(--color-primary);
 }
 
 /* ── URL list ────────────────────────────────────────────────────────────── */
@@ -643,7 +740,7 @@ const tabs: Tab[] = [
 }
 
 .wr-url-list__link {
-  color: var(--accent-primary, #00d4ff);
+  color: var(--color-primary);
   text-decoration: none;
   overflow: hidden;
   text-overflow: ellipsis;

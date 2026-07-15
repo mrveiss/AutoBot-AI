@@ -101,12 +101,14 @@
 import Icon from '@/components/ui/Icon.vue'
 import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { formatDateTime } from '@/utils/formatHelpers'
 import { useKnowledgeVectorization } from '@/composables/knowledge/useKnowledgeVectorization'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 const {
   failedJobs,
@@ -121,7 +123,7 @@ const {
 
 // Delete a single job — confirm before delegating to composable
 const deleteJob = async (jobId: string) => {
-  if (!confirm(t('knowledge.failedVectorizations.confirmDelete'))) {
+  if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.failedVectorizations.confirmDelete') }))) {
     return
   }
   await deleteJobBase(jobId)
@@ -129,7 +131,7 @@ const deleteJob = async (jobId: string) => {
 
 // Clear all failed jobs — confirm before delegating to composable
 const clearAllFailed = async () => {
-  if (!confirm(t('knowledge.failedVectorizations.confirmClearAll', { count: failedJobs.value.length }))) {
+  if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.failedVectorizations.confirmClearAll', { count: failedJobs.value.length }) }))) {
     return
   }
   await clearAllFailedBase()

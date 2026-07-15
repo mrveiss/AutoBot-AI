@@ -88,7 +88,7 @@ logger = get_logger(__name__)
 
 # Re-export for backward compatibility
 __all__ = [
-    # Main class (renamed from Phase9PerformanceMonitor)
+    # Main class (see hardware_metrics.py for HardwarePerformanceMonitor)
     "PerformanceMonitor",
     # Metrics dataclasses
     "GPUMetrics",

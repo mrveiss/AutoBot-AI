@@ -69,7 +69,6 @@ scripts/bulletproof-frontend/sync-and-verify.sh
 
 ### 5. **Real-Time Health Monitoring**
 ```javascript
-src/utils/FrontendHealthMonitor.js
 ```
 - **Continuous health checks** every 30 seconds (5 seconds when issues detected)
 - **Multi-component monitoring** (backend, WebSocket, router, cache)

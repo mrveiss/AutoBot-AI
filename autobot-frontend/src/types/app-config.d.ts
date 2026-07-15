@@ -12,6 +12,8 @@
  * Issue #156: Complete type safety for configuration access
  */
 
+import type { ServicesConfig, InfrastructureConfig } from '@/config/AppConfig'
+
 /**
  * Terminal host configuration
  */
@@ -40,18 +42,18 @@ export interface BackendConfig {
    */
   config?: {
     hosts?: HostConfig[]
-    services?: Record<string, any>
+    services?: ServicesConfig | Record<string, unknown>
   }
 
   /**
    * Service configurations
    */
-  services?: Record<string, any>
+  services?: ServicesConfig | Record<string, unknown>
 
   /**
    * Infrastructure settings
    */
-  infrastructure?: Record<string, any>
+  infrastructure?: InfrastructureConfig | Record<string, unknown>
 
   /**
    * Network settings
@@ -60,7 +62,7 @@ export interface BackendConfig {
     backend?: { host: string; port: string; protocol: string }
     frontend?: { host: string; port: string; protocol: string }
     redis?: { host: string; port: string }
-    [key: string]: any
+    [key: string]: unknown
   }
 }
 

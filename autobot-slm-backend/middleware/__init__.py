@@ -8,6 +8,8 @@ SLM Backend Middleware Package
 Contains reusable ASGI/Starlette middleware for the SLM backend.
 """
 
+# Issue #10778: HTTP API request counter middleware
+from middleware.api_request_counter import ApiRequestCounterMiddleware
 from middleware.security_headers import SecurityHeadersMiddleware
 
-__all__ = ["SecurityHeadersMiddleware"]
+__all__ = ["SecurityHeadersMiddleware", "ApiRequestCounterMiddleware"]

@@ -128,7 +128,7 @@ def _get_ssot_backend_url() -> str:
 
         return get_config().backend_url
     except Exception:
-        return "http://127.0.0.1:8001"
+        return "http://127.0.0.1:8001"  # canonical: ignore py-hardcoded-url - bootstrap: ssot_config unavailable
 
 
 # Load SSOT defaults at module level so Settings class can reference them.

@@ -182,7 +182,7 @@ onUnmounted(() => {
           ]"
         >
           <span :class="['w-2 h-2 rounded-full', isAutoRefresh ? 'bg-success-500 animate-pulse' : 'bg-gray-400']"></span>
-          {{ isAutoRefresh ? 'Live' : 'Paused' }}
+          {{ isAutoRefresh ? $t('monitoring.logViewer.live') : $t('monitoring.logViewer.paused') }}
         </button>
         <button
           @click="fetchLogs"
@@ -208,7 +208,7 @@ onUnmounted(() => {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Search logs..."
+            :placeholder="$t('monitoring.logViewer.searchLogs')"
             class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
@@ -221,7 +221,7 @@ onUnmounted(() => {
             class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
           >
             <option v-for="level in logLevels" :key="level" :value="level">
-              {{ level === 'all' ? 'All Levels' : level.charAt(0).toUpperCase() + level.slice(1) }}
+              {{ level === 'all' ? $t('monitoring.logViewer.allLevels') : level.charAt(0).toUpperCase() + level.slice(1) }}
             </option>
           </select>
         </div>
@@ -234,7 +234,7 @@ onUnmounted(() => {
             class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
           >
             <option v-for="source in logSources" :key="source" :value="source">
-              {{ source === 'all' ? 'All Sources' : source }}
+              {{ source === 'all' ? $t('monitoring.logViewer.allSources') : source }}
             </option>
           </select>
         </div>
@@ -242,9 +242,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Log Count -->
-    <div class="text-sm text-gray-500 mb-2">
-      Showing {{ filteredLogs.length }} of {{ logs.length }} entries
-    </div>
+    <div class="text-sm text-gray-500 mb-2">{{ $t('monitoring.logViewer.showingCountOfCount2Entries', { count: filteredLogs.length, count2: logs.length }) }}</div>
 
     <!-- Log Table -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
@@ -290,7 +288,7 @@ onUnmounted(() => {
             </tr>
             <tr v-if="filteredLogs.length === 0">
               <td colspan="4" class="px-4 py-8 text-center text-gray-500">
-                {{ isLoading ? 'Loading logs...' : 'No logs found' }}
+                {{ isLoading ? $t('monitoring.logViewer.loadingLogs') : $t('monitoring.logViewer.noLogsFound') }}
               </td>
             </tr>
           </tbody>

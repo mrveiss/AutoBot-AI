@@ -74,7 +74,7 @@ interface TreeNode {
   size?: number
   date?: string
   category?: string
-  metadata?: any
+  metadata?: Record<string, unknown>
   content?: string
   children?: TreeNode[]
 }

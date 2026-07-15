@@ -20,6 +20,7 @@ Covers:
   - SLACK_APPROVALS_CHANNEL falls back to SLACK_NOTIFICATIONS_CHANNEL
 """
 
+from contextlib import contextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -121,34 +122,31 @@ class TestNullSlackHook:
 class TestGetSlackHookWithToken:
     """get_slack_hook() builds a _SlackHook when SLACK_BOT_TOKEN is present."""
 
-    def _env(self, extra: dict | None = None) -> dict:
-        base = {"SLACK_BOT_TOKEN": "xoxb-test-token"}
-        if extra:
-            base.update(extra)
-        return base
+    @contextmanager
+    def _slack_env(self, *, token: str = "xoxb-test-token", notifications: str = "", approvals: str = ""):
+        """Patch the SSOT config values get_slack_hook reads and the integration
+        classes _SlackHook builds.
 
-    def test_returns_slack_hook_when_token_present(self):
-        env = self._env()
-        fake_config_cls = MagicMock()
-        fake_integration = MagicMock()
-        fake_integration_cls = MagicMock(return_value=fake_integration)
+        The config object is instantiated once at import, so patching os.environ does
+        NOT propagate to config.slack_* — the values must be patched on config directly.
+        """
+        fake_integration_cls = MagicMock(return_value=MagicMock())
         with (
-            patch.dict("os.environ", env, clear=False),
-            patch("integrations.base.IntegrationConfig", fake_config_cls),
+            patch.object(slack_hook_module.config, "slack_bot_token", token),
+            patch.object(slack_hook_module.config, "slack_notifications_channel", notifications),
+            patch.object(slack_hook_module.config, "slack_approvals_channel", approvals),
+            patch("integrations.base.IntegrationConfig", MagicMock()),
             patch("integrations.slack_integration.SlackNotificationIntegration", fake_integration_cls),
         ):
+            yield fake_integration_cls
+
+    def test_returns_slack_hook_when_token_present(self):
+        with self._slack_env():
             hook = slack_hook_module.get_slack_hook()
         assert isinstance(hook, slack_hook_module._SlackHook)
 
     def test_singleton_reused_after_init(self):
-        env = self._env()
-        fake_integration_cls = MagicMock(return_value=MagicMock())
-        fake_config_cls = MagicMock()
-        with (
-            patch.dict("os.environ", env, clear=False),
-            patch("integrations.base.IntegrationConfig", fake_config_cls),
-            patch("integrations.slack_integration.SlackNotificationIntegration", fake_integration_cls),
-        ):
+        with self._slack_env() as fake_integration_cls:
             h1 = slack_hook_module.get_slack_hook()
             h2 = slack_hook_module.get_slack_hook()
             # SlackNotificationIntegration must be called exactly once
@@ -156,52 +154,17 @@ class TestGetSlackHookWithToken:
         assert h1 is h2
 
     def test_notifications_channel_defaults(self):
-        env = self._env()
-        env.pop("SLACK_NOTIFICATIONS_CHANNEL", None)
-        fake_integration_cls = MagicMock(return_value=MagicMock())
-        fake_config_cls = MagicMock()
-        with (
-            patch.dict("os.environ", env, clear=False),
-            patch("integrations.base.IntegrationConfig", fake_config_cls),
-            patch("integrations.slack_integration.SlackNotificationIntegration", fake_integration_cls),
-        ):
-            import os
-
-            os.environ.pop("SLACK_NOTIFICATIONS_CHANNEL", None)
-            os.environ.pop("SLACK_APPROVALS_CHANNEL", None)
+        with self._slack_env(notifications="", approvals=""):
             hook = slack_hook_module.get_slack_hook()
         assert hook._notifications_channel == "#agent-notifications"
 
     def test_approvals_channel_falls_back_to_notifications_channel(self):
-        env = self._env({"SLACK_NOTIFICATIONS_CHANNEL": "#notifs"})
-        env.pop("SLACK_APPROVALS_CHANNEL", None)
-        fake_integration_cls = MagicMock(return_value=MagicMock())
-        fake_config_cls = MagicMock()
-        with (
-            patch.dict("os.environ", env, clear=False),
-            patch("integrations.base.IntegrationConfig", fake_config_cls),
-            patch("integrations.slack_integration.SlackNotificationIntegration", fake_integration_cls),
-        ):
-            import os
-
-            os.environ.pop("SLACK_APPROVALS_CHANNEL", None)
+        with self._slack_env(notifications="#notifs", approvals=""):
             hook = slack_hook_module.get_slack_hook()
         assert hook._approvals_channel == "#notifs"
 
     def test_approvals_channel_overridden(self):
-        env = self._env(
-            {
-                "SLACK_NOTIFICATIONS_CHANNEL": "#notifs",
-                "SLACK_APPROVALS_CHANNEL": "#approvals",
-            }
-        )
-        fake_integration_cls = MagicMock(return_value=MagicMock())
-        fake_config_cls = MagicMock()
-        with (
-            patch.dict("os.environ", env, clear=False),
-            patch("integrations.base.IntegrationConfig", fake_config_cls),
-            patch("integrations.slack_integration.SlackNotificationIntegration", fake_integration_cls),
-        ):
+        with self._slack_env(notifications="#notifs", approvals="#approvals"):
             hook = slack_hook_module.get_slack_hook()
         assert hook._approvals_channel == "#approvals"
 

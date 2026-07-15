@@ -146,7 +146,10 @@ function updateEffort() {
   width: 90%;
   max-width: 500px;
   max-height: 80vh;
-  overflow: auto;
+  /* #10750 C2: keep header fixed; scroll only the body (below) */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .settings-header {
@@ -181,6 +184,9 @@ function updateEffort() {
 
 .settings-body {
   padding: 1.5rem;
+  /* #10750 C2: this is the single scroll region */
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .setting-group {

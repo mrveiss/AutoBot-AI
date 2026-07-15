@@ -49,7 +49,7 @@ export function useAuditApi() {
         if (params?.offset) searchParams.append('offset', params.offset.toString())
         const queryString = searchParams.toString()
         const url = `${getApiBase()}/audit/logs${queryString ? `?${queryString}` : ''}`
-        return await api.get<any>(url)
+        return await api.get<AuditQueryResponse>(url)
       } catch (error: unknown) {
         logger.error('Failed to load audit logs', error)
         showSubtleErrorNotification('Error', 'Failed to load audit logs', 'error')
@@ -59,7 +59,7 @@ export function useAuditApi() {
 
     async getStatistics(): Promise<AuditStatisticsResponse | null> {
       try {
-        return await api.get<any>(`${getApiBase()}/audit/statistics`)
+        return await api.get<AuditStatisticsResponse>(`${getApiBase()}/audit/statistics`)
       } catch (error: unknown) {
         logger.error('Failed to load audit statistics', error)
         showSubtleErrorNotification('Error', 'Failed to load audit statistics', 'error')
@@ -69,7 +69,7 @@ export function useAuditApi() {
 
     async getSessionAuditTrail(sessionId: string): Promise<AuditQueryResponse | null> {
       try {
-        return await api.get<any>(`${getApiBase()}/audit/session/${sessionId}`)
+        return await api.get<AuditQueryResponse>(`${getApiBase()}/audit/session/${sessionId}`)
       } catch (error: unknown) {
         logger.error('Failed to load session audit trail', error)
         showSubtleErrorNotification('Error', 'Failed to load session audit trail', 'error')
@@ -79,7 +79,7 @@ export function useAuditApi() {
 
     async getUserAuditTrail(userId: string, days: number = 7): Promise<AuditQueryResponse | null> {
       try {
-        return await api.get<any>(`${getApiBase()}/audit/user/${userId}?days=${days}`)
+        return await api.get<AuditQueryResponse>(`${getApiBase()}/audit/user/${userId}?days=${days}`)
       } catch (error: unknown) {
         logger.error('Failed to load user audit trail', error)
         showSubtleErrorNotification('Error', 'Failed to load user audit trail', 'error')
@@ -89,7 +89,7 @@ export function useAuditApi() {
 
     async getFailedOperations(hours: number = 24, resultFilter: AuditResult = 'denied'): Promise<AuditQueryResponse | null> {
       try {
-        return await api.get<any>(
+        return await api.get<AuditQueryResponse>(
           `${getApiBase()}/audit/failures?hours=${hours}&result_filter=${resultFilter}`
         )
       } catch (error: unknown) {
@@ -101,7 +101,7 @@ export function useAuditApi() {
 
     async cleanupLogs(request: AuditCleanupRequest): Promise<AuditCleanupResponse | null> {
       try {
-        return await api.post<any>(`${getApiBase()}/audit/cleanup`, request)
+        return await api.post<AuditCleanupResponse>(`${getApiBase()}/audit/cleanup`, request)
       } catch (error: unknown) {
         logger.error('Failed to cleanup audit logs', error)
         showSubtleErrorNotification('Error', 'Failed to cleanup audit logs', 'error')
@@ -111,7 +111,7 @@ export function useAuditApi() {
 
     async getOperationTypes(): Promise<AuditOperationsResponse | null> {
       try {
-        return await api.get<any>(`${getApiBase()}/audit/operations`)
+        return await api.get<AuditOperationsResponse>(`${getApiBase()}/audit/operations`)
       } catch (error: unknown) {
         logger.error('Failed to load operation types', error)
         showSubtleErrorNotification('Error', 'Failed to load operation types', 'error')

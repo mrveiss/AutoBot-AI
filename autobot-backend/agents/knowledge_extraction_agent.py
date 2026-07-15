@@ -12,7 +12,6 @@ management.
 """
 
 import asyncio
-import json
 import re
 import time
 from datetime import datetime, timezone
@@ -464,27 +463,38 @@ Return the results as a JSON array of facts. Example format:
         return True
 
     async def _get_llm_facts_response(self, content: str, context: str | None) -> List[Dict[str, Any]] | None:
-        """Get raw facts from LLM response. Returns None on error."""
+        """Get raw facts from LLM response. Returns None on error.
+
+        Issue #11520: delegates JSON parsing, fence-stripping, and retry to
+        ``llm_shared.structured_ops.extract`` with an inline JSON Schema so the
+        helper handles all retry-on-invalid logic uniformly.
+        """
+        from llm_shared.structured_ops import ExtractionError, extract
+
+        # Minimal JSON Schema envelope that matches the existing response format.
+        facts_envelope_schema: Dict[str, Any] = {
+            "type": "object",
+            "properties": {
+                "facts": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                }
+            },
+            "required": ["facts"],
+        }
+
         prompt = self._build_extraction_prompt(content, context)
-        response = await self.llm_interface.chat(
-            [{"role": "user", "content": prompt}],
-            llm_type=LLMType.EXTRACTION,
-            structured_output=True,
-        )
-
-        if not response or response.error:
-            error_msg = response.error if response else "No response"
-            logger.warning("No response from LLM for fact extraction: %s", error_msg)
-            return None
-
         try:
-            facts_data = json.loads(response.content)
-            if "facts" not in facts_data:
-                logger.warning("LLM response missing 'facts' field")
-                return None
-            return facts_data["facts"]
-        except json.JSONDecodeError as e:
-            logger.error("Failed to parse LLM response as JSON: %s", e)
+            result: Dict[str, Any] = await extract(  # type: ignore[assignment]
+                prompt,
+                facts_envelope_schema,
+                llm_type=LLMType.EXTRACTION,
+                chunking="never",
+                llm_service=self.llm_interface,
+            )
+            return result.get("facts")
+        except ExtractionError as exc:
+            logger.error("Fact extraction LLM call failed: %s", exc)
             return None
 
     def _enhance_fact_data(self, fact_data: Dict[str, Any], content: str) -> None:

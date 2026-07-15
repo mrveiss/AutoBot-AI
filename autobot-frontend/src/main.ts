@@ -6,6 +6,7 @@ import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import App from './App.vue'
 import router from './router/index'
 import { createLogger } from '@/utils/debugUtils'
+import { isChunkLoadError } from '@/utils/chunkLoadError'
 
 const logger = createLogger('main');
 
@@ -35,6 +36,13 @@ import './assets/css/interaction-polish.css'
 // Without this, the page does not fill the viewport and views without
 // .view-container don't scroll properly.
 import './assets/base.css'
+
+// @autobot/ui shared kit: token contract fallbacks first, then this app's
+// adapter (mapping --aui-* onto the app's own design tokens). Loaded AFTER
+// the app design-system CSS above so the tokens the adapter references are
+// already defined (#10750 C2c, #10860 Task-C).
+import '@autobot/ui/tokens'
+import './assets/aui-theme.css'
 
 // Initialize theme early to prevent flash of unstyled content
 import { initializeTheme } from '@/composables/useTheme'
@@ -104,9 +112,7 @@ app.config.errorHandler = (err, _instance, info) => {
 
   // Check if this is a chunk loading error
   const error = err as Error
-  if (error?.message?.includes('Loading chunk') ||
-      error?.message?.includes('ChunkLoadError') ||
-      error?.message?.includes('Loading CSS chunk')) {
+  if (isChunkLoadError(error)) {
     logger.warn('Chunk loading error detected, initiating cache clear...')
 
     // Import and use cache management
@@ -150,7 +156,7 @@ if ('serviceWorker' in navigator && !_swHostIsIp) {
 
       logger.debug('Service Worker registered successfully', {
         scope: registration.scope,
-        updateViaCache: (registration as any).updateViaCache
+        updateViaCache: registration.updateViaCache
       })
 
       // Check for updates periodically

@@ -133,6 +133,65 @@
   --color-agent-draft-border: #3B82F6;
   --color-agent-draft-bg: #EFF6FF;
   --color-user-edit-cursor: #059669;
+
+  /* ============================================
+   * LLC CATEGORICAL BADGE PALETTE — GH#10868
+   * Per-category badge bg/fg pairs, extracted verbatim from the
+   * previously hardcoded LLC view/component CSS so light mode is
+   * visually identical. Dark/ember define theme-appropriate variants.
+   * ============================================ */
+
+  /* Work-item type */
+  --badge-type-epic-bg: #ddd6fe;      --badge-type-epic-fg: #5b21b6;
+  --badge-type-feature-bg: #bfdbfe;   --badge-type-feature-fg: #1d4ed8;
+  --badge-type-pbi-bg: #d1fae5;       --badge-type-pbi-fg: #065f46;
+  --badge-type-task-bg: #e0f2fe;      --badge-type-task-fg: #0369a1;
+  --badge-type-bug-bg: #fee2e2;       --badge-type-bug-fg: #991b1b;
+  --badge-type-spike-bg: #fef3c7;     --badge-type-spike-fg: #92400e;
+  --badge-type-subtask-bg: #f3f4f6;   --badge-type-subtask-fg: #374151;
+  --badge-type-risk-bg: #fce7f3;      --badge-type-risk-fg: #9d174d;
+
+  /* Work-item status */
+  --badge-status-backlog-bg: #f3f4f6;     --badge-status-backlog-fg: #374151;
+  --badge-status-ready-bg: #e0f2fe;       --badge-status-ready-fg: #0369a1;
+  --badge-status-in_progress-bg: #ddd6fe; --badge-status-in_progress-fg: #5b21b6;
+  --badge-status-in_review-bg: #fef9c3;   --badge-status-in_review-fg: #713f12;
+  --badge-status-done-bg: #d1fae5;        --badge-status-done-fg: #065f46;
+  --badge-status-blocked-bg: #fee2e2;     --badge-status-blocked-fg: #991b1b;
+  --badge-status-cancelled-bg: #f3f4f6;   --badge-status-cancelled-fg: #9ca3af;
+
+  /* Work-item priority pill */
+  --badge-priority-critical-bg: #fee2e2;  --badge-priority-critical-fg: #991b1b;
+  --badge-priority-high-bg: #ffedd5;      --badge-priority-high-fg: #9a3412;
+  --badge-priority-medium-bg: #fef9c3;    --badge-priority-medium-fg: #713f12;
+  --badge-priority-low-bg: #f0fdf4;       --badge-priority-low-fg: #14532d;
+
+  /* Priority dot (solid fill indicators) */
+  --badge-dot-critical: #ef4444;
+  --badge-dot-high: #f97316;
+  --badge-dot-medium: #eab308;
+  --badge-dot-low: #22c55e;
+
+  /* Approval request type (ApprovalsInbox) */
+  --badge-approval-budget_increase-bg: #fef3c7; --badge-approval-budget_increase-fg: #92400e;
+  --badge-approval-agent_spawn-bg: #ddd6fe;     --badge-approval-agent_spawn-fg: #5b21b6;
+  --badge-approval-external_api-bg: #bfdbfe;    --badge-approval-external_api-fg: #1d4ed8;
+  --badge-approval-code_deploy-bg: #fee2e2;     --badge-approval-code_deploy-fg: #991b1b;
+  --badge-approval-data_access-bg: #d1fae5;     --badge-approval-data_access-fg: #065f46;
+  --badge-approval-policy_change-bg: #fce7f3;   --badge-approval-policy_change-fg: #9d174d;
+  --badge-approval-contract_sign-bg: #ffedd5;   --badge-approval-contract_sign-fg: #9a3412;
+  --badge-approval-hiring-bg: #e0f2fe;          --badge-approval-hiring-fg: #0369a1;
+
+  /* Approval decision status (ApprovalsInbox) */
+  --badge-approval-approved-bg: #d1fae5;          --badge-approval-approved-fg: #065f46;
+  --badge-approval-rejected-bg: #fee2e2;          --badge-approval-rejected-fg: #991b1b;
+  --badge-approval-changes_requested-bg: #fef3c7; --badge-approval-changes_requested-fg: #92400e;
+
+  /* Sprint status (SprintBoardView) */
+  --badge-sprint-planning-bg: #fef9c3;  --badge-sprint-planning-fg: #713f12;
+  --badge-sprint-active-bg: #d1fae5;    --badge-sprint-active-fg: #065f46;
+  --badge-sprint-review-bg: #ddd6fe;    --badge-sprint-review-fg: #5b21b6;
+  --badge-sprint-closed-bg: #f3f4f6;    --badge-sprint-closed-fg: #374151;
 }
 
 /* ============================================

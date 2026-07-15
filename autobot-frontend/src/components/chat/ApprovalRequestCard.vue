@@ -222,10 +222,8 @@
 
 import Icon from '@/components/ui/Icon.vue'
 import { ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'
 
-const { t } = useI18n()
 
 interface Props {
   status?: string | null // 'pre_approved' | 'approved' | 'denied' | null

@@ -1,0 +1,17 @@
+{
+  "fixture_version": "1",
+  "trajectory_id": "triage_502_websocket",
+  "task_class": "troubleshooting",
+  "inputs": {
+    "prompt": "My backend returns 502 after restart. The health endpoint works but WebSocket connections fail. What could cause this?"
+  },
+  "expected_tools": ["search_knowledge_base", "read_file"],
+  "baseline_score": 0.88,
+  "expected_output": {
+    "final_status": "completed",
+    "output_text_excerpt": "The health endpoint is HTTP while WebSocket upgrades are proxied separately; check that the reverse proxy forwards Upgrade/Connection headers and that the WS worker restarted."
+  },
+  "agent_config": {
+    "adapter_type": "autobot_agent"
+  }
+}

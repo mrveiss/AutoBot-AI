@@ -14,7 +14,7 @@ declare const KnowledgePersistenceDialog: DefineComponent<
     chatId?: string | null
     chatContext?: KnowledgeChatContext | null
   },
-  {},
+  Record<string, never>,
   unknown
 >
 

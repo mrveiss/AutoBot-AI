@@ -59,15 +59,48 @@ class TestAdapterRunStatus:
 
 @pytest.mark.asyncio
 class TestProcessAdapter:
+    async def test_invoke_disabled_by_default_raises(self) -> None:
+        """GH#11059: ProcessAdapter is fail-closed — invoke raises unless an operator enables it."""
+        adapter = ProcessAdapter()
+        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as spawn:
+            with pytest.raises(PermissionError):
+                await adapter.invoke({"command": "echo hello"}, {})
+        spawn.assert_not_called()
+
     async def test_invoke_returns_pid_string(self) -> None:
         adapter = ProcessAdapter()
         fake_proc = MagicMock()
         fake_proc.pid = 12345
 
-        with patch("asyncio.create_subprocess_shell", new_callable=AsyncMock, return_value=fake_proc):
+        with (
+            patch("llc.adapters.process_adapter._process_adapter_enabled", return_value=True),
+            patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=fake_proc),
+        ):
             run_id = await adapter.invoke({"command": "echo hello"}, {"key": "value"})
 
         assert run_id == "12345"
+
+    async def test_invoke_uses_exec_with_split_argv_not_shell(self) -> None:
+        """GH#11059: command runs via exec on shlex-split argv — no shell metacharacter RCE."""
+        adapter = ProcessAdapter()
+        fake_proc = MagicMock()
+        fake_proc.pid = 7
+
+        captured_argv: list = []
+
+        async def mock_exec(*argv, env, cwd):
+            captured_argv.extend(argv)
+            return fake_proc
+
+        with (
+            patch("llc.adapters.process_adapter._process_adapter_enabled", return_value=True),
+            patch("asyncio.create_subprocess_shell") as shell,
+            patch("asyncio.create_subprocess_exec", side_effect=mock_exec),
+        ):
+            await adapter.invoke({"command": "python run_agent.py --flag"}, {})
+
+        assert captured_argv == ["python", "run_agent.py", "--flag"]
+        shell.assert_not_called()
 
     async def test_invoke_passes_context_as_env(self) -> None:
         adapter = ProcessAdapter()
@@ -76,17 +109,43 @@ class TestProcessAdapter:
 
         captured_env: dict = {}
 
-        async def mock_shell(cmd, *, env, cwd):
+        async def mock_exec(*argv, env, cwd):
             captured_env.update(env)
             return fake_proc
 
-        with patch("asyncio.create_subprocess_shell", side_effect=mock_shell):
+        with (
+            patch("llc.adapters.process_adapter._process_adapter_enabled", return_value=True),
+            patch("asyncio.create_subprocess_exec", side_effect=mock_exec),
+        ):
             await adapter.invoke({"command": "x"}, {"task_id": "t1"})
 
         import json
 
         ctx = json.loads(captured_env["LLC_INVOKE_CONTEXT"])
         assert ctx["task_id"] == "t1"
+
+    async def test_invoke_minimal_env_excludes_backend_secrets(self, monkeypatch) -> None:
+        """GH#11059: the subprocess must NOT inherit backend secrets from os.environ."""
+        monkeypatch.setenv("DATABASE_URL", "postgres://secret")
+        monkeypatch.setenv("PATH", "/usr/bin")
+        adapter = ProcessAdapter()
+        fake_proc = MagicMock()
+        fake_proc.pid = 1
+
+        captured_env: dict = {}
+
+        async def mock_exec(*argv, env, cwd):
+            captured_env.update(env)
+            return fake_proc
+
+        with (
+            patch("llc.adapters.process_adapter._process_adapter_enabled", return_value=True),
+            patch("asyncio.create_subprocess_exec", side_effect=mock_exec),
+        ):
+            await adapter.invoke({"command": "x"}, {})
+
+        assert "DATABASE_URL" not in captured_env  # backend secret NOT leaked
+        assert captured_env.get("PATH") == "/usr/bin"  # safe var passes through
 
     async def test_status_running_when_pid_alive(self) -> None:
         adapter = ProcessAdapter()

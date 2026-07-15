@@ -117,7 +117,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   const searchResults = ref<SearchResult[]>([])
   const ragSearchResult = ref<RagSearchResult | null>(null)
   const selectedDocument = ref<KnowledgeDocument | null>(null)
-  const activeTab = ref<'search' | 'manage' | 'upload' | 'categories' | 'entries' | 'stats' | 'system-docs' | 'prompt-editor' | 'advanced'>('search')
   const isLoading = ref(false)
   const filters = ref<SearchFilters>({
     categories: [],
@@ -259,10 +258,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   })
 
   // Actions
-  function setActiveTab(tab: 'search' | 'manage' | 'upload' | 'categories' | 'entries' | 'stats' | 'system-docs' | 'prompt-editor' | 'advanced') {
-    activeTab.value = tab
-  }
-
   function updateSearchQuery(query: string) {
     searchQuery.value = query
   }
@@ -560,6 +555,12 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     pendingVerificationsTotal.value = total
   }
 
+  // Total-only setter for the badge prefetch — must not clobber a list a
+  // concurrently mounted KnowledgeVerificationQueue already loaded (#11558)
+  function setPendingVerificationsTotal(total: number) {
+    pendingVerificationsTotal.value = total
+  }
+
   function removePendingSource(factId: string) {
     pendingVerifications.value =
       pendingVerifications.value.filter(s => s.fact_id !== factId)
@@ -703,7 +704,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     searchResults,
     ragSearchResult,
     selectedDocument,
-    activeTab,
     isLoading,
     filters,
     stats,
@@ -757,7 +757,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     filteredDocuments,
 
     // Actions
-    setActiveTab,
     updateSearchQuery,
     toggleAdvancedSearch,
     clearSearch,
@@ -794,6 +793,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     updateConnectorStatus,
     setConnectorsLoading,
     setPendingVerifications,
+    setPendingVerificationsTotal,
     removePendingSource,
     setVerificationConfig,
     setVerificationLoading,

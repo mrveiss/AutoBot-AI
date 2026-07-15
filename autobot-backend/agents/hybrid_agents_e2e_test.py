@@ -18,7 +18,7 @@ from agents.agent_client import AgentClient, AgentClientConfig
 from agents.base_agent import create_agent_request
 from agents.chat_agent import ChatAgent
 from agents.classification_agent import ClassificationAgent
-from agents.enhanced_system_commands_agent import get_enhanced_system_commands_agent
+from agents.system_command_agent import get_enhanced_system_commands_agent
 from autobot_shared.logging_manager import get_logger
 
 # Configure logging
@@ -159,7 +159,9 @@ async def test_container_discovery():
     logger.info("=== Testing Container Discovery ===")
 
     try:
-        config = AgentClientConfig({"container_base_url": "http://localhost:8080"})
+        config = AgentClientConfig(
+            {"container_base_url": "http://localhost:8080"}
+        )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
         client = AgentClient(config)
         await client.initialize()

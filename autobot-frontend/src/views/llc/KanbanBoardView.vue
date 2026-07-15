@@ -4,11 +4,11 @@
 <template>
   <div class="kanban-board-view">
     <div class="kanban-header">
-      <h2 class="view-title">Kanban Board</h2>
+      <h2 class="view-title">{{ $t('llc.kanban.title') }}</h2>
       <div class="header-controls">
         <label class="swimlane-toggle">
           <input type="checkbox" v-model="swimlaneEnabled" />
-          <span>Group by assignee type</span>
+          <span>{{ $t('llc.kanban.groupByAssignee') }}</span>
         </label>
       </div>
     </div>
@@ -31,7 +31,7 @@
           <span class="column-title">{{ col.title }}</span>
           <div class="column-meta">
             <span class="column-count">{{ itemsByColumn(col.id).length }}</span>
-            <span v-if="col.wip_limit" class="wip-limit" :title="`WIP limit: ${col.wip_limit}`">
+            <span v-if="col.wip_limit" class="wip-limit" :title="$t('llc.kanban.wipLimit', { limit: col.wip_limit })">
               / {{ col.wip_limit }}
             </span>
           </div>
@@ -45,7 +45,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
-              Human
+              {{ $t('llc.kanban.human') }}
             </div>
             <div class="lane-cards">
               <div
@@ -69,7 +69,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
-              Agent
+              {{ $t('llc.kanban.agent') }}
             </div>
             <div class="lane-cards">
               <div
@@ -100,7 +100,7 @@
               <KanbanCard :item="item" />
             </div>
             <div v-if="itemsByColumn(col.id).length === 0" class="column-empty">
-              Drop items here
+              {{ $t('llc.kanban.dropHere') }}
             </div>
           </div>
         </template>
@@ -118,15 +118,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, defineComponent, h } from 'vue'
+import { ref, computed, onMounted, defineComponent, h } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
+import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
+import { useLiveEvents } from '@/composables/useLiveEvents'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('KanbanBoardView')
 const api = useApiClient()
 const route = useRoute()
+const live = useLiveEvents()
+const { t } = useI18n()
 
 const companyId = computed(() => route.params.companyId as string)
 const boardId = computed(() => route.params.boardId as string)
@@ -145,7 +150,6 @@ const isLoading = ref(false)
 const detailItem = ref<WorkItem | null>(null)
 const draggedItem = ref<WorkItem | null>(null)
 const swimlaneEnabled = ref(false)
-let ws: WebSocket | null = null
 
 function itemsByColumn(colId: string) {
   return items.value.filter(i => i.column_id === colId)
@@ -200,25 +204,15 @@ async function onDrop(colId: string) {
   }
 }
 
-function connectWS() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  const host = location.hostname
-  const port = import.meta.env.VITE_BACKEND_PORT ?? '8001'
-  ws = new WebSocket(`${proto}://${host}:${port}/ws/llc/board/${boardId.value}`)
-
-  ws.onmessage = (evt) => {
-    try {
-      const msg = JSON.parse(evt.data)
-      if (msg.type === 'card_moved') {
-        const item = items.value.find(i => i.id === msg.work_item_id)
-        if (item) item.column_id = msg.column_id
-      }
-    } catch {
-      // ignore malformed frames
-    }
-  }
-
-  ws.onerror = () => logger.error('Board WS error')
+// Live board updates via the canonical /ws/live event bus (channel board:{id}).
+function subscribeBoard() {
+  live.subscribe(`board:${boardId.value}`, (ev) => {
+    const wid = ev.payload?.work_item_id as string | undefined
+    const col = ev.payload?.column_id as string | undefined
+    if (!wid || !col) return
+    const item = items.value.find(i => i.id === wid)
+    if (item) item.column_id = col
+  })
 }
 
 async function fetchBoard() {
@@ -247,14 +241,14 @@ const KanbanCard = defineComponent({
     return () => h('div', { class: 'kanban-card-inner' }, [
       h('div', { class: 'card-header-row' }, [
         h('span', { class: 'card-id' }, props.item.identifier),
-        h('span', { class: `card-type type-${props.item.type}` }, props.item.type),
+        h(WorkItemBadge, { kind: 'type', value: props.item.type, size: 'xs' }),
         props.item.linked_pr_urls?.length
-          ? h('span', { class: 'pr-badge', title: `${props.item.linked_pr_urls.length} PR(s) linked` }, '🔗')
+          ? h('span', { class: 'pr-badge', title: t('llc.kanban.prLinked', { count: props.item.linked_pr_urls.length }) }, '🔗')
           : null,
       ]),
       h('p', { class: 'card-title' }, props.item.title),
       h('div', { class: 'card-footer-row' }, [
-        h('span', { class: `priority-dot priority-${props.item.priority}`, title: props.item.priority }),
+        h(WorkItemBadge, { kind: 'priority', value: props.item.priority, variant: 'dot', size: 'xs' }),
         props.item.story_points ? h('span', { class: 'card-pts' }, String(props.item.story_points)) : null,
         props.item.assignee_name
           ? h('span', { class: 'card-avatar', title: props.item.assignee_name }, initials(props.item.assignee_name))
@@ -266,10 +260,9 @@ const KanbanCard = defineComponent({
 
 onMounted(async () => {
   await fetchBoard()
-  connectWS()
+  subscribeBoard()
 })
-
-onUnmounted(() => ws?.close())
+// useLiveEvents auto-unsubscribes on unmount.
 </script>
 
 <style scoped>
@@ -279,8 +272,8 @@ onUnmounted(() => ws?.close())
   height: 100%;
   padding: 1.5rem;
   gap: 1rem;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .kanban-header {
@@ -308,18 +301,21 @@ onUnmounted(() => ws?.close())
   display: flex;
   gap: 0.75rem;
   flex: 1;
+  min-height: 0;
   overflow-x: auto;
   align-items: flex-start;
 }
 
 .kanban-column {
   flex: 0 0 240px;
-  background: var(--color-surface-elevated, #f9fafb);
+  background: var(--bg-elevated, #f9fafb);
   border-radius: 0.5rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default, #e5e7eb);
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 160px);
+  /* #10750 C2: bounded by .board-layout height, not the viewport */
+  min-height: 0;
+  max-height: 100%;
 }
 
 .column-header {
@@ -329,7 +325,7 @@ onUnmounted(() => ws?.close())
   padding: 0.625rem 0.875rem;
   font-weight: 600;
   font-size: 0.875rem;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.5rem 0.5rem 0 0;
   transition: background 0.15s;
 }
@@ -357,11 +353,12 @@ onUnmounted(() => ws?.close())
 
 .wip-limit {
   font-size: 0.7rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 
 .column-cards {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 0.5rem;
   display: flex;
@@ -370,7 +367,7 @@ onUnmounted(() => ws?.close())
 }
 
 .swimlane {
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
   padding: 0.5rem;
 }
 
@@ -384,7 +381,7 @@ onUnmounted(() => ws?.close())
   gap: 0.375rem;
   font-size: 0.7rem;
   font-weight: 600;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.375rem;
@@ -403,7 +400,7 @@ onUnmounted(() => ws?.close())
 
 .lane-empty {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
   text-align: center;
   padding: 0.5rem;
 }
@@ -417,8 +414,8 @@ onUnmounted(() => ws?.close())
 }
 
 .kanban-card-inner {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   padding: 0.5rem 0.625rem;
   display: flex;
@@ -440,15 +437,7 @@ onUnmounted(() => ws?.close())
 .card-id {
   font-family: monospace;
   font-size: 0.65rem;
-  color: var(--color-text-secondary, #9ca3af);
-}
-
-.card-type {
-  font-size: 0.6rem;
-  padding: 0.1rem 0.35rem;
-  border-radius: 9999px;
-  font-weight: 500;
-  text-transform: capitalize;
+  color: var(--text-secondary, #9ca3af);
 }
 
 .pr-badge {
@@ -462,15 +451,6 @@ onUnmounted(() => ws?.close())
   opacity: 1;
 }
 
-.type-epic { background: #ddd6fe; color: #5b21b6; }
-.type-feature { background: #bfdbfe; color: #1d4ed8; }
-.type-pbi { background: #d1fae5; color: #065f46; }
-.type-task { background: #e0f2fe; color: #0369a1; }
-.type-bug { background: #fee2e2; color: #991b1b; }
-.type-spike { background: #fef3c7; color: #92400e; }
-.type-subtask { background: #f3f4f6; color: #374151; }
-.type-risk { background: #fce7f3; color: #9d174d; }
-
 .card-title {
   margin: 0;
   font-size: 0.78rem;
@@ -483,22 +463,10 @@ onUnmounted(() => ws?.close())
   gap: 0.375rem;
 }
 
-.priority-dot {
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.priority-critical { background: #ef4444; }
-.priority-high { background: #f97316; }
-.priority-medium { background: #eab308; }
-.priority-low { background: #22c55e; }
-
 .card-pts {
   font-size: 0.65rem;
   font-weight: 600;
-  background: var(--color-surface-elevated, #f3f4f6);
+  background: var(--bg-elevated, #f3f4f6);
   padding: 0.1rem 0.35rem;
   border-radius: 0.2rem;
 }
@@ -521,8 +489,8 @@ onUnmounted(() => ws?.close())
   text-align: center;
   padding: 1.5rem 0.5rem;
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #9ca3af);
-  border: 2px dashed var(--color-border, #e5e7eb);
+  color: var(--text-secondary, #9ca3af);
+  border: 2px dashed var(--border-default, #e5e7eb);
   border-radius: 0.375rem;
   margin: 0.5rem;
 }

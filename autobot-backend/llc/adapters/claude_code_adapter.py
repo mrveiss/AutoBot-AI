@@ -37,6 +37,7 @@ import uuid
 from dataclasses import replace
 from typing import Optional
 
+from autobot_shared.cli_tool_flags import sanitize_tool_names
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
@@ -105,6 +106,49 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
     _state_path = staticmethod(_state_path)
     _required_cli = "claude"  # GH#9793: CLI-availability gate in heartbeat dispatch
 
+    @staticmethod
+    def _tool_permission_args(cfg: dict) -> list[str]:
+        """Build --allowedTools/--disallowedTools argv from adapter config (GH#11186).
+
+        ``disallowed_tools`` enforces a governed agent's forbidden tools on the
+        external claude CLI. Both lists are sanitized (empty/flag-looking/
+        delimiter-bearing names dropped) via the shared ``sanitize_tool_names``.
+        """
+        args: list[str] = []
+        allowed = sanitize_tool_names(cfg.get("allowed_tools"))
+        if allowed:
+            args += ["--allowedTools", ",".join(allowed)]
+        disallowed = sanitize_tool_names(cfg.get("disallowed_tools"))
+        if disallowed:
+            args += ["--disallowedTools", ",".join(disallowed)]
+        return args
+
+    @staticmethod
+    def _build_command(cli: str, resume_session_id: Optional[str], cfg: dict, prompt: str) -> list[str]:
+        """Build the claude CLI argv (GH#11186). Pure and unit-testable.
+
+        Tool-permission flags (``--allowedTools``/``--disallowedTools``) apply on
+        BOTH fresh and resumed invocations — they scope the current run, so a
+        governed agent's forbidden tools stay enforced across ``--resume``.
+        ``--model``/``--max-turns`` are session-establishment options (fresh only).
+        The prompt is passed positionally after ``--`` so a prompt starting with
+        ``-`` can never be parsed as an option (matches the execution backend).
+        """
+        cmd: list[str] = [cli, "--output-format", "stream-json", "--print"]
+        if resume_session_id:
+            cmd += ["--resume", resume_session_id]
+        else:
+            model = cfg.get("model")
+            if model:
+                cmd += ["--model", str(model)]
+            max_turns = cfg.get("max_turns")
+            if max_turns is not None:
+                cmd += ["--max-turns", str(max_turns)]
+        cmd += ClaudeCodeAdapter._tool_permission_args(cfg)
+        cmd.append("--")
+        cmd.append(prompt)
+        return cmd
+
     async def _invoke(self, agent_config: dict, context: dict) -> str:
         cli = _resolve_claude_cli()
         agent_id: str = agent_config.get("agent_id", "unknown")
@@ -112,9 +156,6 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
 
         output_dir: str = cfg.get("output_dir", _DEFAULT_OUTPUT_DIR)
         timeout_sec: int = _resolve_timeout(cfg)
-        model: Optional[str] = cfg.get("model")
-        max_turns: Optional[int] = cfg.get("max_turns")
-        allowed_tools: Optional[list] = cfg.get("allowed_tools")
 
         session_id = str(uuid.uuid4())
         run_id_placeholder = f"0/{session_id}"
@@ -127,21 +168,11 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         replay_mode: bool = bool(context.get("replay"))
         resume_session_id = None if replay_mode else await self._get_resumable_session(agent_id)
 
-        cmd: list[str] = [cli, "--output-format", "stream-json", "--print"]
-
         if resume_session_id:
-            cmd += ["--resume", resume_session_id]
             session_id = resume_session_id
             logger.info("ClaudeCodeAdapter: resuming session %s for agent %s", session_id, agent_id)
-        else:
-            if model:
-                cmd += ["--model", model]
-            if max_turns is not None:
-                cmd += ["--max-turns", str(max_turns)]
-            if allowed_tools:
-                cmd += ["--allowedTools", ",".join(allowed_tools)]
 
-        cmd.append(prompt)
+        cmd = self._build_command(cli, resume_session_id, cfg, prompt)
 
         workspace_dir: str | None = context.get("workspace_dir")
         env = {**os.environ, "LLC_INVOKE_CONTEXT": serialize_invoke_context(context)}

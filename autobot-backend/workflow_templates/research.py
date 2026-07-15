@@ -7,6 +7,11 @@ Research Workflow Templates
 
 Issue #381: Extracted from workflow_templates.py god class refactoring.
 Contains research-related workflow template definitions.
+
+Issue #10539: kb_search and store_research steps carry connector_category in
+their inputs dict so agents can resolve the right connector via
+ConnectorRegistry.resolve_by_category("knowledge base") instead of naming a
+specific vendor connector.
 """
 
 from typing import List
@@ -22,6 +27,9 @@ def _create_comprehensive_research_steps() -> List[WorkflowStep]:
 
     Returns list of WorkflowStep objects for knowledge base search, web research,
     source verification, synthesis, and storing results. Issue #620.
+
+    Issue #10539: kb_search and store_research carry connector_category so
+    agents resolve the connector by category rather than by hard-coded type.
     """
     return [
         WorkflowStep(
@@ -30,6 +38,7 @@ def _create_comprehensive_research_steps() -> List[WorkflowStep]:
             action="Search existing knowledge base for relevant information",
             description="Librarian: Knowledge Base Search",
             estimated_duration_seconds=5.0,
+            inputs={"connector_category": "knowledge base"},
         ),
         WorkflowStep(
             task_id="web_research",
@@ -38,6 +47,7 @@ def _create_comprehensive_research_steps() -> List[WorkflowStep]:
             description="Research: Web Research",
             dependencies=["kb_search"],
             estimated_duration_seconds=60.0,
+            inputs={"connector_category": "web"},
         ),
         WorkflowStep(
             task_id="source_verification",
@@ -62,6 +72,7 @@ def _create_comprehensive_research_steps() -> List[WorkflowStep]:
             description="Knowledge_Manager: Store Research",
             dependencies=["synthesis"],
             estimated_duration_seconds=5.0,
+            inputs={"connector_category": "knowledge base"},
         ),
     ]
 
@@ -191,6 +202,7 @@ def _create_tech_research_initial_steps() -> List[WorkflowStep]:
     Create initial steps for technology research: knowledge search and overview.
 
     Issue #620.
+    Issue #10539: existing_knowledge carries connector_category for category-based resolution.
     """
     return [
         WorkflowStep(
@@ -199,6 +211,7 @@ def _create_tech_research_initial_steps() -> List[WorkflowStep]:
             action="Search knowledge base for existing technology information",
             description="Librarian: Technology Knowledge Search",
             estimated_duration_seconds=5.0,
+            inputs={"connector_category": "knowledge base"},
         ),
         WorkflowStep(
             task_id="technology_overview",
@@ -242,6 +255,7 @@ def _create_tech_research_final_steps() -> List[WorkflowStep]:
     Create final steps for technology research: recommendation and storage.
 
     Issue #620.
+    Issue #10539: store_research carries connector_category for category-based resolution.
     """
     return [
         WorkflowStep(
@@ -260,6 +274,7 @@ def _create_tech_research_final_steps() -> List[WorkflowStep]:
             description="Knowledge_Manager: Store Technology Research",
             dependencies=["recommendation"],
             estimated_duration_seconds=5.0,
+            inputs={"connector_category": "knowledge base"},
         ),
     ]
 

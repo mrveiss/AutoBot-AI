@@ -63,14 +63,14 @@ const meta = {
 } as Meta<typeof NavOverflowMenu>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 export const Default: Story = {
   args: {
     items: sampleItems,
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { NavOverflowMenu },
     setup() {
       return { args };
@@ -98,7 +98,7 @@ export const SingleItem: Story = {
       },
     },
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { NavOverflowMenu },
     setup() {
       return { args };
@@ -128,7 +128,7 @@ export const ManyItems: Story = {
       },
     },
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { NavOverflowMenu },
     setup() {
       return { args };
@@ -153,7 +153,7 @@ export const Empty: Story = {
       },
     },
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { NavOverflowMenu },
     setup() {
       return { args };

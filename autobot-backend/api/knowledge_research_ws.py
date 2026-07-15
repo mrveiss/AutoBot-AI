@@ -29,6 +29,7 @@ from typing import Any, Callable, Dict
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from api.ws_security import enforce_ws_origin
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
@@ -133,6 +134,8 @@ async def knowledge_research_ws(websocket: WebSocket) -> None:
 
     Issue #1256: Observable Research Panel.
     """
+    if not await enforce_ws_origin(websocket):
+        return
     await websocket.accept()
     logger.info("Knowledge research WS connected from %s", websocket.client)
 

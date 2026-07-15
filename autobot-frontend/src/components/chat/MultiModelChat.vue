@@ -97,23 +97,15 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { ref, watch, computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useMultiModelCompare } from '@/composables/useMultiModelCompare'
 // GH#8990: show per-model context window in picker
-import { useAvailableModels } from '@/composables/useAvailableModels'
-
-// ---------------------------------------------------------------------------
-// Defaults — user can change via the picker
-// ---------------------------------------------------------------------------
-const DEFAULT_MODELS = [
-  'ollama/llama3',
-  'ollama/mistral',
-  'openai/gpt-4o-mini',
-]
+import { useModelPicker } from '@/composables/useModelPicker'
 
 const { responses, selectedModels, isComparing, compare, reset } = useMultiModelCompare()
-const { models: llmModels, fetchModels } = useAvailableModels()
-fetchModels().catch(() => {})
+// #10755/#10718: source the model list from the live /api/models endpoint (no
+// hardcoded defaults) and seed the selection once it loads — shared wiring.
+const { models: llmModels, availableModels } = useModelPicker(selectedModels)
 
 const promptText = ref('')
 
@@ -131,27 +123,6 @@ const contextWindowLabel = computed(() => {
   }
   return map
 })
-
-// Populate defaults on first mount if localStorage is empty
-if (selectedModels.value.length === 0) {
-  selectedModels.value = [...DEFAULT_MODELS]
-}
-
-// Available models for the picker: union of defaults + any extra stored choices
-const availableModels = ref<string[]>([...DEFAULT_MODELS])
-
-// Keep availableModels in sync with selectedModels (in case user has stored extras)
-watch(
-  selectedModels,
-  (current) => {
-    for (const m of current) {
-      if (!availableModels.value.includes(m)) {
-        availableModels.value.push(m)
-      }
-    }
-  },
-  { immediate: true },
-)
 
 async function onSend(): Promise<void> {
   if (!promptText.value.trim() || selectedModels.value.length === 0 || isComparing.value) return
@@ -183,7 +154,7 @@ defineExpose({ reset })
 .multi-model-chat__picker-label {
   font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--color-text-muted, #9ca3af);
+  color: var(--text-muted, #9ca3af);
   white-space: nowrap;
 }
 
@@ -199,7 +170,7 @@ defineExpose({ reset })
   gap: var(--spacing-1, 0.25rem);
   cursor: pointer;
   font-size: 0.8125rem;
-  color: var(--color-text-primary, #e5e7eb);
+  color: var(--text-primary, #e5e7eb);
 }
 
 .multi-model-chat__model-name {
@@ -210,7 +181,7 @@ defineExpose({ reset })
 .multi-model-chat__model-ctx {
   font-size: 0.6875rem;
   font-family: ui-monospace, monospace;
-  color: var(--color-text-muted, #9ca3af);
+  color: var(--text-muted, #9ca3af);
   background: var(--color-bg-tertiary, #1a1a2e);
   border-radius: 0.25rem;
   padding: 0 0.25rem;
@@ -227,8 +198,8 @@ defineExpose({ reset })
   flex: 1;
   resize: vertical;
   background: var(--color-bg-input, #2a2a3e);
-  color: var(--color-text-primary, #e5e7eb);
-  border: 1px solid var(--color-border, #374151);
+  color: var(--text-primary, #e5e7eb);
+  border: 1px solid var(--border-default, #374151);
   border-radius: var(--radius-md, 0.375rem);
   padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
   font-size: 0.875rem;
@@ -281,7 +252,7 @@ defineExpose({ reset })
 
 .multi-model-chat__response-card {
   background: var(--color-bg-secondary, #13131f);
-  border: 1px solid var(--color-border, #374151);
+  border: 1px solid var(--border-default, #374151);
   border-radius: var(--radius-md, 0.375rem);
   overflow: hidden;
   display: flex;
@@ -298,14 +269,14 @@ defineExpose({ reset })
   justify-content: space-between;
   padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
   background: var(--color-bg-tertiary, #1a1a2e);
-  border-bottom: 1px solid var(--color-border, #374151);
+  border-bottom: 1px solid var(--border-default, #374151);
   gap: var(--spacing-2, 0.5rem);
 }
 
 .multi-model-chat__response-model {
   font-family: ui-monospace, monospace;
   font-size: 0.75rem;
-  color: var(--color-text-muted, #9ca3af);
+  color: var(--text-muted, #9ca3af);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -345,7 +316,7 @@ defineExpose({ reset })
   margin: var(--spacing-0);
   font-family: ui-monospace, monospace;
   font-size: 0.8125rem;
-  color: var(--color-text-primary, #e5e7eb);
+  color: var(--text-primary, #e5e7eb);
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.6;

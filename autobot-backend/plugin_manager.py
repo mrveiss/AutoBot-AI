@@ -11,6 +11,7 @@ Issue #730 - Plugin SDK for extensible tool architecture.
 """
 
 import json
+import threading
 from pathlib import Path
 from typing import Dict, List
 
@@ -27,6 +28,8 @@ from autobot_shared.plugin_sdk import (
     PluginRegistry,
     TrustTier,
 )
+from autobot_shared.plugin_sdk.base import PluginLoadError
+from autobot_shared.plugin_sdk.loader import validate_plugin_config
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from plugin_install import install_from_git, install_from_zip
@@ -35,24 +38,29 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
-# Global plugin loader instance
+# Global plugin loader instance.
+# Issue #10916: _plugin_loader_lock + double-checked pattern prevents two
+# threads from each constructing a PluginLoader (which scans the filesystem).
 _plugin_loader: PluginLoader | None = None
+_plugin_loader_lock = threading.Lock()
 
 
 def get_plugin_loader() -> PluginLoader:
-    """Get or create plugin loader instance."""
-    global _plugin_loader
+    """Get or create plugin loader instance (thread-safe)."""
+    global _plugin_loader  # noqa: PLW0603
     if _plugin_loader is None:
-        # Define plugin directories using SSOT config (#3397)
-        plugins_root = config.path.plugins_path
-        plugin_dirs = [
-            plugins_root / "core-plugins",
-            plugins_root / "community-plugins",
-            # Development fallback
-            Path("plugins/core-plugins"),
-            Path("plugins/community-plugins"),
-        ]
-        _plugin_loader = PluginLoader(plugin_dirs)
+        with _plugin_loader_lock:
+            if _plugin_loader is None:
+                # Define plugin directories using SSOT config (#3397)
+                plugins_root = config.path.plugins_path
+                plugin_dirs = [
+                    plugins_root / "core-plugins",
+                    plugins_root / "community-plugins",
+                    # Development fallback
+                    Path("plugins/core-plugins"),
+                    Path("plugins/community-plugins"),
+                ]
+                _plugin_loader = PluginLoader(plugin_dirs)
     return _plugin_loader
 
 
@@ -481,6 +489,17 @@ async def update_plugin_config(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Plugin not found: {plugin_name}",
         )
+
+    # GH#11522: validate new config against the manifest's config_schema (if any)
+    schema = plugin.manifest.config_schema
+    if schema:
+        try:
+            validate_plugin_config(plugin_name, config_update.config, schema)
+        except PluginLoadError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
 
     # Update plugin config
     plugin.config = config_update.config

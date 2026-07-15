@@ -23,7 +23,7 @@
         <button type="button" class="review-row" @click="detailItem = item">
           <span class="review-identifier">{{ item.identifier }}</span>
           <span class="review-title">{{ item.title }}</span>
-          <span class="review-type">{{ item.type }}</span>
+          <span class="review-type">{{ workItemTypeLabel(item.type) }}</span>
         </button>
       </li>
     </ul>
@@ -41,15 +41,19 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
 import LlcBreadcrumb, { type BreadcrumbItem } from '@/components/llc/LlcBreadcrumb.vue'
 import WorkItemDetail from './WorkItemDetail.vue'
 import type { WorkItem } from './workItemTypes'
+import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
 
 const route = useRoute()
 const api = useApiClient()
+const { t } = useI18n()
+const { workItemTypeLabel } = useWorkItemLabels()
 const userStore = useUserStore()
 const logger = createLogger('ReviewInboxView')
 
@@ -58,7 +62,10 @@ const items = ref<WorkItem[]>([])
 const loading = ref(false)
 const detailItem = ref<WorkItem | null>(null)
 
-const breadcrumb = computed<BreadcrumbItem[]>(() => [{ label: 'Company OS' }, { label: 'My Reviews' }])
+const breadcrumb = computed<BreadcrumbItem[]>(() => [
+  { label: t('llc.reviewInbox.breadcrumbCompanyOs') },
+  { label: t('llc.reviewInbox.breadcrumbMyReviews') },
+])
 
 async function load(): Promise<void> {
   const uid = userStore.currentUser?.id
@@ -100,16 +107,16 @@ onMounted(load)
 .inbox-title {
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
   margin: 0;
 }
 .inbox-count {
   font-size: 0.8125rem;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 .inbox-state {
   padding: 2rem 0;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 .review-list {
   list-style: none;
@@ -137,16 +144,16 @@ onMounted(load)
 .review-identifier {
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 .review-title {
   flex: 1;
   font-size: 0.9375rem;
-  color: var(--color-text-primary, #111827);
+  color: var(--text-primary, #111827);
 }
 .review-type {
   font-size: 0.6875rem;
   text-transform: uppercase;
-  color: var(--color-text-secondary, #9ca3af);
+  color: var(--text-secondary, #9ca3af);
 }
 </style>

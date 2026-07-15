@@ -265,7 +265,7 @@ export function useSessionActivityLogger(): UseSessionActivityLoggerReturn {
     if (!activity) return
 
     try {
-      await apiClient.post<any>(`/chat/sessions/${sessionId}/activities`, {
+      await apiClient.post<unknown>(`/chat/sessions/${sessionId}/activities`, {
         activity_id: activity.id,
         type: activity.type,
         user_id: activity.userId,
@@ -447,7 +447,7 @@ export function useSessionActivityLogger(): UseSessionActivityLoggerReturn {
     let success = true
     for (const [sessionId, activities] of bySession) {
       try {
-        await apiClient.post<any>(`/chat/sessions/${sessionId}/activities/batch`, {
+        await apiClient.post<unknown>(`/chat/sessions/${sessionId}/activities/batch`, {
           activities: activities.map(a => ({
             activity_id: a.id,
             type: a.type,

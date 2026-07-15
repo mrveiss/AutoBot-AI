@@ -3,8 +3,8 @@
     <!-- Header -->
     <div class="page-header">
       <div class="page-header-content">
-        <h2 class="page-title">Company Portability</h2>
-        <p class="page-subtitle">Export your company as a reusable template or snapshot, or import from a template file.</p>
+        <h2 class="page-title">{{ t('llc.portability.title') }}</h2>
+        <p class="page-subtitle">{{ t('llc.portability.subtitle') }}</p>
       </div>
     </div>
 
@@ -19,11 +19,8 @@
            EXPORT SECTION
       ════════════════════════════════════════════════════ -->
       <section class="portability-card">
-        <h3 class="card-title">Export</h3>
-        <p class="card-desc">
-          Download your company structure as a portable JSON file.
-          Secrets are never included — only placeholder names are exported.
-        </p>
+        <h3 class="card-title">{{ t('llc.portability.exportTitle') }}</h3>
+        <p class="card-desc">{{ t('llc.portability.exportDesc') }}</p>
 
         <div class="export-buttons">
           <button
@@ -32,7 +29,7 @@
             @click="exportTemplate"
           >
             <span v-if="exportingTemplate" class="spinner" />
-            <span v-else>⬇ Export Template</span>
+            <span v-else>⬇ {{ t('llc.portability.exportTemplate') }}</span>
           </button>
 
           <button
@@ -41,16 +38,16 @@
             @click="exportSnapshot"
           >
             <span v-if="exportingSnapshot" class="spinner" />
-            <span v-else>⬇ Export Snapshot</span>
+            <span v-else>⬇ {{ t('llc.portability.exportSnapshot') }}</span>
           </button>
         </div>
 
         <p v-if="!effectiveCompanyId" class="export-hint">
-          Select a company to enable exporting.
+          {{ t('llc.portability.selectCompanyHint') }}
         </p>
         <p class="export-hint">
-          <strong>Template</strong> — agents, goals, routines, seed tasks (no sprint history, no secrets).<br />
-          <strong>Snapshot</strong> — full backup including all work items and sprint history.
+          <strong>{{ t('llc.portability.templateHint') }}</strong> — {{ t('llc.portability.templateHintDesc') }}<br />
+          <strong>{{ t('llc.portability.snapshotHint') }}</strong> — {{ t('llc.portability.snapshotHintDesc') }}
         </p>
 
       </section>
@@ -59,8 +56,8 @@
            IMPORT SECTION
       ════════════════════════════════════════════════════ -->
       <section class="portability-card">
-        <h3 class="card-title">Import</h3>
-        <p class="card-desc">Upload a JSON template file to preview and execute an import.</p>
+        <h3 class="card-title">{{ t('llc.portability.importTitle') }}</h3>
+        <p class="card-desc">{{ t('llc.portability.importDesc') }}</p>
 
         <!-- File drop zone -->
         <div
@@ -81,11 +78,11 @@
           <template v-if="importFile">
             <span class="drop-zone-icon">📄</span>
             <span class="drop-zone-label">{{ importFile.name }}</span>
-            <button class="btn-clear-file" @click.stop="clearFile">✕ Clear</button>
+            <button class="btn-clear-file" @click.stop="clearFile">✕ {{ t('llc.portability.clearFile') }}</button>
           </template>
           <template v-else>
             <span class="drop-zone-icon">📁</span>
-            <span class="drop-zone-label">Drag &amp; drop or click to upload a JSON template</span>
+            <span class="drop-zone-label">{{ t('llc.portability.dropZoneLabel') }}</span>
           </template>
         </div>
 
@@ -97,17 +94,17 @@
             @click="runPreview"
           >
             <span v-if="loadingPreview" class="spinner" />
-            <span v-else>🔍 Preview Import</span>
+            <span v-else>🔍 {{ t('llc.portability.previewImport') }}</span>
           </button>
         </div>
 
         <!-- Preview results -->
         <div v-if="importPreview" class="preview-panel">
-          <h4 class="subsection-title">Import Preview</h4>
+          <h4 class="subsection-title">{{ t('llc.portability.importPreview') }}</h4>
 
           <!-- Warnings -->
           <div v-if="importPreview.warnings.length > 0" class="preview-warnings">
-            <h5>⚠ Warnings</h5>
+            <h5>⚠ {{ t('llc.portability.warnings') }}</h5>
             <ul>
               <li v-for="(w, i) in importPreview.warnings" :key="i">{{ w }}</li>
             </ul>
@@ -115,10 +112,10 @@
 
           <!-- Collisions -->
           <div v-if="importPreview.collisions.length > 0" class="preview-collisions">
-            <h5>Collisions detected</h5>
+            <h5>{{ t('llc.portability.collisionsDetected') }}</h5>
             <table class="preview-table">
               <thead>
-                <tr><th>Type</th><th>Name</th><th>Resolution</th></tr>
+                <tr><th>{{ t('llc.portability.colType') }}</th><th>{{ t('llc.portability.colName') }}</th><th>{{ t('llc.portability.colResolution') }}</th></tr>
               </thead>
               <tbody>
                 <tr
@@ -136,20 +133,20 @@
 
           <!-- Will create summary -->
           <div class="preview-summary">
-            <h5>Entities to create</h5>
+            <h5>{{ t('llc.portability.entitiesToCreate') }}</h5>
             <ul class="create-list">
-              <li>Agents: <strong>{{ importPreview.will_create.agents }}</strong></li>
-              <li>Goals: <strong>{{ importPreview.will_create.goals }}</strong></li>
-              <li>Projects: <strong>{{ importPreview.will_create.projects }}</strong></li>
-              <li>Work items: <strong>{{ importPreview.will_create.work_items }}</strong></li>
+              <li>{{ t('llc.portability.createAgents') }} <strong>{{ importPreview.will_create.agents }}</strong></li>
+              <li>{{ t('llc.portability.createGoals') }} <strong>{{ importPreview.will_create.goals }}</strong></li>
+              <li>{{ t('llc.portability.createProjects') }} <strong>{{ importPreview.will_create.projects }}</strong></li>
+              <li>{{ t('llc.portability.createWorkItems') }} <strong>{{ importPreview.will_create.work_items }}</strong></li>
             </ul>
           </div>
 
           <!-- Secret mapping -->
           <div v-if="secretPlaceholders.length > 0" class="secret-mapping">
-            <h5>Secret Mapping</h5>
+            <h5>{{ t('llc.portability.secretMapping') }}</h5>
             <p class="secret-hint">
-              The template references the following secrets. Provide the actual values or secret binding names.
+              {{ t('llc.portability.secretMappingHint') }}
             </p>
             <div
               v-for="placeholder in secretPlaceholders"
@@ -161,7 +158,7 @@
                 v-model="secretMapping[placeholder]"
                 type="text"
                 class="secret-input"
-                :placeholder="`Value or binding for ${placeholder}`"
+                :placeholder="t('llc.portability.secretValuePlaceholder', { name: placeholder })"
               />
             </div>
           </div>
@@ -174,10 +171,10 @@
               @click="executeImport"
             >
               <span v-if="executingImport" class="spinner" />
-              <span v-else>▶ Execute Import</span>
+              <span v-else>▶ {{ t('llc.portability.executeImport') }}</span>
             </button>
             <span v-if="secretMappingIncomplete" class="hint-text">
-              Fill in all secret values above before importing.
+              {{ t('llc.portability.secretMappingIncomplete') }}
             </span>
           </div>
         </div>
@@ -185,17 +182,17 @@
         <!-- Import result -->
         <div v-if="importResult" class="import-result" :class="importResult.ok ? 'result-success' : 'result-error'">
           <template v-if="importResult.ok">
-            ✅ Import successful — company ID: <strong>{{ importResult.company_id }}</strong>
+            ✅ {{ t('llc.portability.importSuccess') }} <strong>{{ importResult.company_id }}</strong>
             <ul v-if="importResult.created_entities" class="result-counts">
               <li v-for="(v, k) in importResult.created_entities" :key="k">{{ k }}: {{ v }}</li>
             </ul>
             <div v-if="importResult.warnings.length > 0">
-              <p>Warnings:</p>
+              <p>{{ t('llc.portability.warningsLabel') }}</p>
               <ul><li v-for="(w, i) in importResult.warnings" :key="i">{{ w }}</li></ul>
             </div>
           </template>
           <template v-else>
-            ❌ Import failed: {{ importResult.error }}
+            ❌ {{ t('llc.portability.importFailed') }} {{ importResult.error }}
           </template>
         </div>
       </section>
@@ -206,6 +203,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
 import { useNotificationBus } from '@/composables/useNotificationBus'
@@ -213,6 +211,7 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('CompanyPortabilityView')
 const { showToast } = useNotificationBus()
+const { t } = useI18n()
 const route = useRoute()
 
 // ── props ────────────────────────────────────────────────────────────────────
@@ -303,10 +302,10 @@ async function exportTemplate(): Promise<void> {
     )
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     await triggerDownload(res, `company_${effectiveCompanyId.value}_template.json`)
-    showToast('Template exported successfully', 'success')
+    showToast(t('llc.portability.toastTemplateExported'), 'success')
   } catch (e) {
     logger.error('Template export failed:', e)
-    showToast('Template export failed', 'error')
+    showToast(t('llc.portability.toastTemplateExportFailed'), 'error')
   } finally {
     exportingTemplate.value = false
   }
@@ -322,10 +321,10 @@ async function exportSnapshot(): Promise<void> {
     )
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     await triggerDownload(res, `company_${effectiveCompanyId.value}_snapshot.json`)
-    showToast('Snapshot exported successfully', 'success')
+    showToast(t('llc.portability.toastSnapshotExported'), 'success')
   } catch (e) {
     logger.error('Snapshot export failed:', e)
-    showToast('Snapshot export failed', 'error')
+    showToast(t('llc.portability.toastSnapshotExportFailed'), 'error')
   } finally {
     exportingSnapshot.value = false
   }
@@ -351,7 +350,7 @@ function onFileChange(e: Event): void {
 
 function loadFile(file: File): void {
   if (!file.name.endsWith('.json') || file.type !== 'application/json') {
-    showToast('Only JSON files are supported', 'error')
+    showToast(t('llc.portability.toastOnlyJson'), 'error')
     return
   }
   importFile.value = file
@@ -402,9 +401,9 @@ async function runPreview(): Promise<void> {
     previewPayload.value = parsed
     importPreview.value = preview
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Preview failed'
+    const msg = e instanceof Error ? e.message : t('llc.portability.toastImportFailed')
     logger.error('Import preview failed:', e)
-    showToast(`Preview failed: ${msg}`, 'error')
+    showToast(t('llc.portability.toastPreviewFailed', { msg }), 'error')
   } finally {
     loadingPreview.value = false
   }
@@ -436,7 +435,7 @@ async function executeImport(): Promise<void> {
         warnings: [],
         error: (errBody.detail as string) ?? `${res.status} ${res.statusText}`,
       }
-      showToast('Import failed', 'error')
+      showToast(t('llc.portability.toastImportFailed'), 'error')
       return
     }
     const body = await res.json() as Record<string, unknown>
@@ -446,12 +445,12 @@ async function executeImport(): Promise<void> {
       created_entities: body.created_entities as Record<string, number>,
       warnings: (body.warnings as string[]) ?? [],
     }
-    showToast('Import completed successfully', 'success')
+    showToast(t('llc.portability.toastImportCompleted'), 'success')
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Import failed'
+    const msg = e instanceof Error ? e.message : t('llc.portability.toastImportFailed')
     logger.error('Import execute failed:', e)
     importResult.value = { ok: false, warnings: [], error: msg }
-    showToast(`Import failed: ${msg}`, 'error')
+    showToast(t('llc.portability.toastImportFailedMsg', { msg }), 'error')
   } finally {
     executingImport.value = false
   }
@@ -473,12 +472,12 @@ async function executeImport(): Promise<void> {
 .page-title {
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
   margin: 0 0 var(--spacing-xs);
 }
 
 .page-subtitle {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -509,8 +508,8 @@ async function executeImport(): Promise<void> {
 }
 
 .portability-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
 }
@@ -519,11 +518,11 @@ async function executeImport(): Promise<void> {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
   margin: 0 0 var(--spacing-xs);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .card-desc {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   margin: 0 0 var(--spacing-md);
 }
 
@@ -559,9 +558,9 @@ async function executeImport(): Promise<void> {
   align-items: center;
   gap: var(--spacing-xs);
   padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-surface);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   cursor: pointer;
   font-size: var(--font-size-sm);
@@ -594,14 +593,14 @@ async function executeImport(): Promise<void> {
 
 .export-hint {
   font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary, var(--color-text-secondary));
+  color: var(--color-text-tertiary, var(--text-secondary));
   margin: 0 0 var(--spacing-md);
 }
 
 /* Recent exports */
 .recent-exports {
   margin-top: var(--spacing-md);
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--border-default);
   padding-top: var(--spacing-md);
 }
 
@@ -609,7 +608,7 @@ async function executeImport(): Promise<void> {
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   margin: 0 0 var(--spacing-sm);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
 }
 
 .export-table,
@@ -625,13 +624,13 @@ async function executeImport(): Promise<void> {
 .preview-table td {
   text-align: left;
   padding: var(--spacing-xs) var(--spacing-sm);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .export-table th,
 .preview-table th {
   font-weight: var(--font-weight-semibold);
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 .download-link {
@@ -642,7 +641,7 @@ async function executeImport(): Promise<void> {
 
 /* Drop zone */
 .drop-zone {
-  border: 2px dashed var(--color-border);
+  border: 2px dashed var(--border-default);
   border-radius: var(--radius-md);
   padding: var(--spacing-xl) var(--spacing-md);
   text-align: center;
@@ -675,18 +674,18 @@ async function executeImport(): Promise<void> {
 }
 
 .drop-zone-label {
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   font-size: var(--font-size-sm);
 }
 
 .btn-clear-file {
   background: none;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   padding: 2px var(--spacing-xs);
   cursor: pointer;
   font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   margin-top: var(--spacing-xs);
 }
 
@@ -699,10 +698,10 @@ async function executeImport(): Promise<void> {
 
 /* Preview panel */
 .preview-panel {
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   padding: var(--spacing-md);
-  background: var(--color-background, var(--color-surface));
+  background: var(--bg-primary, var(--bg-surface));
   margin-top: var(--spacing-md);
 }
 
@@ -752,7 +751,7 @@ async function executeImport(): Promise<void> {
 
 /* Secret mapping */
 .secret-mapping {
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--border-default);
   padding-top: var(--spacing-md);
   margin-top: var(--spacing-md);
   margin-bottom: var(--spacing-md);
@@ -760,7 +759,7 @@ async function executeImport(): Promise<void> {
 
 .secret-hint {
   font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
   margin: 0 0 var(--spacing-sm);
 }
 
@@ -774,18 +773,18 @@ async function executeImport(): Promise<void> {
 .secret-label {
   font-family: var(--font-family-mono, monospace);
   font-size: var(--font-size-sm);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
   min-width: 180px;
 }
 
 .secret-input {
   flex: 1;
   padding: var(--spacing-xs) var(--spacing-sm);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
-  background: var(--color-surface);
-  color: var(--color-text-primary);
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 /* Execute */
@@ -798,7 +797,7 @@ async function executeImport(): Promise<void> {
 
 .hint-text {
   font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
 }
 
 /* Import result */

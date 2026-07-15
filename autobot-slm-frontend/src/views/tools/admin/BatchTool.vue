@@ -421,7 +421,7 @@ onUnmounted(() => {
         <div class="mb-4">
           <div class="flex items-center justify-between text-sm text-gray-600 mb-1">
             <span>{{ $t('tools.admin.batchTool.progress') }}</span>
-            <span>{{ job.processed_items }} / {{ job.total_items }} items ({{ job.progress.toFixed(0) }}%)</span>
+            <span>{{ $t('tools.admin.batchTool.value0Value1ItemsValue2', { value0: job.processed_items, value1: job.total_items, value2: job.progress.toFixed(0) }) }}</span>
           </div>
           <div class="w-full bg-gray-200 rounded-full h-2">
             <div
@@ -463,7 +463,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6">
         <div class="flex items-center justify-between mb-6">
           <h3 class="text-lg font-semibold text-gray-900">{{ $t('tools.admin.batchTool.createBatchJob') }}</h3>
-          <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-600" aria-label="Close">
+          <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-600" :aria-label="$t('tools.admin.batchTool.close')">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -477,7 +477,7 @@ onUnmounted(() => {
               v-model="newJob.name"
               type="text"
               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              placeholder="Enter job name"
+              :placeholder="$t('tools.admin.batchTool.enterJobName')"
             />
           </div>
 
@@ -507,7 +507,7 @@ onUnmounted(() => {
             :disabled="loading || !newJob.name"
             class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
           >
-            {{ loading ? 'Creating...' : 'Create Job' }}
+            {{ loading ? $t('tools.admin.batchTool.creating') : $t('tools.admin.batchTool.createJob') }}
           </button>
         </div>
       </div>

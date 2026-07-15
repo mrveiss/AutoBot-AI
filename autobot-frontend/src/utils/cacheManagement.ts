@@ -6,6 +6,7 @@
  */
 
 import { createLogger } from '@/utils/debugUtils'
+import { isChunkLoadError } from '@/utils/chunkLoadError'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { escapeHtml } from '@/utils/sanitize'
 import { getApiBase } from '@/config/ssot-config'
@@ -106,10 +107,9 @@ export async function handleChunkLoadingError(error: Error, componentName?: stri
     stack: error.stack
   })
 
-  // Check if this is a chunk loading error
-  const isChunkError = error.message?.includes('Loading chunk') ||
-                       error.message?.includes('ChunkLoadError') ||
-                       error.message?.includes('Loading CSS chunk') ||
+  // Check if this is a chunk loading error (a bare "Failed to fetch" is also
+  // treated as one here, since it usually means a chunk request was blocked).
+  const isChunkError = isChunkLoadError(error) ||
                        error.message?.includes('Failed to fetch')
 
   if (isChunkError) {
@@ -307,14 +307,14 @@ export function showSubtleUpdateNotification(version: string, buildHash: string,
   }
 
   // Add safe reload function to global scope
-  (window as any).performSafeReload = () => {
+  (window as unknown as { performSafeReload: () => void }).performSafeReload = () => {
     // Record reload time to prevent loops
     localStorage.setItem('last-auto-reload', Date.now().toString())
     location.reload()
   }
 
   // Add cancel function to global scope
-  (window as any).cancelAutoReload = () => {
+  (window as unknown as { cancelAutoReload: () => void }).cancelAutoReload = () => {
     const intervalId = notification.getAttribute('data-countdown-interval')
     if (intervalId) {
       clearInterval(parseInt(intervalId))
@@ -556,9 +556,7 @@ export function setupGlobalChunkErrorHandlers() {
   window.addEventListener('unhandledrejection', async (event) => {
     const error = event.reason
 
-    if (error?.message?.includes('Loading chunk') ||
-        error?.message?.includes('ChunkLoadError') ||
-        error?.message?.includes('Loading CSS chunk')) {
+    if (isChunkLoadError(error)) {
 
       logger.warn('Global chunk loading failure detected:', error)
 

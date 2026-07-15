@@ -98,7 +98,7 @@ export interface MemorySettings {
 
 export interface DeveloperSettings {
   enabled: boolean
-  enhanced_errors: boolean
+  detailed_errors: boolean
   endpoint_suggestions: boolean
   debug_logging: boolean
 }

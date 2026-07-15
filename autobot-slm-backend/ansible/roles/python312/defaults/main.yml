@@ -1,7 +1,0 @@
-# Copyright 2025-2026 mrveiss
-# SPDX-License-Identifier: Apache-2.0
----
-python312_packages:
-  - python3.12
-  - python3.12-venv
-  - python3.12-dev

@@ -14,8 +14,14 @@ import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLoadingState } from '@/composables/useLoadingState'
+import type { components } from '@/types/generated/api'
 
 const logger = createLogger('useBrowserAutomation')
+
+// Backend response shapes (source of truth: generated api.ts)
+type BrowserMcpStatusResponse = components['schemas']['BrowserMcpStatusResponse']
+type BrowserSessionListData = components['schemas']['BrowserSessionListData']
+type DataResponseBrowserSessionList = components['schemas']['DataResponse_BrowserSessionListData_']
 
 // ===== Type Definitions =====
 
@@ -69,6 +75,62 @@ export interface UseBrowserAutomationOptions {
   pollInterval?: number
 }
 
+// ===== Response Mapping Helpers =====
+
+/**
+ * Map the Browser MCP bridge status (`/api/browser/mcp/status`) onto the
+ * dashboard's BrowserWorkerStatus shape. The MCP bridge only reports Browser
+ * VM connectivity, so resource metrics (cpu/memory/uptime) and session caps
+ * that the bridge does not expose degrade to safe defaults rather than being
+ * fabricated. active_sessions is populated separately from fetchSessions().
+ */
+function mapMcpStatusToWorkerStatus(data: BrowserMcpStatusResponse): BrowserWorkerStatus {
+  const vmStatus = String((data.browser_vm as Record<string, unknown>)?.status ?? '')
+  let status: BrowserWorkerStatus['status'] = 'offline'
+  if (vmStatus === 'healthy') {
+    status = 'online'
+  } else if (vmStatus === 'degraded') {
+    status = 'degraded'
+  }
+
+  return {
+    status,
+    active_sessions: 0, // populated by fetchSessions() (MCP status has no count)
+    max_sessions: 0, // not reported by the MCP bridge
+    cpu_usage: 0, // not reported by the MCP bridge
+    memory_usage: 0, // not reported by the MCP bridge
+    uptime_seconds: 0, // not reported by the MCP bridge
+  }
+}
+
+/**
+ * Map a single research-browser session record onto BrowserSession.
+ * The backend session dict (research_browser.py list_sessions) exposes
+ * session_id/current_url/status/created_at/last_activity; page title and
+ * viewport are not tracked server-side and degrade to safe defaults.
+ */
+function mapSessionRecord(record: Record<string, unknown>): BrowserSession {
+  const rawStatus = String(record.status ?? '')
+  let status: BrowserSession['status'] = 'idle'
+  if (rawStatus === 'error' || rawStatus === 'failed') {
+    status = 'error'
+  } else if (rawStatus === 'active' || rawStatus === 'running' || rawStatus === 'navigating') {
+    status = 'active'
+  }
+
+  const createdAt = typeof record.created_at === 'string' ? record.created_at : ''
+
+  return {
+    id: String(record.session_id ?? ''),
+    url: typeof record.current_url === 'string' ? record.current_url : '',
+    title: '', // not tracked server-side
+    status,
+    created_at: createdAt,
+    last_activity: typeof record.last_activity === 'string' ? record.last_activity : createdAt,
+    viewport: { width: 0, height: 0 }, // not tracked server-side
+  }
+}
+
 // ===== Composable Implementation =====
 
 export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) {
@@ -86,9 +148,12 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
 
   async function fetchWorkerStatus(): Promise<void> {
     try {
-      const data = await ApiClient.get<BrowserWorkerStatus>(`${getApiBase()}/browser/status`)
-      workerStatus.value = data
-      logger.debug('Fetched worker status:', data)
+      const data = await ApiClient.get<BrowserMcpStatusResponse>(`${getApiBase()}/browser/mcp/status`)
+      const mapped = mapMcpStatusToWorkerStatus(data)
+      // Preserve the active_sessions count already derived from fetchSessions().
+      mapped.active_sessions = sessions.value.length
+      workerStatus.value = mapped
+      logger.debug('Fetched worker status:', mapped)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch worker status'
       logger.error('Failed to fetch worker status:', err)
@@ -115,7 +180,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   async function closeSession(sessionId: string): Promise<boolean> {
     error.value = null
     return wrap(async () => {
-      await ApiClient.post<any>(`${getApiBase()}/browser/close`, { session_id: sessionId })
+      await ApiClient.post<unknown>(`${getApiBase()}/browser/close`, { session_id: sessionId })
       sessions.value = sessions.value.filter(s => s.id !== sessionId)
       if (currentSession.value?.id === sessionId) {
         currentSession.value = null
@@ -132,8 +197,19 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
 
   async function fetchSessions(): Promise<void> {
     try {
-      const data = await ApiClient.get<{ sessions: BrowserSession[] }>(`${getApiBase()}/browser/sessions`)
-      sessions.value = data.sessions || []
+      // research-browser is a distinct router prefix from /browser (MCP bridge).
+      // ApiClient.get returns parsed JSON directly; DataResponse wraps the
+      // payload under `data`.
+      const response = await ApiClient.get<DataResponseBrowserSessionList>(
+        `${getApiBase()}/research-browser/sessions`,
+      )
+      const listData: BrowserSessionListData | null | undefined = response?.data
+      const records = listData?.sessions ?? []
+      sessions.value = records.map(mapSessionRecord)
+      // Keep the worker-status session count in sync when it is present.
+      if (workerStatus.value) {
+        workerStatus.value.active_sessions = sessions.value.length
+      }
       logger.debug('Fetched sessions:', sessions.value.length)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch sessions'
@@ -159,7 +235,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   async function navigate(sessionId: string, url: string): Promise<boolean> {
     error.value = null
     return wrap(async () => {
-      await ApiClient.post<any>(`${getApiBase()}/browser/navigate`, { session_id: sessionId, url })
+      await ApiClient.post<unknown>(`${getApiBase()}/browser/navigate`, { session_id: sessionId, url })
       logger.debug('Navigated to:', url)
       await fetchSessions()
       return true
@@ -174,7 +250,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   async function click(sessionId: string, selector: string): Promise<boolean> {
     error.value = null
     return wrap(async () => {
-      await ApiClient.post<any>(`${getApiBase()}/browser/click`, { session_id: sessionId, selector })
+      await ApiClient.post<unknown>(`${getApiBase()}/browser/click`, { session_id: sessionId, selector })
       logger.debug('Clicked element:', selector)
       return true
     }).catch((err) => {
@@ -188,7 +264,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   async function type(sessionId: string, selector: string, text: string): Promise<boolean> {
     error.value = null
     return wrap(async () => {
-      await ApiClient.post<any>(`${getApiBase()}/browser/type`, { session_id: sessionId, selector, text })
+      await ApiClient.post<unknown>(`${getApiBase()}/browser/type`, { session_id: sessionId, selector, text })
       logger.debug('Typed text into:', selector)
       return true
     }).catch((err) => {
@@ -245,7 +321,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   async function deleteSession(sessionId: string): Promise<boolean> {
     error.value = null
     return wrap(async () => {
-      await ApiClient.delete<any>(`${getApiBase()}/browser/session/${sessionId}`)
+      await ApiClient.delete<unknown>(`${getApiBase()}/browser/session/${sessionId}`)
       sessions.value = sessions.value.filter(s => s.id !== sessionId)
       logger.debug('Deleted session:', sessionId)
       return true

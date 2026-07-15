@@ -21,6 +21,11 @@ EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys')
 # worker: Start worker process
 # --loglevel=info: Logging level
 # --concurrency=4: Number of worker processes (adjust based on CPU)
+# No -Q/--queues on purpose (#11631): the worker consumes the full task_queues
+# set defined in celery_app.py (celery, deployments, memory, analytics) — the
+# SSOT that keeps every task_routes target queue consumed. Before task_queues
+# existed, no -Q meant only the default `celery` queue, silently stranding
+# deployments/memory/analytics tasks in Redis.
 ExecStart={{ backend_code_dir | default(backend_install_dir) }}/venv/bin/celery -A celery_app worker \
     --loglevel=info \
     --concurrency={{ celery_concurrency | default(4) }} \

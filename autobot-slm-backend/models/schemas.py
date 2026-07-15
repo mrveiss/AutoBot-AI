@@ -91,6 +91,10 @@ class PortInfo(BaseModel):
     port: int
     process: str | None = None
     pid: int | None = None
+    # GH#11224: bind interface, consumed by the security-posture audit. Without
+    # this field Pydantic's extra="ignore" strips it at heartbeat ingest, so the
+    # audit would never see a bind address. None for pre-GH#11224 agents.
+    address: str | None = None
 
 
 class RoleReportItem(BaseModel):
@@ -377,8 +381,27 @@ class SecretResponse(BaseModel):
     description: str | None = None
     created_at: datetime
     updated_at: datetime
+    warning: str | None = None
+    """Non-blocking validation warning (e.g. HF unreachable at save time, #11718)."""
 
     model_config = {"from_attributes": True}
+
+
+class ApplySecretsRequest(BaseModel):
+    """Request to propagate a stored secret to its dependent services (#11719)."""
+
+    key: str = Field(..., min_length=1, max_length=128)
+
+
+class ApplySecretsResponse(BaseModel):
+    """Result of propagating a secret to its dependent services (#11719)."""
+
+    success: bool
+    key: str
+    dependent_roles: List[str]
+    target_node_ids: List[str]
+    output: str
+    returncode: int
 
 
 # =============================================================================
@@ -1625,6 +1648,28 @@ class DriftResolveResponse(BaseModel):
     deployed_dir: str
     deps_changed: bool = False
     post_steps: List[str] = []
+
+
+class DriftResolveJobResponse(BaseModel):
+    """Accepted async component-resolve job (#11303)."""
+
+    job_id: str
+    component: str
+    status: str
+
+
+class ComponentSyncJobStatus(BaseModel):
+    """Status of an async component-resolve job (#11303)."""
+
+    job_id: str
+    component: str
+    status: str
+    success: bool | None = None
+    deps_changed: bool = False
+    message: str | None = None
+    post_steps: List[str] = []
+    created_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 class PendingNodeResponse(BaseModel):

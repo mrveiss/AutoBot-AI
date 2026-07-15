@@ -209,7 +209,7 @@ export function useConversationFiles(sessionId: string) {
 
     return wrap(async () => {
       try {
-        await api.delete<any>(`${getApiBase()}/conversation-files/conversation/${sessionId}/files/${fileId}`)
+        await api.delete<unknown>(`${getApiBase()}/conversation-files/conversation/${sessionId}/files/${fileId}`)
 
         // Remove file from local state
         files.value = files.value.filter(f => f.file_id !== fileId)
@@ -428,7 +428,7 @@ export function useConversationFiles(sessionId: string) {
     error.value = null
     return wrap(async () => {
       for (const fid of ids) {
-        try { await api.delete<any>(`${API}/files/${fid}`) } catch { /* continue */ }
+        try { await api.delete<unknown>(`${API}/files/${fid}`) } catch { /* continue */ }
       }
       fileSelection.clear()
       await loadFiles()

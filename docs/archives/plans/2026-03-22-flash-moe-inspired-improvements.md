@@ -6,7 +6,7 @@
 
 **Architecture:** Seven independent work streams, each touching a focused area of the codebase. Tasks 1-3 are high priority (fix real bugs). Tasks 4-7 are medium priority (improve performance workflows). All tasks are independent and can be parallelized.
 
-**Tech Stack:** Python 3.12, psutil, pynvml, pytest, Redis, asyncio
+**Tech Stack:** Python 3.14, psutil, pynvml, pytest, Redis, asyncio
 
 **Source:** Research comparison of [danveloper/flash-moe](https://github.com/danveloper/flash-moe) against AutoBot codebase (2026-03-22).
 

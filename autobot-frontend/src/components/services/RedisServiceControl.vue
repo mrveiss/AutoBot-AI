@@ -189,6 +189,7 @@
 
     <!-- Confirmation Dialog -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showConfirmDialog"
       :title="confirmDialog.title"
       size="md"
@@ -227,13 +228,13 @@
 
 <script setup>
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useServiceManagement } from '@/composables/useServiceManagement'
 import { NetworkConstants } from '@/constants/network'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('RedisServiceControl')
@@ -244,7 +245,6 @@ const {
   serviceStatus,
   healthStatus,
   loading,
-  error,
   startService,
   stopService,
   restartService,
@@ -296,8 +296,9 @@ const getHealthCheckVariant = (status) => {
  * Lifecycle: Subscribe to WebSocket updates on mount
  */
 onMounted(() => {
-  subscribeToStatusUpdates((message) => {
-  })
+  // Subscribe to push updates; the composable also auto-refreshes internally,
+  // so this callback is a no-op subscription marker (param unused by design).
+  subscribeToStatusUpdates((_message) => {})
 })
 
 /**

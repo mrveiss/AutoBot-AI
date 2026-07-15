@@ -100,6 +100,9 @@ class EventType(Enum):
     SYSTEM = auto()  # System events (startup, shutdown, errors)
     APPROVAL_REQUIRED = auto()  # Agent requests user approval before executing
     APPROVAL_RESPONSE = auto()  # User approval decision (approved / denied)
+    STEERING = auto()  # Human mid-task guidance injected into the running loop (#10543)
+    HUMAN_QUESTION = auto()  # Agent asks the human a clarifying question; loop suspends (#10553)
+    HUMAN_ANSWER = auto()  # Human provides the answer; loop resumes (#10553)
 
 
 @dataclass
@@ -701,6 +704,163 @@ def create_approval_required_event(
         source="agent",
         task_id=task_id,
         correlation_id=approval_id,
+    )
+
+
+# =============================================================================
+# Steering Event Types (#10543)
+# =============================================================================
+
+
+@dataclass
+class SteeringContent:
+    """Content schema for STEERING events — human mid-task guidance.
+
+    Published when a human sends a steering message to a running agent task.
+    The agent loop drains these at the top of ANALYZE_EVENTS each iteration
+    and applies them as high-priority plan amendments without restarting.
+    """
+
+    steering_id: str  # Stable ID for this guidance message
+    guidance: str  # Human-authored correction / direction text
+    amend_goal: bool = True  # Hint: agent should treat this as a goal amendment
+
+    def to_dict(self) -> dict:
+        return {
+            "steering_id": self.steering_id,
+            "guidance": self.guidance,
+            "amend_goal": self.amend_goal,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "SteeringContent":
+        return cls(
+            steering_id=data["steering_id"],
+            guidance=data.get("guidance", ""),
+            amend_goal=data.get("amend_goal", True),
+        )
+
+
+def create_steering_event(
+    steering_id: str,
+    guidance: str,
+    task_id: str | None = None,
+    amend_goal: bool = True,
+) -> "AgentEvent":
+    """Helper to create a STEERING event (#10543)."""
+    content = SteeringContent(
+        steering_id=steering_id,
+        guidance=guidance,
+        amend_goal=amend_goal,
+    )
+    return AgentEvent(
+        event_type=EventType.STEERING,
+        content=content.to_dict(),
+        source="user",
+        task_id=task_id,
+        correlation_id=steering_id,
+    )
+
+
+# =============================================================================
+# Ask-the-Human Event Types (#10553)
+# =============================================================================
+
+
+@dataclass
+class HumanQuestionContent:
+    """Content schema for HUMAN_QUESTION events.
+
+    Emitted when the agent loop suspends to wait for the human to answer a
+    clarifying question.  The ``question_id`` is used to match the HUMAN_ANSWER.
+    ``choices`` is an optional list of valid responses; None = free-form text.
+    """
+
+    question_id: str  # Stable UUID shared with the HUMAN_ANSWER
+    question: str  # Human-readable question text
+    choices: list[str] | None  # Optional constrained choices
+    timeout_seconds: int  # How long to wait before escalating
+    deadline_ts: float  # Unix epoch seconds when the wait expires
+
+    def to_dict(self) -> dict:
+        return {
+            "question_id": self.question_id,
+            "question": self.question,
+            "choices": self.choices,
+            "timeout_seconds": self.timeout_seconds,
+            "deadline_ts": self.deadline_ts,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "HumanQuestionContent":
+        return cls(
+            question_id=data["question_id"],
+            question=data.get("question", ""),
+            choices=data.get("choices"),
+            timeout_seconds=data.get("timeout_seconds", 300),
+            deadline_ts=data.get("deadline_ts", 0.0),
+        )
+
+
+@dataclass
+class HumanAnswerContent:
+    """Content schema for HUMAN_ANSWER events.
+
+    Published by any channel (in-app, Slack, mobile) that delivers the human's
+    response.  The ``question_id`` links this to the pending HUMAN_QUESTION.
+    """
+
+    question_id: str  # Matches HumanQuestionContent.question_id
+    answer: str  # Human's response (free-form or one of choices)
+
+    def to_dict(self) -> dict:
+        return {"question_id": self.question_id, "answer": self.answer}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "HumanAnswerContent":
+        return cls(
+            question_id=data["question_id"],
+            answer=data.get("answer", ""),
+        )
+
+
+def create_human_question_event(
+    question_id: str,
+    question: str,
+    timeout_seconds: int,
+    task_id: str | None = None,
+    choices: list[str] | None = None,
+) -> AgentEvent:
+    """Helper to create a HUMAN_QUESTION event (#10553)."""
+    content = HumanQuestionContent(
+        question_id=question_id,
+        question=question,
+        choices=choices,
+        timeout_seconds=timeout_seconds,
+        deadline_ts=time.time() + timeout_seconds,
+    )
+    return AgentEvent(
+        event_type=EventType.HUMAN_QUESTION,
+        content=content.to_dict(),
+        source="agent",
+        task_id=task_id,
+        correlation_id=question_id,
+    )
+
+
+def create_human_answer_event(
+    question_id: str,
+    answer: str,
+    task_id: str | None = None,
+) -> AgentEvent:
+    """Helper to create a HUMAN_ANSWER event (#10553)."""
+    content = HumanAnswerContent(question_id=question_id, answer=answer)
+    return AgentEvent(
+        event_type=EventType.HUMAN_ANSWER,
+        content=content.to_dict(),
+        source="user",
+        task_id=task_id,
+        correlation_id=question_id,
     )
 
 

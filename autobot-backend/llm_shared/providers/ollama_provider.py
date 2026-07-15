@@ -78,7 +78,7 @@ class OllamaProvider(BaseProvider):
         self._delegate.ollama_host = self._resolve_base_url()
         return self._delegate
 
-    async def chat_completion(self, request: LLMRequest) -> LLMResponse:
+    async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
         """Delegate to llm_shared OllamaProvider (carries OTel tracing + circuit breaker).
 
         When ``request.metadata["chat_template"]`` is set the messages are
@@ -91,8 +91,9 @@ class OllamaProvider(BaseProvider):
             if chat_template:
                 # Issue #4525: when a chat_template is set, render messages to a
                 # prompt string and POST to /api/generate directly.
-                # Issue #6770: route through the shared "ollama_service" circuit breaker
-                # so total_calls is incremented (same breaker as the delegate path).
+                # GH#11488: breaker accounting (Issue #6770) now lives at the
+                # BaseProvider._guarded_completion seam — wrapping the same
+                # "ollama_service" breaker here again double-counted failures.
                 base_url = self._resolve_base_url()
                 model = request.model_name or self._get_setting("default_model", "")
                 raw_messages = [
@@ -113,10 +114,6 @@ class OllamaProvider(BaseProvider):
                 if request.max_tokens:
                     payload["options"]["num_predict"] = request.max_tokens
 
-                from circuit_breaker import get_circuit_breaker_manager
-
-                cb = get_circuit_breaker_manager().get_circuit_breaker("ollama_service")
-
                 async def _generate() -> Dict[str, Any]:
                     http_client = get_http_client()
                     timeout = aiohttp.ClientTimeout(total=None, connect=5.0, sock_read=None)
@@ -131,7 +128,7 @@ class OllamaProvider(BaseProvider):
                             raise RuntimeError(f"Ollama generate returned HTTP {resp.status}: {body}")
                         return await resp.json()
 
-                data = await cb.call_async(_generate)
+                data = await _generate()
                 content = data.get("response", "")
                 usage = {
                     "prompt_tokens": data.get("prompt_eval_count", 0),

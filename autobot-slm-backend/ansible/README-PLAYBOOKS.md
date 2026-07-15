@@ -8,12 +8,17 @@
 # Provision a fresh node
 ansible-playbook setup-npu-worker.yml --limit 172.16.168.22
 
-# Update all nodes with latest code
+# Update all nodes with latest code (runs DB migrations before restart)
 ansible-playbook update-all-nodes.yml
 
 # Update specific service
 ansible-playbook update-all-nodes.yml --tags backend
 ```
+
+> `update-all-nodes.yml` redirects to the canonical `playbooks/update-all-nodes.yml`,
+> which runs the strict `alembic upgrade head` sequence (pg_dump backup → baseline →
+> upgrade, fail-closed) before restarting the backend — so migrations are always part
+> of the update. See `docs/runbooks/CODE_UPDATE.md`.
 
 ---
 
@@ -35,9 +40,11 @@ ansible-playbook update-all-nodes.yml --tags backend
 
 | Playbook | Purpose | Scope | Time |
 |----------|---------|-------|------|
-| `update-all-nodes.yml` | Code sync + restart (all nodes) | Fleet | ~2 min |
+| `update-all-nodes.yml` | Code sync + **DB migrations** + restart (all nodes) | Fleet | ~3–10 min¹ |
 | `update-all-nodes.yml --tags backend` | Backend code only | Single service | ~30s |
 | `provision-fleet-roles.yml` | Full re-provision | Fleet | ~45 min |
+
+¹ Includes the pre-restart migration sequence (pg_dump backup → baseline → `alembic upgrade head`); longer when migrations or dependency changes apply.
 
 ---
 

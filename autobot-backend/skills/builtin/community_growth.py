@@ -390,7 +390,7 @@ class CommunityGrowthSkill(BaseSkill):
         hint = format_hints.get(fmt, "")
         full_prompt = f"{hint}\n\nContext: {json.dumps(context)}\n\n{prompt}"
 
-        ollama_host = self._config.get("ollama_host", "http://localhost:11434")
+        ollama_host = self._config.get("ollama_host", get_ollama_url())
         ollama_model = self._config.get("ollama_model", "mistral")
         ollama_url = f"{ollama_host}/api/generate"
         payload = {

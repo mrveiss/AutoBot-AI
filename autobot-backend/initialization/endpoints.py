@@ -67,7 +67,7 @@ def _build_capabilities(ai_stack_ready: bool, ai_agents_ready: bool, npu_ready: 
         "rag_enhanced_search": ai_stack_ready,
         "multi_agent_coordination": ai_agents_ready,
         "knowledge_extraction": ai_stack_ready,
-        "enhanced_chat": ai_stack_ready,
+        "ai_stack_chat_available": ai_stack_ready,
         "npu_acceleration": npu_ready,
     }
 
@@ -210,6 +210,23 @@ def register_root_endpoints(app: FastAPI) -> None:
             "workers": cross["workers"],
         }
 
+    @app.get("/api/health/celery-dead-letter")
+    @with_error_handling(category=ErrorCategory.SYSTEM)
+    async def celery_dead_letter_health(limit: int = 20):
+        """Parked Celery tasks (retries exhausted) from the dead-letter list (#11586).
+
+        Returns the parked count plus the most recent entries recorded by
+        ``utils.celery_reliability.DeadLetterTask`` so terminally failed tasks
+        stay queryable after the Celery result TTL expires.
+        """
+        from utils.celery_reliability import get_dead_letter_status
+
+        status = await get_dead_letter_status(limit=limit)
+        return {
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            **status,
+        }
+
     @app.get("/api/version")
     @with_error_handling(category=ErrorCategory.SYSTEM)
     async def root_version():
@@ -230,7 +247,8 @@ def register_root_endpoints(app: FastAPI) -> None:
 
     logger.info(
         "Root endpoints registered: /api/health, /api/health/ai-stack, "
-        "/api/health/circuit-breakers, /api/version, /.well-known/agent.json"
+        "/api/health/circuit-breakers, /api/health/celery-dead-letter, "
+        "/api/version, /.well-known/agent.json"
     )
 
 

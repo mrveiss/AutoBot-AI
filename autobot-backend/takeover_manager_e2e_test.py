@@ -19,7 +19,7 @@ from tests.test_helpers import get_test_backend_url
 
 # Import system components
 try:
-    from api.terminal_handlers import ConsolidatedTerminalWebSocket
+    from api.terminal_handlers import TerminalWebSocket
     from api.workflow_automation import (
         AutomationMode,
         WorkflowAutomationManager,
@@ -241,7 +241,7 @@ class SessionTakeoverTestSuite:
 
         # Create mock terminal session
         mock_websocket = AsyncMock()
-        terminal_session = ConsolidatedTerminalWebSocket(
+        terminal_session = TerminalWebSocket(
             websocket=mock_websocket,
             session_id=self.test_session_id,
         )
@@ -410,7 +410,7 @@ class SessionTakeoverTestSuite:
 
         # Create mock terminal session
         mock_websocket = AsyncMock()
-        terminal_session = ConsolidatedTerminalWebSocket(
+        terminal_session = TerminalWebSocket(
             websocket=mock_websocket,
             session_id=self.test_session_id,
         )
@@ -506,7 +506,7 @@ class SessionTakeoverTestSuite:
 
         # Test malformed messages via public dispatch method
         mock_websocket = AsyncMock()
-        terminal_session = ConsolidatedTerminalWebSocket(
+        terminal_session = TerminalWebSocket(
             websocket=mock_websocket,
             session_id=self.test_session_id,
         )

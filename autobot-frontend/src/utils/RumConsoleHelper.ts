@@ -6,7 +6,16 @@
  * Issue #156 Fix: Import RumAgent to ensure Window.rum type is available
  */
 
-import type { ApiCall } from './RumAgent'
+import type { ApiCall, CriticalIssue, RumMetadata } from './RumAgent'
+
+/** Per-endpoint aggregation computed in rumApiStats(). */
+interface EndpointStats {
+  count: number
+  totalDuration: number
+  timeouts: number
+  errors: number
+  slowCalls: number
+}
 // Import the module to ensure Window.rum declaration is loaded
 import './RumAgent'
 
@@ -93,7 +102,7 @@ window.rumIssues = () => {
     return
   }
 
-  issues.forEach((issue: any, index: number) => {
+  issues.forEach((issue: CriticalIssue, index: number) => {
     console.group(`${index + 1}. ${issue.type} (${new Date(issue.timestamp).toLocaleTimeString()})`)
     console.groupEnd()
   })
@@ -109,7 +118,7 @@ window.rumApiStats = () => {
   const apiCalls = metrics.apiCalls
 
   // Group by endpoint
-  const endpointStats: Record<string, any> = {}
+  const endpointStats: Record<string, EndpointStats> = {}
   apiCalls.forEach((call: ApiCall) => {
     const endpoint = call.url
     if (!endpointStats[endpoint]) {
@@ -130,7 +139,7 @@ window.rumApiStats = () => {
     if (call.isSlow) stats.slowCalls++
   })
 
-  Object.entries(endpointStats).forEach(([endpoint, stats]: [string, any]) => {
+  Object.entries(endpointStats).forEach(([endpoint, stats]: [string, EndpointStats]) => {
     const avgDuration = Math.round(stats.totalDuration / stats.count)
     const hasIssues = stats.timeouts > 0 || stats.errors > 0 || stats.slowCalls > 0
 
@@ -164,7 +173,7 @@ window.rumDebug = () => {
   }
 
   const originalTrackError = window.rum.trackError.bind(window.rum)
-  window.rum.trackError = function(type: string, data: any) {
+  window.rum.trackError = function(type: string, data: RumMetadata) {
     return originalTrackError(type, data)
   }
 

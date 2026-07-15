@@ -14,7 +14,7 @@
       <div class="flex items-start justify-between mb-2">
         <div>
           <span class="font-semibold text-white">{{ approval.skill_id }}</span>
-          <span class="text-xs text-gray-500 ml-3">Requested by: {{ approval.requested_by }}</span>
+          <span class="text-xs text-gray-500 ml-3">{{ $t('skills.approvalsTab.requestedByValue0', { value0: approval.requested_by }) }}</span>
         </div>
         <span
           :class="[

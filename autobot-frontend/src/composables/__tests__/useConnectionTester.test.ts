@@ -150,11 +150,11 @@ describe('useConnectionTester composable', () => {
     })
 
     it('should track isTesting during test', async () => {
-      let resolveFetch: any
-      const fetchPromise = new Promise((resolve) => {
+      let resolveFetch: () => void
+      const fetchPromise = new Promise<Response>((resolve) => {
         resolveFetch = () => resolve(new Response(null, { status: 200 }))
       })
-      vi.mocked(fetch).mockReturnValue(fetchPromise as any)
+      vi.mocked(fetch).mockReturnValue(fetchPromise)
 
       const tester = useConnectionTester({
         endpoint: 'http://example.com/health'
@@ -620,11 +620,10 @@ describe('useConnectionTester composable', () => {
     })
 
     it('should cancel ongoing test', async () => {
-      let _resolveFetch: any
-      const fetchPromise = new Promise((resolve) => {
-        resolveFetch = () => resolve(new Response(null, { status: 200 }))
-      })
-      vi.mocked(fetch).mockReturnValue(fetchPromise as any)
+      // Never-resolving fetch: the test cancels the in-flight request rather than
+      // completing it, so no resolver is needed.
+      const fetchPromise = new Promise<Response>(() => {})
+      vi.mocked(fetch).mockReturnValue(fetchPromise)
 
       const tester = useConnectionTester({
         endpoint: 'http://example.com/health'
@@ -654,11 +653,11 @@ describe('useConnectionTester composable', () => {
     })
 
     it('should prevent concurrent tests', async () => {
-      let resolveFetch: any
-      const fetchPromise = new Promise((resolve) => {
+      let resolveFetch: () => void
+      const fetchPromise = new Promise<Response>((resolve) => {
         resolveFetch = () => resolve(new Response(null, { status: 200 }))
       })
-      vi.mocked(fetch).mockReturnValue(fetchPromise as any)
+      vi.mocked(fetch).mockReturnValue(fetchPromise)
 
       const tester = useConnectionTester({
         endpoint: 'http://example.com/health'
@@ -743,11 +742,10 @@ describe('useConnectionTester composable', () => {
     })
 
     it('should cancel all ongoing tests', async () => {
-      let _resolveFetch: any
-      const fetchPromise = new Promise((resolve) => {
-        resolveFetch = () => resolve(new Response(null, { status: 200 }))
-      })
-      vi.mocked(fetch).mockReturnValue(fetchPromise as any)
+      // Never-resolving fetch: the test cancels the in-flight requests rather than
+      // completing them, so no resolver is needed.
+      const fetchPromise = new Promise<Response>(() => {})
+      vi.mocked(fetch).mockReturnValue(fetchPromise)
 
       const { testers, testAll, cancelAll } = useConnectionTesters({
         backend: { endpoint: 'http://backend.com/health' },
@@ -786,11 +784,11 @@ describe('useConnectionTester composable', () => {
     })
 
     it('should compute anyTesting', async () => {
-      let resolveFetch: any
-      const fetchPromise = new Promise((resolve) => {
+      let resolveFetch: () => void
+      const fetchPromise = new Promise<Response>((resolve) => {
         resolveFetch = () => resolve(new Response(null, { status: 200 }))
       })
-      vi.mocked(fetch).mockReturnValue(fetchPromise as any)
+      vi.mocked(fetch).mockReturnValue(fetchPromise)
 
       const { testers, anyTesting } = useConnectionTesters({
         backend: { endpoint: 'http://backend.com/health' },

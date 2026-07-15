@@ -171,15 +171,14 @@
     </div>
 
     <!-- Pattern Details Modal -->
-    <div v-if="selectedPattern" class="modal-overlay" @click="selectedPattern = null">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ $t('analytics.logPatterns.patternDetails', { id: selectedPattern.pattern_id }) }}</h3>
-          <button @click="selectedPattern = null" class="close-btn">
-            <Icon name="times" />
-          </button>
-        </div>
-        <div class="modal-body">
+    <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
+      :model-value="!!selectedPattern"
+      :title="selectedPattern ? $t('analytics.logPatterns.patternDetails', { id: selectedPattern.pattern_id }) : ''"
+      size="md"
+      @close="selectedPattern = null"
+    >
+      <template v-if="selectedPattern">
           <div class="detail-section">
             <h4>{{ $t('analytics.logPatterns.patternTemplate') }}</h4>
             <pre class="pattern-code">{{ selectedPattern.pattern_template }}</pre>
@@ -210,9 +209,8 @@
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+      </template>
+    </BaseModal>
 
     <!-- Loading State -->
     <div v-if="isAnalyzing && !miningResult" class="loading-overlay">
@@ -227,13 +225,14 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
+import { BaseModal } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLogPatternData } from '@/composables/analytics/useLogPatternData'
-import type { LogPattern, LogAnomaly, LogTrend, MiningResult, RealtimeData } from '@/composables/analytics/useLogPatternData'
+import type { LogPattern, LogTrend, MiningResult, RealtimeData } from '@/composables/analytics/useLogPatternData'
 
 const { t } = useI18n()
 
@@ -362,7 +361,11 @@ onUnmounted(() => {
 .log-pattern-dashboard {
   padding: var(--spacing-6);
   background: var(--bg-primary);
-  min-height: 100vh;
+  /* #10750: was 100vh (overflowed the shell region). min-h-full flex column —
+     parent .analytics-router-view scrolls; the pattern grid grows to fill. */
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
   color: var(--text-primary);
 }
 
@@ -488,7 +491,11 @@ onUnmounted(() => {
 .content-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
   gap: var(--spacing-6);
+  /* #10750: grow to fill remaining height; panels scroll internally. */
+  flex: 1;
+  min-height: 0;
 }
 
 /* Panels */
@@ -497,6 +504,9 @@ onUnmounted(() => {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .patterns-panel {
@@ -533,7 +543,9 @@ onUnmounted(() => {
 
 .panel-content {
   padding: var(--spacing-4);
-  max-height: 600px;
+  /* #10750: fill the panel and scroll internally rather than a fixed cap. */
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -827,56 +839,6 @@ onUnmounted(() => {
 
 .empty-state p {
   margin: var(--spacing-0);
-}
-
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay-backdrop);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-content {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  width: 90%;
-  max-width: 700px;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-4) var(--spacing-5);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.modal-header h3 {
-  margin: var(--spacing-0);
-  color: var(--text-primary);
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: var(--text-xl);
-  cursor: pointer;
-}
-
-.close-btn:hover {
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: var(--spacing-5);
 }
 
 .detail-section {

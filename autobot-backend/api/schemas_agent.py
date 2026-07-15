@@ -42,18 +42,18 @@ class AgentCommandExecuteResponse(BaseModel):
 
 
 class AgentHealthResponse(BaseModel):
-    """Response for GET /health/enhanced."""
+    """Response for GET /health/detailed."""
 
     status: str
     ai_stack_available: bool
     multi_agent_coordination: bool
-    enhanced_capabilities: bool
+    advanced_capabilities: bool
     timestamp: str
     error: str | None = None
 
 
 # ---------------------------------------------------------------------------
-# enhanced_memory.py schemas
+# task_memory.py schemas
 # ---------------------------------------------------------------------------
 
 
@@ -474,7 +474,7 @@ class LLMInjectContextResponse(BaseModel):
 
     status: str
     original_prompt: str
-    enhanced_prompt: str
+    augmented_prompt: str
     context_level: str
     timestamp: str
 
@@ -955,7 +955,7 @@ class AgentStatusData(BaseModel):
 
 
 class GoalExecutionResult(BaseModel):
-    """Result payload for enhanced goal execution via multi-agent coordination."""
+    """Result payload for advanced goal execution via multi-agent coordination."""
 
     model_config = {"extra": "allow"}
 
@@ -1006,13 +1006,13 @@ class AgentTaskData(BaseModel):
     result: Dict[str, Any] | None = None
 
 
-class EnhancedGoalData(AgentTaskData):
-    """data payload for POST /agent/goal/enhanced."""
+class GoalData(AgentTaskData):
+    """data payload for POST /agent/goal/orchestrated."""
 
     goal: str
     coordination_mode: str
     priority: str | None = None
-    enhanced_context_used: bool
+    context_used: bool
     knowledge_base_integrated: bool
     timestamp: str
     result: GoalExecutionResult | None = None
@@ -1059,11 +1059,11 @@ class MultiAgentQueryData(BaseModel):
     results: Dict[str, Any]
 
 
-class EnhancedKnowledgeSearchData(BaseModel):
-    """data payload for POST /ai-stack/knowledge/enhanced-search."""
+class KnowledgeSearchData(BaseModel):
+    """data payload for POST /ai-stack/knowledge/search."""
 
     local_kb: List[Dict[str, Any]]
-    enhanced: Dict[str, Any]
+    rag_augmented: Dict[str, Any]
 
 
 class ComprehensiveResearchData(BaseModel):
@@ -1399,12 +1399,26 @@ class LoginRequest(BaseModel):
         return v
 
 
+class PasswordWarning(BaseModel):
+    """Non-blocking soft warning attached to a successful login response (#10199).
+
+    Presence of this field does NOT indicate an auth failure — the token is
+    still valid.  Clients should surface the ``reason`` as a nudge to the user
+    to update their password.
+    """
+
+    weak: bool = True
+    reason: str
+
+
 class LoginResponse(BaseModel):
     success: bool
     message: str
     user: dict | None = None
     token: str | None = None
     session_id: str | None = None
+    password_warning: PasswordWarning | None = None
+    """Soft warning when the submitted password is weak (non-blocking, #10199)."""
 
 
 class LogoutRequest(BaseModel):
@@ -1553,21 +1567,18 @@ class OrganizationStatsResponse(BaseModel):
 
 
 class GoalPayload(BaseModel):
-    goal: str
-    use_phi2: bool = False
-    user_role: str = "user"
+    """Goal payload — unified from bare and advanced variants (#10666 B1).
 
-
-class CommandApprovalPayload(BaseModel):
-    task_id: str
-    approved: bool
-    user_role: str = "user"
-
-
-class EnhancedGoalPayload(BaseModel):
-    """Enhanced goal payload with AI Stack integration."""
+    The simple /goal endpoint reads only ``goal``/``use_phi2``/``user_role``.
+    The /goal/orchestrated endpoint also reads the remaining optional fields.
+    All added fields carry defaults, so existing callers that only send
+    ``goal`` remain fully backward-compatible.
+    """
 
     goal: str = Field(..., min_length=1, max_length=10000, description="Goal description")
+    use_phi2: bool = False
+    user_role: str = "user"
+    # Fields from the former GoalPayload — all optional so /goal callers unaffected
     agents: List[str] | None = Field(None, description="Specific agents to use")
     coordination_mode: str = Field("intelligent", description="Coordination mode (parallel, sequential, intelligent)")
     priority: str = Field("normal", description="Task priority (low, normal, high, urgent)")
@@ -1575,6 +1586,12 @@ class EnhancedGoalPayload(BaseModel):
     use_knowledge_base: bool = Field(True, description="Use knowledge base for context")
     include_reasoning: bool = Field(False, description="Include reasoning steps")
     max_execution_time: int = Field(300, ge=30, le=1800, description="Max execution time in seconds")
+
+
+class CommandApprovalPayload(BaseModel):
+    task_id: str
+    approved: bool
+    user_role: str = "user"
 
 
 class MultiAgentTaskPayload(BaseModel):
@@ -1893,6 +1910,53 @@ class ResetLearningResponse(BaseModel):
 
     success: bool
     message: str
+
+
+class FailurePatternRecord(BaseModel):
+    """Serialized failure pattern for the knowledge-export document (GH#11151)."""
+
+    pattern_id: str
+    causal_chain: str
+    occurrence_count: int
+    successful_resolutions: List[str]
+    resolution_success_rate: float
+    confidence: float
+
+
+class LearnedKnowledgeExport(BaseModel):
+    """Human-reviewable export of an agent's learned knowledge (GH#11151)."""
+
+    task_type: str
+    learned_strategy: LearnedStrategyResponse | None
+    high_confidence_threshold: float
+    high_confidence_failure_patterns: List[FailurePatternRecord]
+
+
+class LearnedKnowledgeImport(BaseModel):
+    """Operator-curated learned strategy to import (GH#11151).
+
+    ``best_prompt_template`` and ``best_approach`` are treated as untrusted and
+    sanitized before persistence (reuses the #11060 data-only framing).
+    """
+
+    task_type: str
+    best_approach: str
+    best_prompt_template: str
+    # GH#11179: bound the scoring fields so an import can't inject out-of-range
+    # values into the planner's strategy selection (symmetric with export's
+    # min_confidence ge/le).
+    avg_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    sample_size: int = Field(default=0, ge=0)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    failure_patterns: List[str] = Field(default_factory=list)
+
+
+class KnowledgeImportResponse(BaseModel):
+    """Response for a knowledge-import operation (GH#11151)."""
+
+    success: bool
+    message: str
+    task_type: str
 
 
 # ---------------------------------------------------------------------------

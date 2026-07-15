@@ -326,7 +326,7 @@ class TestPrepareLlmResetsLoopState:
         manager.get_or_create_session = AsyncMock(return_value=session_stub)
         manager._prepare_llm_workflow_params = AsyncMock(return_value=MagicMock())
         ctx = MagicMock()
-        ctx.ollama_endpoint = "http://localhost:11434"
+        ctx.ollama_endpoint = "http://localhost:11434"  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
         ctx.selected_model = "llama3"
         ctx.system_prompt = "You are an assistant."
         ctx.initial_prompt = "Hello"

@@ -14,7 +14,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
-from .base_adapter import BaseAdapter, NormalizedResponse, UnifiedMessage
+from .base_adapter import BaseAdapter, GatewayMessage, NormalizedResponse
 
 logger = get_logger(__name__)
 
@@ -33,7 +33,7 @@ class MatrixAdapter(BaseAdapter):
         super().__init__("matrix")
         self._e2ee = MATRIX_E2EE_ENABLED
 
-    async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:
+    async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
         """Convert matrix-nio RoomMessage event dict to unified schema."""
         metadata = await self.extract_metadata(raw_message)
 
@@ -52,7 +52,7 @@ class MatrixAdapter(BaseAdapter):
             relates_to.get("m.in_reply_to", {}).get("event_id") if relates_to.get("rel_type") != "m.thread" else None
         )
 
-        return UnifiedMessage(
+        return GatewayMessage(
             user_id=sender,
             platform="matrix",
             channel_id=room_id,

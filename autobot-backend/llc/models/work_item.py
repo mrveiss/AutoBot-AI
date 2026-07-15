@@ -67,10 +67,24 @@ class LLCWorkItem(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     acceptance_criteria: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    # GH#10852: per-criterion completion, booleans parallel-indexed to
+    # acceptance_criteria. NULL means no completion has been tracked yet.
+    acceptance_criteria_done: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
     labels: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=sa.text("'[]'::jsonb"))
 
     # GitHub PR linking (GH#9625)
     linked_pr_urls: Mapped[list] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=sa.text("'[]'::jsonb"),
+    )
+
+    # Declarative approval requirements (GH#11140): action categories that must be
+    # approved before the agent performs them (e.g. "pushing commits", "publishing",
+    # "destructive operations"). Makes governance visible at plan time; enforcement
+    # stays in the existing runtime approval flow. Empty list = no declared gates.
+    requires_approval_before: Mapped[list] = mapped_column(
         JSONB,
         nullable=False,
         default=list,

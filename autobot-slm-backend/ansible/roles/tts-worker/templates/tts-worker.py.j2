@@ -54,6 +54,14 @@ _model_loaded = False
 _model_error: Optional[str] = None
 _voice_cache: dict = {}  # voice_id -> voice_state
 
+# Degraded-engine tracking (#11718): an invalid/missing HF token makes the
+# worker silently fall back to the ungated base model while /health still
+# reported "healthy" with no signal. These globals let /health distinguish
+# "configured gated model loaded" from "fell back, HF auth failed".
+_hf_auth_ok: bool = True
+_hf_auth_error: Optional[str] = None
+_voice_cloning_loaded: bool = True
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -148,21 +156,29 @@ def _configure_hf_token() -> None:
     automatically, but calling login() here logs a clear confirmation and
     ensures the token is active for all downstream hub calls (issue #3078).
     """
+    global _hf_auth_ok, _hf_auth_error
     if HF_TOKEN:
         try:
             import huggingface_hub
 
             huggingface_hub.login(token=HF_TOKEN, add_to_git_credential=False)
             logger.info("HuggingFace Hub authenticated via HF_TOKEN.")
+            _hf_auth_ok = True
+            _hf_auth_error = None
         except Exception as exc:
             logger.error("HuggingFace Hub login failed: %s", exc)
+            _hf_auth_ok = False
+            _hf_auth_error = str(exc)
     else:
         _warn_missing_token(TTS_MODEL_ID)
+        if _is_gated_model(TTS_MODEL_ID):
+            _hf_auth_ok = False
+            _hf_auth_error = "HF_TOKEN is not set for a gated model"
 
 
 def _load_model():
     """Load Pocket TTS model. Returns (success, error_msg)."""
-    global _model
+    global _model, _voice_cloning_loaded
     try:
         _check_cache_writable(MODELS_DIR)
         from pocket_tts import TTSModel
@@ -170,14 +186,35 @@ def _load_model():
         VOICES_DIR.mkdir(parents=True, exist_ok=True)
         _configure_hf_token()
         _model = TTSModel.load_model()
+        # has_voice_cloning is False when pocket_tts could not download the
+        # gated voice-cloning weights and fell back to the public model
+        # (#11718) — this is the real "loaded model != configured model" signal.
+        _voice_cloning_loaded = getattr(_model, "has_voice_cloning", True)
         logger.info(
-            "Pocket TTS model loaded (sample_rate=%d)",
+            "Pocket TTS model loaded (sample_rate=%d, voice_cloning=%s)",
             _model.sample_rate,
+            _voice_cloning_loaded,
         )
         return True, None
     except Exception as e:
         logger.error("Failed to load Pocket TTS: %s", e)
         return False, str(e)
+
+
+def _compute_degraded_state() -> tuple[bool, Optional[str]]:
+    """Return (engine_degraded, reason) — HF auth failure or gated fallback (#11718).
+
+    Degraded when HF authentication failed, or the configured model is gated
+    but the worker fell back to the public (non-voice-cloning) weights.
+    """
+    if not _hf_auth_ok:
+        return True, f"HuggingFace authentication failed: {_hf_auth_error}"
+    if _is_gated_model(TTS_MODEL_ID) and not _voice_cloning_loaded:
+        return True, (
+            f"Configured model '{TTS_MODEL_ID}' requires gated voice-cloning "
+            "weights, but the worker fell back to the public model."
+        )
+    return False, None
 
 
 def _get_voice_state(voice_id: str):
@@ -275,7 +312,14 @@ def _run_create_voice(name: str, audio_path: str) -> str:
 
 @app.get("/health")
 async def health() -> JSONResponse:
-    """Health check with model status."""
+    """Health check with model status.
+
+    ``status`` reflects whether the service is up and can serve requests.
+    ``engine_degraded`` (#11718) is a separate signal: it is True when HF
+    auth failed or the configured gated model could not be loaded, even
+    though the worker is otherwise healthy (serving the fallback model).
+    """
+    engine_degraded, degraded_reason = _compute_degraded_state()
     payload = {
         "status": "healthy" if _model_loaded else "degraded",
         "service": "tts-worker",
@@ -283,6 +327,8 @@ async def health() -> JSONResponse:
         "engine": "pocket-tts",
         "model_loaded": _model_loaded,
         "sample_rate": _model.sample_rate if _model else 0,
+        "engine_degraded": engine_degraded,
+        "degraded_reason": degraded_reason,
     }
     if _model_error:
         payload["error"] = _model_error

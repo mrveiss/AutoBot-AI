@@ -30,9 +30,9 @@ class TestEmitRetrievalFeedback:
         return svc
 
     @pytest.mark.asyncio
-    async def test_calls_publish_live_event(self):
-        """_emit_retrieval_feedback calls publish_live_event exactly once."""
-        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
+    async def test_calls_publish_event(self):
+        """_emit_retrieval_feedback calls publish_event exactly once."""
+        with patch("services.rag_service.publish_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="test query",
@@ -44,7 +44,7 @@ class TestEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_channel_is_global(self):
         """Event is published to the 'global' channel."""
-        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
+        with patch("services.rag_service.publish_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="q",
@@ -57,7 +57,7 @@ class TestEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_event_type_is_rag_retrieval(self):
         """Event type is 'rag_retrieval'."""
-        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
+        with patch("services.rag_service.publish_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="q",
@@ -70,7 +70,7 @@ class TestEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_payload_contains_query_text(self):
         """Payload includes query_text field."""
-        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
+        with patch("services.rag_service.publish_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="what is redis",
@@ -83,7 +83,7 @@ class TestEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_payload_contains_retrieved_chunk_ids(self):
         """Payload includes retrieved_chunk_ids field."""
-        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
+        with patch("services.rag_service.publish_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="q",
@@ -96,7 +96,7 @@ class TestEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_payload_contains_final_ranked_ids(self):
         """Payload includes final_ranked_ids field."""
-        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
+        with patch("services.rag_service.publish_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="q",
@@ -109,7 +109,7 @@ class TestEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_payload_contains_timestamp(self):
         """Payload includes a numeric timestamp."""
-        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
+        with patch("services.rag_service.publish_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="q",
@@ -122,9 +122,9 @@ class TestEmitRetrievalFeedback:
 
     @pytest.mark.asyncio
     async def test_publish_error_does_not_propagate(self):
-        """If publish_live_event raises, _emit_retrieval_feedback does not re-raise."""
+        """If publish_event raises, _emit_retrieval_feedback does not re-raise."""
         with patch(
-            "services.rag_service.publish_live_event",
+            "services.rag_service.publish_event",
             new_callable=AsyncMock,
             side_effect=RuntimeError("ws down"),
         ):
@@ -298,7 +298,7 @@ class TestComplexityInEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_payload_contains_complexity_field(self):
         """Payload includes a complexity field when explicitly provided."""
-        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
+        with patch("services.rag_service.publish_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="what is redis",
@@ -321,7 +321,7 @@ class TestComplexityInEmitRetrievalFeedback:
         query = "compare redis and memcached advantages and disadvantages"
         expected_complexity = classifier.classify(query).value
 
-        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
+        with patch("services.rag_service.publish_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query=query,
@@ -336,7 +336,7 @@ class TestComplexityInEmitRetrievalFeedback:
     @pytest.mark.asyncio
     async def test_default_complexity_is_simple(self):
         """When no complexity is passed, the default is 'simple'."""
-        with patch("services.rag_service.publish_live_event", new_callable=AsyncMock) as mock_pub:
+        with patch("services.rag_service.publish_event", new_callable=AsyncMock) as mock_pub:
             svc = self._make_service()
             await svc._emit_retrieval_feedback(
                 query="q",

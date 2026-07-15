@@ -5,8 +5,8 @@
 """Regression tests for the AI Stack client enabled-gate (#9782).
 
 When disabled, the client must NOT attempt any network connection (which is
-what produced the ~237 per-boot "AI Stack client error" warnings in compose /
-single_user deployments that ship no AI Stack VM).
+what produced the ~237 per-boot "AI Stack client error" warnings in
+deployments that ship no AI Stack VM).
 """
 
 import pytest

@@ -4,8 +4,8 @@
  * Type definitions for ClearNotifications utility
  */
 
-export function clearAllSystemNotifications(): boolean;
-export function resetHealthMonitor(): boolean;
+export function clearAllSystemNotifications(): Promise<boolean>;
+export function resetHealthMonitor(): Promise<boolean>;
 
 export interface ClearNotificationsModule {
   clearAllSystemNotifications: typeof clearAllSystemNotifications;

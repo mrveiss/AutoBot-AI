@@ -34,6 +34,7 @@ from constants.threshold_constants import (
     ResourceThresholds,
     TimingConstants,
 )
+from knowledge.search import map_kb_result_to_dict  # Issue #10740 shared mapper
 
 if TYPE_CHECKING:
     import torch as _torch_type  # noqa: F401
@@ -84,6 +85,10 @@ def _get_pil_image():
 
         _PILImage = Image
     return _PILImage
+
+
+# Default top-k for semantic search when not specified by caller. Issue #10716.
+_DEFAULT_SEMANTIC_SEARCH_TOP_K: int = 5
 
 
 def _get_gpu_metrics_with_pynvml() -> Dict[str, Any] | None:
@@ -805,15 +810,44 @@ class AIHardwareAccelerator:
             }
 
     async def _gpu_semantic_search(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Perform semantic search using GPU acceleration."""
-        # This would integrate with the existing knowledge base search
-        # For now, return a placeholder result
-        return {
-            "search_results": [],
-            "total_results": 0,
-            "search_time_ms": 0,
-            "device": "GPU",
-        }
+        """Perform semantic search via the knowledge base. Issue #10716.
+
+        Wires the previously-stubbed GPU semantic search path to the canonical
+        knowledge base factory, matching the pattern used in async_chat_workflow.
+        The 'device' label is kept as 'GPU' because this path is only reached
+        when the accelerator routes to the GPU processor — the KB back-end may
+        use CPU vectors, but the dispatch decision was GPU.
+        """
+        _EMPTY: Dict[str, Any] = {"search_results": [], "total_results": 0, "search_time_ms": 0, "device": "GPU"}
+
+        query: str = input_data.get("query", "")
+        if not query:
+            return _EMPTY
+
+        top_k: int = input_data.get("top_k", _DEFAULT_SEMANTIC_SEARCH_TOP_K)
+
+        try:
+            from knowledge_base_factory import get_knowledge_base
+
+            kb = await get_knowledge_base()
+            if kb is None:
+                logger.warning("Knowledge base unavailable; returning empty semantic search result")
+                return _EMPTY
+
+            t0 = time.perf_counter()
+            raw: List[Dict[str, Any]] = await kb.search(query=query, top_k=top_k)
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+            results = [map_kb_result_to_dict(r) for r in raw]  # Issue #10740
+            return {
+                "search_results": results,
+                "total_results": len(results),
+                "search_time_ms": round(elapsed_ms, 2),
+                "device": "GPU",
+            }
+        except Exception as exc:
+            logger.error("GPU semantic search failed: %s", exc)
+            return _EMPTY
 
     async def _process_on_cpu(self, task: ProcessingTask) -> Dict[str, Any]:
         """Process task on CPU (fallback)."""

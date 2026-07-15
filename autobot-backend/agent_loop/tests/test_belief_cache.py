@@ -174,7 +174,7 @@ async def test_cached_tool_not_in_tools_executed():
 
     tool = {"tool_name": "read_file", "args": {"path": "/tmp/f.txt"}}
 
-    with patch("events.bus.publish_event", new_callable=AsyncMock) as mock_pub:
+    with patch("agent_loop.loop._bus_publish_event", new_callable=AsyncMock):
         with patch.object(loop, "_execute_tools", new_callable=AsyncMock, return_value={}) as mock_exec:
             with patch.object(loop, "_select_tools", new_callable=AsyncMock, return_value=[tool]):
                 with patch.object(loop, "_analyze_events", new_callable=AsyncMock, return_value={"events": []}):
@@ -183,8 +183,9 @@ async def test_cached_tool_not_in_tools_executed():
 
                         result = await loop._execute_iteration_phases(IterationResult(iteration_number=1))
 
-    # Tool was cached — _execute_tools should have been called with empty list
-    mock_exec.assert_called_once_with([])
+    # Tool was cached — no live tools remain, so _execute_tools is skipped entirely
+    # (loop.py: `_execute_tools(tools_to_run) if tools_to_run else {}`).
+    mock_exec.assert_not_called()
     # No live tools → tools_executed is empty
     assert result.tools_executed == []
     # Cached result is in tool_results
@@ -206,7 +207,7 @@ async def test_belief_cache_hit_event_published():
     async def _capture_publish(channel, event_type, payload, **kwargs):
         published_events.append((event_type, payload))
 
-    with patch("events.bus.publish_event", side_effect=_capture_publish):
+    with patch("agent_loop.loop._bus_publish_event", side_effect=_capture_publish):
         with patch.object(loop, "_execute_tools", new_callable=AsyncMock, return_value={}):
             with patch.object(loop, "_select_tools", new_callable=AsyncMock, return_value=[tool]):
                 with patch.object(loop, "_analyze_events", new_callable=AsyncMock, return_value={"events": []}):

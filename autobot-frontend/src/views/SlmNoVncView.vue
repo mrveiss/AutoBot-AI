@@ -27,14 +27,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import { useI18n } from 'vue-i18n'
 import type { SelectorHost } from '@/composables/useHostSelector'
 import HostSelector from '@/components/ui/HostSelector.vue'
 import DesktopInterface from '@/components/desktop/DesktopInterface.vue'
 import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('SlmNoVncView')
-const { t } = useI18n()
 
 const selectedHost = ref<SelectorHost | null>(null)
 

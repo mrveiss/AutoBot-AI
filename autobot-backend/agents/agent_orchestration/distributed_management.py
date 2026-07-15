@@ -44,8 +44,8 @@ class DistributedAgentManager:
     work-stealing (#2109, #4694).  This is the **distributed-runtime** registry
     — it handles multi-node agent membership and task reassignment.  It does
     not hold database state or static capability profiles.  See also:
-    - orchestration.agent_registry.AgentRegistry — static profile/capability registry
-    - agents.agent_client.AgentRegistry — health-tracking runtime registry
+    - orchestration.agent_registry.AgentCapabilityRegistry — static profile/capability registry
+    - agents.agent_client.AgentHealthRegistry — health-tracking runtime registry
     - services.agent_registry_service.AgentRegistryService — DB-backed CRUD
     """
 

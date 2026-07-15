@@ -633,7 +633,7 @@ Authentication is currently disabled by default. The system includes a security 
 ```json
 {
   "enabled": false,
-  "enhanced_errors": true,
+  "detailed_errors": true,
   "endpoint_suggestions": true,
   "debug_logging": false
 }

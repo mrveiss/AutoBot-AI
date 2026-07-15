@@ -454,7 +454,7 @@ class NPUSemanticSearch:
         self._log_search_completion(results, total_time, embedding_time, search_time, embedding_device)
         return results, metrics
 
-    async def enhanced_search(
+    async def search(
         self,
         query: str,
         similarity_top_k: int = 10,
@@ -848,13 +848,13 @@ class NPUSemanticSearch:
     ) -> List[Tuple[List[SearchResult], SearchMetrics]]:
         """Batch semantic search — uses a single ChromaDB call for all queries.
 
-        Issue #8153: replaces N individual ``enhanced_search`` dispatches with:
+        Issue #8153: replaces N individual ``search`` dispatches with:
           1. Cache check for all queries (no I/O).
           2. Concurrent embedding generation for cache misses.
           3. One ``query_batch()`` call → one ``asyncio.to_thread`` dispatch.
           4. Per-query result slicing from the batched response.
 
-        Falls back to the individual ``enhanced_search`` path when the knowledge
+        Falls back to the individual ``search`` path when the knowledge
         base ChromaDB collection is not available.
         """
         if not queries:
@@ -911,7 +911,7 @@ class NPUSemanticSearch:
 
             async def _search_with_semaphore(idx: int) -> Tuple[int, Any]:
                 async with semaphore:
-                    result = await self.enhanced_search(
+                    result = await self.search(
                         query=queries[idx],
                         similarity_top_k=similarity_top_k,
                         filters=filters,
@@ -977,7 +977,7 @@ class NPUSemanticSearch:
                 try:
                     start_time = time.time()
 
-                    search_results, metrics = await self.enhanced_search(
+                    search_results, metrics = await self.search(
                         query=query,
                         similarity_top_k=5,
                         enable_npu_acceleration=True,

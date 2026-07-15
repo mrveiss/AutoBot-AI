@@ -86,11 +86,11 @@
       ansible.builtin.shell: "grep -oP '^AUTOBOT_USER_MODE=\\K.*' {{ backend_code_dir }}/.env"
       register: backend_user_mode_probe
       changed_when: false
-      failed_when: false  # absent .env/var means single_user (no Postgres)
+      failed_when: false  # absent .env/var = not yet configured; skip until set
       tags: [migrations]
 
     - name: Database migration sequence (Postgres-backed modes) (#10001)
-      when: backend_user_mode_probe.stdout | default('') | trim not in ['', 'single_user']
+      when: backend_user_mode_probe.stdout | default('') | trim != ''
       tags: [migrations]
       block:
         # Strict migration sequence consolidated into one shared include
@@ -113,7 +113,7 @@
 
     - name: Check backend health
       uri:
-        url: "https://{{ ansible_host }}:{{ backend_https_port }}/api/health"
+        url: "http://127.0.0.1:8001/api/health"
         validate_certs: false
         status_code: [200, 404]
         timeout: 10

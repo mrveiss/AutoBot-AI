@@ -100,7 +100,7 @@ export function useKnowledgeEntityGraph(): UseKnowledgeEntityGraphReturn {
   async function _fetchGraphStats(): Promise<void> {
     try {
       const data = await apiClient.get<Record<string, unknown>>(
-        `${getApiBase()}/knowledge_base/unified/graph?max_facts=100`,
+        `${getApiBase()}/knowledge_base/multi-source/graph?max_facts=100`,
       )
       const graphData = (data as Record<string, unknown>)?.data ?? data
 

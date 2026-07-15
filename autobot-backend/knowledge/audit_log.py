@@ -8,14 +8,14 @@ Knowledge Audit Logging
 Issue #679: Comprehensive audit trail for knowledge access, modifications, and permission changes.
 
 .. deprecated::
-    Use ``services.audit.unified_audit`` directly (GH#8290 Phase 2).
+    Use ``services.audit.audit`` directly (GH#8290 Phase 2).
     This module will be removed in Phase 3 once all callers are migrated.
 """
 
 import warnings
 
 warnings.warn(
-    "knowledge.audit_log is deprecated (GH#8290). " "Import from services.audit.unified_audit instead.",
+    "knowledge.audit_log is deprecated (GH#8290). " "Import from services.audit.audit instead.",
     DeprecationWarning,
     stacklevel=2,
 )

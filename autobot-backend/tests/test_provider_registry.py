@@ -41,8 +41,9 @@ class MockProvider(BaseProvider):
         self.chat_completion_called = False
         self.stream_completion_called = False
 
-    async def chat_completion(self, request: LLMRequest) -> LLMResponse:
-        """Mock chat completion."""
+    async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
+        """Mock chat completion — implements the abstract hook so the base
+        rate-limiter/backoff wrapper (chat_completion) drives it (#11249)."""
         self.chat_completion_called = True
         self._total_requests += 1
         return LLMResponse(
@@ -294,7 +295,7 @@ class TestHealthChecks:
         # Second check should return cached result (not failed)
         result2 = await registry._check_health_cached("mock_test")
 
-        assert result1 == result2 == True
+        assert result1 is True and result2 is True
 
     @pytest.mark.asyncio
     async def test_health_check_all_parallel(self):
@@ -575,6 +576,102 @@ class TestEdgeCases:
         # Should gracefully fall back to available providers
         selected = await registry.get_provider_for_request(conversation_id="conv-id", request=request)
         assert selected is provider
+
+
+# ============================================================================
+# #11585 — resolution precedence: per-request > per-conversation > org > global
+# ============================================================================
+
+
+class TestResolutionPrecedence:
+    """Full precedence chain for get_provider_for_request (#11585)."""
+
+    def _registry_with(self, names: List[str]):
+        registry = ProviderRegistry()
+        providers = {}
+        for name in names:
+            provider = MockProvider()
+            provider.provider_name = name
+            registry.register(provider)
+            providers[name] = provider
+        return registry, providers
+
+    @pytest.mark.asyncio
+    async def test_per_request_beats_conversation_org_and_global(self):
+        registry, providers = self._registry_with(["req", "conv", "org", "glob"])
+        registry.set_fallback_chain(["glob"])
+        registry.set_conversation_provider("c1", "conv")
+        registry._resolve_org_provider = AsyncMock(return_value="org")
+
+        selected = await registry.get_provider_for_request(provider_name="req", conversation_id="c1", org_id="o1")
+        assert selected is providers["req"]
+
+    @pytest.mark.asyncio
+    async def test_conversation_beats_org_and_global(self):
+        registry, providers = self._registry_with(["conv", "org", "glob"])
+        registry.set_fallback_chain(["glob"])
+        registry.set_conversation_provider("c1", "conv")
+        registry._resolve_org_provider = AsyncMock(return_value="org")
+
+        selected = await registry.get_provider_for_request(conversation_id="c1", org_id="o1")
+        assert selected is providers["conv"]
+
+    @pytest.mark.asyncio
+    async def test_org_beats_global(self):
+        registry, providers = self._registry_with(["org", "glob"])
+        registry.set_fallback_chain(["glob"])
+        registry._resolve_org_provider = AsyncMock(return_value="org")
+
+        selected = await registry.get_provider_for_request(org_id="o1")
+        assert selected is providers["org"]
+
+    @pytest.mark.asyncio
+    async def test_global_fallback_when_no_overrides(self):
+        registry, providers = self._registry_with(["glob", "other"])
+        registry.set_fallback_chain(["glob"])
+
+        selected = await registry.get_provider_for_request()
+        assert selected is providers["glob"]
+
+
+# ============================================================================
+# #11249 — providers must implement _chat_completion_impl (not override the
+# concrete chat_completion wrapper), else the class stays abstract and silently
+# fails to register (TypeError: Can't instantiate abstract class).
+# ============================================================================
+
+
+class TestProviderConcreteness:
+    """Regression: every BaseProvider subclass must be instantiable.
+
+    Verified by source inspection (AST) rather than import, because several
+    providers carry optional SDK deps that are not installed in every test
+    environment — but the regression we guard (overriding the concrete
+    ``chat_completion`` wrapper instead of implementing the abstract
+    ``_chat_completion_impl``) is fully visible in the source.
+    """
+
+    @pytest.mark.parametrize(
+        "filename",
+        ["ollama_provider.py", "custom_openai.py", "groq.py", "huggingface.py", "vllm_base.py"],
+    )
+    def test_provider_implements_impl_not_override(self, filename):
+        import ast
+        from pathlib import Path
+
+        source = (Path(__file__).resolve().parents[1] / "llm_shared" / "providers" / filename).read_text(
+            encoding="utf-8"
+        )
+        methods = {n.name for n in ast.walk(ast.parse(source)) if isinstance(n, ast.AsyncFunctionDef)}
+        assert "_chat_completion_impl" in methods, f"{filename}: must implement _chat_completion_impl (#11249)"
+        assert "chat_completion" not in methods, (
+            f"{filename}: must not override the concrete chat_completion wrapper — "
+            f"that leaves the class abstract and it fails to register (#11249)"
+        )
+
+    def test_mock_provider_is_concrete(self):
+        # MockProvider is imported at module top, so the runtime check is reliable here.
+        assert not set(getattr(MockProvider, "__abstractmethods__", frozenset()))
 
 
 if __name__ == "__main__":

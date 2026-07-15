@@ -130,12 +130,12 @@ class CICDIntegrationTester:
             ),
             TestPipelineStage(
                 name="comprehensive_tests",
-                description="Comprehensive Phase 9 test suite",
-                command="python tests/phase9_comprehensive_test_suite.py --performance --integration",
+                description="Comprehensive test suite",
+                command="python tests/comprehensive_test_suite.py --performance --integration",
                 timeout=1800,  # 30 minutes
                 required=True,
                 dependencies=["integration_tests"],
-                artifacts=["phase9-comprehensive-results.json"],
+                artifacts=["comprehensive-results.json"],
             ),
             TestPipelineStage(
                 name="monitoring_tests",
@@ -222,7 +222,7 @@ class CICDIntegrationTester:
         self.results_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results")
         self.results_dir.mkdir(exist_ok=True)
 
-        self.pipeline_id = f"phase9_pipeline_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        self.pipeline_id = f"hardware_pipeline_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         # CI/CD environment detection
         self.ci_environment = self._detect_ci_environment()

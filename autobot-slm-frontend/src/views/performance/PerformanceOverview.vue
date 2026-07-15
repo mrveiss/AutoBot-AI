@@ -112,8 +112,8 @@ function formatDate(dateStr: string): string {
     <!-- Refresh Bar -->
     <div class="flex items-center justify-between mb-6">
       <div class="text-sm text-gray-500">
-        <span v-if="totalTraces > 0">{{ totalTraces.toLocaleString() }} total traces</span>
-        <span v-if="activeSlos > 0" class="ml-4">{{ activeSlos }} active SLOs</span>
+        <span v-if="totalTraces > 0">{{ $t('performance.performanceOverview.value0TotalTraces', { value0: totalTraces.toLocaleString() }) }}</span>
+        <span v-if="activeSlos > 0" class="ml-4">{{ $t('performance.performanceOverview.value0ActiveSLOs', { value0: activeSlos }) }}</span>
       </div>
       <button
         @click="fetchOverview"
@@ -192,9 +192,7 @@ function formatDate(dateStr: string): string {
           :style="{ width: `${Math.min(sloCompliance, 100)}%` }"
         ></div>
       </div>
-      <p class="text-xs text-gray-400 mt-1">
-        {{ activeSlos }} active SLO{{ activeSlos !== 1 ? 's' : '' }} tracked
-      </p>
+      <p class="text-xs text-gray-400 mt-1">{{ $t('performance.performanceOverview.value0ActiveSLOPluralTracked', { value0: activeSlos, plural: activeSlos !== 1 ? 's' : '' }) }}</p>
     </div>
 
     <!-- Top 10 Slowest Traces -->

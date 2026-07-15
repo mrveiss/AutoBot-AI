@@ -19,7 +19,7 @@ import psutil
 import pytest
 
 from knowledge import KnowledgeBase
-from memory.compat import EnhancedMemoryManager
+from memory import MemoryManager
 
 # Import components to benchmark
 from orchestrator import Orchestrator
@@ -192,7 +192,7 @@ class TestKnowledgeBasePerformance:
                         "provider": "ollama",
                         "providers": {
                             "ollama": {
-                                "host": "http://localhost:11434",
+                                "host": "http://localhost:11434",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                                 "selected_model": "nomic-embed-text",
                             }
                         },
@@ -366,14 +366,7 @@ class TestMemorySystemPerformance:
         """Set up test environment"""
         self.benchmark = PerformanceBenchmark()
 
-        with patch("enhanced_memory_manager.global_config_manager") as mock_config:
-            mock_config.get.return_value = {
-                "memory": {
-                    "database_path": ":memory:",  # Use in-memory database
-                    "embedding_cache_size": 1000,
-                }
-            }
-            self.memory_manager = EnhancedMemoryManager()
+        self.memory_manager = MemoryManager()
 
     async def test_memory_storage_performance(self):
         """Benchmark memory storage operations"""
@@ -465,7 +458,7 @@ class TestSystemIntegrationPerformance:
         with (
             patch("orchestrator.Orchestrator") as mock_orchestrator_class,
             patch("knowledge_base.KnowledgeBase") as mock_kb_class,
-            patch("enhanced_memory_manager.EnhancedMemoryManager") as mock_memory_class,
+            patch("memory.manager.MemoryManager") as mock_memory_class,
         ):
             # Set up mocks
             mock_orchestrator = MagicMock()

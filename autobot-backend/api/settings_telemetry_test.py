@@ -5,8 +5,8 @@
 """Tests for POST/GET /api/settings/telemetry (Issue #9035, #10000).
 
 Covers:
-  - POST returns 200 with Postgres available (session present)
-  - POST returns 200 without Postgres (single_user mode, session=None) — bug fixed by #10000
+  - POST returns 200 with a DB session present
+  - POST returns 200 when the optional session is None (defensive guard) — #10000
   - Audit trail is called when session is present, skipped when None
   - GET returns 200 and correct field values
 
@@ -38,7 +38,7 @@ async def _session_present():
 
 
 async def _session_absent():
-    """Stub for get_optional_db_session: yields None (single_user mode)."""
+    """Stub for get_optional_db_session: yields None (defensive-guard path)."""
     yield None
 
 
@@ -75,6 +75,7 @@ def _registered_deps(method: str, path_suffix: str) -> dict:
 # Cache at module level so we extract once per test session.
 _POST_DEPS = _registered_deps("POST", "/telemetry")
 _GET_DEPS = _registered_deps("GET", "/telemetry")
+_PROMPT_SHOWN_DEPS = _registered_deps("POST", "/telemetry/prompt-shown")
 
 # ---------------------------------------------------------------------------
 # Shared admin stubs
@@ -166,20 +167,19 @@ class TestPostTelemetryWithPostgres:
 
 
 # ---------------------------------------------------------------------------
-# POST /api/settings/telemetry — without Postgres (single_user) — Issue #10000
+# POST /api/settings/telemetry — optional session is None (defensive) — #10000
 # ---------------------------------------------------------------------------
 
 
-class TestPostTelemetrySingleUserMode:
-    """In single_user mode get_optional_db_session yields None.
+class TestPostTelemetryNoSession:
+    """When get_optional_db_session yields None the endpoint must still save.
 
-    The endpoint must save the config and return 200 without touching the DB.
-    Before the #10000 fix this path raised HTTP 503 because the endpoint used
-    get_db_session which hard-raises 503 in single_user mode.
+    The endpoint saves the config and returns 200 without touching the DB,
+    guarding its audit-trail write with ``if session is not None`` (#10000).
     """
 
     def test_returns_200_without_postgres(self):
-        """POST /api/settings/telemetry succeeds with session=None (single_user)."""
+        """POST /api/settings/telemetry succeeds with session=None."""
         app = _make_app(with_session=False)
 
         fake_cfg = {"telemetry": {"enabled": True, "anonymous_usage_stats": True, "first_run_prompt_shown": False}}
@@ -250,6 +250,94 @@ class TestPostTelemetrySingleUserMode:
 # ---------------------------------------------------------------------------
 # GET /api/settings/telemetry
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# POST /api/settings/telemetry/prompt-shown — authenticated, non-admin (#11344)
+# ---------------------------------------------------------------------------
+
+
+def _non_admin_user() -> dict:
+    return {"username": "member", "role": "member", "id": "user-2"}
+
+
+def _make_prompt_shown_app(*, with_session: bool = True) -> FastAPI:
+    """App mounting the settings router with a NON-admin authenticated user.
+
+    Intentionally does NOT override check_admin_permission — the prompt-shown
+    endpoint must not depend on it (#11344).
+    """
+    app = FastAPI()
+    app.include_router(router, prefix="/api/settings")
+    app.dependency_overrides[get_optional_db_session] = _session_present if with_session else _session_absent
+    if "current_user" in _PROMPT_SHOWN_DEPS:
+        app.dependency_overrides[_PROMPT_SHOWN_DEPS["current_user"]] = _non_admin_user
+    return app
+
+
+class TestDismissTelemetryPrompt:
+    """POST /api/settings/telemetry/prompt-shown — any authenticated user."""
+
+    def test_non_admin_can_dismiss_returns_200(self):
+        """A non-admin marks the prompt shown without a 403 (#11344)."""
+        app = _make_prompt_shown_app(with_session=True)
+
+        fake_cfg = {"telemetry": {"enabled": True, "anonymous_usage_stats": True, "first_run_prompt_shown": False}}
+
+        class _FakeTelemetry:
+            enabled = True
+            anonymous_usage_stats = True
+            first_run_prompt_shown = True
+
+        class _FakeConfig:
+            telemetry = _FakeTelemetry()
+
+        with (
+            patch("api.settings.ConfigService.get_full_config", return_value=dict(fake_cfg)),
+            patch("api.settings.ConfigService.save_full_config", return_value={"status": "ok"}),
+            patch("api.settings.ConfigService.clear_cache"),
+            patch("api.settings.ConfigRevisionService", return_value=MagicMock(create_revision=AsyncMock())),
+            patch("autobot_shared.ssot_config.config", _FakeConfig()),
+        ):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post("/api/settings/telemetry/prompt-shown", json={})
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["first_run_prompt_shown"] is True
+
+    def test_dismiss_only_writes_prompt_flag(self):
+        """The dismissal patch must NOT clobber enabled/anonymous flags (#11344)."""
+        app = _make_prompt_shown_app(with_session=False)
+
+        save_mock = MagicMock(return_value={"status": "ok"})
+        fake_cfg = {"telemetry": {"enabled": True, "anonymous_usage_stats": True, "first_run_prompt_shown": False}}
+
+        class _FakeTelemetry:
+            enabled = True
+            anonymous_usage_stats = True
+            first_run_prompt_shown = True
+
+        class _FakeConfig:
+            telemetry = _FakeTelemetry()
+
+        with (
+            patch("api.settings.ConfigService.get_full_config", return_value=dict(fake_cfg)),
+            patch("api.settings.ConfigService.save_full_config", save_mock),
+            patch("api.settings.ConfigService.clear_cache"),
+            patch("api.settings.ConfigRevisionService", return_value=MagicMock()),
+            patch("autobot_shared.ssot_config.config", _FakeConfig()),
+        ):
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post("/api/settings/telemetry/prompt-shown", json={})
+
+        assert resp.status_code == 200
+        save_mock.assert_called_once()
+        saved = save_mock.call_args.args[0]["telemetry"]
+        # Original enable flags preserved; only the prompt flag flipped true.
+        assert saved["enabled"] is True
+        assert saved["anonymous_usage_stats"] is True
+        assert saved["first_run_prompt_shown"] is True
 
 
 class TestGetTelemetry:

@@ -38,7 +38,9 @@ class FeedbackTracker:
         # so we share the same connection pool instead of creating a second engine (#10570).
         # FeedbackTracker is used from sync context (routers/feedback.py background
         # tasks) so a sync session is genuinely required here.
-        self.SessionLocal = sessionmaker(bind=get_async_engine().sync_engine)
+        self.SessionLocal = sessionmaker(  # canonical: ignore py-adhoc-db-engine
+            bind=get_async_engine().sync_engine  # sync wrapper over canonical engine (sync bg-task context)
+        )
 
         # Redis for time-series caching
         self.redis_client = get_redis_client(async_client=False, database="main")

@@ -382,7 +382,7 @@ class TodoWriteOptimizer:
 
             if len(similar_todos) > 1:
                 # Create consolidated todo
-                consolidated_content = self._create_consolidated_content(similar_todos)
+                consolidated_content = self._create_merged_content(similar_todos)
                 consolidated_todo = OptimizedTodoItem(
                     content=consolidated_content,
                     status=similar_todos[0].status,
@@ -399,8 +399,8 @@ class TodoWriteOptimizer:
 
         return consolidated
 
-    def _create_consolidated_content(self, similar_todos: List[OptimizedTodoItem]) -> str:
-        """Create consolidated content from similar todos"""
+    def _create_merged_content(self, similar_todos: List[OptimizedTodoItem]) -> str:
+        """Create merged content from similar todos"""
         if len(similar_todos) == 1:
             return similar_todos[0].content
 

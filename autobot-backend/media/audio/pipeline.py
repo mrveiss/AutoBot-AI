@@ -13,6 +13,7 @@ import asyncio
 import base64
 import os
 import tempfile
+import threading
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
@@ -30,25 +31,33 @@ except ImportError:
 
 logger = get_logger(__name__)
 
-# Lazy singleton for the Whisper pipeline (expensive to load)
+# Lazy singleton for the Whisper pipeline (expensive to load).
+# Issue #10916: _whisper_pipeline_lock prevents two threads from both finding
+# _whisper_pipeline is None and each calling hf_pipeline() concurrently.
+# _WHISPER_LOADED sentinel distinguishes "not yet tried" from "tried but None".
 _whisper_pipeline: Any | None = None
+_whisper_pipeline_lock = threading.Lock()
+_WHISPER_LOADED = False
 _WHISPER_MODEL = "openai/whisper-base"
 
 
 def _get_whisper_pipeline() -> Any | None:
-    """Lazy-load Whisper pipeline; returns None if unavailable."""
-    global _whisper_pipeline
+    """Lazy-load Whisper pipeline; returns None if unavailable (thread-safe)."""
+    global _whisper_pipeline, _WHISPER_LOADED  # noqa: PLW0603
     if not _TRANSFORMERS_AVAILABLE:
         return None
-    if _whisper_pipeline is None:
-        try:
-            _whisper_pipeline = hf_pipeline(
-                "automatic-speech-recognition",
-                model=_WHISPER_MODEL,
-            )
-            logger.info("Whisper pipeline loaded: %s", _WHISPER_MODEL)
-        except Exception as exc:
-            logger.warning("Failed to load Whisper pipeline: %s", exc)
+    if not _WHISPER_LOADED:
+        with _whisper_pipeline_lock:
+            if not _WHISPER_LOADED:
+                try:
+                    _whisper_pipeline = hf_pipeline(
+                        "automatic-speech-recognition",
+                        model=_WHISPER_MODEL,
+                    )
+                    logger.info("Whisper pipeline loaded: %s", _WHISPER_MODEL)
+                except Exception as exc:
+                    logger.warning("Failed to load Whisper pipeline: %s", exc)
+                _WHISPER_LOADED = True
     return _whisper_pipeline
 
 

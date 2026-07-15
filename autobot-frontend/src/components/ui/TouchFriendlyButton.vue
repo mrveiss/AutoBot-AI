@@ -25,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, nextTick } from 'vue'
+import { computed, ref } from 'vue'
 import LoadingSpinner from './LoadingSpinner.vue'
 import type { ComponentSize } from '@/types/component-props'
 
@@ -151,7 +151,7 @@ const createRipple = (event: TouchEvent) => {
 }
 
 .ripple-effect {
-  @apply absolute w-12 h-12 bg-white/30 rounded-full;
+  @apply absolute w-12 h-12 bg-autobot-bg-card/30 rounded-full;
   animation: ripple 0.6s ease-out;
   pointer-events: none;
 }

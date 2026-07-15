@@ -22,7 +22,7 @@
         <tr class="text-gray-400 border-b border-gray-700">
           <th class="pb-2 pr-4">{{ $t('skills.reposTab.name') }}</th>
           <th class="pb-2 pr-4">{{ $t('skills.reposTab.type') }}</th>
-          <th class="pb-2 pr-4">URL</th>
+          <th class="pb-2 pr-4">{{ $t('skills.reposTab.uRL') }}</th>
           <th class="pb-2 pr-4">{{ $t('skills.reposTab.skills') }}</th>
           <th class="pb-2 pr-4">{{ $t('skills.reposTab.lastSync') }}</th>
           <th class="pb-2"></th>
@@ -77,17 +77,17 @@
             <input
               v-model="newRepo.name"
               type="text"
-              placeholder="my-skills"
+              :placeholder="$t('skills.reposTab.mySkills')"
               class="mt-1 w-full bg-gray-900 border border-gray-700 rounded px-3 py-2
                      text-white text-sm focus:outline-hidden focus:border-blue-500"
             />
           </label>
           <label class="block">
-            <span class="text-sm text-gray-400">URL</span>
+            <span class="text-sm text-gray-400">{{ $t('skills.reposTab.uRL') }}</span>
             <input
               v-model="newRepo.url"
               type="text"
-              placeholder="https://... or /path/to/dir"
+              :placeholder="$t('skills.reposTab.httpsOrPathToDir')"
               class="mt-1 w-full bg-gray-900 border border-gray-700 rounded px-3 py-2
                      text-white text-sm focus:outline-hidden focus:border-blue-500"
             />
@@ -101,8 +101,8 @@
             >
               <option value="git">{{ $t('skills.reposTab.git') }}</option>
               <option value="local">{{ $t('skills.reposTab.local') }}</option>
-              <option value="http">HTTP</option>
-              <option value="mcp">MCP</option>
+              <option value="http">{{ $t('skills.reposTab.hTTP') }}</option>
+              <option value="mcp">{{ $t('skills.reposTab.mCP') }}</option>
             </select>
           </label>
         </div>

@@ -12,13 +12,14 @@ improving recovery recommendations through feedback loops.
 Issue #2154: Pattern-based error recovery optimization.
 """
 
+import asyncio
 import hashlib
 import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_30_DAYS
 
@@ -29,6 +30,10 @@ PATTERN_KEY_PREFIX = "failure:pattern:"
 PATTERN_STATS_SUFFIX = ":stats"
 PATTERN_HISTORY_SUFFIX = ":history"
 KNOWN_PATTERNS_KEY = "failure:patterns:known"
+
+# Maximum seconds to wait for any single Redis operation on the failure path.
+# Keeps a slow/hung Redis from stalling workflow error handling.
+_REDIS_OP_TIMEOUT: float = 2.0
 
 
 @dataclass
@@ -44,6 +49,10 @@ class FailurePattern:
     confidence: float = 0.8  # How confident in this pattern's recovery strategy
     first_seen: str = field(default_factory=lambda: now_utc().isoformat())
     last_seen: str = field(default_factory=lambda: now_utc().isoformat())
+    # In-repo traceback frames captured when the pattern was first recorded
+    # (#11182).  Each entry: {"file": <repo-relative str>, "line": int,
+    # "func": str}.  Empty list for patterns recorded before this field existed.
+    failure_locations: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dict."""
@@ -57,6 +66,7 @@ class FailurePattern:
             "confidence": self.confidence,
             "first_seen": self.first_seen,
             "last_seen": self.last_seen,
+            "failure_locations": self.failure_locations,
         }
 
     @classmethod
@@ -72,10 +82,11 @@ class FailurePattern:
             confidence=data.get("confidence", 0.8),
             first_seen=data.get("first_seen", ""),
             last_seen=data.get("last_seen", ""),
+            failure_locations=data.get("failure_locations", []),
         )
 
 
-class FailurePatternDetector:
+class FailurePatternDetector(AsyncRedisClientMixin):
     """
     Detects and learns failure patterns from error causal chains.
 
@@ -83,16 +94,14 @@ class FailurePatternDetector:
     - Pattern matching for new errors
     - Confidence scoring based on historical resolution data
     - Feedback loop for improving recommendations over time
+
+    All Redis I/O is async-native (``await redis.<op>``) via
+    ``AsyncRedisClientMixin``.  Each operation is bounded by
+    ``_REDIS_OP_TIMEOUT`` seconds so a slow Redis cannot stall the
+    workflow failure path.
     """
 
-    def __init__(self) -> None:
-        self._redis: Any | None = None
-
-    def _get_redis(self) -> Any:
-        """Lazy-init sync Redis client."""
-        if self._redis is None:
-            self._redis = get_redis_client(async_client=False, database="main")
-        return self._redis
+    _redis_database = "main"
 
     def hash_causal_chain(self, causal_chain: str) -> str:
         """Hash a causal chain for pattern matching."""
@@ -112,33 +121,32 @@ class FailurePatternDetector:
         pattern_hash = self.hash_causal_chain(causal_chain)
 
         try:
-            redis = self._get_redis()
+            redis = await self._get_redis()
+            if redis is None:
+                logger.warning("Pattern detection degraded — Redis unavailable (hash=%s)", pattern_hash)
+                return None
             pattern_key = f"{PATTERN_KEY_PREFIX}{pattern_hash}"
 
-            # Check if pattern exists
-            pattern_data = redis.get(pattern_key)
+            pattern_data = await asyncio.wait_for(redis.get(pattern_key), timeout=_REDIS_OP_TIMEOUT)
             if not pattern_data:
                 return None
 
-            # Deserialize pattern
             try:
-                pattern_dict = json.loads(pattern_data)
-                pattern = FailurePattern.from_dict(pattern_dict)
-
-                # Update last_seen timestamp
-                pattern.last_seen = now_utc().isoformat()
-                self._store_pattern(pattern_hash, pattern)
-
-                logger.debug(
-                    "Found known pattern: hash=%s, count=%d, success_rate=%.2f",
-                    pattern_hash,
-                    pattern.occurrence_count,
-                    pattern.resolution_success_rate,
-                )
-                return pattern
+                pattern = FailurePattern.from_dict(json.loads(pattern_data))
             except (json.JSONDecodeError, KeyError) as exc:
                 logger.warning("Corrupt pattern data for hash=%s: %s", pattern_hash, exc)
                 return None
+
+            pattern.last_seen = now_utc().isoformat()
+            await self._store_pattern(pattern_hash, pattern)
+
+            logger.debug(
+                "Found known pattern: hash=%s, count=%d, success_rate=%.2f",
+                pattern_hash,
+                pattern.occurrence_count,
+                pattern.resolution_success_rate,
+            )
+            return pattern
 
         except Exception as exc:
             logger.warning("Failed to detect pattern: %s", exc)
@@ -149,6 +157,7 @@ class FailurePatternDetector:
         causal_chain: str,
         error_type: str,
         successful_action: str | None = None,
+        failure_locations: List[Dict[str, Any]] | None = None,
     ) -> FailurePattern:
         """
         Learn/update a pattern from error experience.
@@ -157,6 +166,8 @@ class FailurePatternDetector:
             causal_chain: The causal chain
             error_type: The error type
             successful_action: If provided, update resolution stats
+            failure_locations: In-repo traceback frames from the error (#11182).
+                Stored only on the first occurrence; ignored on subsequent ones.
 
         Returns:
             Updated FailurePattern
@@ -164,11 +175,13 @@ class FailurePatternDetector:
         pattern_hash = self.hash_causal_chain(causal_chain)
 
         try:
-            redis = self._get_redis()
+            redis = await self._get_redis()
+            if redis is None:
+                logger.warning("Pattern learning degraded — Redis unavailable (hash=%s)", pattern_hash)
+                return self._degraded_pattern(pattern_hash, causal_chain, error_type)
             pattern_key = f"{PATTERN_KEY_PREFIX}{pattern_hash}"
 
-            # Try to load existing pattern
-            pattern_data = redis.get(pattern_key)
+            pattern_data = await asyncio.wait_for(redis.get(pattern_key), timeout=_REDIS_OP_TIMEOUT)
             if pattern_data:
                 try:
                     pattern = FailurePattern.from_dict(json.loads(pattern_data))
@@ -176,28 +189,25 @@ class FailurePatternDetector:
                     pattern = self._create_new_pattern(pattern_hash, causal_chain)
             else:
                 pattern = self._create_new_pattern(pattern_hash, causal_chain)
+                # Attach locations on first-time recording only.
+                if failure_locations:
+                    pattern.failure_locations = failure_locations
 
-            # Update pattern with new observation
             if error_type not in pattern.error_types:
                 pattern.error_types.append(error_type)
 
             pattern.occurrence_count += 1
             pattern.last_seen = now_utc().isoformat()
 
-            # Update resolution stats if action succeeded
             if successful_action:
                 if successful_action not in pattern.successful_resolutions:
                     pattern.successful_resolutions.append(successful_action)
-
-                # Recompute success rate
                 if pattern.occurrence_count > 0:
                     success_count = len(pattern.successful_resolutions)
                     pattern.resolution_success_rate = success_count / pattern.occurrence_count
-                    # Boost confidence if we have good resolution history
                     pattern.confidence = min(1.0, 0.7 + (pattern.resolution_success_rate * 0.3))
 
-            # Store pattern back to Redis
-            self._store_pattern(pattern_hash, pattern)
+            await self._store_pattern(pattern_hash, pattern)
 
             logger.info(
                 "Updated pattern: hash=%s, count=%d, success_rate=%.2f, confidence=%.2f",
@@ -206,19 +216,25 @@ class FailurePatternDetector:
                 pattern.resolution_success_rate,
                 pattern.confidence,
             )
-
             return pattern
 
         except Exception as exc:
             logger.warning("Failed to learn pattern: %s", exc)
-            # Return a minimal pattern on failure
-            return FailurePattern(
-                pattern_id=pattern_hash,
-                causal_chain=causal_chain,
-                error_types=[error_type],
-                occurrence_count=1,
-                confidence=0.5,
-            )
+            return self._degraded_pattern(pattern_hash, causal_chain, error_type)
+
+    def _degraded_pattern(self, pattern_hash: str, causal_chain: str, error_type: str) -> FailurePattern:
+        """Unpersisted fallback pattern returned when Redis is unavailable.
+
+        Keeps ``learn_pattern`` returning a usable (low-confidence) pattern so the
+        error-recovery path degrades gracefully instead of raising.
+        """
+        return FailurePattern(
+            pattern_id=pattern_hash,
+            causal_chain=causal_chain,
+            error_types=[error_type],
+            occurrence_count=1,
+            confidence=0.5,
+        )
 
     def _create_new_pattern(self, pattern_hash: str, causal_chain: str) -> FailurePattern:
         """Create a new failure pattern."""
@@ -232,33 +248,51 @@ class FailurePatternDetector:
             last_seen=now_utc().isoformat(),
         )
 
-    def _store_pattern(self, pattern_hash: str, pattern: FailurePattern) -> None:
-        """Store a pattern to Redis."""
+    async def _store_pattern(self, pattern_hash: str, pattern: FailurePattern) -> None:
+        """Store a pattern to Redis (async-native, bounded by _REDIS_OP_TIMEOUT)."""
         try:
-            redis = self._get_redis()
+            redis = await self._get_redis()
+            if redis is None:
+                logger.warning("Pattern persistence degraded — Redis unavailable (hash=%s)", pattern_hash)
+                return
             pattern_key = f"{PATTERN_KEY_PREFIX}{pattern_hash}"
 
-            # Store pattern data
-            redis.set(
-                pattern_key,
-                json.dumps(pattern.to_dict()),
-                ex=TTL_30_DAYS,
+            await asyncio.wait_for(
+                redis.set(pattern_key, json.dumps(pattern.to_dict()), ex=TTL_30_DAYS),
+                timeout=_REDIS_OP_TIMEOUT,
             )
-
-            # Add to known patterns set (for enumeration)
-            redis.sadd(KNOWN_PATTERNS_KEY, pattern_hash)
-            redis.expire(KNOWN_PATTERNS_KEY, TTL_30_DAYS)
+            await asyncio.wait_for(redis.sadd(KNOWN_PATTERNS_KEY, pattern_hash), timeout=_REDIS_OP_TIMEOUT)
+            await asyncio.wait_for(redis.expire(KNOWN_PATTERNS_KEY, TTL_30_DAYS), timeout=_REDIS_OP_TIMEOUT)
 
         except Exception as exc:
             logger.warning("Failed to store pattern: %s", exc)
 
+    @staticmethod
+    def _decode_members(raw: set) -> set:
+        """Normalise smembers() output to a set of str.
+
+        Redis-py returns ``set[bytes]`` when *decode_responses* is False/unset
+        and ``set[str]`` when it is True.  Normalising at the consumption
+        point makes every caller correct regardless of client configuration.
+        """
+        return {m.decode() if isinstance(m, bytes) else m for m in raw}
+
     async def get_pattern_statistics(self) -> Dict[str, Any]:
         """Get overall statistics about learned patterns."""
+        _empty_stats = {
+            "total_patterns": 0,
+            "total_occurrences": 0,
+            "average_success_rate": 0.0,
+            "high_confidence_patterns": 0,
+        }
         try:
-            redis = self._get_redis()
+            redis = await self._get_redis()
+            if redis is None:
+                logger.warning("Pattern statistics degraded — Redis unavailable")
+                return dict(_empty_stats)
 
-            # Get all known patterns
-            pattern_hashes = redis.smembers(KNOWN_PATTERNS_KEY) or set()
+            raw = await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT)
+            pattern_hashes = self._decode_members(raw or set())
 
             if not pattern_hashes:
                 return {
@@ -274,7 +308,7 @@ class FailurePatternDetector:
 
             for pattern_hash in pattern_hashes:
                 pattern_key = f"{PATTERN_KEY_PREFIX}{pattern_hash}"
-                pattern_data = redis.get(pattern_key)
+                pattern_data = await asyncio.wait_for(redis.get(pattern_key), timeout=_REDIS_OP_TIMEOUT)
                 if pattern_data:
                     try:
                         pattern = FailurePattern.from_dict(json.loads(pattern_data))
@@ -316,14 +350,18 @@ class FailurePatternDetector:
             List of FailurePattern ordered by frequency
         """
         try:
-            redis = self._get_redis()
-            pattern_hashes = redis.smembers(KNOWN_PATTERNS_KEY) or set()
+            redis = await self._get_redis()
+            if redis is None:
+                logger.warning("Listing known patterns degraded — Redis unavailable")
+                return []
+            raw = await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT)
+            pattern_hashes = self._decode_members(raw or set())
 
             patterns: List[FailurePattern] = []
 
             for pattern_hash in pattern_hashes:
                 pattern_key = f"{PATTERN_KEY_PREFIX}{pattern_hash}"
-                pattern_data = redis.get(pattern_key)
+                pattern_data = await asyncio.wait_for(redis.get(pattern_key), timeout=_REDIS_OP_TIMEOUT)
                 if pattern_data:
                     try:
                         pattern = FailurePattern.from_dict(json.loads(pattern_data))
@@ -331,9 +369,7 @@ class FailurePatternDetector:
                     except (json.JSONDecodeError, KeyError):
                         continue
 
-            # Sort by occurrence count (most frequent first)
             patterns.sort(key=lambda p: p.occurrence_count, reverse=True)
-
             return patterns[:limit]
 
         except Exception as exc:
@@ -343,14 +379,15 @@ class FailurePatternDetector:
     async def clear_patterns(self) -> None:
         """Clear all learned patterns (for testing or reset)."""
         try:
-            redis = self._get_redis()
-            pattern_hashes = redis.smembers(KNOWN_PATTERNS_KEY) or set()
+            redis = await self._get_redis()
+            raw = await asyncio.wait_for(redis.smembers(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT)
+            pattern_hashes = self._decode_members(raw or set())
 
             for pattern_hash in pattern_hashes:
                 pattern_key = f"{PATTERN_KEY_PREFIX}{pattern_hash}"
-                redis.delete(pattern_key)
+                await asyncio.wait_for(redis.delete(pattern_key), timeout=_REDIS_OP_TIMEOUT)
 
-            redis.delete(KNOWN_PATTERNS_KEY)
+            await asyncio.wait_for(redis.delete(KNOWN_PATTERNS_KEY), timeout=_REDIS_OP_TIMEOUT)
             logger.info("Cleared %d failure patterns", len(pattern_hashes))
 
         except Exception as exc:

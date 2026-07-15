@@ -18,6 +18,7 @@ on:
 jobs:
   auto-update:
     runs-on: [self-hosted, linux]
+    timeout-minutes: 15  # #11077: fail fast (self-hosted); not GitHub's 24h default
     permissions:
       contents: write
       pull-requests: write

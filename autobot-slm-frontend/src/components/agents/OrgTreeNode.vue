@@ -51,7 +51,7 @@ function roleBadgeClass(role: string): string {
     }}</span>
     <span class="node-name">{{ node.name }}</span>
     <span v-if="node.direct_reports_count" class="reports-count"
-      >{{ node.direct_reports_count }} reports</span
+      >{{ $t('agents.orgTreeNode.value0Reports', { value0: node.direct_reports_count }) }}</span
     >
   </li>
   <OrgTreeNode

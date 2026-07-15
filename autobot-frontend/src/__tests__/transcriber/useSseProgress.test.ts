@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { useSseProgress } from '@/composables/transcriber/useSseProgress'
 
 describe('useSseProgress', () => {
-  let mockEventSource: any
+  let mockEventSource: Record<string, unknown>
   let onmessageHandler: ((event: MessageEvent) => void) | null = null
   let onerrorHandler: (() => void) | null = null
 
@@ -19,7 +19,7 @@ describe('useSseProgress', () => {
     }
 
     // Mock the EventSource constructor
-    vi.stubGlobal('EventSource', vi.fn(function EventSource(this: any, _url: string) {
+    vi.stubGlobal('EventSource', vi.fn(function EventSource(this: unknown, _url: string) {
       Object.defineProperty(mockEventSource, 'onmessage', {
         set: (handler) => { onmessageHandler = handler },
         get: () => onmessageHandler,

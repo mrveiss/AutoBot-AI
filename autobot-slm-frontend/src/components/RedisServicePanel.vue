@@ -15,8 +15,11 @@
 
 import { ref, onMounted, onUnmounted } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
+import i18n from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { createLogger } from '@/utils/debugUtils'
+
+const t = i18n.global.t.bind(i18n.global)
 
 const logger = createLogger('RedisServicePanel')
 const authStore = useAuthStore()
@@ -95,7 +98,9 @@ function statusTextClass(status: string | undefined): string {
 
 async function fetchStatus(): Promise<void> {
   try {
-    const response = await fetch(`${getBackendUrl()}/api/redis-service/status`)
+    const response = await fetch(`${getBackendUrl()}/api/redis-service/status`, {
+      headers: authHeaders(),
+    })
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
     }
@@ -103,7 +108,7 @@ async function fetchStatus(): Promise<void> {
     errorMessage.value = null
   } catch (err) {
     logger.error('Failed to fetch Redis status:', err)
-    errorMessage.value = 'Failed to fetch Redis service status'
+    errorMessage.value = t('redisServicePanel.fetchStatusFailed')
   } finally {
     isLoading.value = false
   }
@@ -125,13 +130,13 @@ async function performAction(action: 'start' | 'stop' | 'restart'): Promise<void
       const body = await response.json().catch(() => ({}))
       throw new Error(body.detail ?? `HTTP ${response.status}`)
     }
-    successMessage.value = `Redis service ${action} succeeded`
+    successMessage.value = t('redisServicePanel.actionSucceeded', { action })
     // Refresh status after action
     await fetchStatus()
     setTimeout(() => { successMessage.value = null }, 4000)
   } catch (err) {
     logger.error(`Failed to ${action} Redis service:`, err)
-    errorMessage.value = err instanceof Error ? err.message : `Failed to ${action} Redis service`
+    errorMessage.value = err instanceof Error ? err.message : t('redisServicePanel.actionFailed', { action })
   } finally {
     isActionInProgress.value = false
     currentAction.value = null
@@ -202,8 +207,8 @@ onUnmounted(() => {
         @click="fetchStatus"
         :disabled="isLoading || isActionInProgress"
         class="p-1.5 text-gray-400 hover:text-gray-600 disabled:opacity-40 transition-colors"
-        title="Refresh status"
-        aria-label="Refresh status"
+        :title="$t('redisServicePanel.refreshStatus')"
+        :aria-label="$t('redisServicePanel.refreshStatus')"
       >
         <svg :class="['w-4 h-4', isLoading ? 'animate-spin' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -215,7 +220,7 @@ onUnmounted(() => {
     <!-- Success / Error banners -->
     <div v-if="successMessage" class="px-4 py-2 bg-green-50 border-b border-green-100 text-sm text-green-700 flex items-center justify-between">
       <span>{{ successMessage }}</span>
-      <button @click="successMessage = null" class="text-green-500 hover:text-green-700" aria-label="Dismiss">
+      <button @click="successMessage = null" class="text-green-500 hover:text-green-700" :aria-label="$t('redisServicePanel.dismiss')">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -223,7 +228,7 @@ onUnmounted(() => {
     </div>
     <div v-if="errorMessage" class="px-4 py-2 bg-red-50 border-b border-red-100 text-sm text-red-700 flex items-center justify-between">
       <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700" aria-label="Dismiss">
+      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700" :aria-label="$t('redisServicePanel.dismiss')">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -316,9 +321,7 @@ onUnmounted(() => {
       </button>
 
       <!-- Last checked -->
-      <span v-if="redisStatus?.last_checked" class="ml-auto text-xs text-gray-400">
-        Checked {{ new Date(redisStatus.last_checked).toLocaleTimeString() }}
-      </span>
+      <span v-if="redisStatus?.last_checked" class="ml-auto text-xs text-gray-400">{{ $t('redisServicePanel.checkedValue0', { value0: new Date(redisStatus.last_checked).toLocaleTimeString() }) }}</span>
     </div>
 
     <!-- Stop confirmation dialog -->

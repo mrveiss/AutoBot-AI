@@ -19,15 +19,15 @@ from fastapi.responses import JSONResponse
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     AIStackDocumentAnalysisData,
-    AIStackEnhancedHealthData,
-    AIStackEnhancedSearchData,
-    AIStackEnhancedSearchRequest,
-    AIStackEnhancedStatsData,
+    AIStackHealthStatusData,
     AIStackKnowledgeExtractData,
     AIStackKnowledgeExtractionRequest,
     AIStackQueryReformulateData,
     AIStackRAGQueryRequest,
     AIStackRagSearchData,
+    AIStackSearchData,
+    AIStackSearchRequest,
+    AIStackStatsData,
     AIStackSystemInsightsData,
     DocumentAnalysisRequest,
 )
@@ -50,7 +50,7 @@ logger = get_logger(__name__)
 # Router Configuration
 # ====================================================================
 
-router = APIRouter(tags=["knowledge-enhanced"])
+router = APIRouter(tags=["knowledge-aistack"])
 
 # ====================================================================
 # Request/Response Models
@@ -112,7 +112,7 @@ async def _search_local_knowledge_base(
         return {"results": [], "error": "Internal server error", "source": "local_kb"}
 
 
-async def _search_rag_enhanced(
+async def _search_rag(
     query: str,
     max_results: int,
     local_docs: List[Dict[str, Any]] | None = None,
@@ -125,7 +125,7 @@ async def _search_rag_enhanced(
     Args:
         query: Search query string
         max_results: Maximum results to return
-        local_docs: Optional local documents to enhance with
+        local_docs: Optional local documents to augment with
 
     Returns:
         Dictionary with RAG search results
@@ -146,13 +146,13 @@ async def _search_rag_enhanced(
         return {"results": [], "error": e.message, "source": "ai_stack_rag"}
 
 
-async def _search_enhanced_librarian(
+async def _search_librarian(
     query: str,
     search_type: str,
     max_results: int,
 ) -> Dict[str, Any]:
     """
-    Search using AI Stack enhanced librarian.
+    Search using AI Stack KB librarian.
 
     Issue #281: Extracted helper for librarian search.
 
@@ -166,17 +166,17 @@ async def _search_enhanced_librarian(
     """
     try:
         ai_client = await get_ai_stack_client()
-        enhanced_results = await ai_client.search_knowledge_enhanced(
+        librarian_results = await ai_client.search_knowledge(
             query=query,
             search_type=search_type,
             max_results=max_results,
         )
 
-        logger.info("Enhanced librarian search completed")
-        return {"results": enhanced_results, "source": "ai_stack_librarian"}
+        logger.info("Librarian search completed")
+        return {"results": librarian_results, "source": "ai_stack_librarian"}
 
     except AIStackError as e:
-        logger.warning("Enhanced librarian search failed: %s", e)
+        logger.warning("Librarian search failed: %s", e)
         return {"results": [], "error": e.message, "source": "ai_stack_librarian"}
 
 
@@ -216,7 +216,7 @@ def _combine_search_results(
 
 
 async def _run_all_search_sources(
-    request_data: "AIStackEnhancedSearchRequest",
+    request_data: "AIStackSearchRequest",
     req: Request,
     knowledge_base,
 ) -> Dict[str, Any]:
@@ -245,13 +245,13 @@ async def _run_all_search_sources(
 
     if request_data.include_rag:
         local_docs = results.get("local_knowledge_base", {}).get("results")
-        results["rag_enhanced"] = await _search_rag_enhanced(
+        results["rag"] = await _search_rag(
             query=request_data.query,
             max_results=request_data.max_results,
             local_docs=local_docs,
         )
 
-    results["enhanced_librarian"] = await _search_enhanced_librarian(
+    results["librarian"] = await _search_librarian(
         query=request_data.query,
         search_type=request_data.search_type,
         max_results=request_data.max_results,
@@ -260,20 +260,20 @@ async def _run_all_search_sources(
     return results
 
 
-@router.post("/search/enhanced", response_model=DataResponse[AIStackEnhancedSearchData])
+@router.post("/search", response_model=DataResponse[AIStackSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_search",
+    operation="search",
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-async def enhanced_search(
-    request_data: AIStackEnhancedSearchRequest,
+async def search(
+    request_data: AIStackSearchRequest,
     req: Request,
     knowledge_base=Depends(get_knowledge_base),
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Enhanced search combining local knowledge base with AI Stack RAG capabilities.
+    Search combining local knowledge base with AI Stack RAG capabilities.
 
     Issue #281: Refactored from 144 lines to use extracted helper methods.
     Issue #744: Requires authenticated user.
@@ -303,10 +303,10 @@ async def enhanced_search(
         )
 
     except Exception as e:
-        logger.error("Enhanced search failed: %s", e)
+        logger.error("AI Stack search failed: %s", e)
         return create_error_response(
             error_code="SEARCH_ERROR",
-            message="Enhanced search failed",
+            message="AI Stack search failed",
             status_code=500,
         )
 
@@ -606,13 +606,13 @@ async def get_system_knowledge_insights(
 # ====================================================================
 
 
-@router.get("/stats/enhanced", response_model=DataResponse[AIStackEnhancedStatsData])
+@router.get("/stats", response_model=DataResponse[AIStackStatsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="get_enhanced_stats",
+    operation="get_aistack_stats",
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-async def get_enhanced_stats(
+async def get_aistack_stats(
     req: Request,
     current_user: dict = Depends(get_current_user),
 ):
@@ -660,17 +660,17 @@ async def get_enhanced_stats(
         )
 
 
-@router.get("/health/enhanced", response_model=DataResponse[AIStackEnhancedHealthData])
+@router.get("/health/status", response_model=DataResponse[AIStackHealthStatusData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_knowledge_health",
+    operation="knowledge_health",
     error_code_prefix="KNOWLEDGE_AI_STACK",
 )
-async def enhanced_knowledge_health(
+async def knowledge_health(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Enhanced health check including AI Stack connectivity.
+    Health check including AI Stack connectivity.
 
     Issue #744: Requires authenticated user.
     """
@@ -698,7 +698,7 @@ async def enhanced_knowledge_health(
         return JSONResponse(status_code=200 if overall_healthy else 503, content=health_status)
 
     except Exception as e:
-        logger.error("Enhanced knowledge health check failed: %s", e)
+        logger.error("AI Stack knowledge health check failed: %s", e)
         return JSONResponse(
             status_code=503,
             content={

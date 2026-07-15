@@ -29,7 +29,8 @@ logger = logging.getLogger(__name__)
 
 # Enrollment playbook template (Issue #665)
 # This YAML template is used to deploy the SLM agent to nodes during enrollment
-_ENROLLMENT_PLAYBOOK_TEMPLATE = """# AutoBot - AI-Powered Automation Platform
+_ENROLLMENT_PLAYBOOK_TEMPLATE = """  # canonical: ignore py-hardcoded-url - agent template for remote nodes
+# AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #

@@ -3,6 +3,8 @@
 import appConfig from '@/config/AppConfig.js';
 import { createLogger } from '@/utils/debugUtils';
 import { getApiBase } from '@/config/ssot-config';
+import { getSelectedCompanyId } from '@/utils/orgContext';
+import { isRealAuthToken } from '@/utils/authToken';
 
 // Create scoped logger for ApiClient
 const logger = createLogger('ApiClient');
@@ -217,7 +219,7 @@ export class ApiClient {
       const stored = localStorage.getItem('autobot_auth');
       if (!stored) return null;
       const auth = JSON.parse(stored);
-      if (auth.token && auth.token !== 'single_user_mode') {
+      if (isRealAuthToken(auth.token)) {
         // Check expiry before returning — expired tokens cause widespread 401s (#979)
         if (auth.expiresAt && new Date(auth.expiresAt) <= new Date()) {
           logger.warn('Auth token expired, clearing stale localStorage');
@@ -233,8 +235,17 @@ export class ApiClient {
     }
   }
 
-  // Handle 401 — clear stored auth and redirect to login (#827)
-  private _handleUnauthorized(endpoint: string): void {
+  // Handle 401 — clear stored auth and redirect to login (#827).
+  // Only destructive when the request carried a bearer token (#10750 A12):
+  // a 401 on a token-less background call is not a session rejection.
+  private _handleUnauthorized(endpoint: string, tokenWasAttached: boolean): void {
+    if (!tokenWasAttached) {
+      logger.debug(
+        '401 on token-less request — not clearing session (no session to invalidate):',
+        endpoint
+      );
+      return;
+    }
     logger.warn('401 Unauthorized, clearing auth:', endpoint);
     localStorage.removeItem('autobot_auth');
     localStorage.removeItem('autobot_user');
@@ -311,6 +322,16 @@ export class ApiClient {
         hdrs['Authorization'] = `Bearer ${authToken}`;
       }
 
+      // Inject the selected company as org/tenant context (#10750 A5). Omitted
+      // when no company is selected, so non-LLC requests are unaffected.
+      const orgId = getSelectedCompanyId();
+      if (orgId) {
+        const orgHdrs = fetchOptions.headers as Record<string, string>;
+        if (!orgHdrs['X-Organization-Id']) {
+          orgHdrs['X-Organization-Id'] = orgId;
+        }
+      }
+
       // Handle body — support FormData (don't stringify, remove Content-Type)
       if (body instanceof FormData) {
         fetchOptions.body = body;
@@ -323,12 +344,16 @@ export class ApiClient {
       const response = await fetch(url, fetchOptions);
       cleanup();
 
-      // Handle 401 — redirect to login (skip for auth endpoints)
+      // Handle 401 — redirect to login (skip for auth endpoints).
+      // Pass whether THIS request actually carried a bearer token so the handler
+      // only clears + redirects on a genuine rejection of an authenticated request
+      // (#10750 A12). Token-less background/optional probes (e.g. the load-time
+      // telemetry-consent check or version poll) that 401 must NOT log the user out.
       if (
         response.status === 401 &&
         !endpoint.includes(`${getApiBase()}/auth/`)
       ) {
-        this._handleUnauthorized(endpoint);
+        this._handleUnauthorized(endpoint, authToken != null);
       }
 
       return response;

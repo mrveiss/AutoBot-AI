@@ -15,14 +15,14 @@ const meta = {
 } as Meta<typeof ProfileModal>;
 
 export default meta;
-// #7273: relaxed to StoryObj<any> for render-only stories that don't match component props
-type Story = StoryObj<any>;
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+type Story = StoryObj<Record<string, unknown>>;
 
 export const Default: Story = {
   args: {
     isOpen: true
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { ProfileModal },
     setup() {
       return { args };
@@ -43,7 +43,7 @@ export const Closed: Story = {
   args: {
     isOpen: false
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { ProfileModal },
     setup() {
       return { args };
@@ -64,7 +64,7 @@ export const WithBackdrop: Story = {
   args: {
     isOpen: true
   },
-  render: (args: any) => ({
+  render: (args: Record<string, unknown>) => ({
     components: { ProfileModal },
     setup() {
       return { args };

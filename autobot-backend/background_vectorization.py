@@ -12,6 +12,7 @@ Issue #285: Integrated with Embedding Pattern Analyzer for cost tracking.
 """
 
 import asyncio
+import os
 import time
 from datetime import datetime, timezone
 
@@ -19,6 +20,17 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from constants.threshold_constants import TimingConstants
+
+# Redis set holding fact ids that still need (re)vectorization (#11296). The
+# reconciler reads only this set on the hot loop instead of SCANning every
+# fact:* key each cycle, so a KB with N facts pays O(pending) instead of O(N)
+# when nothing is pending. A periodic full fact:* scan re-seeds the set as a
+# safety net (catches inline-vectorization failures + externally-added facts).
+PENDING_SET_KEY = "kb:vectorize:pending"
+
+# Run the full fact:* safety-net reconcile every Nth cycle (default 12 → hourly
+# at the 5-minute check_interval). Env-tunable; never hard-coded per cadence.
+FULL_SCAN_EVERY_N_CYCLES = max(1, int(os.environ.get("KB_VECTORIZE_FULL_SCAN_EVERY_N_CYCLES", "12")))
 
 # Embedding analytics integration (Issue #285)
 try:
@@ -47,6 +59,8 @@ class BackgroundVectorizer:
         self.check_interval = 300  # 5 minutes
         self.batch_size = 50
         self.batch_delay = 0.5
+        # Cycle counter drives the periodic full fact:* safety-net scan (#11296).
+        self._cycle_count = 0
         # Embedding model used (from config or default)
         self.embedding_model = DEFAULT_EMBEDDING_MODEL
 
@@ -94,17 +108,51 @@ class BackgroundVectorizer:
             return await pipe.execute()
 
     def _filter_pending_facts(self, batch: list, all_status: list) -> tuple:
-        """Filter out completed facts (Issue #336 - extracted helper)."""
+        """Filter out completed facts (Issue #336 - extracted helper).
+
+        Returns (facts_to_process, skipped_count, completed_keys). completed_keys
+        lets the reconciler SREM already-embedded facts from the pending set (#11296).
+        """
         facts_to_process = []
-        skipped = 0
+        completed_keys = []
         for fact_key, status_bytes in zip(batch, all_status):
             if status_bytes:
                 status = self._decode_bytes(status_bytes)
                 if status == "completed":
-                    skipped += 1
+                    completed_keys.append(fact_key)
                     continue
             facts_to_process.append(fact_key)
-        return facts_to_process, skipped
+        return facts_to_process, len(completed_keys), completed_keys
+
+    @staticmethod
+    def _fact_id(fact_key: str) -> str:
+        """Extract the bare fact id from a ``fact:<id>`` key (#11296)."""
+        return fact_key.split(":")[-1] if ":" in fact_key else fact_key
+
+    async def _sync_pending_set(self, kb, to_add: list, to_remove: list) -> None:
+        """Keep the pending set tight: SADD facts needing work, SREM completed (#11296)."""
+        add_ids = [self._fact_id(k) for k in to_add]
+        remove_ids = [self._fact_id(k) for k in to_remove]
+        if not add_ids and not remove_ids:
+            return
+        try:
+            async with kb.redis().pipeline() as pipe:
+                if add_ids:
+                    await pipe.sadd(PENDING_SET_KEY, *add_ids)
+                if remove_ids:
+                    await pipe.srem(PENDING_SET_KEY, *remove_ids)
+                await pipe.execute()
+        except Exception as e:
+            logger.debug("Pending-set sync failed (non-critical): %s", e)
+
+    async def _scan_pending_set(self, kb) -> list:
+        """Read the pending fact ids and rebuild their ``fact:<id>`` keys (#11296)."""
+        try:
+            ids = await kb.redis().smembers(PENDING_SET_KEY)
+        except Exception as e:
+            logger.debug("Pending-set read failed, treating as empty: %s", e)
+            return []
+        return ["fact:%s" % self._decode_bytes(i) for i in ids]
 
     async def _fetch_fact_data(self, kb, facts_to_process: list) -> list:
         """Batch fetch fact data (Issue #336 - extracted helper)."""
@@ -135,6 +183,8 @@ class BackgroundVectorizer:
                     "vectorized_at": datetime.now(tz=timezone.utc).isoformat(),
                 },
             )
+            # Drop it from the pending set — no longer needs reconciling (#11296).
+            await kb.redis().srem(PENDING_SET_KEY, self._fact_id(fact_key))
         except Exception as e:
             logger.debug("Status update failed (non-critical): %s", e)
 
@@ -176,8 +226,13 @@ class BackgroundVectorizer:
         stats = {"success": 0, "skipped": 0, "failed": 0, "tokens": 0}
 
         all_status = await self._get_vectorization_status(kb, batch)
-        facts_to_process, already_skipped = self._filter_pending_facts(batch, all_status)
+        facts_to_process, already_skipped, completed_keys = self._filter_pending_facts(batch, all_status)
         stats["skipped"] += already_skipped
+
+        # Pending-set maintenance (#11296): mark still-pending facts, drop the
+        # already-completed ones (their status will only revert on failure, which
+        # leaves them SADDed via facts_to_process next cycle).
+        await self._sync_pending_set(kb, to_add=facts_to_process, to_remove=completed_keys)
 
         all_fact_data = await self._fetch_fact_data(kb, facts_to_process)
 
@@ -207,12 +262,20 @@ class BackgroundVectorizer:
         try:
             self.is_running = True
             self.last_run = datetime.now(tz=timezone.utc)
+            self._cycle_count += 1
 
-            logger.info("Starting background vectorization...")
+            # Full fact:* scan on the first cycle and every Nth cycle thereafter
+            # (safety net); otherwise reconcile only the pending set (#11296).
+            full_scan = self._cycle_count == 1 or self._cycle_count % FULL_SCAN_EVERY_N_CYCLES == 0
+            if full_scan:
+                logger.info("Starting background vectorization (full fact:* reconcile)...")
+                fact_keys = await kb._scan_redis_keys_async("fact:*")
+            else:
+                logger.info("Starting background vectorization (pending-set reconcile)...")
+                fact_keys = await self._scan_pending_set(kb)
 
-            fact_keys = await kb._scan_redis_keys_async("fact:*")
             if not fact_keys:
-                logger.info("No facts found for vectorization")
+                logger.info("No pending facts for vectorization")
                 return
 
             total_batches = (len(fact_keys) + self.batch_size - 1) // self.batch_size

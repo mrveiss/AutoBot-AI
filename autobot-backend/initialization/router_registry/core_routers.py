@@ -11,6 +11,7 @@ and are imported at module level to fail fast if missing.
 """
 
 import api.pricing_health  # noqa: F401 — registers KnownProbes.PRICING probe (GH#6480)
+import content_reach.health  # noqa: F401 — registers KnownProbes.CONTENT_REACH probe (#10932)
 
 # Core router imports - these are required for basic functionality
 from api.adapters import router as adapters_router  # Issue #1403
@@ -69,7 +70,9 @@ from api.knowledge_search_scoped import router as knowledge_search_scoped_router
 from api.knowledge_suggestions import router as knowledge_suggestions_router
 from api.knowledge_sync_queue import router as knowledge_sync_queue_router  # Issue #4453
 from api.knowledge_tags import router as knowledge_tags_router
-from api.knowledge_vectorization import router as knowledge_vectorization_router
+
+# #11072: knowledge_vectorization is included via api/knowledge.py's knowledge_router
+# (not registered standalone here) to avoid duplicate OpenAPI operation IDs.
 from api.knowledge_verification import router as knowledge_verification_router
 from api.live_events import router as live_events_router  # Issue #6229
 from api.llm import router as llm_router
@@ -349,15 +352,14 @@ def _get_knowledge_feature_routers() -> list:
         (
             knowledge_search_aggregator_router,
             "/knowledge_base",
-            ["knowledge-unified", "knowledge-search"],
+            ["knowledge-multi-source", "knowledge-search"],
             "knowledge_search_aggregator",
         ),
-        (
-            knowledge_vectorization_router,
-            "/knowledge_base",
-            ["knowledge-vectorization"],
-            "knowledge_vectorization",
-        ),
+        # #11072: knowledge_vectorization is NOT registered here — api/knowledge.py
+        # already includes it into knowledge_router (mounted at /knowledge_base),
+        # so a second standalone mount at the same prefix produced duplicate
+        # OpenAPI operation IDs (get_/clear_failed_vectorization_jobs) and api.ts
+        # drift. The knowledge_router include is the single source.
         # Issue #4453: document sync queue admin endpoints
         (
             knowledge_sync_queue_router,

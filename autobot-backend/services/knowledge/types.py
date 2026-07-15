@@ -38,7 +38,7 @@ class QueryIntentResult:
 
 
 @dataclass
-class EnhancedQuery:
+class Query:
     """Result of conversation-aware query enhancement."""
 
     original_query: str

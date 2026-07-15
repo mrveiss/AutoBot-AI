@@ -1,0 +1,73 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# PostgreSQL Scheduled Backups (#11383)
+# Provisions a systemd timer that runs `pg_dumpall` on a configurable schedule
+# to a configurable retention directory, pruning dumps older than the window.
+# Idempotent: re-running only rewrites managed files and re-asserts timer state.
+---
+
+- name: Ensure PostgreSQL backup directory exists
+  ansible.builtin.file:
+    path: "{{ postgresql_backup_dir }}"
+    state: directory
+    owner: "{{ autobot_user }}"
+    group: "{{ autobot_group }}"
+    mode: "0750"
+  become: true
+
+- name: Deploy PostgreSQL backup script
+  ansible.builtin.template:
+    src: autobot-pg-backup.sh.j2
+    dest: /usr/local/bin/autobot-pg-backup.sh
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Deploy PostgreSQL backup service unit
+  ansible.builtin.template:
+    src: autobot-pg-backup.service.j2
+    dest: /etc/systemd/system/autobot-pg-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+
+- name: Deploy PostgreSQL backup timer unit
+  ansible.builtin.template:
+    src: autobot-pg-backup.timer.j2
+    dest: /etc/systemd/system/autobot-pg-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+
+- name: Flush handlers to reload systemd before enabling the timer
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start PostgreSQL backup timer
+  ansible.builtin.systemd:
+    name: autobot-pg-backup.timer
+    state: started
+    enabled: true
+  become: true
+
+- name: Report PostgreSQL backup timer schedule
+  ansible.builtin.command:
+    cmd: systemctl list-timers autobot-pg-backup.timer --no-pager
+  register: _pg_backup_timer_status
+  changed_when: false
+
+- name: Display PostgreSQL backup timer status
+  ansible.builtin.debug:
+    msg:
+      - "PostgreSQL scheduled backups enabled"
+      - "Schedule: {{ postgresql_backup_on_calendar }}"
+      - "Destination: {{ postgresql_backup_dir }}"
+      - "Retention: {{ postgresql_backup_retention_days }} days"
+      - "{{ _pg_backup_timer_status.stdout_lines | default(['(timer output unavailable)']) }}"

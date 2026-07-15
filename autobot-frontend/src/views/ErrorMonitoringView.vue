@@ -5,9 +5,8 @@
   Author: mrveiss
 
   Error Monitoring Dashboard
-  Issue #9891 - Wire error-monitoring UI to backend /api/errors/* endpoints
-  Issue #9983 - Restore timeline / top-errors / summary / resolve UI on the
-                reimplemented (Prometheus + Redis) /api/errors/metrics/* endpoints
+  Backed by /api/errors/* and the /api/errors/metrics/* (Prometheus + Redis)
+  endpoints: timeline, top-errors, summary, and resolve.
 -->
 <template>
   <div class="error-monitoring-view">
@@ -58,7 +57,7 @@
       </template>
     </div>
 
-    <!-- Metrics summary strip (#9983) -->
+    <!-- Metrics summary strip -->
     <div v-if="summary" class="em-summary-strip">
       <div class="em-strip-item">
         <span class="em-strip-value">{{ summary.total_errors }}</span>
@@ -88,7 +87,7 @@
       </div>
     </div>
 
-    <!-- Metrics row: timeline + top errors (#9983) -->
+    <!-- Metrics row: timeline + top errors -->
     <div class="em-metrics-row">
       <!-- Timeline -->
       <section class="em-section">

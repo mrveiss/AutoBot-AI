@@ -45,6 +45,26 @@ router = APIRouter()
 logger = get_logger(__name__)
 
 
+def _with_identity(context: dict | None, current_user: dict) -> dict:
+    """Return *context* augmented with the caller's tenant/user identity (#11015).
+
+    Threads ``org_id``/``user_id`` from the authenticated user into the planning
+    context so trajectory capture + retrieval stay isolated to the owning tenant.
+    Reuses the canonical ``extract_user_context_from_request`` (single precedence
+    for user/org resolution) rather than re-deriving it here (#11036 audit
+    follow-up). Never overrides a caller-supplied value.
+    """
+    from knowledge.search_filters import extract_user_context_from_request  # noqa: PLC0415
+
+    ctx = dict(context or {})
+    user_id, org_id, _ = extract_user_context_from_request(current_user)
+    if org_id and not ctx.get("tenant_id"):
+        ctx["tenant_id"] = str(org_id)
+    if user_id and not ctx.get("user_id"):
+        ctx["user_id"] = str(user_id)
+    return ctx
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_workflow",
@@ -131,7 +151,7 @@ async def execute_workflow(
             orchestrator.config.max_parallel_tasks = request.max_parallel_tasks
 
         # Create and execute workflow
-        result = await create_and_execute_workflow(request.goal, request.context)
+        result = await create_and_execute_workflow(request.goal, _with_identity(request.context, current_user))
 
         # Check if workflow has multiple tasks (Issue #620: uses helpers)
         has_multiple_tasks = len(result.get("results", {})) > 1
@@ -169,7 +189,7 @@ async def create_workflow_plan(
         logger.info("Creating workflow plan for: %s", request.goal)
 
         # Create plan
-        plan = await orchestrator.create_workflow_plan(request.goal, request.context)
+        plan = await orchestrator.create_workflow_plan(request.goal, _with_identity(request.context, current_user))
 
         # Convert to serializable format
         plan_dict = {
@@ -271,8 +291,10 @@ async def recommend_agents(
         if not capabilities_needed:
             raise HTTPException(status_code=400, detail="No valid capabilities specified")
 
-        # Get recommendations
-        recommendations = await orchestrator.get_agent_recommendations(capabilities_needed)
+        # Get recommendations with ranking scores (#10660); names preserved for
+        # backward compatibility, scores surfaced as an additive field.
+        scored = await orchestrator.get_agent_recommendations_scored(capabilities_needed)
+        recommendations = [agent for agent, _ in scored]
 
         return JSONResponse(
             status_code=200,
@@ -282,9 +304,12 @@ async def recommend_agents(
                 "capabilities_requested": request.capabilities_needed,
                 "recommended_agents": recommendations,
                 "agent_count": len(recommendations),
+                "agent_scores": [{"agent": agent, "score": round(score, 4)} for agent, score in scored],
             },
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Agent recommendation error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to get recommendations")

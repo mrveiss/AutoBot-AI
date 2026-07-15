@@ -41,7 +41,7 @@ export function useOperationsApi() {
         if (filter?.limit) params.append('limit', filter.limit.toString())
         const queryString = params.toString()
         const url = `${getApiBase()}/long-running/${queryString ? `?${queryString}` : ''}`
-        return await api.get<any>(url)
+        return await api.get<OperationsListResponse>(url)
       } catch (error: unknown) {
         logger.error('Failed to load operations', error)
         showSubtleErrorNotification('Error', 'Failed to load operations', 'error')
@@ -51,7 +51,7 @@ export function useOperationsApi() {
 
     async getOperation(operationId: string): Promise<Operation | null> {
       try {
-        return await api.get<any>(`${getApiBase()}/long-running/${operationId}`)
+        return await api.get<Operation>(`${getApiBase()}/long-running/${operationId}`)
       } catch (error: unknown) {
         logger.error('Failed to get operation status', error)
         showSubtleErrorNotification('Error', 'Failed to get operation status', 'error')
@@ -61,7 +61,7 @@ export function useOperationsApi() {
 
     async cancelOperation(operationId: string): Promise<CancelOperationResponse | null> {
       try {
-        return await api.post<any>(`${getApiBase()}/long-running/${operationId}/cancel`)
+        return await api.post<CancelOperationResponse>(`${getApiBase()}/long-running/${operationId}/cancel`)
       } catch (error: unknown) {
         logger.error('Failed to cancel operation', error)
         showSubtleErrorNotification('Error', 'Failed to cancel operation', 'error')
@@ -71,7 +71,7 @@ export function useOperationsApi() {
 
     async resumeOperation(operationId: string): Promise<ResumeOperationResponse | null> {
       try {
-        return await api.post<any>(`${getApiBase()}/long-running/${operationId}/resume`)
+        return await api.post<ResumeOperationResponse>(`${getApiBase()}/long-running/${operationId}/resume`)
       } catch (error: unknown) {
         logger.error('Failed to resume operation', error)
         showSubtleErrorNotification('Error', 'Failed to resume operation', 'error')

@@ -132,9 +132,8 @@ from knowledge.schemas.rag import (
     UpdateRagConfigResponse,
 )
 from knowledge.schemas.search import (
-    EnhancedSearchResponse,
-    EnhancedSearchV2Response,
     ExpandQueryResponse,
+    KBSearchResponse,
     KnowledgeSearchResponse,
     RagSearchResponse,
     RecordClickResponse,
@@ -246,9 +245,8 @@ __all__ = [
     "RunBenchmarkRequest",
     "UpdateRagConfigResponse",
     # search.py
-    "EnhancedSearchResponse",
-    "EnhancedSearchV2Response",
     "ExpandQueryResponse",
+    "KBSearchResponse",
     "KnowledgeSearchResponse",
     "RagSearchResponse",
     "RecordClickResponse",

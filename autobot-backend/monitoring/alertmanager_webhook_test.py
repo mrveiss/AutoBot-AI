@@ -44,7 +44,7 @@ class TestAlertManagerWebhook:
                 "description": "Circuit breaker for redis_main has opened with 5 failures",
                 "recommendation": "Check redis_main service health, logs, and connectivity",
             },
-            "externalURL": "http://localhost:9093",
+            "externalURL": "http://localhost:9093",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
             "alerts": [
                 {
                     "status": "firing",
@@ -61,7 +61,7 @@ class TestAlertManagerWebhook:
                     },
                     "startsAt": "2025-01-01T12:00:00.000Z",
                     "endsAt": None,
-                    "generatorURL": "http://localhost:9090/graph",
+                    "generatorURL": "http://localhost:9090/graph",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                     "fingerprint": "abc123def456",
                 }
             ],
@@ -89,7 +89,7 @@ class TestAlertManagerWebhook:
                 "description": "Redis server main is unavailable",
                 "recommendation": "Check Redis service on VM3 (10.0.0.4:6379)",
             },
-            "externalURL": "http://localhost:9093",
+            "externalURL": "http://localhost:9093",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
             "alerts": [
                 {
                     "status": "firing",
@@ -107,7 +107,7 @@ class TestAlertManagerWebhook:
                     },
                     "startsAt": "2025-01-01T12:00:00.000Z",
                     "endsAt": None,
-                    "generatorURL": "http://localhost:9090/graph",
+                    "generatorURL": "http://localhost:9090/graph",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                     "fingerprint": "redis123",
                 }
             ],
@@ -137,7 +137,7 @@ class TestAlertManagerWebhook:
                 "description": "NPU worker circuit breaker opened - hardware acceleration unavailable",
                 "recommendation": "Check NPU Worker VM2 (10.0.0.3:8081) and OpenVINO status",
             },
-            "externalURL": "http://localhost:9093",
+            "externalURL": "http://localhost:9093",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
             "alerts": [
                 {
                     "status": "firing",
@@ -154,7 +154,7 @@ class TestAlertManagerWebhook:
                     },
                     "startsAt": "2025-01-01T12:00:00.000Z",
                     "endsAt": None,
-                    "generatorURL": "http://localhost:9090/graph",
+                    "generatorURL": "http://localhost:9090/graph",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                     "fingerprint": "npu123",
                 }
             ],
@@ -180,7 +180,7 @@ class TestAlertManagerWebhook:
                 "summary": "Circuit Breaker OPEN: redis_main",
                 "description": "Circuit breaker for redis_main has opened",
             },
-            "externalURL": "http://localhost:9093",
+            "externalURL": "http://localhost:9093",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
             "alerts": [
                 {
                     "status": "resolved",
@@ -196,7 +196,7 @@ class TestAlertManagerWebhook:
                     },
                     "startsAt": "2025-01-01T12:00:00.000Z",
                     "endsAt": "2025-01-01T12:05:00.000Z",
-                    "generatorURL": "http://localhost:9090/graph",
+                    "generatorURL": "http://localhost:9090/graph",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                     "fingerprint": "abc123def456",
                 }
             ],
@@ -222,7 +222,7 @@ class TestAlertManagerWebhook:
                 "description": "Security errors detected in api: 5 events",
                 "recommendation": "Investigate security logs immediately",
             },
-            "externalURL": "http://localhost:9093",
+            "externalURL": "http://localhost:9093",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
             "alerts": [
                 {
                     "status": "firing",
@@ -238,7 +238,7 @@ class TestAlertManagerWebhook:
                     },
                     "startsAt": "2025-01-01T12:00:00.000Z",
                     "endsAt": None,
-                    "generatorURL": "http://localhost:9090/graph",
+                    "generatorURL": "http://localhost:9090/graph",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                     "fingerprint": "security123",
                 }
             ],
@@ -256,7 +256,7 @@ class TestAlertManagerWebhook:
             annotations={"summary": "Test", "description": "Test description"},
             startsAt="2025-01-01T12:00:00.000Z",
             endsAt=None,
-            generatorURL="http://localhost:9090",
+            generatorURL="http://localhost:9090",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
             fingerprint="test123",
         )
 
@@ -273,7 +273,7 @@ class TestAlertManagerWebhook:
             labels={"alertname": "TestAlert"},
             annotations={"summary": "Test"},
             startsAt="2025-01-01T12:00:00.000Z",
-            generatorURL="http://localhost:9090",
+            generatorURL="http://localhost:9090",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
             fingerprint="test123",
         )
 
@@ -285,7 +285,7 @@ class TestAlertManagerWebhook:
             groupLabels={"alertname": "TestAlert"},
             commonLabels={"alertname": "TestAlert"},
             commonAnnotations={"summary": "Test"},
-            externalURL="http://localhost:9093",
+            externalURL="http://localhost:9093",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
             alerts=[alert],
         )
 
@@ -404,7 +404,7 @@ class TestAlertManagerWebhook:
                 labels={"alertname": "MinimalAlert"},
                 annotations={"summary": "Minimal"},
                 startsAt="2025-01-01T12:00:00.000Z",
-                generatorURL="http://localhost:9090",
+                generatorURL="http://localhost:9090",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                 fingerprint="minimal123",
             )
 
@@ -428,7 +428,7 @@ class TestAlertManagerWebhook:
                 labels={"alertname": "TestAlert"},
                 annotations={"summary": "Test"},
                 startsAt="2025-01-01T12:00:00.000Z",
-                generatorURL="http://localhost:9090",
+                generatorURL="http://localhost:9090",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                 fingerprint="test123",
             )
 
@@ -460,7 +460,7 @@ class TestAlertManagerWebhook:
                 labels={"alertname": "TestAlert", "severity": severity},
                 annotations={"summary": "Test"},
                 startsAt="2025-01-01T12:00:00.000Z",
-                generatorURL="http://localhost:9090",
+                generatorURL="http://localhost:9090",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                 fingerprint="test123",
             )
 
@@ -490,7 +490,7 @@ class TestAlertManagerWebhook:
                 },
                 annotations={"summary": "Test"},
                 startsAt="2025-01-01T12:00:00.000Z",
-                generatorURL="http://localhost:9090",
+                generatorURL="http://localhost:9090",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                 fingerprint="test123",
             )
 
@@ -528,7 +528,7 @@ class TestAlertManagerWebhook:
                     },
                     "startsAt": "2025-01-01T12:01:00.000Z",
                     "endsAt": None,
-                    "generatorURL": "http://localhost:9090/graph",
+                    "generatorURL": "http://localhost:9090/graph",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                     "fingerprint": "xyz789",
                 }
             )

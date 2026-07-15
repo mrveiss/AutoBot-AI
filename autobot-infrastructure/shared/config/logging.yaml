@@ -87,7 +87,7 @@ developer:
   debug_logging: true
   enabled: true
   endpoint_suggestions: true
-  enhanced_errors: true
+  detailed_errors: true
 
   rum:
     debug_mode: false

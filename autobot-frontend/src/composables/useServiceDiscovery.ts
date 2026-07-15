@@ -15,6 +15,7 @@
 import { ref, computed } from 'vue'
 import { discoverService, clearDiscoveryCache } from '@/config/ssot-config'
 import { useUserStore } from '@/stores/useUserStore'
+import { isRealAuthToken } from '@/utils/authToken'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useServiceDiscovery')
@@ -44,7 +45,7 @@ export function useServiceDiscovery() {
   function getAuthToken(): string | null {
     // Access token from user store's authState
     const authState = userStore.authState
-    if (authState && authState.token && authState.token !== 'single_user_mode') {
+    if (authState && isRealAuthToken(authState.token)) {
       return authState.token
     }
     // Return null when no real token - callers must handle this (#820)

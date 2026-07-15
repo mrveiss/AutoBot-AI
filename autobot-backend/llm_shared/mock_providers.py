@@ -38,12 +38,13 @@ class LocalLLM:
         if self._ollama_available:
             logger.info("LocalLLM initialized with Ollama at %s", self._ollama_url)
         else:
-            # Issue #665: More informative warning - LocalLLM is optional
-            logger.debug(
-                "LocalLLM (Ollama) not configured - this provider will use mock responses. "
-                "This only affects the 'local' LLM provider. Other providers (OpenAI, Anthropic, "
-                "Google) work independently. To enable local Ollama: set AUTOBOT_OLLAMA_ENDPOINT "
-                "in .env file."
+            # #10726: Raised to WARNING — a missing AUTOBOT_OLLAMA_ENDPOINT means the
+            # 'local' provider silently serves mock text, masking a prod misconfiguration.
+            logger.warning(
+                "LocalLLM (Ollama) not configured — AUTOBOT_OLLAMA_ENDPOINT is unset or empty. "
+                "The 'local' provider will return MOCK responses until Ollama is configured. "
+                "Other providers (OpenAI, Anthropic, Google) work independently. "
+                "Set AUTOBOT_OLLAMA_ENDPOINT in .env to enable real local inference."
             )
 
     def _create_mock_response(self, prompt: str) -> dict:
@@ -119,7 +120,11 @@ class LocalLLM:
             Dict with response in OpenAI-compatible format
         """
         if not self._ollama_available:
-            logger.debug("Using mock response (Ollama not configured)")
+            # #10726: WARNING so each mock-response generation is observable in prod logs.
+            logger.warning(
+                "LocalLLM.generate called but Ollama is not configured — returning MOCK response. "
+                "Set AUTOBOT_OLLAMA_ENDPOINT to route to a real model."
+            )
             await asyncio.sleep(TimingConstants.MICRO_DELAY)
             return self._create_mock_response(prompt)
 
@@ -162,12 +167,25 @@ class MockPalm:
     class QuotaExceededError(Exception):
         """Exception raised when API quota is exceeded."""
 
+    # #10726: MockPalm is instantiated unconditionally at module load (the module-level
+    # ``palm`` global below), so a warning in __init__ would fire on every import and be
+    # pure noise. The actionable signal is when the mock is actually *used* on a request
+    # path — so the warning lives in the methods (get_quota_status / generate_text) instead.
+    _mock_use_warned = False
+
     def __init__(self):
-        """Initialize MockPalm with debug message about mock usage."""
-        # Issue #665: Changed to debug - MockPalm is a fallback, not an error condition
-        logger.debug(
-            "MockPalm provider instantiated (mock fallback). "
-            "For real Google AI, configure GOOGLE_API_KEY in .env file."
+        """Initialize MockPalm (a no-op mock stub; see class note and _warn_mock_use)."""
+
+    @classmethod
+    def _warn_mock_use(cls) -> None:
+        """Warn once per process when MockPalm is actually exercised on a request path."""
+        if cls._mock_use_warned:
+            return
+        cls._mock_use_warned = True
+        logger.warning(
+            "MockPalm is being USED to serve a request — this is a MOCK stub with no real "
+            "Google AI calls and exists for backward compatibility only. "
+            "Configure GOOGLE_API_KEY and use a real Vertex/Gemini provider for production."
         )
 
     async def get_quota_status(self):
@@ -177,6 +195,7 @@ class MockPalm:
         Returns:
             MockQuotaStatus with simulated quota information
         """
+        self._warn_mock_use()
         await asyncio.sleep(TimingConstants.STREAMING_CHUNK_DELAY)
 
         class MockQuotaStatus:
@@ -197,6 +216,7 @@ class MockPalm:
         Returns:
             Dict with mock generated text
         """
+        self._warn_mock_use()
         await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
         prompt = kwargs.get("prompt", "")

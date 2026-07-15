@@ -72,7 +72,7 @@ Declarative `required_env` field added to `PluginManifest`. Plugins now declare 
 
 ### Build & Tooling
 
-- **#7249 — Format wrapper** (PR #7262): `scripts/format.sh` wrapper + make targets; Python 3.12 settings pinned.
+- **#7249 — Format wrapper** (PR #7262): `scripts/format.sh` wrapper + make targets; Python 3.14 settings pinned.
 - **#7225 — CI startup smoke** (PR #7243): `pydantic[email]` added to CI framework requirements to unblock startup-import-smoke.
 - **#7128b — Audit script worktree path fix** (PR #7244): Skip entry-point runners; correct worktree-relative path check.
 

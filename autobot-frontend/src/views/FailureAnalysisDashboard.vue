@@ -5,7 +5,7 @@
   SPDX-License-Identifier: Apache-2.0
 
   Failure Analysis Dashboard
-  Issue #9892: Wire causal-inference engine (analyze-failure) to the frontend.
+  Backed by the causal-inference engine via POST /api/diagnostics/analyze-failure.
 -->
 <template>
   <div class="failure-analysis-view">
@@ -127,10 +127,10 @@
       </section>
 
       <!-- Causal chain -->
-      <section v-if="result.causal_chain.length" class="result-section">
+      <section v-if="(result.causal_chain ?? []).length" class="result-section">
         <h3 class="section-title">
           {{ $t('analytics.failureAnalysis.result.causalChain') }}
-          <span class="count-badge">{{ result.causal_chain.length }}</span>
+          <span class="count-badge">{{ (result.causal_chain ?? []).length }}</span>
         </h3>
         <ol class="causal-chain-list">
           <li v-for="(event, idx) in result.causal_chain" :key="String(event.event_id || idx)" class="chain-item">
@@ -148,10 +148,10 @@
       </section>
 
       <!-- Interventions -->
-      <section v-if="result.interventions.length" class="result-section">
+      <section v-if="(result.interventions ?? []).length" class="result-section">
         <h3 class="section-title">
           {{ $t('analytics.failureAnalysis.result.interventions') }}
-          <span class="count-badge">{{ result.interventions.length }}</span>
+          <span class="count-badge">{{ (result.interventions ?? []).length }}</span>
         </h3>
         <div class="interventions-grid">
           <div
@@ -190,10 +190,10 @@
       </section>
 
       <!-- Confounders -->
-      <section v-if="result.confounders.length" class="result-section">
+      <section v-if="(result.confounders ?? []).length" class="result-section">
         <h3 class="section-title">
           {{ $t('analytics.failureAnalysis.result.confounders') }}
-          <span class="count-badge">{{ result.confounders.length }}</span>
+          <span class="count-badge">{{ (result.confounders ?? []).length }}</span>
         </h3>
         <div class="confounders-list">
           <div v-for="(conf, idx) in result.confounders" :key="String(conf.event_id || idx)" class="event-card">
@@ -212,7 +212,7 @@
       </section>
 
       <!-- Recommendations -->
-      <section v-if="result.recommendations.length" class="result-section">
+      <section v-if="(result.recommendations ?? []).length" class="result-section">
         <h3 class="section-title">{{ $t('analytics.failureAnalysis.result.recommendations') }}</h3>
         <ul class="recommendations-list">
           <li v-for="(rec, idx) in result.recommendations" :key="idx">{{ rec }}</li>

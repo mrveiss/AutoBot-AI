@@ -7,9 +7,19 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 
+interface TestSecret {
+  id: string;
+  name: string;
+  type: string;
+  scope: string;
+  description?: string;
+  tags?: string[];
+  expires_at?: string | null;
+}
+
 describe('SecretsManager - filteredSecrets Memoization', () => {
   // Mock cache behavior
-  let filterCache: Map<string, any[]>;
+  let filterCache: Map<string, TestSecret[]>;
   let cacheHits = 0;
   let cacheMisses = 0;
 
@@ -38,12 +48,12 @@ describe('SecretsManager - filteredSecrets Memoization', () => {
 
   // Test helper: simulate filtering with cache
   const filterSecretsWithCache = (
-    secrets: any[],
+    secrets: TestSecret[],
     selectedCategory: string,
     selectedScope: string,
     showExpiredOnly: boolean,
     debouncedSearch: string
-  ): any[] => {
+  ): TestSecret[] => {
     const cacheKey = mockGetFilterCacheKey(
       selectedCategory,
       selectedScope,

@@ -58,7 +58,7 @@ from .reports import (
 )
 
 # Main tracker class
-from .tracker import EnhancedProjectStateTracker, get_state_tracker
+from .tracker import ProjectStateTracker, get_state_tracker
 
 # Tracking functions
 from .tracking import (
@@ -242,7 +242,7 @@ __all__ = [
     "calculate_trends",
     "export_state_data_to_file",
     # Main tracker
-    "EnhancedProjectStateTracker",
+    "ProjectStateTracker",
     "get_state_tracker",
     # Convenience functions
     "track_system_error",

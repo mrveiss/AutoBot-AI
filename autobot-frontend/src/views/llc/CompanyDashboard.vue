@@ -3,10 +3,9 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
-import { useWebSocket } from '@/composables/useWebSocket'
-import { getBackendUrl } from '@/config/ssot-config'
+import { useLiveEvents } from '@/composables/useLiveEvents'
 import { createLogger } from '@/utils/debugUtils'
 import { useRouter } from 'vue-router'
 import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
@@ -20,6 +19,7 @@ import type { AgentDisplayStatus, RunDisplayStatus } from '@/composables/llc/llc
 const logger = createLogger('CompanyDashboard')
 const api = useApiClient()
 const router = useRouter()
+const live = useLiveEvents()
 const { resolveCompanyId } = useLlcCompanyContext()
 
 // Resolved at mount: the top-level /llc/dashboard nav entry carries no
@@ -126,22 +126,22 @@ const activityFeed = ref<ActivityEvent[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 
-const wsUrl = computed(
-  () => `${getBackendUrl().replace(/^http/, 'ws')}/api/llc/ws/activity/${companyId.value}`
-)
-
-const { lastMessage, connect, disconnect } = useWebSocket(wsUrl, {
-  autoConnect: false,
-  autoReconnect: true,
-})
-
-function handleWsMessage(raw: string) {
-  try {
-    const event = JSON.parse(raw) as ActivityEvent
-    activityFeed.value = [event, ...activityFeed.value].slice(0, 50)
-  } catch (err) {
-    logger.warn('WS parse error', err)
+// Map an activity-log row (llc/services/activity_log.py — actor_*/entity_*/action/
+// occurred_at) to the ActivityEvent display shape. Used by both the initial fetch
+// and the live /ws/live stream so neither renders blank fields (#11395).
+function mapActivityRow(p: Record<string, unknown>): ActivityEvent {
+  return {
+    id: String(p.id ?? ''),
+    type: String(p.action ?? p.type ?? ''),
+    summary: String(p.summary ?? `${p.action ?? ''} ${p.entity_type ?? ''}`.trim()),
+    agent_name: (p.actor_agent_id ?? p.actor_user_id ?? null) as string | null,
+    timestamp: String(p.occurred_at ?? p.timestamp ?? ''),
   }
+}
+
+// Live activity via the canonical /ws/live event bus (channel company:{id}).
+function pushActivity(p: Record<string, unknown>) {
+  activityFeed.value = [mapActivityRow(p), ...activityFeed.value].slice(0, 50)
 }
 
 const budgetPercent = (b: BudgetInfo) =>
@@ -170,13 +170,15 @@ async function fetchDashboardData() {
       api.get<PendingApproval[]>(`/api/llc/approvals?company_id=${cid}`),
       api.get<RawBudgetRow[]>(`/api/llc/budget?company_id=${cid}`),
       api.get<RawRunRow[]>('/api/llc/heartbeat-runs?limit=20'),
-      api.get<{ items: ActivityEvent[] }>(`/api/llc/companies/${cid}/activity?page_size=50`),
+      api.get<{ items: Array<Record<string, unknown>> }>(`/api/llc/companies/${cid}/activity?page_size=50`),
     ])
     agents.value = (agentsResp ?? []).map(mapAgent)
     pendingApprovals.value = approvalsResp ?? []
     budgets.value = (budgetsResp ?? []).map(mapBudget)
     heartbeatRuns.value = (runsResp ?? []).map(mapRun)
-    activityFeed.value = activityResp?.items ?? []
+    // Backend returns ActivityLogEntry rows, not the display shape — map them
+    // through the same mapper as live events so fields aren't blank (#11395).
+    activityFeed.value = (activityResp?.items ?? []).map(mapActivityRow).slice(0, 50)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     logger.error('Failed to fetch dashboard data:', msg)
@@ -196,7 +198,11 @@ async function quickApprove(approvalId: string) {
 }
 
 function launchCeoChat() {
-  router.push({ path: '/chat', query: { mode: 'ceo' } })
+  // #11552 follow-up: the CEO Chat button must open THIS company's CEO chat, not
+  // the global assistant. Route to the company-scoped ceo-chat view (mirrors
+  // LlcSidebar's nav target) so the company context (and its LLC tools) apply.
+  if (!companyId.value) return
+  router.push({ path: `/llc/companies/${companyId.value}/ceo-chat` })
 }
 
 function formatDuration(ms: number | null): string {
@@ -214,181 +220,190 @@ onMounted(async () => {
   await resolveCompanyId().then((id) => { companyId.value = id })
   if (!companyId.value) return
   await fetchDashboardData()
-  connect()
-})
-
-onUnmounted(() => {
-  disconnect()
-})
-
-watch(lastMessage, (msg) => {
-  if (msg) handleWsMessage(msg as string)
+  // useLiveEvents auto-unsubscribes on unmount.
+  live.subscribe(`company:${companyId.value}`, (ev) => {
+    if (ev.event_type === 'llc:activity_created') pushActivity(ev.payload)
+  })
 })
 </script>
 
 <template>
-  <div class="p-4 space-y-6 max-w-7xl mx-auto">
-    <!-- Header -->
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Company Dashboard</h1>
-      <button
-        class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
-        @click="launchCeoChat"
-      >
-        CEO Chat
-      </button>
-    </div>
-
-    <div v-if="!companyId" class="text-center py-12 text-gray-500">
-      Select a company to view its dashboard.
-    </div>
-
-    <template v-else>
-      <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
-        {{ error }}
-        <button class="ml-4 underline" @click="fetchDashboardData">Retry</button>
+  <!--
+    Full-height scroll container: the shell now gives dashboards a full-height
+    content region (#10897). `min-h-full` on the inner wrapper makes short
+    content still reach the bottom edge, and the live Activity Feed grows to
+    absorb the vertical slack instead of leaving dead space (#10750).
+  -->
+  <div class="h-full overflow-y-auto">
+    <div class="min-h-full flex flex-col gap-6 p-4 max-w-7xl mx-auto">
+      <!-- Header -->
+      <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-autobot-text-primary">{{ $t('llc.dashboard.title') }}</h1>
+        <button
+          class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+          @click="launchCeoChat"
+        >
+          {{ $t('llc.dashboard.ceoChat') }}
+        </button>
       </div>
 
-      <div v-if="isLoading" class="text-center py-12 text-gray-500">Loading…</div>
+      <div v-if="!companyId" class="text-center py-12 text-autobot-text-muted">
+        {{ $t('llc.dashboard.selectCompany') }}
+      </div>
 
       <template v-else>
-        <!-- Pending Approvals -->
-        <section v-if="pendingApprovals.length > 0">
-          <div class="flex items-center gap-2 mb-3">
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Pending Approvals</h2>
-            <span class="bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-0.5 rounded-full">
-              {{ pendingApprovals.length }}
-            </span>
-          </div>
-          <div class="space-y-2">
-            <div
-              v-for="approval in pendingApprovals"
-              :key="approval.id"
-              class="flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3"
-            >
-              <div>
-                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ approval.title }}</p>
-                <p class="text-xs text-gray-500">Requested by {{ approval.requested_by }} · {{ formatTime(approval.created_at) }}</p>
-              </div>
-              <button
-                class="px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
-                @click="quickApprove(approval.id)"
-              >
-                Approve
-              </button>
-            </div>
-          </div>
-        </section>
+        <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
+          {{ error }}
+          <button class="ml-4 underline" @click="fetchDashboardData">{{ $t('llc.dashboard.retry') }}</button>
+        </div>
 
-        <!-- Budget Gauges -->
-        <section>
-          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Budget</h2>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div
-              v-for="budget in budgets"
-              :key="budget.label"
-              class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4"
-            >
-              <div class="flex justify-between items-center mb-2">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ budget.label }}</span>
-                <span class="text-xs text-gray-500">{{ budgetPercent(budget) }}%</span>
-              </div>
-              <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                <div
-                  class="h-2 rounded-full transition-all"
-                  :class="budgetBarColor(budget)"
-                  :style="{ width: `${budgetPercent(budget)}%` }"
-                />
-              </div>
-              <p class="text-xs text-gray-500 mt-1">{{ budget.spent }} / {{ budget.total }}</p>
-            </div>
-          </div>
-        </section>
+        <div v-if="isLoading" class="text-center py-12 text-autobot-text-muted">{{ $t('llc.dashboard.loading') }}</div>
 
-        <!-- Agent Status Grid -->
-        <section>
-          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">
-            Agents
-            <span class="text-sm font-normal text-gray-500 ml-1">({{ agents.length }})</span>
-          </h2>
-          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            <div
-              v-for="agent in agents"
-              :key="agent.id"
-              class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 flex flex-col gap-1"
-            >
-              <div class="flex items-center gap-2">
-                <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="agentStatusColor(agent.status)" />
-                <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{{ agent.name }}</span>
-              </div>
-              <span class="text-xs text-gray-500 truncate">{{ agent.title }}</span>
-              <span class="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded px-1.5 py-0.5 self-start">
-                {{ agent.adapter_type }}
+        <!-- Content wrapper is itself a full-height column so the feed can grow. -->
+        <div v-else class="flex flex-col gap-6 flex-1 min-h-0">
+          <!-- Pending Approvals -->
+          <section v-if="pendingApprovals.length > 0">
+            <div class="flex items-center gap-2 mb-3">
+              <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('llc.dashboard.pendingApprovals') }}</h2>
+              <span class="bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+                {{ pendingApprovals.length }}
               </span>
             </div>
-          </div>
-        </section>
-
-        <!-- Live Heartbeat Runs -->
-        <section>
-          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Recent Heartbeat Runs</h2>
-          <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-              <thead class="bg-gray-50 dark:bg-gray-900">
-                <tr>
-                  <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Agent</th>
-                  <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                  <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Started</th>
-                  <th class="px-4 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Duration</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-800">
-                <tr v-for="run in heartbeatRuns" :key="run.run_id">
-                  <td class="px-4 py-2 text-gray-900 dark:text-gray-100 font-medium">{{ run.agent_name }}</td>
-                  <td class="px-4 py-2">
-                    <span
-                      class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-                      :class="{
-                        'bg-green-100 text-green-800': run.status === 'done',
-                        'bg-blue-100 text-blue-800': run.status === 'running',
-                        'bg-red-100 text-red-800': run.status === 'failed',
-                      }"
-                    >
-                      {{ run.status }}
-                    </span>
-                  </td>
-                  <td class="px-4 py-2 text-gray-500">{{ formatTime(run.started_at) }}</td>
-                  <td class="px-4 py-2 text-gray-500">{{ formatDuration(run.duration_ms) }}</td>
-                </tr>
-                <tr v-if="heartbeatRuns.length === 0">
-                  <td colspan="4" class="px-4 py-4 text-center text-gray-400 text-sm">No runs yet</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <!-- Activity Feed -->
-        <section>
-          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Live Activity</h2>
-          <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700 max-h-72 overflow-y-auto">
-            <div
-              v-for="event in activityFeed"
-              :key="event.id"
-              class="px-4 py-2 flex items-start gap-3"
-            >
-              <span class="text-xs text-gray-400 w-16 flex-shrink-0 pt-0.5">{{ formatTime(event.timestamp) }}</span>
-              <div class="flex-1 min-w-0">
-                <span class="text-xs text-indigo-600 dark:text-indigo-400 font-medium mr-1">{{ event.agent_name ?? 'system' }}</span>
-                <span class="text-sm text-gray-700 dark:text-gray-300">{{ event.summary }}</span>
+            <div class="space-y-2">
+              <div
+                v-for="approval in pendingApprovals"
+                :key="approval.id"
+                class="flex items-center justify-between bg-autobot-bg-card rounded-lg border border-autobot-border p-3"
+              >
+                <div>
+                  <p class="text-sm font-medium text-autobot-text-primary">{{ approval.title }}</p>
+                  <p class="text-xs text-autobot-text-muted">{{ $t('llc.dashboard.requestedBy', { name: approval.requested_by }) }} · {{ formatTime(approval.created_at) }}</p>
+                </div>
+                <button
+                  class="px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                  @click="quickApprove(approval.id)"
+                >
+                  {{ $t('llc.dashboard.approve') }}
+                </button>
               </div>
             </div>
-            <div v-if="activityFeed.length === 0" class="px-4 py-4 text-center text-gray-400 text-sm">
-              Waiting for activity…
+          </section>
+
+          <!-- Budget Gauges -->
+          <section>
+            <h2 class="text-lg font-semibold text-autobot-text-primary mb-3">{{ $t('llc.dashboard.budget') }}</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-fr">
+              <div
+                v-for="budget in budgets"
+                :key="budget.label"
+                class="bg-autobot-bg-card rounded-lg border border-autobot-border p-4"
+              >
+                <div class="flex justify-between items-center mb-2">
+                  <span class="text-sm font-medium text-autobot-text-secondary">{{ budget.label }}</span>
+                  <span class="text-xs text-autobot-text-muted">{{ budgetPercent(budget) }}%</span>
+                </div>
+                <div class="w-full bg-autobot-bg-tertiary rounded-full h-2">
+                  <div
+                    class="h-2 rounded-full transition-all"
+                    :class="budgetBarColor(budget)"
+                    :style="{ width: `${budgetPercent(budget)}%` }"
+                  />
+                </div>
+                <p class="text-xs text-autobot-text-muted mt-1">{{ budget.spent }} / {{ budget.total }}</p>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+
+          <!-- Agent Status Grid -->
+          <section>
+            <h2 class="text-lg font-semibold text-autobot-text-primary mb-3">
+              {{ $t('llc.dashboard.agents') }}
+              <span class="text-sm font-normal text-autobot-text-muted ml-1">({{ agents.length }})</span>
+            </h2>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 auto-rows-fr">
+              <div
+                v-for="agent in agents"
+                :key="agent.id"
+                class="bg-autobot-bg-card rounded-lg border border-autobot-border p-3 flex flex-col gap-1"
+              >
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="agentStatusColor(agent.status)" />
+                  <span class="text-sm font-medium text-autobot-text-primary truncate">{{ agent.name }}</span>
+                </div>
+                <span class="text-xs text-autobot-text-muted truncate">{{ agent.title }}</span>
+                <span class="text-xs bg-autobot-bg-tertiary text-autobot-text-secondary rounded px-1.5 py-0.5 self-start">
+                  {{ agent.adapter_type }}
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Live Heartbeat Runs -->
+          <section>
+            <h2 class="text-lg font-semibold text-autobot-text-primary mb-3">{{ $t('llc.dashboard.recentRuns') }}</h2>
+            <div class="overflow-x-auto rounded-lg border border-autobot-border">
+              <table class="min-w-full divide-y divide-autobot-border text-sm">
+                <thead class="bg-autobot-bg-surface">
+                  <tr>
+                    <th class="px-4 py-2 text-left text-xs font-semibold text-autobot-text-secondary uppercase tracking-wider">{{ $t('llc.dashboard.colAgent') }}</th>
+                    <th class="px-4 py-2 text-left text-xs font-semibold text-autobot-text-secondary uppercase tracking-wider">{{ $t('llc.dashboard.colStatus') }}</th>
+                    <th class="px-4 py-2 text-left text-xs font-semibold text-autobot-text-secondary uppercase tracking-wider">{{ $t('llc.dashboard.colStarted') }}</th>
+                    <th class="px-4 py-2 text-left text-xs font-semibold text-autobot-text-secondary uppercase tracking-wider">{{ $t('llc.dashboard.colDuration') }}</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-autobot-border bg-autobot-bg-card">
+                  <tr v-for="run in heartbeatRuns" :key="run.run_id">
+                    <td class="px-4 py-2 text-autobot-text-primary font-medium">{{ run.agent_name }}</td>
+                    <td class="px-4 py-2">
+                      <span
+                        class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                        :class="{
+                          'bg-green-100 text-green-800': run.status === 'done',
+                          'bg-blue-100 text-blue-800': run.status === 'running',
+                          'bg-red-100 text-red-800': run.status === 'failed',
+                        }"
+                      >
+                        {{ run.status }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-2 text-autobot-text-muted">{{ formatTime(run.started_at) }}</td>
+                    <td class="px-4 py-2 text-autobot-text-muted">{{ formatDuration(run.duration_ms) }}</td>
+                  </tr>
+                  <tr v-if="heartbeatRuns.length === 0">
+                    <td colspan="4" class="px-4 py-4 text-center text-autobot-text-muted text-sm">{{ $t('llc.dashboard.noRuns') }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <!--
+            Activity Feed — the primary live-data widget and the designated
+            "grower": `flex-1 min-h-0` lets it absorb the remaining vertical
+            space, and the inner list scrolls internally instead of a fixed
+            `max-h-72` cap. Keeps an empty state that fills down to the bottom.
+          -->
+          <section class="flex flex-col flex-1 min-h-0">
+            <h2 class="text-lg font-semibold text-autobot-text-primary mb-3">{{ $t('llc.dashboard.liveActivity') }}</h2>
+            <div class="flex-1 min-h-0 bg-autobot-bg-card rounded-lg border border-autobot-border divide-y divide-autobot-border overflow-y-auto">
+              <div
+                v-for="event in activityFeed"
+                :key="event.id"
+                class="px-4 py-2 flex items-start gap-3"
+              >
+                <span class="text-xs text-autobot-text-muted w-16 flex-shrink-0 pt-0.5">{{ formatTime(event.timestamp) }}</span>
+                <div class="flex-1 min-w-0">
+                  <span class="text-xs text-indigo-600 dark:text-indigo-400 font-medium mr-1">{{ event.agent_name ?? $t('llc.dashboard.system') }}</span>
+                  <span class="text-sm text-autobot-text-secondary">{{ event.summary }}</span>
+                </div>
+              </div>
+              <div v-if="activityFeed.length === 0" class="px-4 py-4 text-center text-autobot-text-muted text-sm">
+                {{ $t('llc.dashboard.waitingActivity') }}
+              </div>
+            </div>
+          </section>
+        </div>
       </template>
-    </template>
+    </div>
   </div>
 </template>

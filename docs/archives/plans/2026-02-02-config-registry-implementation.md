@@ -6,7 +6,7 @@
 
 **Architecture:** Lazy-loading singleton that defers Redis connection until first access, caches locally with 60s TTL, and falls back gracefully through Redis → Environment Variables → Hardcoded Defaults.
 
-**Tech Stack:** Python 3.12+, Redis (via `src.utils.redis_client`), threading for thread-safety, pytest for testing.
+**Tech Stack:** Python 3.14+, Redis (via `src.utils.redis_client`), threading for thread-safety, pytest for testing.
 
 **Related:** Issue #751, Design doc: `docs/plans/2026-02-02-config-registry-consolidation-design.md`
 

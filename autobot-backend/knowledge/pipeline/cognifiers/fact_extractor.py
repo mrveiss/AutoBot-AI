@@ -11,26 +11,43 @@ as discrete retrievable units alongside full chunks.
 """
 
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, get_args
 from uuid import UUID
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
-from knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
+from knowledge.pipeline.cognifiers.llm_utils import (
+    batched_chunk_extract,
+    literal_prompt_list,
+    parse_llm_json_response,
+    render_prompt_sentinels,
+)
 from knowledge.pipeline.models.chunk import ProcessedChunk
-from knowledge.pipeline.models.fact import AtomicFact
+from knowledge.pipeline.models.fact import AtomicFact, FactType
 from knowledge.pipeline.registry import TaskRegistry
+from llm_shared.types import LLMType
 from services.llm_service import get_llm_service
 
 logger = get_logger(__name__)
 
-FACT_EXTRACTION_PROMPT = """Extract atomic facts from the following text.
+# Single source of truth for the allowed fact-type values (#11017): derived from
+# the ``FactType`` Literal so the prompt fragment and the validation set can never
+# drift from the type. Adding a value to FactType updates both at once.
+_FACT_TYPES = tuple(get_args(FactType))
+_FACT_TYPES_STR = literal_prompt_list(FactType, quote=True)
+
+# Max characters of a chunk sent to the LLM (shared by per-chunk and batched paths).
+MAX_CHUNK_CHARS = 2000
+
+FACT_EXTRACTION_PROMPT = render_prompt_sentinels(
+    """Extract atomic facts from the following text.
 
 For each fact, provide:
 - subject: Main subject or entity (e.g., "AutoBot", "ChromaDB")
 - predicate: Relationship or property (e.g., "is", "enables", "has")
 - object: Object entity or value (e.g., "AI platform", "knowledge base")
-- fact_type: One of 'statement', 'relationship', 'property', 'definition', 'rule', 'measurement'
+- fact_type: One of %%FACT_TYPES%%
 - description: Natural language description of the fact
 - context: Supporting context from the text (relevant sentence or phrase)
 - confidence: Score 0.0-1.0 indicating extraction confidence
@@ -48,7 +65,36 @@ Return JSON array of facts:
 
 Text:
 {text}
-"""
+""",
+    {"FACT_TYPES": _FACT_TYPES_STR},
+)
+
+# Batched variant (#10647): extract facts from multiple labeled chunks in one
+# call, keyed by chunk index, to cut LLM round-trips.
+FACT_EXTRACTION_BATCH_PROMPT = render_prompt_sentinels(
+    """Extract atomic facts from each of the following text chunks.
+
+Each chunk is labeled "Chunk N:". For each fact provide:
+- subject, predicate, object
+- fact_type: One of %%FACT_TYPES%%
+- description, context, confidence (0.0-1.0)
+
+Return a JSON object mapping each chunk index (as a string) to its array of facts
+(each fact uses the same fields listed above); use an empty array for chunks with
+no facts. Example for two chunks:
+{{
+  "0": [
+    {{"subject": "...", "predicate": "...", "object": "...",
+      "fact_type": "statement", "description": "...", "context": "...", "confidence": 0.9}}
+  ],
+  "1": []
+}}
+
+Chunks:
+{chunks}
+""",
+    {"FACT_TYPES": _FACT_TYPES_STR},
+)
 
 # NLP-based patterns for fact extraction (Issue #3395)
 # Used when sentence-level parsing can identify simple facts
@@ -77,15 +123,9 @@ NLP_PATTERNS = [
     ),
 ]
 
-# Valid fact types
-VALID_FACT_TYPES = {
-    "statement",
-    "relationship",
-    "property",
-    "definition",
-    "rule",
-    "measurement",
-}
+# Valid fact types — derived from the FactType Literal (#11017) so validation
+# can never drift from the type or the prompt fragment above.
+VALID_FACT_TYPES = frozenset(_FACT_TYPES)
 
 
 @TaskRegistry.register_cognifier("extract_facts")
@@ -219,24 +259,43 @@ class FactExtractor(BaseCognifier):
         return all_facts
 
     async def _process_batch(self, chunks: List[ProcessedChunk], context: PipelineContext) -> List[AtomicFact]:
-        """Process a batch of chunks."""
-        facts = []
-        for chunk in chunks:
-            chunk_facts = await self._extract_from_chunk(chunk, context)
-            facts.extend(chunk_facts)
-        return facts
+        """Extract facts for a batch in ONE LLM call when batching is on (#10647/#11017).
+
+        Routes through the shared ``batched_chunk_extract`` helper (index-keyed
+        prompt, per-*missing*-chunk fallback, batch-scaled ``max_tokens``) instead
+        of a fact-local reimplementation — so fact extraction honors the
+        ``cognifier_multichunk_batching`` / ``cognifier_batch_max_chunk_chars``
+        config like the other extractors and inherits the #11012 partial-response
+        fix. ``batched_chunk_extract`` honors the flag itself, running the legacy
+        per-chunk loop when it is disabled (#11090).
+        """
+        return await batched_chunk_extract(
+            chunks,
+            llm=self.llm,
+            batch_prompt_template=FACT_EXTRACTION_BATCH_PROMPT,
+            llm_type=LLMType.EXTRACTION,
+            max_chunk_chars=config.cognifier_batch_max_chunk_chars,
+            convert=lambda raw, chunk: self._convert_to_facts(raw, chunk, context.document_id),
+            extract_one=lambda chunk: self._extract_from_chunk(chunk, context),
+        )
 
     async def _extract_from_chunk(self, chunk: ProcessedChunk, context: PipelineContext) -> List[AtomicFact]:
-        """Extract facts from a single chunk using LLM."""
+        """Extract facts from a single chunk using LLM.
+
+        Transient LLM errors are caught and return an empty list.
+        Format and parse errors are re-raised (#10645).
+        """
+        prompt = FACT_EXTRACTION_PROMPT.format(text=chunk.content[:MAX_CHUNK_CHARS])
         try:
-            prompt = FACT_EXTRACTION_PROMPT.format(text=chunk.content[:2000])
-            response = await self.llm.chat([{"role": "user", "content": prompt}])
-            parsed = parse_llm_json_response(response.content)
-            raw_facts = parsed if isinstance(parsed, list) else []
-            return self._convert_to_facts(raw_facts, chunk, context.document_id)
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}], llm_type=LLMType.EXTRACTION, structured_output=True
+            )
         except Exception as e:
-            logger.error("Fact extraction failed for chunk %s: %s", chunk.id, e)
+            logger.error("Fact extraction LLM call failed (transient) for chunk %s: %s", chunk.id, e)
             return []
+        parsed = parse_llm_json_response(response.content, strict=True)
+        raw_facts = parsed if isinstance(parsed, list) else []
+        return self._convert_to_facts(raw_facts, chunk, context.document_id)
 
     def _convert_to_facts(
         self,

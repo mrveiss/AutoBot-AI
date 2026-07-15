@@ -114,6 +114,9 @@ def test_observability_coverage():
         "20260608_052",  # merge revision — no-op
         "20260623_062",  # RBAC colon->dot reconcile (#10458) — data-only head;
         # absorbed by the data-only tail advance, idempotent if re-run
+        "20260630_064",  # llc reviewer cols (UUID) + kb_summary (TEXT) drift fix
+        # (#10750) — non-TIMESTAMPTZ cols added via raw ADD COLUMN IF NOT EXISTS,
+        # so unparseable; fully idempotent (IF NOT EXISTS + has_table) if re-run
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "

@@ -32,11 +32,11 @@ from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
 from api.schemas_system import (
+    ChatSecretScope,
     ChatSecretsDeleteData,
     SecretCreatedData,
     SecretCreateRequest,
     SecretModel,
-    SecretScope,
     SecretsListData,
     SecretsStatsData,
     SecretsStatusResponse,
@@ -52,7 +52,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from middleware.proxy_utils import get_client_ip
-from services.audit.unified_audit import AuditAction, audit_record  # GH#8290 Phase 2
+from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
@@ -281,7 +281,7 @@ class SecretsManager:
             return None
 
         # Check access permissions
-        if secret_data["scope"] == SecretScope.CHAT:
+        if secret_data["scope"] == ChatSecretScope.CHAT:
             if not chat_id or secret_data["chat_id"] != chat_id:
                 raise PermissionError("Access denied: Chat-scoped secret from different chat")
 
@@ -292,7 +292,7 @@ class SecretsManager:
 
         return secret_data
 
-    def list_secrets(self, chat_id: str | None = None, scope: SecretScope | None = None) -> List[Dict]:
+    def list_secrets(self, chat_id: str | None = None, scope: ChatSecretScope | None = None) -> List[Dict]:
         """List secrets with access control"""
         secrets = self._load_secrets()
         result = []
@@ -303,7 +303,7 @@ class SecretsManager:
                 continue
 
             # Apply access control
-            if secret_data["scope"] == SecretScope.CHAT:
+            if secret_data["scope"] == ChatSecretScope.CHAT:
                 if not chat_id or secret_data["chat_id"] != chat_id:
                     continue
 
@@ -329,7 +329,7 @@ class SecretsManager:
             return None
 
         # Check access permissions
-        if secret_data["scope"] == SecretScope.CHAT:
+        if secret_data["scope"] == ChatSecretScope.CHAT:
             if not chat_id or secret_data["chat_id"] != chat_id:
                 raise PermissionError("Access denied: Cannot modify chat-scoped secret from " "different chat")
 
@@ -366,7 +366,7 @@ class SecretsManager:
             return False
 
         # Check access permissions
-        if secret_data["scope"] == SecretScope.CHAT:
+        if secret_data["scope"] == ChatSecretScope.CHAT:
             if not chat_id or secret_data["chat_id"] != chat_id:
                 raise PermissionError("Access denied: Cannot delete chat-scoped secret from " "different chat")
 
@@ -389,13 +389,13 @@ class SecretsManager:
                 continue
 
             # Check access permissions for source
-            if secret_data["scope"] == SecretScope.CHAT:
+            if secret_data["scope"] == ChatSecretScope.CHAT:
                 if not chat_id or secret_data["chat_id"] != chat_id:
                     failed.append({"secret_id": secret_id, "reason": "Access denied"})
                     continue
 
             # Validate target scope
-            if request.target_scope == SecretScope.CHAT and not request.target_chat_id:
+            if request.target_scope == ChatSecretScope.CHAT and not request.target_chat_id:
                 failed.append(
                     {
                         "secret_id": secret_id,
@@ -406,7 +406,7 @@ class SecretsManager:
 
             # Perform transfer
             secret_data["scope"] = request.target_scope
-            if request.target_scope == SecretScope.CHAT:
+            if request.target_scope == ChatSecretScope.CHAT:
                 secret_data["chat_id"] = request.target_chat_id
             else:
                 secret_data["chat_id"] = None
@@ -442,7 +442,7 @@ class SecretsManager:
 
         # Find all secrets for this chat
         for secret_id, secret_data in secrets.items():
-            if secret_data["scope"] == SecretScope.CHAT and secret_data["chat_id"] == chat_id:
+            if secret_data["scope"] == ChatSecretScope.CHAT and secret_data["chat_id"] == chat_id:
                 chat_secrets.append(
                     {
                         "id": secret_id,
@@ -464,7 +464,7 @@ class SecretsManager:
         deleted = []
 
         for secret_id, secret_data in list(secrets.items()):
-            if secret_data["scope"] == SecretScope.CHAT and secret_data["chat_id"] == chat_id:
+            if secret_data["scope"] == ChatSecretScope.CHAT and secret_data["chat_id"] == chat_id:
                 if secret_ids is None or secret_id in secret_ids:
                     del secrets[secret_id]
                     deleted.append({"id": secret_id, "name": secret_data["name"]})
@@ -590,7 +590,7 @@ async def create_secret(
 async def list_secrets(
     http_request: Request,
     chat_id: str | None = Query(None),
-    scope: SecretScope | None = Query(None),
+    scope: ChatSecretScope | None = Query(None),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """List secrets with optional filtering (Issue #744: requires admin authentication)"""
@@ -626,7 +626,7 @@ async def get_secret_types(
         status_code=200,
         content={
             "types": [{"value": t.value, "label": t.value.replace("_", " ").title()} for t in SecretType],
-            "scopes": [{"value": s.value, "label": s.value.title()} for s in SecretScope],
+            "scopes": [{"value": s.value, "label": s.value.title()} for s in ChatSecretScope],
         },
     )
 

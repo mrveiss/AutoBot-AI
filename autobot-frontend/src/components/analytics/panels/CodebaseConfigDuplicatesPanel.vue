@@ -127,7 +127,7 @@ interface ConfigDuplicatesResult {
   report: string
 }
 
-const props = defineProps<{
+defineProps<{
   analysis: ConfigDuplicatesResult | null
   loading: boolean
   error: string | null

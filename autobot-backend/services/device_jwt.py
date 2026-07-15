@@ -57,7 +57,7 @@ from typing import Dict
 from autobot_shared.auth.jwt_core import JWTDecodeError, decode_jwt, encode_jwt
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from services.audit.unified_audit import AuditAction, audit_record
+from services.audit.audit import AuditAction, audit_record
 
 logger = get_logger(__name__)
 

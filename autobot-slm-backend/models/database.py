@@ -135,8 +135,16 @@ class Node(Base):
 
     @property
     def ansible_target(self) -> str:
-        """Best identifier for Ansible --limit targeting (#1814)."""
-        return self.ansible_name or self.ip_address
+        """Best identifier for Ansible --limit targeting (#1814).
+
+        Falls back to node_id, not ip_address: the dynamic registry
+        inventory (services/inventory_builder.py, #10109) keys every host
+        by node_id and registers no IP alias, so `--limit <ip>` matches no
+        hosts and ansible aborts with "no hosts to target" (#11717). node_id
+        is guaranteed to resolve there; ansible_name still wins first for
+        nodes that carry a human-assigned static-inventory name.
+        """
+        return self.ansible_name or self.node_id
 
 
 class Deployment(Base):
@@ -406,6 +414,27 @@ class FleetSyncNodeState(Base):
     status = Column(String(20), default="pending")
     message = Column(Text, nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class ComponentSyncJob(Base):
+    """Async per-component drift/resolve job (#11303).
+
+    DB-backed so status survives the SLM backend restarting itself when the
+    resolved component is autobot-slm-backend (same rationale as #1707).
+    """
+
+    __tablename__ = "component_sync_jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_id = Column(String(64), unique=True, nullable=False, index=True)
+    component = Column(String(64), nullable=False)
+    status = Column(String(20), default="pending")  # pending|running|completed|failed
+    success = Column(Boolean, nullable=True)
+    deps_changed = Column(Boolean, default=False)
+    message = Column(Text, nullable=True)
+    post_steps = Column(Text, nullable=True)  # newline-joined step log
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
 
@@ -759,9 +788,15 @@ class PolicyStatus(str, enum.Enum):
 
 
 class AuditLog(Base):
-    """Audit log for tracking all user actions and system events."""
+    """SLM node/system audit log (integer-PK).
 
-    __tablename__ = "audit_logs"
+    Records SLM control-plane actions (node management, service control,
+    deployments, security events) on the main SLM database. Distinct from the
+    UUID/org-aware ``user_management.models.audit.AuditLog``, which owns the
+    ``audit_logs`` table on the ``slm_users`` database (#10764).
+    """
+
+    __tablename__ = "slm_node_audit_logs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     log_id = Column(String(64), unique=True, nullable=False, index=True)

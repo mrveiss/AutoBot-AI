@@ -39,8 +39,8 @@
 - If pre-commit hook fails: read error, fix, re-stage, retry (max 3) — never `--no-verify`
 
 **CI/Production Parity:**
-- CI runs Python 3.12 (deadsnakes PPA) — never use 3.13-only packages
-- All nodes: deadsnakes PPA python3.12 venv at `/opt/autobot/<component>/venv`
+- CI runs Python 3.14 (deadsnakes PPA) — never use 3.13-only packages
+- All nodes: deadsnakes PPA python3.14 venv at `/opt/autobot/<component>/venv`
 
 **Branch Strategy:**
 - Always target `Dev_new_gui` for PRs unless told otherwise
@@ -159,6 +159,10 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 **Commit format:** `<type>(scope): <description> (#issue-number)`
 
 **Always close the issue after implementation.** PRs targeting `Dev_new_gui` will NOT auto-close issues — verify with `gh issue view`.
+
+**CI diagnosis:** queued checks on self-hosted runners are NOT stuck — confirm failure before acting.
+
+**Posting comments:** write literal markdown — never raw JSON or a file path.
 
 **GitHub CLI Workarounds:**
 

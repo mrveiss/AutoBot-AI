@@ -45,8 +45,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from autobot_shared.env_utils import env_int_clamped
 
 
 # Determine project root for .env file location
@@ -80,6 +82,37 @@ LIGHT_PROCESSING_MODEL = "phi3:mini"  # Extraction, formatting, lightweight task
 INSTRUCTION_MODEL = "mistral:7b-instruct"  # RAG, entity extraction, instruction following
 SYSTEM_MODEL = "dolphin-llama3:8b"  # System commands, security (uncensored)
 QUALITY_MODEL = DEFAULT_LLM_MODEL  # User-facing chat, research, code analysis
+
+# Truthy env-var values — shared by every boolean flag below.
+_TRUE_VALUES = {"1", "true", "yes"}
+
+# Best-of-N plan selection (#10583)
+# AUTOBOT_PLAN_BEST_OF_N_ENABLED=true  → opt-in path (default: off)
+# AUTOBOT_PLAN_BEST_OF_N_COUNT=3       → number of candidate plans (default: 3, max: 5)
+PLAN_BEST_OF_N_ENABLED: bool = os.environ.get("AUTOBOT_PLAN_BEST_OF_N_ENABLED", "false").lower() in _TRUE_VALUES
+# Reuse the shared env_int_clamped helper (safe-parse — no import-time crash on
+# bad input — + clamp); do NOT reimplement it locally (#11022 audit follow-up).
+PLAN_BEST_OF_N_COUNT: int = env_int_clamped("AUTOBOT_PLAN_BEST_OF_N_COUNT", 3, 2, 5)
+
+# #10602: ClaimVerifier wiring — adds KB RAG + optional research-agent LLM call per claim.
+# Default OFF because it adds latency/cost; set AUTOBOT_CLAIM_VERIFICATION_ENABLED=true to opt in.
+CLAIM_VERIFICATION_ENABLED: bool = os.environ.get("AUTOBOT_CLAIM_VERIFICATION_ENABLED", "false").lower() in _TRUE_VALUES
+
+# #10602: Self-improvement write path — pure plumbing, no extra LLM calls until outcomes exist.
+# Default ON.  Set AUTOBOT_SELF_IMPROVEMENT_ENABLED=false to disable.
+SELF_IMPROVEMENT_ENABLED: bool = os.environ.get("AUTOBOT_SELF_IMPROVEMENT_ENABLED", "true").lower() in _TRUE_VALUES
+
+# #11015: Planning context (learned-strategy + similar-trajectory retrieval) at plan time.
+# Kill-switch for the always-on ChromaDB/Redis I/O added by #10580/#10581 — set
+# AUTOBOT_PLANNING_CONTEXT_ENABLED=false to disable the retrieval entirely (e.g. when
+# the vector store is cold/slow). Default ON to preserve the shipped behaviour.
+PLANNING_CONTEXT_ENABLED: bool = os.environ.get("AUTOBOT_PLANNING_CONTEXT_ENABLED", "true").lower() in _TRUE_VALUES
+
+# #10602: Subagent reflection pass — adds LLM score + optional revision per task.
+# Default OFF; set AUTOBOT_SUBAGENT_REFLECTION_ENABLED=true to opt in.
+SUBAGENT_REFLECTION_ENABLED: bool = (
+    os.environ.get("AUTOBOT_SUBAGENT_REFLECTION_ENABLED", "false").lower() in _TRUE_VALUES
+)
 
 
 class VMConfig(BaseSettings):
@@ -186,6 +219,46 @@ class LLMConfig(BaseSettings):
 
     # Default provider for all models (can be overridden per-model)
     provider: str = Field(default="ollama", alias="AUTOBOT_LLM_PROVIDER")
+
+    # LLM cost-efficiency toggles (#10597)
+    # Prompt caching is a pure cost win → default on.  Chat tiered routing
+    # downgrades models by complexity (precision-sensitive) → default off until
+    # validated via knowledge/rag_benchmarks.py.
+    llm_prompt_cache_default: bool = Field(default=True, alias="AUTOBOT_LLM_PROMPT_CACHE_DEFAULT")
+    chat_tiered_routing: bool = Field(default=False, alias="AUTOBOT_CHAT_TIERED_ROUTING")
+    # Response cache for chat(): only near-deterministic, safely-reusable
+    # requests are cached (low temperature, no tools/structured-output/thinking).
+    # Above this temperature responses must vary, so they are never cached.
+    llm_response_cache: bool = Field(default=True, alias="AUTOBOT_LLM_RESPONSE_CACHE")
+    llm_cache_max_temperature: float = Field(default=0.3, alias="AUTOBOT_LLM_CACHE_MAX_TEMPERATURE")
+    # Prepend the [Source N] citation instruction to the KB context block (#10652,
+    # #10736). When True the prompt includes "Answer … cite as [Source N]"; when
+    # False the [Source N] labels still render but the instruction is omitted.
+    # Renamed from chat_grounding_enabled (AUTOBOT_CHAT_GROUNDING) — old env var
+    # still accepted for backward-compat via AliasChoices.
+    chat_citation_instruction_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "AUTOBOT_CHAT_CITATION_INSTRUCTION",
+            "AUTOBOT_CHAT_GROUNDING",
+        ),
+    )
+    # Inline AgentResponseJudge on chat replies (#10599, §3.3).
+    # OFF by default — each judge call adds one LLM round-trip.
+    # Enable with AUTOBOT_CHAT_INLINE_JUDGE=true.
+    chat_inline_judge_enabled: bool = Field(default=False, alias="AUTOBOT_CHAT_INLINE_JUDGE")
+    # Minimum judge overall_score to accept a response without one regeneration
+    # attempt.  Only used when chat_inline_judge_enabled=True.
+    chat_inline_judge_threshold: float = Field(default=0.6, alias="AUTOBOT_CHAT_INLINE_JUDGE_THRESHOLD")
+
+    # Knowledge-ingestion cognifier batching (#10598). When True, extraction
+    # cognifiers pack multiple chunks into ONE structured LLM call (index-keyed)
+    # instead of one call per chunk — a pure token/round-trip win, with an
+    # automatic per-chunk fallback that keeps correctness. Default on.
+    cognifier_multichunk_batching: bool = Field(default=True, alias="AUTOBOT_COGNIFIER_MULTICHUNK_BATCHING")
+    # Per-chunk character cap when packing chunks into a batched cognifier prompt,
+    # so one oversized chunk can't blow the context window (0 = no truncation).
+    cognifier_batch_max_chunk_chars: int = Field(default=2000, alias="AUTOBOT_COGNIFIER_BATCH_MAX_CHUNK_CHARS")
 
     # Provider-specific endpoints (each provider can have its own URL)
     ollama_endpoint: str = Field(default="http://127.0.0.1:11434", alias="AUTOBOT_OLLAMA_ENDPOINT")
@@ -514,6 +587,15 @@ class TimeoutConfig(BaseSettings):
     # 60s was the old in-memory eviction window; Redis persistence needs a
     # realistic poll window — default 3600s (1 hour), overridable via env.
     a2a_task_ttl: float = Field(default=3600.0, alias="AUTOBOT_A2A_TASK_TTL_SECONDS")
+
+    # ------------------------------------------------------------------ #
+    # Elevation session (seconds)                                          #
+    # ------------------------------------------------------------------ #
+
+    # How long an approved elevation session remains valid before the user
+    # must re-authenticate.  Default 900 s (15 min) matches the UI label.
+    # Override with AUTOBOT_ELEVATION_SESSION_TTL. (#10723)
+    elevation_session_ttl: int = Field(default=900, alias="AUTOBOT_ELEVATION_SESSION_TTL")
 
     # ------------------------------------------------------------------ #
     # Skill / code validation (seconds)                                    #
@@ -1247,7 +1329,8 @@ class MiscConfig(BaseSettings):
 
     anthropic_api_base_url: str = Field(default="", alias="ANTHROPIC_API_BASE_URL")
     api_key: str = Field(default="", alias="API_KEY")
-    ast_cache_max_size: int = Field(default=0, alias="AST_CACHE_MAX_SIZE")
+    # #11681: restore pre-#7437 default (1000) — 0 silently disabled the AST cache
+    ast_cache_max_size: int = Field(default=1000, alias="AST_CACHE_MAX_SIZE")
     audit_log_file: str = Field(default="/opt/autobot/logs/audit.log", alias="AUTOBOT_AUDIT_LOG_FILE")
     autoresearch_docker_cpus: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_CPUS")
     autoresearch_data_dir: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DATA_DIR")
@@ -1263,6 +1346,16 @@ class MiscConfig(BaseSettings):
     autoresearch_staged_eval_threshold: float = Field(default=0.0, alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_THRESHOLD")
     autoresearch_timeout: int = Field(default=0, alias="AUTOBOT_AUTORESEARCH_TIMEOUT")
     ai_stack_enabled: bool = Field(default=True, alias="AUTOBOT_AI_STACK_ENABLED")
+    allow_unapproved_sudo: bool = Field(
+        default=False,
+        alias="AUTOBOT_ALLOW_UNAPPROVED_SUDO",
+        description=(
+            "Allow direct sudo fallback in elevation_wrapper when no GUI elevation client is "
+            "configured.  Safe default is False (block).  Set to true only in headless/CI "
+            "environments with a NOPASSWD service account.  Never set in production/multi-user "
+            "deployments — configure an elevation_client instead.  Issue #10799."
+        ),
+    )
     cache_enabled: bool = Field(default=False, alias="AUTOBOT_CACHE_ENABLED")
     cache_size: int = Field(default=0, alias="AUTOBOT_CACHE_SIZE")
     cache_l1_size: int = Field(
@@ -1275,7 +1368,11 @@ class MiscConfig(BaseSettings):
         alias="AUTOBOT_CACHE_L2_TTL",
         description="L2 Redis LLM response cache TTL in seconds",
     )
+    celery_dead_letter_max: str = Field(default="", alias="AUTOBOT_CELERY_DEAD_LETTER_MAX")
+    celery_dedup_ttl: str = Field(default="", alias="AUTOBOT_CELERY_DEDUP_TTL")
+    celery_max_retries: str = Field(default="", alias="AUTOBOT_CELERY_MAX_RETRIES")
     celery_result_expires: str = Field(default="", alias="AUTOBOT_CELERY_RESULT_EXPIRES")
+    celery_retry_backoff_max: str = Field(default="", alias="AUTOBOT_CELERY_RETRY_BACKOFF_MAX")
     celery_visibility_timeout: int = Field(default=0, alias="AUTOBOT_CELERY_VISIBILITY_TIMEOUT")
     chats_directory: str = Field(default="", alias="AUTOBOT_CHATS_DIRECTORY")
     chat_history_file: str = Field(default="", alias="AUTOBOT_CHAT_HISTORY_FILE")
@@ -1316,7 +1413,6 @@ class MiscConfig(BaseSettings):
     desktop_depth: str = Field(default="", alias="AUTOBOT_DESKTOP_DEPTH")
     desktop_max_sessions: str = Field(default="", alias="AUTOBOT_DESKTOP_MAX_SESSIONS")
     desktop_resolution: str = Field(default="", alias="AUTOBOT_DESKTOP_RESOLUTION")
-    dev_auth_bypass: str = Field(default="", alias="AUTOBOT_DEV_AUTH_BYPASS")
     dev_mode: str = Field(default="", alias="AUTOBOT_DEV_MODE")
     encryption_key: str = Field(default="", alias="AUTOBOT_ENCRYPTION_KEY")
     env: str = Field(default="", alias="AUTOBOT_ENV")
@@ -1482,7 +1578,8 @@ class MiscConfig(BaseSettings):
     codebase_parallel_mode: str = Field(default="", alias="CODEBASE_PARALLEL_MODE")
     codebase_scan_parallel_files: str = Field(default="", alias="CODEBASE_SCAN_PARALLEL_FILES")
     config: str = Field(default="", alias="CONFIG")
-    content_cache_max_size: int = Field(default=0, alias="CONTENT_CACHE_MAX_SIZE")
+    # #11681: restore pre-#7437 default (500) — 0 silently disabled the content cache
+    content_cache_max_size: int = Field(default=500, alias="CONTENT_CACHE_MAX_SIZE")
     context_enabled: bool = Field(default=False, alias="CONTEXT_ENABLED")
     context_model: str = Field(default="", alias="CONTEXT_MODEL")
     context_summary_ttl_days: str = Field(default="", alias="CONTEXT_SUMMARY_TTL_DAYS")
@@ -1496,7 +1593,8 @@ class MiscConfig(BaseSettings):
     display_height: str = Field(default="", alias="DISPLAY_HEIGHT")
     display_width: str = Field(default="", alias="DISPLAY_WIDTH")
     encryption_key: str = Field(default="", alias="ENCRYPTION_KEY")  # type: ignore[no-redef]  # GH#7105
-    file_cache_ttl_seconds: int = Field(default=0, alias="FILE_CACHE_TTL_SECONDS")
+    # #11681: restore pre-#7437 default (300 s) — 0 made every file-list entry expire instantly
+    file_cache_ttl_seconds: int = Field(default=300, alias="FILE_CACHE_TTL_SECONDS")
     gateway_enable_sandbox: str = Field(default="", alias="GATEWAY_ENABLE_SANDBOX")
     gateway_heartbeat_interval: str = Field(default="", alias="GATEWAY_HEARTBEAT_INTERVAL")
     gateway_max_message_size: int = Field(default=0, alias="GATEWAY_MAX_MESSAGE_SIZE")
@@ -1528,11 +1626,14 @@ class MiscConfig(BaseSettings):
     mcp_worker_log_level: str = Field(default="", alias="MCP_WORKER_LOG_LEVEL")
     mcp_worker_mem_mb: int = Field(default=0, alias="MCP_WORKER_MEM_MB")
     mcp_worker_nofile: str = Field(default="", alias="MCP_WORKER_NOFILE")
+    mistral_api_base_url: str = Field(default="", alias="MISTRAL_API_BASE_URL")
+    mistral_api_key: str = Field(default="", alias="MISTRAL_API_KEY")
+    mistral_default_model: str = Field(default="", alias="MISTRAL_DEFAULT_MODEL")
     network_subnet: str = Field(default="", alias="NETWORK_SUBNET")
     nous_api_base_url: str = Field(default="", alias="NOUS_API_BASE_URL")
     nous_api_key: str = Field(default="", alias="NOUS_API_KEY")
     nous_default_model: str = Field(default="", alias="NOUS_DEFAULT_MODEL")
-    ollama_host: str = Field(default="", alias="OLLAMA_HOST")
+    ollama_host: str = Field(default="127.0.0.1", alias="OLLAMA_HOST")
     ollama_url: str = Field(default="", alias="OLLAMA_URL")  # type: ignore[no-redef]  # GH#7105
     openai_api_base_url: str = Field(default="", alias="OPENAI_API_BASE_URL")
     openrouter_api_base_url: str = Field(default="", alias="OPENROUTER_API_BASE_URL")
@@ -1556,6 +1657,7 @@ class MiscConfig(BaseSettings):
     shell: str = Field(default="", alias="SHELL")
     slack_approvals_channel: str = Field(default="", alias="SLACK_APPROVALS_CHANNEL")
     slack_bot_token: str = Field(default="", alias="SLACK_BOT_TOKEN")
+    discord_bot_token: str = Field(default="", alias="DISCORD_BOT_TOKEN")
     slack_notifications_channel: str = Field(default="", alias="SLACK_NOTIFICATIONS_CHANNEL")
     slm_auth_token: str = Field(default="", alias="SLM_AUTH_TOKEN")
     slm_url: str = Field(default="", alias="SLM_URL")
@@ -1597,7 +1699,6 @@ class FeatureConfig(BaseSettings):
     semantic_chunking: bool = Field(default=True, alias="AUTOBOT_SEMANTIC_CHUNKING")
     debug_mode: bool = Field(default=False, alias="AUTOBOT_DEBUG_MODE")
     hot_reload: bool = Field(default=True, alias="AUTOBOT_HOT_RELOAD")
-    single_user_mode: bool = Field(default=True, alias="AUTOBOT_SINGLE_USER_MODE")
     permission_system_v2: bool = Field(default=False, alias="AUTOBOT_PERMISSION_SYSTEM_V2")
 
     # Subsystem feature flags — issue #3017
@@ -1623,6 +1724,107 @@ class FeatureConfig(BaseSettings):
     training: bool = Field(default=False, alias="AUTOBOT_FEATURE_TRAINING_TR")
     graph_rag: bool = Field(default=True, alias="AUTOBOT_FEATURE_GRAPH_RAG")
     mcp: bool = Field(default=True, alias="AUTOBOT_FEATURE_MCP")
+
+
+class CostModelConfig(BaseSettings):
+    """Operator-supplied monthly cost estimates for hardware components.
+
+    Issue #10720: Replaces hardcoded literals in business_intelligence_dashboard.py
+    so operators can supply deployment-specific costs without editing source code.
+
+    All fields represent USD/month and are documented as ESTIMATES; the dashboard
+    renders them with an "estimated" label when the defaults are in use.
+
+    Override via environment variables, e.g.:
+        AUTOBOT_COST_CPU_MONTHLY_USD=75
+        AUTOBOT_COST_GPU_MONTHLY_USD=120
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # Per-component monthly cost estimates (USD).
+    # Defaults reflect a single-host deployment with a discrete GPU;
+    # operators MUST override these to reflect actual electricity + depreciation.
+    cpu_monthly_usd: float = Field(
+        default=50.0,
+        alias="AUTOBOT_COST_CPU_MONTHLY_USD",
+        description="Estimated monthly cost apportioned to CPU (USD). Operator-supplied estimate.",
+    )
+    gpu_monthly_usd: float = Field(
+        default=80.0,
+        alias="AUTOBOT_COST_GPU_MONTHLY_USD",
+        description="Estimated monthly cost apportioned to GPU incl. higher power draw (USD). Operator estimate.",
+    )
+    npu_monthly_usd: float = Field(
+        default=30.0,
+        alias="AUTOBOT_COST_NPU_MONTHLY_USD",
+        description="Estimated monthly cost apportioned to NPU (USD). Operator-supplied estimate.",
+    )
+    memory_monthly_usd: float = Field(
+        default=20.0,
+        alias="AUTOBOT_COST_MEMORY_MONTHLY_USD",
+        description="Estimated monthly cost apportioned to RAM (USD). Operator-supplied estimate.",
+    )
+    storage_monthly_usd: float = Field(
+        default=25.0,
+        alias="AUTOBOT_COST_STORAGE_MONTHLY_USD",
+        description="Estimated monthly cost apportioned to NVMe storage (USD). Operator-supplied estimate.",
+    )
+    network_monthly_usd: float = Field(
+        default=80.0,
+        alias="AUTOBOT_COST_NETWORK_MONTHLY_USD",
+        description="Estimated monthly internet cost (USD). Operator-supplied estimate.",
+    )
+
+    # Baseline utilization efficiency targets (percent) per component.
+    cpu_baseline_efficiency: float = Field(
+        default=70.0,
+        alias="AUTOBOT_COST_CPU_BASELINE_EFFICIENCY",
+        description="Target CPU utilisation percent for efficiency scoring.",
+    )
+    gpu_baseline_efficiency: float = Field(
+        default=60.0,
+        alias="AUTOBOT_COST_GPU_BASELINE_EFFICIENCY",
+        description="Target GPU utilisation percent for efficiency scoring.",
+    )
+    npu_baseline_efficiency: float = Field(
+        default=50.0,
+        alias="AUTOBOT_COST_NPU_BASELINE_EFFICIENCY",
+        description="Target NPU utilisation percent for efficiency scoring.",
+    )
+    memory_baseline_efficiency: float = Field(
+        default=80.0,
+        alias="AUTOBOT_COST_MEMORY_BASELINE_EFFICIENCY",
+        description="Target memory utilisation percent for efficiency scoring.",
+    )
+    storage_baseline_efficiency: float = Field(
+        default=60.0,
+        alias="AUTOBOT_COST_STORAGE_BASELINE_EFFICIENCY",
+        description="Target storage utilisation percent for efficiency scoring.",
+    )
+    network_baseline_efficiency: float = Field(
+        default=40.0,
+        alias="AUTOBOT_COST_NETWORK_BASELINE_EFFICIENCY",
+        description="Target network utilisation percent for efficiency scoring.",
+    )
+
+    # Issue #10778: link capacity used to convert bytes/s → utilisation %.
+    # Set to 0 (default) to suppress percentage conversion and expose raw bytes/s
+    # as an honest "unavailable" signal rather than fabricating a number.
+    # Example: 1 Gbit/s Ethernet = 1000; 100 Mbit/s = 100.
+    network_link_capacity_mbps: float = Field(
+        default=0.0,
+        alias="AUTOBOT_COST_NETWORK_LINK_CAPACITY_MBPS",
+        description=(
+            "Network link capacity in Mbit/s used to derive utilisation % from psutil "
+            "bytes/s counters. Set to 0 (default) when capacity is unknown; the dashboard "
+            "will report bytes/s and mark the % as unavailable rather than fabricating a value."
+        ),
+    )
 
 
 class TelemetryConfig(BaseSettings):
@@ -1709,6 +1911,7 @@ class AutoBotConfig(BaseSettings):
     )  # Issue #3397; alias avoids collision with system PATH env var
     misc: MiscConfig = Field(default_factory=MiscConfig)  # GH#7437: Unmapped env vars
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)  # Issue #9035
+    cost_model: CostModelConfig = Field(default_factory=CostModelConfig)  # Issue #10720
 
     # Top-level settings
     deployment_mode: str = Field(default="distributed", alias="AUTOBOT_DEPLOYMENT_MODE")

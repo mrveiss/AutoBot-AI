@@ -175,9 +175,11 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, reactive, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder';
 
 const { t } = useI18n();
+const { confirm } = useConfirmDialog();
 
 const props = defineProps<{ nodes: WorkflowNode[]; selectedNodeId: string | null }>();
 const emit = defineEmits<{
@@ -332,8 +334,8 @@ function deleteNode(id: string) {
 
 function selectNode(id: string) { emit('node-selected', id); }
 
-function clearCanvas() {
-  if (props.nodes.length && confirm(t('workflow.canvas.clearConfirm'))) {
+async function clearCanvas() {
+  if (props.nodes.length && (await confirm({ title: t('common.confirm'), message: t('workflow.canvas.clearConfirm') }))) {
     props.nodes.forEach(n => emit('node-removed', n.id));
     emit('node-selected', null);
   }

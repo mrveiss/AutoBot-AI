@@ -198,12 +198,10 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { createLogger } from '@/utils/debugUtils'
 import { useKnowledgeEntityGraph } from '@/composables/knowledge/useKnowledgeEntityGraph'
 import EntityExtractor from './EntityExtractor.vue'
 import GraphRAGQuery from './GraphRAGQuery.vue'
 
-const logger = createLogger('EntityGraphManager')
 const { t } = useI18n()
 const router = useRouter()
 

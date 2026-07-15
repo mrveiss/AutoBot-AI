@@ -7,10 +7,10 @@ Agent API with basic orchestrator functionality and AI Stack multi-agent integra
 
 This module provides:
 - Basic agent operations (goal execution, pause/resume, command approval)
-- Enhanced AI Stack capabilities (multi-agent coordination, research tasks)
+- AI Stack capabilities (multi-agent coordination, research tasks)
 - Development analysis and optimization features
 
-Consolidated from agent.py and agent_enhanced.py per Issue #708.
+Consolidated from agent.py and the AI Stack agent module per Issue #708.
 """
 
 import asyncio
@@ -34,8 +34,7 @@ from api.schemas_agent import (
     AgentStatusData,
     CommandApprovalPayload,
     DevelopmentAnalysisData,
-    EnhancedGoalData,
-    EnhancedGoalPayload,
+    GoalData,
     GoalPayload,
     MultiAgentCoordinationData,
     MultiAgentTaskPayload,
@@ -61,7 +60,7 @@ logger = get_logger(__name__)
 prometheus_metrics = get_metrics_manager()
 
 # ====================================================================
-# Constants for Enhanced Agent Operations (Issue #708 consolidation)
+# Constants for AI Stack Agent Operations (Issue #708 consolidation)
 # ====================================================================
 
 # Performance optimization: O(1) lookup for coordination keywords (Issue #326)
@@ -886,7 +885,7 @@ async def execute_command(
 
 
 # ====================================================================
-# Enhanced Agent Functions with AI Stack Integration (Issue #708 consolidation)
+# AI Stack Agent Functions (Issue #708 consolidation)
 # ====================================================================
 
 
@@ -968,7 +967,7 @@ async def _enhance_context_with_kb(payload, knowledge_base) -> str | None:
         knowledge_base: Knowledge base instance or None
 
     Returns:
-        Enhanced context string or original context
+        Augmented context string or original context
     """
     if not (payload.use_knowledge_base and knowledge_base):
         return payload.context
@@ -996,24 +995,24 @@ def _determine_coordination_mode(payload, selected_agents: list) -> str:
 
 
 # ====================================================================
-# Enhanced Agent Endpoints (Issue #708 consolidation)
+# Multi-Agent Orchestration Endpoints (Issue #708 consolidation)
 # ====================================================================
 
 
-@router.post("/goal/enhanced", response_model=DataResponse[EnhancedGoalData])
+@router.post("/goal/orchestrated", response_model=DataResponse[GoalData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="execute_enhanced_goal",
+    operation="execute_orchestrated_goal",
     error_code_prefix="AGENT",
 )
-async def execute_enhanced_goal(
-    payload: EnhancedGoalPayload,
+async def execute_orchestrated_goal(
+    payload: GoalPayload,
     request: Request,
     config=Depends(get_config),
     knowledge_base=Depends(get_knowledge_base),
     current_user: dict = Depends(get_current_user),
 ):
-    """Execute goal using enhanced AI Stack multi-agent coordination.
+    """Execute goal via multi-agent orchestration with AI Stack coordination.
 
     Issue #398: refactored.
     Issue #744: Requires authenticated user.
@@ -1030,7 +1029,7 @@ async def execute_enhanced_goal(
 
     # Issue #398: Use extracted helpers
     selected_agents = await _select_agents_for_goal(ai_client, payload, available_agents)
-    enhanced_context = await _enhance_context_with_kb(payload, knowledge_base)
+    kb_context = await _enhance_context_with_kb(payload, knowledge_base)
     coordination_mode = _determine_coordination_mode(payload, selected_agents)
 
     execution_start = time.monotonic()
@@ -1052,14 +1051,14 @@ async def execute_enhanced_goal(
                 "execution_time": execution_time,
                 "priority": payload.priority,
                 "result": result,
-                "enhanced_context_used": enhanced_context is not None,
+                "context_used": kb_context is not None,
                 "knowledge_base_integrated": payload.use_knowledge_base,
                 "timestamp": utc_timestamp(),
             }
         )
 
     except AIStackError as e:
-        await handle_ai_stack_error(e, "Enhanced goal execution")
+        await handle_ai_stack_error(e, "Orchestrated goal execution")
 
 
 @router.post("/multi-agent/coordinate", response_model=DataResponse[MultiAgentCoordinationData])
@@ -1150,20 +1149,20 @@ async def comprehensive_research_task(
             research_agents.append("npu_code_search")
 
         # Add knowledge base context
-        enhanced_query = request_data.research_query
+        research_query = request_data.research_query
         if knowledge_base:
             try:
                 kb_results = await knowledge_base.search(query=request_data.research_query, top_k=3)
                 if kb_results:
                     kb_context = "\n".join([f"- {item.get('content', '')[:150]}..." for item in kb_results])
-                    enhanced_query = f"{request_data.research_query}\n\nExisting" f"knowledge:\n{kb_context}"
+                    research_query = f"{request_data.research_query}\n\nExisting" f"knowledge:\n{kb_context}"
 
             except Exception as e:
                 logger.warning("KB context failed: %s", e)
 
         # Execute research using multiple agents
         research_result = await ai_client.multi_agent_query(
-            query=enhanced_query, agents=research_agents, coordination_mode="sequential"
+            query=research_query, agents=research_agents, coordination_mode="sequential"
         )
 
         return create_success_response(
@@ -1221,52 +1220,90 @@ async def analyze_development_task(
         await handle_ai_stack_error(e, "Development analysis")
 
 
+async def _ai_stack_available_agents() -> List[dict]:
+    """Return AI Stack agents as capability-info dicts; empty list when unreachable.
+
+    #6828: AI Stack unavailability degrades to the local registry instead of a
+    503 (same precedent as the #10511 PG fallback in api/agent_org.py).
+    """
+    try:
+        ai_client = await get_ai_stack_client()
+        agents_info = await ai_client.list_available_agents()
+    except AIStackError as e:
+        logger.warning("AI Stack unavailable for /agents/available — serving local registry only: %s", e)
+        return []
+
+    agents_with_caps = []
+    for agent in agents_info.get("agents", []):
+        # Issue #281: capabilities from module constant, with fallback for unknown agents
+        agent_info = AGENT_CAPABILITIES.get(
+            agent,
+            {
+                "description": f"AI agent: {agent}",
+                "capabilities": ["general_processing"],
+            },
+        ).copy()  # Copy to avoid modifying the constant
+        agent_info["name"] = agent
+        agent_info["status"] = "available"
+        agents_with_caps.append(agent_info)
+    return agents_with_caps
+
+
+def _local_registry_agents() -> List[dict]:
+    """Agents from the canonical in-process AgentCapabilityRegistry (#6828).
+
+    Exposes the orchestration profiles (capabilities + specializations) through
+    the same response shape as AI Stack agents so /agents/available is the one
+    unified "find an agent that can do X" entry point.
+    """
+    from orchestration.agent_registry import get_default_capability_registry
+
+    agents = []
+    for profile in get_default_capability_registry().get_all().values():
+        capabilities = sorted({c.value for c in profile.capabilities} | set(profile.specializations))
+        agents.append(
+            {
+                "name": profile.agent_id,
+                "description": f"Local orchestration agent ({profile.agent_type})",
+                "capabilities": capabilities,
+                "status": profile.availability_status,
+            }
+        )
+    return agents
+
+
 @router.get("/agents/available", response_model=DataResponse[AgentAvailableData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_available_agents",
     error_code_prefix="AGENT",
 )
-async def list_available_agents():
+async def list_available_agents(capability: str | None = None):
     """
-    List all available AI Stack agents with their capabilities.
+    List all available agents (AI Stack + local orchestration registry).
 
     Issue #281: Refactored to use module-level AGENT_CAPABILITIES constant.
     Issue #987: Removed auth requirement — read-only status, accessible to SLM admin.
+    Issue #6828: unified entry point — merges AI Stack agents with the canonical
+    AgentCapabilityRegistry profiles; optional ``capability`` query filters to
+    agents that can do X (case-insensitive substring on capability names).
     """
-    try:
-        ai_client = await get_ai_stack_client()
-        agents_info = await ai_client.list_available_agents()
+    agents_with_caps = await _ai_stack_available_agents()
+    known = {a["name"] for a in agents_with_caps}
+    agents_with_caps.extend(a for a in _local_registry_agents() if a["name"] not in known)
 
-        # Issue #281: Use module-level constant for agent capabilities
-        # Combine available agents with capability info
-        available_list = agents_info.get("agents", [])
-        enhanced_list = []
+    if capability:
+        needle = capability.lower()
+        agents_with_caps = [a for a in agents_with_caps if any(needle in c.lower() for c in a["capabilities"])]
 
-        for agent in available_list:
-            # Get capabilities from module constant, with fallback for unknown agents
-            agent_info = AGENT_CAPABILITIES.get(
-                agent,
-                {
-                    "description": f"AI agent: {agent}",
-                    "capabilities": ["general_processing"],
-                },
-            ).copy()  # Copy to avoid modifying the constant
-            agent_info["name"] = agent
-            agent_info["status"] = "available"
-            enhanced_list.append(agent_info)
-
-        return create_success_response(
-            {
-                "total_agents": len(enhanced_list),
-                "agents": enhanced_list,
-                "coordination_modes": ["parallel", "sequential", "intelligent"],
-                "multi_agent_support": True,
-            }
-        )
-
-    except AIStackError as e:
-        await handle_ai_stack_error(e, "List available agents")
+    return create_success_response(
+        {
+            "total_agents": len(agents_with_caps),
+            "agents": agents_with_caps,
+            "coordination_modes": ["parallel", "sequential", "intelligent"],
+            "multi_agent_support": True,
+        }
+    )
 
 
 @router.get("/agents/status", response_model=DataResponse[AgentStatusData])
@@ -1305,14 +1342,14 @@ async def get_agents_status():
         await handle_ai_stack_error(e, "Agent status check")
 
 
-@router.get("/health/enhanced", response_model=AgentHealthResponse)
+@router.get("/health/detailed", response_model=AgentHealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="enhanced_agent_health",
+    operation="agent_health",
     error_code_prefix="AGENT",
 )
-async def enhanced_agent_health():
-    """Enhanced health check for agent services."""
+async def agent_health():
+    """Detailed health check for agent services."""
     try:
         ai_client = await get_ai_stack_client()
         health_status = await ai_client.health_check()
@@ -1321,7 +1358,7 @@ async def enhanced_agent_health():
             "status": health_status["status"],
             "ai_stack_available": health_status["status"] == "healthy",
             "multi_agent_coordination": health_status["status"] == "healthy",
-            "enhanced_capabilities": health_status["status"] == "healthy",
+            "advanced_capabilities": health_status["status"] == "healthy",
             "timestamp": utc_timestamp(),
         }
 
@@ -1330,7 +1367,7 @@ async def enhanced_agent_health():
             "status": "degraded",
             "ai_stack_available": False,
             "multi_agent_coordination": False,
-            "enhanced_capabilities": False,
+            "advanced_capabilities": False,
             "error": "Internal server error",
             "timestamp": utc_timestamp(),
         }

@@ -82,7 +82,7 @@ def test_can_access_policy_unit():
     Cases required by #9968:
     (a) owner == caller → allow
     (b) different real users → deny
-    (c) DEFAULT_USER row + DEFAULT_USER caller (single_user mode) → allow
+    (c) DEFAULT_USER row + DEFAULT_USER caller → allow
     (d) DEFAULT_USER row + real user → DENY  (was the IDOR)
     (e) unowned / empty user_id → deny
     """
@@ -90,7 +90,7 @@ def test_can_access_policy_unit():
     assert can_access({"user_id": "alice"}, "alice") is True
     # (b) different real users → deny
     assert can_access({"user_id": "alice"}, "bob") is False
-    # (c) single_user: DEFAULT_USER caller accesses DEFAULT_USER row → allow
+    # (c) DEFAULT_USER caller accesses DEFAULT_USER row → allow
     assert can_access({"user_id": DEFAULT_USER}, DEFAULT_USER) is True
     # (d) IDOR fix: real user must NOT access DEFAULT_USER-owned row
     assert can_access({"user_id": DEFAULT_USER}, "bob") is False
@@ -182,9 +182,9 @@ async def test_legacy_default_rows_not_accessible_to_other_users(client):
     """DEFAULT_USER rows are NOT shared across real users (#9968 IDOR fix).
 
     Pre-auth rows (stamped DEFAULT_USER) are accessible only by the
-    DEFAULT_USER caller (single_user mode).  Real authenticated users are
-    denied — the old "any caller can read default rows" behaviour was the
-    IDOR.  Cross-user reassignment of legacy rows is tracked separately.
+    DEFAULT_USER caller.  Real authenticated users are denied — the old
+    "any caller can read default rows" behaviour was the IDOR.  Cross-user
+    reassignment of legacy rows is tracked separately.
     """
     r = await client.post(
         "/api/transcriber/projects", json={"name": "legacy", "description": ""}
@@ -193,6 +193,6 @@ async def test_legacy_default_rows_not_accessible_to_other_users(client):
     # Real user bob is DENIED access to a DEFAULT_USER-owned row
     r = await client.get(f"/api/transcriber/projects/{pid}", headers={USER_HEADER: "bob"})
     assert r.status_code == 404, "IDOR (#9968): real user should not access DEFAULT_USER rows"
-    # DEFAULT_USER caller (single_user) can still access its own rows
+    # DEFAULT_USER caller can still access its own rows
     r = await client.get(f"/api/transcriber/projects/{pid}", headers={USER_HEADER: DEFAULT_USER})
     assert r.status_code == 200

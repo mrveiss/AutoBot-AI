@@ -75,7 +75,14 @@
                 <i :class="source.source_type === 'github' ? 'github' : 'folder'"></i>
               </div>
               <div class="source-details">
-                <div class="source-name">{{ source.name }}</div>
+                <div class="source-name">
+                  <span class="source-name-text">{{ source.name }}</span>
+                  <!-- GH#11129: LLC project label per source row -->
+                  <span
+                    v-if="projectLabels?.[source.id]"
+                    class="source-project-label"
+                  >{{ projectLabels![source.id] }}</span>
+                </div>
                 <div class="source-meta">
                   <span v-if="source.repo" class="source-repo">{{ source.repo }}</span>
                   <span v-else-if="source.clone_path" class="source-path">{{ source.clone_path }}</span>
@@ -183,6 +190,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
@@ -193,6 +201,7 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SourceManager')
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 // ---- Types ----------------------------------------------------------------
 
@@ -209,11 +218,13 @@ interface RunningTask {
 interface Props {
   selectedSourceId: string | null
   visible: boolean
+  /** GH#11129: map of source_id → LLC project name for grouping labels */
+  projectLabels?: Record<string, string>
 }
 
 const props = defineProps<Props>()
 
-const emit = defineEmits<{
+defineEmits<{
   (e: 'select-source', source: CodeSource): void
   (e: 'open-add-source'): void
   (e: 'edit-source', source: CodeSource): void
@@ -331,7 +342,7 @@ async function syncSource(source: CodeSource) {
 }
 
 async function deleteSource(source: CodeSource) {
-  if (!confirm(t('analytics.sources.confirmDelete', { name: source.name }))) return
+  if (!(await confirm({ title: t('common.confirm'), message: t('analytics.sources.confirmDelete', { name: source.name }) }))) return
   deletingId.value = source.id
   try {
     await apiDeleteSource(source.id)
@@ -631,9 +642,27 @@ defineExpose({ loadSources })
   font-weight: var(--font-semibold);
   color: var(--text-primary);
   font-size: var(--text-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.source-name-text {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* GH#11129: per-row LLC project label in the source list */
+.source-project-label {
+  flex-shrink: 0;
+  font-size: 0.7em;
+  font-weight: 500;
+  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  background: var(--bg-hover);
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
 }
 
 .source-meta {

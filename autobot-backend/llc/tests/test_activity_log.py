@@ -262,6 +262,37 @@ class TestRecordUnit:
         assert payload_arg["action"] == "work_item.created"
         assert payload_arg["company_id"] == company_id
 
+    @pytest.mark.asyncio
+    async def test_publish_emits_live_event(self) -> None:
+        """#11386: activity rows are fanned out to /ws/live via LiveEventManager
+        on the valid channel company:{id} so the CompanyDashboard feed updates."""
+        svc = _make_service()
+        company_id = _uuid()
+        entry = LLCActivityLog(
+            id=uuid.uuid4(),
+            company_id=uuid.UUID(company_id),
+            actor_type="agent",
+            actor_agent_id=uuid.uuid4(),
+            entity_type="work_item",
+            entity_id=uuid.uuid4(),
+            action="work_item.created",
+            after_state={},
+            occurred_at=datetime.now(tz=timezone.utc),
+        )
+        mock_pub = AsyncMock()
+        with (
+            patch("live_event_manager.publish_live_event", mock_pub),
+            patch(
+                "llc.services.activity_log.get_async_redis_client",
+                AsyncMock(return_value=AsyncMock(publish=AsyncMock())),
+            ),
+        ):
+            await svc._publish(company_id, entry)
+
+        mock_pub.assert_awaited_once()
+        assert mock_pub.call_args[0][0] == f"company:{company_id}"
+        assert mock_pub.call_args[0][1] == "llc:activity_created"
+
 
 # ---------------------------------------------------------------------------
 # Query unit tests (mocked execute)

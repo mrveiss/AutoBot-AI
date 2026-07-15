@@ -33,6 +33,11 @@ class SourceType(Enum):
     DOCUMENTATION = "documentation"
     API_RESPONSE = "api_response"
     FILE_CONTENT = "file_content"
+    YOUTUBE = "youtube"  # #10932 content reach
+    REDDIT = "reddit"  # #10932 content reach
+    WEB_PAGE = "web_page"  # #10932 content reach
+    SOCIAL = "social"  # #10932 content reach
+    FORUM = "forum"  # #11079: forum/discussion boards (e.g. Hacker News) — not Reddit-specific
 
 
 class SourceReliability(Enum):
@@ -41,6 +46,7 @@ class SourceReliability(Enum):
     VERIFIED = "verified"  # System state, tool output
     HIGH = "high"  # KB, official docs
     MEDIUM = "medium"  # Web search, API responses
+    COMMUNITY = "community"  # #11079: crowd-sourced (reddit/forum/social) — below MEDIUM, above LOW
     LOW = "low"  # User input, unverified sources
     UNKNOWN = "unknown"  # Cannot determine reliability
 
@@ -78,6 +84,11 @@ class Source:
             SourceType.DOCUMENTATION: "📖",
             SourceType.API_RESPONSE: "🔌",
             SourceType.FILE_CONTENT: "📄",
+            SourceType.YOUTUBE: "📺",
+            SourceType.REDDIT: "👽",
+            SourceType.WEB_PAGE: "🌐",
+            SourceType.SOCIAL: "💬",
+            SourceType.FORUM: "💬",
         }
 
         icon = source_icon.get(self.type, "📋")

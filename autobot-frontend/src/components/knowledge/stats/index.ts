@@ -5,10 +5,12 @@
 /**
  * Knowledge Stats Sub-Components
  *
- * Barrel exports for KnowledgeStats sub-components.
- * Extracted from KnowledgeStats.vue for better maintainability.
+ * Barrel exports for knowledge stats sub-components (stats panels).
+ * Extracted from the former KnowledgeStats.vue (#184); mounted into
+ * KnowledgeHealthAnalytics.vue (#11562).
  *
  * Issue #184: Split oversized Vue components
+ * Issue #11562: Wire in orphaned stats subpanels
  */
 
 export { default as VectorStatsSection } from './VectorStatsSection.vue'

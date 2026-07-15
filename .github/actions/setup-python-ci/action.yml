@@ -11,7 +11,7 @@
 # Usage:
 #   - uses: ./.github/actions/setup-python-ci
 #     with:
-#       python-version: '3.12'
+#       python-version: '3.14'
 #       requirements-file: 'requirements-ci.txt'
 #       extra-packages: 'pytest pytest-asyncio mypy'
 
@@ -20,9 +20,9 @@ description: 'Set up Python with pip caching, upgrade pip/setuptools/wheel, and 
 
 inputs:
   python-version:
-    description: 'Python version to install (e.g. "3.12")'
+    description: 'Python version to install (e.g. "3.14")'
     required: false
-    default: '3.12'
+    default: '3.14'
   requirements-file:
     description: 'Path to requirements file to install (relative to repo root). Empty to skip.'
     required: false

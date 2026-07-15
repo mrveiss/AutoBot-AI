@@ -71,6 +71,7 @@
 
     <!-- Add/Edit Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showAddModal"
       :title="editingEndpoint ? $t('featureFlags.enforcement.editOverride') : $t('featureFlags.enforcement.addEndpointOverride')"
       size="md"
@@ -127,6 +128,7 @@
 
     <!-- Remove Confirmation Modal -->
     <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
       v-model="showRemoveModal"
       :title="$t('featureFlags.enforcement.removeOverride')"
       size="sm"
@@ -158,7 +160,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, reactive } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { EnforcementMode } from '@/utils/FeatureFlagsApiClient';
-import BaseModal from '@/components/ui/BaseModal.vue';
+import { BaseModal } from '@autobot/ui'
 
 const { t } = useI18n();
 

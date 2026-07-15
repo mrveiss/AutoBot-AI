@@ -167,9 +167,7 @@ onUnmounted(() => {
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-          Clear All ({{ alertCounts.total }})
-        </button>
+          </svg>{{ $t('monitoring.alertsMonitor.clearAllValue0', { value0: alertCounts.total }) }}</button>
         <button
           @click="refresh"
           :disabled="isLoading"
@@ -223,9 +221,7 @@ onUnmounted(() => {
             ? 'bg-gray-900 text-white'
             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
         ]"
-      >
-        Active Alerts ({{ alertCounts.total }})
-      </button>
+      >{{ $t('monitoring.alertsMonitor.activeAlertsValue0', { value0: alertCounts.total }) }}</button>
       <button
         @click="activeTab = 'recommendations'"
         :class="[
@@ -234,9 +230,7 @@ onUnmounted(() => {
             ? 'bg-gray-900 text-white'
             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
         ]"
-      >
-        Recommendations ({{ recommendations?.length ?? 0 }})
-      </button>
+      >{{ $t('monitoring.alertsMonitor.recommendationsValue0', { value0: recommendations?.length ?? 0 }) }}</button>
     </div>
 
     <!-- Alerts Tab -->
@@ -249,7 +243,7 @@ onUnmounted(() => {
           class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
         >
           <option v-for="level in severityLevels" :key="level" :value="level">
-            {{ level === 'all' ? 'All Severities' : level.charAt(0).toUpperCase() + level.slice(1) }}
+            {{ level === 'all' ? $t('monitoring.alertsMonitor.allSeverities') : level.charAt(0).toUpperCase() + level.slice(1) }}
           </option>
         </select>
       </div>

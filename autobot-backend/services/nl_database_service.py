@@ -32,6 +32,7 @@ from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
+from llm_shared.types import LLMType
 
 logger = get_logger(__name__)
 
@@ -523,7 +524,7 @@ class NLDatabaseService:
             if self._llm is None:
                 self._llm = LLMService()
 
-            llm_response = await self._llm.chat([{"role": "user", "content": prompt}], llm_type="task")
+            llm_response = await self._llm.chat([{"role": "user", "content": prompt}], llm_type=LLMType.TASK)
             response = llm_response.content
             return _extract_sql_from_response(response)
         except Exception as exc:

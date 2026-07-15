@@ -21,17 +21,16 @@
       </div>
 
       <!-- Tab Bar -->
-      <div class="tab-bar" role="tablist">
+      <div ref="profileTablistRef" class="tab-bar" role="tablist">
         <button
           v-for="tab in tabs"
           :key="tab.key"
+          v-bind="tabAttrs(tab.key)"
           class="tab-btn"
           :class="{ active: activeTab === tab.key }"
-          role="tab"
-          :aria-selected="activeTab === tab.key"
-          :aria-controls="`panel-${tab.key}`"
           type="button"
           @click="activeTab = tab.key"
+          @keydown="handleTabKeydown"
         >
           <Icon :name="tab.icon" />
           {{ tab.label }}
@@ -40,7 +39,7 @@
 
       <div class="modal-body">
         <!-- General Tab -->
-        <div v-if="activeTab === 'general'" id="panel-general" role="tabpanel">
+        <div v-if="activeTab === 'general'" v-bind="panelAttrs('general')">
           <div class="profile-section">
             <h3>{{ $t('profile.accountInfo') }}</h3>
             <div class="info-grid">
@@ -125,7 +124,7 @@
         </div>
 
         <!-- Appearance & Voice Tab -->
-        <div v-if="activeTab === 'appearance'" id="panel-appearance" role="tabpanel">
+        <div v-if="activeTab === 'appearance'" v-bind="panelAttrs('appearance')">
           <div class="profile-section">
             <h3>{{ $t('profile.appearance') }}</h3>
             <PreferencesPanel />
@@ -162,12 +161,12 @@
         </div>
 
         <!-- Language Tab -->
-        <div v-if="activeTab === 'language'" id="panel-language" role="tabpanel">
+        <div v-if="activeTab === 'language'" v-bind="panelAttrs('language')">
           <LanguageSettingsPanel />
         </div>
 
         <!-- Security Tab -->
-        <div v-if="activeTab === 'security'" id="panel-security" role="tabpanel">
+        <div v-if="activeTab === 'security'" v-bind="panelAttrs('security')">
           <div class="profile-section">
             <h3>{{ $t('profile.changePassword') }}</h3>
             <div class="pw-form">
@@ -205,7 +204,7 @@
         </div>
 
         <!-- Devices Tab -->
-        <div v-if="activeTab === 'devices'" id="panel-devices" role="tabpanel">
+        <div v-if="activeTab === 'devices'" v-bind="panelAttrs('devices')">
           <DeviceManagementPanel />
         </div>
       </div>
@@ -238,6 +237,7 @@ import { useFocusTrap } from '@/composables/useFocusTrap'
 import { useFocusRestore } from '@/composables/useFocusRestore'
 import { useInitialFocus } from '@/composables/useInitialFocus'
 import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
+import { useTabs } from '@/composables/useTabs'
 
 const props = defineProps<{
   isOpen: boolean
@@ -255,6 +255,12 @@ const emit = defineEmits<{
 }>()
 
 type TabKey = 'general' | 'appearance' | 'language' | 'security' | 'devices'
+const PROFILE_TAB_IDS = ['general', 'appearance', 'language', 'security', 'devices'] as const
+
+const { t } = useI18n()
+
+const { activeTab, tabAttrs, panelAttrs, handleKeydown: handleTabKeydown, tablistRef: profileTablistRef } =
+  useTabs(PROFILE_TAB_IDS)
 
 const tabs = computed<{ key: TabKey; label: string; icon: IconName }[]>(() => [
   { key: 'general', label: t('profile.tabGeneral'), icon: 'user' },
@@ -263,9 +269,6 @@ const tabs = computed<{ key: TabKey; label: string; icon: IconName }[]>(() => [
   { key: 'security', label: t('profile.tabSecurity'), icon: 'shield-alt' },
   { key: 'devices', label: t('profile.tabDevices'), icon: 'smartphone' }
 ])
-
-const { t } = useI18n()
-const activeTab = ref<TabKey>('general')
 
 const userStore = useUserStore()
 const { voiceDisplayMode, setVoiceDisplayMode } = usePreferences()
@@ -384,7 +387,10 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   width: 90%;
   max-width: 600px;
   max-height: 90vh;
-  overflow-y: auto;
+  /* #10750 C2: keep header fixed; scroll only .modal-body */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   box-shadow: var(--shadow-xl);
 }
 
@@ -461,6 +467,9 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 
 .modal-body {
   padding: var(--spacing-6);
+  /* #10750 C2: single scroll region */
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .profile-section {

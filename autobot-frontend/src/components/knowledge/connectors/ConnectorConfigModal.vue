@@ -15,7 +15,7 @@ import type {
   ConnectorType
 } from '@/types/knowledgeBase'
 import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
 import BaseButton from '@/components/base/BaseButton.vue'
 import ConnectorOAuthButton from '@/components/knowledge/connectors/ConnectorOAuthButton.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -532,10 +532,10 @@ async function testConnection() {
       props.editConnector!.connector_id
     )
     testResult.value = result
-  } catch (error: any) {
+  } catch (error) {
     testResult.value = {
       success: false,
-      message: error.message || 'Test failed'
+      message: (error as Error).message || 'Test failed'
     }
   } finally {
     testing.value = false
@@ -562,8 +562,8 @@ async function handleSave() {
 
     emit('saved', result)
     emit('update:modelValue', false)
-  } catch (error: any) {
-    saveError.value = error.message || t('knowledge.connectors.config.saveFailed')
+  } catch (error) {
+    saveError.value = (error as Error).message || t('knowledge.connectors.config.saveFailed')
     logger.error('Failed to save connector: %s', error)
   } finally {
     saving.value = false
@@ -577,6 +577,7 @@ function closeModal() {
 
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :model-value="modelValue"
     :title="modalTitle"
     size="md"

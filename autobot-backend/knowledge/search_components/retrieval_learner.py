@@ -19,9 +19,11 @@ rag:retrieval_patterns:__global__:{pattern_hash} HASH   — global fallback patt
 rag:rl:cursors                                   HASH   — last processed stream ID per key
 """
 
+import asyncio
 import hashlib
 import json
 import math
+import os
 import threading
 import time
 from dataclasses import dataclass, field
@@ -29,6 +31,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_client import get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.ttl_constants import TTL_30_DAYS
 
@@ -54,6 +57,12 @@ _CURSOR_HASH_KEY = "rag:rl:cursors"
 _PATTERN_KEY_PREFIX = "rag:retrieval_patterns:"
 # Sentinel used when no authenticated user is available (global/system scope).
 GLOBAL_USER = "__global__"
+
+# Maximum seconds to wait when acquiring an async Redis client.  Bounds the
+# tenacity retry loop inside get_redis_client so a Redis outage cannot hang the
+# hot routing/planning path.  Override via env var for staging environments that
+# tolerate a slower Redis start-up.
+_REDIS_ACQUIRE_TIMEOUT = float(os.getenv("AUTOBOT_RETRIEVAL_REDIS_TIMEOUT", "1.5"))
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +138,7 @@ class RetrievalLearner:
 
     def __init__(self, redis=None) -> None:
         self._redis = redis
+        self._redis_unavailable = False
         self._redis_lock = threading.Lock()
         self._cursors: Dict[str, str] = {}
         self._cursors_loaded = False
@@ -138,11 +148,35 @@ class RetrievalLearner:
     # ------------------------------------------------------------------
 
     async def _get_redis(self):
-        """Lazily obtain an async Redis client from the canonical factory."""
-        if self._redis is None:
-            from autobot_shared.redis_client import get_redis_client
+        """Lazily obtain an async Redis client with a bounded fast-fail guard.
 
-            self._redis = await get_redis_client(async_client=True, database="analytics")
+        If Redis was previously found to be unavailable (_redis_unavailable is
+        True) the method returns None immediately without retrying, so callers
+        on the hot routing/planning path are never blocked by a Redis outage.
+
+        When the client has not yet been acquired, the call to
+        get_redis_client() — which runs a tenacity retry loop — is wrapped in
+        asyncio.wait_for with a short timeout (_REDIS_ACQUIRE_TIMEOUT seconds).
+        On timeout or connection error the _redis_unavailable flag is set and
+        None is returned; the WARNING is logged only once per instance lifetime.
+        """
+        if self._redis_unavailable:
+            return None
+        if self._redis is not None:
+            return self._redis
+        try:
+            self._redis = await asyncio.wait_for(
+                get_redis_client(async_client=True, database="analytics"),
+                timeout=_REDIS_ACQUIRE_TIMEOUT,
+            )
+        except (asyncio.TimeoutError, Exception) as exc:
+            self._redis_unavailable = True
+            logger.warning(
+                "RetrievalLearner: Redis unavailable (%.1fs timeout) — degrading to no-op: %s",
+                _REDIS_ACQUIRE_TIMEOUT,
+                exc,
+            )
+            return None
         return self._redis
 
     # ------------------------------------------------------------------
@@ -155,6 +189,9 @@ class RetrievalLearner:
             return
         try:
             redis = await self._get_redis()
+            if redis is None:
+                self._cursors_loaded = True
+                return
             stored = await redis.hgetall(_CURSOR_HASH_KEY)
             if stored:
                 self._cursors.update(
@@ -175,6 +212,8 @@ class RetrievalLearner:
         """Persist a single cursor entry to Redis."""
         try:
             redis = await self._get_redis()
+            if redis is None:
+                return
             await redis.hset(_CURSOR_HASH_KEY, stream_key, cursor)
         except Exception as exc:
             logger.warning("RetrievalLearner: could not save cursor for %s: %s", stream_key, exc)
@@ -331,6 +370,8 @@ class RetrievalLearner:
 
         try:
             redis = await self._get_redis()
+            if redis is None:
+                return
             existing_raw = await redis.hgetall(redis_key)
 
             if existing_raw:
@@ -420,6 +461,8 @@ class RetrievalLearner:
 
         try:
             redis = await self._get_redis()
+            if redis is None:
+                return None
             qualifying: List[RetrievalPattern] = []
             for redis_key in candidates:
                 raw = await redis.hgetall(redis_key)
@@ -474,6 +517,8 @@ class RetrievalLearner:
         redis_key = f"{_PATTERN_KEY_PREFIX}{uid}:{pattern_hash}"
         try:
             redis = await self._get_redis()
+            if redis is None:
+                return
             raw = await redis.hgetall(redis_key)
             if not raw:
                 logger.debug("RetrievalLearner: no pattern found for %s", redis_key)
@@ -518,6 +563,9 @@ class RetrievalLearner:
             redis = await self._get_redis()
         except Exception as exc:
             logger.warning("RetrievalLearner: consolidate — redis unavailable: %s", exc)
+            return 0, 0
+
+        if redis is None:
             return 0, 0
 
         all_keys = await _scan_pattern_keys(redis, _PATTERN_KEY_PREFIX)

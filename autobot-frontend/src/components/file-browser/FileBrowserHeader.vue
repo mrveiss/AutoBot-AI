@@ -48,12 +48,12 @@ interface Emits {
   (e: 'navigate-to-path', path: string): void
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   title: '',
   currentPath: '/'
 })
 
-const emit = defineEmits<Emits>()
+defineEmits<Emits>()
 </script>
 
 <style scoped>

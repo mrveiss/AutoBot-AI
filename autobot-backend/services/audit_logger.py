@@ -51,6 +51,10 @@ from utils.async_initializable import AsyncInitializable
 
 logger = get_logger(__name__)
 
+# Bind-all / loopback placeholders that are not routable hosts and must not be
+# shown as the backend address in the audit dashboard (#10502 item #11).
+_NON_ROUTABLE_HOSTS = frozenset({"0.0.0.0", "::", "127.0.0.1", "::1", "localhost", ""})
+
 # Audit result types
 AuditResult = Literal["success", "denied", "failed", "error"]
 
@@ -256,6 +260,20 @@ class AuditLogger(AsyncInitializable):
             NetworkConstants.BROWSER_VM_IP: "browser",
         }
         return vm_mapping.get(self.vm_source, socket.gethostname())
+
+    @property
+    def display_host(self) -> str:
+        """Routable host label for UIs (#10502 item #11).
+
+        vm_source is the configured bind address (config.vm.main =
+        AUTOBOT_BACKEND_HOST), which in production is 0.0.0.0 (bind-all) or a
+        loopback — not a real, routable host. Show the machine FQDN/hostname
+        instead so the audit dashboard displays where the backend actually runs.
+        """
+        source = (self.vm_source or "").strip()
+        if source.lower() in _NON_ROUTABLE_HOSTS:
+            return socket.getfqdn() or socket.gethostname()
+        return source
 
     async def _get_audit_db(self) -> async_redis.Redis | None:
         """Get Redis audit database (DB 10)"""

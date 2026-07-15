@@ -15,8 +15,8 @@ from fastapi.testclient import TestClient
 
 # Import system components
 from app_factory import create_app
-from enhanced_security_layer import EnhancedSecurityLayer
 from secure_command_executor import CommandRisk, SecureCommandExecutor
+from security_layer import SecurityLayer
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def temp_audit_file():
 @pytest.fixture
 def security_layer(temp_audit_file):
     """Create enhanced security layer for testing"""
-    with patch("enhanced_security_layer.global_config_manager") as mock_config:
+    with patch("security_layer.global_config_manager") as mock_config:
         mock_config.get.return_value = {
             "enable_auth": False,
             "enable_command_security": True,
@@ -46,7 +46,7 @@ def security_layer(temp_audit_file):
                 "guest": {"permissions": ["read_only"]},
             },
         }
-        return EnhancedSecurityLayer()
+        return SecurityLayer()
 
 
 class TestSecuritySystemIntegration:
@@ -240,13 +240,13 @@ class TestDockerSandboxIntegration:
 
     def test_docker_sandbox_configuration(self):
         """Test Docker sandbox configuration in security system"""
-        with patch("enhanced_security_layer.global_config_manager") as mock_config:
+        with patch("security_layer.global_config_manager") as mock_config:
             mock_config.get.return_value = {
                 "enable_command_security": True,
                 "use_docker_sandbox": True,
             }
 
-            security = EnhancedSecurityLayer()
+            security = SecurityLayer()
             assert security.use_docker_sandbox is True
             assert security.command_executor.use_docker_sandbox is True
 

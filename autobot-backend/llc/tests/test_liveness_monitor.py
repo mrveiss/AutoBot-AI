@@ -11,16 +11,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llc.scheduler.liveness_monitor import LivenessMonitor, run_id_label
-from user_management.config import DeploymentMode
-
-
-@pytest.fixture(autouse=True)
-def _multi_company_mode():
-    """_check_once() early-returns in single_user mode (no PostgreSQL, #9089);
-    force a multi-tenant mode so the recovery path under test actually runs."""
-    with patch("llc.scheduler.liveness_monitor.get_deployment_config") as cfg:
-        cfg.return_value.mode = DeploymentMode.MULTI_COMPANY
-        yield
 
 
 def _mock_session(stuck_runs: list, work_item: object | None = None) -> AsyncMock:

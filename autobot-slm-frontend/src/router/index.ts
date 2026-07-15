@@ -162,10 +162,10 @@ const router = createRouter({
           meta: { title: 'General Settings', parent: 'settings' }
         },
         {
-          // Issue #4705: Wire InfrastructureSettings view into settings router
+          // Issue #11368: infrastructure settings consolidated into the canonical
+          // /roles view; redirect preserves old bookmarks.
           path: 'infrastructure',
-          name: 'settings-infrastructure',
-          component: () => import('@/views/settings/InfrastructureSettings.vue'),
+          redirect: '/roles',
           meta: { title: 'Infrastructure', parent: 'settings' }
         },
         {
@@ -286,6 +286,20 @@ const router = createRouter({
           name: 'settings-admin-sso',
           component: () => import('@/views/settings/admin/SSOSettings.vue'),
           meta: { title: 'SSO / OIDC', parent: 'settings', admin: true }
+        },
+        {
+          // Issue #11129 P2: Company OS project disposal policy (SLM operator panel)
+          path: 'disposal-policy',
+          name: 'settings-disposal-policy',
+          component: () => import('@/views/settings/DisposalPolicySettings.vue'),
+          meta: { title: 'Disposal Policy', parent: 'settings' }
+        },
+        {
+          // Issue #11271 P3: Company OS findings policy (SLM operator panel)
+          path: 'findings-policy',
+          name: 'settings-findings-policy',
+          component: () => import('@/views/settings/FindingsPolicySettings.vue'),
+          meta: { title: 'Findings Policy', parent: 'settings' }
         },
       ]
     },

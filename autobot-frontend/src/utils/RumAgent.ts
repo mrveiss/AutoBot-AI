@@ -73,6 +73,11 @@ interface PrometheusRumMetrics {
   critical_issues?: PrometheusCriticalIssueMetric[]
 }
 
+// Free-form metadata bag attached to RUM records (error data, interaction
+// context, arbitrary metric payloads). Values are opaque — consumers narrow
+// at the use site.
+type RumMetadata = Record<string, unknown>
+
 interface ApiCall {
   timestamp: string
   method: string
@@ -86,10 +91,36 @@ interface ApiCall {
   sessionId: string
 }
 
+// WebSocket event payload. The Prometheus reporter reads `direction` and
+// `type`/`event_type`; any other fields are opaque.
+interface WebSocketEventData {
+  direction?: string
+  type?: string
+  event_type?: string
+  [key: string]: unknown
+}
+
+// Page-level performance metrics captured on window `load`.
+interface PageMetrics {
+  domContentLoaded: number
+  loadComplete: number
+  domInteractive: number
+  firstPaint: number | null
+  timestamp: string
+}
+
+// Slow-resource timing sample captured by the PerformanceObserver.
+interface ResourceTiming {
+  name: string
+  duration: number
+  size?: number
+  timestamp: string
+}
+
 interface WebSocketEvent {
   timestamp: string
   event: string
-  data: Record<string, any>
+  data: WebSocketEventData
   sessionId: string
 }
 
@@ -99,7 +130,7 @@ interface UserInteraction {
   element: string
   elementId?: string | null
   elementClass?: string | null
-  context: Record<string, any>
+  context: RumMetadata
   sessionId: string
 }
 
@@ -111,7 +142,7 @@ interface ErrorInfo {
   sessionId: string
   url: string
   userAgent: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 interface RumMetrics {
@@ -119,17 +150,37 @@ interface RumMetrics {
   errors: ErrorInfo[]
   userInteractions: UserInteraction[]
   webSocketEvents: WebSocketEvent[]
-  pageMetrics: Record<string, any>
-  resourceTimings: any[]
+  pageMetrics: PageMetrics | Record<string, never>
+  resourceTimings: ResourceTiming[]
   sessionDuration: number
 }
+
+// Payload attached to a critical issue: either a free-form metadata bag or a
+// concrete captured record (an API call or a tracked error).
+type RumIssueData = RumMetadata | ApiCall | ErrorInfo
 
 interface CriticalIssue {
   type: string
   severity: 'critical'
   timestamp: string
   sessionId: string
-  data: Record<string, any>
+  data: RumIssueData
+}
+
+// Snapshot produced by generateReport() and persisted to localStorage.
+interface RumReport {
+  sessionId: string
+  sessionDuration: number
+  timestamp: string
+  summary: {
+    totalApiCalls: number
+    slowApiCalls: number
+    timeoutApiCalls: number
+    totalErrors: number
+    userInteractions: number
+    webSocketEvents: number
+  }
+  recentIssues: Array<ApiCall | ErrorInfo>
 }
 
 class RumAgent {
@@ -142,6 +193,13 @@ class RumAgent {
     verySlowApiCall: number
     timeoutThreshold: number
   }
+  private rumEventEndpoint: string
+  // #10956: circuit breaker so a failing telemetry endpoint can't be retried
+  // in a tight loop (backend restart → 502 per event → console flood).
+  private rumEventFailures = 0
+  private rumEventCircuitOpenUntil = 0
+  private static readonly RUM_EVENT_FAILURE_THRESHOLD = 5
+  private static readonly RUM_EVENT_CIRCUIT_COOLDOWN_MS = 60000
   // Issue #476: Prometheus metrics export configuration
   private prometheusEnabled: boolean
   private prometheusEndpoint: string
@@ -172,6 +230,7 @@ class RumAgent {
       timeoutThreshold: 30000 // ms
     }
 
+    this.rumEventEndpoint = getApiBase() + '/rum/event'
     // Issue #476: Initialize Prometheus metrics export
     this.prometheusEnabled = localStorage.getItem('rum_prometheus_enabled') !== 'false'
     this.prometheusEndpoint = getApiBase() + '/rum/metrics'
@@ -290,7 +349,7 @@ class RumAgent {
   }
 
   // WebSocket Monitoring
-  trackWebSocketEvent(event: string, data: Record<string, any> = {}): void {
+  trackWebSocketEvent(event: string, data: WebSocketEventData = {}): void {
     const wsEvent: WebSocketEvent = {
       timestamp: new Date().toISOString(),
       event,
@@ -316,7 +375,7 @@ class RumAgent {
   }
 
   // User Interaction Tracking
-  trackUserInteraction(action: string, element?: Element | null, context: Record<string, any> = {}): void {
+  trackUserInteraction(action: string, element?: Element | null, context: RumMetadata = {}): void {
     const interaction: UserInteraction = {
       timestamp: new Date().toISOString(),
       action,
@@ -369,7 +428,7 @@ class RumAgent {
     })
   }
 
-  trackError(type: string, errorData: Record<string, any>): void {
+  trackError(type: string, errorData: RumMetadata): void {
     const error: ErrorInfo = {
       timestamp: new Date().toISOString(),
       type,
@@ -381,6 +440,10 @@ class RumAgent {
 
     this.metrics.errors.push(error)
 
+    // #10938: Send structured event to /api/rum/event so the per-event rum.log
+    // captures it. errorData is nested under `data` as the backend formatter expects.
+    this.sendRumEvent(type, errorData)
+
     // Issue #476: Queue for Prometheus reporting
     if (this.prometheusEnabled) {
       const isRejection = type === 'unhandled_promise_rejection'
@@ -389,7 +452,7 @@ class RumAgent {
         error_type: type,
         page,
         is_rejection: isRejection,
-        component: errorData.component
+        component: errorData.component as string | undefined
       })
     }
 
@@ -514,7 +577,7 @@ class RumAgent {
   }
 
   // Generic metric logging
-  logMetric(type: string, data: Record<string, any>): Record<string, any> {
+  logMetric(type: string, data: RumMetadata): RumMetadata {
     const metric = {
       type,
       timestamp: new Date().toISOString(),
@@ -526,7 +589,7 @@ class RumAgent {
   }
 
   // Critical issue reporting
-  reportCriticalIssue(type: string, data: Record<string, any>): void {
+  reportCriticalIssue(type: string, data: RumIssueData): void {
     const issue: CriticalIssue = {
       type,
       severity: 'critical',
@@ -550,7 +613,7 @@ class RumAgent {
     // Reduce excessive logging for known network issues
     // Issue #981: Format message as string to prevent [object Object] in log output
     if (issue.type !== 'network_error' && issue.type !== 'http_error') {
-      const dataMsg = issue.data?.message || JSON.stringify(issue.data)
+      const dataMsg = (issue.data as RumMetadata)?.message || JSON.stringify(issue.data)
       logger.error(`🚨🚨🚨 CRITICAL ISSUE: ${issue.type} — ${dataMsg}`)
     }
   }
@@ -651,6 +714,50 @@ class RumAgent {
     }
   }
 
+  // #10938: Post a structured RumEvent to /api/rum/event so rum.log captures it.
+  // errorData fields go into the nested `data` field the backend formatter expects.
+  private sendRumEvent(type: string, errorData: RumMetadata): void {
+    // #10956: if the endpoint has failed repeatedly (e.g. backend restarting →
+    // 502), stop sending for a cooldown so telemetry can't flood the console.
+    if (Date.now() < this.rumEventCircuitOpenUntil) return
+
+    const payload = {
+      type,
+      timestamp: new Date().toISOString(),
+      sessionId: this.sessionId,
+      url: window.location.href,
+      userAgent: navigator.userAgent,
+      data: errorData
+    }
+    fetch(this.rumEventEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true
+    })
+      .then((res) => {
+        // A 502/5xx is a resolved response, not a rejection — count it so the
+        // breaker opens during backend outages.
+        if (res.ok) {
+          this.rumEventFailures = 0
+        } else {
+          this.recordRumEventFailure()
+        }
+      })
+      .catch(() => {
+        // Network-layer rejection (backend unreachable) — also a failure.
+        this.recordRumEventFailure()
+      })
+  }
+
+  private recordRumEventFailure(): void {
+    this.rumEventFailures += 1
+    if (this.rumEventFailures >= RumAgent.RUM_EVENT_FAILURE_THRESHOLD) {
+      this.rumEventCircuitOpenUntil = Date.now() + RumAgent.RUM_EVENT_CIRCUIT_COOLDOWN_MS
+      this.rumEventFailures = 0
+    }
+  }
+
   // Issue #476: Enable/disable Prometheus reporting
   enablePrometheusReporting(): void {
     this.prometheusEnabled = true
@@ -662,11 +769,11 @@ class RumAgent {
     localStorage.setItem('rum_prometheus_enabled', 'false')
   }
 
-  generateReport(): Record<string, any> {
+  generateReport(): RumReport {
     const now = performance.now()
     const sessionDuration = now - this.startTime
 
-    const report = {
+    const report: RumReport = {
       sessionId: this.sessionId,
       sessionDuration,
       timestamp: new Date().toISOString(),
@@ -759,4 +866,4 @@ declare global {
 window.rum = rumAgent
 
 export default rumAgent
-export type { ApiCall, WebSocketEvent, UserInteraction, ErrorInfo, RumMetrics, CriticalIssue }
+export type { ApiCall, WebSocketEvent, WebSocketEventData, UserInteraction, ErrorInfo, RumMetrics, CriticalIssue, RumMetadata, PageMetrics, ResourceTiming, RumReport }

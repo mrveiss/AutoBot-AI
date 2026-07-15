@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
@@ -44,16 +45,20 @@ async def list_agents(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
-    """List LLC agents for the org with their latest heartbeat summary (GH#8549).
+    """List LLC agents for the org with their latest heartbeat summary (GH#8549, #11366).
 
-    Returns one row per distinct agent_id that has at least one heartbeat run
-    scoped to the caller's org.  Heartbeat-enabled status and last-run data are
-    derived from LLCHeartbeatRun rows.
+    Returns the full company roster from the org chart (``AgentOrgNode``) — every
+    agent, not just those with heartbeat history — each with its human-readable
+    name and its latest heartbeat run (LEFT JOIN) for status.  This lets assignee
+    pickers (Routines, Heartbeat monitor) list freshly-provisioned agents and show
+    names instead of opaque ids.
     """
     effective_company_id = company_id or str(ctx.org_id)
 
-    # Subquery: latest run per agent
-    subq = (
+    # Latest heartbeat run per agent, keyed by the logical agent_id *slug* — the
+    # dual-keyspace column shared by heartbeat/controls/budgets, NOT the UUID PK
+    # (joining on the wrong one silently returns 0 rows in Postgres; see AgentOrgNode).
+    latest_runs = (
         select(
             LLCHeartbeatRun.agent_id,
             func.max(LLCHeartbeatRun.created_at).label("latest_at"),
@@ -62,28 +67,44 @@ async def list_agents(
         .group_by(LLCHeartbeatRun.agent_id)
         .subquery()
     )
+
+    # Full roster from the org chart, LEFT JOINed to each agent's latest run.
     result = await session.execute(
-        select(LLCHeartbeatRun)
-        .join(
-            subq,
-            (LLCHeartbeatRun.agent_id == subq.c.agent_id) & (LLCHeartbeatRun.created_at == subq.c.latest_at),
+        select(AgentOrgNode, LLCHeartbeatRun)
+        .outerjoin(latest_runs, latest_runs.c.agent_id == AgentOrgNode.agent_id)
+        .outerjoin(
+            LLCHeartbeatRun,
+            (LLCHeartbeatRun.agent_id == latest_runs.c.agent_id)
+            & (LLCHeartbeatRun.created_at == latest_runs.c.latest_at),
         )
-        .order_by(LLCHeartbeatRun.agent_id)
+        .where(AgentOrgNode.company_id == effective_company_id)
+        .order_by(AgentOrgNode.name)
     )
-    rows = result.scalars().all()
 
     return [
         {
-            "id": run.agent_id,
-            "name": run.agent_id,
-            "heartbeat_enabled": True,
-            "last_heartbeat_at": run.started_at.isoformat() if run.started_at else None,
-            "last_run_status": run.status,
+            # Logical agent_id slug — kept as `id` for backward compatibility with
+            # the heartbeat monitor; also exposed explicitly as `agent_id`.
+            "id": node.agent_id,
+            "agent_id": node.agent_id,
+            # UUID PK — the keyspace work-item / routine assignees are stored in
+            # (llc_work_items.assignee_agent_id); assignee pickers POST this value.
+            "org_node_id": str(node.id),
+            "name": node.name,
+            "org_role": node.org_role,
+            "title": node.title,
+            "heartbeat_enabled": node.heartbeat_enabled,
+            "last_heartbeat_at": (
+                run.started_at.isoformat()
+                if run is not None and run.started_at
+                else (node.last_heartbeat_at.isoformat() if node.last_heartbeat_at else None)
+            ),
+            "last_run_status": run.status if run is not None else None,
             "current_run_started_at": (
-                run.started_at.isoformat() if run.status == "running" and run.started_at else None
+                run.started_at.isoformat() if run is not None and run.status == "running" and run.started_at else None
             ),
         }
-        for run in rows
+        for node, run in result.all()
     ]
 
 

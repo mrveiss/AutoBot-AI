@@ -10,6 +10,7 @@ test fixture that spins up fakeredis).
 """
 
 import asyncio
+from datetime import datetime, timezone
 
 import pytest
 import pytest_asyncio
@@ -155,9 +156,20 @@ async def test_add_active_task_blocked_on_second_agent(fake_redis, monkeypatch):
     class _FakeAgent:
         agent_id = "agent-A"
 
-    info_a = DistributedAgentInfo(agent=_FakeAgent(), health=_FakeHealth(), active_tasks=set())
+    now = datetime.now(timezone.utc)
+    info_a = DistributedAgentInfo(
+        agent=_FakeAgent(),
+        health=_FakeHealth(),
+        last_health_check=now,
+        active_tasks=set(),
+    )
     info_b_agent = type("B", (), {"agent_id": "agent-B"})()
-    info_b = DistributedAgentInfo(agent=info_b_agent, health=_FakeHealth(), active_tasks=set())
+    info_b = DistributedAgentInfo(
+        agent=info_b_agent,
+        health=_FakeHealth(),
+        last_health_check=now,
+        active_tasks=set(),
+    )
 
     mgr.distributed_agents["agent-A"] = info_a
     mgr.distributed_agents["agent-B"] = info_b

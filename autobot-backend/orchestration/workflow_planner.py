@@ -85,14 +85,13 @@ class WorkflowPlanner:
         self.agent_registry = agent_registry
         self._find_best_agent = find_best_agent_callback
 
-    async def plan_enhanced_workflow_steps(
+    async def plan_workflow_steps_with_agents(
         self,
         user_request: str,
         complexity: TaskComplexity,
         context: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
-        """
-        Plan workflow steps with intelligent agent assignment.
+        """Plan workflow steps with intelligent agent assignment.
 
         Consults the TrajectoryStore (GH#7357) before building from scratch:
         if similar high-reward trajectories exist, logs them for the caller to
@@ -105,7 +104,7 @@ class WorkflowPlanner:
             context: Additional context for planning
 
         Returns:
-            List of enhanced workflow steps with agent assignments
+            List of workflow steps with agent assignments
         """
         # GH#7357: consult trajectory store for similar solved tasks
         await self._annotate_context_with_trajectories(user_request, context)
@@ -113,7 +112,7 @@ class WorkflowPlanner:
         # Get base workflow steps from original orchestrator
         base_steps = self.base_orchestrator.plan_workflow_steps(user_request, complexity)
 
-        enhanced_steps = []
+        steps_with_agents = []
 
         for step in base_steps:
             # Determine required capabilities for each step
@@ -125,7 +124,7 @@ class WorkflowPlanner:
                 required_capabilities=required_capabilities,
             )
 
-            enhanced_step = {
+            assigned_step = {
                 "id": step.id,
                 "agent_type": step.agent_type,
                 "assigned_agent": assigned_agent,
@@ -138,9 +137,9 @@ class WorkflowPlanner:
                 "status": "planned",
             }
 
-            enhanced_steps.append(enhanced_step)
+            steps_with_agents.append(assigned_step)
 
-        return enhanced_steps
+        return steps_with_agents
 
     def determine_step_capabilities(self, action: str, agent_type: str) -> Set[AgentCapability]:
         """
@@ -285,10 +284,21 @@ class WorkflowPlanner:
         Non-fatal: errors are caught and logged so planning always continues.
         """
         try:
+            from autobot_shared.ssot_config import PLANNING_CONTEXT_ENABLED  # noqa: PLC0415
+
+            if not PLANNING_CONTEXT_ENABLED:  # #11015 kill-switch
+                return
             from memory.trajectory_store import get_trajectory_store
 
+            # #11015: scope to the caller's tenant so one org's trajectories can't
+            # surface in another's plan. Absent tenant → un-scoped (legacy).
+            # #11089: also scope to the caller's user (strict intra-tenant isolation).
+            tenant_id = str(context.get("tenant_id") or "") or None
+            user_id = str(context.get("user_id") or "") or None
             store = await get_trajectory_store()
-            similar = await store.find_similar_trajectories(user_request, top_k=5, min_reward=0.7)
+            similar = await store.find_similar_trajectories(
+                user_request, top_k=5, min_reward=0.7, tenant_id=tenant_id, user_id=user_id
+            )
             if similar:
                 context["similar_trajectories"] = similar
                 logger.debug(

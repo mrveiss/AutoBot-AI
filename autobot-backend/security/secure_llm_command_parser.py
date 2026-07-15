@@ -15,12 +15,12 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from enhanced_security_layer import EnhancedSecurityLayer
 from security.prompt_injection_detector import (
     InjectionRisk,
     PromptInjectionDetector,
     get_prompt_injection_detector,
 )
+from security_layer import SecurityLayer
 from utils.command_validator import CommandValidator
 
 logger = get_logger(__name__)
@@ -68,7 +68,7 @@ class SecureLLMCommandParser:
         self.strict_mode = strict_mode
 
         # Security layer for audit logging
-        self._security_layer: EnhancedSecurityLayer | None = None
+        self._security_layer: SecurityLayer | None = None
 
         # Statistics tracking
         self.stats = {
@@ -80,10 +80,10 @@ class SecureLLMCommandParser:
 
         logger.info("SecureLLMCommandParser initialized (strict_mode=%s)", strict_mode)
 
-    def _get_security_layer(self) -> EnhancedSecurityLayer:
+    def _get_security_layer(self) -> SecurityLayer:
         """Lazy initialization of security layer for audit logging."""
         if self._security_layer is None:
-            self._security_layer = EnhancedSecurityLayer()
+            self._security_layer = SecurityLayer()
         return self._security_layer
 
     def _check_response_injection(self, llm_response: str, user_goal: str) -> List[ValidatedCommand] | None:

@@ -13,25 +13,108 @@ Tests recovery recommendations for various error scenarios:
 - Pattern learning and feedback loop
 
 Issue #2154.
+
+Note (#10870): autobot-backend/conftest.py stubs the heavy causal/agent_loop/
+code_intelligence import chain (``orchestration.causal_error_recovery`` &co.) as
+MagicMocks so the lightweight, types-only orchestration tests can collect without
+the full backend stack.  This suite, however, exercises the *real* recovery logic
+(action scoring, leaf-vs-downstream classification, pattern feedback), so it must
+load the genuine modules.  We swap the stubs for the real implementations at import
+time and restore the stubs on teardown so sibling test modules that rely on them are
+unaffected — the same isolation contract used by ``tests/agent_loop/conftest.py``.
 """
 
+import sys
 from unittest.mock import MagicMock
 
 import pytest
 
-from orchestration.causal_error_analyzer import (
+# ---------------------------------------------------------------------------
+# Real-module loading (#10870).
+#
+# The parent conftest replaces the causal/agent_loop/code_intelligence packages
+# with MagicMock package stubs.  Awaiting the stubbed ``recommend_recovery`` raised
+# "object MagicMock can't be used in 'await' expression".  Drop the stubs, import the
+# real modules, then restore the exact objects we displaced so process-shared state is
+# left untouched for other test files.
+#
+# Restoration strategy: capture only the EXACT conftest stub entries (by name),
+# displace them, import real implementations, then on teardown re-insert only the
+# displaced stubs and remove any NEW transitive deps added by our real imports.
+#
+# The original broad prefix-based scan (_STUBBED_PREFIXES startswith) was wrong:
+# by the time this module's code runs during collection, the real orchestration
+# package has already been fully imported by earlier test files (e.g.
+# orchestration.success_criteria, orchestration.workflow_runner are all real).
+# The broad scan captured ALL those real modules in _SAVED_STUBS, popped them,
+# and on teardown re-inserted old objects — causing class identity splits and
+# isinstance() failures in later test files.
+# ---------------------------------------------------------------------------
+
+# The exact set of module names that conftest.py replaced with MagicMock stubs.
+# These are the ONLY entries we need to displace and restore.
+_CONFTEST_STUB_NAMES: tuple = (
+    "orchestration.causal_error_recovery",
+    "orchestration.causal_error_analyzer",
+    "orchestration.causal_validator",
+    "agent_loop",
+    "agent_loop.loop",
+    "agent_loop.think_tool",
+    "tools.parallel",
+    "tools.parallel.executor",
+    "code_intelligence",
+)
+
+# Save the current (stub) entries for the specific names we will displace.
+_SAVED_STUBS: dict[str, object] = {name: sys.modules[name] for name in _CONFTEST_STUB_NAMES if name in sys.modules}
+
+# Record all keys present before our real imports so we can compute the delta.
+_KEYS_BEFORE_IMPORT: frozenset = frozenset(sys.modules)
+
+# Displace only the specific stub entries we identified above.
+for _name in _SAVED_STUBS:
+    sys.modules.pop(_name, None)
+
+from orchestration.causal_error_analyzer import (  # noqa: E402
     CausalErrorAnalysis,
     CausalErrorAnalyzer,
 )
-from orchestration.causal_error_recovery import (
+from orchestration.causal_error_recovery import (  # noqa: E402
     CausalErrorRecovery,
     RecoveryAction,
     RecoveryPlan,
 )
-from services.failure_pattern_detector import (
+from services.failure_pattern_detector import (  # noqa: E402
     FailurePattern,
     FailurePatternDetector,
 )
+
+# Keys added ONLY by our real imports — these are safe to remove on teardown.
+# Keys that were already in _KEYS_BEFORE_IMPORT (real orchestration modules
+# imported by earlier test files) are excluded and left untouched.
+_KEYS_OUR_IMPORTS_ADDED: frozenset = frozenset(sys.modules) - _KEYS_BEFORE_IMPORT
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_conftest_stubs():
+    """Restore the parent-conftest MagicMock stubs after this module's tests.
+
+    Keeps the real modules loaded for the duration of this file, then puts the
+    original stub objects back so sibling type-only orchestration tests (which
+    depend on the stubbed import chain) see the state they expect.
+
+    Only removes new transitive deps added by OUR imports and re-inserts the
+    specific stub entries we displaced — never touches orchestration modules
+    that were already real before this file's module-level code ran.
+    """
+    yield
+    # Remove only the transitive deps that our real imports added.
+    for _name in _KEYS_OUR_IMPORTS_ADDED:
+        sys.modules.pop(_name, None)
+    # Restore the specific stub entries we displaced at import time.
+    for _name, _mod in _SAVED_STUBS.items():
+        sys.modules[_name] = _mod  # type: ignore[assignment]
+
 
 # =============================================================================
 # Test CausalErrorRecovery
@@ -246,13 +329,92 @@ class TestCausalErrorRecovery:
 # =============================================================================
 
 
+class _FakeAsyncRedis:
+    """Minimal in-memory async Redis stand-in for the pattern-detector tests.
+
+    Implements only the ops ``FailurePatternDetector`` uses
+    (get/set/sadd/smembers/expire) so the learn→detect→statistics roundtrip
+    works without a live Redis. Previously these tests hit the real client,
+    whose circuit breaker is open in CI, so every op returned ``None`` and the
+    detector silently no-opped — 4 tests failed on ``assert ... is not None``
+    (#11144).
+    """
+
+    def __init__(self):
+        self._kv = {}
+        self._sets = {}
+
+    async def get(self, key):
+        return self._kv.get(key)
+
+    async def set(self, key, value, ex=None):
+        self._kv[key] = value
+        return True
+
+    async def sadd(self, key, *members):
+        self._sets.setdefault(key, set()).update(members)
+        return len(members)
+
+    async def smembers(self, key):
+        return set(self._sets.get(key, set()))
+
+    async def expire(self, key, ttl):
+        return True
+
+    async def delete(self, key):
+        self._kv.pop(key, None)
+        self._sets.pop(key, None)
+        return True
+
+
+class _FakeSyncRedis:
+    """Minimal in-memory *sync* Redis stand-in for ``CausalErrorRecovery``.
+
+    ``CausalErrorRecovery`` uses a synchronous client (get/incr/expire/set/hset);
+    like the detector it silently no-ops when the real client's circuit breaker
+    is open, which broke the feedback-loop integration test (#11144).
+    """
+
+    def __init__(self):
+        self._kv = {}
+        self._hashes = {}
+
+    def get(self, key):
+        return self._kv.get(key)
+
+    def set(self, key, value, ex=None):
+        self._kv[key] = value
+        return True
+
+    def incr(self, key):
+        self._kv[key] = str(int(self._kv.get(key, 0)) + 1)
+        return int(self._kv[key])
+
+    def expire(self, key, ttl):
+        return True
+
+    def hset(self, key, *args, **kwargs):
+        mapping = kwargs.get("mapping") or {}
+        if len(args) >= 2:
+            mapping[args[0]] = args[1]
+        self._hashes.setdefault(key, {}).update(mapping)
+        return len(mapping)
+
+
+def _make_detector_with_fake_redis() -> FailurePatternDetector:
+    """A detector wired to an in-memory Redis so persistence roundtrips (#11144)."""
+    detector = FailurePatternDetector()
+    detector._redis = _FakeAsyncRedis()
+    return detector
+
+
 class TestFailurePatternDetector:
     """Test failure pattern detection and learning."""
 
     @pytest.fixture
     def detector(self):
-        """Create a pattern detector instance."""
-        return FailurePatternDetector()
+        """Create a pattern detector instance backed by an in-memory Redis."""
+        return _make_detector_with_fake_redis()
 
     def test_hash_causal_chain_consistency(self, detector):
         """Test that hashing is consistent."""
@@ -430,8 +592,9 @@ class TestCausalErrorRecoveryIntegration:
     @pytest.mark.asyncio
     async def test_pattern_feedback_improves_confidence(self):
         """Test that feedback loops improve confidence in recommendations."""
-        detector = FailurePatternDetector()
+        detector = _make_detector_with_fake_redis()
         recovery_sys = CausalErrorRecovery()
+        recovery_sys._redis = _FakeSyncRedis()  # in-memory sync Redis so feedback roundtrips (#11144)
 
         causal_chain = "Pool exhaustion → Connection denied"
         error = RuntimeError("Connection denied")

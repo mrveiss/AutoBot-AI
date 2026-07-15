@@ -4,10 +4,12 @@
 // Author: mrveiss
 
 import { watch } from 'vue'
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
 import { usePairingQR } from '@/composables/usePairingQR'
 import { createLogger } from '@/utils/debugUtils'
+const { t } = useI18n()
 
 const logger = createLogger('PairDeviceDialog')
 
@@ -54,6 +56,7 @@ watch(isPaired, (paired) => {
 
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :model-value="modelValue"
     :title="$t('mobile.pairing.title')"
     size="md"
@@ -86,7 +89,7 @@ watch(isPaired, (paired) => {
           <p class="text-sm text-autobot-text-secondary">{{ $t('mobile.pairing.instructionsDetail') }}</p>
         </div>
 
-        <div class="flex justify-center bg-white p-4 rounded-lg border border-autobot-border">
+        <div class="flex justify-center bg-autobot-bg-card p-4 rounded-lg border border-autobot-border">
           <img
             :src="qrDataUrl"
             :alt="$t('mobile.pairing.instructions')"

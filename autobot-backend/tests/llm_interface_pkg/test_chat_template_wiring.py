@@ -140,7 +140,9 @@ async def test_ollama_stream_uses_prompt_payload_when_template_set():
     from llm_shared.models import LLMRequest
     from llm_shared.providers.ollama_provider import OllamaProvider
 
-    provider = OllamaProvider(settings={"base_url": "http://localhost:11434"})
+    provider = OllamaProvider(
+        settings={"base_url": "http://localhost:11434"}
+    )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
     request = LLMRequest(
         messages=[
@@ -190,7 +192,9 @@ async def test_ollama_stream_uses_messages_payload_without_template():
     from llm_shared.models import LLMRequest
     from llm_shared.providers.ollama_provider import OllamaProvider
 
-    provider = OllamaProvider(settings={"base_url": "http://localhost:11434"})
+    provider = OllamaProvider(
+        settings={"base_url": "http://localhost:11434"}
+    )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
     request = LLMRequest(
         messages=[{"role": "user", "content": "Hi"}],
@@ -241,7 +245,9 @@ async def test_ollama_chat_completion_pre_renders_when_template_set():
     from llm_shared.models import LLMRequest
     from llm_shared.providers.ollama_provider import OllamaProvider
 
-    provider = OllamaProvider(settings={"base_url": "http://localhost:11434"})
+    provider = OllamaProvider(
+        settings={"base_url": "http://localhost:11434"}
+    )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
     request = LLMRequest(
         messages=[
@@ -308,7 +314,9 @@ async def test_ollama_chat_completion_passes_through_without_template():
     from llm_shared.models import LLMRequest, LLMResponse
     from llm_shared.providers.ollama_provider import OllamaProvider
 
-    provider = OllamaProvider(settings={"base_url": "http://localhost:11434"})
+    provider = OllamaProvider(
+        settings={"base_url": "http://localhost:11434"}
+    )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
     request = LLMRequest(
         messages=[{"role": "user", "content": "Hello"}],
@@ -326,7 +334,7 @@ async def test_ollama_chat_completion_passes_through_without_template():
 
     mock_delegate = MagicMock()
     mock_delegate.chat_completion = AsyncMock(return_value=expected_response)
-    mock_delegate.ollama_host = "http://localhost:11434"
+    mock_delegate.ollama_host = "http://localhost:11434"  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
 
     with patch.object(provider, "_ensure_delegate", return_value=mock_delegate):
         response = await provider.chat_completion(request)

@@ -129,6 +129,17 @@ class BaseCognifier(ABC):
         """
 
 
+class CognifyError(Exception):
+    """Raised when a cognifier fails in a way that must not be silently swallowed.
+
+    Used for two categories (#10645):
+    - Prompt/template construction errors (KeyError/ValueError from .format()) that
+      indicate a systematically broken prompt — every chunk would fail identically.
+    - Total-extraction failure: all chunks returned empty results, which hides a broken
+      prompt or LLM configuration behind a silently empty knowledge graph.
+    """
+
+
 class BaseLoader(ABC):
     """Base class for loader components."""
 

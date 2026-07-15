@@ -107,33 +107,23 @@ function getSortIcon(key: SortKey): string {
             <th
               @click="toggleSort('hostname')"
               class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-            >
-              Node {{ getSortIcon('hostname') }}
-            </th>
+            >{{ $t('monitoring.nodeMetricsGrid.nodeHostname', { hostname: getSortIcon('hostname') }) }}</th>
             <th
               @click="toggleSort('status')"
               class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-            >
-              Status {{ getSortIcon('status') }}
-            </th>
+            >{{ $t('monitoring.nodeMetricsGrid.statusStatus', { status: getSortIcon('status') }) }}</th>
             <th
               @click="toggleSort('cpu_percent')"
               class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-            >
-              CPU {{ getSortIcon('cpu_percent') }}
-            </th>
+            >{{ $t('monitoring.nodeMetricsGrid.cPUValue0', { value0: getSortIcon('cpu_percent') }) }}</th>
             <th
               @click="toggleSort('memory_percent')"
               class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-            >
-              Memory {{ getSortIcon('memory_percent') }}
-            </th>
+            >{{ $t('monitoring.nodeMetricsGrid.memoryValue0', { value0: getSortIcon('memory_percent') }) }}</th>
             <th
               @click="toggleSort('disk_percent')"
               class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-            >
-              Disk {{ getSortIcon('disk_percent') }}
-            </th>
+            >{{ $t('monitoring.nodeMetricsGrid.diskValue0', { value0: getSortIcon('disk_percent') }) }}</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {{ $t('monitoring.nodeMetricsGrid.services') }}
             </th>
@@ -177,9 +167,7 @@ function getSortIcon(key: SortKey): string {
               <div class="text-sm text-gray-900">
                 {{ node.services_running }} / {{ node.services_running + node.services_failed }}
               </div>
-              <div v-if="node.services_failed > 0" class="text-xs text-danger-600">
-                {{ node.services_failed }} failed
-              </div>
+              <div v-if="node.services_failed > 0" class="text-xs text-danger-600">{{ $t('monitoring.nodeMetricsGrid.value0Failed', { value0: node.services_failed }) }}</div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
               <span v-if="node.last_heartbeat">

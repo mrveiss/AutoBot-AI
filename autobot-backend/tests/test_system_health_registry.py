@@ -133,7 +133,7 @@ def test_re_registering_overwrites_and_keeps_one_entry():
         return ComponentHealth(name="dup", status="ok", detail="v1")
 
     @register_health_probe("dup")
-    async def _probe_v2(_request=None):
+    async def _probe_overwrite(_request=None):
         return ComponentHealth(name="dup", status="ok", detail="v2")
 
     assert list_registered_probes() == ["dup"]

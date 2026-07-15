@@ -91,7 +91,7 @@ case "$actual_ver" in
     *)
         echo "format.sh: WARNING — using Python $actual_ver but project targets py3.12+." >&2
         echo "  Black will emit a 'cannot parse code formatted for Python 3.12'" >&2
-        echo "  warning. Install black on python3.12 to silence:" >&2
+        echo "  warning. Install black on python3.14 to silence:" >&2
         echo "    python3.12 -m pip install black==26.3.1 isort==8.0.1" >&2
         echo "" >&2
         ;;

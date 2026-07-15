@@ -123,12 +123,13 @@ describe('useProbeBackedHealth', () => {
     })
   })
 
-  it('returns buildUnavailable with probe.detail when status is not ok', async () => {
+  it('calls buildHealthy for a FOUND degraded probe (renders real status, not "unavailable") — #11227', async () => {
     apiGetSpy.mockResolvedValue({
       probes: [
         {
           name: 'batch_jobs',
           status: 'degraded',
+          data: { redis_connected: false },
           detail: 'redis is slow',
         },
       ],
@@ -141,17 +142,19 @@ describe('useProbeBackedHealth', () => {
     })
 
     const result = await getHealth()
+    // buildHealthy was called (not buildUnavailable) — the consumer, not the
+    // composable, decides how to render the degraded status + its detail.
     expect(result).toEqual({
-      status: 'unavailable',
+      status: 'healthy',
       active_jobs: 0,
       redis_connected: false,
       message: 'redis is slow',
     })
   })
 
-  it('falls back to "Service unavailable" when status is not ok and no detail', async () => {
+  it('calls buildHealthy for a FOUND probe even with a non-ok status and no detail — #11227', async () => {
     apiGetSpy.mockResolvedValue({
-      probes: [{ name: 'batch_jobs', status: 'unavailable' }],
+      probes: [{ name: 'batch_jobs', status: 'down' }],
     })
 
     const getHealth = useProbeBackedHealth<TestHealthResponse>({
@@ -161,7 +164,13 @@ describe('useProbeBackedHealth', () => {
     })
 
     const result = await getHealth()
-    expect(result?.message).toBe('Service unavailable')
+    // Found probe → buildHealthy path (message comes from probe.detail: undefined here).
+    expect(result).toEqual({
+      status: 'healthy',
+      active_jobs: 0,
+      redis_connected: false,
+      message: undefined,
+    })
   })
 
   it('returns buildUnavailable("Service unavailable") on fetch error', async () => {
@@ -189,5 +198,54 @@ describe('useProbeBackedHealth', () => {
 
     const result = await getHealth()
     expect(result?.status).toBe('unavailable')
+  })
+})
+
+describe('useProbeBackedHealth — found-probe routing (#11227)', () => {
+  it('routes a FOUND non-ok probe to buildHealthy, not buildUnavailable', async () => {
+    apiGetSpy.mockResolvedValue({
+      probes: [
+        {
+          name: 'batch_jobs',
+          status: 'degraded',
+          data: { redis_connected: false },
+          detail: 'redis is slow',
+        },
+      ],
+    })
+
+    const buildHealthySpy = vi.fn(buildHealthy)
+    const buildUnavailableSpy = vi.fn(buildUnavailable)
+
+    const getHealth = useProbeBackedHealth<TestHealthResponse>({
+      probeName: 'batch_jobs',
+      buildHealthy: buildHealthySpy,
+      buildUnavailable: buildUnavailableSpy,
+    })
+
+    const result = await getHealth()
+    expect(buildHealthySpy).toHaveBeenCalledOnce()
+    expect(buildUnavailableSpy).not.toHaveBeenCalled()
+    expect(result?.status).toBe('healthy')
+    expect(result?.message).toBe('redis is slow')
+  })
+
+  it('reserves buildUnavailable for a genuinely missing probe', async () => {
+    apiGetSpy.mockResolvedValue({ probes: [] })
+
+    const buildHealthySpy = vi.fn(buildHealthy)
+    const buildUnavailableSpy = vi.fn(buildUnavailable)
+
+    const getHealth = useProbeBackedHealth<TestHealthResponse>({
+      probeName: 'batch_jobs',
+      buildHealthy: buildHealthySpy,
+      buildUnavailable: buildUnavailableSpy,
+    })
+
+    const result = await getHealth()
+    expect(buildUnavailableSpy).toHaveBeenCalledOnce()
+    expect(buildHealthySpy).not.toHaveBeenCalled()
+    expect(result?.status).toBe('unavailable')
+    expect(result?.message).toBe('batch_jobs probe not registered')
   })
 })

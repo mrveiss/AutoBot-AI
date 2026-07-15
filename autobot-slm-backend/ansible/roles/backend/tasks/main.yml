@@ -204,7 +204,7 @@
   tags: ['backend', 'config']
 
 # ============================================================
-# Backend-specific system dependencies (Python 3.12 now in shared Phase 0)
+# Backend-specific system dependencies (Python 3.14 now in shared Phase 0)
 # ============================================================
 # #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
 - name: "Backend | Refresh apt cache (best-effort, bounded; #6719)"
@@ -245,6 +245,10 @@
       - libsndfile1
       - libsndfile1-dev
       - portaudio19-dev
+      # Text-to-speech engine for pyttsx3 (#10566): without espeak-ng the backend
+      # reports "no speech voices installed" and TTS output is unavailable.
+      - espeak-ng
+      - espeak-ng-data
       # OCR / CAPTCHA solver (tesseract, Issue #206)
       - tesseract-ocr
       - libtesseract-dev
@@ -266,16 +270,19 @@
 
 - name: Create backend directories
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ item.path }}"
     state: directory
-    mode: "0755"
+    mode: "{{ item.mode }}"
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
   loop:
-    - "{{ backend_install_dir }}"
-    - "{{ backend_log_dir }}"
-    - "{{ backend_data_dir }}"
-    - "{{ backend_data_dir }}/conversation_files"
+    - {path: "{{ backend_install_dir }}", mode: "0755"}
+    - {path: "{{ backend_log_dir }}", mode: "0755"}
+    - {path: "{{ backend_data_dir }}", mode: "0755"}
+    - {path: "{{ backend_data_dir }}/conversation_files", mode: "0755"}
+    # #10911: service-keys holds the durable RSA JWT keypair; 0700 so only the
+    # backend user can read the private key.
+    - {path: "{{ backend_data_dir }}/service-keys", mode: "0700"}
 
 - name: Sync autobot-backend code from code_source
   ansible.posix.synchronize:
@@ -513,13 +520,13 @@
   when: venv_check.stat.exists and venv_check.stat.islnk
 
 # #7052: Detect partially-corrupted venv from a prior failed install.
-# A venv with a working python3.12 binary but stale .pth files (e.g. from
+# A venv with a working python3.14 binary but stale .pth files (e.g. from
 # an editable install whose finder module was removed during venv rebuild)
 # breaks pip on first import. The `Create venv` task below skips when
 # bin/activate exists, so without this check the corruption survives reinstall.
 - name: "Backend | Check venv health (pip importable, #7052)"
   ansible.builtin.command:
-    cmd: "{{ backend_code_dir }}/venv/bin/python3.12 -c 'import pip'"
+    cmd: "{{ backend_code_dir }}/venv/bin/python3.14 -c 'import pip'"
   register: _venv_health
   changed_when: false
   failed_when: false
@@ -533,9 +540,17 @@
     - venv_check.stat.exists and venv_check.stat.isdir
     - (_venv_health.rc | default(0)) != 0
 
-- name: Create Python 3.12 virtual environment via deadsnakes
+- name: "Backend | Enforce venv target Python version (env-drift fix)"
+  ansible.builtin.include_role:
+    name: python314
+    tasks_from: ensure_venv_version
+  vars:
+    venv_path: "{{ backend_code_dir }}/venv"
+    venv_python: python3.14
+
+- name: Create Python 3.14 virtual environment via deadsnakes
   ansible.builtin.command:
-    cmd: "python3.12 -m venv {{ backend_code_dir }}/venv"
+    cmd: "python3.14 -m venv {{ backend_code_dir }}/venv"
     creates: "{{ backend_code_dir }}/venv/bin/activate"
   become_user: "{{ backend_user }}"
 
@@ -571,9 +586,21 @@
     - restart backend
     - restart celery
 
+# The filtered file is written to /tmp, so its `-c ../constraints/shared.txt`
+# (kept from requirements.txt, #10524) would resolve relative to /tmp and fail
+# (pip errors on a missing constraint file). Rewrite it to the canonical
+# code_source constraints path, which always exists as the git checkout, so the
+# pinned constraints are actually applied on deploy (#11117).
+- name: Resolve absolute constraints path for filtered requirements
+  ansible.builtin.set_fact:
+    backend_constraints_abs: "{{ code_source_dir | default('/opt/autobot/code_source') }}/constraints/"
+
 - name: Create filtered backend requirements file
   ansible.builtin.shell:
-    cmd: "grep -Ev '^-e.*autobot[-_]shared|^-r' {{ backend_code_dir }}/requirements.txt > /tmp/requirements-filtered.txt"
+    cmd: >-
+      grep -Ev '^-e.*autobot[-_]shared|^-r' {{ backend_code_dir }}/requirements.txt
+      | sed 's|^-c \.\./constraints/|-c {{ backend_constraints_abs }}|'
+      > /tmp/requirements-filtered.txt
   become_user: "{{ backend_user }}"
 
 # (#2872) Removed failed_when: false — pip install failures must surface.
@@ -625,10 +652,10 @@
     - backend_vllm_enabled | bool
     - backend_gpu_available | default(false) | bool
 
-- name: Deploy aioredis compatibility shim for Python 3.12
+- name: Deploy aioredis compatibility shim for Python 3.14
   ansible.builtin.template:
     src: aioredis_shim.py.j2
-    dest: "{{ backend_code_dir }}/venv/lib/python3.12/site-packages/aioredis.py"
+    dest: "{{ backend_code_dir }}/venv/lib/python3.14/site-packages/aioredis.py"
     mode: '0644'
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
@@ -651,7 +678,8 @@
 
 # ==========================================================
 # PostgreSQL for User Management (Issue #2953)
-# Included only when backend_user_mode is not single_user.
+# AutoBot always runs full user management (#10713); every supported user mode
+# is Postgres-backed, so this always runs.
 # Re-uses the shared postgresql role with autobot_users DB.
 # ==========================================================
 - name: "Backend | Configure PostgreSQL for user management (#2953)"
@@ -664,7 +692,19 @@
     databases:
       - "{{ backend_postgres_db | default('autobot_users') }}"
     postgresql_listen_addresses: "localhost"
-  when: (backend_user_mode | default('single_user')) != 'single_user'
+    # #10636: On a collapsed single-box deploy this instance already hosts the
+    # SLM (slm_app) whose creds live in the DEFAULT db-credentials.env. Writing
+    # the backend's AUTOBOT_DB_* creds into that same file would overwrite the
+    # SLM's SLM_DB_* entries — the SLM systemd unit's EnvironmentFile then loads
+    # nothing and the SLM loses DB access. Give the backend its OWN creds file so
+    # both coexist; the SLM's file is never touched. On multi-VM fleets this is
+    # a separate instance/host, so a distinct filename is harmless there too.
+    postgresql_credentials_file: "autobot-db-credentials.env"
+    # #10636: The postgresql role's pg_hba render is additive (it discovers every
+    # existing login role first — see roles/postgresql/tasks/configure.yml — so
+    # slm_app's rules survive), and this second run must ONLY reload, never
+    # restart, the shared instance. postgresql.conf renders identically on both
+    # runs (both pass listen_addresses=localhost), so no restart is triggered.
   tags: ['backend', 'postgresql']
 
 # ==========================================================
@@ -714,6 +754,63 @@
   loop:
     - /etc/autobot/certs/server-key.pem
     - /etc/autobot/certs/server-cert.pem
+
+# #10636: full-user-management secrets for the runtime .env. The DB password
+# is created by the postgresql role above (db_password); the internal service
+# API key and the initial-admin password (which seeds the default admin on
+# first boot) come from /etc/autobot/slm-secrets.env (written by slm_manager).
+# Without these the clean-install .env has no DB password / admin → /login has
+# no account, matching the deploy-path wiring in update-all-nodes.yml.
+- name: "Backend | Read AUTOBOT_INTERNAL_API_KEY for .env (#10636)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*'
+      /etc/autobot/slm-secrets.env 2>/dev/null || true
+  register: _backend_internal_api_key
+  changed_when: false
+  failed_when: false
+  no_log: true
+  tags: ['backend', 'config']
+
+- name: "Backend | Read admin seed password (AUTOBOT_ADMIN_PASSWORD, fallback SLM_ADMIN_PASSWORD) (#10636)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
+      || grep -oP '^SLM_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
+      || true
+  register: _backend_admin_password
+  changed_when: false
+  failed_when: false
+  no_log: true
+  tags: ['backend', 'config']
+
+# #10636: db_password is set in-memory by the postgresql include above when it
+# runs in this play. On a tag-filtered re-run that skips that include (or when
+# the DB was provisioned by a separate playbook), read the backend's OWN creds
+# file — autobot-db-credentials.env, never the SLM's db-credentials.env — so the
+# .env still renders a valid AUTOBOT_POSTGRES_PASSWORD without clobbering the SLM.
+- name: "Backend | Read AUTOBOT_DB_PASSWORD from backend creds file (fallback, #10636)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_DB_PASSWORD=\K.*'
+      /etc/autobot/autobot-db-credentials.env 2>/dev/null || true
+  register: _backend_db_password_file
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when: db_password is not defined
+  tags: ['backend', 'config']
+
+- name: "Backend | Set full-user-management .env facts (#10636)"
+  ansible.builtin.set_fact:
+    autobot_internal_api_key: "{{ _backend_internal_api_key.stdout | default('') | trim }}"
+    autobot_admin_password: "{{ _backend_admin_password.stdout | default('') | trim }}"
+    backend_postgres_password: >-
+      {{ db_password
+         | default(_backend_db_password_file.stdout | default('') | trim, true)
+         | default(backend_postgres_password | default(''), true) }}
+  no_log: true
+  tags: ['backend', 'config']
 
 # Issue #2824: Deploy .env to backend_code_dir so the systemd
 # EnvironmentFile directive can find it.  Previous code deployed to

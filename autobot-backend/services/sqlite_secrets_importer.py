@@ -75,8 +75,8 @@ async def _existing_markers(session: AsyncSession) -> set[str]:
     return {r for r in rows if r}
 
 
-def _build_unified(row: dict, plaintext: bytes, owner: uuid.UUID, root_key: bytes) -> tuple[Secret, SecretGrant]:
-    """Seal *plaintext* and build the new unified Secret + owner grant for a legacy SQLite row."""
+def _build_secret_grant(row: dict, plaintext: bytes, owner: uuid.UUID, root_key: bytes) -> tuple[Secret, SecretGrant]:
+    """Seal *plaintext* and build the new vault Secret + owner grant for a legacy SQLite row."""
     new_id = uuid.uuid4()
     sid = str(new_id)
     vault = VaultRef(VaultKind.USER, str(owner))
@@ -140,7 +140,7 @@ async def import_sqlite_secrets(
             # Per-row SAVEPOINT so one bad row (FK/unique violation, or dirty data
             # that overflows a PG column → DataError) is reported without aborting the batch.
             async with session.begin_nested():
-                secret, grant = _build_unified(row, plaintext, owner, root_key)
+                secret, grant = _build_secret_grant(row, plaintext, owner, root_key)
                 session.add(secret)
                 session.add(grant)
                 await session.flush()

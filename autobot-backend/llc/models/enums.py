@@ -125,6 +125,16 @@ class ApprovalType(str, Enum):
     STRATEGY = "strategy"
     BUDGET_OVERRIDE = "budget_override"
     SPRINT_CLOSE = "sprint_close"
+    PROJECT_DISPOSAL = "project_disposal"
+    FINDING_PROMOTION = "finding_promotion"
+
+
+class FindingProposalStatus(str, Enum):
+    """Status of an analytics finding proposal (#11271)."""
+
+    PENDING = "pending"
+    PROMOTED = "promoted"
+    DISMISSED = "dismissed"
 
 
 class ApprovalStatus(str, Enum):

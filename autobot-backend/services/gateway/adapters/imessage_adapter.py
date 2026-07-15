@@ -17,7 +17,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
-from .base_adapter import BaseAdapter, NormalizedResponse, UnifiedMessage
+from .base_adapter import BaseAdapter, GatewayMessage, NormalizedResponse
 
 logger = get_logger(__name__)
 
@@ -42,7 +42,7 @@ class IMessageAdapter(BaseAdapter):
         elif not IMESSAGE_ENABLED:
             logger.info("IMessageAdapter loaded; set AUTOBOT_IMESSAGE_ENABLED=true on a macOS host to enable sends")
 
-    async def normalize_message(self, raw_message: Dict[str, Any]) -> UnifiedMessage:
+    async def normalize_message(self, raw_message: Dict[str, Any]) -> GatewayMessage:
         """Convert macOS relay webhook payload to unified schema."""
         metadata = await self.extract_metadata(raw_message)
 
@@ -54,7 +54,7 @@ class IMessageAdapter(BaseAdapter):
         sender = raw_message.get("sender") or raw_message.get("from", "")
         chat_id = raw_message.get("chat_id") or raw_message.get("room_name") or sender
 
-        return UnifiedMessage(
+        return GatewayMessage(
             user_id=sender,
             platform="imessage",
             channel_id=chat_id,

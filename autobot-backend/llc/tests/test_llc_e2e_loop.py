@@ -78,7 +78,9 @@ _COST_MODEL = "claude-haiku-4-5-20251001"
 @pytest_asyncio.fixture
 async def engine():  # noqa: ANN201
     """In-memory SQLite engine with the loop schema created."""
-    eng = create_async_engine("sqlite+aiosqlite:///:memory:")
+    eng = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
+        "sqlite+aiosqlite:///:memory:"
+    )
     await harness.create_loop_schema(eng)
     yield eng
     await eng.dispose()
@@ -86,7 +88,9 @@ async def engine():  # noqa: ANN201
 
 @pytest_asyncio.fixture
 async def session_factory(engine):  # noqa: ANN001, ANN201
-    return async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    return async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
+        engine, expire_on_commit=False, class_=AsyncSession
+    )
 
 
 @pytest_asyncio.fixture

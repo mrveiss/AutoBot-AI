@@ -605,25 +605,59 @@ class LLMHandlerMixin:
         """
         return get_language_instruction(language_code)
 
-    def _get_system_prompt(self, language=None) -> str:
+    def _get_system_prompt(self, language=None, company_id=None) -> str:
         """Get system prompt with optional personality preamble.
 
         Issue #964: Personality preamble prepended when a profile is active.
         Issue #1325: Appends language instruction when non-English.
+        #11501 T2: appends board/company tool teaching when *company_id* is set
+        (the CEO-chat path), so those tools are advertised only there.
         """
         preamble = self._get_personality_preamble()
         resolved_lang = self._resolve_language(language)
         lang_instruction = self._get_language_instruction(resolved_lang)
+        llc_tools = self._get_llc_tool_prompt() if company_id else ""
+        compose_teaching = self._get_compose_tool_prompt()
         try:
             prompt = get_prompt("chat.system_prompt_simple")
             logger.debug("[ChatWorkflowManager] Loaded simplified system prompt")
-            return preamble + prompt + lang_instruction
+            return preamble + prompt + llc_tools + compose_teaching + lang_instruction
         except Exception as e:
             logger.error("Failed to load system prompt from file: %s", e)
-            return preamble + """You are AutoBot. Execute commands using:
+            return preamble + llc_tools + compose_teaching + """You are AutoBot. Execute commands using:
 <TOOL_CALL name="execute_command" params='{"command":"cmd"}'>desc</TOOL_CALL>
 
 NEVER teach commands - ALWAYS execute them.""" + lang_instruction
+
+    @staticmethod
+    def _get_llc_tool_prompt() -> str:
+        """Board/company tool teaching for the CEO-chat path (#11501 T2)."""
+        try:
+            from llc.agent_tools import LLC_TOOL_PROMPT
+
+            return LLC_TOOL_PROMPT
+        except Exception:  # noqa: BLE001 — LLC optional; never break general chat
+            return ""
+
+    @staticmethod
+    def _get_compose_tool_prompt() -> str:
+        """Compose tool teaching injected when CODEEXEC_ENABLED (GH#11568)."""
+        try:
+            from chat_workflow.tool_handler import CODEEXEC_ENABLED
+
+            if not CODEEXEC_ENABLED:
+                return ""
+        except Exception:  # noqa: BLE001
+            return ""
+        return (
+            "\n\n## compose tool\n"
+            "Use `compose` to run a sandboxed Python script that can call read-only AutoBot tools "
+            "via the `autobot_tools` module (e.g. `await autobot_tools.web_search(query=...)`). "
+            "Scripts must only import from the allowlist (autobot_tools, asyncio, json, re, math). "
+            "Do NOT use exec, eval, compile, or __import__.\n"
+            "Return your final answer by writing it to stdout (e.g. `print(json.dumps(result))`); "
+            "that printed output is what you receive back — tool-call plumbing is handled for you.\n"
+        )
 
     def _build_conversation_context(self, session: WorkflowSession) -> str:
         """Build conversation context from recent history.
@@ -693,20 +727,29 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         knowledge_context: str,
         conversation_context: str,
         message: str,
+        trajectory_context: str = "",
     ) -> str:
-        """Build full prompt with optional knowledge context.
+        """Build full prompt with optional knowledge and trajectory context.
 
         system_prompt is sent via the Ollama ``system`` field — not embedded here
-        to avoid double-injection and context-window waste.
+        to avoid double-injection and context-window waste. ``trajectory_context``
+        (#11261) is an untrusted reference block of similar past turns, prepended
+        so the model can reuse prior solutions without treating them as commands.
         """
+        prefix = ""
         if knowledge_context:
-            return (
-                knowledge_context + "\n" + conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
-            )
-        return conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
+            prefix += knowledge_context + "\n"
+        if trajectory_context:
+            prefix += trajectory_context + "\n"
+        return prefix + conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
 
-    def _get_selected_model(self) -> str:
-        """Get selected LLM model from config with fallback."""
+    def _get_selected_model(self, requested_model: str | None = None) -> str:
+        """Get the LLM model: per-request/per-conversation override, else global config (#11585)."""
+        if requested_model:
+            logger.info(
+                "Using per-request LLM model override: %s", requested_model
+            )  # codeql[py/clear-text-logging-sensitive-data]
+            return requested_model
         try:
             default_model = get_config().get_default_llm_model()
             selected = get_config().get_nested("backend.llm.ollama.selected_model", default_model)
@@ -734,8 +777,12 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
 
         Issue #1325: Accepts language for system prompt resolution.
         Issue MVA-1992: lightweight_mode bypasses RAG/memory for trivial queries.
+        Issue #11585: session.metadata["model_override"] (per-request/per-conversation
+        choice) takes priority over the global config default.
         """
-        selected_model = self._get_selected_model()
+        selected_model = self._get_selected_model(
+            session.metadata.get("model_override") if session and session.metadata else None
+        )
         # Issue #1214: Try SLM service discovery first (fleet-managed endpoint),
         # then fall back to local config-based resolution (#1070 model routing).
         slm_base = await self._discover_ollama_from_slm()
@@ -752,7 +799,10 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             {"message": message, "use_knowledge": use_knowledge, "language": language},
         )
 
-        system_prompt = self._get_system_prompt(language=language)
+        system_prompt = self._get_system_prompt(
+            language=language,
+            company_id=(session.metadata.get("company_id") if session and session.metadata else None),
+        )
         # Issue #5066: Tiered L0-L3 context wake-up (A/B against legacy path).
         # When TIERED_CONTEXT_ENABLED=true the TieredContextBuilder owns all
         # context prepending (L0 identity + L1 essential story + L2/L3 on-demand).
@@ -789,43 +839,31 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         knowledge_context, citations = "", []
         if self.knowledge_service and use_knowledge and not lightweight_mode:
             knowledge_context, citations = await self._retrieve_knowledge_context(message, session)
-            # Issue #3770: compress KB results when context exceeds model budget
+            # Issue #3770/#10837: compress KB results when context exceeds model budget.
+            # budget_grounded_context returns (context_str, effective_citations); rebind
+            # citations to the trimmed subset so params["citations"] only lists sources
+            # the model actually saw in the prompt (#10837 regression fix).
             if knowledge_context and citations:
-                from context_window_manager import ContextWindowManager
-                from services.memory.compression import ContextCompressionService
+                from services.knowledge.service import budget_grounded_context
 
-                cwm = ContextWindowManager()
-                cwm.set_model(selected_model)
-                kc_tokens = cwm.estimate_tokens(knowledge_context)
-                max_kb_tokens = cwm.get_max_history_tokens()
-                if await cwm.async_should_compress(content_tokens=kc_tokens, model_name=selected_model):
-                    svc = ContextCompressionService(
-                        model_thresholds={
-                            name: spec.get("compression_threshold", 8192)
-                            for name, spec in cwm.config.get("models", {}).items()
-                            if isinstance(spec, dict)
-                        }
-                    )
-                    citations = await svc.compress_kb_results(citations, max_tokens=max_kb_tokens)
-                    # Rebuild knowledge context from trimmed citations
-                    if citations:
-                        lines = ["KNOWLEDGE CONTEXT:"]
-                        for i, c in enumerate(citations, 1):
-                            score = c.get("score", 0.0)
-                            content = c.get("content", "").strip()
-                            lines.append(f"{i}. [score: {score:.2f}] {content}")
-                        knowledge_context = "\n".join(lines)
-                        logger.info(
-                            "[#3770] KB compressed to %d citations (%d tokens)",
-                            len(citations),
-                            cwm.estimate_tokens(knowledge_context),
-                        )
-                    else:
-                        knowledge_context = ""
+                knowledge_context, citations = await budget_grounded_context(citations, model_name=selected_model)
         else:
             session.metadata["used_knowledge"] = False
 
-        full_prompt = self._build_full_prompt(knowledge_context, conversation_context, message)
+        # #11261: search-before — inject similar high-reward past turns as an
+        # untrusted reference block. User/tenant-scoped by the store; skipped in
+        # lightweight mode and fully non-fatal.
+        trajectory_context = ""
+        if not lightweight_mode:
+            from chat_workflow.trajectory_context import retrieve_trajectory_context
+
+            trajectory_context = await retrieve_trajectory_context(
+                message,
+                user_id=str(session.metadata.get("user_id") or ""),
+                tenant_id=str(session.metadata.get("tenant_id") or ""),
+            )
+
+        full_prompt = self._build_full_prompt(knowledge_context, conversation_context, message, trajectory_context)
 
         # Issue #4265: Emit AFTER_PROMPT_BUILD hook after full prompt is built
         full_prompt = await _emit_after_prompt_build(

@@ -94,6 +94,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/health/celery-dead-letter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Celery Dead Letter Health
+         * @description Parked Celery tasks (retries exhausted) from the dead-letter list (#11586).
+         *
+         *     Returns the parked count plus the most recent entries recorded by
+         *     ``utils.celery_reliability.DeadLetterTask`` so terminally failed tasks
+         *     stay queryable after the Celery result TTL expires.
+         */
+        get: operations["celery_dead_letter_health_api_health_celery_dead_letter_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/version": {
         parameters: {
             query?: never;
@@ -245,6 +269,29 @@ export interface paths {
          *     If user_id is NULL, deletes global policy.
          */
         delete: operations["delete_retention_policy_api_admin_retention_policies__policy_type__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/retention-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Retention Settings
+         * @description Return active retention configuration and per-type storage counts (GH#8995).
+         *
+         *     Config values come from ssot_config (env-var-driven).
+         *     Counts are approximate (best-effort Redis scan); 0 = unavailable.
+         */
+        get: operations["get_retention_settings_api_admin_retention_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -479,6 +526,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/revoke-rs256-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Rs256 Token
+         * @description Revoke an RS256 authority token by adding its jti to the cross-service denylist.
+         *
+         *     Writes ``auth:rs256:jti:denylist:<jti>`` to the shared Redis instance so
+         *     that autobot-slm-backend's JWKS verifier rejects the token on its next
+         *     presentation, even before the token's ``exp`` claim elapses.
+         *
+         *     TTL of the denylist entry equals the remaining token lifetime so it
+         *     auto-expires and never accumulates indefinitely.
+         *
+         *     The caller must be authenticated (any valid user may revoke their own
+         *     token; a separate admin endpoint is not needed — the token is bound to
+         *     the presenter by signature and is unusable without the private key).
+         *
+         *     Returns a 200 with ``revoked=True`` on success or when the token is
+         *     already expired (nothing to revoke, but not an error).
+         */
+        post: operations["revoke_rs256_token_api_auth_revoke_rs256_token_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/me": {
         parameters: {
             query?: never;
@@ -489,8 +570,6 @@ export interface paths {
         /**
          * Get Current User Info
          * @description Get current authenticated user information.
-         *
-         *     In single_user deployment mode, returns default admin user without requiring auth.
          */
         get: operations["get_current_user_info_api_auth_me_get"];
         put?: never;
@@ -511,8 +590,6 @@ export interface paths {
         /**
          * Check Authentication
          * @description Quick authentication check endpoint.
-         *
-         *     In single_user mode, always returns authenticated=True.
          */
         get: operations["check_authentication_api_auth_check_get"];
         put?: never;
@@ -581,7 +658,6 @@ export interface paths {
          * @description Self-registration endpoint for new users (#1801).
          *
          *     Creates a new user account with the default 'user' role.
-         *     Disabled in single_user deployment mode.
          */
         post: operations["signup_api_auth_signup_post"];
         delete?: never;
@@ -1135,6 +1211,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat/sessions/{session_id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Session Role
+         * @description Return the session's pinned governed role (or null) plus the valid roles.
+         */
+        get: operations["get_session_role_api_chat_sessions__session_id__role_get"];
+        /**
+         * Set Session Role
+         * @description Pin a chat session to a governed agent role (GH#11186).
+         *
+         *     The role's ``forbidden_work`` manifest is then enforced at the tool seam for
+         *     this session and overrides any client-supplied ``agent_id``.
+         */
+        put: operations["set_session_role_api_chat_sessions__session_id__role_put"];
+        post?: never;
+        /**
+         * Clear Session Role
+         * @description Remove a session's governed-role binding (reverts to ungoverned chat).
+         */
+        delete: operations["clear_session_role_api_chat_sessions__session_id__role_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chat/sessions/{session_id}/approval-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Session Approval Categories
+         * @description Return the session's declared approval categories plus the valid vocabulary.
+         */
+        get: operations["get_session_approval_categories_api_chat_sessions__session_id__approval_categories_get"];
+        /**
+         * Set Session Approval Categories
+         * @description Declare which action categories require approval for this session (GH#11202).
+         *
+         *     Backend-owned permission decision — matching tool calls are held via the chat
+         *     approval interrupt (when the gate flag is enabled). The frontend only calls this.
+         */
+        put: operations["set_session_approval_categories_api_chat_sessions__session_id__approval_categories_put"];
+        post?: never;
+        /**
+         * Clear Session Approval Categories
+         * @description Remove a session's approval-category declaration.
+         */
+        delete: operations["clear_session_approval_categories_api_chat_sessions__session_id__approval_categories_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat/health": {
         parameters: {
             query?: never;
@@ -1298,7 +1436,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced": {
+    "/api/ai-stack": {
         parameters: {
             query?: never;
             header?: never;
@@ -1308,25 +1446,25 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enhanced Chat
-         * @description Enhanced chat endpoint with AI Stack integration.
+         * Chat Ai Stack
+         * @description AI Stack chat endpoint with knowledge base integration.
          *
          *     This endpoint provides intelligent conversation with:
-         *     - AI Stack enhanced reasoning capabilities
+         *     - AI Stack reasoning capabilities
          *     - Knowledge base integration
          *     - Source citations
          *     - Customizable response preferences
          *
          *     Issue #744: Requires authenticated user.
          */
-        post: operations["enhanced_chat_api_enhanced_post"];
+        post: operations["chat_ai_stack_api_ai_stack_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/stream-enhanced": {
+    "/api/stream-ai-stack": {
         parameters: {
             query?: never;
             header?: never;
@@ -1336,22 +1474,22 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Stream Enhanced Chat
-         * @description Stream enhanced chat response for real-time communication.
+         * Stream Ai Stack Chat
+         * @description Stream AI Stack chat response for real-time communication.
          *
-         *     Provides real-time streaming of AI Stack enhanced responses
+         *     Provides real-time streaming of AI Stack responses
          *     with knowledge base integration.
          *
          *     Issue #744: Requires authenticated user.
          */
-        post: operations["stream_enhanced_chat_api_stream_enhanced_post"];
+        post: operations["stream_ai_stack_chat_api_stream_ai_stack_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/health-enhanced": {
+    "/api/health-ai-stack": {
         parameters: {
             query?: never;
             header?: never;
@@ -1359,12 +1497,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Enhanced Chat Health Check
-         * @description Health check for enhanced chat service including AI Stack connectivity.
+         * Chat Health Ai Stack
+         * @description Health check for AI Stack chat service including AI Stack connectivity.
          *
          *     Issue #744: Requires authenticated user.
          */
-        get: operations["enhanced_chat_health_check_api_health_enhanced_get"];
+        get: operations["chat_health_ai_stack_api_health_ai_stack_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1567,6 +1705,74 @@ export interface paths {
          *     Only org admins can delete org-wide presets.
          */
         delete: operations["delete_preset_api_chat_presets__preset_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/benchmarks/prompt-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Prompt Sets
+         * @description Return the built-in benchmark prompt sets (Issue #9024).
+         */
+        get: operations["list_prompt_sets_api_benchmarks_prompt_sets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/benchmarks/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Runs
+         * @description List saved runs for the user, newest first, with optional filters (Issue #9024).
+         */
+        get: operations["list_runs_api_benchmarks_runs_get"];
+        put?: never;
+        /**
+         * Create Run
+         * @description Persist a benchmark run for the authenticated user (Issue #9024).
+         */
+        post: operations["create_run_api_benchmarks_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/benchmarks/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Run
+         * @description Return a single saved run owned by the user (Issue #9024).
+         */
+        get: operations["get_run_api_benchmarks_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Run
+         * @description Delete a saved run owned by the user (Issue #9024).
+         */
+        delete: operations["delete_run_api_benchmarks_runs__run_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1804,12 +2010,30 @@ export interface paths {
          *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
          *     so the uncached aggregator is acceptable on its own.
          */
-        get: operations["get_system_health_api_system_system_health_get"];
+        get: operations["get_system_health_alias"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
-        head?: never;
+        /**
+         * Get System Health
+         * @description Get aggregated system health status.
+         *
+         *     Public endpoint — no auth required. Frontend health monitors check this
+         *     before login. Issue #916: removed admin_check to allow unauthenticated access.
+         *
+         *     Issue #3333: This is the canonical aggregator. Components registered via
+         *     ``api.system_health.register_health_probe`` are run concurrently and their
+         *     string-valued statuses are merged into ``components`` to preserve the
+         *     frontend ``HealthCheckResponse`` shape. Per-component diagnostic detail
+         *     (latency, error reason, structured data) lives under ``probes``.
+         *
+         *     Issue #6906: ``@cache_response`` was removed because the embedded probe
+         *     results flip status second-by-second; a 30s TTL hid real failures.
+         *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
+         *     so the uncached aggregator is acceptable on its own.
+         */
+        head: operations["head_system_health_alias"];
         patch?: never;
         trace?: never;
     };
@@ -1838,12 +2062,30 @@ export interface paths {
          *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
          *     so the uncached aggregator is acceptable on its own.
          */
-        get: operations["get_system_health_api_system_health_get"];
+        get: operations["get_system_health"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
-        head?: never;
+        /**
+         * Get System Health
+         * @description Get aggregated system health status.
+         *
+         *     Public endpoint — no auth required. Frontend health monitors check this
+         *     before login. Issue #916: removed admin_check to allow unauthenticated access.
+         *
+         *     Issue #3333: This is the canonical aggregator. Components registered via
+         *     ``api.system_health.register_health_probe`` are run concurrently and their
+         *     string-valued statuses are merged into ``components`` to preserve the
+         *     frontend ``HealthCheckResponse`` shape. Per-component diagnostic detail
+         *     (latency, error reason, structured data) lives under ``probes``.
+         *
+         *     Issue #6906: ``@cache_response`` was removed because the embedded probe
+         *     results flip status second-by-second; a 30s TTL hid real failures.
+         *     Probe execution is bounded at ~2s by the registry's per-probe timeout,
+         *     so the uncached aggregator is acceptable on its own.
+         */
+        head: operations["head_system_health"];
         patch?: never;
         trace?: never;
     };
@@ -2589,6 +2831,11 @@ export interface paths {
          * Get Telemetry Settings
          * @description Get current telemetry settings (Issue #9035).
          *
+         *     Public: returns only global, non-sensitive telemetry config (enabled flags +
+         *     first-run-prompt state). Checked at app load before auth is established, so
+         *     gating it behind get_current_user caused spurious 401s (#10750 A13). The
+         *     consent-changing POST /telemetry remains authenticated.
+         *
          *     Returns telemetry opt-in/opt-out status and whether the first-run
          *     prompt has been shown.
          *
@@ -2600,14 +2847,13 @@ export interface paths {
          * Update Telemetry Settings
          * @description Update telemetry settings (Issue #9035).
          *
-         *     Allows users to opt in/out of telemetry collection. When telemetry
+         *     Allows admins to opt in/out of telemetry collection. When telemetry
          *     is disabled, the AnalyticsMiddleware and VoiceRealtimeTelemetry
          *     services skip data collection.
          *
-         *     Requires admin permission.  Works in single_user mode (no Postgres
-         *     required): the consent state is persisted to settings.json via
-         *     ConfigService; the DB audit trail is skipped when Postgres is
-         *     unavailable (Issue #10000).
+         *     Requires admin permission.  The consent state is persisted to
+         *     settings.json via ConfigService; a DB audit-trail revision is also
+         *     recorded (Issue #10000).
          *
          *     Args:
          *         request: New telemetry settings
@@ -2622,7 +2868,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/usage/usage/summary": {
+    "/api/settings/telemetry/prompt-shown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Telemetry Prompt
+         * @description Mark the first-run telemetry prompt as shown (Issue #11344).
+         *
+         *     Records a UI-dismissal state only — it never changes the enable/disable
+         *     flags — so it is available to any authenticated user (not just admins).
+         *     This lets non-admins dismiss the consent modal without a 403, which
+         *     previously caused it to re-appear on every refresh. Toggling telemetry
+         *     itself still requires the admin-gated POST /telemetry endpoint.
+         */
+        post: operations["dismiss_telemetry_prompt_api_settings_telemetry_prompt_shown_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/usage/summary": {
         parameters: {
             query?: never;
             header?: never;
@@ -2638,7 +2910,7 @@ export interface paths {
          *
          *     Issue #1807: Billing-ready usage metrics.
          */
-        get: operations["get_usage_summary_api_usage_usage_summary_get"];
+        get: operations["get_usage_summary_api_usage_summary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2647,7 +2919,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/usage/usage/by-user": {
+    "/api/usage/by-user": {
         parameters: {
             query?: never;
             header?: never;
@@ -2660,7 +2932,7 @@ export interface paths {
          *
          *     Issue #1807: Per-user billing metrics.
          */
-        get: operations["get_usage_by_user_all_api_usage_usage_by_user_get"];
+        get: operations["get_usage_by_user_all_api_usage_by_user_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2669,7 +2941,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/usage/usage/by-user/{user_id}": {
+    "/api/usage/by-user/{user_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2682,7 +2954,7 @@ export interface paths {
          *
          *     Issue #1807: Per-user billing metrics.
          */
-        get: operations["get_usage_by_user_single_api_usage_usage_by_user__user_id__get"];
+        get: operations["get_usage_by_user_single_api_usage_by_user__user_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2691,7 +2963,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/usage/usage/me": {
+    "/api/usage/me": {
         parameters: {
             query?: never;
             header?: never;
@@ -2706,7 +2978,7 @@ export interface paths {
          *
          *     Issue #1807: Personal usage dashboard data.
          */
-        get: operations["get_my_usage_api_usage_usage_me_get"];
+        get: operations["get_my_usage_api_usage_me_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2715,7 +2987,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/usage/usage/record": {
+    "/api/usage/record": {
         parameters: {
             query?: never;
             header?: never;
@@ -2734,14 +3006,14 @@ export interface paths {
          *
          *     Issue #1807: Billing-ready usage event ingestion.
          */
-        post: operations["record_usage_event_api_usage_usage_record_post"];
+        post: operations["record_usage_event_api_usage_record_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/usage/usage/export/csv": {
+    "/api/usage/export/csv": {
         parameters: {
             query?: never;
             header?: never;
@@ -2758,7 +3030,7 @@ export interface paths {
          *
          *     Issue #1807: CSV export for billing/reporting.
          */
-        get: operations["export_usage_csv_api_usage_usage_export_csv_get"];
+        get: operations["export_usage_csv_api_usage_export_csv_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3244,6 +3516,46 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/users/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get User Preferences
+         * @description Get current user's preferences.
+         *
+         *     Returns:
+         *         DataResponse with user preferences
+         *
+         *     Raises:
+         *         HTTPException: 401 if not authenticated
+         */
+        get: operations["get_user_preferences_api_users_me_preferences_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update User Preferences
+         * @description Update current user's preferences.
+         *
+         *     Args:
+         *         preferences: New preference values
+         *
+         *     Returns:
+         *         DataResponse with updated preferences
+         *
+         *     Raises:
+         *         HTTPException: 401 if not authenticated
+         *         HTTPException: 500 if Redis operation fails
+         */
+        patch: operations["update_user_preferences_api_users_me_preferences_patch"];
         trace?: never;
     };
     "/api/devices/pair-qr": {
@@ -3977,12 +4289,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Knowledge Stats
-         * @description Get knowledge base statistics - FIXED to use proper instance
+         * Get Aistack Stats
+         * @description Get enhanced knowledge base statistics including AI Stack metrics.
          *
-         *     Issue #744: Requires admin authentication.
+         *     Issue #744: Requires authenticated user.
          */
-        get: operations["get_knowledge_stats_api_knowledge_base_stats_get"];
+        get: operations["get_aistack_stats_api_knowledge_base_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5411,7 +5723,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/ai-stack/search/enhanced": {
+    "/api/knowledge_base/ai-stack/search": {
         parameters: {
             query?: never;
             header?: never;
@@ -5421,8 +5733,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enhanced Search
-         * @description Enhanced search combining local knowledge base with AI Stack RAG capabilities.
+         * Search
+         * @description Search combining local knowledge base with AI Stack RAG capabilities.
          *
          *     Issue #281: Refactored from 144 lines to use extracted helper methods.
          *     Issue #744: Requires authenticated user.
@@ -5432,7 +5744,7 @@ export interface paths {
          *     - AI Stack RAG-enhanced retrieval
          *     - Intelligent result ranking and synthesis
          */
-        post: operations["enhanced_search_api_knowledge_base_ai_stack_search_enhanced_post"];
+        post: operations["search_api_knowledge_base_ai_stack_search_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5564,7 +5876,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/ai-stack/stats/enhanced": {
+    "/api/knowledge_base/ai-stack/stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -5572,12 +5884,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Enhanced Stats
+         * Get Aistack Stats
          * @description Get enhanced knowledge base statistics including AI Stack metrics.
          *
          *     Issue #744: Requires authenticated user.
          */
-        get: operations["get_enhanced_stats_api_knowledge_base_ai_stack_stats_enhanced_get"];
+        get: operations["get_aistack_stats_api_knowledge_base_ai_stack_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5586,7 +5898,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/ai-stack/health/enhanced": {
+    "/api/knowledge_base/ai-stack/health/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -5594,12 +5906,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Enhanced Knowledge Health
-         * @description Enhanced health check including AI Stack connectivity.
+         * Knowledge Health
+         * @description Health check including AI Stack connectivity.
          *
          *     Issue #744: Requires authenticated user.
          */
-        get: operations["enhanced_knowledge_health_api_knowledge_base_ai_stack_health_enhanced_get"];
+        get: operations["knowledge_health_api_knowledge_base_ai_stack_health_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5671,7 +5983,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/search": {
+    "/api/knowledge_base/multi-source/search": {
         parameters: {
             query?: never;
             header?: never;
@@ -5681,21 +5993,21 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Unified Search
-         * @description Search across all knowledge sources in a unified query.
+         * Search
+         * @description Search across all knowledge sources in a multi-source query.
          *
          *     Issue #620: Refactored to use extracted helper methods.
          *
          *     Returns results from all sources with source attribution.
          */
-        post: operations["unified_search_api_knowledge_base_unified_search_post"];
+        post: operations["search_api_knowledge_base_multi_source_search_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/stats": {
+    "/api/knowledge_base/multi-source/stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -5703,10 +6015,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Unified Stats
-         * @description Get statistics from all unified knowledge sources (KB facts, relations, docs). Ref: #1088.
+         * Stats
+         * @description Get statistics from all multi-source knowledge endpoints (KB facts, relations, docs). Ref: #1088.
          */
-        get: operations["unified_stats_api_knowledge_base_unified_stats_get"];
+        get: operations["stats_api_knowledge_base_multi_source_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5715,7 +6027,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/context": {
+    "/api/knowledge_base/multi-source/context": {
         parameters: {
             query?: never;
             header?: never;
@@ -5726,7 +6038,7 @@ export interface paths {
         put?: never;
         /**
          * Get Llm Context
-         * @description Get formatted context for LLM prompts from unified knowledge sources.
+         * @description Get formatted context for LLM prompts from multi-source knowledge endpoints.
          *
          *     Retrieves and formats knowledge from all sources into a context string
          *     suitable for inclusion in LLM prompts.
@@ -5736,14 +6048,14 @@ export interface paths {
          *     - Source citations
          *     - Metadata about retrieved content
          */
-        post: operations["get_llm_context_api_knowledge_base_unified_context_post"];
+        post: operations["get_llm_context_api_knowledge_base_multi_source_context_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/documentation/search": {
+    "/api/knowledge_base/multi-source/documentation/search": {
         parameters: {
             query?: never;
             header?: never;
@@ -5761,7 +6073,7 @@ export interface paths {
          *         n_results: Maximum results to return
          *         score_threshold: Minimum relevance score (0-1)
          */
-        get: operations["search_documentation_api_knowledge_base_unified_documentation_search_get"];
+        get: operations["search_documentation_api_knowledge_base_multi_source_documentation_search_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5770,7 +6082,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/documentation/stats": {
+    "/api/knowledge_base/multi-source/documentation/stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -5783,7 +6095,7 @@ export interface paths {
          *
          *     Returns document count and indexing status.
          */
-        get: operations["documentation_stats_api_knowledge_base_unified_documentation_stats_get"];
+        get: operations["documentation_stats_api_knowledge_base_multi_source_documentation_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5792,7 +6104,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/unified/graph": {
+    "/api/knowledge_base/multi-source/graph": {
         parameters: {
             query?: never;
             header?: never;
@@ -5800,17 +6112,17 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Unified Graph Simple
-         * @description GET version of unified graph for simple requests.
+         * Get Multi Source Graph Simple
+         * @description GET version of multi-source graph for simple requests.
          *
-         *     Returns a unified knowledge graph with default settings.
-         *     For more control, use POST /unified/graph with GraphRequest body.
+         *     Returns a multi-source knowledge graph with default settings.
+         *     For more control, use POST /multi-source/graph with GraphRequest body.
          */
-        get: operations["get_unified_graph_simple_api_knowledge_base_unified_graph_get"];
+        get: operations["get_multi_source_graph_simple_api_knowledge_base_multi_source_graph_get"];
         put?: never;
         /**
-         * Get Unified Graph
-         * @description Get unified knowledge graph combining categories, facts, and relations.
+         * Get Multi Source Graph
+         * @description Get multi-source knowledge graph combining categories, facts, and relations.
          *
          *     This endpoint is designed for the KnowledgeGraph.vue component to visualize
          *     all knowledge sources in a single graph. It returns:
@@ -5823,7 +6135,7 @@ export interface paths {
          *     - entities: List of nodes with id, name, type, observations
          *     - relations: List of edges with from, to, type, strength
          */
-        post: operations["get_unified_graph_api_knowledge_base_unified_graph_post"];
+        post: operations["get_multi_source_graph_api_knowledge_base_multi_source_graph_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6246,185 +6558,18 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Consolidated Search
-         * @description Consolidated knowledge base search endpoint (Issue #555).
+         * Search
+         * @description Search combining local knowledge base with AI Stack RAG capabilities.
          *
-         *     This is the PRIMARY search endpoint that combines all search capabilities:
-         *     - Basic search (query, top_k)
-         *     - Enhanced search (tags, hybrid mode, reranking)
-         *     - RAG search (query reformulation, synthesis)
-         *     - Advanced filtering (date filters, term filters)
-         *     - Analytics tracking
+         *     Issue #281: Refactored from 144 lines to use extracted helper methods.
+         *     Issue #744: Requires authenticated user.
          *
-         *     **Parameters:**
-         *     - **query** (required): Search query string
-         *     - **top_k**: Maximum results (default: 10, max: 100)
-         *     - **category**: Filter by category
-         *     - **mode**: Search mode - 'semantic', 'keyword', 'hybrid' (default), 'auto'
-         *     - **enable_rag**: Enable RAG enhancement for synthesized responses
-         *     - **enable_reranking**: Enable cross-encoder reranking
-         *     - **reformulate_query**: Expand query for better coverage
-         *     - **return_context**: Return optimized context for chat integration
-         *     - **tags**: Filter by tags
-         *     - **tags_match_any**: Match ANY tag (true) or ALL tags (false, default)
-         *     - **min_score**: Minimum score threshold (0.0-1.0)
-         *     - **offset**: Pagination offset
-         *     - **include_documentation**: Also search project documentation
-         *     - **include_relations**: Include related facts
-         *
-         *     **Returns:** results, total_results, query, mode, rag_enhanced,
-         *     reranking_applied, synthesized_response (if enable_rag=true).
-         *     Migration: /enhanced_search→tags/reranking, /rag_search→enable_rag=true,
-         *     /similarity_search→mode=semantic. Issue #665: extracted helpers. #1088.
+         *     This endpoint provides superior search results by combining:
+         *     - Local knowledge base semantic search
+         *     - AI Stack RAG-enhanced retrieval
+         *     - Intelligent result ranking and synthesis
          */
-        post: operations["consolidated_search_api_knowledge_base_search_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/enhanced_search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Enhanced Search
-         * @deprecated
-         * @description **[DEPRECATED]** Use POST /search with appropriate parameters instead.
-         *
-         *     Migration: Use `/search` with these parameters:
-         *     - `tags`: for tag filtering
-         *     - `tags_match_any`: for tag match mode
-         *     - `mode`: for search mode
-         *     - `enable_reranking`: for reranking
-         *     - `min_score`: for score threshold
-         *
-         *     ---
-         *
-         *     Enhanced search with tag filtering, hybrid mode, and query preprocessing.
-         *
-         *     Issue #78: Search Quality Improvements
-         *
-         *     Features:
-         *     - Hybrid search mode (semantic + keyword with RRF)
-         *     - Tag-based filtering (match all or any)
-         *     - Query preprocessing (abbreviation expansion)
-         *     - Minimum score threshold
-         *     - Optional cross-encoder reranking
-         *     - Pagination support
-         *
-         *     Request body:
-         *     - query: Search query string
-         *     - limit: Maximum results (default: 10, max: 100)
-         *     - offset: Pagination offset (default: 0)
-         *     - category: Optional category filter
-         *     - tags: Optional list of tags to filter by
-         *     - tags_match_any: If True, match ANY tag. If False, match ALL (default: False)
-         *     - mode: "semantic", "keyword", or "hybrid" (default: "hybrid")
-         *     - enable_reranking: Enable cross-encoder reranking (default: False)
-         *     - min_score: Minimum similarity score 0.0-1.0 (default: 0.0)
-         *
-         *     Returns:
-         *     - success: Boolean status
-         *     - results: List of search results
-         *     - total_count: Total matching results (before pagination)
-         *     - query_processed: The preprocessed query used
-         *     - mode: Search mode used
-         *     - tags_applied: Tags used for filtering
-         *     - min_score_applied: Minimum score threshold used
-         *     - reranking_applied: Whether reranking was applied
-         */
-        post: operations["enhanced_search_api_knowledge_base_enhanced_search_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/rag_search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Rag Enhanced Search
-         * @deprecated
-         * @description **[DEPRECATED]** Use POST /search with `enable_rag=true` instead.
-         *
-         *     Migration: use `enable_rag=true`, `reformulate_query=true` in /search.
-         *     RAG-enhanced search with query reformulation, multi-query dedup, and synthesis.
-         *     Issue #281: Refactored to use extracted helpers. #1088: param extraction.
-         */
-        post: operations["rag_enhanced_search_api_knowledge_base_rag_search_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/similarity_search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Similarity Search
-         * @deprecated
-         * @description **[DEPRECATED]** Use POST /search with `mode=semantic` instead (Issue #665: refactored).
-         *
-         *     Migration: Use `/search` with these parameters:
-         *     - `mode`: "semantic" (for pure vector search)
-         *     - `min_score`: for threshold filtering (e.g., 0.7)
-         *     - `enable_rag`: for RAG enhancement
-         */
-        post: operations["similarity_search_api_knowledge_base_similarity_search_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/enhanced_search_v2": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Enhanced Search V2
-         * @deprecated
-         * @description **[DEPRECATED]** Use POST /search with appropriate parameters instead.
-         *
-         *     Migration: All v2 features are now in `/search`:
-         *     - `created_after`, `created_before`: Date filtering
-         *     - `exclude_terms`, `require_terms`: Term filtering
-         *     - `session_id`, `track_analytics`: Analytics
-         *
-         *     ---
-         *
-         *     Enhanced search v2 with Issue #78 improvements (Issue #398: refactored).
-         *
-         *     Features: Query expansion, relevance scoring, filtering, clustering, analytics.
-         *     See API documentation for full parameter list.
-         */
-        post: operations["enhanced_search_v2_api_knowledge_base_enhanced_search_v2_post"];
+        post: operations["search_api_knowledge_base_search_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9271,34 +9416,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/search/enhanced": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Enhanced Search
-         * @description Enhanced search combining local knowledge base with AI Stack RAG capabilities.
-         *
-         *     Issue #281: Refactored from 144 lines to use extracted helper methods.
-         *     Issue #744: Requires authenticated user.
-         *
-         *     This endpoint provides superior search results by combining:
-         *     - Local knowledge base semantic search
-         *     - AI Stack RAG-enhanced retrieval
-         *     - Intelligent result ranking and synthesis
-         */
-        post: operations["enhanced_search_api_knowledge_base_search_enhanced_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/knowledge_base/search/rag": {
         parameters: {
             query?: never;
@@ -9424,7 +9541,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/stats/enhanced": {
+    "/api/knowledge_base/health/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -9432,34 +9549,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Enhanced Stats
-         * @description Get enhanced knowledge base statistics including AI Stack metrics.
+         * Knowledge Health
+         * @description Health check including AI Stack connectivity.
          *
          *     Issue #744: Requires authenticated user.
          */
-        get: operations["get_enhanced_stats_api_knowledge_base_stats_enhanced_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/knowledge_base/health/enhanced": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Enhanced Knowledge Health
-         * @description Enhanced health check including AI Stack connectivity.
-         *
-         *     Issue #744: Requires authenticated user.
-         */
-        get: operations["enhanced_knowledge_health_api_knowledge_base_health_enhanced_get"];
+        get: operations["knowledge_health_api_knowledge_base_health_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -13174,6 +13269,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mcp/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Mcp Registry Health
+         * @description Aggregate health check for the MCP registry (#10429).
+         *
+         *     The frontend MCP manager and SLM admin monitoring poll
+         *     GET /api/mcp/health (advertised by the registry info route) expecting an
+         *     aggregate of per-bridge health. It previously 404'd because only
+         *     /tools, /bridges, /stats and / existed. Reuses the cached bridge probe.
+         */
+        get: operations["get_mcp_registry_health_api_mcp_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/mcp/tools": {
         parameters: {
             query?: never;
@@ -15545,7 +15665,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agent/goal/enhanced": {
+    "/api/agent/goal/orchestrated": {
         parameters: {
             query?: never;
             header?: never;
@@ -15555,13 +15675,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Execute Enhanced Goal
-         * @description Execute goal using enhanced AI Stack multi-agent coordination.
+         * Execute Orchestrated Goal
+         * @description Execute goal via multi-agent orchestration with AI Stack coordination.
          *
          *     Issue #398: refactored.
          *     Issue #744: Requires authenticated user.
          */
-        post: operations["execute_enhanced_goal_api_agent_goal_enhanced_post"];
+        post: operations["execute_orchestrated_goal_api_agent_goal_orchestrated_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15646,10 +15766,13 @@ export interface paths {
         };
         /**
          * List Available Agents
-         * @description List all available AI Stack agents with their capabilities.
+         * @description List all available agents (AI Stack + local orchestration registry).
          *
          *     Issue #281: Refactored to use module-level AGENT_CAPABILITIES constant.
          *     Issue #987: Removed auth requirement — read-only status, accessible to SLM admin.
+         *     Issue #6828: unified entry point — merges AI Stack agents with the canonical
+         *     AgentCapabilityRegistry profiles; optional ``capability`` query filters to
+         *     agents that can do X (case-insensitive substring on capability names).
          */
         get: operations["list_available_agents_api_agent_agents_available_get"];
         put?: never;
@@ -15682,7 +15805,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agent/health/enhanced": {
+    "/api/agent/health/detailed": {
         parameters: {
             query?: never;
             header?: never;
@@ -15690,10 +15813,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Enhanced Agent Health
-         * @description Enhanced health check for agent services.
+         * Agent Health
+         * @description Detailed health check for agent services.
          */
-        get: operations["enhanced_agent_health_api_agent_health_enhanced_get"];
+        get: operations["agent_health_api_agent_health_detailed_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -16336,6 +16459,31 @@ export interface paths {
          *     Each node contains nested children recursively.
          */
         get: operations["get_org_tree_api_agents_org_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agents Status
+         * @description Return all registered agents with runtime status (#10502, #10511).
+         *
+         *     Uses the Postgres-backed ``AgentOrgService`` when a session is available,
+         *     with a defensive fallback to the in-memory ``AgentCapabilityRegistry`` populated from
+         *     ``DEFAULT_AGENT_CONFIGS`` so the Home dashboard "Agent Activity Monitor"
+         *     returns 200 instead of 503.
+         */
+        get: operations["get_agents_status_api_agents_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -17779,6 +17927,75 @@ export interface paths {
          *         List of audit entries ordered by timestamp descending
          */
         get: operations["get_capability_audit_log_api_plugins_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/themes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Themes */
+        get: operations["list_themes_api_themes_get"];
+        put?: never;
+        /** Install Theme */
+        post: operations["install_theme_api_themes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/themes/{theme_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Uninstall Theme */
+        delete: operations["uninstall_theme_api_themes__theme_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/themes/{theme_id}/theme.css": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Serve Theme Css */
+        get: operations["serve_theme_css_api_themes__theme_id__theme_css_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/themes/{theme_id}/assets/{rel}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Serve Theme Asset */
+        get: operations["serve_theme_asset_api_themes__theme_id__assets__rel__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21108,7 +21325,7 @@ export interface paths {
         post?: never;
         /**
          * Delete Code Source
-         * @description Delete a code source and remove its clone directory if present.
+         * @description Delete a code source and remove its clone directory + index if present.
          */
         delete: operations["delete_code_source_api_analytics_codebase_sources__source_id__delete"];
         options?: never;
@@ -21223,7 +21440,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/unified/report": {
+    "/api/reporting/report": {
         parameters: {
             query?: never;
             header?: never;
@@ -21231,8 +21448,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Unified Report
-         * @description Get unified analytics report aggregating all analytics sources.
+         * Get Analytics Report
+         * @description Get aggregated analytics report from all analytics sources.
          *
          *     Returns comprehensive code health overview including:
          *     - Overall health score
@@ -21242,7 +21459,7 @@ export interface paths {
          *     - Quality breakdown
          *     - Recommendations
          */
-        get: operations["get_unified_report_api_unified_report_get"];
+        get: operations["get_analytics_report_api_reporting_report_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21251,7 +21468,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/unified/summary": {
+    "/api/reporting/summary": {
         parameters: {
             query?: never;
             header?: never;
@@ -21264,7 +21481,7 @@ export interface paths {
          *
          *     Lightweight endpoint for dashboard cards.
          */
-        get: operations["get_quick_summary_api_unified_summary_get"];
+        get: operations["get_quick_summary_api_reporting_summary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21273,7 +21490,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/unified/trends": {
+    "/api/reporting/trends": {
         parameters: {
             query?: never;
             header?: never;
@@ -21286,7 +21503,7 @@ export interface paths {
          *
          *     Note: Returns no_data status as trend storage requires historical snapshots.
          */
-        get: operations["get_trends_api_unified_trends_get"];
+        get: operations["get_trends_api_reporting_trends_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21625,6 +21842,33 @@ export interface paths {
          *     Issue #744: Requires admin authentication.
          */
         get: operations["get_debt_report_api_debt_report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/quality/remediation-deltas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Remediation Deltas
+         * @description Return recent remediation delta records written by the remediation loop.
+         *
+         *     Issue #11203: Surfaces ``remediation:delta:history`` so the quality
+         *     dashboard can show before/after health-score improvements alongside
+         *     the trend line.  Read-only; returns an empty list on a fresh system.
+         *
+         *     Args:
+         *         limit: Maximum number of recent delta records to return (1-100).
+         */
+        get: operations["get_remediation_deltas_api_quality_remediation_deltas_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -24482,14 +24726,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Unified Dashboard
-         * @description Get unified analytics dashboard.
+         * Get Analytics Dashboard
+         * @description Get aggregated analytics dashboard.
          *
          *     Aggregates all analytics sources into a single comprehensive view.
          *
          *     Issue #744: Requires admin authentication.
          */
-        get: operations["get_unified_dashboard_api_advanced_dashboard_get"];
+        get: operations["get_analytics_dashboard_api_advanced_dashboard_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -26258,6 +26502,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent-terminal/tasks/{task_id}/steer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Steer Agent Task
+         * @description Send a steering message to a running agent task without stopping it (#10543).
+         *
+         *     The guidance is queued in the loop's steering inbox and drained at the top
+         *     of the next ANALYZE_EVENTS phase.  The loop continues without restart;
+         *     the agent acknowledges the guidance in its next tool selection.
+         *
+         *     Returns 403 when the caller does not own the task (IDOR fix, #10553).
+         *     Returns 409 when no running loop owns the given task_id (stale or wrong ID).
+         *     Mirrors the approval-response path: publish a STEERING event so the live
+         *     event stream records the guidance in the task's trajectory.
+         */
+        post: operations["steer_agent_task_api_agent_terminal_tasks__task_id__steer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-terminal/tasks/{task_id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer Human Question
+         * @description Deliver a human's answer to a suspended ask_human() call (#10553).
+         *
+         *     The answer is published as a HUMAN_ANSWER event on the event stream so the
+         *     waiting loop can pick it up via its answer inbox.  Mirrors the steer endpoint
+         *     — publish-then-return; no blocking.
+         *
+         *     Returns 403 when the caller does not own the task (IDOR fix, #10553).
+         */
+        post: operations["answer_human_question_api_agent_terminal_tasks__task_id__answer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent-terminal/sessions/{session_id}/interrupt": {
         parameters: {
             query?: never;
@@ -26741,6 +27040,31 @@ export interface paths {
          *     ServicesSummary-shaped response.  Delegates to service_monitor helpers.
          */
         get: operations["get_services_health_api_monitoring_services_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/monitoring/metrics/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Resource Metrics History
+         * @description Per-machine resource-utilization history for the dashboard heatmap (#10264).
+         *
+         *     Queries Prometheus node-exporter range data and groups the series by the
+         *     ``instance`` label so each machine becomes one heatmap row. Shapes the result
+         *     as ``{machines: [{name, metrics: [{time, value}]}]}`` — the contract
+         *     ``useResourceMetrics.processData`` expects.
+         */
+        get: operations["get_resource_metrics_history_api_monitoring_metrics_history_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -28695,6 +29019,11 @@ export interface paths {
         /**
          * Send message to a channel
          * @description Send a message to the specified provider channel.
+         *
+         *     Slack and Discord are resolved through ``MessagingProtocol`` adapters
+         *     (#11524); Teams still uses its webhook-only execute_action path because
+         *     it targets a webhook URL rather than a channel_id and does not satisfy
+         *     the full MessagingProtocol contract.
          */
         post: operations["send_message_api_integrations_communication__provider__messages_post"];
         delete?: never;
@@ -29424,6 +29753,11 @@ export interface paths {
          *
          *     Security: verifies the ``X-Hub-Signature-256`` HMAC over the raw body using
          *     the stored app secret (Meta security requirement). Fails closed.
+         *
+         *     Text messages are routed immediately.  Media messages (image/audio/voice/
+         *     video/document) are downloaded from the Graph API and attached to the chat
+         *     message as ``has_file`` metadata before dispatch, mirroring the Telegram
+         *     adapter's has_file flow (GH#10267).
          */
         post: operations["whatsapp_webhook_api_whatsapp_webhook_post"];
         delete?: never;
@@ -29453,6 +29787,153 @@ export interface paths {
          */
         post: operations["configure_whatsapp_api_whatsapp_config_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm-auth/oauth/initiate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Oauth Initiate
+         * @description Begin a provider auth-code + PKCE flow; return the authorize URL + state.
+         *
+         *     The server mints the PKCE verifier/challenge and an unguessable ``state``,
+         *     stashes them in Redis (short TTL, keyed to the initiating admin), and returns
+         *     the provider authorize URL. The client never supplies the verifier — the
+         *     callback takes it from the stored state (#11297). Requires admin: the stored
+         *     credential is system-wide.
+         */
+        post: operations["oauth_initiate_api_llm_auth_oauth_initiate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm-auth/oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Oauth Callback
+         * @description Exchange an OAuth authorization code for tokens and persist to vault.
+         *
+         *     Authorized by a server-minted, **single-use** ``state`` (from /oauth/initiate):
+         *     the state is atomically consumed (GETDEL), must belong to the current admin,
+         *     and supplies the verifier / token_url / client_id — none of which the client
+         *     provides. This closes the CSRF / code-injection hole where a lured admin could
+         *     bind an attacker's account as the shared system credential (#11297).
+         *
+         *     Requires admin — stored credential is system-wide (shared by all users).
+         */
+        post: operations["oauth_callback_api_llm_auth_oauth_callback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm-auth/device/initiate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Device Initiate
+         * @description Start a device-code flow.
+         *
+         *     Calls the provider's device authorization endpoint and returns the
+         *     ``user_code`` + ``verification_uri`` for the user to complete on another device.
+         *     The caller polls ``/device/poll`` until approval or expiry.
+         *
+         *     Requires admin — stored credential is system-wide (shared by all users).
+         */
+        post: operations["device_initiate_api_llm_auth_device_initiate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm-auth/device/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Device Poll
+         * @description Poll the token endpoint for a device-code grant and persist on approval.
+         *
+         *     Returns ``stored=False`` when the grant is still pending (caller should
+         *     retry after the ``interval`` from ``/device/initiate``).
+         *
+         *     Requires admin — stored credential is system-wide (shared by all users).
+         */
+        post: operations["device_poll_api_llm_auth_device_poll_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm-auth/status/{provider_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Provider Auth Status
+         * @description Return the auth connection status for a provider.
+         */
+        get: operations["provider_auth_status_api_llm_auth_status__provider_name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm-auth/{provider_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Provider Auth
+         * @description Revoke stored OAuth / device-code / session tokens for a provider.
+         *
+         *     Requires admin — credential is system-wide (shared by all users).
+         */
+        delete: operations["revoke_provider_auth_api_llm_auth__provider_name__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -30132,7 +30613,13 @@ export interface paths {
         put?: never;
         /**
          * Start Workflow
-         * @description Start executing automated workflow
+         * @description Start executing automated workflow.
+         *
+         *     Accepts an optional ``provider_credentials`` map (GH#9037) so each run can
+         *     bring its own per-provider API keys. The credentials are scoped to the
+         *     current async task via ``inject_runtime_credentials`` — they override the
+         *     stored/global provider config for this invocation only, are never
+         *     persisted, and are redacted from all logs.
          */
         post: operations["start_workflow_api_workflow_automation_start_workflow__workflow_id__post"];
         delete?: never;
@@ -30572,7 +31059,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/logs/unified": {
+    "/api/logs/combined": {
         parameters: {
             query?: never;
             header?: never;
@@ -30580,12 +31067,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Unified Logs
-         * @description Get unified logs from all sources, merged by timestamp.
+         * Get Combined Logs
+         * @description Get combined logs from docker + file sources, merged by timestamp.
          *
          *     Issue #744: Requires admin authentication.
          */
-        get: operations["get_unified_logs_api_logs_unified_get"];
+        get: operations["get_combined_logs_api_logs_combined_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -31096,6 +31583,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/secrets/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Service List System Secrets
+         * @description List system-vault secrets accessible to a service identity.
+         */
+        get: operations["service_list_system_secrets_api_v2_secrets_system_get"];
+        put?: never;
+        /**
+         * Service Create System Secret
+         * @description Create a secret in the system vault via service identity (HMAC-authenticated).
+         */
+        post: operations["service_create_system_secret_api_v2_secrets_system_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/secrets/system/{secret_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Service Read System Secret
+         * @description Read a system-vault secret value via service identity.
+         */
+        get: operations["service_read_system_secret_api_v2_secrets_system__secret_id__get"];
+        /**
+         * Service Rotate System Secret
+         * @description Rotate a system-vault secret value (re-seal with new DEK) via service identity.
+         */
+        put: operations["service_rotate_system_secret_api_v2_secrets_system__secret_id__put"];
+        post?: never;
+        /**
+         * Service Delete System Secret
+         * @description Delete a system-vault secret via service identity.
+         */
+        delete: operations["service_delete_system_secret_api_v2_secrets_system__secret_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/secrets/system/{secret_id}/rewrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Service Rewrap System Secret
+         * @description Rotate the wrapping KEK for a system-vault secret via service identity (rewrap DEKs).
+         *
+         *     Service-auth counterpart of ``POST /{secret_id}/rewrap`` so non-user callers
+         *     (e.g. the SLM rotating SSO client-secret KEKs) can perform KEK rotation
+         *     scoped strictly to the system vault. The sealed value is unchanged.
+         */
+        post: operations["service_rewrap_system_secret_api_v2_secrets_system__secret_id__rewrap_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/secrets/{secret_id}": {
         parameters: {
             query?: never;
@@ -31110,6 +31673,46 @@ export interface paths {
         post?: never;
         /** Delete Secret */
         delete: operations["delete_secret_api_v2_secrets__secret_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/secrets/{secret_id}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Secret Access
+         * @description Who can access this secret: owner + every grantee vault, resolved to member users.
+         */
+        get: operations["secret_access_api_v2_secrets__secret_id__access_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/secrets/{secret_id}/dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Secret Dependencies
+         * @description What depends on this secret: every service/agent/workflow consumer (rotation-impact list).
+         */
+        get: operations["secret_dependencies_api_v2_secrets__secret_id__dependencies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -31144,6 +31747,29 @@ export interface paths {
         post?: never;
         /** Revoke Share */
         delete: operations["revoke_share_api_v2_secrets__secret_id__share__grantee__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/secrets/{secret_id}/rewrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rewrap Secret Kek
+         * @description Rotate the wrapping KEK for *secret_id* by rewrapping all grants under the new root key.
+         *
+         *     The sealed value is untouched — only the wrapped DEKs change. Use this after
+         *     rotating ``AUTOBOT_SECRETS_ROOT_KEY`` to migrate grants to the new KEK.
+         */
+        post: operations["rewrap_secret_kek_api_v2_secrets__secret_id__rewrap_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -32932,6 +33558,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/vision/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Vision Health
+         * @description Vision service health check (#10429).
+         *
+         *     The frontend (VisionMultimodalApiClient / SLM AdminMonitoring) polls
+         *     GET /api/vision/health expecting a VisionHealthResponse; it previously 404'd
+         *     because only /vision/status existed.
+         */
+        get: operations["get_vision_health_api_vision_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/vision/status": {
         parameters: {
             query?: never;
@@ -32998,7 +33648,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/status": {
+    "/api/video-generation/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Providers
+         * @description Return which video providers have API keys configured.
+         */
+        get: operations["list_providers_api_video_generation_providers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/video-generation/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Video
+         * @description Submit an async video-generation job; returns a job id to poll.
+         */
+        post: operations["generate_video_api_video_generation_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/video-generation/status/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Status
+         * @description Poll a submitted job for progress and the final video URL.
+         */
+        get: operations["get_status_api_video_generation_status__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/web-research/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -33009,7 +33719,7 @@ export interface paths {
          * Get Research Status
          * @description Get current web research status and configuration
          */
-        get: operations["get_research_status_api_web_research_settings_web_research_status_get"];
+        get: operations["get_research_status_api_web_research_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -33018,7 +33728,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/enable": {
+    "/api/web-research/enable": {
         parameters: {
             query?: never;
             header?: never;
@@ -33031,14 +33741,14 @@ export interface paths {
          * Enable Web Research
          * @description Enable web research functionality
          */
-        post: operations["enable_web_research_api_web_research_settings_web_research_enable_post"];
+        post: operations["enable_web_research_api_web_research_enable_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/disable": {
+    "/api/web-research/disable": {
         parameters: {
             query?: never;
             header?: never;
@@ -33051,14 +33761,14 @@ export interface paths {
          * Disable Web Research
          * @description Disable web research functionality
          */
-        post: operations["disable_web_research_api_web_research_settings_web_research_disable_post"];
+        post: operations["disable_web_research_api_web_research_disable_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/settings": {
+    "/api/web-research/settings": {
         parameters: {
             query?: never;
             header?: never;
@@ -33069,12 +33779,12 @@ export interface paths {
          * Get Research Settings
          * @description Get current web research settings
          */
-        get: operations["get_research_settings_api_web_research_settings_web_research_settings_get"];
+        get: operations["get_research_settings_api_web_research_settings_get"];
         /**
          * Update Research Settings
          * @description Update web research settings
          */
-        put: operations["update_research_settings_api_web_research_settings_web_research_settings_put"];
+        put: operations["update_research_settings_api_web_research_settings_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -33082,7 +33792,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/test": {
+    "/api/web-research/test": {
         parameters: {
             query?: never;
             header?: never;
@@ -33095,14 +33805,14 @@ export interface paths {
          * Test Web Research
          * @description Test web research functionality
          */
-        post: operations["test_web_research_api_web_research_settings_web_research_test_post"];
+        post: operations["test_web_research_api_web_research_test_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/clear-cache": {
+    "/api/web-research/clear-cache": {
         parameters: {
             query?: never;
             header?: never;
@@ -33115,14 +33825,14 @@ export interface paths {
          * Clear Research Cache
          * @description Clear web research cache
          */
-        post: operations["clear_research_cache_api_web_research_settings_web_research_clear_cache_post"];
+        post: operations["clear_research_cache_api_web_research_clear_cache_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/reset-circuit-breakers": {
+    "/api/web-research/reset-circuit-breakers": {
         parameters: {
             query?: never;
             header?: never;
@@ -33135,14 +33845,14 @@ export interface paths {
          * Reset Circuit Breakers
          * @description Reset all circuit breakers for web research
          */
-        post: operations["reset_circuit_breakers_api_web_research_settings_web_research_reset_circuit_breakers_post"];
+        post: operations["reset_circuit_breakers_api_web_research_reset_circuit_breakers_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/web-research-settings/web-research/usage-stats": {
+    "/api/web-research/usage-stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -33153,7 +33863,7 @@ export interface paths {
          * Get Usage Stats
          * @description Get web research usage statistics
          */
-        get: operations["get_usage_stats_api_web_research_settings_web_research_usage_stats_get"];
+        get: operations["get_usage_stats_api_web_research_usage_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -33753,6 +34463,10 @@ export interface paths {
         /**
          * Get Version
          * @description Get application version and system information
+         *
+         *     Public: returns only version/build/environment/services_count/name (no
+         *     sensitive data). Called at app load before auth, so requiring admin caused
+         *     spurious 401s (#10750 A13).
          *
          *     Issue #744: Requires admin authentication.
          */
@@ -36101,6 +36815,46 @@ export interface paths {
          * @description Clear all learned outcomes and strategies for an agent or task type.
          */
         post: operations["reset_agent_learning_api_agents__agent_id__reset_learning_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{agent_id}/knowledge-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export an agent's learned strategy + high-confidence failure patterns
+         * @description Render an agent's opaque learned knowledge as a human-reviewable document (GH#11151).
+         */
+        get: operations["export_agent_knowledge_api_agents__agent_id__knowledge_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{agent_id}/knowledge-import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import an operator-curated learned strategy
+         * @description Persist a reviewer-curated strategy, sanitizing untrusted free-text first (GH#11151).
+         */
+        post: operations["import_agent_knowledge_api_agents__agent_id__knowledge_import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -38797,7 +39551,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-search/semantic": {
+    "/api/npu-search/semantic": {
         parameters: {
             query?: never;
             header?: never;
@@ -38807,7 +39561,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enhanced Semantic Search
+         * Semantic Search
          * @description Perform NPU-enhanced semantic search.
          *
          *     Issue #665: Refactored to use extracted helper functions.
@@ -38818,14 +39572,14 @@ export interface paths {
          *     - CPU fallback for reliability
          *     - Intelligent device selection based on workload
          */
-        post: operations["enhanced_semantic_search_api_enhanced_search_semantic_post"];
+        post: operations["semantic_search_api_npu_search_semantic_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-search/hardware/status": {
+    "/api/npu-search/hardware/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -38838,7 +39592,7 @@ export interface paths {
          *
          *     Returns information about NPU, GPU, and CPU availability and performance.
          */
-        get: operations["get_hardware_status_api_enhanced_search_hardware_status_get"];
+        get: operations["get_hardware_status_api_npu_search_hardware_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -38847,7 +39601,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-search/benchmark": {
+    "/api/npu-search/benchmark": {
         parameters: {
             query?: never;
             header?: never;
@@ -38862,14 +39616,14 @@ export interface paths {
          *
          *     Tests search performance on NPU, GPU, and CPU to provide optimization insights.
          */
-        post: operations["benchmark_search_performance_api_enhanced_search_benchmark_post"];
+        post: operations["benchmark_search_performance_api_npu_search_benchmark_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-search/optimize": {
+    "/api/npu-search/optimize": {
         parameters: {
             query?: never;
             header?: never;
@@ -38888,14 +39642,14 @@ export interface paths {
          *     - quality_optimized: Best search result quality
          *     - balanced: Balanced performance (default)
          */
-        post: operations["optimize_search_engine_api_enhanced_search_optimize_post"];
+        post: operations["optimize_search_engine_api_npu_search_optimize_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-search/performance/analytics": {
+    "/api/npu-search/performance/analytics": {
         parameters: {
             query?: never;
             header?: never;
@@ -38909,7 +39663,7 @@ export interface paths {
          *     Provides insights into search engine performance, hardware utilization,
          *     and optimization opportunities.
          */
-        get: operations["get_performance_analytics_api_enhanced_search_performance_analytics_get"];
+        get: operations["get_performance_analytics_api_npu_search_performance_analytics_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -38918,7 +39672,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-search/test/connectivity": {
+    "/api/npu-search/test/connectivity": {
         parameters: {
             query?: never;
             header?: never;
@@ -38931,7 +39685,7 @@ export interface paths {
          *
          *     Verifies that the NPU Worker is accessible and NPU hardware is available.
          */
-        get: operations["test_npu_connectivity_api_enhanced_search_test_connectivity_get"];
+        get: operations["test_npu_connectivity_api_npu_search_test_connectivity_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -38940,7 +39694,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/statistics": {
+    "/api/task-memory/statistics": {
         parameters: {
             query?: never;
             header?: never;
@@ -38950,10 +39704,8 @@ export interface paths {
         /**
          * Get Memory Statistics
          * @description Get comprehensive memory and task execution statistics.
-         *
-         *     Issue #357: Now uses async memory manager for non-blocking database operations.
          */
-        get: operations["get_memory_statistics_api_enhanced_memory_statistics_get"];
+        get: operations["get_memory_statistics_api_task_memory_statistics_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -38962,7 +39714,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/tasks/history": {
+    "/api/task-memory/tasks/history": {
         parameters: {
             query?: never;
             header?: never;
@@ -38971,9 +39723,9 @@ export interface paths {
         };
         /**
          * Get Task History
-         * @description Get task execution history with filtering options
+         * @description Get task execution history with filtering options.
          */
-        get: operations["get_task_history_api_enhanced_memory_tasks_history_get"];
+        get: operations["get_task_history_api_task_memory_tasks_history_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -38982,7 +39734,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/tasks": {
+    "/api/task-memory/tasks": {
         parameters: {
             query?: never;
             header?: never;
@@ -38994,17 +39746,15 @@ export interface paths {
         /**
          * Create Task
          * @description Create a new task record.
-         *
-         *     Issue #357: Now uses async memory manager for non-blocking database operations.
          */
-        post: operations["create_task_api_enhanced_memory_tasks_post"];
+        post: operations["create_task_api_task_memory_tasks_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/tasks/{task_id}": {
+    "/api/task-memory/tasks/{task_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -39015,11 +39765,8 @@ export interface paths {
         /**
          * Update Task
          * @description Update task status and information.
-         *
-         *     Issue #315: Refactored to use helper function for reduced nesting depth.
-         *     Issue #357: Now uses async memory manager for non-blocking database operations.
          */
-        put: operations["update_task_api_enhanced_memory_tasks__task_id__put"];
+        put: operations["update_task_api_task_memory_tasks__task_id__put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -39027,7 +39774,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/tasks/{task_id}/markdown-reference": {
+    "/api/task-memory/tasks/{task_id}/markdown-reference": {
         parameters: {
             query?: never;
             header?: never;
@@ -39039,17 +39786,15 @@ export interface paths {
         /**
          * Add Markdown Reference
          * @description Add markdown file reference to a task.
-         *
-         *     Issue #357: Wrapped sync operation in asyncio.to_thread for non-blocking.
          */
-        post: operations["add_markdown_reference_api_enhanced_memory_tasks__task_id__markdown_reference_post"];
+        post: operations["add_markdown_reference_api_task_memory_tasks__task_id__markdown_reference_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/markdown/scan": {
+    "/api/task-memory/markdown/scan": {
         parameters: {
             query?: never;
             header?: never;
@@ -39058,11 +39803,9 @@ export interface paths {
         };
         /**
          * Scan Markdown System
-         * @description Initialize and scan markdown reference system.
-         *
-         *     Issue #357: Wrapped sync operation in asyncio.to_thread for non-blocking.
+         * @description Initialise and scan markdown reference system.
          */
-        get: operations["scan_markdown_system_api_enhanced_memory_markdown_scan_get"];
+        get: operations["scan_markdown_system_api_task_memory_markdown_scan_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -39071,7 +39814,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/markdown/search": {
+    "/api/task-memory/markdown/search": {
         parameters: {
             query?: never;
             header?: never;
@@ -39081,10 +39824,8 @@ export interface paths {
         /**
          * Search Markdown
          * @description Search markdown content and sections.
-         *
-         *     Issue #357: Wrapped sync operation in asyncio.to_thread for non-blocking.
          */
-        get: operations["search_markdown_api_enhanced_memory_markdown_search_get"];
+        get: operations["search_markdown_api_task_memory_markdown_search_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -39093,7 +39834,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/markdown/{file_path}/references": {
+    "/api/task-memory/markdown/{file_path}/references": {
         parameters: {
             query?: never;
             header?: never;
@@ -39103,10 +39844,8 @@ export interface paths {
         /**
          * Get Document References
          * @description Get all references for a specific markdown document.
-         *
-         *     Issue #357: Wrapped sync operation in asyncio.to_thread for non-blocking.
          */
-        get: operations["get_document_references_api_enhanced_memory_markdown__file_path__references_get"];
+        get: operations["get_document_references_api_task_memory_markdown__file_path__references_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -39115,7 +39854,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/embeddings/cache-stats": {
+    "/api/task-memory/embeddings/cache-stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -39125,10 +39864,8 @@ export interface paths {
         /**
          * Get Embedding Cache Stats
          * @description Get embedding cache statistics.
-         *
-         *     Issue #357: Wrapped sync operation in asyncio.to_thread for non-blocking.
          */
-        get: operations["get_embedding_cache_stats_api_enhanced_memory_embeddings_cache_stats_get"];
+        get: operations["get_embedding_cache_stats_api_task_memory_embeddings_cache_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -39137,7 +39874,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/cleanup": {
+    "/api/task-memory/cleanup": {
         parameters: {
             query?: never;
             header?: never;
@@ -39150,16 +39887,14 @@ export interface paths {
         /**
          * Cleanup Old Data
          * @description Clean up old task records and cached data.
-         *
-         *     Issue #357: Now uses async memory manager for non-blocking database operations.
          */
-        delete: operations["cleanup_old_data_api_enhanced_memory_cleanup_delete"];
+        delete: operations["cleanup_old_data_api_task_memory_cleanup_delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/enhanced-memory/active-tasks": {
+    "/api/task-memory/active-tasks": {
         parameters: {
             query?: never;
             header?: never;
@@ -39168,9 +39903,9 @@ export interface paths {
         };
         /**
          * Get Active Tasks
-         * @description Get currently active tasks
+         * @description Get currently active tasks.
          */
-        get: operations["get_active_tasks_api_enhanced_memory_active_tasks_get"];
+        get: operations["get_active_tasks_api_task_memory_active_tasks_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -39409,6 +40144,52 @@ export interface paths {
          * @description Get example analysis requests and usage patterns.
          */
         get: operations["get_analysis_examples_api_dev_speedup_examples_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dev-speedup/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Templates
+         * @description Return reusable code templates for the Developer Speedup view (#902, #10502).
+         *
+         *     Optional ``category`` filters the catalog (e.g. ``backend``, ``frontend``,
+         *     ``testing``).
+         */
+        get: operations["get_templates_api_dev_speedup_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/dev-speedup/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get History
+         * @description Return recent developer-speedup actions, newest first (#902, #10502).
+         *
+         *     Reads the bounded Redis history list. A fresh system with no recorded
+         *     actions returns an empty list.
+         */
+        get: operations["get_history_api_dev_speedup_history_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -40147,6 +40928,130 @@ export interface paths {
          *     for this task.
          */
         get: operations["get_task_workspace_api_tasks__task_id__workspace_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspace/tasks/{task_id}/create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Workspace
+         * @description Create or resume the persistent workspace container for *task_id*.
+         */
+        post: operations["create_workspace_api_workspace_tasks__task_id__create_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspace/tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Workspace
+         * @description Return workspace info for *task_id*; 404 if not found.
+         */
+        get: operations["get_workspace_api_workspace_tasks__task_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Destroy Workspace
+         * @description Stop container, remove volume, delete Redis metadata.
+         */
+        delete: operations["destroy_workspace_api_workspace_tasks__task_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspace/tasks/{task_id}/exec": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exec Command
+         * @description Exec a command inside the task workspace container.
+         */
+        post: operations["exec_command_api_workspace_tasks__task_id__exec_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspace/tasks/{task_id}/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Snapshot Workspace
+         * @description Snapshot the workspace filesystem state via ``docker commit``.
+         */
+        post: operations["snapshot_workspace_api_workspace_tasks__task_id__snapshot_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspace/tasks/{task_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Workspace
+         * @description Restore workspace from a named snapshot (rolls back container to that checkpoint).
+         */
+        post: operations["restore_workspace_api_workspace_tasks__task_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspace/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Workspace Stats
+         * @description Return quota + all active workspace metadata.
+         */
+        get: operations["workspace_stats_api_workspace_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -43276,6 +44181,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/graph-rag/collections/{collection_id}/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Collection Graph
+         * @description Return a collection's knowledge-graph subgraph (nodes + edges).
+         *
+         *     Issue #9018 Phase 2 — read-only KB-explorer view. Reuses AutoBotMemoryGraph
+         *     query methods (no graph mutation). #10234: returns a plain dict via
+         *     JSONResponse (no response_model=Dict .model_dump footgun).
+         *     Issue #744: requires an authenticated user.
+         */
+        get: operations["collection_graph_api_graph_rag_collections__collection_id__graph_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai-stack/agents": {
         parameters: {
             query?: never;
@@ -43367,7 +44297,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/ai-stack/chat/enhanced": {
+    "/api/ai-stack/chat": {
         parameters: {
             query?: never;
             header?: never;
@@ -43377,15 +44307,15 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enhanced Chat
-         * @description Enhanced chat with AI Stack integration and knowledge base support.
+         * Chat
+         * @description Chat with AI Stack integration and knowledge base support.
          *
          *     This endpoint provides intelligent conversation with access to
          *     knowledge base and advanced AI reasoning capabilities.
          *
          *     Issue #744: Requires admin authentication.
          */
-        post: operations["enhanced_chat_api_ai_stack_chat_enhanced_post"];
+        post: operations["chat_api_ai_stack_chat_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -43414,7 +44344,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/ai-stack/knowledge/enhanced-search": {
+    "/api/ai-stack/knowledge/search": {
         parameters: {
             query?: never;
             header?: never;
@@ -43424,12 +44354,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enhanced Knowledge Search
-         * @description Enhanced knowledge search combining local KB and AI Stack capabilities.
+         * Knowledge Search
+         * @description Knowledge search combining local KB and AI Stack capabilities.
          *
          *     Issue #744: Requires admin authentication.
          */
-        post: operations["enhanced_knowledge_search_api_ai_stack_knowledge_enhanced_search_post"];
+        post: operations["knowledge_search_api_ai_stack_knowledge_search_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -43611,28 +44541,6 @@ export interface paths {
          *     Issue #744: Requires admin authentication.
          */
         post: operations["legacy_rag_search_api_ai_stack_legacy_rag_search_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-stack/legacy/enhanced-chat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Legacy Enhanced Chat
-         * @description Legacy enhanced chat endpoint for backward compatibility.
-         *
-         *     Issue #744: Requires admin authentication.
-         */
-        post: operations["legacy_enhanced_chat_api_ai_stack_legacy_enhanced_chat_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -43948,9 +44856,9 @@ export interface paths {
         put?: never;
         /**
          * Retrieval Context
-         * @description Strategy-dispatched context retrieval (RAG / CAG).
+         * @description Strategy-dispatched context retrieval (RAG / CAG / KAG).
          *
-         *     Issue #9018 Phase 1.
+         *     Issue #9018 Phase 1 (CAG) + Phase 2 (KAG).
          *
          *     **Parameters:**
          *     - **query**: Generation query string.
@@ -43960,7 +44868,7 @@ export interface paths {
          *
          *     **Returns:**
          *     - **context**: Assembled context string for LLM injection.
-         *     - **strategy**: Actual strategy used ('rag' or 'cag').
+         *     - **strategy**: Actual strategy used ('rag', 'cag' or 'kag').
          *     - **metrics**: Timing and result-count metrics.
          */
         post: operations["retrieval_context_api_knowledge_base_rag_context_post"];
@@ -44705,6 +45613,56 @@ export interface paths {
          *     returns the catalog entry dict containing at minimum a ``skill_md`` field.
          */
         post: operations["install_catalog_skill_api_skills_catalog__name__install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/bundles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List curated skill bundles
+         * @description Return all role-curated skill bundles (Research / Engineering / Knowledge).
+         *
+         *     Bundles are DATA ONLY — they reference existing builtin skill ids and
+         *     introduce no new skill logic (Issue #10540).
+         */
+        get: operations["list_skill_bundles_api_skills_bundles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/bundles/{bundle_id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable all skills in a curated bundle
+         * @description Enable every member skill of a curated bundle.
+         *
+         *     Delegates to the existing ``registry.enable_skill`` +
+         *     ``manager.persist_skill_enabled`` pair for each member skill — exactly the
+         *     same path taken by ``POST /skills/{name}/enable`` (Issue #10540).
+         *
+         *     Returns which skills were enabled, which were skipped (not registered),
+         *     and which failed (e.g. dependency errors).
+         */
+        post: operations["enable_skill_bundle_api_skills_bundles__bundle_id__enable_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -45877,6 +46835,11 @@ export interface paths {
         /**
          * List Insights
          * @description List distilled experiment insights.
+         *
+         *     Resilient by design (#11081): on a fresh/empty deployment the insights
+         *     collection may not exist yet (or the vector store is unavailable), which
+         *     would otherwise 500 and crash the whole Experiments dashboard. Absence of
+         *     data is not an error — return an empty list instead.
          */
         get: operations["list_insights_api_autoresearch_insights_get"];
         put?: never;
@@ -46741,10 +47704,22 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Decorator
-         * @description Inner decorator that wraps function with API error handling.
+         * Verbatim Search
+         * @description Search verbatim conversation chunks.
+         *
+         *     Returns chunks ranked by cosine similarity.  When ``session_id`` is
+         *     provided, only chunks from that session are considered.
+         *
+         *     Args:
+         *         q: Free-text query.
+         *         session_id: Optional session scope.
+         *         limit: Maximum chunks to return (1–100, default 10).
+         *
+         *     Returns:
+         *         JSON object with ``results`` list, each item having
+         *         ``id``, ``text``, ``score``, and ``metadata`` keys.
          */
-        get: operations["decorator_api_verbatim_memory_verbatim_memory_search_get"];
+        get: operations["verbatim_search_api_verbatim_memory_verbatim_memory_search_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -46764,10 +47739,20 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Decorator
-         * @description Inner decorator that wraps function with API error handling.
+         * Delete Session Verbatim
+         * @description Delete all verbatim chunks for a session.
+         *
+         *     Used for user opt-out and retention enforcement.  The caller must be
+         *     authenticated; in production the middleware additionally enforces that
+         *     users can only delete their own sessions.
+         *
+         *     Args:
+         *         session_id: Session whose verbatim chunks to remove.
+         *
+         *     Returns:
+         *         JSON object with ``session_id`` and ``deleted_count``.
          */
-        delete: operations["decorator_api_verbatim_memory_verbatim_memory_session__session_id__delete"];
+        delete: operations["delete_session_verbatim_api_verbatim_memory_verbatim_memory_session__session_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -47063,8 +48048,7 @@ export interface paths {
          * @description Return all curated starter presets.
          *
          *     Auth-gated (#6568): the preset catalogue exposes platform capability
-         *     info and should not be enumerable pre-login. ``single_user`` deployments
-         *     still pass through via the synthetic admin in ``get_current_user``.
+         *     info and should not be enumerable pre-login.
          */
         get: operations["list_presets_api_onboarding_presets_get"];
         put?: never;
@@ -47174,6 +48158,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/boards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Company Boards
+         * @description List all boards for the caller's company (GH#10219 — un-orphans the Sprint
+         *     and Kanban board views, which previously had no UI entry point).
+         *
+         *     Tenant-scoped via ``ctx.org_id`` so there is no cross-tenant exposure (the
+         *     IDOR class fixed for sprints.py in #10148 is avoided here by construction).
+         */
+        get: operations["list_company_boards_api_llc_boards_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/boards/kanban": {
         parameters: {
             query?: never;
@@ -47268,6 +48276,32 @@ export interface paths {
          * @description Move a work item to a board column, enforcing WIP limits.
          */
         post: operations["move_item_api_llc_boards__board_id__move_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/adapters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Adapters
+         * @description List registered adapter types with availability.
+         *
+         *     - ``implemented``: False for stub adapters that raise NotImplementedError
+         *       (detected by the absence of the subprocess ``is_cli_available`` hook).
+         *     - ``available``: implemented AND (for subprocess adapters) the required CLI
+         *       is on PATH.
+         *     - ``requires_cli``: the CLI binary name, or null for in-process adapters.
+         */
+        get: operations["list_adapters_api_llc_adapters_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -47995,6 +49029,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/projects/{project_id}/findings/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan Findings
+         * @description Scan a project's linked repo for findings and queue real ones as proposals.
+         */
+        post: operations["scan_findings_api_llc_projects__project_id__findings_scan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/projects/{project_id}/findings/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Proposals
+         * @description List finding proposals for a project, optionally filtered by status.
+         */
+        get: operations["list_proposals_api_llc_projects__project_id__findings_proposals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/findings/proposals/{proposal_id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Promote Proposal
+         * @description Promote a pending proposal to a work item (or gate on approval).
+         */
+        post: operations["promote_proposal_api_llc_findings_proposals__proposal_id__promote_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/findings/proposals/{proposal_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Proposal
+         * @description Dismiss a pending proposal with a reason.
+         */
+        post: operations["dismiss_proposal_api_llc_findings_proposals__proposal_id__dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/companies/{company_id}/portfolios": {
         parameters: {
             query?: never;
@@ -48108,6 +49222,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/projects/with-repos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Projects With Repos
+         * @description Return all projects in the caller's org that have a code source linked (#11129).
+         */
+        get: operations["list_projects_with_repos_api_llc_projects_with_repos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/projects/{project_id}": {
         parameters: {
             query?: never;
@@ -48119,12 +49253,99 @@ export interface paths {
         get: operations["get_project_api_llc_projects__project_id__get"];
         put?: never;
         post?: never;
-        /** Delete Project */
+        /**
+         * Delete Project
+         * @description Delete a project — must be archived first; routes through the disposal workflow (#11129 P2).
+         */
         delete: operations["delete_project_api_llc_projects__project_id__delete"];
         options?: never;
         head?: never;
         /** Update Project */
         patch: operations["update_project_api_llc_projects__project_id__patch"];
+        trace?: never;
+    };
+    "/api/llc/projects/{project_id}/repo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attach Project Repo
+         * @description Attach a GitHub repo to a project by creating a CodeSource and storing its id (#11129).
+         */
+        post: operations["attach_project_repo_api_llc_projects__project_id__repo_post"];
+        /**
+         * Detach Project Repo
+         * @description Unlink the repo from a project; the CodeSource record survives (#11129).
+         */
+        delete: operations["detach_project_repo_api_llc_projects__project_id__repo_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/projects/{project_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Project
+         * @description Move a project to the archived lifecycle state (#11129 P2).
+         */
+        post: operations["archive_project_api_llc_projects__project_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/projects/{project_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Project
+         * @description Restore an archived / pending-disposal project to active (#11129 P2).
+         */
+        post: operations["restore_project_api_llc_projects__project_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/projects/{project_id}/dispose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dispose Project
+         * @description Dispose an archived project (immediate / scheduled / approval-gated per SLM policy; #11129 P2).
+         */
+        post: operations["dispose_project_api_llc_projects__project_id__dispose_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/llc/projects/{project_id}/sprints": {
@@ -49052,11 +50273,13 @@ export interface paths {
         };
         /**
          * List Agents
-         * @description List LLC agents for the org with their latest heartbeat summary (GH#8549).
+         * @description List LLC agents for the org with their latest heartbeat summary (GH#8549, #11366).
          *
-         *     Returns one row per distinct agent_id that has at least one heartbeat run
-         *     scoped to the caller's org.  Heartbeat-enabled status and last-run data are
-         *     derived from LLCHeartbeatRun rows.
+         *     Returns the full company roster from the org chart (``AgentOrgNode``) — every
+         *     agent, not just those with heartbeat history — each with its human-readable
+         *     name and its latest heartbeat run (LEFT JOIN) for status.  This lets assignee
+         *     pickers (Routines, Heartbeat monitor) list freshly-provisioned agents and show
+         *     names instead of opaque ids.
          */
         get: operations["list_agents_api_llc_agents_get"];
         put?: never;
@@ -49798,50 +51021,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/llc/templates/{template_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Template
-         * @description Fetch full template JSON by ID (GH#8260).
-         */
-        get: operations["get_template_api_llc_templates__template_id__get"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete Template
-         * @description Delete template from DB and ChromaDB collection (GH#8260).
-         */
-        delete: operations["delete_template_api_llc_templates__template_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/llc/templates/{template_id}/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Import Template
-         * @description Import template into target company; resolves {{SECRET}} placeholders (GH#8260).
-         */
-        post: operations["import_template_api_llc_templates__template_id__import_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/llc/templates/built-in": {
         parameters: {
             query?: never;
@@ -49885,6 +51064,50 @@ export interface paths {
         get: operations["get_built_in_template_api_llc_templates_built_in__template_key__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/templates/{template_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Template
+         * @description Fetch full template JSON by ID (GH#8260).
+         */
+        get: operations["get_template_api_llc_templates__template_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Template
+         * @description Delete template from DB and ChromaDB collection (GH#8260).
+         */
+        delete: operations["delete_template_api_llc_templates__template_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/templates/{template_id}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Template
+         * @description Import template into target company; resolves {{SECRET}} placeholders (GH#8260).
+         */
+        post: operations["import_template_api_llc_templates__template_id__import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -49968,20 +51191,48 @@ export interface paths {
         put?: never;
         /**
          * Create Realtime Session
-         * @description SDP offer proxy for OpenAI Realtime WebRTC.
+         * @description SDP offer proxy for realtime voice, dispatched to the selected provider.
          *
          *     Accepts multipart form fields:
          *       - sdp (text/plain): WebRTC SDP offer from the browser
          *       - session (application/json): session configuration JSON
          *
-         *     Returns the SDP answer from OpenAI with Content-Type: application/sdp.
-         *     Maps upstream 401 → 502 and 5xx → 502; missing key → 503.
+         *     Returns the provider's negotiation answer. For WebRTC providers this is the
+         *     SDP answer with Content-Type: application/sdp. Provider errors map to 503
+         *     (not configured) or 502 (upstream failure).
          */
         post: operations["create_realtime_session_api_voice_realtime_session_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/voice/realtime/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Providers
+         * @description List realtime voice providers + the active selection (never returns keys).
+         */
+        get: operations["list_providers_api_voice_realtime_providers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Provider
+         * @description Set the active realtime provider (in-process; doc'd restart limitation).
+         *
+         *     Pass {"provider": null} to clear the override and fall back to the
+         *     AUTOBOT_VOICE_REALTIME_PROVIDER config / default.
+         */
+        patch: operations["set_provider_api_voice_realtime_providers_patch"];
         trace?: never;
     };
     "/api/voice/realtime/session/{session_id}/end": {
@@ -50105,6 +51356,105 @@ export interface paths {
          *     Any user_id in the request body is silently ignored (fail-closed design).
          */
         delete: operations["unsubscribe_api_push_unsubscribe_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/privacy/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Memories
+         * @description List all memory items stored for the authenticated user.
+         *
+         *     Returns items from every store (verbatim, trajectory, working_memory,
+         *     graph, retrieval_learner) with provenance and timestamps.
+         */
+        get: operations["list_memories_api_memory_privacy_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/privacy/forget-everywhere/{memory_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Forget Everywhere
+         * @description Cascade-delete a memory item from every store.
+         *
+         *     Returns a per-store map of ``{store: true/false}`` indicating whether the
+         *     item existed in that store.  A True value means it was deleted from there.
+         */
+        delete: operations["forget_everywhere_api_memory_privacy_forget_everywhere__memory_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/privacy/{store}/{memory_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Amend Memory
+         * @description Amend (correct) a memory item's content.
+         *
+         *     Only ``verbatim`` and ``working_memory`` stores support amendment.
+         *     For graph entities, delete and recreate via the knowledge graph API.
+         */
+        put: operations["amend_memory_api_memory_privacy__store___memory_id__put"];
+        post?: never;
+        /**
+         * Forget From Store
+         * @description Forget a specific memory item from a named store.
+         *
+         *     Use the ``store`` and ``memory_id`` values returned by GET /list.
+         *     Returns 404 when the item is not found in the named store.
+         */
+        delete: operations["forget_from_store_api_memory_privacy__store___memory_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/privacy/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Memory
+         * @description Download the caller's complete memory footprint as a JSON file.
+         *
+         *     Reuses the LLC full-state-snapshot export pattern: returns
+         *     Content-Disposition: attachment so browsers trigger a download.
+         */
+        get: operations["export_memory_api_memory_privacy_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -50539,67 +51889,10 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * AIStackEnhancedHealthData
-         * @description data payload for GET /health/enhanced.
+         * AIStackHealthStatusData
+         * @description data payload for GET /health/status.
          */
-        AIStackEnhancedHealthData: {
-            [key: string]: unknown;
-        };
-        /**
-         * AIStackEnhancedSearchData
-         * @description data payload for POST /search/enhanced.
-         */
-        AIStackEnhancedSearchData: {
-            [key: string]: unknown;
-        };
-        /**
-         * AIStackEnhancedSearchRequest
-         * @description Enhanced search request with AI Stack integration.
-         */
-        AIStackEnhancedSearchRequest: {
-            /**
-             * Query
-             * @description Search query
-             */
-            query: string;
-            /**
-             * Search Type
-             * @description Search type (precise, comprehensive, broad)
-             * @default comprehensive
-             */
-            search_type: string;
-            /**
-             * Max Results
-             * @description Maximum results to return
-             * @default 10
-             */
-            max_results: number;
-            /**
-             * Include Rag
-             * @description Include RAG-enhanced results
-             * @default true
-             */
-            include_rag: boolean;
-            /**
-             * Include Local
-             * @description Include local knowledge base results
-             * @default true
-             */
-            include_local: boolean;
-            /**
-             * Confidence Threshold
-             * @description Minimum confidence score
-             * @default 0.3
-             */
-            confidence_threshold: number;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * AIStackEnhancedStatsData
-         * @description data payload for GET /stats/enhanced.
-         */
-        AIStackEnhancedStatsData: {
+        AIStackHealthStatusData: {
             [key: string]: unknown;
         };
         /**
@@ -50706,6 +51999,63 @@ export interface components {
          * @description data payload for POST /search/rag.
          */
         AIStackRagSearchData: {
+            [key: string]: unknown;
+        };
+        /**
+         * AIStackSearchData
+         * @description data payload for POST /search.
+         */
+        AIStackSearchData: {
+            [key: string]: unknown;
+        };
+        /**
+         * AIStackSearchRequest
+         * @description Search request with AI Stack integration.
+         */
+        AIStackSearchRequest: {
+            /**
+             * Query
+             * @description Search query
+             */
+            query: string;
+            /**
+             * Search Type
+             * @description Search type (precise, comprehensive, broad)
+             * @default comprehensive
+             */
+            search_type: string;
+            /**
+             * Max Results
+             * @description Maximum results to return
+             * @default 10
+             */
+            max_results: number;
+            /**
+             * Include Rag
+             * @description Include RAG-enhanced results
+             * @default true
+             */
+            include_rag: boolean;
+            /**
+             * Include Local
+             * @description Include local knowledge base results
+             * @default true
+             */
+            include_local: boolean;
+            /**
+             * Confidence Threshold
+             * @description Minimum confidence score
+             * @default 0.3
+             */
+            confidence_threshold: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AIStackStatsData
+         * @description data payload for GET /stats.
+         */
+        AIStackStatsData: {
             [key: string]: unknown;
         };
         /**
@@ -52179,7 +53529,7 @@ export interface components {
         };
         /**
          * AgentHealthResponse
-         * @description Response for GET /health/enhanced.
+         * @description Response for GET /health/detailed.
          */
         AgentHealthResponse: {
             /** Status */
@@ -52188,8 +53538,8 @@ export interface components {
             ai_stack_available: boolean;
             /** Multi Agent Coordination */
             multi_agent_coordination: boolean;
-            /** Enhanced Capabilities */
-            enhanced_capabilities: boolean;
+            /** Advanced Capabilities */
+            advanced_capabilities: boolean;
             /** Timestamp */
             timestamp: string;
             /** Error */
@@ -52593,6 +53943,71 @@ export interface components {
             research_capabilities: boolean;
             /** Development Tools */
             development_tools: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AgentStatusItem
+         * @description Runtime status for one registered agent (#10502).
+         *
+         *     Shape consumed by the Home dashboard "Agent Activity Monitor"
+         *     (frontend ``useAgentActivityData`` ``Agent`` interface).
+         */
+        AgentStatusItem: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Type
+             * @default worker
+             */
+            type: string;
+            /**
+             * Status
+             * @default idle
+             */
+            status: string;
+            /** Currenttask */
+            currentTask?: string | null;
+            /**
+             * Taskscompleted
+             * @default 0
+             */
+            tasksCompleted: number;
+            /**
+             * Uptime
+             * @default 0
+             */
+            uptime: number;
+            /**
+             * Successrate
+             * @default 0
+             */
+            successRate: number;
+            /** Recenttasks */
+            recentTasks?: {
+                [key: string]: unknown;
+            }[];
+            /** Activitytimeline */
+            activityTimeline?: {
+                [key: string]: unknown;
+            }[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AgentStatusListResponse
+         * @description All registered agents with runtime status (#10502).
+         */
+        AgentStatusListResponse: {
+            /** Agents */
+            agents?: components["schemas"]["AgentStatusItem"][];
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
         } & {
             [key: string]: unknown;
         };
@@ -53221,6 +54636,19 @@ export interface components {
             agents: unknown[];
             /** Total Agents */
             total_agents: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AmendRequest
+         * @description Body for PUT /memory/privacy/{store}/{memory_id}.
+         */
+        AmendRequest: {
+            /**
+             * Content
+             * @description Replacement content text
+             */
+            content: string;
         } & {
             [key: string]: unknown;
         };
@@ -54992,6 +56420,20 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** AttachRepoRequest */
+        AttachRepoRequest: {
+            /** Repo */
+            repo: string;
+            /** Credential Id */
+            credential_id?: string | null;
+            /**
+             * Branch
+             * @default main
+             */
+            branch: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * AudioIngestRequest
          * @description Request body for POST /api/knowledge_base/audio (URL-based ingestion).
@@ -55941,6 +57383,74 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * BenchmarkResult
+         * @description One model's outcome within a benchmark run.
+         */
+        BenchmarkResult: {
+            /**
+             * Model
+             * @description 'provider/model' spec
+             */
+            model: string;
+            /**
+             * Content
+             * @description Model response text
+             * @default
+             */
+            content: string;
+            /**
+             * Rating
+             * @description User star rating 0-5 (0 = unrated)
+             * @default 0
+             */
+            rating: number;
+            /**
+             * Costusd
+             * @description Estimated cost in USD for this response
+             * @default 0
+             */
+            costUsd: number;
+            /**
+             * Latencyms
+             * @description Response latency in milliseconds
+             * @default 0
+             */
+            latencyMs: number;
+            /**
+             * Error
+             * @description Error message if the model failed
+             */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * BenchmarkRunCreate
+         * @description Request body for saving a benchmark run.
+         */
+        BenchmarkRunCreate: {
+            /**
+             * Prompt
+             * @description The prompt that was compared
+             */
+            prompt: string;
+            /**
+             * Prompttype
+             * @description rag | code | summarization | reasoning | custom
+             * @default custom
+             */
+            promptType: string;
+            /**
+             * Promptsetid
+             * @description Source prompt-set id, if any
+             */
+            promptSetId?: string | null;
+            /** Results */
+            results?: components["schemas"]["BenchmarkResult"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * BenchmarkRunResponse
          * @description Shape returned by POST /benchmark/run.
          *
@@ -55980,6 +57490,13 @@ export interface components {
         Body_agent_upload_attachment_api_llc_agent_attachments_post: {
             /** File */
             file: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** Body_chat_ai_stack_api_ai_stack_post */
+        Body_chat_ai_stack_api_ai_stack_post: {
+            message?: components["schemas"]["ChatMessage"];
+            preferences?: components["schemas"]["ChatPreferences"] | null;
         } & {
             [key: string]: unknown;
         };
@@ -56033,13 +57550,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** Body_enhanced_chat_api_enhanced_post */
-        Body_enhanced_chat_api_enhanced_post: {
-            message?: components["schemas"]["EnhancedChatMessage"];
-            preferences?: components["schemas"]["ChatPreferences"] | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** Body_execute_command_api_agent_execute_command_post */
         Body_execute_command_api_agent_execute_command_post: {
             /** Command Data */
@@ -56060,6 +57570,13 @@ export interface components {
              * File
              * @description Plugin ZIP archive
              */
+            file: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** Body_install_theme_api_themes_post */
+        Body_install_theme_api_themes_post: {
+            /** File */
             file: string;
         } & {
             [key: string]: unknown;
@@ -56142,9 +57659,23 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** Body_stream_enhanced_chat_api_stream_enhanced_post */
-        Body_stream_enhanced_chat_api_stream_enhanced_post: {
-            message?: components["schemas"]["EnhancedChatMessage"];
+        /** Body_set_session_approval_categories_api_chat_sessions__session_id__approval_categories_put */
+        Body_set_session_approval_categories_api_chat_sessions__session_id__approval_categories_put: {
+            /** Categories */
+            categories: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /** Body_set_session_role_api_chat_sessions__session_id__role_put */
+        Body_set_session_role_api_chat_sessions__session_id__role_put: {
+            /** Role */
+            role: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** Body_stream_ai_stack_chat_api_stream_ai_stack_post */
+        Body_stream_ai_stack_chat_api_stream_ai_stack_post: {
+            message?: components["schemas"]["ChatMessage"];
             preferences?: components["schemas"]["ChatPreferences"] | null;
         } & {
             [key: string]: unknown;
@@ -56238,6 +57769,16 @@ export interface components {
         Body_voice_speak_api_api_voice_speak_post: {
             /** Text */
             text: string;
+            /**
+             * Voice Id
+             * @default
+             */
+            voice_id: string;
+            /**
+             * Language
+             * @default
+             */
+            language: string;
             /**
              * User Role
              * @default user
@@ -57990,6 +59531,42 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ChatCapabilitiesData
+         * @description data payload for GET /capabilities.
+         *
+         *     Some fields are absent on the fallback path when AI Stack is
+         *     unavailable (only ``ai_stack_chat_available``, ``ai_stack_integration``,
+         *     ``knowledge_base_integration``, ``error`` are populated then).
+         */
+        ChatCapabilitiesData: {
+            /** Ai Stack Chat Available */
+            ai_stack_chat_available: boolean;
+            /** Ai Stack Integration */
+            ai_stack_integration: boolean;
+            /** Knowledge Base Integration */
+            knowledge_base_integration: boolean;
+            /** Source Citations */
+            source_citations?: boolean | null;
+            /** Streaming Responses */
+            streaming_responses?: boolean | null;
+            /** Multi Agent Coordination */
+            multi_agent_coordination?: boolean | null;
+            /** Available Agents */
+            available_agents?: unknown[] | null;
+            /** Response Styles */
+            response_styles?: string[] | null;
+            /** Supported Languages */
+            supported_languages?: string[] | null;
+            /** Max Message Length */
+            max_message_length?: number | null;
+            /** Context Window */
+            context_window?: number | null;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** ChatCompletionRequest */
         ChatCompletionRequest: {
             /**
@@ -58040,6 +59617,35 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * ChatData
+         * @description data payload for POST /ai-stack.
+         *
+         *     Mirrors ChatMessageData with an additional ``knowledge_sources``
+         *     field for KB-augmented AI Stack chats.
+         */
+        ChatData: {
+            /** Content */
+            content: string;
+            /** Role */
+            role: string;
+            /** Session Id */
+            session_id: string;
+            /** Message Id */
+            message_id?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /** Knowledge Sources */
+            knowledge_sources?: {
+                [key: string]: unknown;
+            }[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * ChatDeleteData
          * @description data payload for DELETE /chats/{chat_id}.
          */
@@ -58052,30 +59658,26 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * ChatHealthComponents
-         * @description Component health subsection of ChatHealthData.
-         */
-        ChatHealthComponents: {
-            /** Chat History Manager */
-            chat_history_manager: string;
-            /** Llm Service */
-            llm_service: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * ChatHealthData
-         * @description Response shape for GET /chat/health (#6497).
+         * @description Response shape for GET /chat/health and GET /health-ai-stack (#6497, #10654).
          *
-         *     Wire format is the model itself — no DataResponse envelope. The route
-         *     declares response_model=ChatHealthData directly.
+         *     Canonical model for both health endpoints. Wire format is the model itself —
+         *     no DataResponse envelope. ``components`` is Dict[str, Any] so it handles
+         *     both the fixed {chat_history_manager, llm_service} shape from /chat/health
+         *     and the heterogeneous per-component map from /health-ai-stack.
+         *     ``error`` is only populated on the /health-ai-stack error path.
          */
         ChatHealthData: {
             /** Status */
             status: string;
             /** Timestamp */
             timestamp: string;
-            components: components["schemas"]["ChatHealthComponents"];
+            /** Components */
+            components: {
+                [key: string]: unknown;
+            };
+            /** Error */
+            error?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58175,7 +59777,13 @@ export interface components {
         };
         /**
          * ChatMessage
-         * @description Chat message model for requests
+         * @description Chat message model for requests — canonical for both /chat and /enhanced (#10654).
+         *
+         *     Fields from the former enhanced variant (use_ai_stack, use_knowledge_base,
+         *     response_style, include_sources) carry defaults so a plain /chat request
+         *     that omits them validates without change. ``reasoning_effort`` is used by
+         *     /chat only and is also optional, so /enhanced requests that omit it still
+         *     validate.
          */
         ChatMessage: {
             /**
@@ -58213,6 +59821,30 @@ export interface components {
              */
             language?: string | null;
             /**
+             * Use Ai Stack
+             * @description Whether to use AI Stack for enhanced responses
+             * @default true
+             */
+            use_ai_stack: boolean;
+            /**
+             * Use Knowledge Base
+             * @description Whether to include knowledge base context
+             * @default true
+             */
+            use_knowledge_base: boolean;
+            /**
+             * Response Style
+             * @description Response style preference
+             * @default conversational
+             */
+            response_style: string;
+            /**
+             * Include Sources
+             * @description Whether to include source citations
+             * @default true
+             */
+            include_sources: boolean;
+            /**
              * Thinking Mode Enabled
              * @description Enable extended thinking mode for reasoning models (Claude 3.7+, DeepSeek R1). When enabled, the model performs chain-of-thought reasoning before responding.
              */
@@ -58222,6 +59854,21 @@ export interface components {
              * @description Thinking budget in tokens (e.g., 1000, 5000, 10000, 63000). Only used when thinking_mode_enabled=True. Limits the amount of reasoning tokens.
              */
             thinking_budget_tokens?: number | null;
+            /**
+             * Reasoning Effort
+             * @description Per-conversation reasoning effort override (low, medium, high, auto). Overrides the user's account-level default. Omit to use the user default. When 'auto' or absent the provider's own defaults are used (#9017).
+             */
+            reasoning_effort?: string | null;
+            /**
+             * Model
+             * @description Per-request model override. Overrides the per-conversation and global default model for this message; omit to use the current default (#11585).
+             */
+            model?: string | null;
+            /**
+             * Provider
+             * @description Per-request LLM provider override. Validated against registered providers (422 on unknown names) and pinned to the conversation so later messages inherit it (#11585).
+             */
+            provider?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58249,6 +59896,13 @@ export interface components {
             } | null;
             /** @description Thinking mode metadata (Claude 3.7+ reasoning models) */
             thinking_metadata?: components["schemas"]["ThinkingMetadata"] | null;
+            /**
+             * Citations
+             * @description Structured source citations from RAG retrieval. Non-empty only when grounding.grounded=True.
+             */
+            citations?: components["schemas"]["Citation"][];
+            /** @description Grounding transparency marker. grounded=False signals a model-only claim. */
+            grounding?: components["schemas"]["GroundingStatus"] | null;
         } & {
             [key: string]: unknown;
         };
@@ -58281,6 +59935,29 @@ export interface components {
              * @default true
              */
             fact_checking: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ChatRequest */
+        ChatRequest: {
+            /** Message */
+            message: string;
+            /** Context */
+            context?: string | null;
+            /** Chat History */
+            chat_history?: {
+                [key: string]: unknown;
+            }[] | null;
+            /**
+             * Use Knowledge Base
+             * @default true
+             */
+            use_knowledge_base: boolean;
+            /**
+             * Response Style
+             * @default conversational
+             */
+            response_style: string;
         } & {
             [key: string]: unknown;
         };
@@ -58322,6 +59999,22 @@ export interface components {
              * @default true
              */
             keep_system_prompt: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ChatResult
+         * @description Data payload for POST /ai-stack/chat.
+         */
+        ChatResult: {
+            /** Message */
+            message?: string | null;
+            /** Context Used */
+            context_used?: unknown[] | null;
+            /** Knowledge Sources */
+            knowledge_sources?: string[] | null;
+            /** Reasoning */
+            reasoning?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58501,6 +60194,42 @@ export interface components {
          * @description Response for GET /circuit-breakers — opaque shape from manager.get_status().
          */
         CircuitBreakerStatusResponse: {
+            [key: string]: unknown;
+        };
+        /**
+         * Citation
+         * @description Structured source citation attached to a RAG-grounded response (#10548).
+         *
+         *     Propagated from retrieval (kb_results / RAGMetrics) through the response
+         *     builder to the API payload and rendered by CitationsDisplay.vue as chips.
+         */
+        Citation: {
+            /**
+             * Id
+             * @description Unique citation identifier (chunk/doc/graph-node id)
+             */
+            id: string;
+            /**
+             * Source Type
+             * @description Origin of this citation: 'doc' | 'chunk' | 'graph'
+             */
+            source_type: string;
+            /**
+             * Title
+             * @description Human-readable title or file name
+             */
+            title: string;
+            /**
+             * Uri
+             * @description Relative path or URI for deep-linking
+             */
+            uri?: string | null;
+            /**
+             * Score
+             * @description Retrieval relevance score (0–1)
+             */
+            score: number;
+        } & {
             [key: string]: unknown;
         };
         /**
@@ -59641,6 +61370,23 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** CodeSourceSummary */
+        CodeSourceSummary: {
+            /** Id */
+            id: string;
+            /** Repo */
+            repo?: string | null;
+            /** Branch */
+            branch?: string | null;
+            /** Clone Path */
+            clone_path?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * CodeSourceUpdateRequest
          * @description Request to update an existing code source.
@@ -59664,7 +61410,7 @@ export interface components {
             /**
              * Codebase Path
              * @description Path to codebase to index
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-9959
+             * @default /home/runner/work/AutoBot-AI/AutoBot-AI
              */
             codebase_path: string;
             /**
@@ -60068,12 +61814,16 @@ export interface components {
         /**
          * CompanyCreate
          * @description Request body for POST /companies.
+         *
+         *     ``slug`` is optional here (unlike CompanyBase): clients such as the creation
+         *     wizard only collect a display name, so we derive a URL-safe slug from the
+         *     name when one isn't supplied (GH#10715).
          */
         CompanyCreate: {
             /** Name */
             name: string;
             /** Slug */
-            slug: string;
+            slug?: string | null;
             /** Description */
             description?: string | null;
             /**
@@ -60193,6 +61943,8 @@ export interface components {
             name?: string | null;
             /** Description */
             description?: string | null;
+            /** Parent Org Id */
+            parent_org_id?: string | null;
             /** Issue Prefix */
             issue_prefix?: string | null;
             /** Budget Monthly Cents */
@@ -60931,140 +62683,6 @@ export interface components {
          * @enum {string}
          */
         ConsistencyLevel: "consistent" | "mostly_consistent" | "inconsistent" | "unknown";
-        /**
-         * ConsolidatedSearchRequest
-         * @description Consolidated search request model combining all search features (Issue #555).
-         *
-         *     This is the primary search endpoint that supports all search capabilities:
-         *     - Basic search (query, limit)
-         *     - Enhanced search (tags, hybrid mode, reranking)
-         *     - RAG search (query reformulation, synthesis)
-         *     - Advanced filtering (date filters, term filters)
-         *     - Analytics tracking
-         *
-         *     Deprecates: /enhanced_search, /rag_search, /similarity_search, /enhanced_search_v2
-         */
-        ConsolidatedSearchRequest: {
-            /**
-             * Query
-             * @description Search query
-             */
-            query: string;
-            /**
-             * Top K
-             * @description Maximum results to return
-             * @default 10
-             */
-            top_k: number;
-            /**
-             * Category
-             * @description Filter by category
-             */
-            category?: string | null;
-            /**
-             * Mode
-             * @description Search mode: 'semantic' (vector only), 'keyword' (text only), 'hybrid' (both, default), 'auto' (intelligent selection)
-             * @default hybrid
-             */
-            mode: string;
-            /**
-             * Enable Rag
-             * @description Enable RAG enhancement for synthesized responses
-             * @default false
-             */
-            enable_rag: boolean;
-            /**
-             * Enable Reranking
-             * @description Enable cross-encoder reranking for improved relevance
-             * @default false
-             */
-            enable_reranking: boolean;
-            /**
-             * Reformulate Query
-             * @description Use RAG agent to expand/reformulate query for better coverage
-             * @default false
-             */
-            reformulate_query: boolean;
-            /**
-             * Return Context
-             * @description Return optimized context for RAG (useful for chat integration)
-             * @default false
-             */
-            return_context: boolean;
-            /**
-             * Tags
-             * @description Filter results by tags
-             */
-            tags?: string[] | null;
-            /**
-             * Tags Match Any
-             * @description If True, match facts with ANY tag. If False (default), match ALL tags.
-             * @default false
-             */
-            tags_match_any: boolean;
-            /**
-             * Min Score
-             * @description Minimum similarity score threshold (0.0-1.0)
-             * @default 0
-             */
-            min_score: number;
-            /**
-             * Offset
-             * @description Pagination offset
-             * @default 0
-             */
-            offset: number;
-            /**
-             * Created After
-             * @description Filter facts created after this date (ISO format: YYYY-MM-DD)
-             */
-            created_after?: string | null;
-            /**
-             * Created Before
-             * @description Filter facts created before this date (ISO format: YYYY-MM-DD)
-             */
-            created_before?: string | null;
-            /**
-             * Exclude Terms
-             * @description Exclude results containing these terms
-             */
-            exclude_terms?: string[] | null;
-            /**
-             * Require Terms
-             * @description Only include results containing ALL of these terms
-             */
-            require_terms?: string[] | null;
-            /**
-             * Include Documentation
-             * @description Also search project documentation
-             * @default false
-             */
-            include_documentation: boolean;
-            /**
-             * Include Relations
-             * @description Include related facts in results
-             * @default false
-             */
-            include_relations: boolean;
-            /**
-             * Board Id
-             * @description Project-scoped board ID for namespaced search. None / '__global__' searches all boards.
-             */
-            board_id?: string | null;
-            /**
-             * Track Analytics
-             * @description Track this search for analytics (default: true)
-             * @default true
-             */
-            track_analytics: boolean;
-            /**
-             * Session Id
-             * @description Session ID for analytics correlation
-             */
-            session_id?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** ContentClassificationRequest */
         ContentClassificationRequest: {
             /** Content */
@@ -62665,44 +64283,14 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[AIStackEnhancedHealthData] */
-        DataResponse_AIStackEnhancedHealthData_: {
+        /** DataResponse[AIStackHealthStatusData] */
+        DataResponse_AIStackHealthStatusData_: {
             /**
              * Success
              * @default true
              */
             success: boolean;
-            data?: components["schemas"]["AIStackEnhancedHealthData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[AIStackEnhancedSearchData] */
-        DataResponse_AIStackEnhancedSearchData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AIStackEnhancedSearchData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[AIStackEnhancedStatsData] */
-        DataResponse_AIStackEnhancedStatsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AIStackEnhancedStatsData"] | null;
+            data?: components["schemas"]["AIStackHealthStatusData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -62748,6 +64336,36 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["AIStackRagSearchData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DataResponse[AIStackSearchData] */
+        DataResponse_AIStackSearchData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["AIStackSearchData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DataResponse[AIStackStatsData] */
+        DataResponse_AIStackStatsData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["AIStackStatsData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -63805,6 +65423,36 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DataResponse[ChatCapabilitiesData] */
+        DataResponse_ChatCapabilitiesData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["ChatCapabilitiesData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DataResponse[ChatData] */
+        DataResponse_ChatData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["ChatData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** DataResponse[ChatDeleteData] */
         DataResponse_ChatDeleteData_: {
             /**
@@ -63963,6 +65611,21 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["ChatResetData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DataResponse[ChatResult] */
+        DataResponse_ChatResult_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["ChatResult"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -64603,81 +66266,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[EnhancedChatCapabilitiesData] */
-        DataResponse_EnhancedChatCapabilitiesData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["EnhancedChatCapabilitiesData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[EnhancedChatData] */
-        DataResponse_EnhancedChatData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["EnhancedChatData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[EnhancedChatResult] */
-        DataResponse_EnhancedChatResult_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["EnhancedChatResult"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[EnhancedGoalData] */
-        DataResponse_EnhancedGoalData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["EnhancedGoalData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[EnhancedKnowledgeSearchData] */
-        DataResponse_EnhancedKnowledgeSearchData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["EnhancedKnowledgeSearchData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[EnterpriseBulkEnableResponse] */
         DataResponse_EnterpriseBulkEnableResponse_: {
             /**
@@ -64963,6 +66551,21 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DataResponse[GoalData] */
+        DataResponse_GoalData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["GoalData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** DataResponse[GraphRagMetricsData] */
         DataResponse_GraphRagMetricsData_: {
             /**
@@ -65031,6 +66634,21 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["KnowledgeRebuildIndexData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DataResponse[KnowledgeSearchData] */
+        DataResponse_KnowledgeSearchData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["KnowledgeSearchData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -66451,6 +68069,21 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DataResponse[UserPreferencesData] */
+        DataResponse_UserPreferencesData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["UserPreferencesData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** DataResponse[WebResearchCacheClearData] */
         DataResponse_WebResearchCacheClearData_: {
             /**
@@ -67155,6 +68788,17 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DependentOut */
+        DependentOut: {
+            /** Dependent Kind */
+            dependent_kind: string;
+            /** Dependent Id */
+            dependent_id: string;
+            /** Company Id */
+            company_id: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * DeploymentCreateRequest
          * @description Generic deployment create request (multi-role, non-Docker path).
@@ -67400,6 +69044,30 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * DevSpeedupAction
+         * @description A recorded developer-speedup action for history (#10502).
+         */
+        DevSpeedupAction: {
+            /** Id */
+            id: string;
+            /** Action */
+            action: string;
+            /** Timestamp */
+            timestamp: string;
+            /**
+             * Input
+             * @default
+             */
+            input: string;
+            /**
+             * Output
+             * @default
+             */
+            output: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * DevSpeedupAnalysisResultResponse
          * @description Response for POST|GET /analyze.
          */
@@ -67412,6 +69080,28 @@ export interface components {
             results: unknown;
             /** Status */
             status: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DevSpeedupCodeTemplate
+         * @description A reusable code template (#10502, #902).
+         */
+        DevSpeedupCodeTemplate: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Language */
+            language: string;
+            /** Template */
+            template: string;
+            /** Variables */
+            variables?: string[];
+            /** Category */
+            category: string;
         } & {
             [key: string]: unknown;
         };
@@ -67462,6 +69152,16 @@ export interface components {
             typical_workflow: string[];
             /** Performance Tips */
             performance_tips: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DevSpeedupHistoryResponse
+         * @description Response for GET /history (#10502).
+         */
+        DevSpeedupHistoryResponse: {
+            /** Actions */
+            actions?: components["schemas"]["DevSpeedupAction"][];
         } & {
             [key: string]: unknown;
         };
@@ -67584,14 +69284,24 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * DevSpeedupTemplatesResponse
+         * @description Response for GET /templates (#10502).
+         */
+        DevSpeedupTemplatesResponse: {
+            /** Templates */
+            templates?: components["schemas"]["DevSpeedupCodeTemplate"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * DeveloperConfigResponse
          * @description Response for GET /config in developer.py.
          */
         DeveloperConfigResponse: {
             /** Enabled */
             enabled: boolean;
-            /** Enhanced Errors */
-            enhanced_errors: boolean;
+            /** Detailed Errors */
+            detailed_errors: boolean;
             /** Endpoint Suggestions */
             endpoint_suggestions: boolean;
             /** Debug Logging */
@@ -67723,6 +69433,37 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DeviceInitiateRequest */
+        DeviceInitiateRequest: {
+            /** Provider Name */
+            provider_name: string;
+            /** Device Authorization Url */
+            device_authorization_url: string;
+            /** Client Id */
+            client_id: string;
+            /**
+             * Scope
+             * @default openid
+             */
+            scope: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DeviceInitiateResponse */
+        DeviceInitiateResponse: {
+            /** Device Code */
+            device_code: string;
+            /** User Code */
+            user_code: string;
+            /** Verification Uri */
+            verification_uri: string;
+            /** Expires In */
+            expires_in: number;
+            /** Interval */
+            interval: number;
+        } & {
+            [key: string]: unknown;
+        };
         /** DeviceListResponse */
         DeviceListResponse: {
             /** Devices */
@@ -67735,6 +69476,19 @@ export interface components {
          * @enum {string}
          */
         DevicePlatform: "ios" | "android" | "pwa";
+        /** DevicePollRequest */
+        DevicePollRequest: {
+            /** Provider Name */
+            provider_name: string;
+            /** Token Url */
+            token_url: string;
+            /** Client Id */
+            client_id: string;
+            /** Device Code */
+            device_code: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** DeviceResponse */
         DeviceResponse: {
             /**
@@ -67918,6 +69672,13 @@ export interface components {
             path: string;
             /** Tree */
             tree: unknown[];
+        } & {
+            [key: string]: unknown;
+        };
+        /** DismissRequest */
+        DismissRequest: {
+            /** Reason */
+            reason: string;
         } & {
             [key: string]: unknown;
         };
@@ -68731,550 +70492,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * EnhancedChatCapabilitiesData
-         * @description data payload for GET /capabilities.
-         *
-         *     Some fields are absent on the fallback path when AI Stack is
-         *     unavailable (only ``enhanced_chat``, ``ai_stack_integration``,
-         *     ``knowledge_base_integration``, ``error`` are populated then).
-         */
-        EnhancedChatCapabilitiesData: {
-            /** Enhanced Chat */
-            enhanced_chat: boolean;
-            /** Ai Stack Integration */
-            ai_stack_integration: boolean;
-            /** Knowledge Base Integration */
-            knowledge_base_integration: boolean;
-            /** Source Citations */
-            source_citations?: boolean | null;
-            /** Streaming Responses */
-            streaming_responses?: boolean | null;
-            /** Multi Agent Coordination */
-            multi_agent_coordination?: boolean | null;
-            /** Available Agents */
-            available_agents?: unknown[] | null;
-            /** Response Styles */
-            response_styles?: string[] | null;
-            /** Supported Languages */
-            supported_languages?: string[] | null;
-            /** Max Message Length */
-            max_message_length?: number | null;
-            /** Context Window */
-            context_window?: number | null;
-            /** Error */
-            error?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EnhancedChatData
-         * @description data payload for POST /enhanced.
-         *
-         *     Mirrors ChatMessageData with an additional ``knowledge_sources``
-         *     field for KB-augmented enhanced chats.
-         */
-        EnhancedChatData: {
-            /** Content */
-            content: string;
-            /** Role */
-            role: string;
-            /** Session Id */
-            session_id: string;
-            /** Message Id */
-            message_id?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-            /** Metadata */
-            metadata?: {
-                [key: string]: unknown;
-            } | null;
-            /** Knowledge Sources */
-            knowledge_sources?: {
-                [key: string]: unknown;
-            }[] | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EnhancedChatHealthData
-         * @description Response shape for GET /health-enhanced (#6497).
-         *
-         *     Wire format is the model itself — no DataResponse envelope. The
-         *     components map is heterogeneous (per-component status strings keyed
-         *     by component name) so it is typed as Dict[str, Any].
-         */
-        EnhancedChatHealthData: {
-            /** Status */
-            status: string;
-            /** Timestamp */
-            timestamp: string;
-            /** Components */
-            components: {
-                [key: string]: unknown;
-            };
-            /** Error */
-            error?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EnhancedChatMessage
-         * @description Enhanced chat message with AI Stack integration.
-         */
-        EnhancedChatMessage: {
-            /**
-             * Content
-             * @description Message content
-             */
-            content: string;
-            /**
-             * Role
-             * @description Message role
-             * @default user
-             */
-            role: string;
-            /**
-             * Session Id
-             * @description Chat session ID
-             */
-            session_id: string;
-            /**
-             * Message Type
-             * @description Message type
-             * @default text
-             */
-            message_type: string | null;
-            /**
-             * Metadata
-             * @description Additional metadata
-             */
-            metadata?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Language
-             * @description Preferred response language code (e.g. 'en', 'es', 'de'). Overrides personality language when set.
-             */
-            language?: string | null;
-            /**
-             * Use Ai Stack
-             * @description Whether to use AI Stack for enhanced responses
-             * @default true
-             */
-            use_ai_stack: boolean;
-            /**
-             * Use Knowledge Base
-             * @description Whether to include knowledge base context
-             * @default true
-             */
-            use_knowledge_base: boolean;
-            /**
-             * Response Style
-             * @description Response style preference
-             * @default conversational
-             */
-            response_style: string;
-            /**
-             * Include Sources
-             * @description Whether to include source citations
-             * @default true
-             */
-            include_sources: boolean;
-            /**
-             * Thinking Mode Enabled
-             * @description Enable extended thinking mode for reasoning models (Claude 3.7+, DeepSeek R1). When enabled, the model performs chain-of-thought reasoning before responding.
-             */
-            thinking_mode_enabled?: boolean | null;
-            /**
-             * Thinking Budget Tokens
-             * @description Thinking budget in tokens (e.g., 1000, 5000, 10000, 63000). Only used when thinking_mode_enabled=True. Limits the amount of reasoning tokens.
-             */
-            thinking_budget_tokens?: number | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** EnhancedChatRequest */
-        EnhancedChatRequest: {
-            /** Message */
-            message: string;
-            /** Context */
-            context?: string | null;
-            /** Chat History */
-            chat_history?: {
-                [key: string]: unknown;
-            }[] | null;
-            /**
-             * Use Knowledge Base
-             * @default true
-             */
-            use_knowledge_base: boolean;
-            /**
-             * Response Style
-             * @default conversational
-             */
-            response_style: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EnhancedChatResult
-         * @description Data payload for POST /ai-stack/chat/enhanced and /ai-stack/legacy/enhanced-chat.
-         */
-        EnhancedChatResult: {
-            /** Message */
-            message?: string | null;
-            /** Context Used */
-            context_used?: unknown[] | null;
-            /** Knowledge Sources */
-            knowledge_sources?: string[] | null;
-            /** Reasoning */
-            reasoning?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EnhancedGoalData
-         * @description data payload for POST /agent/goal/enhanced.
-         */
-        EnhancedGoalData: {
-            /** Agents Used */
-            agents_used: string[];
-            /** Execution Time */
-            execution_time: number;
-            result?: components["schemas"]["GoalExecutionResult"] | null;
-            /** Goal */
-            goal: string;
-            /** Coordination Mode */
-            coordination_mode: string;
-            /** Priority */
-            priority?: string | null;
-            /** Enhanced Context Used */
-            enhanced_context_used: boolean;
-            /** Knowledge Base Integrated */
-            knowledge_base_integrated: boolean;
-            /** Timestamp */
-            timestamp: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EnhancedGoalPayload
-         * @description Enhanced goal payload with AI Stack integration.
-         */
-        EnhancedGoalPayload: {
-            /**
-             * Goal
-             * @description Goal description
-             */
-            goal: string;
-            /**
-             * Agents
-             * @description Specific agents to use
-             */
-            agents?: string[] | null;
-            /**
-             * Coordination Mode
-             * @description Coordination mode (parallel, sequential, intelligent)
-             * @default intelligent
-             */
-            coordination_mode: string;
-            /**
-             * Priority
-             * @description Task priority (low, normal, high, urgent)
-             * @default normal
-             */
-            priority: string;
-            /**
-             * Context
-             * @description Additional context
-             */
-            context?: string | null;
-            /**
-             * Use Knowledge Base
-             * @description Use knowledge base for context
-             * @default true
-             */
-            use_knowledge_base: boolean;
-            /**
-             * Include Reasoning
-             * @description Include reasoning steps
-             * @default false
-             */
-            include_reasoning: boolean;
-            /**
-             * Max Execution Time
-             * @description Max execution time in seconds
-             * @default 300
-             */
-            max_execution_time: number;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EnhancedKnowledgeSearchData
-         * @description data payload for POST /ai-stack/knowledge/enhanced-search.
-         */
-        EnhancedKnowledgeSearchData: {
-            /** Local Kb */
-            local_kb: {
-                [key: string]: unknown;
-            }[];
-            /** Enhanced */
-            enhanced: {
-                [key: string]: unknown;
-            };
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EnhancedSearchBenchmarkResponse
-         * @description Response for POST /benchmark.
-         *
-         *     benchmark_results shape is service-delegated.
-         */
-        EnhancedSearchBenchmarkResponse: {
-            /** Benchmark Results */
-            benchmark_results: {
-                [key: string]: unknown;
-            };
-            /** Timestamp */
-            timestamp: number;
-            /** Recommendations */
-            recommendations: string[];
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EnhancedSearchConnectivityResponse
-         * @description Response for GET /test/connectivity.
-         */
-        EnhancedSearchConnectivityResponse: {
-            /** Connectivity */
-            connectivity: string;
-            /** Timestamp */
-            timestamp: number;
-            /** Npu Worker Url */
-            npu_worker_url?: string | null;
-            /** Test Search Results */
-            test_search_results?: number | null;
-            /** Test Device Used */
-            test_device_used?: string | null;
-            /** Test Time Ms */
-            test_time_ms?: number | null;
-            /** Error */
-            error?: string | null;
-            /** Fallback Available */
-            fallback_available?: boolean | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EnhancedSearchHardwareStatusResponse
-         * @description Response for GET /hardware/status.
-         *
-         *     hardware_status, cache_stats, and configuration are service-delegated dicts.
-         */
-        EnhancedSearchHardwareStatusResponse: {
-            /** Hardware Status */
-            hardware_status: {
-                [key: string]: unknown;
-            };
-            /** Knowledge Base Ready */
-            knowledge_base_ready: boolean;
-            /** Cache Stats */
-            cache_stats: {
-                [key: string]: unknown;
-            };
-            /** Configuration */
-            configuration: {
-                [key: string]: unknown;
-            };
-            /** Timestamp */
-            timestamp: number;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EnhancedSearchOptimizeResponse
-         * @description Response for POST /optimize.
-         */
-        EnhancedSearchOptimizeResponse: {
-            /** Optimization Applied */
-            optimization_applied: string;
-            /** Configuration */
-            configuration: {
-                [key: string]: unknown;
-            };
-            /** Timestamp */
-            timestamp: number;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EnhancedSearchPerformanceAnalyticsResponse
-         * @description Response for GET /performance/analytics.
-         *
-         *     search_statistics, hardware_status, and performance_analysis are
-         *     service-delegated dicts.
-         */
-        EnhancedSearchPerformanceAnalyticsResponse: {
-            /** Search Statistics */
-            search_statistics: {
-                [key: string]: unknown;
-            };
-            /** Hardware Status */
-            hardware_status: {
-                [key: string]: unknown;
-            };
-            /** Performance Analysis */
-            performance_analysis: {
-                [key: string]: unknown;
-            };
-            /** Recommendations */
-            recommendations: string[];
-            /** Timestamp */
-            timestamp: number;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EnhancedSearchRequest
-         * @description Enhanced search request with tag filtering and hybrid mode (Issue #78, #685)
-         */
-        EnhancedSearchRequest: {
-            /**
-             * Query
-             * @description Search query
-             */
-            query: string;
-            /**
-             * Limit
-             * @description Max results to return
-             * @default 10
-             */
-            limit: number;
-            /**
-             * Offset
-             * @description Pagination offset
-             * @default 0
-             */
-            offset: number;
-            /** Category */
-            category?: string | null;
-            /**
-             * Tags
-             * @description Filter results by tags (facts must have ALL specified tags)
-             */
-            tags?: string[] | null;
-            /**
-             * Tags Match Any
-             * @description If True, match facts with ANY tag. If False (default), match ALL tags.
-             * @default false
-             */
-            tags_match_any: boolean;
-            /**
-             * Mode
-             * @description Search mode: 'semantic' (vector only), 'keyword' (text only), 'hybrid' (both)
-             * @default hybrid
-             */
-            mode: string;
-            /**
-             * Enable Reranking
-             * @description Enable cross-encoder reranking for better relevance
-             * @default false
-             */
-            enable_reranking: boolean;
-            /**
-             * Min Score
-             * @description Minimum similarity score threshold (0.0-1.0)
-             * @default 0
-             */
-            min_score: number;
-            /**
-             * Access Level
-             * @description Filter by access level: all, autobot, general, system, user
-             * @default all
-             */
-            access_level: string;
-            /**
-             * Board Id
-             * @description Project-scoped board ID for namespaced search. None / '__global__' searches all boards.
-             */
-            board_id?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EnhancedSearchResponse
-         * @description Shape returned by deprecated POST /enhanced_search.
-         *
-         *     Mirrors the kb.enhanced_search() contract: success, results, total_count,
-         *     query_processed, mode, tags_applied, min_score_applied, reranking_applied.
-         *     extra="allow" handles KB-specific additions.
-         */
-        EnhancedSearchResponse: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            /** Results */
-            results?: {
-                [key: string]: unknown;
-            }[];
-            /**
-             * Total Count
-             * @default 0
-             */
-            total_count: number;
-            /** Query Processed */
-            query_processed?: string | null;
-            /** Mode */
-            mode?: string | null;
-            /** Tags Applied */
-            tags_applied?: string[] | null;
-            /**
-             * Min Score Applied
-             * @default 0
-             */
-            min_score_applied: number;
-            /**
-             * Reranking Applied
-             * @default false
-             */
-            reranking_applied: boolean;
-            /** Message */
-            message?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EnhancedSearchV2Response
-         * @description Shape returned by deprecated POST /enhanced_search_v2.
-         *
-         *     Delegates to kb.enhanced_search_v2(); mirrors the enhanced_search shape.
-         */
-        EnhancedSearchV2Response: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            /** Results */
-            results?: {
-                [key: string]: unknown;
-            }[];
-            /**
-             * Total Count
-             * @default 0
-             */
-            total_count: number;
-            /** Message */
-            message?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * EnterpriseBulkEnableResponse
          * @description Response for POST /features/bulk-enable.
          */
@@ -69968,6 +71185,32 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ExecRequest */
+        ExecRequest: {
+            /** Command */
+            command: string[] | string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ExecResponse */
+        ExecResponse: {
+            /** Success */
+            success: boolean;
+            /** Exit Code */
+            exit_code: number;
+            /** Stdout */
+            stdout: string;
+            /** Stderr */
+            stderr: string;
+            /** Execution Time */
+            execution_time: number;
+            /** Task Id */
+            task_id: string;
+            /** Security Blocked */
+            security_blocked: boolean;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * ExpandQueryResponse
          * @description Shape returned by POST /expand_query.
@@ -70339,6 +71582,26 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * FailurePatternRecord
+         * @description Serialized failure pattern for the knowledge-export document (GH#11151).
+         */
+        FailurePatternRecord: {
+            /** Pattern Id */
+            pattern_id: string;
+            /** Causal Chain */
+            causal_chain: string;
+            /** Occurrence Count */
+            occurrence_count: number;
+            /** Successful Resolutions */
+            successful_resolutions: string[];
+            /** Resolution Success Rate */
+            resolution_success_rate: number;
+            /** Confidence */
+            confidence: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * FeatureCategory
          * @description Categories of enterprise features
          * @enum {string}
@@ -70472,6 +71735,21 @@ export interface components {
              * @description Position in top-k suggestions
              */
             completion_rank?: number | null;
+            /**
+             * Org Id
+             * @description Tenant/org identifier (#10545 preference scope)
+             */
+            org_id?: string | null;
+            /**
+             * Task Class
+             * @description Task class for preference scope, e.g. 'code-fix' (#10545)
+             */
+            task_class?: string | null;
+            /**
+             * Behavior
+             * @description Behavior judged: agent/skill/strategy tag (#10545)
+             */
+            behavior?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -71298,6 +72576,54 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** FindingProposalResponse */
+        FindingProposalResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Source Id */
+            source_id: string;
+            /** Finding Key */
+            finding_key: string;
+            /** Finding Type */
+            finding_type: string;
+            /** Severity */
+            severity: string;
+            /** File Path */
+            file_path: string;
+            /** Line Number */
+            line_number: number | null;
+            /** Description */
+            description: string;
+            /** Suggestion */
+            suggestion: string | null;
+            /** Verdict Is Real */
+            verdict_is_real: boolean | null;
+            /** Verdict Confidence */
+            verdict_confidence: number | null;
+            /** Verdict Rationale */
+            verdict_rationale: string | null;
+            /** Status */
+            status: string;
+            /** Work Item Id */
+            work_item_id: string | null;
+            /** Dismiss Reason */
+            dismiss_reason: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** FindingsPlaceholderResponse */
         FindingsPlaceholderResponse: {
             /** Findings */
@@ -71367,6 +72693,11 @@ export interface components {
              * @description Pin folder to top of list
              */
             pinned?: boolean | null;
+            /**
+             * Archived
+             * @description Archive folder (hidden from main list, still searchable)
+             */
+            archived?: boolean | null;
         } & {
             [key: string]: unknown;
         };
@@ -71552,7 +72883,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI
+             * @default /opt/autobot
              */
             repo_path: string;
             /**
@@ -71581,7 +72912,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI
+             * @default /opt/autobot
              */
             repo_path: string;
             /**
@@ -71601,7 +72932,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI
+             * @default /opt/autobot
              */
             repo_path: string;
             /**
@@ -71833,7 +73164,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI
+             * @default /opt/autobot
              */
             repo_path: string;
             /**
@@ -71923,7 +73254,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI
+             * @default /opt/autobot
              */
             repo_path: string;
             /**
@@ -71943,7 +73274,7 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path (must be whitelisted)
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI
+             * @default /opt/autobot
              */
             repo_path: string;
             /**
@@ -71976,8 +73307,33 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * GoalData
+         * @description data payload for POST /agent/goal/orchestrated.
+         */
+        GoalData: {
+            /** Agents Used */
+            agents_used: string[];
+            /** Execution Time */
+            execution_time: number;
+            result?: components["schemas"]["GoalExecutionResult"] | null;
+            /** Goal */
+            goal: string;
+            /** Coordination Mode */
+            coordination_mode: string;
+            /** Priority */
+            priority?: string | null;
+            /** Context Used */
+            context_used: boolean;
+            /** Knowledge Base Integrated */
+            knowledge_base_integrated: boolean;
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * GoalExecutionResult
-         * @description Result payload for enhanced goal execution via multi-agent coordination.
+         * @description Result payload for advanced goal execution via multi-agent coordination.
          */
         GoalExecutionResult: {
             /** Final Answer */
@@ -71999,9 +73355,20 @@ export interface components {
          * @enum {string}
          */
         GoalLevel: "vision" | "mission" | "objective" | "key_result";
-        /** GoalPayload */
+        /**
+         * GoalPayload
+         * @description Goal payload — unified from bare and advanced variants (#10666 B1).
+         *
+         *     The simple /goal endpoint reads only ``goal``/``use_phi2``/``user_role``.
+         *     The /goal/orchestrated endpoint also reads the remaining optional fields.
+         *     All added fields carry defaults, so existing callers that only send
+         *     ``goal`` remain fully backward-compatible.
+         */
         GoalPayload: {
-            /** Goal */
+            /**
+             * Goal
+             * @description Goal description
+             */
             goal: string;
             /**
              * Use Phi2
@@ -72013,6 +73380,46 @@ export interface components {
              * @default user
              */
             user_role: string;
+            /**
+             * Agents
+             * @description Specific agents to use
+             */
+            agents?: string[] | null;
+            /**
+             * Coordination Mode
+             * @description Coordination mode (parallel, sequential, intelligent)
+             * @default intelligent
+             */
+            coordination_mode: string;
+            /**
+             * Priority
+             * @description Task priority (low, normal, high, urgent)
+             * @default normal
+             */
+            priority: string;
+            /**
+             * Context
+             * @description Additional context
+             */
+            context?: string | null;
+            /**
+             * Use Knowledge Base
+             * @description Use knowledge base for context
+             * @default true
+             */
+            use_knowledge_base: boolean;
+            /**
+             * Include Reasoning
+             * @description Include reasoning steps
+             * @default false
+             */
+            include_reasoning: boolean;
+            /**
+             * Max Execution Time
+             * @description Max execution time in seconds
+             * @default 300
+             */
+            max_execution_time: number;
         } & {
             [key: string]: unknown;
         };
@@ -72220,7 +73627,7 @@ export interface components {
         };
         /**
          * GraphRequest
-         * @description Request model for unified knowledge graph.
+         * @description Request model for multi-source knowledge graph.
          */
         GraphRequest: {
             /**
@@ -72277,6 +73684,27 @@ export interface components {
             context?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GroundingStatus
+         * @description Grounding transparency marker attached to every assistant response (#10548).
+         *
+         *     ``grounded=True``  → citations[] is non-empty and comes from real retrieval.
+         *     ``grounded=False`` → model-only claim; no KB/graph evidence was found.
+         */
+        GroundingStatus: {
+            /**
+             * Grounded
+             * @description True when citations[] contains verified retrieval evidence
+             */
+            grounded: boolean;
+            /**
+             * Strategy
+             * @description Retrieval strategy used: 'rag' | 'cag' | 'kag' | None
+             */
+            strategy?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -74099,7 +75527,7 @@ export interface components {
              * Source Paths
              * @description Paths to populate from
              * @default [
-             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-9959"
+             *       "/home/runner/work/AutoBot-AI/AutoBot-AI"
              *     ]
              */
             source_paths: string[];
@@ -74712,7 +76140,7 @@ export interface components {
         };
         /**
          * KnowledgeDocumentationSearchResponse
-         * @description Response for GET /unified/documentation/search.
+         * @description Response for GET /multi-source/documentation/search.
          */
         KnowledgeDocumentationSearchResponse: {
             /** Success */
@@ -74730,7 +76158,7 @@ export interface components {
         };
         /**
          * KnowledgeDocumentationStatsResponse
-         * @description Response for GET /unified/documentation/stats.
+         * @description Response for GET /multi-source/documentation/stats.
          */
         KnowledgeDocumentationStatsResponse: {
             /** Success */
@@ -75121,6 +76549,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * KnowledgeImportResponse
+         * @description Response for a knowledge-import operation (GH#11151).
+         */
+        KnowledgeImportResponse: {
+            /** Success */
+            success: boolean;
+            /** Message */
+            message: string;
+            /** Task Type */
+            task_type: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * KnowledgeMainCategoriesResponse
          * @description Shape of ``GET /api/knowledge_base/categories/main``.
          *
@@ -75264,6 +76706,88 @@ export interface components {
             errors?: unknown[] | null;
             /** Warnings */
             warnings?: unknown[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeMultiSourceContextResponse
+         * @description Response for POST /multi-source/context.
+         */
+        KnowledgeMultiSourceContextResponse: {
+            /** Success */
+            success: boolean;
+            /** Context */
+            context: string;
+            /** Context Length */
+            context_length: number;
+            /** Citations */
+            citations: unknown[];
+            /** Sources Used */
+            sources_used: unknown[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeMultiSourceGraphResponse
+         * @description Response for POST /multi-source/graph and GET /multi-source/graph.
+         */
+        KnowledgeMultiSourceGraphResponse: {
+            /** Success */
+            success: boolean;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /** Stats */
+            stats: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeMultiSourceSearchResponse
+         * @description Response for POST /multi-source/search.
+         */
+        KnowledgeMultiSourceSearchResponse: {
+            /** Success */
+            success: boolean;
+            /** Query */
+            query: string;
+            /** Facts */
+            facts: unknown[];
+            /** Related Facts */
+            related_facts: unknown[];
+            /** Documentation */
+            documentation: unknown[];
+            /** Sources Searched */
+            sources_searched: string[];
+            /** Total Results */
+            total_results: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeMultiSourceStatsResponse
+         * @description Response for GET /multi-source/stats.
+         *
+         *     Sections are populated dynamically — extra fields allowed.
+         */
+        KnowledgeMultiSourceStatsResponse: {
+            /** Success */
+            success: boolean;
+            /** Knowledge Base */
+            knowledge_base: {
+                [key: string]: unknown;
+            };
+            /** Relations */
+            relations: {
+                [key: string]: unknown;
+            };
+            /** Documentation */
+            documentation: {
+                [key: string]: unknown;
+            };
         } & {
             [key: string]: unknown;
         };
@@ -75498,6 +77022,22 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * KnowledgeSearchData
+         * @description data payload for POST /ai-stack/knowledge/search.
+         */
+        KnowledgeSearchData: {
+            /** Local Kb */
+            local_kb: {
+                [key: string]: unknown;
+            }[];
+            /** Rag Augmented */
+            rag_augmented: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * KnowledgeSearchRequest
          * @description Request body for POST /mcp/search_knowledge_base.
          */
@@ -75528,7 +77068,7 @@ export interface components {
          * @description Shape returned by POST /search (all three code paths).
          *
          *     The basic and enhanced paths use _build_search_response (keys: results,
-         *     total_results, query, mode, kb_implementation, rag_enhanced, reranking_applied).
+         *     total_results, query, mode, kb_implementation, rag_applied, reranking_applied).
          *     The RAG path additionally includes status, synthesized_response, original_query,
          *     reformulated_queries, confidence_score, etc.  extra="allow" admits all extra
          *     fields so both code paths validate without wrapping returns.
@@ -75550,10 +77090,10 @@ export interface components {
             /** Kb Implementation */
             kb_implementation?: string | null;
             /**
-             * Rag Enhanced
+             * Rag Applied
              * @default false
              */
-            rag_enhanced: boolean;
+            rag_applied: boolean;
             /**
              * Reranking Applied
              * @default false
@@ -76029,88 +77569,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeUnifiedContextResponse
-         * @description Response for POST /unified/context.
-         */
-        KnowledgeUnifiedContextResponse: {
-            /** Success */
-            success: boolean;
-            /** Context */
-            context: string;
-            /** Context Length */
-            context_length: number;
-            /** Citations */
-            citations: unknown[];
-            /** Sources Used */
-            sources_used: unknown[];
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * KnowledgeUnifiedGraphResponse
-         * @description Response for POST /unified/graph and GET /unified/graph.
-         */
-        KnowledgeUnifiedGraphResponse: {
-            /** Success */
-            success: boolean;
-            /** Data */
-            data: {
-                [key: string]: unknown;
-            };
-            /** Stats */
-            stats: {
-                [key: string]: unknown;
-            };
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * KnowledgeUnifiedSearchResponse
-         * @description Response for POST /unified/search.
-         */
-        KnowledgeUnifiedSearchResponse: {
-            /** Success */
-            success: boolean;
-            /** Query */
-            query: string;
-            /** Facts */
-            facts: unknown[];
-            /** Related Facts */
-            related_facts: unknown[];
-            /** Documentation */
-            documentation: unknown[];
-            /** Sources Searched */
-            sources_searched: string[];
-            /** Total Results */
-            total_results: number;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * KnowledgeUnifiedStatsResponse
-         * @description Response for GET /unified/stats.
-         *
-         *     Sections are populated dynamically — extra fields allowed.
-         */
-        KnowledgeUnifiedStatsResponse: {
-            /** Success */
-            success: boolean;
-            /** Knowledge Base */
-            knowledge_base: {
-                [key: string]: unknown;
-            };
-            /** Relations */
-            relations: {
-                [key: string]: unknown;
-            };
-            /** Documentation */
-            documentation: {
-                [key: string]: unknown;
-            };
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * KnowledgeUnshareFactResponse
          * @description Response for DELETE /api/knowledge/facts/{fact_id}/share/{user_id_to_remove}.
          */
@@ -76544,8 +78002,8 @@ export interface components {
             status: string;
             /** Original Prompt */
             original_prompt: string;
-            /** Enhanced Prompt */
-            enhanced_prompt: string;
+            /** Augmented Prompt */
+            augmented_prompt: string;
             /** Context Level */
             context_level: string;
             /** Timestamp */
@@ -77169,6 +78627,55 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * LearnedKnowledgeExport
+         * @description Human-reviewable export of an agent's learned knowledge (GH#11151).
+         */
+        LearnedKnowledgeExport: {
+            /** Task Type */
+            task_type: string;
+            learned_strategy: components["schemas"]["LearnedStrategyResponse"] | null;
+            /** High Confidence Threshold */
+            high_confidence_threshold: number;
+            /** High Confidence Failure Patterns */
+            high_confidence_failure_patterns: components["schemas"]["FailurePatternRecord"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * LearnedKnowledgeImport
+         * @description Operator-curated learned strategy to import (GH#11151).
+         *
+         *     ``best_prompt_template`` and ``best_approach`` are treated as untrusted and
+         *     sanitized before persistence (reuses the #11060 data-only framing).
+         */
+        LearnedKnowledgeImport: {
+            /** Task Type */
+            task_type: string;
+            /** Best Approach */
+            best_approach: string;
+            /** Best Prompt Template */
+            best_prompt_template: string;
+            /**
+             * Avg Score
+             * @default 0
+             */
+            avg_score: number;
+            /**
+             * Sample Size
+             * @default 0
+             */
+            sample_size: number;
+            /**
+             * Confidence
+             * @default 0
+             */
+            confidence: number;
+            /** Failure Patterns */
+            failure_patterns?: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * LearnedStrategyResponse
          * @description Serialized learned strategy record.
          */
@@ -77418,6 +78925,20 @@ export interface components {
             metric_after: number;
             /** Confidence */
             confidence: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * LogCombinedResponse
+         * @description Response for GET /logs/combined (docker + file logs merged into one stream).
+         */
+        LogCombinedResponse: {
+            /** Logs */
+            logs: unknown[];
+            /** Total Count */
+            total_count: number;
+            /** Sources Included */
+            sources_included: string[];
         } & {
             [key: string]: unknown;
         };
@@ -77915,20 +79436,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * LogUnifiedResponse
-         * @description Response for GET /logs/unified.
-         */
-        LogUnifiedResponse: {
-            /** Logs */
-            logs: unknown[];
-            /** Total Count */
-            total_count: number;
-            /** Sources Included */
-            sources_included: string[];
-        } & {
-            [key: string]: unknown;
-        };
         /** LoginRequest */
         LoginRequest: {
             /** Username */
@@ -77952,6 +79459,7 @@ export interface components {
             token?: string | null;
             /** Session Id */
             session_id?: string | null;
+            password_warning?: components["schemas"]["PasswordWarning"] | null;
         } & {
             [key: string]: unknown;
         };
@@ -78163,6 +79671,28 @@ export interface components {
             status: string;
             /** Cache */
             cache: {
+                [key: string]: unknown;
+            };
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * MCPRegistryHealthResponse
+         * @description Response for GET /health.
+         */
+        MCPRegistryHealthResponse: {
+            /** Status */
+            status: string;
+            /** Total Bridges */
+            total_bridges: number;
+            /** Healthy Bridges */
+            healthy_bridges: number;
+            /** Checks */
+            checks: unknown[];
+            /** Cache Stats */
+            cache_stats: {
                 [key: string]: unknown;
             };
             /** Timestamp */
@@ -78498,7 +80028,7 @@ export interface components {
          * MaintenanceDashboardResponse
          * @description Response for GET /maintenance/dashboard.
          *
-         *     Shape from service.get_unified_dashboard() — opaque; extra allowed.
+         *     Shape from service.get_analytics_dashboard() — opaque; extra allowed.
          */
         MaintenanceDashboardResponse: {
             [key: string]: unknown;
@@ -79807,7 +81337,7 @@ export interface components {
          * @description Categories of quality metrics.
          * @enum {string}
          */
-        MetricCategory: "maintainability" | "reliability" | "security" | "performance" | "testability" | "documentation";
+        MetricCategory: "maintainability" | "reliability" | "security" | "performance" | "testability" | "documentation" | "runtime_risk";
         /**
          * MetricsDashboardResponse
          * @description Response for GET /dashboard.
@@ -80812,7 +82342,7 @@ export interface components {
         };
         /**
          * NPUSearchRequest
-         * @description Enhanced search request model.
+         * @description AI Stack search request model.
          */
         NPUSearchRequest: {
             /**
@@ -80849,7 +82379,7 @@ export interface components {
         };
         /**
          * NPUSearchResponse
-         * @description Enhanced search response model.
+         * @description AI Stack search response model.
          */
         NPUSearchResponse: {
             /** Query */
@@ -80910,7 +82440,7 @@ export interface components {
          *       "name": "Primary NPU Worker",
          *       "platform": "linux",
          *       "priority": 8,
-         *       "url": "http://YOUR_BACKEND_IP:8081",
+         *       "url": "http://127.0.0.1:8081",
          *       "weight": 2
          *     }
          */
@@ -80974,7 +82504,7 @@ export interface components {
          *         "name": "Primary NPU Worker",
          *         "platform": "linux",
          *         "priority": 8,
-         *         "url": "http://YOUR_BACKEND_IP:8081",
+         *         "url": "http://127.0.0.1:8081",
          *         "weight": 2
          *       },
          *       "metrics": {
@@ -81324,6 +82854,66 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * OAuthAuthorizeResponse
+         * @description Return of /oauth/initiate — the provider URL to redirect to + the CSRF state.
+         */
+        OAuthAuthorizeResponse: {
+            /** Authorize Url */
+            authorize_url: string;
+            /** State */
+            state: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OAuthCallbackRequest
+         * @description Body for POST /oauth/callback — bound to a server-minted, single-use state.
+         *
+         *     The verifier / token_url / client_id are taken from the stored state, never
+         *     from the client, so a lured admin cannot inject an attacker's credentials.
+         */
+        OAuthCallbackRequest: {
+            /** State */
+            state: string;
+            /** Code */
+            code: string;
+            /** Redirect Uri */
+            redirect_uri: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OAuthInitiateRequest
+         * @description Body for POST /oauth/initiate — starts a server-driven PKCE auth-code flow.
+         */
+        OAuthInitiateRequest: {
+            /** Provider Name */
+            provider_name: string;
+            /** Authorize Url */
+            authorize_url: string;
+            /** Token Url */
+            token_url: string;
+            /** Client Id */
+            client_id: string;
+            /** Redirect Uri */
+            redirect_uri: string;
+            /** Scopes */
+            scopes?: string[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** OAuthInitiateResponse */
+        OAuthInitiateResponse: {
+            /** Provider Name */
+            provider_name: string;
+            /** Stored */
+            stored: boolean;
+            /** Expires At */
+            expires_at?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * OCRRequest
          * @description Request for OCR text extraction
          */
@@ -81478,6 +83068,10 @@ export interface components {
              * @default 0
              */
             agent_count: number;
+            /** Agent Scores */
+            agent_scores?: {
+                [key: string]: unknown;
+            }[];
         } & {
             [key: string]: unknown;
         };
@@ -81597,6 +83191,8 @@ export interface components {
         OrgChartNode: {
             /** Id */
             id: string;
+            /** Node Id */
+            node_id: string;
             /** Name */
             name: string;
             /** Title */
@@ -81756,7 +83352,7 @@ export interface components {
              * @description Default visibility for new knowledge
              * @default private
              */
-            default_visibility: components["schemas"]["VisibilityLevel"];
+            default_visibility: components["schemas"]["ScopeLevel"];
             /**
              * Allow User Private
              * @description Allow users to create private knowledge
@@ -82160,6 +83756,25 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * PasswordWarning
+         * @description Non-blocking soft warning attached to a successful login response (#10199).
+         *
+         *     Presence of this field does NOT indicate an auth failure — the token is
+         *     still valid.  Clients should surface the ``reason`` as a nudge to the user
+         *     to update their password.
+         */
+        PasswordWarning: {
+            /**
+             * Weak
+             * @default true
+             */
+            weak: boolean;
+            /** Reason */
+            reason: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * PatternAnalysisRequest
          * @description Request model for pattern analysis.
          */
@@ -82167,7 +83782,7 @@ export interface components {
             /**
              * Path
              * @description Path to analyze (defaults to project root)
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-9959
+             * @default /home/runner/work/AutoBot-AI/AutoBot-AI
              */
             path: string;
             /**
@@ -83882,6 +85497,11 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Program Count
+             * @default 0
+             */
+            program_count: number;
         } & {
             [key: string]: unknown;
         };
@@ -84195,6 +85815,11 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Project Count
+             * @default 0
+             */
+            project_count: number;
         } & {
             [key: string]: unknown;
         };
@@ -84295,6 +85920,27 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Open Work Item Count
+             * @default 0
+             */
+            open_work_item_count: number;
+            /** Active Sprint Name */
+            active_sprint_name?: string | null;
+            /** Code Source Id */
+            code_source_id?: string | null;
+            code_source?: components["schemas"]["CodeSourceSummary"] | null;
+            /**
+             * Lifecycle State
+             * @default active
+             */
+            lifecycle_state: string;
+            /** Archived At */
+            archived_at?: string | null;
+            /** Disposal Scheduled At */
+            disposal_scheduled_at?: string | null;
+            /** Disposal Approval Id */
+            disposal_approval_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -84566,6 +86212,19 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ProviderAuthStatus */
+        ProviderAuthStatus: {
+            /** Provider Name */
+            provider_name: string;
+            /** Connected */
+            connected: boolean;
+            /** Expires At */
+            expires_at?: number | null;
+            /** Auth Kind */
+            auth_kind?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * ProviderCredentialCreate
          * @description Request to create/update user provider credential.
@@ -84766,10 +86425,10 @@ export interface components {
             /** Reformulated Queries */
             reformulated_queries?: string[];
             /**
-             * Rag Enhanced
+             * Rag Applied
              * @default false
              */
-            rag_enhanced: boolean;
+            rag_applied: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -85079,46 +86738,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * RagSearchResponse
-         * @description Shape returned by deprecated POST /rag_search.
-         *
-         *     Shares the same RAG synthesis shape as the /search RAG path.
-         */
-        RagSearchResponse: {
-            /**
-             * Status
-             * @default success
-             */
-            status: string;
-            /**
-             * Synthesized Response
-             * @default
-             */
-            synthesized_response: string;
-            /** Results */
-            results?: {
-                [key: string]: unknown;
-            }[];
-            /**
-             * Total Results
-             * @default 0
-             */
-            total_results: number;
-            /** Original Query */
-            original_query?: string | null;
-            /** Reformulated Queries */
-            reformulated_queries?: string[];
-            /**
-             * Rag Enhanced
-             * @default true
-             */
-            rag_enhanced: boolean;
-            /** Message */
-            message?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * RagStatsResponse
          * @description Shape returned by GET /stats/rag.
          */
@@ -85215,6 +86834,34 @@ export interface components {
              * @default info
              */
             severity: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** RealtimeProviderInfo */
+        RealtimeProviderInfo: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Configured */
+            configured: boolean;
+            /** Transport */
+            transport: string;
+            /** Supports Tools */
+            supports_tools: boolean;
+            /** Supports Audio Output */
+            supports_audio_output: boolean;
+            /** Supports Cost Tracking */
+            supports_cost_tracking: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** RealtimeProvidersResponse */
+        RealtimeProvidersResponse: {
+            /** Selected */
+            selected: string;
+            /** Providers */
+            providers: components["schemas"]["RealtimeProviderInfo"][];
         } & {
             [key: string]: unknown;
         };
@@ -86150,43 +87797,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * RestoreRequest
-         * @description Request model for restoring knowledge base from backup (Issue #419)
-         */
-        RestoreRequest: {
-            /**
-             * Backup File
-             * @description Path to backup file to restore
-             */
-            backup_file: string;
-            /**
-             * Overwrite Existing
-             * @description Overwrite existing facts with backup data
-             * @default false
-             */
-            overwrite_existing: boolean;
-            /**
-             * Skip Duplicates
-             * @description Skip facts that already exist
-             * @default true
-             */
-            skip_duplicates: boolean;
-            /**
-             * Restore Embeddings
-             * @description Restore vector embeddings if available
-             * @default true
-             */
-            restore_embeddings: boolean;
-            /**
-             * Dry Run
-             * @description Only validate backup, don't actually restore
-             * @default true
-             */
-            dry_run: boolean;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * RestoreSnapshotResponse
          * @description Response for POST /execution/snapshots/{id}/restore.
          */
@@ -86550,6 +88160,16 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * RewrapBody
+         * @description New root key (url-safe base64, 32 bytes decoded) to derive fresh KEKs for rewrapping.
+         */
+        RewrapBody: {
+            /** New Root Key */
+            new_root_key: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** RoleAssignmentResponse */
         RoleAssignmentResponse: {
             /**
@@ -86882,11 +88502,8 @@ export interface components {
             url: string;
             /** Useragent */
             userAgent: string;
-            /**
-             * Data
-             * @default {}
-             */
-            data: {
+            /** Data */
+            data?: {
                 [key: string]: unknown;
             };
         } & {
@@ -87802,6 +89419,12 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * ScopeLevel
+         * @description Visibility scope for a shareable resource (secret, knowledge fact, skill, agent).
+         * @enum {string}
+         */
+        ScopeLevel: "user" | "session" | "shared" | "group" | "organization" | "workflow" | "private" | "system" | "public";
+        /**
          * ScopedSearchRequest
          * @description Scoped search request with automatic permission filtering.
          */
@@ -88016,6 +89639,24 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SearchBenchmarkResponse
+         * @description Response for POST /benchmark.
+         *
+         *     benchmark_results shape is service-delegated.
+         */
+        SearchBenchmarkResponse: {
+            /** Benchmark Results */
+            benchmark_results: {
+                [key: string]: unknown;
+            };
+            /** Timestamp */
+            timestamp: number;
+            /** Recommendations */
+            recommendations: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * SearchByMetadataRequest
          * @description Request model for searching facts by metadata field (Issue #414).
          */
@@ -88098,6 +89739,30 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SearchConnectivityResponse
+         * @description Response for GET /test/connectivity.
+         */
+        SearchConnectivityResponse: {
+            /** Connectivity */
+            connectivity: string;
+            /** Timestamp */
+            timestamp: number;
+            /** Npu Worker Url */
+            npu_worker_url?: string | null;
+            /** Test Search Results */
+            test_search_results?: number | null;
+            /** Test Device Used */
+            test_device_used?: string | null;
+            /** Test Time Ms */
+            test_time_ms?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Fallback Available */
+            fallback_available?: boolean | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * SearchFilesRequest
          * @description Request model for searching files.
          */
@@ -88121,28 +89786,71 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * SearchRequest
-         * @description Request for similarity search.
+         * SearchHardwareStatusResponse
+         * @description Response for GET /hardware/status.
+         *
+         *     hardware_status, cache_stats, and configuration are service-delegated dicts.
          */
-        SearchRequest: {
-            /**
-             * Query
-             * @description Query text for similarity search
-             */
-            query: string;
-            /**
-             * N Results
-             * @description Number of results to return
-             * @default 10
-             */
-            n_results: number;
-            /**
-             * Where
-             * @description Metadata filter (ChromaDB where clause)
-             */
-            where?: {
+        SearchHardwareStatusResponse: {
+            /** Hardware Status */
+            hardware_status: {
                 [key: string]: unknown;
-            } | null;
+            };
+            /** Knowledge Base Ready */
+            knowledge_base_ready: boolean;
+            /** Cache Stats */
+            cache_stats: {
+                [key: string]: unknown;
+            };
+            /** Configuration */
+            configuration: {
+                [key: string]: unknown;
+            };
+            /** Timestamp */
+            timestamp: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SearchOptimizeResponse
+         * @description Response for POST /optimize.
+         */
+        SearchOptimizeResponse: {
+            /** Optimization Applied */
+            optimization_applied: string;
+            /** Configuration */
+            configuration: {
+                [key: string]: unknown;
+            };
+            /** Timestamp */
+            timestamp: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SearchPerformanceAnalyticsResponse
+         * @description Response for GET /performance/analytics.
+         *
+         *     search_statistics, hardware_status, and performance_analysis are
+         *     service-delegated dicts.
+         */
+        SearchPerformanceAnalyticsResponse: {
+            /** Search Statistics */
+            search_statistics: {
+                [key: string]: unknown;
+            };
+            /** Hardware Status */
+            hardware_status: {
+                [key: string]: unknown;
+            };
+            /** Performance Analysis */
+            performance_analysis: {
+                [key: string]: unknown;
+            };
+            /** Recommendations */
+            recommendations: string[];
+            /** Timestamp */
+            timestamp: number;
         } & {
             [key: string]: unknown;
         };
@@ -88186,6 +89894,19 @@ export interface components {
             explanation?: string | null;
             /** Key Concepts */
             key_concepts?: string[] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** SecretAccessOut */
+        SecretAccessOut: {
+            /** Secret Id */
+            secret_id: string;
+            /** Owner Vault */
+            owner_vault: string;
+            /** Grants */
+            grants: components["schemas"]["VaultAccessOut"][];
+            /** Effective Users */
+            effective_users: string[];
         } & {
             [key: string]: unknown;
         };
@@ -88251,6 +89972,15 @@ export interface components {
             secret: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
+        };
+        /** SecretDependenciesOut */
+        SecretDependenciesOut: {
+            /** Secret Id */
+            secret_id: string;
+            /** Dependents */
+            dependents: components["schemas"]["DependentOut"][];
         } & {
             [key: string]: unknown;
         };
@@ -88578,7 +90308,7 @@ export interface components {
              * Scan Paths
              * @description Paths to scan
              * @default [
-             *       "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-9959"
+             *       "/home/runner/work/AutoBot-AI/AutoBot-AI"
              *     ]
              */
             scan_paths: string[];
@@ -89656,6 +91386,13 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** SetRealtimeProviderRequest */
+        SetRealtimeProviderRequest: {
+            /** Provider */
+            provider?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** SettingsTaskQueuedResponse */
         SettingsTaskQueuedResponse: {
             /** Task Id */
@@ -89860,47 +91597,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * SimilaritySearchResponse
-         * @description Shape returned by deprecated POST /similarity_search.
-         */
-        SimilaritySearchResponse: {
-            /** Results */
-            results?: {
-                [key: string]: unknown;
-            }[];
-            /**
-             * Total Results
-             * @default 0
-             */
-            total_results: number;
-            /**
-             * Query
-             * @default
-             */
-            query: string;
-            /**
-             * Threshold
-             * @default 0.7
-             */
-            threshold: number;
-            /**
-             * Kb Implementation
-             * @default
-             */
-            kb_implementation: string;
-            /**
-             * Rag Enhanced
-             * @default false
-             */
-            rag_enhanced: boolean;
-            /** Rag Analysis */
-            rag_analysis?: {
-                [key: string]: unknown;
-            } | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * SingleAgentCostResponse
          * @description Response for GET /cost/by-agent/{agent_id} — opaque tracker result + budget.
          */
@@ -90014,6 +91710,52 @@ export interface components {
          * @enum {string}
          */
         SkillActivationLevel: "trusted" | "monitored" | "sandboxed" | "restricted";
+        /**
+         * SkillBundleInstallResponse
+         * @description Response for POST /skills/bundles/{bundle_id}/enable (Issue #10540).
+         */
+        SkillBundleInstallResponse: {
+            /** Bundle Id */
+            bundle_id: string;
+            /** Enabled */
+            enabled: string[];
+            /** Skipped */
+            skipped: string[];
+            /** Failed */
+            failed: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SkillBundleResponse
+         * @description A single role-curated skill bundle returned by GET /skills/bundles.
+         */
+        SkillBundleResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Member Skill Ids */
+            member_skill_ids: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SkillBundlesListResponse
+         * @description Response for GET /skills/bundles (Issue #10540).
+         */
+        SkillBundlesListResponse: {
+            /** Bundles */
+            bundles: components["schemas"]["SkillBundleResponse"][];
+            /** Total */
+            total: number;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * SkillCatalogInstallData
          * @description Response data for POST /skills/catalog/{name}/install.
@@ -90489,6 +92231,26 @@ export interface components {
              * @default
              */
             user_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** SnapshotRequest */
+        SnapshotRequest: {
+            /** Checkpoint Name */
+            checkpoint_name: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** SnapshotResponse */
+        SnapshotResponse: {
+            /** Task Id */
+            task_id: string;
+            /** Checkpoint Name */
+            checkpoint_name: string;
+            /** Image Tag */
+            image_tag: string;
+            /** Created At */
+            created_at: number;
         } & {
             [key: string]: unknown;
         };
@@ -91747,7 +93509,7 @@ export interface components {
          * SystemCacheCoordinatorStatsResponse
          * @description Response for GET /api/cache/stats.
          *
-         *     Shape is defined by CacheCoordinator.get_unified_stats() — opaque.
+         *     Shape is defined by CacheCoordinator.get_cache_stats() — opaque.
          */
         SystemCacheCoordinatorStatsResponse: {
             [key: string]: unknown;
@@ -92195,6 +93957,32 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * TaskAnswerRequest
+         * @description Request to deliver a human answer to a suspended ask_human() call (#10553).
+         *
+         *     Mirrors TaskSteeringRequest — delivers free-form or choice-constrained text
+         *     back to the awaiting loop via the answer inbox.
+         */
+        TaskAnswerRequest: {
+            /**
+             * Question Id
+             * @description UUID from the HUMAN_QUESTION event
+             */
+            question_id: string;
+            /**
+             * Answer
+             * @description Human's response (free-form or one of the choices)
+             */
+            answer: string;
+            /**
+             * Task Id
+             * @description Task ID (also available from URL path)
+             */
+            task_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * TaskApprovalLinkResponse
          * @description Response for a task-approval link.
          */
@@ -92324,6 +94112,27 @@ export interface components {
             created_at?: string | null;
             /** Updated At */
             updated_at?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TaskSteeringRequest
+         * @description Request to send a steering message to a running agent task (#10543).
+         *
+         *     Steering amends the active plan without stopping the loop — the guidance
+         *     is absorbed at the top of the next ANALYZE_EVENTS phase.
+         */
+        TaskSteeringRequest: {
+            /**
+             * Guidance
+             * @description Human correction or direction text injected into the running loop
+             */
+            guidance: string;
+            /**
+             * Task Id
+             * @description Task ID (also available from URL path)
+             */
+            task_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -93565,7 +95374,7 @@ export interface components {
             /**
              * Test Path
              * @description Path to test directory
-             * @default /home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-9959/autobot-backend
+             * @default /home/runner/work/AutoBot-AI/AutoBot-AI/autobot-backend
              */
             test_path: string;
             /**
@@ -94293,53 +96102,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * UnifiedSearchRequest
-         * @description Request model for unified knowledge search.
-         */
-        UnifiedSearchRequest: {
-            /**
-             * Query
-             * @description Search query text
-             */
-            query: string;
-            /**
-             * Top K
-             * @description Max results from fact search
-             * @default 10
-             */
-            top_k: number;
-            /**
-             * Doc Results
-             * @description Max documentation results
-             * @default 3
-             */
-            doc_results: number;
-            /**
-             * Expand Relations
-             * @description Include related facts via graph
-             * @default true
-             */
-            expand_relations: boolean;
-            /**
-             * Score Threshold
-             * @description Minimum relevance score
-             * @default 0.3
-             */
-            score_threshold: number;
-            /**
-             * Include Sources
-             * @description Which sources to search: facts, relations, documentation
-             * @default [
-             *       "facts",
-             *       "relations",
-             *       "documentation"
-             *     ]
-             */
-            include_sources: string[];
-        } & {
-            [key: string]: unknown;
-        };
         /** UnsubscribeRequest */
         UnsubscribeRequest: {
             /** Endpoint */
@@ -94640,7 +96402,7 @@ export interface components {
          */
         UpdatePermissionsRequest: {
             /** @description New visibility level */
-            visibility: components["schemas"]["VisibilityLevel"];
+            visibility: components["schemas"]["ScopeLevel"];
             /**
              * Organization Id
              * @description Organization ID for org-level knowledge
@@ -95065,6 +96827,65 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * UserPreferences
+         * @description User preferences model.
+         *
+         *     Appearance fields (#8988) persist UI theme/accent/density per user account so
+         *     choices follow the user across devices. localStorage remains a write-through
+         *     cache on the frontend; the account is the source of truth.
+         */
+        UserPreferences: {
+            /**
+             * Reasoning Effort
+             * @description Default reasoning effort level (low, medium, high, auto)
+             * @default auto
+             */
+            reasoning_effort: string;
+            /**
+             * Theme
+             * @description Base theme mode (dark, light, system)
+             * @default dark
+             */
+            theme: string;
+            /**
+             * Accent Color
+             * @description Accent color preset
+             * @default blue
+             */
+            accent_color: string;
+            /**
+             * Layout Density
+             * @description Layout density (compact, comfortable, spacious)
+             * @default comfortable
+             */
+            layout_density: string;
+            /**
+             * Font Size
+             * @description Base font size (small, medium, large)
+             * @default medium
+             */
+            font_size: string;
+            /**
+             * Theme Preset
+             * @description Selected named theme preset (e.g. catppuccin-mocha); 'auto' when none
+             * @default auto
+             */
+            theme_preset: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * UserPreferencesData
+         * @description Data payload for user preferences endpoints.
+         */
+        UserPreferencesData: {
+            /** User Id */
+            user_id: string;
+            preferences: components["schemas"]["UserPreferences"];
         } & {
             [key: string]: unknown;
         };
@@ -95586,6 +97407,19 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** VaultAccessOut */
+        VaultAccessOut: {
+            /** Vault */
+            vault: string;
+            /** Kind */
+            kind: string;
+            /** Id */
+            id: string | null;
+            /** Members */
+            members: string[];
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * VectorizationStatusPollResponse
          * @description Response for GET /vectorize_facts/status.
@@ -95757,14 +97591,87 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * VisibilityLevel
-         * @description Visibility levels for knowledge facts.
-         *
-         *     Issue #679: Extended with hierarchical scopes.
-         * @enum {string}
-         */
-        VisibilityLevel: "private" | "shared" | "group" | "organization" | "system" | "public";
+        /** VideoGenerationRequest */
+        VideoGenerationRequest: {
+            /** Prompt */
+            prompt: string;
+            /**
+             * Provider
+             * @default runway
+             */
+            provider: string;
+            /**
+             * Duration
+             * @default 5
+             */
+            duration: number;
+            /** Resolution */
+            resolution?: string | null;
+            /** Aspect Ratio */
+            aspect_ratio?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** VideoJobResponse */
+        VideoJobResponse: {
+            /** Success */
+            success: boolean;
+            /**
+             * Job Id
+             * @default
+             */
+            job_id: string;
+            /**
+             * Provider
+             * @default
+             */
+            provider: string;
+            /**
+             * Status
+             * @default pending
+             */
+            status: string;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** VideoStatusResponse */
+        VideoStatusResponse: {
+            /** Success */
+            success: boolean;
+            /**
+             * Job Id
+             * @default
+             */
+            job_id: string;
+            /**
+             * Status
+             * @default pending
+             */
+            status: string;
+            /**
+             * Progress
+             * @default 0
+             */
+            progress: number;
+            /** Video Url */
+            video_url?: string | null;
+            /**
+             * Provider
+             * @default
+             */
+            provider: string;
+            /**
+             * Prompt
+             * @default
+             */
+            prompt: string;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * VisionAutomationOpportunitiesResponse
          * @description Response for GET /vision/automation-opportunities.
@@ -95844,6 +97751,24 @@ export interface components {
             element_types: components["schemas"]["VisionElementTypeItem"][];
             /** Total Types */
             total_types: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * VisionHealthResponse
+         * @description Health check response
+         */
+        VisionHealthResponse: {
+            /** Status */
+            status: string;
+            /** Analyzer Ready */
+            analyzer_ready: boolean;
+            /** Capabilities */
+            capabilities: string[];
+            /** Element Types Supported */
+            element_types_supported: string[];
+            /** Interaction Types Supported */
+            interaction_types_supported: string[];
         } & {
             [key: string]: unknown;
         };
@@ -97098,6 +99023,8 @@ export interface components {
             created_by_user_id?: string | null;
             /** Labels */
             labels?: string[] | null;
+            /** Requires Approval Before */
+            requires_approval_before?: string[] | null;
         } & {
             [key: string]: unknown;
         };
@@ -97167,6 +99094,8 @@ export interface components {
             description?: string | null;
             /** Acceptance Criteria */
             acceptance_criteria?: string[] | null;
+            /** Acceptance Criteria Done */
+            acceptance_criteria_done?: boolean[] | null;
             priority?: components["schemas"]["WorkItemPriority"] | null;
             /** Story Points */
             story_points?: number | null;
@@ -97182,6 +99111,8 @@ export interface components {
             assignee_agent_id?: string | null;
             /** Assignee User Id */
             assignee_user_id?: string | null;
+            /** Requires Approval Before */
+            requires_approval_before?: string[] | null;
             /** Scheduled Start */
             scheduled_start?: string | null;
             /** Scheduled End */
@@ -97226,7 +99157,7 @@ export interface components {
          *       "total_tasks_completed": 42,
          *       "total_tasks_failed": 2,
          *       "uptime_seconds": 3600.5,
-         *       "url": "http://127.0.0.1:8082",
+         *       "url": "http://127.0.0.1:8081",
          *       "worker_id": "windows_npu_worker_abc123"
          *     }
          */
@@ -97707,6 +99638,25 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * WorkflowStartRequest
+         * @description Optional body for ``POST /start_workflow/{id}`` (GH#9037).
+         *
+         *     ``provider_credentials`` maps a provider name (anthropic, openai, ollama,
+         *     custom_openai, …) to its settings dict (``api_key``, ``base_url``, …). When
+         *     present, these credentials override the stored/global provider config for
+         *     this single run only — they are never persisted and are redacted from logs.
+         */
+        WorkflowStartRequest: {
+            /** Provider Credentials */
+            provider_credentials?: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * WorkflowStatusResponse
          * @description Response shape for GET /workflow/{workflow_id}/status.
          */
@@ -97813,6 +99763,25 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** WorkspaceInfoResponse */
+        WorkspaceInfoResponse: {
+            /** Task Id */
+            task_id: string;
+            /** Container Id */
+            container_id: string;
+            /** Volume Name */
+            volume_name: string;
+            /** Image */
+            image: string;
+            /** Created At */
+            created_at: number;
+            /** Last Active */
+            last_active: number;
+            /** Checkpoint Tags */
+            checkpoint_tags: string[];
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * WriteFileRequest
          * @description Request model for writing files.
@@ -97828,6 +99797,16 @@ export interface components {
              * @description File content to write
              */
             content: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * _RS256RevokeRequest
+         * @description Request body for RS256 authority token revocation (#10278).
+         */
+        _RS256RevokeRequest: {
+            /** Token */
+            token: string;
         } & {
             [key: string]: unknown;
         };
@@ -97849,6 +99828,32 @@ export interface components {
         api__image_generation__ProvidersResponse: {
             /** Providers */
             providers: components["schemas"]["ProviderStatus"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SearchRequest
+         * @description Request for similarity search.
+         */
+        api__knowledge_chroma__SearchRequest: {
+            /**
+             * Query
+             * @description Query text for similarity search
+             */
+            query: string;
+            /**
+             * N Results
+             * @description Number of results to return
+             * @default 10
+             */
+            n_results: number;
+            /**
+             * Where
+             * @description Metadata filter (ChromaDB where clause)
+             */
+            where?: {
+                [key: string]: unknown;
+            } | null;
         } & {
             [key: string]: unknown;
         };
@@ -97949,6 +99954,229 @@ export interface components {
              * @default false
              */
             include_embeddings: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RestoreRequest
+         * @description Request model for restoring knowledge base from backup (Issue #419)
+         */
+        api__schemas_knowledge__RestoreRequest: {
+            /**
+             * Backup File
+             * @description Path to backup file to restore
+             */
+            backup_file: string;
+            /**
+             * Overwrite Existing
+             * @description Overwrite existing facts with backup data
+             * @default false
+             */
+            overwrite_existing: boolean;
+            /**
+             * Skip Duplicates
+             * @description Skip facts that already exist
+             * @default true
+             */
+            skip_duplicates: boolean;
+            /**
+             * Restore Embeddings
+             * @description Restore vector embeddings if available
+             * @default true
+             */
+            restore_embeddings: boolean;
+            /**
+             * Dry Run
+             * @description Only validate backup, don't actually restore
+             * @default true
+             */
+            dry_run: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SearchRequest
+         * @description Canonical request model for knowledge-base vector/document search (#78, #685, #555, #10654, #10666).
+         *
+         *     Consolidates the former SearchRequest, SearchRequest, SearchRequest,
+         *     and SearchRequest into one model.  All added fields carry defaults so existing
+         *     callers that only set query/limit/category remain fully backward-compatible.
+         *
+         *     ``limit`` accepts the legacy ``top_k`` wire name via ``validation_alias`` so JSON
+         *     payloads that send ``{"top_k": 10}`` continue to parse without change.
+         */
+        api__schemas_knowledge__SearchRequest: {
+            /**
+             * Query
+             * @description Search query
+             */
+            query: string;
+            /**
+             * Limit
+             * @description Max results to return (also accepts legacy 'top_k' wire name)
+             * @default 10
+             */
+            limit: number;
+            /**
+             * Offset
+             * @description Pagination offset
+             * @default 0
+             */
+            offset: number;
+            /** Category */
+            category?: string | null;
+            /**
+             * Tags
+             * @description Filter results by tags (facts must have ALL specified tags)
+             */
+            tags?: string[] | null;
+            /**
+             * Tags Match Any
+             * @description If True, match facts with ANY tag. If False (default), match ALL tags.
+             * @default false
+             */
+            tags_match_any: boolean;
+            /**
+             * Mode
+             * @description Search mode: 'semantic' (vector only), 'keyword' (text only), 'hybrid' (both, default), 'auto' (intelligent selection)
+             * @default hybrid
+             */
+            mode: string;
+            /**
+             * Enable Reranking
+             * @description Enable cross-encoder reranking for better relevance
+             * @default false
+             */
+            enable_reranking: boolean;
+            /**
+             * Min Score
+             * @description Minimum similarity score threshold (0.0-1.0)
+             * @default 0
+             */
+            min_score: number;
+            /**
+             * Access Level
+             * @description Filter by access level: all, autobot, general, system, user
+             * @default all
+             */
+            access_level: string;
+            /**
+             * Board Id
+             * @description Project-scoped board ID for namespaced search. None / '__global__' searches all boards.
+             */
+            board_id?: string | null;
+            /**
+             * Enable Rag
+             * @description Enable RAG enhancement for synthesized responses
+             * @default false
+             */
+            enable_rag: boolean;
+            /**
+             * Reformulate Query
+             * @description Use RAG agent to expand/reformulate query for better coverage
+             * @default false
+             */
+            reformulate_query: boolean;
+            /**
+             * Return Context
+             * @description Return optimized context for RAG (useful for chat integration)
+             * @default false
+             */
+            return_context: boolean;
+            /**
+             * Created After
+             * @description Filter facts created after this date (ISO format: YYYY-MM-DD)
+             */
+            created_after?: string | null;
+            /**
+             * Created Before
+             * @description Filter facts created before this date (ISO format: YYYY-MM-DD)
+             */
+            created_before?: string | null;
+            /**
+             * Exclude Terms
+             * @description Exclude results containing these terms
+             */
+            exclude_terms?: string[] | null;
+            /**
+             * Require Terms
+             * @description Only include results containing ALL of these terms
+             */
+            require_terms?: string[] | null;
+            /**
+             * Include Documentation
+             * @description Also search project documentation
+             * @default false
+             */
+            include_documentation: boolean;
+            /**
+             * Include Relations
+             * @description Include related facts in results
+             * @default false
+             */
+            include_relations: boolean;
+            /**
+             * Doc Results
+             * @description Max documentation results (multi-source search)
+             * @default 3
+             */
+            doc_results: number;
+            /**
+             * Expand Relations
+             * @description Include related facts via graph (multi-source search)
+             * @default true
+             */
+            expand_relations: boolean;
+            /**
+             * Include Sources
+             * @description Which sources to search: facts, relations, documentation
+             * @default [
+             *       "facts",
+             *       "relations",
+             *       "documentation"
+             *     ]
+             */
+            include_sources: string[];
+            /**
+             * Track Analytics
+             * @description Track this search for analytics (default: true)
+             * @default true
+             */
+            track_analytics: boolean;
+            /**
+             * Session Id
+             * @description Session ID for analytics correlation
+             */
+            session_id?: string | null;
+            /**
+             * Enable Query Expansion
+             * @description Expand query with synonyms/related terms before searching
+             * @default false
+             */
+            enable_query_expansion: boolean;
+            /**
+             * Enable Relevance Scoring
+             * @description Apply additional relevance scoring on top of vector similarity
+             * @default false
+             */
+            enable_relevance_scoring: boolean;
+            /**
+             * Enable Clustering
+             * @description Cluster results by topic before returning
+             * @default false
+             */
+            enable_clustering: boolean;
+            /**
+             * Exclude Sources
+             * @description Exclude results from these source identifiers
+             */
+            exclude_sources?: string[] | null;
+            /**
+             * Verified Only
+             * @description Return only facts that have been verified/approved
+             * @default false
+             */
+            verified_only: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -98066,6 +100294,20 @@ export interface components {
              * @description Registry id or name of the skill to install
              */
             skill_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** RestoreRequest */
+        api__task_workspace_ws__RestoreRequest: {
+            /** Checkpoint Name */
+            checkpoint_name: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ProvidersResponse */
+        api__video_generation__ProvidersResponse: {
+            /** Providers */
+            providers: components["schemas"]["ProviderStatus"][];
         } & {
             [key: string]: unknown;
         };
@@ -98235,7 +100477,7 @@ export interface components {
          * @description Gate type for a board approval request (GH#8214).
          * @enum {string}
          */
-        llc__models__enums__ApprovalType: "hire" | "strategy" | "budget_override" | "sprint_close";
+        llc__models__enums__ApprovalType: "hire" | "strategy" | "budget_override" | "sprint_close" | "project_disposal" | "finding_promotion";
         /**
          * TemplateSearchResponse
          * @description Response for GET /llc/templates/search (GH#8260).
@@ -98465,6 +100707,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    celery_dead_letter_health_api_health_celery_dead_letter_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -98754,6 +101027,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_retention_settings_api_admin_retention_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -99053,6 +101348,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_AuthLogoutData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_rs256_token_api_auth_revoke_rs256_token_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["_RS256RevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -100022,6 +102352,200 @@ export interface operations {
             };
         };
     };
+    get_session_role_api_chat_sessions__session_id__role_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_session_role_api_chat_sessions__session_id__role_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_set_session_role_api_chat_sessions__session_id__role_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_session_role_api_chat_sessions__session_id__role_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_session_approval_categories_api_chat_sessions__session_id__approval_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_session_approval_categories_api_chat_sessions__session_id__approval_categories_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_set_session_approval_categories_api_chat_sessions__session_id__approval_categories_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_session_approval_categories_api_chat_sessions__session_id__approval_categories_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_Dict_str__Any__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     chat_health_check_api_chat_health_get: {
         parameters: {
             query?: never;
@@ -100237,7 +102761,7 @@ export interface operations {
             };
         };
     };
-    enhanced_chat_api_enhanced_post: {
+    chat_ai_stack_api_ai_stack_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -100246,7 +102770,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["Body_enhanced_chat_api_enhanced_post"];
+                "application/json": components["schemas"]["Body_chat_ai_stack_api_ai_stack_post"];
             };
         };
         responses: {
@@ -100256,7 +102780,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_EnhancedChatData_"];
+                    "application/json": components["schemas"]["DataResponse_ChatData_"];
                 };
             };
             /** @description Validation Error */
@@ -100270,7 +102794,7 @@ export interface operations {
             };
         };
     };
-    stream_enhanced_chat_api_stream_enhanced_post: {
+    stream_ai_stack_chat_api_stream_ai_stack_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -100279,7 +102803,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["Body_stream_enhanced_chat_api_stream_enhanced_post"];
+                "application/json": components["schemas"]["Body_stream_ai_stack_chat_api_stream_ai_stack_post"];
             };
         };
         responses: {
@@ -100303,7 +102827,7 @@ export interface operations {
             };
         };
     };
-    enhanced_chat_health_check_api_health_enhanced_get: {
+    chat_health_ai_stack_api_health_ai_stack_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -100318,7 +102842,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnhancedChatHealthData"];
+                    "application/json": components["schemas"]["ChatHealthData"];
                 };
             };
         };
@@ -100645,6 +103169,155 @@ export interface operations {
             };
         };
     };
+    list_prompt_sets_api_benchmarks_prompt_sets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_runs_api_benchmarks_runs_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by 'provider/model' present in the run */
+                model?: string | null;
+                /** @description Filter by promptType */
+                prompt_type?: string | null;
+                /** @description ISO timestamp — only runs at/after this time */
+                since?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_run_api_benchmarks_runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BenchmarkRunCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_api_benchmarks_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_run_api_benchmarks_runs__run_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     invite_user_api_sessions__session_id__invite_post: {
         parameters: {
             query?: never;
@@ -100920,7 +103593,7 @@ export interface operations {
             };
         };
     };
-    get_system_health_api_system_system_health_get: {
+    get_system_health_alias: {
         parameters: {
             query?: never;
             header?: never;
@@ -100940,7 +103613,47 @@ export interface operations {
             };
         };
     };
-    get_system_health_api_system_health_get: {
+    head_system_health_alias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemHealthResponse"];
+                };
+            };
+        };
+    };
+    get_system_health: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemHealthResponse"];
+                };
+            };
+        };
+    };
+    head_system_health: {
         parameters: {
             query?: never;
             header?: never;
@@ -101847,7 +104560,27 @@ export interface operations {
             };
         };
     };
-    get_usage_summary_api_usage_usage_summary_get: {
+    dismiss_telemetry_prompt_api_settings_telemetry_prompt_shown_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelemetrySettingsResponse"];
+                };
+            };
+        };
+    };
+    get_usage_summary_api_usage_summary_get: {
         parameters: {
             query?: {
                 /** @description Number of days to include */
@@ -101879,7 +104612,7 @@ export interface operations {
             };
         };
     };
-    get_usage_by_user_all_api_usage_usage_by_user_get: {
+    get_usage_by_user_all_api_usage_by_user_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -101899,7 +104632,7 @@ export interface operations {
             };
         };
     };
-    get_usage_by_user_single_api_usage_usage_by_user__user_id__get: {
+    get_usage_by_user_single_api_usage_by_user__user_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -101930,7 +104663,7 @@ export interface operations {
             };
         };
     };
-    get_my_usage_api_usage_usage_me_get: {
+    get_my_usage_api_usage_me_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -101950,7 +104683,7 @@ export interface operations {
             };
         };
     };
-    record_usage_event_api_usage_usage_record_post: {
+    record_usage_event_api_usage_record_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -101983,7 +104716,7 @@ export interface operations {
             };
         };
     };
-    export_usage_csv_api_usage_usage_export_csv_get: {
+    export_usage_csv_api_usage_export_csv_get: {
         parameters: {
             query?: {
                 /** @description Days of data to export */
@@ -102176,6 +104909,8 @@ export interface operations {
             query?: {
                 /** @description Permanently delete user */
                 hard_delete?: boolean;
+                /** @description Reassign the deleted user's memory records to this user */
+                reassign_to?: string | null;
             };
             header?: never;
             path: {
@@ -103108,6 +105843,59 @@ export interface operations {
             };
         };
     };
+    get_user_preferences_api_users_me_preferences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_UserPreferencesData_"];
+                };
+            };
+        };
+    };
+    update_user_preferences_api_users_me_preferences_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserPreferences"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_UserPreferencesData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_pair_qr_api_devices_pair_qr_get: {
         parameters: {
             query?: never;
@@ -104009,7 +106797,7 @@ export interface operations {
             };
         };
     };
-    get_knowledge_stats_api_knowledge_base_stats_get: {
+    get_aistack_stats_api_knowledge_base_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -104024,7 +106812,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeStatsResponse"];
+                    "application/json": components["schemas"]["DataResponse_AIStackStatsData_"];
                 };
             };
         };
@@ -105494,7 +108282,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["RestoreRequest"];
+                "application/json": components["schemas"]["api__schemas_knowledge__RestoreRequest"];
             };
         };
         responses: {
@@ -105622,7 +108410,7 @@ export interface operations {
             };
         };
     };
-    enhanced_search_api_knowledge_base_ai_stack_search_enhanced_post: {
+    search_api_knowledge_base_ai_stack_search_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -105631,7 +108419,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AIStackEnhancedSearchRequest"];
+                "application/json": components["schemas"]["AIStackSearchRequest"];
             };
         };
         responses: {
@@ -105641,7 +108429,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackEnhancedSearchData_"];
+                    "application/json": components["schemas"]["DataResponse_AIStackSearchData_"];
                 };
             };
             /** @description Validation Error */
@@ -105817,7 +108605,7 @@ export interface operations {
             };
         };
     };
-    get_enhanced_stats_api_knowledge_base_ai_stack_stats_enhanced_get: {
+    get_aistack_stats_api_knowledge_base_ai_stack_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -105832,12 +108620,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackEnhancedStatsData_"];
+                    "application/json": components["schemas"]["DataResponse_AIStackStatsData_"];
                 };
             };
         };
     };
-    enhanced_knowledge_health_api_knowledge_base_ai_stack_health_enhanced_get: {
+    knowledge_health_api_knowledge_base_ai_stack_health_status_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -105852,7 +108640,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackEnhancedHealthData_"];
+                    "application/json": components["schemas"]["DataResponse_AIStackHealthStatusData_"];
                 };
             };
         };
@@ -105917,7 +108705,7 @@ export interface operations {
             };
         };
     };
-    unified_search_api_knowledge_base_unified_search_post: {
+    search_api_knowledge_base_multi_source_search_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -105926,7 +108714,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UnifiedSearchRequest"];
+                "application/json": components["schemas"]["api__schemas_knowledge__SearchRequest"];
             };
         };
         responses: {
@@ -105936,7 +108724,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeUnifiedSearchResponse"];
+                    "application/json": components["schemas"]["KnowledgeMultiSourceSearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -105950,7 +108738,7 @@ export interface operations {
             };
         };
     };
-    unified_stats_api_knowledge_base_unified_stats_get: {
+    stats_api_knowledge_base_multi_source_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -105965,12 +108753,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeUnifiedStatsResponse"];
+                    "application/json": components["schemas"]["KnowledgeMultiSourceStatsResponse"];
                 };
             };
         };
     };
-    get_llm_context_api_knowledge_base_unified_context_post: {
+    get_llm_context_api_knowledge_base_multi_source_context_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -105989,7 +108777,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeUnifiedContextResponse"];
+                    "application/json": components["schemas"]["KnowledgeMultiSourceContextResponse"];
                 };
             };
             /** @description Validation Error */
@@ -106003,7 +108791,7 @@ export interface operations {
             };
         };
     };
-    search_documentation_api_knowledge_base_unified_documentation_search_get: {
+    search_documentation_api_knowledge_base_multi_source_documentation_search_get: {
         parameters: {
             query: {
                 query: string;
@@ -106036,7 +108824,7 @@ export interface operations {
             };
         };
     };
-    documentation_stats_api_knowledge_base_unified_documentation_stats_get: {
+    documentation_stats_api_knowledge_base_multi_source_documentation_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -106056,7 +108844,7 @@ export interface operations {
             };
         };
     };
-    get_unified_graph_simple_api_knowledge_base_unified_graph_get: {
+    get_multi_source_graph_simple_api_knowledge_base_multi_source_graph_get: {
         parameters: {
             query?: {
                 /** @description Maximum facts to include */
@@ -106076,7 +108864,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeUnifiedGraphResponse"];
+                    "application/json": components["schemas"]["KnowledgeMultiSourceGraphResponse"];
                 };
             };
             /** @description Validation Error */
@@ -106090,7 +108878,7 @@ export interface operations {
             };
         };
     };
-    get_unified_graph_api_knowledge_base_unified_graph_post: {
+    get_multi_source_graph_api_knowledge_base_multi_source_graph_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -106109,7 +108897,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeUnifiedGraphResponse"];
+                    "application/json": components["schemas"]["KnowledgeMultiSourceGraphResponse"];
                 };
             };
             /** @description Validation Error */
@@ -106557,7 +109345,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SearchRequest"];
+                "application/json": components["schemas"]["api__knowledge_chroma__SearchRequest"];
             };
         };
         responses: {
@@ -106581,7 +109369,7 @@ export interface operations {
             };
         };
     };
-    consolidated_search_api_knowledge_base_search_post: {
+    search_api_knowledge_base_search_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -106590,7 +109378,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ConsolidatedSearchRequest"];
+                "application/json": components["schemas"]["AIStackSearchRequest"];
             };
         };
         responses: {
@@ -106600,145 +109388,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeSearchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    enhanced_search_api_knowledge_base_enhanced_search_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnhancedSearchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnhancedSearchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    rag_enhanced_search_api_knowledge_base_rag_search_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RagSearchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    similarity_search_api_knowledge_base_similarity_search_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SimilaritySearchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    enhanced_search_v2_api_knowledge_base_enhanced_search_v2_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnhancedSearchV2Response"];
+                    "application/json": components["schemas"]["DataResponse_AIStackSearchData_"];
                 };
             };
             /** @description Validation Error */
@@ -109815,7 +112465,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Filter by visibility scope */
-                scope?: components["schemas"]["VisibilityLevel"] | null;
+                scope?: components["schemas"]["ScopeLevel"] | null;
                 /** @description Maximum number of items to return */
                 limit?: number;
                 /** @description Number of items to skip before returning results */
@@ -110311,39 +112961,6 @@ export interface operations {
             };
         };
     };
-    enhanced_search_api_knowledge_base_search_enhanced_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AIStackEnhancedSearchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackEnhancedSearchData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     rag_search_api_knowledge_base_search_rag_post: {
         parameters: {
             query?: never;
@@ -110506,7 +113123,7 @@ export interface operations {
             };
         };
     };
-    get_enhanced_stats_api_knowledge_base_stats_enhanced_get: {
+    knowledge_health_api_knowledge_base_health_status_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -110521,27 +113138,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackEnhancedStatsData_"];
-                };
-            };
-        };
-    };
-    enhanced_knowledge_health_api_knowledge_base_health_enhanced_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_AIStackEnhancedHealthData_"];
+                    "application/json": components["schemas"]["DataResponse_AIStackHealthStatusData_"];
                 };
             };
         };
@@ -115340,6 +117937,26 @@ export interface operations {
             };
         };
     };
+    get_mcp_registry_health_api_mcp_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPRegistryHealthResponse"];
+                };
+            };
+        };
+    };
     get_manual_mcp_tools_api_mcp_tools_get: {
         parameters: {
             query?: never;
@@ -118278,7 +120895,7 @@ export interface operations {
             };
         };
     };
-    execute_enhanced_goal_api_agent_goal_enhanced_post: {
+    execute_orchestrated_goal_api_agent_goal_orchestrated_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -118287,7 +120904,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["EnhancedGoalPayload"];
+                "application/json": components["schemas"]["GoalPayload"];
             };
         };
         responses: {
@@ -118297,7 +120914,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_EnhancedGoalData_"];
+                    "application/json": components["schemas"]["DataResponse_GoalData_"];
                 };
             };
             /** @description Validation Error */
@@ -118412,7 +121029,9 @@ export interface operations {
     };
     list_available_agents_api_agent_agents_available_get: {
         parameters: {
-            query?: never;
+            query?: {
+                capability?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -118426,6 +121045,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_AgentAvailableData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -118450,7 +121078,7 @@ export interface operations {
             };
         };
     };
-    enhanced_agent_health_api_agent_health_enhanced_get: {
+    agent_health_api_agent_health_detailed_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -119380,6 +122008,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgNodeResponse"][];
+                };
+            };
+        };
+    };
+    get_agents_status_api_agents_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentStatusListResponse"];
                 };
             };
         };
@@ -121360,6 +124008,153 @@ export interface operations {
                     "application/json": {
                         [key: string]: components["schemas"]["CapabilityAuditEntry"][];
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_themes_api_themes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    install_theme_api_themes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_install_theme_api_themes_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    uninstall_theme_api_themes__theme_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                theme_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    serve_theme_css_api_themes__theme_id__theme_css_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                theme_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    serve_theme_asset_api_themes__theme_id__assets__rel__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                theme_id: string;
+                rel: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -125663,7 +128458,7 @@ export interface operations {
             };
         };
     };
-    get_unified_report_api_unified_report_get: {
+    get_analytics_report_api_reporting_report_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -125683,7 +128478,7 @@ export interface operations {
             };
         };
     };
-    get_quick_summary_api_unified_summary_get: {
+    get_quick_summary_api_reporting_summary_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -125703,7 +128498,7 @@ export interface operations {
             };
         };
     };
-    get_trends_api_unified_trends_get: {
+    get_trends_api_reporting_trends_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -126167,6 +128962,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_AnalyticsDebtReportResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_remediation_deltas_api_quality_remediation_deltas_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -129817,7 +132645,7 @@ export interface operations {
             };
         };
     };
-    get_unified_dashboard_api_advanced_dashboard_get: {
+    get_analytics_dashboard_api_advanced_dashboard_get: {
         parameters: {
             query?: {
                 /** @description Days to analyze */
@@ -132080,6 +134908,80 @@ export interface operations {
             };
         };
     };
+    steer_agent_task_api_agent_terminal_tasks__task_id__steer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskSteeringRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    answer_human_question_api_agent_terminal_tasks__task_id__answer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskAnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     interrupt_agent_session_api_agent_terminal_sessions__session_id__interrupt_post: {
         parameters: {
             query?: {
@@ -132624,6 +135526,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ServicesSummaryResponse"];
+                };
+            };
+        };
+    };
+    get_resource_metrics_history_api_monitoring_metrics_history_get: {
+        parameters: {
+            query?: {
+                /** @description cpu | memory | disk | network */
+                metric?: string;
+                /** @description 1h | 6h | 24h | 7d */
+                range?: string;
+                /** @description Optional substring filter on the node instance label */
+                machine?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -136222,6 +139160,198 @@ export interface operations {
             };
         };
     };
+    oauth_initiate_api_llm_auth_oauth_initiate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthInitiateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthAuthorizeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_callback_api_llm_auth_oauth_callback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthCallbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthInitiateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    device_initiate_api_llm_auth_device_initiate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceInitiateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceInitiateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    device_poll_api_llm_auth_device_poll_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevicePollRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthInitiateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    provider_auth_status_api_llm_auth_status__provider_name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderAuthStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_provider_auth_api_llm_auth__provider_name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_active_workflows_api_workflow_workflows_get: {
         parameters: {
             query?: never;
@@ -137156,7 +140286,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["WorkflowStartRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -137803,7 +140937,7 @@ export interface operations {
             };
         };
     };
-    get_unified_logs_api_logs_unified_get: {
+    get_combined_logs_api_logs_combined_get: {
         parameters: {
             query?: {
                 /** @description Total number of lines to return */
@@ -137825,7 +140959,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LogUnifiedResponse"];
+                    "application/json": components["schemas"]["LogCombinedResponse"];
                 };
             };
             /** @description Validation Error */
@@ -138672,6 +141806,189 @@ export interface operations {
             };
         };
     };
+    service_list_system_secrets_api_v2_secrets_system_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretMetadata"][];
+                };
+            };
+        };
+    };
+    service_create_system_secret_api_v2_secrets_system_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSecretBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretMetadata"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    service_read_system_secret_api_v2_secrets_system__secret_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                secret_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretValue"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    service_rotate_system_secret_api_v2_secrets_system__secret_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                secret_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RotateBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretMetadata"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    service_delete_system_secret_api_v2_secrets_system__secret_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                secret_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    service_rewrap_system_secret_api_v2_secrets_system__secret_id__rewrap_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                secret_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RewrapBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretMetadata"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     read_secret_api_v2_secrets__secret_id__get: {
         parameters: {
             query?: never;
@@ -138767,6 +142084,68 @@ export interface operations {
             };
         };
     };
+    secret_access_api_v2_secrets__secret_id__access_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                secret_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretAccessOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    secret_dependencies_api_v2_secrets__secret_id__dependencies_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                secret_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretDependenciesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     share_secret_api_v2_secrets__secret_id__share_post: {
         parameters: {
             query?: never;
@@ -138822,6 +142201,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rewrap_secret_kek_api_v2_secrets__secret_id__rewrap_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                secret_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RewrapBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretMetadata"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -141234,6 +144648,26 @@ export interface operations {
             };
         };
     };
+    get_vision_health_api_vision_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisionHealthResponse"];
+                };
+            };
+        };
+    };
     get_vision_status_api_vision_status_get: {
         parameters: {
             query?: never;
@@ -141307,7 +144741,91 @@ export interface operations {
             };
         };
     };
-    get_research_status_api_web_research_settings_web_research_status_get: {
+    list_providers_api_video_generation_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["api__video_generation__ProvidersResponse"];
+                };
+            };
+        };
+    };
+    generate_video_api_video_generation_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VideoGenerationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoJobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_status_api_video_generation_status__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_research_status_api_web_research_status_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -141327,7 +144845,7 @@ export interface operations {
             };
         };
     };
-    enable_web_research_api_web_research_settings_web_research_enable_post: {
+    enable_web_research_api_web_research_enable_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -141347,7 +144865,7 @@ export interface operations {
             };
         };
     };
-    disable_web_research_api_web_research_settings_web_research_disable_post: {
+    disable_web_research_api_web_research_disable_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -141367,7 +144885,7 @@ export interface operations {
             };
         };
     };
-    get_research_settings_api_web_research_settings_web_research_settings_get: {
+    get_research_settings_api_web_research_settings_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -141387,7 +144905,7 @@ export interface operations {
             };
         };
     };
-    update_research_settings_api_web_research_settings_web_research_settings_put: {
+    update_research_settings_api_web_research_settings_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -141420,7 +144938,7 @@ export interface operations {
             };
         };
     };
-    test_web_research_api_web_research_settings_web_research_test_post: {
+    test_web_research_api_web_research_test_post: {
         parameters: {
             query?: {
                 query?: string;
@@ -141451,7 +144969,7 @@ export interface operations {
             };
         };
     };
-    clear_research_cache_api_web_research_settings_web_research_clear_cache_post: {
+    clear_research_cache_api_web_research_clear_cache_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -141471,7 +144989,7 @@ export interface operations {
             };
         };
     };
-    reset_circuit_breakers_api_web_research_settings_web_research_reset_circuit_breakers_post: {
+    reset_circuit_breakers_api_web_research_reset_circuit_breakers_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -141491,7 +145009,7 @@ export interface operations {
             };
         };
     };
-    get_usage_stats_api_web_research_settings_web_research_usage_stats_get: {
+    get_usage_stats_api_web_research_usage_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -145482,6 +149000,77 @@ export interface operations {
             };
         };
     };
+    export_agent_knowledge_api_agents__agent_id__knowledge_export_get: {
+        parameters: {
+            query?: {
+                /** @description Task type to export */
+                task_type?: string | null;
+                /** @description Only export failure patterns at or above this confidence */
+                min_confidence?: number;
+            };
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnedKnowledgeExport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_agent_knowledge_api_agents__agent_id__knowledge_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearnedKnowledgeImport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeImportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     index_codebase_api_analytics_code_code_index_post: {
         parameters: {
             query?: never;
@@ -148762,7 +152351,7 @@ export interface operations {
             };
         };
     };
-    enhanced_semantic_search_api_enhanced_search_semantic_post: {
+    semantic_search_api_npu_search_semantic_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -148795,7 +152384,7 @@ export interface operations {
             };
         };
     };
-    get_hardware_status_api_enhanced_search_hardware_status_get: {
+    get_hardware_status_api_npu_search_hardware_status_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -148810,12 +152399,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnhancedSearchHardwareStatusResponse"];
+                    "application/json": components["schemas"]["SearchHardwareStatusResponse"];
                 };
             };
         };
     };
-    benchmark_search_performance_api_enhanced_search_benchmark_post: {
+    benchmark_search_performance_api_npu_search_benchmark_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -148834,7 +152423,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnhancedSearchBenchmarkResponse"];
+                    "application/json": components["schemas"]["SearchBenchmarkResponse"];
                 };
             };
             /** @description Validation Error */
@@ -148848,7 +152437,7 @@ export interface operations {
             };
         };
     };
-    optimize_search_engine_api_enhanced_search_optimize_post: {
+    optimize_search_engine_api_npu_search_optimize_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -148867,7 +152456,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnhancedSearchOptimizeResponse"];
+                    "application/json": components["schemas"]["SearchOptimizeResponse"];
                 };
             };
             /** @description Validation Error */
@@ -148881,7 +152470,7 @@ export interface operations {
             };
         };
     };
-    get_performance_analytics_api_enhanced_search_performance_analytics_get: {
+    get_performance_analytics_api_npu_search_performance_analytics_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -148896,12 +152485,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnhancedSearchPerformanceAnalyticsResponse"];
+                    "application/json": components["schemas"]["SearchPerformanceAnalyticsResponse"];
                 };
             };
         };
     };
-    test_npu_connectivity_api_enhanced_search_test_connectivity_get: {
+    test_npu_connectivity_api_npu_search_test_connectivity_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -148916,12 +152505,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnhancedSearchConnectivityResponse"];
+                    "application/json": components["schemas"]["SearchConnectivityResponse"];
                 };
             };
         };
     };
-    get_memory_statistics_api_enhanced_memory_statistics_get: {
+    get_memory_statistics_api_task_memory_statistics_get: {
         parameters: {
             query?: {
                 days_back?: number;
@@ -148952,7 +152541,7 @@ export interface operations {
             };
         };
     };
-    get_task_history_api_enhanced_memory_tasks_history_get: {
+    get_task_history_api_task_memory_tasks_history_get: {
         parameters: {
             query?: {
                 agent_type?: string | null;
@@ -148986,7 +152575,7 @@ export interface operations {
             };
         };
     };
-    create_task_api_enhanced_memory_tasks_post: {
+    create_task_api_task_memory_tasks_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -149019,7 +152608,7 @@ export interface operations {
             };
         };
     };
-    update_task_api_enhanced_memory_tasks__task_id__put: {
+    update_task_api_task_memory_tasks__task_id__put: {
         parameters: {
             query?: never;
             header?: never;
@@ -149054,7 +152643,7 @@ export interface operations {
             };
         };
     };
-    add_markdown_reference_api_enhanced_memory_tasks__task_id__markdown_reference_post: {
+    add_markdown_reference_api_task_memory_tasks__task_id__markdown_reference_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -149089,7 +152678,7 @@ export interface operations {
             };
         };
     };
-    scan_markdown_system_api_enhanced_memory_markdown_scan_get: {
+    scan_markdown_system_api_task_memory_markdown_scan_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -149109,7 +152698,7 @@ export interface operations {
             };
         };
     };
-    search_markdown_api_enhanced_memory_markdown_search_get: {
+    search_markdown_api_task_memory_markdown_search_get: {
         parameters: {
             query: {
                 query: string;
@@ -149143,7 +152732,7 @@ export interface operations {
             };
         };
     };
-    get_document_references_api_enhanced_memory_markdown__file_path__references_get: {
+    get_document_references_api_task_memory_markdown__file_path__references_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -149174,7 +152763,7 @@ export interface operations {
             };
         };
     };
-    get_embedding_cache_stats_api_enhanced_memory_embeddings_cache_stats_get: {
+    get_embedding_cache_stats_api_task_memory_embeddings_cache_stats_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -149194,7 +152783,7 @@ export interface operations {
             };
         };
     };
-    cleanup_old_data_api_enhanced_memory_cleanup_delete: {
+    cleanup_old_data_api_task_memory_cleanup_delete: {
         parameters: {
             query?: {
                 days_to_keep?: number;
@@ -149225,7 +152814,7 @@ export interface operations {
             };
         };
     };
-    get_active_tasks_api_enhanced_memory_active_tasks_get: {
+    get_active_tasks_api_task_memory_active_tasks_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -149582,6 +153171,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_DevSpeedupExamplesResultResponse_"];
+                };
+            };
+        };
+    };
+    get_templates_api_dev_speedup_templates_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by template category */
+                category?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevSpeedupTemplatesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_history_api_dev_speedup_history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevSpeedupHistoryResponse"];
                 };
             };
         };
@@ -150726,6 +154367,224 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workspace_api_workspace_tasks__task_id__create_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceInfoResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workspace_api_workspace_tasks__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceInfoResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    destroy_workspace_api_workspace_tasks__task_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    exec_command_api_workspace_tasks__task_id__exec_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExecRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    snapshot_workspace_api_workspace_tasks__task_id__snapshot_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnapshotRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnapshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_workspace_api_workspace_tasks__task_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["api__task_workspace_ws__RestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceInfoResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workspace_stats_api_workspace_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -152212,7 +156071,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["RestoreRequest"];
+                "application/json": components["schemas"]["api__schemas_knowledge__RestoreRequest"];
             };
         };
         responses: {
@@ -154386,6 +158245,37 @@ export interface operations {
             };
         };
     };
+    collection_graph_api_graph_rag_collections__collection_id__graph_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_ai_agents_api_ai_stack_agents_get: {
         parameters: {
             query?: never;
@@ -154506,7 +158396,7 @@ export interface operations {
             };
         };
     };
-    enhanced_chat_api_ai_stack_chat_enhanced_post: {
+    chat_api_ai_stack_chat_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -154515,7 +158405,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["EnhancedChatRequest"];
+                "application/json": components["schemas"]["ChatRequest"];
             };
         };
         responses: {
@@ -154525,7 +158415,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_EnhancedChatResult_"];
+                    "application/json": components["schemas"]["DataResponse_ChatResult_"];
                 };
             };
             /** @description Validation Error */
@@ -154572,7 +158462,7 @@ export interface operations {
             };
         };
     };
-    enhanced_knowledge_search_api_ai_stack_knowledge_enhanced_search_post: {
+    knowledge_search_api_ai_stack_knowledge_search_post: {
         parameters: {
             query: {
                 query: string;
@@ -154591,7 +158481,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_EnhancedKnowledgeSearchData_"];
+                    "application/json": components["schemas"]["DataResponse_KnowledgeSearchData_"];
                 };
             };
             /** @description Validation Error */
@@ -154856,38 +158746,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_RAGQueryResult_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    legacy_enhanced_chat_api_ai_stack_legacy_enhanced_chat_post: {
-        parameters: {
-            query: {
-                message: string;
-                context?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_EnhancedChatResult_"];
                 };
             };
             /** @description Validation Error */
@@ -156215,6 +160073,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_SkillCatalogInstallData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_skill_bundles_api_skills_bundles_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillBundlesListResponse"];
+                };
+            };
+        };
+    };
+    enable_skill_bundle_api_skills_bundles__bundle_id__enable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bundle_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillBundleInstallResponse"];
                 };
             };
             /** @description Validation Error */
@@ -159249,10 +163158,15 @@ export interface operations {
             };
         };
     };
-    decorator_api_verbatim_memory_verbatim_memory_search_get: {
+    verbatim_search_api_verbatim_memory_verbatim_memory_search_get: {
         parameters: {
             query: {
-                func: unknown;
+                /** @description Search query */
+                q: string;
+                /** @description Restrict results to this session */
+                session_id?: string | null;
+                /** @description Maximum number of results */
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -159266,7 +163180,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -159280,13 +163196,13 @@ export interface operations {
             };
         };
     };
-    decorator_api_verbatim_memory_verbatim_memory_session__session_id__delete: {
+    delete_session_verbatim_api_verbatim_memory_verbatim_memory_session__session_id__delete: {
         parameters: {
-            query: {
-                func: unknown;
-            };
+            query?: never;
             header?: never;
-            path?: never;
+            path: {
+                session_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -159297,7 +163213,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -159961,6 +163879,28 @@ export interface operations {
             };
         };
     };
+    list_company_boards_api_llc_boards_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+        };
+    };
     create_kanban_board_api_llc_boards_kanban_post: {
         parameters: {
             query?: never;
@@ -160130,6 +164070,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_adapters_api_llc_adapters_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
                 };
             };
         };
@@ -161593,6 +165555,142 @@ export interface operations {
             };
         };
     };
+    scan_findings_api_llc_projects__project_id__findings_scan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_proposals_api_llc_projects__project_id__findings_proposals_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingProposalResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    promote_proposal_api_llc_findings_proposals__proposal_id__promote_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_proposal_api_llc_findings_proposals__proposal_id__dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DismissRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_portfolios_api_llc_companies__company_id__portfolios_get: {
         parameters: {
             query?: never;
@@ -162012,6 +166110,26 @@ export interface operations {
             };
         };
     };
+    list_projects_with_repos_api_llc_projects_with_repos_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"][];
+                };
+            };
+        };
+    };
     get_project_api_llc_projects__project_id__get: {
         parameters: {
             query?: never;
@@ -162094,6 +166212,167 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_project_repo_api_llc_projects__project_id__repo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachRepoRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detach_project_repo_api_llc_projects__project_id__repo_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_project_api_llc_projects__project_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_project_api_llc_projects__project_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dispose_project_api_llc_projects__project_id__dispose_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -162513,6 +166792,7 @@ export interface operations {
                 type?: components["schemas"]["WorkItemType"] | null;
                 status?: components["schemas"]["WorkItemStatus"] | null;
                 assignee?: string | null;
+                reviewer?: string | null;
                 sprint_id?: string | null;
                 parent_id?: string | null;
                 top_level_only?: boolean;
@@ -165773,6 +170053,61 @@ export interface operations {
             };
         };
     };
+    list_built_in_templates_api_llc_templates_built_in_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+        };
+    };
+    get_built_in_template_api_llc_templates_built_in__template_key__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_template_api_llc_templates__template_id__get: {
         parameters: {
             query?: {
@@ -165858,61 +170193,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TemplateImportResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_built_in_templates_api_llc_templates_built_in_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
-                };
-            };
-        };
-    };
-    get_built_in_template_api_llc_templates_built_in__template_key__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                template_key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
                 };
             };
             /** @description Validation Error */
@@ -166032,6 +170312,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_providers_api_voice_realtime_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RealtimeProvidersResponse"];
+                };
+            };
+        };
+    };
+    set_provider_api_voice_realtime_providers_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRealtimeProviderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RealtimeProvidersResponse"];
                 };
             };
             /** @description Validation Error */
@@ -166230,6 +170563,182 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_memories_api_memory_privacy_list_get: {
+        parameters: {
+            query?: {
+                /** @description Admin only: inspect another user */
+                target_user_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forget_everywhere_api_memory_privacy_forget_everywhere__memory_id__delete: {
+        parameters: {
+            query?: {
+                target_user_id?: string | null;
+            };
+            header?: never;
+            path: {
+                memory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    amend_memory_api_memory_privacy__store___memory_id__put: {
+        parameters: {
+            query?: {
+                target_user_id?: string | null;
+            };
+            header?: never;
+            path: {
+                store: string;
+                memory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AmendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forget_from_store_api_memory_privacy__store___memory_id__delete: {
+        parameters: {
+            query?: {
+                target_user_id?: string | null;
+            };
+            header?: never;
+            path: {
+                store: string;
+                memory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_memory_api_memory_privacy_export_get: {
+        parameters: {
+            query?: {
+                target_user_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

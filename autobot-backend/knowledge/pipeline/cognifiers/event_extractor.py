@@ -13,28 +13,39 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import (
+    batched_chunk_extract,
     build_entity_map,
+    literal_prompt_list,
     parse_llm_json_response,
+    render_prompt_sentinels,
 )
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.event import EventType, TemporalEvent, TemporalType
 from knowledge.pipeline.registry import TaskRegistry
+from llm_shared.types import LLMType
 from services.llm_service import get_llm_service
 
 logger = get_logger(__name__)
 
+# Prompt fragments derived from the TemporalType/EventType Literals (#11017) so the
+# prompt can never drift from the type (validation already uses ``__args__``).
+_TEMPORAL_TYPES_STR = literal_prompt_list(TemporalType)
+_EVENT_TYPES_STR = literal_prompt_list(EventType)
 
-EVENT_EXTRACTION_PROMPT = """Extract temporal events from the text.
+
+EVENT_EXTRACTION_PROMPT = render_prompt_sentinels(
+    """Extract temporal events from the text.
 
 For each event:
 - name: Event title
 - description: Brief description
 - temporal_expression: Time phrase (e.g., "yesterday", "2024-01-15")
-- temporal_type: point, range, relative, recurring
-- event_type: action, decision, change, milestone, occurrence
+- temporal_type: One of %%TEMPORAL_TYPES%%
+- event_type: One of %%EVENT_TYPES%%
 - participants: Entity names involved
 - location: Where it happened (if mentioned)
 - confidence: 0.0-1.0
@@ -43,7 +54,37 @@ Return JSON: [{{"name": "...", "description": "...", ...}}, ...]
 
 Text:
 {text}
-"""
+""",
+    {"TEMPORAL_TYPES": _TEMPORAL_TYPES_STR, "EVENT_TYPES": _EVENT_TYPES_STR},
+)
+
+EVENT_EXTRACTION_BATCH_PROMPT = render_prompt_sentinels(
+    """Extract temporal events from each of the following text chunks.
+
+Each chunk is labeled "Chunk N:". For each event provide:
+- name: Event title
+- description: Brief description
+- temporal_expression: Time phrase (e.g., "yesterday", "2024-01-15")
+- temporal_type: One of %%TEMPORAL_TYPES%%
+- event_type: One of %%EVENT_TYPES%%
+- participants: Entity names involved
+- location: Where it happened (if mentioned)
+- confidence: 0.0-1.0
+
+Return a JSON object mapping each chunk index (as a string) to its array of
+events (same fields as above); use an empty array for chunks with no events.
+Example for two chunks:
+{{
+  "0": [{{"name": "...", "description": "...", "temporal_expression": "...",
+         "temporal_type": "point", "event_type": "occurrence", "participants": [], "confidence": 0.9}}],
+  "1": []
+}}
+
+Chunks:
+{chunks}
+""",
+    {"TEMPORAL_TYPES": _TEMPORAL_TYPES_STR, "EVENT_TYPES": _EVENT_TYPES_STR},
+)
 
 
 @TaskRegistry.register_cognifier("extract_events")
@@ -90,12 +131,21 @@ class EventExtractor(BaseCognifier):
         entity_map: Dict[str, Entity],
         context: PipelineContext,
     ) -> List[TemporalEvent]:
-        """Process batch of chunks for events."""
-        events = []
-        for chunk in chunks:
-            chunk_events = await self._extract_from_chunk(chunk, entity_map, context)
-            events.extend(chunk_events)
-        return events
+        """Extract events for a batch in ONE LLM call when batching is on (#10598).
+
+        Routes through ``batched_chunk_extract`` (index-keyed prompt, per-chunk
+        fallback) so K chunks cost one round-trip instead of K. The helper runs
+        the legacy per-chunk loop itself when the config flag is disabled (#11090).
+        """
+        return await batched_chunk_extract(
+            chunks,
+            llm=self.llm,
+            batch_prompt_template=EVENT_EXTRACTION_BATCH_PROMPT,
+            llm_type=LLMType.EXTRACTION,
+            max_chunk_chars=config.cognifier_batch_max_chunk_chars,
+            convert=lambda raw, chunk: self._convert_to_events(raw, chunk, entity_map, context),
+            extract_one=lambda chunk: self._extract_from_chunk(chunk, entity_map, context),
+        )
 
     async def _extract_from_chunk(
         self,
@@ -103,16 +153,22 @@ class EventExtractor(BaseCognifier):
         entity_map: Dict[str, Entity],
         context: PipelineContext,
     ) -> List[TemporalEvent]:
-        """Extract events from a single chunk."""
+        """Extract events from a single chunk.
+
+        Transient LLM errors are caught and return an empty list.
+        Format and parse errors are re-raised (#10645).
+        """
+        prompt = EVENT_EXTRACTION_PROMPT.format(text=chunk.content)
         try:
-            prompt = EVENT_EXTRACTION_PROMPT.format(text=chunk.content)
-            response = await self.llm.chat([{"role": "user", "content": prompt}])
-            parsed = parse_llm_json_response(response.content)
-            raw_events = parsed if isinstance(parsed, list) else []
-            return self._convert_to_events(raw_events, chunk, entity_map, context)
+            response = await self.llm.chat(
+                [{"role": "user", "content": prompt}], llm_type=LLMType.EXTRACTION, structured_output=True
+            )
         except Exception as e:
-            logger.error("Event extraction failed: %s", e)
+            logger.error("Event extraction LLM call failed (transient): %s", e)
             return []
+        parsed = parse_llm_json_response(response.content, strict=True)
+        raw_events = parsed if isinstance(parsed, list) else []
+        return self._convert_to_events(raw_events, chunk, entity_map, context)
 
     def _parse_llm_response(self, content: str) -> list:
         """

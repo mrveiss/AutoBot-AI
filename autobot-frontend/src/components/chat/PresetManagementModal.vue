@@ -4,6 +4,7 @@
 
 <template>
   <BaseModal
+    :close-label="t('ui.modal.closeDialog')"
     :model-value="modelValue"
     :title="$t('chat.presets.modalTitle')"
     size="md"
@@ -16,8 +17,10 @@
 </template>
 
 <script setup lang="ts">
-import BaseModal from '@/components/ui/BaseModal.vue'
+import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import PresetFormBody from '@/components/chat/PresetFormBody.vue'
+const { t } = useI18n()
 
 defineProps<{
   modelValue: boolean

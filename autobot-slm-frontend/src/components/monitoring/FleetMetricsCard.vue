@@ -46,9 +46,7 @@ function formatTimestamp(timestamp: string): string {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <h3 class="text-lg font-semibold text-gray-900">{{ $t('monitoring.fleetMetricsCard.fleetMetricsSummary') }}</h3>
-      <div v-if="metrics" class="text-sm text-gray-500">
-        Updated: {{ formatTimestamp(metrics.timestamp) }}
-      </div>
+      <div v-if="metrics" class="text-sm text-gray-500">{{ $t('monitoring.fleetMetricsCard.updatedValue0', { value0: formatTimestamp(metrics.timestamp) }) }}</div>
     </div>
 
     <div v-if="loading" class="flex items-center justify-center py-8">
@@ -66,9 +64,7 @@ function formatTimestamp(timestamp: string): string {
         <div :class="['text-3xl font-bold', healthColor]">
           {{ healthPercentage }}%
         </div>
-        <div class="text-xs text-gray-600">
-          {{ metrics.online_nodes }}/{{ metrics.total_nodes }} nodes online
-        </div>
+        <div class="text-xs text-gray-600">{{ $t('monitoring.fleetMetricsCard.value0Value1NodesOnline', { value0: metrics.online_nodes, value1: metrics.total_nodes }) }}</div>
       </div>
 
       <!-- CPU Usage -->
@@ -77,9 +73,7 @@ function formatTimestamp(timestamp: string): string {
         <div :class="['text-3xl font-bold', getMetricColor(metrics.avg_cpu_percent)]">
           {{ metrics.avg_cpu_percent.toFixed(1) }}%
         </div>
-        <div class="text-xs text-gray-600">
-          Across {{ metrics.total_nodes }} nodes
-        </div>
+        <div class="text-xs text-gray-600">{{ $t('monitoring.fleetMetricsCard.acrossValue0Nodes', { value0: metrics.total_nodes }) }}</div>
       </div>
 
       <!-- Memory Usage -->
@@ -88,9 +82,7 @@ function formatTimestamp(timestamp: string): string {
         <div :class="['text-3xl font-bold', getMetricColor(metrics.avg_memory_percent)]">
           {{ metrics.avg_memory_percent.toFixed(1) }}%
         </div>
-        <div class="text-xs text-gray-600">
-          Across {{ metrics.total_nodes }} nodes
-        </div>
+        <div class="text-xs text-gray-600">{{ $t('monitoring.fleetMetricsCard.acrossValue0Nodes', { value0: metrics.total_nodes }) }}</div>
       </div>
 
       <!-- Services -->
@@ -100,9 +92,7 @@ function formatTimestamp(timestamp: string): string {
           {{ metrics.running_services }}/{{ metrics.total_services }}
         </div>
         <div class="text-xs text-gray-600">
-          <span v-if="metrics.failed_services > 0" class="text-danger-600">
-            {{ metrics.failed_services }} failed
-          </span>
+          <span v-if="metrics.failed_services > 0" class="text-danger-600">{{ $t('monitoring.fleetMetricsCard.value0Failed', { value0: metrics.failed_services }) }}</span>
           <span v-else class="text-success-600">{{ $t('monitoring.fleetMetricsCard.allHealthy') }}</span>
         </div>
       </div>

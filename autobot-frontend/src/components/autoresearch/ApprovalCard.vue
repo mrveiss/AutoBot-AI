@@ -50,15 +50,15 @@ async function handleReject() {
 
     <div v-if="approval.metrics" class="mb-3 grid grid-cols-2 gap-2 text-sm">
       <div>
-        <span class="text-neutral-500">Baseline val_bpb:</span>
+        <span class="text-autobot-text-muted">Baseline val_bpb:</span>
         <span class="ml-1 font-mono">{{ approval.metrics.baseline_val_bpb?.toFixed(4) ?? '---' }}</span>
       </div>
       <div>
-        <span class="text-neutral-500">Result val_bpb:</span>
+        <span class="text-autobot-text-muted">Result val_bpb:</span>
         <span class="ml-1 font-mono">{{ approval.metrics.result_val_bpb?.toFixed(4) ?? '---' }}</span>
       </div>
       <div v-if="approval.metrics.improvement_pct != null" class="col-span-2">
-        <span class="text-neutral-500">Improvement:</span>
+        <span class="text-autobot-text-muted">Improvement:</span>
         <span class="ml-1 font-mono text-green-600 dark:text-green-400">
           {{ approval.metrics.improvement_pct.toFixed(2) }}%
         </span>

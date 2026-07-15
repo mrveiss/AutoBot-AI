@@ -20,7 +20,7 @@ add and configure fleet nodes (which may all be the same machine).
 | Phase | What Happens |
 |-------|-------------|
 | 1 — Pre-flight | Checks root, systemd, Debian/Ubuntu, disk space (5 GB), memory (2 GB), internet |
-| 2 — System Setup | Installs Python 3.12, Node 20, Ansible, nginx, git, openssl, rsync; creates `autobot` user with passwordless sudo; generates ED25519 SSH key at `/home/autobot/.ssh/autobot_key`; copies to `/etc/autobot/ssh/` |
+| 2 — System Setup | Installs Python 3.14, Node 20, Ansible, nginx, git, openssl, rsync; creates `autobot` user with passwordless sudo; generates ED25519 SSH key at `/home/autobot/.ssh/autobot_key`; copies to `/etc/autobot/ssh/` |
 | 3 — Code Deployment | Clones `Dev_new_gui` to `/opt/autobot/code_source`; rsyncs `autobot-slm-backend`, `autobot-slm-frontend`, `autobot-slm-agent`, `autobot_shared`, `autobot-infrastructure` to `/opt/autobot/` |
 | 4 — Ansible Deployment | Generates `inventory/localhost.yml`; writes `/etc/autobot/slm-secrets.env` (secret key, encryption key, admin password, server IP, network subnet/gateway); runs `deploy-slm-manager.yml --skip-tags seed,provision` |
 | 5 — Service Verification | Waits up to 7 minutes for `autobot-slm-backend` to pass `GET /api/health`; verifies PostgreSQL and nginx |

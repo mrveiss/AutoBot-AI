@@ -23,6 +23,7 @@ from services.execution.base_backend import (
     ExecutionStatus,
     ExecutionTask,
 )
+from services.execution.env_sanitizer import safe_task_env
 
 logger = get_logger(__name__)
 
@@ -58,9 +59,9 @@ class LocalBackend(ExecutionBackend):
         )
 
         try:
-            # Prepare environment
-            env = os.environ.copy()
-            env.update(task.env_vars)
+            # Security: sanitize semi-untrusted task env vars (AUTOBOT_*
+            # allowlist + hijack/credential denylist) over the trusted parent env.
+            env = safe_task_env(os.environ, task.env_vars)
 
             # Prepare command based on language
             cmd = self._prepare_command(task, env)

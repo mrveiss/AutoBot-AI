@@ -42,12 +42,12 @@ This guide shows how to deploy AutoBot with optimal hardware utilization:
 - Intel Core Ultra processor with NPU
 - 16GB+ RAM
 - Docker Desktop
-- Python 3.12+
+- Python 3.14+
 
 ### WSL2 Requirements
 - Ubuntu 20.04+ or similar
 - NVIDIA GPU with CUDA support
-- Python 3.12+
+- Python 3.14+
 - Docker access from WSL2
 
 ## 🚀 Deployment Steps

@@ -154,12 +154,17 @@ class WorkItemCreate(BaseModel):
     created_by_agent_id: Optional[str] = None
     created_by_user_id: Optional[str] = None
     labels: Optional[List[str]] = None
+    # GH#11140: declarative approval-gated action categories (plan-time visibility).
+    requires_approval_before: Optional[List[str]] = None
 
 
 class WorkItemUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     acceptance_criteria: Optional[List[str]] = None
+    # GH#10852: per-criterion completion, booleans parallel-indexed to
+    # acceptance_criteria; persists the WorkItemDetail checkboxes.
+    acceptance_criteria_done: Optional[List[bool]] = None
     priority: Optional[WorkItemPriority] = None
     story_points: Optional[int] = None
     labels: Optional[List[str]] = None
@@ -168,6 +173,8 @@ class WorkItemUpdate(BaseModel):
     goal_id: Optional[str] = None
     assignee_agent_id: Optional[str] = None
     assignee_user_id: Optional[str] = None
+    # GH#11140: declarative approval-gated action categories.
+    requires_approval_before: Optional[List[str]] = None
     # GH#9020: planned schedule for the Gantt/timeline view.
     scheduled_start: Optional[datetime] = None
     scheduled_end: Optional[datetime] = None
@@ -299,11 +306,24 @@ def _coworker_display(item: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _relations_to_list(item: Any) -> List[Dict[str, Any]]:
-    """Serialize outgoing + incoming relations for GET response (GH#8252)."""
+async def _relations_to_list(item: Any) -> List[Dict[str, Any]]:
+    """Serialize outgoing relations for the response (GH#8252).
+
+    #11684: use ``awaitable_attrs`` so relationship access is async-safe. Items
+    reach here loaded three ways — eager-loaded (list path), bare-loaded
+    (get/update/transition via ``_service().get()``), or freshly created
+    (create path). Under an AsyncSession a plain ``item.outgoing_relations`` on a
+    not-yet-loaded relationship raises ``MissingGreenlet`` (sync IO in an async
+    context) → the endpoint 500s even though the row exists. ``awaitable_attrs``
+    returns the cached value when already loaded and awaits a load otherwise, so
+    every path serializes correctly. (``outgoing_relations`` is ``lazy=selectin``;
+    each relation's ``target`` is lazy=select — an N+1 when an item has many
+    relations, tracked as a fast-follow.)
+    """
     rows = []
-    for rel in getattr(item, "outgoing_relations", []) or []:
-        tgt = rel.target
+    outgoing = await item.awaitable_attrs.outgoing_relations
+    for rel in outgoing or []:
+        tgt = await rel.awaitable_attrs.target
         rows.append(
             {
                 "id": str(rel.id),
@@ -326,11 +346,13 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
         "title": item.title,
         "description": item.description,
         "acceptance_criteria": item.acceptance_criteria,
+        "acceptance_criteria_done": item.acceptance_criteria_done or [],  # GH#10852
         "status": item.status,
         "priority": item.priority,
         "story_points": item.story_points,
         "labels": item.labels,
         "linked_pr_urls": item.linked_pr_urls or [],  # GH#9625
+        "requires_approval_before": item.requires_approval_before or [],  # GH#11140
         "parent_id": str(item.parent_id) if item.parent_id else None,
         "project_id": str(item.project_id) if item.project_id else None,
         "sprint_id": str(item.sprint_id) if item.sprint_id else None,
@@ -356,7 +378,7 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
         "has_human_handoff_context": bool(getattr(item, "review_brief", None)),
         "created_at": item.created_at.isoformat() if item.created_at else None,
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,
-        "relations": _relations_to_list(item),
+        "relations": await _relations_to_list(item),
     }
 
 
@@ -370,25 +392,29 @@ async def create_work_item(
     body: WorkItemCreate,
     session: AsyncSession = Depends(get_session),
 ) -> Dict[str, Any]:
-    item = await _service().create(
-        session,
-        company_id=body.company_id,
-        type=body.type,
-        title=body.title,
-        description=body.description,
-        acceptance_criteria=body.acceptance_criteria,
-        priority=body.priority,
-        story_points=body.story_points,
-        parent_id=body.parent_id,
-        project_id=body.project_id,
-        sprint_id=body.sprint_id,
-        goal_id=body.goal_id,
-        assignee_agent_id=body.assignee_agent_id,
-        assignee_user_id=body.assignee_user_id,
-        created_by_agent_id=body.created_by_agent_id,
-        created_by_user_id=body.created_by_user_id,
-        labels=body.labels,
-    )
+    try:
+        item = await _service().create(
+            session,
+            company_id=body.company_id,
+            type=body.type,
+            title=body.title,
+            description=body.description,
+            acceptance_criteria=body.acceptance_criteria,
+            priority=body.priority,
+            story_points=body.story_points,
+            parent_id=body.parent_id,
+            project_id=body.project_id,
+            sprint_id=body.sprint_id,
+            goal_id=body.goal_id,
+            assignee_agent_id=body.assignee_agent_id,
+            assignee_user_id=body.assignee_user_id,
+            created_by_agent_id=body.created_by_agent_id,
+            created_by_user_id=body.created_by_user_id,
+            labels=body.labels,
+            requires_approval_before=body.requires_approval_before,
+        )
+    except ValueError as exc:  # e.g. unknown approval category (GH#11206)
+        raise HTTPException(status_code=400, detail=str(exc))
     await session.commit()
     await _kb_manager.ensure_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
     return await _item_to_dict(item, session)
@@ -458,7 +484,10 @@ async def update_work_item(
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     fields = {k: v for k, v in body.model_dump(exclude_none=True).items()}
-    item = await _service().update(session, work_item_id, **fields)
+    try:
+        item = await _service().update(session, work_item_id, **fields)
+    except ValueError as exc:  # e.g. unknown approval category (GH#11206)
+        raise HTTPException(status_code=400, detail=str(exc))
     if item is None:
         raise HTTPException(status_code=404, detail="Work item not found")
     await session.commit()
@@ -956,7 +985,11 @@ async def set_or_clear_coworker(
                 caller_role="owner",
             )
         await session.commit()
-        return _item_to_dict(item)
+        # #11684: was `return _item_to_dict(item)` — unawaited and missing the
+        # session arg (latent since _item_to_dict became an async 2-arg fn); the
+        # awaitable_attrs relation load makes it a guaranteed crash. Match every
+        # other caller.
+        return await _item_to_dict(item, session)
     except CoWorkingPermissionError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=403, detail="Internal server error")

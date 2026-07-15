@@ -326,13 +326,13 @@ onMounted(() => {
         <div class="config-form">
           <!-- Agent ID (always read-only) -->
           <div class="form-group">
-            <label>Agent ID</label>
+            <label>{{ $t('agentsView.agentID') }}</label>
             <input type="text" :value="selectedAgent.agent_id" disabled />
           </div>
 
           <!-- LLM Provider -->
           <div class="form-group">
-            <label>LLM Provider</label>
+            <label>{{ $t('agentsView.lLMProvider') }}</label>
             <select v-model="editForm.llm_provider" :disabled="!isEditing">
               <option v-for="p in providers" :key="p" :value="p">{{ p }}</option>
             </select>
@@ -340,13 +340,13 @@ onMounted(() => {
 
           <!-- LLM Model -->
           <div class="form-group">
-            <label>LLM Model</label>
+            <label>{{ $t('agentsView.lLMModel') }}</label>
             <input v-model="editForm.llm_model" :disabled="!isEditing" />
           </div>
 
           <!-- LLM Endpoint — node selector or custom -->
           <div class="form-group endpoint-group">
-            <label>LLM Endpoint</label>
+            <label>{{ $t('agentsView.lLMEndpoint') }}</label>
 
             <!-- Read-only view -->
             <div v-if="!isEditing" class="endpoint-readonly">
@@ -360,7 +360,7 @@ onMounted(() => {
                 class="node-select"
                 @change="onEndpointNodeChange(editForm.endpoint_node)"
               >
-                <optgroup label="Fleet Nodes">
+                <optgroup :label="$t('agentsView.fleetNodes')">
                   <option
                     v-for="node in nodes"
                     :key="node.node_id"
@@ -369,7 +369,7 @@ onMounted(() => {
                     {{ node.node_id }} — {{ node.ip_address }}:{{ OLLAMA_PORT }}
                   </option>
                 </optgroup>
-                <option :value="CUSTOM_VALUE">Custom…</option>
+                <option :value="CUSTOM_VALUE">{{ $t('agentsView.custom') }}</option>
               </select>
 
               <input
@@ -387,7 +387,7 @@ onMounted(() => {
 
           <!-- Timeout -->
           <div class="form-group">
-            <label>Timeout (seconds)</label>
+            <label>{{ $t('agentsView.timeoutSeconds') }}</label>
             <input
               v-model.number="editForm.llm_timeout"
               type="number"
@@ -399,7 +399,7 @@ onMounted(() => {
 
           <!-- Temperature -->
           <div class="form-group">
-            <label>Temperature</label>
+            <label>{{ $t('agentsView.temperature') }}</label>
             <input
               v-model.number="editForm.llm_temperature"
               type="number"
@@ -417,15 +417,13 @@ onMounted(() => {
                 v-model="editForm.is_active"
                 type="checkbox"
                 :disabled="!isEditing"
-              />
-              Active
-            </label>
+              />{{ $t('agentsView.active') }}</label>
           </div>
         </div>
       </div>
 
       <div v-else class="agent-detail empty">
-        <p>Select an agent to view and edit its configuration</p>
+        <p>{{ $t('agentsView.selectAnAgentToViewAnd') }}</p>
       </div>
     </div>
 

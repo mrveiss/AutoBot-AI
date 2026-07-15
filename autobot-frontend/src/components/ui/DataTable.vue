@@ -149,14 +149,14 @@ interface Column {
   key: string
   label: string
   sortable?: boolean
-  format?: (value: any) => string
+  format?: (value: unknown) => string
 }
 
 interface Props {
   /** Table columns configuration */
   columns: Column[]
   /** Table data rows */
-  data: any[]
+  data: Record<string, unknown>[]
   /** Show table header */
   showHeader?: boolean
   /** Table title */
@@ -228,8 +228,8 @@ const sortedData = computed(() => {
   // Apply sorting
   if (sortKey.value) {
     result.sort((a, b) => {
-      const aVal = a[sortKey.value!]
-      const bVal = b[sortKey.value!]
+      const aVal = a[sortKey.value!] as string | number
+      const bVal = b[sortKey.value!] as string | number
       const compare = aVal < bVal ? -1 : aVal > bVal ? 1 : 0
       return sortDirection.value === 'asc' ? compare : -compare
     })
@@ -245,7 +245,7 @@ const sortedData = computed(() => {
   return result
 })
 
-const formatCell = (value: any, column: Column) => {
+const formatCell = (value: unknown, column: Column) => {
   if (column.format) {
     return column.format(value)
   }

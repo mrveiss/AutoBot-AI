@@ -72,9 +72,9 @@
    * LAYOUT VARIABLES
    * ============================================ */
 
-  --header-height: 80px;
+  /* #10750 C2: --header-height + --view-min-height are canonical in
+     design-tokens.css (56px, the real header height). Duplicate 80px removed. */
   --sidebar-width: 256px;
-  --view-min-height: calc(100vh - var(--header-height));
 
   /* Content constraints */
   --content-max-width: 1280px;

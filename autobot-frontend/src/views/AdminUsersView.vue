@@ -148,104 +148,94 @@
     </div>
 
     <!-- Create User Modal -->
-    <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>Add User</h3>
-          <button
-            class="btn-close"
-            @click="showCreateModal = false"
-            :aria-label="$t('common.close')"
-            :title="$t('common.close')"
-            type="button"
-          ><Icon name="times" /></button>
+    <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
+      v-model="showCreateModal"
+      title="Add User"
+      size="sm"
+    >
+      <form @submit.prevent="createUser">
+        <div class="form-group">
+          <label>Email</label>
+          <input v-model="newUser.email" type="email" class="form-input" required />
         </div>
-        <form class="modal-body" @submit.prevent="createUser">
-          <div class="form-group">
-            <label>Email</label>
-            <input v-model="newUser.email" type="email" class="form-input" required />
-          </div>
-          <div class="form-group">
-            <label>Username</label>
-            <input v-model="newUser.username" type="text" class="form-input" required minlength="3" />
-          </div>
-          <div class="form-group">
-            <label>Password</label>
-            <input v-model="newUser.password" type="password" class="form-input" required minlength="8" />
-          </div>
-          <div class="form-group">
-            <label>Display Name</label>
-            <input v-model="newUser.display_name" type="text" class="form-input" />
-          </div>
-          <div v-if="createError" class="error-inline">{{ createError }}</div>
-          <div class="modal-footer">
-            <button type="button" class="btn-action-secondary" @click="showCreateModal = false">Cancel</button>
-            <button type="submit" class="btn-action-primary" :disabled="creating">
-              <Icon v-if="creating" name="sync-alt" :spin="true" />
-              Create User
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div class="form-group">
+          <label>Username</label>
+          <input v-model="newUser.username" type="text" class="form-input" required minlength="3" />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input v-model="newUser.password" type="password" class="form-input" required minlength="8" />
+        </div>
+        <div class="form-group">
+          <label>Display Name</label>
+          <input v-model="newUser.display_name" type="text" class="form-input" />
+        </div>
+        <div v-if="createError" class="error-inline">{{ createError }}</div>
+        <!-- hidden submit keeps Enter-to-submit working inside the form -->
+        <button type="submit" class="sr-only" tabindex="-1" aria-hidden="true"></button>
+      </form>
+      <template #actions>
+        <button type="button" class="btn-action-secondary" @click="showCreateModal = false">Cancel</button>
+        <button type="button" class="btn-action-primary" :disabled="creating" @click="createUser">
+          <Icon v-if="creating" name="sync-alt" :spin="true" />
+          Create User
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Assign Voice Bundle Modal -->
-    <div v-if="bundleTarget" class="modal-overlay" @click.self="closeBundleModal">
-      <div class="modal modal-sm">
-        <div class="modal-header">
-          <h3>Assign Voice Bundle</h3>
-          <button
-            class="btn-close"
-            @click="closeBundleModal"
-            :aria-label="$t('common.close')"
-            type="button"
-          ><Icon name="times" /></button>
+    <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
+      :model-value="!!bundleTarget"
+      title="Assign Voice Bundle"
+      size="sm"
+      @close="closeBundleModal"
+    >
+      <template v-if="bundleTarget">
+        <p class="bundle-user-name">
+          User: <strong>{{ bundleTarget.username }}</strong>
+        </p>
+        <div class="form-group">
+          <label>Voice Bundle</label>
+          <select v-model="newBundleName" class="form-input" :disabled="bundleModalLoading">
+            <option :value="null">— Use role default —</option>
+            <option v-for="name in VOICE_BUNDLE_NAMES" :key="name" :value="name">
+              {{ VOICE_BUNDLE_LABELS[name] }}
+            </option>
+          </select>
         </div>
-        <div class="modal-body">
-          <p class="bundle-user-name">
-            User: <strong>{{ bundleTarget.username }}</strong>
-          </p>
-          <div class="form-group">
-            <label>Voice Bundle</label>
-            <select v-model="newBundleName" class="form-input" :disabled="bundleModalLoading">
-              <option :value="null">— Use role default —</option>
-              <option v-for="name in VOICE_BUNDLE_NAMES" :key="name" :value="name">
-                {{ VOICE_BUNDLE_LABELS[name] }}
-              </option>
-            </select>
-          </div>
-          <div v-if="bundleError" class="error-inline">{{ bundleError }}</div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-action-secondary" @click="closeBundleModal">Cancel</button>
-          <button
-            type="button"
-            class="btn-action-primary"
-            :disabled="bundleSaving || bundleModalLoading"
-            @click="doAssignBundle"
-          >
-            <Icon v-if="bundleSaving || bundleModalLoading" name="sync-alt" :spin="true" />
-            Save
-          </button>
-        </div>
-      </div>
-    </div>
+        <div v-if="bundleError" class="error-inline">{{ bundleError }}</div>
+      </template>
+      <template #actions>
+        <button type="button" class="btn-action-secondary" @click="closeBundleModal">Cancel</button>
+        <button
+          type="button"
+          class="btn-action-primary"
+          :disabled="bundleSaving || bundleModalLoading"
+          @click="doAssignBundle"
+        >
+          <Icon v-if="bundleSaving || bundleModalLoading" name="sync-alt" :spin="true" />
+          Save
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Delete Confirm Modal -->
-    <div v-if="deleteTarget" class="modal-overlay" @click.self="deleteTarget = null">
-      <div class="modal modal-sm">
-        <div class="modal-header">
-          <h3>Delete User</h3>
-        </div>
-        <div class="modal-body">
-          <p>Delete <strong>{{ deleteTarget.username }}</strong>? This cannot be undone.</p>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-action-secondary" @click="deleteTarget = null">Cancel</button>
-          <button class="btn-action-danger" @click="deleteUser">Delete</button>
-        </div>
-      </div>
-    </div>
+    <BaseModal
+      :close-label="t('ui.modal.closeDialog')"
+      :model-value="!!deleteTarget"
+      title="Delete User"
+      size="sm"
+      :show-close="false"
+      @close="deleteTarget = null"
+    >
+      <p v-if="deleteTarget">Delete <strong>{{ deleteTarget.username }}</strong>? This cannot be undone.</p>
+      <template #actions>
+        <button class="btn-action-secondary" @click="deleteTarget = null">Cancel</button>
+        <button class="btn-action-danger" @click="deleteUser">Delete</button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -255,6 +245,8 @@ import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import Icon from '@/components/ui/Icon.vue'
+import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import {
   useAdminVoiceBundle,
   VOICE_BUNDLE_NAMES,
@@ -262,6 +254,7 @@ import {
 } from '@/composables/useVoiceBundle'
 import type { VoiceBundleName } from '@/composables/useVoiceBundle'
 
+const { t } = useI18n()
 const logger = createLogger('AdminUsersView')
 
 interface UserRecord {
@@ -535,7 +528,7 @@ onMounted(loadUsers)
 
 .page-subtitle {
   font-size: var(--text-sm);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   margin: var(--spacing-0);
 }
 
@@ -574,21 +567,21 @@ onMounted(loadUsers)
   left: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .search-input {
   width: 100%;
   padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-9);
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   box-sizing: border-box;
 }
 
 .table-section {
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-default, #e5e7eb);
   border-radius: var(--radius-xl);
   overflow: hidden;
 }
@@ -596,7 +589,7 @@ onMounted(loadUsers)
 .loading-state {
   padding: var(--spacing-8);
   text-align: center;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .data-table {
@@ -611,14 +604,14 @@ onMounted(loadUsers)
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   background: var(--color-surface-alt, #f9fafb);
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
 }
 
 .data-table td {
   padding: var(--spacing-3) var(--spacing-4);
-  border-bottom: 1px solid var(--color-border, #f3f4f6);
+  border-bottom: 1px solid var(--border-default, #f3f4f6);
   font-size: var(--text-sm);
 }
 
@@ -671,7 +664,7 @@ onMounted(loadUsers)
 
 .bundle-loading {
   font-size: var(--text-xs);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .bundle-user-name {
@@ -681,7 +674,7 @@ onMounted(loadUsers)
 
 .role-select {
   padding: var(--spacing-1) var(--spacing-2);
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: var(--radius-md);
   font-size: 0.8125rem;
   background: transparent;
@@ -726,7 +719,7 @@ onMounted(loadUsers)
 
 .empty-row {
   text-align: center;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
   padding: 2rem !important;
 }
 
@@ -736,12 +729,12 @@ onMounted(loadUsers)
   justify-content: center;
   gap: var(--spacing-4);
   padding: var(--spacing-3);
-  border-top: 1px solid var(--color-border, #e5e7eb);
+  border-top: 1px solid var(--border-default, #e5e7eb);
 }
 
 .btn-page {
   padding: var(--spacing-1-5) var(--spacing-3);
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: var(--radius-md);
   background: transparent;
   cursor: pointer;
@@ -754,7 +747,7 @@ onMounted(loadUsers)
 
 .page-info {
   font-size: var(--text-sm);
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-secondary, #6b7280);
 }
 
 .btn-action-primary,
@@ -778,8 +771,8 @@ onMounted(loadUsers)
 
 .btn-action-secondary {
   background: transparent;
-  border-color: var(--color-border, #d1d5db);
-  color: var(--color-text, #111827);
+  border-color: var(--border-default, #d1d5db);
+  color: var(--text-primary, #111827);
 }
 
 .btn-action-danger {
@@ -791,54 +784,6 @@ onMounted(loadUsers)
 .btn-action-secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal {
-  background: var(--color-surface, #fff);
-  border-radius: var(--radius-xl);
-  width: 100%;
-  max-width: 480px;
-  box-shadow: var(--shadow-2xl);
-}
-
-.modal-sm {
-  max-width: 360px;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-4) var(--spacing-5);
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
-}
-
-.modal-header h3 {
-  margin: var(--spacing-0);
-  font-size: var(--text-base);
-  font-weight: 600;
-}
-
-.btn-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-text-secondary, #6b7280);
-  font-size: var(--text-sm);
-}
-
-.modal-body {
-  padding: var(--spacing-5);
 }
 
 .form-group {
@@ -855,7 +800,7 @@ onMounted(loadUsers)
 .form-input {
   width: 100%;
   padding: var(--spacing-2) var(--spacing-3);
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--border-default, #d1d5db);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   box-sizing: border-box;
@@ -867,10 +812,4 @@ onMounted(loadUsers)
   margin-top: var(--spacing-2);
 }
 
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-2);
-  padding-top: var(--spacing-4);
-}
 </style>

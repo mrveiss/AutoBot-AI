@@ -117,7 +117,8 @@ async def get_developer_config():
     developer_config = unified_config_manager.get_nested("developer", {})
     return {
         "enabled": developer_config.get("enabled", False),
-        "enhanced_errors": developer_config.get("enhanced_errors", True),
+        # Back-compat: fall back to the legacy ``enhanced_errors`` key for configs written before #10792.
+        "detailed_errors": developer_config.get("detailed_errors", developer_config.get("enhanced_errors", True)),
         "endpoint_suggestions": developer_config.get("endpoint_suggestions", True),
         "debug_logging": developer_config.get("debug_logging", False),
     }
@@ -167,12 +168,16 @@ async def get_system_info():
 
 
 # Custom exception handler for 404 errors with developer mode enhancements
-async def enhanced_404_handler(request: Request, exc: HTTPException):
-    """Enhanced 404 handler that provides helpful suggestions in developer mode"""
+async def not_found_handler(request: Request, exc: HTTPException):
+    """404 handler that provides helpful suggestions in developer mode"""
     developer_mode = unified_config_manager.get_nested("developer.enabled", False)
-    enhanced_errors = unified_config_manager.get_nested("developer.enhanced_errors", True)
+    # Back-compat: fall back to the legacy ``enhanced_errors`` key for configs written before #10792.
+    detailed_errors = unified_config_manager.get_nested(
+        "developer.detailed_errors",
+        unified_config_manager.get_nested("developer.enhanced_errors", True),
+    )
 
-    if not developer_mode or not enhanced_errors:
+    if not developer_mode or not detailed_errors:
         return JSONResponse(status_code=404, content={"detail": "Not Found"})
 
     path = request.url.path
@@ -199,12 +204,16 @@ async def enhanced_404_handler(request: Request, exc: HTTPException):
 
 
 # Custom exception handler for 405 errors (Method Not Allowed)
-async def enhanced_405_handler(request: Request, exc: HTTPException):
-    """Enhanced 405 handler for developer mode"""
+async def method_not_allowed_handler(request: Request, exc: HTTPException):
+    """405 handler for developer mode"""
     developer_mode = unified_config_manager.get_nested("developer.enabled", False)
-    enhanced_errors = unified_config_manager.get_nested("developer.enhanced_errors", True)
+    # Back-compat: fall back to the legacy ``enhanced_errors`` key for configs written before #10792.
+    detailed_errors = unified_config_manager.get_nested(
+        "developer.detailed_errors",
+        unified_config_manager.get_nested("developer.enhanced_errors", True),
+    )
 
-    if not developer_mode or not enhanced_errors:
+    if not developer_mode or not detailed_errors:
         return JSONResponse(status_code=405, content={"detail": "Method Not Allowed"})
 
     path = request.url.path

@@ -178,3 +178,45 @@ class TestQueryContextAnalysis:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# ---------------------------------------------------------------------------
+# #10703 — relevance floor (min_score)
+# ---------------------------------------------------------------------------
+
+
+def _sr(hybrid: float, rerank: float | None = None) -> SearchResult:
+    return SearchResult(
+        content="c",
+        metadata={},
+        semantic_score=0.0,
+        keyword_score=0.0,
+        hybrid_score=hybrid,
+        relevance_rank=1,
+        source_path="p",
+        rerank_score=rerank,
+    )
+
+
+def test_relevance_floor_drops_below_threshold():
+    # last item: rerank_score 0.1 is used in preference to hybrid_score 0.5 → dropped
+    results = [_sr(0.9), _sr(0.2), _sr(0.5, rerank=0.1)]
+    kept = AdvancedRAGOptimizer._apply_relevance_floor(results, 0.3)
+    kept_scores = [(r.rerank_score if r.rerank_score is not None else r.hybrid_score) for r in kept]
+    assert kept_scores == [0.9]
+
+
+def test_relevance_floor_zero_is_noop():
+    results = [_sr(0.1), _sr(0.2)]
+    assert AdvancedRAGOptimizer._apply_relevance_floor(results, 0.0) is results  # unchanged, same object
+
+
+def test_make_cache_key_includes_min_score():
+    opt = AdvancedRAGOptimizer()
+    assert opt._make_cache_key("q", 5, True, 0.0) != opt._make_cache_key("q", 5, True, 0.5)
+
+
+def test_relevance_floor_keeps_exact_boundary():
+    # score == min_score is inclusive (>=); guards against a future > regression
+    kept = AdvancedRAGOptimizer._apply_relevance_floor([_sr(0.3)], 0.3)
+    assert len(kept) == 1

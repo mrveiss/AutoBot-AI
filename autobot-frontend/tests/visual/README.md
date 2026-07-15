@@ -1,12 +1,27 @@
 # Visual regression tests
 
-Pixel-diff every Storybook story against committed baseline PNGs. Catches
-the kind of drift that type-check + unit tests miss — design-token rounds,
-icon path typos, layout shifts, color regressions.
+Pixel-diff every Storybook story against baseline PNGs. Catches the kind of
+drift that type-check + unit tests miss — design-token rounds, icon path
+typos, layout shifts, color regressions.
 
 This was the safety gap closed by #5077, originally surfaced because
 PRs #5036 / #5043 / #4805 each touched 30+ UI files with no way to verify
 the visual result.
+
+> **Baselines are NOT committed (#9825 cleanup).** `__screenshots__/` is
+> gitignored. Developer-machine PNGs (incl. WSL2) never matched ubuntu-latest
+> CI font rendering, so committed baselines caused constant false failures on
+> every PR (#10316/#10320) for a non-required gate, plus ~23 MB of binary churn.
+>
+> Visual regression now runs **on demand**, not per-PR:
+> - **Authoritative CI baseline set:** dispatch the *Visual Regression* workflow
+>   with `regenerate_baselines=true` — it builds the baseline artifact on
+>   ubuntu-latest.
+> - **Locally:** `npm run test:visual` (generates baselines on first run; they
+>   stay local/untracked).
+>
+> To restore a per-PR committed-baseline gate later: generate the set via the
+> workflow, commit it, and re-add the `pull_request` trigger.
 
 ## Quick reference
 

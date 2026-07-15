@@ -28,6 +28,53 @@ tags:
   - media
 ---
 
+## Capability Tiers
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ youtube-transcript                                            │
+├─────────────────────────────────────────────────────────────┤
+│ STANDALONE   (always works, zero config)                     │
+│   • Extract auto/manual captions + metadata for any public   │
+│     video via yt-dlp (no login, no video download)           │
+├─────────────────────────────────────────────────────────────┤
+│ SUPERCHARGED (unlocks when you connect a tool)               │
+│   • Browser cookies (--cookies-from-browser) → age-gated,    │
+│     members-only, and private videos you can access          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**STANDALONE — always works, zero config**
+
+- Download manual or auto-generated captions for any public video with `yt-dlp`
+  (subtitles only — the video itself is never downloaded).
+- Fetch full video metadata (`--dump-json`) and search YouTube for video IDs.
+- Graceful degradation: manual subs → auto-generated subs → description text.
+
+**SUPERCHARGED — unlocks per connected tool**
+
+| Connect this | Unlocks |
+|--------------|---------|
+| Browser cookies (`--cookies-from-browser firefox`) | Transcripts and metadata for age-gated, members-only, or private videos that the signed-in browser session can access. |
+
+Without cookies the skill simply stays on the public-video STANDALONE tier.
+
+## Output Contract
+
+Transcript extraction returns this fixed shape:
+
+```
+## Transcript: <video title>
+
+**Video:** <url or id>   **Duration:** <hh:mm:ss>   **Uploader:** <name>
+**Caption source:** manual | auto-generated | description-fallback
+
+<plain-text transcript, timing tags stripped>
+```
+
+Metadata-only requests return the raw `--dump-json` object (keys: `title`,
+`description`, `duration`, `uploader`, `view_count`, `upload_date`, `chapters`).
+
 ## When to Use
 
 Use this skill when an agent needs to read or summarize the spoken content of a

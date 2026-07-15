@@ -36,6 +36,11 @@ from services.execution.base_backend import (
     ExecutionTask,
     ResourceLimits,
 )
+from services.execution.claude_code_backend import (
+    CLAUDE_CODE_BACKEND,
+    ClaudeCodeBackend,
+    build_claude_code_backend,
+)
 from services.execution.docker_backend import DockerBackend
 from services.execution.execution_manager import (
     ExecutionManager,
@@ -58,4 +63,8 @@ __all__ = [
     "ModalBackend",
     "ExecutionManager",
     "get_execution_manager",
+    # Claude Code / Agent SDK execution provider (Issue #10550)
+    "CLAUDE_CODE_BACKEND",
+    "ClaudeCodeBackend",
+    "build_claude_code_backend",
 ]

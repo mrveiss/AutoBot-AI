@@ -93,6 +93,35 @@ async def list_templates(
     return await svc.list_templates(params, requesting_company_id=company_id)
 
 
+# Static /built-in routes MUST be declared before the dynamic /{template_id}
+# route: FastAPI matches in definition order, so a {template_id: uuid} above
+# would swallow GET /built-in and 422 on UUID parsing of "built-in" (GH#9042).
+@router.get("/built-in", response_model=List[Dict])
+async def list_built_in_templates() -> List[Dict]:
+    """List all built-in company templates (GH#9042).
+
+    Returns template metadata only (name, description, category, tags).
+    Does not require authentication or database access.
+    """
+    return TemplateService.list_built_in_templates()
+
+
+@router.get("/built-in/{template_key}", response_model=Dict)
+async def get_built_in_template(template_key: str) -> Dict:
+    """Fetch a specific built-in template by key (GH#9042).
+
+    Args:
+        template_key: Template identifier (e.g., 'software-team')
+
+    Returns:
+        Full template JSON including metadata, variables, agents, goals, work_items, kb_collections
+    """
+    try:
+        return TemplateService.get_built_in_template(template_key)
+    except BuiltInTemplateNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Built-in template not found")
+
+
 @router.get("/{template_id}", response_model=TemplateDetail)
 async def get_template(
     template_id: uuid.UUID,
@@ -141,29 +170,3 @@ async def delete_template(
         await svc.session.commit()
     except TemplateNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
-
-
-@router.get("/built-in", response_model=List[Dict])
-async def list_built_in_templates() -> List[Dict]:
-    """List all built-in company templates (GH#9042).
-
-    Returns template metadata only (name, description, category, tags).
-    Does not require authentication or database access.
-    """
-    return TemplateService.list_built_in_templates()
-
-
-@router.get("/built-in/{template_key}", response_model=Dict)
-async def get_built_in_template(template_key: str) -> Dict:
-    """Fetch a specific built-in template by key (GH#9042).
-
-    Args:
-        template_key: Template identifier (e.g., 'software-team')
-
-    Returns:
-        Full template JSON including metadata, variables, agents, goals, work_items, kb_collections
-    """
-    try:
-        return TemplateService.get_built_in_template(template_key)
-    except BuiltInTemplateNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")

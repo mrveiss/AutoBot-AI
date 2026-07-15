@@ -8,14 +8,14 @@ Stores structured compliance events in a Redis sorted set keyed by Unix
 timestamp.  All writes are fire-and-forget — callers are never blocked.
 
 .. deprecated::
-    Use ``services.audit.unified_audit`` directly (GH#8290 Phase 2).
+    Use ``services.audit.audit`` directly (GH#8290 Phase 2).
     This module will be removed in Phase 3 once all callers are migrated.
 """
 
 import warnings
 
 warnings.warn(
-    "services.event_log is deprecated (GH#8290). " "Import from services.audit.unified_audit instead.",
+    "services.event_log is deprecated (GH#8290). " "Import from services.audit.audit instead.",
     DeprecationWarning,
     stacklevel=2,
 )

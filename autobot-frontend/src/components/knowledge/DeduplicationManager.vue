@@ -188,6 +188,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -196,6 +197,7 @@ import { useKnowledgeDeduplication } from '@/composables/knowledge/useKnowledgeD
 
 const logger = createLogger('DeduplicationManager')
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 const {
   duplicateStats,
@@ -239,7 +241,7 @@ const scanForIssues = async () => {
 
 // Cleanup duplicates
 const cleanupDuplicates = async () => {
-  if (!confirm(t('knowledge.deduplication.confirmRemoveDuplicates', { count: duplicateStats.value.total_duplicates }))) {
+  if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.deduplication.confirmRemoveDuplicates', { count: duplicateStats.value.total_duplicates }) }))) {
     return
   }
 
@@ -261,7 +263,7 @@ const cleanupDuplicates = async () => {
 
 // Cleanup orphans
 const cleanupOrphans = async () => {
-  if (!confirm(t('knowledge.deduplication.confirmRemoveOrphans', { count: orphanStats.value.orphaned_count }))) {
+  if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.deduplication.confirmRemoveOrphans', { count: orphanStats.value.orphaned_count }) }))) {
     return
   }
 

@@ -33,6 +33,10 @@
         <div class="project-header-name">
           <i :class="selectedSource.source_type === 'github' ? 'github' : 'folder'"></i>
           {{ selectedSource.name }}
+          <!-- GH#11129: LLC project label when this source is linked to a project -->
+          <span v-if="selectedSourceProject" class="project-header-llc-label">
+            {{ selectedSourceProject }}
+          </span>
         </div>
         <div class="project-header-meta">
           <span v-if="selectedSource.repo" class="project-meta-item">
@@ -327,6 +331,7 @@
       v-if="showSourceManager"
       :selected-source-id="selectedSource?.id ?? null"
       :visible="showSourceManager"
+      :project-labels="codeSourceProjectMap"
       @select-source="handleSelectSource"
       @open-add-source="showAddSourceModal = true; showSourceManager = false"
       @edit-source="handleEditSource"
@@ -354,13 +359,12 @@
 
     <!-- Issue #3436: Per-project sub-tab navigation and child route outlet -->
     <div v-if="route.params.sourceId" class="project-sub-tabs-container">
-      <nav class="project-sub-tabs" role="tablist" aria-label="Project analytics tabs">
+      <nav class="project-sub-tabs" :aria-label="$t('analytics.codebase.tabs.ariaLabel', 'Project analytics')">
         <router-link
           :to="`/analytics/codebase/${route.params.sourceId}`"
           class="project-sub-tab"
           :class="{ 'project-sub-tab-active': isOverviewTabActive }"
-          role="tab"
-          :aria-selected="isOverviewTabActive"
+          :aria-current="isOverviewTabActive ? 'page' : undefined"
         >
           <svg class="sub-tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -371,8 +375,7 @@
           :to="`/analytics/codebase/${route.params.sourceId}/code-quality`"
           class="project-sub-tab"
           :class="{ 'project-sub-tab-active': isCodeQualityTabActive }"
-          role="tab"
-          :aria-selected="isCodeQualityTabActive"
+          :aria-current="isCodeQualityTabActive ? 'page' : undefined"
         >
           <svg class="sub-tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -383,8 +386,7 @@
           :to="`/analytics/codebase/${route.params.sourceId}/code-review`"
           class="project-sub-tab"
           :class="{ 'project-sub-tab-active': isCodeReviewTabActive }"
-          role="tab"
-          :aria-selected="isCodeReviewTabActive"
+          :aria-current="isCodeReviewTabActive ? 'page' : undefined"
         >
           <svg class="sub-tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -396,8 +398,7 @@
           :to="`/analytics/codebase/${route.params.sourceId}/evolution`"
           class="project-sub-tab"
           :class="{ 'project-sub-tab-active': isEvolutionTabActive }"
-          role="tab"
-          :aria-selected="isEvolutionTabActive"
+          :aria-current="isEvolutionTabActive ? 'page' : undefined"
         >
           <svg class="sub-tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -408,8 +409,7 @@
           :to="`/analytics/codebase/${route.params.sourceId}/code-generation`"
           class="project-sub-tab"
           :class="{ 'project-sub-tab-active': isCodeGenerationTabActive }"
-          role="tab"
-          :aria-selected="isCodeGenerationTabActive"
+          :aria-current="isCodeGenerationTabActive ? 'page' : undefined"
         >
           <svg class="sub-tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -448,9 +448,9 @@ import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
 import { useNotificationBus } from '@/composables/useNotificationBus'
-import { getCssVar } from '@/composables/useCssVars'
 import { useCodebaseExport, type SectionType } from '@/composables/analytics/useCodebaseExport'
 import type { ScanDefinition } from '@/composables/useAnalyticsScanRunner'
+import type { PatternAnalysisReport } from '@/composables/usePatternAnalysis'
 import { useIndexingJob } from '@/composables/analytics/useIndexingJob'
 import { useDashboardLoaders } from '@/composables/analytics/useDashboardLoaders'
 import { useSourceRegistry } from '@/composables/analytics/useSourceRegistry'
@@ -458,6 +458,7 @@ import { useAnalyticsDataFetchers } from '@/composables/analytics/useAnalyticsDa
 import { useCodeIntelAnalysis } from '@/composables/analytics/useCodeIntelAnalysis'
 import { useAnalyticsDebug } from '@/composables/analytics/useAnalyticsDebug'
 import { createLogger } from '@/utils/debugUtils'
+import { useApiClient } from '@/plugins/api'
 // Issue #1133: Code Source Registry Components
 import CodebaseOverviewPanel from '@/components/analytics/CodebaseOverviewPanel.vue'
 import CodebaseDependenciesPanel from '@/components/analytics/CodebaseDependenciesPanel.vue'
@@ -483,6 +484,29 @@ import CodebaseOwnershipPanel from '@/components/analytics/panels/CodebaseOwners
 import CodebaseChartsSection from '@/components/analytics/panels/CodebaseChartsSection.vue'
 
 const logger = createLogger('CodebaseAnalytics')
+
+// GH#11129: map code_source_id → LLC project name for source labelling.
+const api = useApiClient()
+const codeSourceProjectMap = ref<Record<string, string>>({})
+
+async function loadProjectRepoMap(): Promise<void> {
+  try {
+    const items = await api.get<{ id: string; name: string; code_source_id: string | null }[]>(
+      '/api/llc/projects/with-repos',
+    )
+    const map: Record<string, string> = {}
+    for (const item of items) {
+      if (item.code_source_id) map[item.code_source_id] = item.name
+    }
+    codeSourceProjectMap.value = map
+  } catch (err) {
+    logger.warn('Failed to load project repo map', err)
+  }
+}
+
+const selectedSourceProject = computed(() =>
+  selectedSource.value ? (codeSourceProjectMap.value[selectedSource.value.id] ?? null) : null,
+)
 
 // i18n + routing
 const { t } = useI18n()
@@ -904,7 +928,7 @@ const runFullAnalysis = async () => {
 }
 
 // Pattern analysis event handlers
-const onPatternAnalysisComplete = (report: any) => {
+const onPatternAnalysisComplete = (report: PatternAnalysisReport) => {
   logger.info('Pattern analysis complete:', report?.analysis_summary)
   notify(t('analytics.codebase.notify.patternAnalysisComplete', { count: report?.analysis_summary?.total_patterns_found || 0 }), 'success')
 }
@@ -924,13 +948,16 @@ onMounted(async () => {
     return
   }
 
+  // GH#11129: load project→source map unconditionally so labels populate
+  // regardless of whether the source-load guard returns early.
+  void loadProjectRepoMap()
+
   // Load source metadata from backend (#6068: extracted to useSourceRegistry)
   const loaded = await loadSourceById(sourceId)
   if (!loaded) {
     analyticsRouter.replace({ name: 'analytics-codebase' })
     return
   }
-
   await checkCurrentIndexingJob()
   loadCachedAnalyticsData(codeIntelExtraScans())
   // #2390: Auto-load overview dashboard cards on page visit
@@ -954,8 +981,8 @@ onUnmounted(() => {
   padding: var(--spacing-5);
   background: var(--bg-primary);
   color: var(--text-primary);
-  min-height: 100vh;
-  overflow-y: auto;
+  /* #10750 C2: fill scrolling parent; drop inner overflow to avoid double scroll */
+  min-height: 100%;
   overflow-x: hidden;
 }
 
@@ -996,6 +1023,16 @@ onUnmounted(() => {
 .project-meta-item.status-ready { color: var(--color-success, #22c55e); }
 .project-meta-item.status-syncing { color: var(--color-warning, #f59e0b); }
 .project-meta-item.status-error { color: var(--color-error, #ef4444); }
+
+/* GH#11129: LLC project label displayed next to source name */
+.project-header-llc-label {
+  font-size: 0.75em;
+  font-weight: 500;
+  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  background: var(--bg-hover);
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+}
 
 .btn-primary {
   padding: var(--spacing-2-5) var(--spacing-5);

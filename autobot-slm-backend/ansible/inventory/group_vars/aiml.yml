@@ -98,7 +98,7 @@ ai_stack:
     # OpenVINO configuration
     OPENVINO_DEVICE: "AUTO"
     OV_LOG_LEVEL: "ERROR"
-    LD_LIBRARY_PATH: "/usr/local/lib:/usr/lib/x86_64-linux-gnu:/usr/local/lib/python3.12"
+    LD_LIBRARY_PATH: "/usr/local/lib:/usr/lib/x86_64-linux-gnu:/usr/local/lib/python3.14"
 
     # GPU configuration (if available)
     NVIDIA_VISIBLE_DEVICES: "all"

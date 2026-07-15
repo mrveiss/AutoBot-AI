@@ -20,9 +20,9 @@ const companyStore = useLlcCompanyStore()
 const runtimeFeaturesStore = useRuntimeFeaturesStore()
 
 // #10502: Company OS (LLC) requires a PostgreSQL company/multi-company
-// deployment; in single_user mode the company endpoints return 503. Gate the
-// view on the runtime flag and show an informational empty-state instead of
-// surfacing the raw 503 error + Retry button.
+// deployment; without it the company endpoints return 503. Gate the view on the
+// runtime flag and show an informational empty-state instead of surfacing the
+// raw 503 error + Retry button.
 const companyOsEnabled = computed(() => runtimeFeaturesStore.companyOsEnabled)
 
 async function selectCompany(company: LlcCompany): Promise<void> {
@@ -32,7 +32,9 @@ async function selectCompany(company: LlcCompany): Promise<void> {
     await router.push(redirect)
     return
   }
-  await router.push({ path: '/llc/dashboard', query: { company: company.id } })
+  // Enter the company's PM workspace (LlcCompanyLayout with sidebar → backlog,
+  // boards, sprints…), not the sidebar-less standalone /llc/dashboard.
+  await router.push(`/llc/companies/${company.id}`)
 }
 
 onMounted(async () => {
@@ -52,8 +54,8 @@ onMounted(async () => {
       <p class="selector-subtitle">{{ $t('nav.llcSelectCompanyPrompt') }}</p>
     </header>
 
-    <!-- #10502: company mode off (single_user) OR a 503 from the company
-         endpoint — informational empty-state, never a raw error. -->
+    <!-- #10502: company mode off OR a 503 from the company endpoint —
+         informational empty-state, never a raw error. -->
     <div v-if="!companyOsEnabled || companyStore.unavailable" class="selector-unavailable">
       <span class="selector-unavailable-icon" aria-hidden="true">🏢</span>
       <h2 class="selector-unavailable-title">
@@ -139,7 +141,7 @@ onMounted(async () => {
   color: var(--text-secondary, #6b7280);
 }
 
-/* #10502: unavailable (single_user deployment) empty-state */
+/* #10502: unavailable (no company-mode deployment) empty-state */
 .selector-unavailable {
   padding: 3rem 1.5rem;
   text-align: center;
@@ -173,7 +175,7 @@ onMounted(async () => {
   padding: 0.75rem 1rem;
   border-radius: var(--radius-md, 8px);
   background: var(--color-danger-bg, #fae5e1);
-  color: var(--color-danger, #cb3326);
+  color: var(--color-error, #cb3326);
   font-size: 0.875rem;
 }
 

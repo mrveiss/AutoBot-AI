@@ -6,7 +6,7 @@
 
 **Architecture:** One new `BaseSkill` subclass (`community_growth.py`) provides 8 tools wrapping Reddit (PRAW), Twitter API v2, Discord webhook, and GitHub API. Three new `WorkflowTemplate` definitions in a new `community.py` module plug into the existing `WorkflowTemplateManager`. All credentials are fetched from the existing secrets manager at runtime; no values are hardcoded.
 
-**Tech Stack:** Python 3.12, `praw` (Reddit), `aiohttp` (already installed — used for Twitter/Discord/GitHub), existing `BaseSkill` / `WorkflowTemplate` / `SkillRegistry` / `SecretsManager` frameworks.
+**Tech Stack:** Python 3.14, `praw` (Reddit), `aiohttp` (already installed — used for Twitter/Discord/GitHub), existing `BaseSkill` / `WorkflowTemplate` / `SkillRegistry` / `SecretsManager` frameworks.
 
 ---
 
