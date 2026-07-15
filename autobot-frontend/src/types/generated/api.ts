@@ -83352,7 +83352,7 @@ export interface components {
              * @description Default visibility for new knowledge
              * @default private
              */
-            default_visibility: components["schemas"]["VisibilityLevel"];
+            default_visibility: components["schemas"]["ScopeLevel"];
             /**
              * Allow User Private
              * @description Allow users to create private knowledge
@@ -89418,6 +89418,12 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ScopeLevel
+         * @description Visibility scope for a shareable resource (secret, knowledge fact, skill, agent).
+         * @enum {string}
+         */
+        ScopeLevel: "user" | "session" | "shared" | "group" | "organization" | "workflow" | "private" | "system" | "public";
         /**
          * ScopedSearchRequest
          * @description Scoped search request with automatic permission filtering.
@@ -96396,7 +96402,7 @@ export interface components {
          */
         UpdatePermissionsRequest: {
             /** @description New visibility level */
-            visibility: components["schemas"]["VisibilityLevel"];
+            visibility: components["schemas"]["ScopeLevel"];
             /**
              * Organization Id
              * @description Organization ID for org-level knowledge
@@ -97666,14 +97672,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * VisibilityLevel
-         * @description Visibility levels for knowledge facts.
-         *
-         *     Issue #679: Extended with hierarchical scopes.
-         * @enum {string}
-         */
-        VisibilityLevel: "private" | "shared" | "group" | "organization" | "system" | "public";
         /**
          * VisionAutomationOpportunitiesResponse
          * @description Response for GET /vision/automation-opportunities.
@@ -112467,7 +112465,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Filter by visibility scope */
-                scope?: components["schemas"]["VisibilityLevel"] | null;
+                scope?: components["schemas"]["ScopeLevel"] | null;
                 /** @description Maximum number of items to return */
                 limit?: number;
                 /** @description Number of items to skip before returning results */
