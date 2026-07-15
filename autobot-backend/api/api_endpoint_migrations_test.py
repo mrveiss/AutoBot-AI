@@ -22380,7 +22380,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         source = inspect.getsource(secrets.get_secret_types)
         self.assertIn("SecretType", source)
-        self.assertIn("SecretScope", source)
+        self.assertIn("ChatSecretScope", source)  # renamed from SecretScope (#11759)
 
     def test_batch_132_migration_preserves_statistics_calculation(self):
         """Verify migration preserves statistics calculation logic"""

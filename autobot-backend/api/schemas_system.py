@@ -3297,8 +3297,14 @@ def _validate_secret_name(name: str) -> str:
     return name
 
 
-class SecretScope(str, Enum):
-    """Secret scope enumeration."""
+class ChatSecretScope(str, Enum):
+    """Scope enumeration for the legacy Redis chat-secrets store (api/secrets.py).
+
+    Distinct from the canonical authorization scope ``ScopeLevel``
+    (``autobot_shared.scoping.scope_level``, aliased as ``SecretScope`` in
+    ``models/secret.py``): this enum adds CHAT/GENERAL for chat-vs-global
+    secret pools and has no WORKFLOW member (#11759).
+    """
 
     CHAT = "chat"
     GENERAL = "general"
@@ -3328,7 +3334,7 @@ class SecretModel(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     type: SecretType
-    scope: SecretScope
+    scope: ChatSecretScope
     chat_id: str | None = None
     description: str | None = ""
     tags: List[str] = Field(default_factory=list)
@@ -3343,7 +3349,7 @@ class SecretCreateRequest(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=256)
     type: SecretType
-    scope: SecretScope
+    scope: ChatSecretScope
     value: str = Field(..., min_length=1, max_length=65536)
     chat_id: str | None = Field(None, max_length=128)
     description: str | None = Field("", max_length=1024)
@@ -3367,7 +3373,7 @@ class SecretCreateRequest(BaseModel):
             name=self.name,
             type=self.type,
             scope=self.scope,
-            chat_id=self.chat_id if self.scope == SecretScope.CHAT else None,
+            chat_id=self.chat_id if self.scope == ChatSecretScope.CHAT else None,
             description=self.description,
             tags=self.tags,
             expires_at=self.expires_at,
@@ -3375,7 +3381,7 @@ class SecretCreateRequest(BaseModel):
         )
 
     def is_chat_scoped(self) -> bool:
-        return self.scope == SecretScope.CHAT
+        return self.scope == ChatSecretScope.CHAT
 
     def requires_chat_id(self) -> bool:
         return self.is_chat_scoped() and not self.chat_id
@@ -3405,7 +3411,7 @@ class SecretTransferRequest(BaseModel):
     """Request model for transferring secrets between scopes."""
 
     secret_ids: List[str]
-    target_scope: SecretScope
+    target_scope: ChatSecretScope
     target_chat_id: str | None = None
 
 
