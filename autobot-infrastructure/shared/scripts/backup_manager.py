@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tarfile
 from datetime import datetime, timedelta
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -35,8 +36,85 @@ logger = logging.getLogger(__name__)
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from utils.script_utils import ScriptFormatter
-from utils.service_registry import get_service_registry
+# --- Standalone replacements for backend-only modules (#11761) --------------
+# `utils/` exists only under autobot-backend/ and is not importable from this
+# directory; shared scripts stay standalone (#11759). Canonical source
+# mirrored below: autobot-backend/utils/service_registry.py (surface used
+# by this script: deployment_mode + get_deployment_info).
+
+
+class DeploymentMode(Enum):
+    """Deployment modes (mirrors backend utils/service_registry.py)."""
+
+    LOCAL = "local"
+    DOCKER_LOCAL = "docker_local"
+    DISTRIBUTED = "distributed"
+    KUBERNETES = "kubernetes"
+    CLOUD = "cloud"
+
+
+# Port env aliases + defaults mirror autobot_shared/ssot_config.py.
+_SERVICE_DEFS = {
+    "backend": ("AUTOBOT_BACKEND_PORT", 8001),
+    "frontend": ("AUTOBOT_FRONTEND_PORT", 5173),
+    "redis": ("AUTOBOT_REDIS_PORT", 6379),
+    "ollama": ("AUTOBOT_OLLAMA_PORT", 11434),
+    "ai-stack": ("AUTOBOT_AI_STACK_PORT", 8080),
+    "npu-worker": ("AUTOBOT_NPU_WORKER_PORT", 8081),
+    "playwright-vnc": ("AUTOBOT_BROWSER_SERVICE_PORT", 9001),
+}
+
+
+class ServiceRegistry:
+    """Env-driven standalone stand-in for the backend ServiceRegistry."""
+
+    def __init__(self):
+        """Initialize registry from environment."""
+        self.deployment_mode = self._detect_deployment_mode()
+        self.services: Dict[str, str] = {name: self._build_url(name) for name in _SERVICE_DEFS}
+
+    @staticmethod
+    def _detect_deployment_mode() -> DeploymentMode:
+        """Detect deployment mode from env, falling back to container heuristic."""
+        mode = os.environ.get("AUTOBOT_DEPLOYMENT_MODE", "").lower()
+        if mode:
+            try:
+                return DeploymentMode(mode)
+            except ValueError:
+                logger.warning("Invalid AUTOBOT_DEPLOYMENT_MODE: %s", mode)
+        return DeploymentMode.DOCKER_LOCAL if os.path.exists("/.dockerenv") else DeploymentMode.LOCAL
+
+    @staticmethod
+    def _build_url(name: str) -> str:
+        """Build a service base URL from environment overrides."""
+        host_env = f"AUTOBOT_{name.upper().replace('-', '_')}_HOST"
+        host = os.environ.get(host_env, "localhost")
+        port_env, default_port = _SERVICE_DEFS[name]
+        port = int(os.environ.get(port_env, default_port))
+        scheme = "redis" if name == "redis" else "http"
+        return f"{scheme}://{host}:{port}"
+
+    def get_deployment_info(self) -> Dict[str, Any]:
+        """Get deployment information."""
+        return {
+            "deployment_mode": self.deployment_mode.value,
+            "services_count": len(self.services),
+            "services": {name: {"url": url} for name, url in self.services.items()},
+        }
+
+
+_registry: Optional[ServiceRegistry] = None
+
+
+def get_service_registry() -> ServiceRegistry:
+    """Get the process-wide ServiceRegistry instance."""
+    global _registry
+    if _registry is None:
+        _registry = ServiceRegistry()
+    return _registry
+
+
+# --- end standalone replacements (#11761) -----------------------------------
 
 
 class BackupManager:
@@ -76,13 +154,26 @@ class BackupManager:
         logger.info(f"   Backup Directory: {self.backup_dir}")
         logger.info(f"   Project Root: {self.project_root}")
 
-    def print_header(self, title: str):
+    # Standalone copies of ScriptFormatter.print_header/print_step
+    # (autobot-backend/utils/script_utils.py) — this script must not
+    # import backend modules (#11761).
+    def print_header(self, title: str, width: int = 60):
         """Print formatted header."""
-        ScriptFormatter.print_header(title)
+        print(f"\n{'=' * width}")  # noqa: print  # canonical: ignore py-print-smoke
+        print(f"  {title}")  # noqa: print  # canonical: ignore py-print-smoke
+        print("=" * width)  # noqa: print  # canonical: ignore py-print-smoke
 
     def print_step(self, step: str, status: str = "info"):
         """Print step with status."""
-        ScriptFormatter.print_step(step, status)
+        status_symbols = {
+            "info": "📋",
+            "success": "✅",
+            "warning": "⚠️",
+            "error": "❌",
+            "running": "🔄",
+        }
+        symbol = status_symbols.get(status, "📋")
+        print(f"{symbol} {step}")  # noqa: print  # canonical: ignore py-print-smoke
 
     def generate_backup_id(self) -> str:
         """Generate unique backup ID."""

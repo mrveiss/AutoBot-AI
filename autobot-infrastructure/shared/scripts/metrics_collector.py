@@ -30,23 +30,162 @@ import asyncio
 import json
 import logging
 import os
+import socket
 import statistics
 import sys
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+import psutil
+import yaml
 
 logger = logging.getLogger(__name__)
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from utils.script_utils import ScriptFormatter
-from utils.service_registry import get_service_registry
+# --- Standalone replacements for backend-only modules (#11761) --------------
+# `utils/` exists only under autobot-backend/ and is not importable from this
+# directory; shared scripts stay standalone (#11759). Canonical source
+# mirrored below: autobot-backend/utils/service_registry.py (surface used
+# by this script: check_all_services_health + get_service_url).
+
+
+class DeploymentMode(Enum):
+    """Deployment modes (mirrors backend utils/service_registry.py)."""
+
+    LOCAL = "local"
+    DOCKER_LOCAL = "docker_local"
+    DISTRIBUTED = "distributed"
+    KUBERNETES = "kubernetes"
+    CLOUD = "cloud"
+
+
+class ServiceStatus(Enum):
+    """Service health status (mirrors backend utils/service_registry.py)."""
+
+    HEALTHY = "healthy"
+    UNHEALTHY = "unhealthy"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class ServiceHealth:
+    """Service health state."""
+
+    status: ServiceStatus
+    last_check: float
+    response_time: float = 0.0
+
+
+# Port env aliases + defaults mirror autobot_shared/ssot_config.py;
+# health paths mirror autobot_shared/ssot_constants.py.
+_SERVICE_DEFS = {
+    "backend": ("AUTOBOT_BACKEND_PORT", 8001, "/api/health"),
+    "frontend": ("AUTOBOT_FRONTEND_PORT", 5173, "/"),
+    "redis": ("AUTOBOT_REDIS_PORT", 6379, None),
+    "ollama": ("AUTOBOT_OLLAMA_PORT", 11434, "/api/tags"),
+    "ai-stack": ("AUTOBOT_AI_STACK_PORT", 8080, "/health"),
+    "npu-worker": ("AUTOBOT_NPU_WORKER_PORT", 8081, "/health"),
+    "playwright-vnc": ("AUTOBOT_BROWSER_SERVICE_PORT", 9001, "/health"),
+}
+
+
+class ServiceRegistry:
+    """Env-driven standalone stand-in for the backend ServiceRegistry."""
+
+    def __init__(self):
+        """Initialize registry from environment."""
+        self.deployment_mode = self._detect_deployment_mode()
+        self.services: Dict[str, str] = {name: self._build_url(name) for name in _SERVICE_DEFS}
+
+    @staticmethod
+    def _detect_deployment_mode() -> DeploymentMode:
+        """Detect deployment mode from env, falling back to container heuristic."""
+        mode = os.environ.get("AUTOBOT_DEPLOYMENT_MODE", "").lower()
+        if mode:
+            try:
+                return DeploymentMode(mode)
+            except ValueError:
+                logger.warning("Invalid AUTOBOT_DEPLOYMENT_MODE: %s", mode)
+        return DeploymentMode.DOCKER_LOCAL if os.path.exists("/.dockerenv") else DeploymentMode.LOCAL
+
+    @staticmethod
+    def _build_url(name: str) -> str:
+        """Build a service base URL from environment overrides."""
+        host_env = f"AUTOBOT_{name.upper().replace('-', '_')}_HOST"
+        host = os.environ.get(host_env, "localhost")
+        port_env, default_port, _health = _SERVICE_DEFS[name]
+        port = int(os.environ.get(port_env, default_port))
+        scheme = "redis" if name == "redis" else "http"
+        return f"{scheme}://{host}:{port}"
+
+    def list_services(self) -> List[str]:
+        """List registered service names."""
+        return list(self.services)
+
+    def get_service_url(self, service_name: str, path: str = "") -> str:
+        """Get full URL for a service."""
+        if service_name not in self.services:
+            raise ValueError(f"Service '{service_name}' not found in registry")
+        return f"{self.services[service_name]}{path}"
+
+    @staticmethod
+    def _probe(url: str, timeout: float = 5.0) -> bool:
+        """Probe a service: TCP connect for redis, HTTP GET otherwise."""
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme == "redis":
+            try:
+                with socket.create_connection((parsed.hostname, parsed.port), timeout=timeout):
+                    return True
+            except OSError:
+                return False
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310
+                return response.status == 200
+        except (urllib.error.URLError, OSError, ValueError):
+            return False
+
+    async def check_service_health(self, service_name: str) -> ServiceHealth:
+        """Check health of a single service."""
+        _port_env, _default_port, health_path = _SERVICE_DEFS[service_name]
+        url = self.get_service_url(service_name, health_path or "")
+        start = time.time()
+        ok = await asyncio.get_running_loop().run_in_executor(None, self._probe, url)
+        return ServiceHealth(
+            status=ServiceStatus.HEALTHY if ok else ServiceStatus.UNHEALTHY,
+            last_check=time.time(),
+            response_time=time.time() - start,
+        )
+
+    async def check_all_services_health(self) -> Dict[str, ServiceHealth]:
+        """Check health of all registered services."""
+        names = self.list_services()
+        results = await asyncio.gather(*(self.check_service_health(name) for name in names))
+        return dict(zip(names, results))
+
+
+_registry: Optional[ServiceRegistry] = None
+
+
+def get_service_registry() -> ServiceRegistry:
+    """Get the process-wide ServiceRegistry instance."""
+    global _registry
+    if _registry is None:
+        _registry = ServiceRegistry()
+    return _registry
+
+
+# --- end standalone replacements (#11761) -----------------------------------
 
 
 @dataclass
@@ -130,13 +269,26 @@ class MetricsCollector:
         logger.info(f"   Storage Directory: {self.storage_dir}")
         logger.info(f"   Retention: {retention_days} days")
 
-    def print_header(self, title: str):
+    # Standalone copies of ScriptFormatter.print_header/print_step
+    # (autobot-backend/utils/script_utils.py) — this script must not
+    # import backend modules (#11761).
+    def print_header(self, title: str, width: int = 60):
         """Print formatted header."""
-        ScriptFormatter.print_header(title)
+        print(f"\n{'=' * width}")  # noqa: print  # canonical: ignore py-print-smoke
+        print(f"  {title}")  # noqa: print  # canonical: ignore py-print-smoke
+        print("=" * width)  # noqa: print  # canonical: ignore py-print-smoke
 
     def print_step(self, step: str, status: str = "info"):
         """Print step with status."""
-        ScriptFormatter.print_step(step, status)
+        status_symbols = {
+            "info": "📋",
+            "success": "✅",
+            "warning": "⚠️",
+            "error": "❌",
+            "running": "🔄",
+        }
+        symbol = status_symbols.get(status, "📋")
+        print(f"{symbol} {step}")  # noqa: print  # canonical: ignore py-print-smoke
 
     def _collect_cpu_and_memory_metrics(self, timestamp: float) -> List[Metric]:
         """Collect CPU and memory metrics.
