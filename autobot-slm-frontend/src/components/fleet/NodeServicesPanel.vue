@@ -466,9 +466,24 @@ onUnmounted(() => {
 
             <!-- Service Name, Description & Error Context (#1019) -->
             <td class="px-4 py-3">
-              <div class="font-medium text-gray-900">{{ service.service_name }}</div>
+              <div class="font-medium text-gray-900 flex items-center gap-1.5">
+                {{ service.service_name }}
+                <span
+                  v-if="service.extra_data?.engine_degraded"
+                  class="inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium bg-yellow-100 text-yellow-800"
+                  :title="String(service.extra_data.degraded_reason || '')"
+                >
+                  {{ $t('fleet.nodeServicesPanel.engineDegraded') }}
+                </span>
+              </div>
               <div v-if="service.description" class="text-xs text-gray-500 truncate max-w-xs" :title="service.description">
                 {{ service.description }}
+              </div>
+              <div
+                v-if="service.extra_data?.engine_degraded && service.extra_data?.degraded_reason"
+                class="mt-1 text-xs text-yellow-700"
+              >
+                {{ service.extra_data.degraded_reason }}
               </div>
               <div
                 v-if="service.status === 'failed' && service.extra_data?.error_message"
