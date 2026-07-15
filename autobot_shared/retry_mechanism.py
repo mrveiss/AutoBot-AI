@@ -55,6 +55,17 @@ class BackoffStrategy(Enum):
         return mapping[self]
 
 
+# Canonical transient (retryable) exception set (#11689). Single source of
+# truth for "which concrete exceptions are transient": Celery derives
+# CELERY_TRANSIENT_ERRORS from this tuple, and RetryConfig builds its
+# retryable default from it, so the split can never silently drift.
+RETRYABLE_EXCEPTIONS: tuple = (
+    ConnectionError,
+    TimeoutError,
+    OSError,
+)
+
+
 @dataclass
 class RetryConfig:
     """Configuration for retry mechanism (Issue #376 - use named constants)"""
@@ -66,11 +77,10 @@ class RetryConfig:
     jitter: bool = True
     strategy: RetryStrategy = RetryStrategy.EXPONENTIAL_BACKOFF
 
-    # Exceptions that should trigger a retry
-    retryable_exceptions: tuple = (
-        ConnectionError,
-        TimeoutError,
-        OSError,
+    # Exceptions that should trigger a retry — the canonical transient set
+    # plus a catch-all (non_retryable_exceptions takes precedence in
+    # is_retryable_exception, so the catch-all never retries validation errors).
+    retryable_exceptions: tuple = RETRYABLE_EXCEPTIONS + (
         # Add database-specific exceptions
         Exception,  # Temporary - should be more specific
     )
