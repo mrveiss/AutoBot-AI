@@ -20,11 +20,11 @@ API_KEY_PATTERNS = [
     re.compile(r"(Bearer\s+[a-zA-Z0-9\-._~+/]+=*)"),  # Bearer tokens
 ]
 
-# Keys in dicts that should be redacted
+# Keys in dicts that should be redacted. Entries MUST be in the normalized
+# form redact_dict compares against (lowercase, "_" and "-" stripped) —
+# un-normalized entries like "api_key" can never match a normalized key (#11762).
 SENSITIVE_KEYS = {
-    "api_key",
-    "apiKey",
-    "api-key",
+    "apikey",
     "token",
     "bearer",
     "password",

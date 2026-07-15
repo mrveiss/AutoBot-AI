@@ -367,6 +367,9 @@ if "llm_shared" not in sys.modules:
     # #10551: provider auth abstraction — load real so tests can import the
     # strategy classes without hitting the llm_shared MagicMock stub.
     _real_load_and_bind("llm_shared.provider_auth", _llm_root / "provider_auth.py")
+    # #11762: credential redaction — was never real-loaded, so its co-located
+    # tests silently failed collection and a redaction bug went unnoticed.
+    _real_load_and_bind("llm_shared.credential_redaction", _llm_root / "credential_redaction.py")
     # #10551: base_provider — load real so BaseProvider tests can instantiate it.
     # #10917: base_provider's real load (added in #10551) silently failed because
     # the llm_shared stub has an empty __path__, so its relative imports
