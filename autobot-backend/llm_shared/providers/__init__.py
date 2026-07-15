@@ -11,6 +11,7 @@ have been moved from ``llm_providers/`` into this package.
 Cloud API providers:
     AnthropicProvider      — Anthropic Claude (with OTel tracing restored, #697)
     BedrockProvider        — AWS Bedrock (Claude, Llama, Mistral, Titan, Nova, GH#9010)
+    OpenAICompatibleProvider — Shared base for the OpenAI chat-completions dialect (#11517)
     OpenAIProvider         — OpenAI GPT/o1 (OTel tracing, circuit breaker)
     GroqProvider           — Groq ultra-low-latency inference
     MistralProvider        — Mistral Le Chat / Codestral / Devstral (#10549)
@@ -51,6 +52,7 @@ from .mock_handler import LocalHandler, MockHandler
 from .nous_portal import NOUS_MODELS, NousPortalProvider
 from .ollama_provider import OllamaProvider  # registry-facing
 from .openai import OpenAIProvider
+from .openai_compatible import OpenAICompatibleProvider
 from .openrouter import OpenRouterProvider
 from .transformers_provider import TransformersProvider
 from .vertexai import VERTEX_MODELS, VertexAIProvider
@@ -62,6 +64,7 @@ __all__ = [
     "AnthropicProvider",
     "BedrockProvider",
     "BEDROCK_MODELS",
+    "OpenAICompatibleProvider",
     "OpenAIProvider",
     "GroqProvider",
     "GROQ_MODELS",
