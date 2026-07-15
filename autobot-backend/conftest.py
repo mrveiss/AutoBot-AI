@@ -63,6 +63,36 @@ def _make_pkg_stub(name: str) -> types.ModuleType:
     return mod
 
 
+def _real_load_and_bind(name: str, path: Path) -> None:
+    """Real-load module *name* from *path*, overwriting any stub, and ALWAYS
+    bind it as an attribute on its parent package module (#11661 — merged
+    ``_load_real_mod`` + ``_real_load_service``).
+
+    The parent bind is load-bearing (#11532/#11618): ``unittest.mock.patch``
+    resolves ``"pkg.mod.NAME"`` via ``getattr(sys.modules["pkg"], "mod")``.
+    When ``pkg`` is a MagicMock package stub, its catch-all ``__getattr__``
+    returns a mock singleton, so without the setattr patch() silently patches
+    the wrong object while the real module's globals stay untouched (inert
+    patch).  Falls back to a package stub if the real file can't be loaded in
+    this environment.
+    """
+    import importlib.util as _rlb_ilu
+
+    spec = _rlb_ilu.spec_from_file_location(name, str(path))
+    if not spec or not spec.loader:
+        return
+    mod = _rlb_ilu.module_from_spec(spec)
+    sys.modules[name] = mod
+    try:
+        spec.loader.exec_module(mod)
+    except Exception:
+        sys.modules[name] = _make_pkg_stub(name)
+        return
+    parent, _, child = name.rpartition(".")
+    if parent and parent in sys.modules:
+        setattr(sys.modules[parent], child, mod)
+
+
 # Stub chromadb before it is imported. chromadb hangs at import time on
 # machines without a local Chroma server (it fires gRPC keep-alive probes via
 # opentelemetry), AND the version of opentelemetry-exporter-otlp-proto-grpc in
@@ -196,26 +226,7 @@ for _svc_mod in [
 # the *real* pure helper (_strip_ansi). Load it real — overwriting the package stub
 # above — so those tests don't get a MagicMock. Other tests that patch this module
 # still work (patch targets a real module just as well).
-import importlib.util as _svc_ilu  # noqa: E402
-
-# Also bind on the parent package: `import services.tool_output_filter as mod`
-# resolves via getattr(services, "tool_output_filter"), not sys.modules directly,
-# so without this the package stub's catch-all __getattr__ returns a MagicMock.
-for _real_svc, _real_rel in [
-    ("services.tool_output_filter", "services/tool_output_filter.py"),
-]:
-    _rspec = _svc_ilu.spec_from_file_location(_real_svc, str(backend_root / _real_rel))
-    if _rspec and _rspec.loader:
-        _rmod = _svc_ilu.module_from_spec(_rspec)
-        sys.modules[_real_svc] = _rmod
-        try:
-            _rspec.loader.exec_module(_rmod)
-            _parent_name, _, _child_name = _real_svc.rpartition(".")
-            if _parent_name in sys.modules:
-                setattr(sys.modules[_parent_name], _child_name, _rmod)
-        except Exception:
-            # Fall back to the stub if the real module can't load in this env.
-            sys.modules[_real_svc] = _make_pkg_stub(_real_svc)
+_real_load_and_bind("services.tool_output_filter", backend_root / "services" / "tool_output_filter.py")
 
 # npu_pipeline — stub the package and its sub-modules so that the __init__.py
 # import chain (which pulls in Redis/config) doesn't break test collection.
@@ -326,47 +337,36 @@ if "llm_shared" not in sys.modules:
     # GH#8998: Register real fallback_chain and model_fallback_coordinator modules
     # so tests inside llm_shared/ can import them without the full heavy __init__.py chain.
     # Load in dependency order: types → models → optimization.rate_limiter → fallback_chain → coordinator.
-    import importlib.util as _ilu
-
+    # #11661: real-loads go through the canonical _real_load_and_bind helper so
+    # every loaded module is also bound on its parent package stub (patch()
+    # resolves via getattr(parent, child) — see the helper docstring).
     _llm_root = backend_root / "llm_shared"
 
-    def _load_real_mod(name: str, path: "Path") -> None:  # type: ignore[name-defined]
-        if name in sys.modules:
-            return
-        _spec = _ilu.spec_from_file_location(name, str(path))
-        if _spec and _spec.loader:
-            _mod = _ilu.module_from_spec(_spec)
-            sys.modules[name] = _mod
-            try:
-                _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
-            except Exception:
-                sys.modules.pop(name, None)
-
-    _load_real_mod("llm_shared.types", _llm_root / "types.py")
-    _load_real_mod("llm_shared.models", _llm_root / "models.py")
+    _real_load_and_bind("llm_shared.types", _llm_root / "types.py")
+    _real_load_and_bind("llm_shared.models", _llm_root / "models.py")
     # #11520: canonical JSON parser and schema-typed extraction helper — lightweight,
     # no heavy deps; load real so tests importing them don't hit the stub.
-    _load_real_mod("llm_shared.json_utils", _llm_root / "json_utils.py")
-    _load_real_mod("llm_shared.structured_ops", _llm_root / "structured_ops.py")
-    _load_real_mod("llm_shared.optimization.rate_limiter", _llm_root / "optimization" / "rate_limiter.py")
-    _load_real_mod("llm_shared.fallback_chain", _llm_root / "fallback_chain.py")
+    _real_load_and_bind("llm_shared.json_utils", _llm_root / "json_utils.py")
+    _real_load_and_bind("llm_shared.structured_ops", _llm_root / "structured_ops.py")
+    _real_load_and_bind("llm_shared.optimization.rate_limiter", _llm_root / "optimization" / "rate_limiter.py")
+    _real_load_and_bind("llm_shared.fallback_chain", _llm_root / "fallback_chain.py")
     # #11519: provider degradation store — load real BEFORE model_fallback_coordinator
     # and provider_registry which import it at module level.
-    _load_real_mod("llm_shared.provider_degradation", _llm_root / "provider_degradation.py")
-    _load_real_mod("llm_shared.model_fallback_coordinator", _llm_root / "model_fallback_coordinator.py")
+    _real_load_and_bind("llm_shared.provider_degradation", _llm_root / "provider_degradation.py")
+    _real_load_and_bind("llm_shared.model_fallback_coordinator", _llm_root / "model_fallback_coordinator.py")
     # #9017: reasoning_effort utility is imported by chat_workflow.manager at module level;
     # load the real file so tests that import manager don't hit the providers MagicMock stub.
-    _load_real_mod(
+    _real_load_and_bind(
         "llm_shared.providers.reasoning_effort",
         _llm_root / "providers" / "reasoning_effort.py",
     )
     # #9037: per-run credential primitives (ContextVar + RunCredentialContext) live
     # in the lightweight run_credentials module; load it real so tests importing
     # them don't hit the llm_shared MagicMock stub.
-    _load_real_mod("llm_shared.run_credentials", _llm_root / "run_credentials.py")
+    _real_load_and_bind("llm_shared.run_credentials", _llm_root / "run_credentials.py")
     # #10551: provider auth abstraction — load real so tests can import the
     # strategy classes without hitting the llm_shared MagicMock stub.
-    _load_real_mod("llm_shared.provider_auth", _llm_root / "provider_auth.py")
+    _real_load_and_bind("llm_shared.provider_auth", _llm_root / "provider_auth.py")
     # #10551: base_provider — load real so BaseProvider tests can instantiate it.
     # #10917: base_provider's real load (added in #10551) silently failed because
     # the llm_shared stub has an empty __path__, so its relative imports
@@ -375,12 +375,12 @@ if "llm_shared" not in sys.modules:
     # order — all bare-env-importable (observability guards its langfuse/langsmith
     # SDK imports inside methods and does not import otel_observer at top level) —
     # so base_provider (and then provider_registry) load real.
-    _load_real_mod("llm_shared.cross_worker_rate_limiter", _llm_root / "cross_worker_rate_limiter.py")
-    _load_real_mod("llm_shared.observability", _llm_root / "observability" / "__init__.py")
-    _load_real_mod("llm_shared.rate_limit_backoff", _llm_root / "rate_limit_backoff.py")
-    _load_real_mod("llm_shared.base_provider", _llm_root / "base_provider.py")
-    _load_real_mod("llm_shared.model_param_registry", _llm_root / "model_param_registry.py")
-    _load_real_mod("llm_shared.provider_registry", _llm_root / "provider_registry.py")
+    _real_load_and_bind("llm_shared.cross_worker_rate_limiter", _llm_root / "cross_worker_rate_limiter.py")
+    _real_load_and_bind("llm_shared.observability", _llm_root / "observability" / "__init__.py")
+    _real_load_and_bind("llm_shared.rate_limit_backoff", _llm_root / "rate_limit_backoff.py")
+    _real_load_and_bind("llm_shared.base_provider", _llm_root / "base_provider.py")
+    _real_load_and_bind("llm_shared.model_param_registry", _llm_root / "model_param_registry.py")
+    _real_load_and_bind("llm_shared.provider_registry", _llm_root / "provider_registry.py")
     # Re-export the real classes onto the top-level stub so
     # `from llm_shared import ProviderRegistry, BaseProvider` resolves to the real
     # ones for tests that exercise them (tests/test_provider_registry.py, #10917).
@@ -404,13 +404,12 @@ if "llm_shared" not in sys.modules:
     # test_hardware.py targets the real module globals instead of the MagicMock
     # package stub.  Deps: autobot_shared.logging_manager (already patched) and
     # llm_shared.optimization.model_inspector (stubbed just above).
-    _load_real_mod("llm_shared.hardware", _llm_root / "hardware.py")
+    _real_load_and_bind("llm_shared.hardware", _llm_root / "hardware.py")
     _hw_mod = sys.modules.get("llm_shared.hardware")
     if _hw_mod is not None:
-        # Bind on parent stub so patch("llm_shared.hardware.X") resolves via
-        # getattr(sys.modules["llm_shared"], "hardware") rather than the stub's
-        # catch-all __getattr__ which always returns the same MagicMock.
-        setattr(_llm_stub, "hardware", _hw_mod)
+        # Parent bind (so patch("llm_shared.hardware.X") targets the real
+        # module) now happens inside _real_load_and_bind (#11661); only the
+        # top-level re-exports remain here.
         if hasattr(_hw_mod, "HardwareDetector"):
             _llm_stub.HardwareDetector = _hw_mod.HardwareDetector  # type: ignore[attr-defined]
         if hasattr(_hw_mod, "TORCH_AVAILABLE"):
@@ -754,17 +753,12 @@ if "sqlalchemy.orm" in sys.modules:
 # models/__init__.py itself (if forced by other test files) has sqlalchemy stubs
 # already in place.
 if "models" not in sys.modules:
-    _infra_path = str(backend_root / "models" / "infrastructure.py")
-    _spec = _ilu.spec_from_file_location("models.infrastructure", _infra_path)
-    if _spec and _spec.loader:
-        # Create a lightweight 'models' namespace package to hold the sub-module
-        _models_pkg = _make_pkg_stub("models")
-        _models_pkg.__path__ = [str(backend_root / "models")]
-        _infra_mod = _ilu.module_from_spec(_spec)
-        _infra_mod.__package__ = "models"
-        sys.modules["models.infrastructure"] = _infra_mod
-        _spec.loader.exec_module(_infra_mod)  # type: ignore[union-attr]
-        setattr(_models_pkg, "infrastructure", _infra_mod)
+    # Create a lightweight 'models' namespace package to hold the sub-module,
+    # then real-load infrastructure.py onto it (#11661: canonical helper; it
+    # also performs the parent bind this block previously did by hand).
+    _models_pkg = _make_pkg_stub("models")
+    _models_pkg.__path__ = [str(backend_root / "models")]
+    _real_load_and_bind("models.infrastructure", backend_root / "models" / "infrastructure.py")
 
 
 # -- Requirements.txt enforcement (Issue #5032 / #5044) --------------------
@@ -877,37 +871,6 @@ def set_test_environment():
     os.environ.update(original_env)
 
 
-def _real_load_service(name: str, rel_path: str) -> None:  # noqa: ANN001
-    """Real-load a services.* module by path, overwriting any existing stub.
-
-    Must be called from pytest_configure (after all module-level stubs are in
-    place but before collection imports test modules).  Falls back to the
-    existing stub silently if the real file can't be loaded in this env.
-
-    #11532 note: after inserting the real module into sys.modules we ALSO bind
-    it as an attribute on the parent package stub.  ``unittest.mock.patch``
-    resolves ``"services.foo.BAR"`` by calling ``__import__("services.foo")``
-    then ``getattr(services, "foo")``.  Without the setattr the parent stub's
-    ``__getattr__`` always returns a MagicMock singleton, so patch silently
-    patches the wrong object and the real module's globals are never updated.
-    """
-    import importlib.util as _rl_ilu
-
-    _spec = _rl_ilu.spec_from_file_location(name, str(backend_root / rel_path))
-    if _spec and _spec.loader:
-        _mod = _rl_ilu.module_from_spec(_spec)
-        sys.modules[name] = _mod
-        try:
-            _spec.loader.exec_module(_mod)
-        except Exception:
-            sys.modules[name] = _make_pkg_stub(name)
-            return
-        # Bind on parent so patch() resolves via getattr(parent, child_name).
-        _parent, _, _child = name.rpartition(".")
-        if _parent and _parent in sys.modules:
-            setattr(sys.modules[_parent], _child, sys.modules[name])
-
-
 def pytest_configure(config):  # noqa: ANN001
     """#11248/#11532: real-load lightweight service modules whose unit tests need the
     real helpers, AFTER every module-level stub above is in place.
@@ -926,5 +889,5 @@ def pytest_configure(config):  # noqa: ANN001
     Real-loading here ensures ``sys.modules["services.llm_cost_tracker"]`` is the
     same object as ``_check_pricing_staleness.__globals__`` so patch() is effective.
     """
-    _real_load_service("services.llm_api_key_service", "services/llm_api_key_service.py")
-    _real_load_service("services.llm_cost_tracker", "services/llm_cost_tracker.py")
+    _real_load_and_bind("services.llm_api_key_service", backend_root / "services" / "llm_api_key_service.py")
+    _real_load_and_bind("services.llm_cost_tracker", backend_root / "services" / "llm_cost_tracker.py")
