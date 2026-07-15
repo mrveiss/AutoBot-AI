@@ -21,6 +21,7 @@ from services.ansible_secrets import fetch_deploy_secrets
 from services.inventory_builder import (
     build_registry_inventory,
     validate_inventory,
+    write_temp_extra_vars,
     write_temp_inventory,
 )
 from services.provision_progress import TaskProgressTracker
@@ -229,7 +230,7 @@ class PlaybookExecutor:
         playbook_path: Path,
         limit: List[str] | None,
         tags: List[str] | None,
-        extra_vars: Dict[str, str] | None,
+        extra_vars_file: Path | None,
         check_mode: bool,
         inventory_path: Path | None = None,
     ) -> List[str]:
@@ -237,6 +238,12 @@ class PlaybookExecutor:
         Build Ansible command with parameters.
 
         Helper for execute_playbook (Issue #880).
+
+        extra_vars are passed as ``-e @<file>`` (a 0600 temp JSON written by
+        write_temp_extra_vars), never as ``-e key=value`` argv: extra_vars
+        always include the stored SLM secrets (#3519), and argv is readable
+        by every local user via /proc/<pid>/cmdline for the whole run
+        (#11735).
         """
         ansible_cmd = self._find_ansible_playbook()
         effective_inventory = inventory_path or self.inventory_path
@@ -246,9 +253,8 @@ class PlaybookExecutor:
             cmd.extend(["--limit", ",".join(limit)])
         if tags:
             cmd.extend(["--tags", ",".join(tags)])
-        if extra_vars:
-            for key, value in extra_vars.items():
-                cmd.extend(["-e", f"{key}={value}"])
+        if extra_vars_file:
+            cmd.extend(["-e", f"@{extra_vars_file}"])
         if check_mode:
             cmd.append("--check")
 
@@ -538,11 +544,17 @@ class PlaybookExecutor:
         deploy_secrets = await fetch_deploy_secrets()
         merged_extra_vars: Dict[str, str] = {**deploy_secrets, **(extra_vars or {})}
 
+        # Secrets ride along in extra_vars — hand them to ansible via a 0600
+        # temp file (-e @file), never argv (#11735).
+        extra_vars_file: Path | None = None
+        if merged_extra_vars:
+            extra_vars_file = write_temp_extra_vars(merged_extra_vars)
+
         cmd = self._build_ansible_command(
             playbook_path,
             limit,
             tags,
-            merged_extra_vars or None,
+            extra_vars_file,
             check_mode,
             inventory_path=effective_inventory,
         )
@@ -573,12 +585,17 @@ class PlaybookExecutor:
                 "returncode": -1,
             }
         finally:
-            # Clean up the per-run temp inventory file
+            # Clean up the per-run temp inventory and extra-vars files
             if dynamic_inv_path is not None:
                 try:
                     dynamic_inv_path.unlink(missing_ok=True)
                 except OSError as exc:
                     logger.debug("Could not remove temp inventory %s: %s", dynamic_inv_path, exc)
+            if extra_vars_file is not None:
+                try:
+                    extra_vars_file.unlink(missing_ok=True)
+                except OSError as exc:
+                    logger.debug("Could not remove temp extra-vars file %s: %s", extra_vars_file, exc)
 
 
 # Singleton instance
