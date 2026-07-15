@@ -12,8 +12,10 @@ from pathlib import Path
 
 import pytest
 
-# Add project root to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+# Make sibling modules (version.py, agent.py, ...) importable both from repo
+# root (pytest testpaths) and standalone from this directory — mirrors
+# health_collector_probe_test.py (#11723).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 class TestAgentVersion:
@@ -32,7 +34,7 @@ class TestAgentVersion:
 
     def test_initialization(self, tmp_path):
         """Test AgentVersion can be initialized."""
-        from slm.agent.version import AgentVersion
+        from version import AgentVersion
 
         version_file = tmp_path / "version.json"
         agent_version = AgentVersion(version_file=version_file)
@@ -41,7 +43,7 @@ class TestAgentVersion:
 
     def test_get_version_returns_commit(self, temp_version_file):
         """Test get_version returns commit hash."""
-        from slm.agent.version import AgentVersion
+        from version import AgentVersion
 
         agent_version = AgentVersion(version_file=temp_version_file)
         version = agent_version.get_version()
@@ -50,7 +52,7 @@ class TestAgentVersion:
 
     def test_get_version_info_returns_full_data(self, temp_version_file):
         """Test get_version_info returns full version data."""
-        from slm.agent.version import AgentVersion
+        from version import AgentVersion
 
         agent_version = AgentVersion(version_file=temp_version_file)
         info = agent_version.get_version_info()
@@ -60,7 +62,7 @@ class TestAgentVersion:
 
     def test_get_version_missing_file(self, tmp_path):
         """Test get_version with missing file returns None."""
-        from slm.agent.version import AgentVersion
+        from version import AgentVersion
 
         agent_version = AgentVersion(version_file=tmp_path / "nonexistent.json")
         version = agent_version.get_version()
@@ -69,7 +71,7 @@ class TestAgentVersion:
 
     def test_save_version(self, tmp_path):
         """Test save_version creates file."""
-        from slm.agent.version import AgentVersion
+        from version import AgentVersion
 
         version_file = tmp_path / "version.json"
         agent_version = AgentVersion(version_file=version_file)
@@ -84,7 +86,7 @@ class TestAgentVersion:
 
     def test_save_version_with_extra_data(self, tmp_path):
         """Test save_version with extra metadata."""
-        from slm.agent.version import AgentVersion
+        from version import AgentVersion
 
         version_file = tmp_path / "version.json"
         agent_version = AgentVersion(version_file=version_file)
@@ -101,7 +103,7 @@ class TestAgentVersion:
 
     def test_is_outdated_true(self, temp_version_file):
         """Test is_outdated returns True when versions differ."""
-        from slm.agent.version import AgentVersion
+        from version import AgentVersion
 
         agent_version = AgentVersion(version_file=temp_version_file)
 
@@ -111,7 +113,7 @@ class TestAgentVersion:
 
     def test_is_outdated_false(self, temp_version_file):
         """Test is_outdated returns False when versions match."""
-        from slm.agent.version import AgentVersion
+        from version import AgentVersion
 
         agent_version = AgentVersion(version_file=temp_version_file)
 
@@ -121,7 +123,7 @@ class TestAgentVersion:
 
     def test_clear_cache(self, temp_version_file):
         """Test clear_cache forces re-read."""
-        from slm.agent.version import AgentVersion
+        from version import AgentVersion
 
         agent_version = AgentVersion(version_file=temp_version_file)
 
@@ -139,7 +141,7 @@ class TestGetAgentVersion:
 
     def test_returns_singleton(self, tmp_path):
         """Test get_agent_version returns same instance."""
-        from slm.agent.version import get_agent_version, reset_version_instance
+        from version import get_agent_version, reset_version_instance
 
         reset_version_instance()
 
@@ -167,7 +169,7 @@ class TestHeartbeatIntegration:
 
     def test_heartbeat_payload_includes_version(self, temp_version_file):
         """Test that heartbeat payload includes code_version."""
-        from slm.agent.version import AgentVersion
+        from version import AgentVersion
 
         version_manager = AgentVersion(version_file=temp_version_file)
 
@@ -182,7 +184,7 @@ class TestHeartbeatIntegration:
 
     def test_heartbeat_payload_handles_none_version(self, tmp_path):
         """Test that heartbeat payload handles None version gracefully."""
-        from slm.agent.version import AgentVersion
+        from version import AgentVersion
 
         # Non-existent file
         version_manager = AgentVersion(version_file=tmp_path / "missing.json")
@@ -198,7 +200,7 @@ class TestHeartbeatIntegration:
 
     def test_update_available_detection(self, temp_version_file):
         """Test detecting update from heartbeat response."""
-        from slm.agent.version import AgentVersion
+        from version import AgentVersion
 
         version_manager = AgentVersion(version_file=temp_version_file)
 
@@ -215,7 +217,7 @@ class TestHeartbeatIntegration:
 
     def test_update_available_false_when_same_version(self, temp_version_file):
         """Test no update when versions match."""
-        from slm.agent.version import AgentVersion
+        from version import AgentVersion
 
         version_manager = AgentVersion(version_file=temp_version_file)
 
