@@ -381,6 +381,8 @@ class SecretResponse(BaseModel):
     description: str | None = None
     created_at: datetime
     updated_at: datetime
+    warning: str | None = None
+    """Non-blocking validation warning (e.g. HF unreachable at save time, #11718)."""
 
     model_config = {"from_attributes": True}
 
