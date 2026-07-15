@@ -35,7 +35,7 @@ from services.hf_token_validator import probe_hf_token
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/secrets", tags=["secrets"])
 
-HF_TOKEN_KEY = "hf_token"
+HF_TOKEN_KEY = "hf_token"  # nosec B105 - secret-store key name, not a credential
 HF_REJECTED_DETAIL = (
     "HuggingFace rejected this token (401): it appears invalid or revoked. "
     "Generate a new token at https://huggingface.co/settings/tokens and try again."
